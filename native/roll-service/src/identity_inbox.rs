@@ -190,10 +190,7 @@ fn why_stopped(status: &str, evidence: &Value, candidate_count: usize) -> String
         return count_text;
     }
     let is_empty_evidence = evidence.is_null()
-        || evidence
-            .as_object()
-            .map(|o| o.is_empty())
-            .unwrap_or(false)
+        || evidence.as_object().map(|o| o.is_empty()).unwrap_or(false)
         || evidence.as_array().map(|a| a.is_empty()).unwrap_or(false);
     if let Some(obj) = evidence.as_object() {
         if let Some(reason) = obj.get("decision_reason").and_then(|v| v.as_str()) {

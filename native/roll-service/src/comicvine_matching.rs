@@ -208,8 +208,6 @@ fn bigram_dice(a: &str, b: &str) -> f64 {
     }
     let ba = bigrams(a);
     let bb = bigrams(b);
-    let mut bcount: BTreeMap<&str, usize> = BTreeMap::new();
-    // use owned strings - easier
     let ba_owned = ba;
     let bb_owned = bb;
     let mut map: BTreeMap<String, usize> = BTreeMap::new();
@@ -225,19 +223,18 @@ fn bigram_dice(a: &str, b: &str) -> f64 {
             }
         }
     }
-    let _ = bcount;
     (2.0 * inter as f64) / (ba_owned.len() as f64 + bb_owned.len() as f64)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct NormalizedIssueLabel {
-    raw: String,
-    canonical: String,
-    kind: LabelKind,
+pub struct NormalizedIssueLabel {
+    pub raw: String,
+    pub canonical: String,
+    pub kind: LabelKind,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum LabelKind {
+pub enum LabelKind {
     Numeric { value: String },
     Decimal { value: String },
     Fraction { numerator: u32, denominator: u32 },
@@ -259,7 +256,11 @@ fn parse_fraction(value: &str) -> Option<(u32, u32)> {
     let (n, d) = s.split_once('/')?;
     let n = n.trim().parse::<u32>().ok()?;
     let d = d.trim().parse::<u32>().ok()?;
-    if d == 0 { None } else { Some((n, d)) }
+    if d == 0 {
+        None
+    } else {
+        Some((n, d))
+    }
 }
 
 fn parse_numeric(value: &str) -> Option<String> {
@@ -269,7 +270,11 @@ fn parse_numeric(value: &str) -> Option<String> {
     }
     if s.chars().all(|c| c.is_ascii_digit()) {
         let trimmed = s.trim_start_matches('0');
-        return Some(if trimmed.is_empty() { "0".to_string() } else { trimmed.to_string() });
+        return Some(if trimmed.is_empty() {
+            "0".to_string()
+        } else {
+            trimmed.to_string()
+        });
     }
     if let Some((a, b)) = s.split_once('.') {
         if !a.is_empty()
@@ -311,20 +316,31 @@ fn extract_prefixed_number(prefix: &str, value: &str) -> Option<Option<String>> 
         return Some(Some(n));
     }
     let cleaned = rest.replace(|c: char| !c.is_alphanumeric(), "");
-    if cleaned.is_empty() { Some(None) } else { Some(Some(cleaned.to_uppercase())) }
+    if cleaned.is_empty() {
+        Some(None)
+    } else {
+        Some(Some(cleaned.to_uppercase()))
+    }
 }
 
 pub fn normalize_issue_label(value: &str) -> NormalizedIssueLabel {
     let raw = value.to_string();
     let simple = normalize_simple_label(value);
     if simple.is_empty() {
-        return NormalizedIssueLabel { raw, canonical: String::new(), kind: LabelKind::Text(String::new()) };
+        return NormalizedIssueLabel {
+            raw,
+            canonical: String::new(),
+            kind: LabelKind::Text(String::new()),
+        };
     }
     if let Some((n, d)) = parse_fraction(&simple) {
         return NormalizedIssueLabel {
             canonical: format!("{n}/{d}"),
             raw,
-            kind: LabelKind::Fraction { numerator: n, denominator: d },
+            kind: LabelKind::Fraction {
+                numerator: n,
+                denominator: d,
+            },
         };
     }
     if let Some((base, suffix)) = parse_point_one(&simple) {
@@ -336,22 +352,36 @@ pub fn normalize_issue_label(value: &str) -> NormalizedIssueLabel {
     }
     if let Some(number) = parse_numeric(&simple) {
         let kind = if number.contains('.') {
-            LabelKind::Decimal { value: number.clone() }
+            LabelKind::Decimal {
+                value: number.clone(),
+            }
         } else {
-            LabelKind::Numeric { value: number.clone() }
+            LabelKind::Numeric {
+                value: number.clone(),
+            }
         };
-        return NormalizedIssueLabel { canonical: number, raw, kind };
+        return NormalizedIssueLabel {
+            canonical: number,
+            raw,
+            kind,
+        };
     }
     if let Some(num) = extract_prefixed_number("annual", &simple) {
         return NormalizedIssueLabel {
-            canonical: match &num { Some(n) => format!("annual {n}"), None => "annual".to_string() },
+            canonical: match &num {
+                Some(n) => format!("annual {n}"),
+                None => "annual".to_string(),
+            },
             raw,
             kind: LabelKind::Annual { value: num },
         };
     }
     if let Some(num) = extract_prefixed_number("special", &simple) {
         return NormalizedIssueLabel {
-            canonical: match &num { Some(n) => format!("special {n}"), None => "special".to_string() },
+            canonical: match &num {
+                Some(n) => format!("special {n}"),
+                None => "special".to_string(),
+            },
             raw,
             kind: LabelKind::Special { value: num },
         };
@@ -382,16 +412,58 @@ pub fn compare_issue_labels(local: &str, provider: &str) -> LabelMatch {
     match (&l.kind, &p.kind) {
         (LabelKind::Numeric { value: a }, LabelKind::Decimal { value: b })
         | (LabelKind::Decimal { value: a }, LabelKind::Numeric { value: b }) => {
-            if normalize_decimal(a) == normalize_decimal(b) { LabelMatch::Equivalent } else { LabelMatch::None }
+            if normalize_decimal(a) == normalize_decimal(b) {
+                LabelMatch::Equivalent
+            } else {
+                LabelMatch::None
+            }
         }
-        (LabelKind::PointOne { base: ab, suffix: asuf }, LabelKind::PointOne { base: bb, suffix: bsuf }) => {
-            if ab == bb && asuf == bsuf { LabelMatch::Exact } else { LabelMatch::None }
+        (
+            LabelKind::PointOne {
+                base: ab,
+                suffix: asuf,
+            },
+            LabelKind::PointOne {
+                base: bb,
+                suffix: bsuf,
+            },
+        ) => {
+            if ab == bb && asuf == bsuf {
+                LabelMatch::Exact
+            } else {
+                LabelMatch::None
+            }
         }
-        (LabelKind::Fraction { numerator: an, denominator: ad }, LabelKind::Fraction { numerator: bn, denominator: bd }) => {
-            if an * bd == bn * ad { LabelMatch::Equivalent } else { LabelMatch::None }
+        (
+            LabelKind::Fraction {
+                numerator: an,
+                denominator: ad,
+            },
+            LabelKind::Fraction {
+                numerator: bn,
+                denominator: bd,
+            },
+        ) => {
+            if an * bd == bn * ad {
+                LabelMatch::Equivalent
+            } else {
+                LabelMatch::None
+            }
         }
-        (LabelKind::Fraction { numerator, denominator }, LabelKind::Decimal { value })
-        | (LabelKind::Decimal { value }, LabelKind::Fraction { numerator, denominator }) => {
+        (
+            LabelKind::Fraction {
+                numerator,
+                denominator,
+            },
+            LabelKind::Decimal { value },
+        )
+        | (
+            LabelKind::Decimal { value },
+            LabelKind::Fraction {
+                numerator,
+                denominator,
+            },
+        ) => {
             if decimal_matches_fraction(value, *numerator, *denominator) {
                 LabelMatch::Equivalent
             } else {
@@ -400,10 +472,18 @@ pub fn compare_issue_labels(local: &str, provider: &str) -> LabelMatch {
         }
         (LabelKind::Annual { value: a }, LabelKind::Annual { value: b })
         | (LabelKind::Special { value: a }, LabelKind::Special { value: b }) => {
-            if a == b { LabelMatch::Exact } else { LabelMatch::None }
+            if a == b {
+                LabelMatch::Exact
+            } else {
+                LabelMatch::None
+            }
         }
         (LabelKind::Text(a), LabelKind::Text(b)) => {
-            if a == b { LabelMatch::Exact } else { LabelMatch::None }
+            if a == b {
+                LabelMatch::Exact
+            } else {
+                LabelMatch::None
+            }
         }
         _ => LabelMatch::None,
     }
@@ -425,7 +505,10 @@ fn normalize_decimal(value: &str) -> String {
 }
 
 fn decimal_matches_fraction(value: &str, numerator: u32, denominator: u32) -> bool {
-    let Some((int_part, frac_part)) = normalize_decimal(value).split_once('.').map(|(a, b)| (a.to_string(), b.to_string())) else {
+    let Some((int_part, frac_part)) = normalize_decimal(value)
+        .split_once('.')
+        .map(|(a, b)| (a.to_string(), b.to_string()))
+    else {
         // integer decimal like "1" - only matches n/d if exact
         if let Ok(int_val) = normalize_decimal(value).parse::<i64>() {
             return int_val * denominator as i64 == numerator as i64;
@@ -434,8 +517,12 @@ fn decimal_matches_fraction(value: &str, numerator: u32, denominator: u32) -> bo
     };
     // Compare value == numerator/denominator by cross-multiplying with decimal scale.
     let scale = 10_i64.pow(frac_part.len() as u32);
-    let Ok(int_val) = int_part.parse::<i64>() else { return false };
-    let Ok(frac_val) = frac_part.parse::<i64>() else { return false };
+    let Ok(int_val) = int_part.parse::<i64>() else {
+        return false;
+    };
+    let Ok(frac_val) = frac_part.parse::<i64>() else {
+        return false;
+    };
     let scaled = int_val.saturating_mul(scale).saturating_add(frac_val);
     scaled.saturating_mul(denominator as i64) == (numerator as i64).saturating_mul(scale)
 }
@@ -444,10 +531,16 @@ fn normalized_publisher(value: &str) -> String {
     normalize_title(value)
 }
 
-pub fn discover_volume_candidates(issue: &MatchIssue, provider_issues: &[ProviderIssue]) -> Vec<VolumeCandidate> {
+pub fn discover_volume_candidates(
+    issue: &MatchIssue,
+    provider_issues: &[ProviderIssue],
+) -> Vec<VolumeCandidate> {
     let mut by_volume: BTreeMap<i32, Vec<&ProviderIssue>> = BTreeMap::new();
     for row in provider_issues {
-        by_volume.entry(row.comicvine_volume_id).or_default().push(row);
+        by_volume
+            .entry(row.comicvine_volume_id)
+            .or_default()
+            .push(row);
     }
     let mut out = Vec::new();
     for (volume_id, rows) in by_volume {
@@ -490,7 +583,11 @@ pub fn discover_volume_candidates(issue: &MatchIssue, provider_issues: &[Provide
         } else if best_title >= 0.45 {
             let bonus = FUZZY_TITLE_WEIGHT * best_title;
             score += bonus;
-            evidence.push(format!("fuzzy title match {:.0}%: {}", best_title * 100.0, best_title_name));
+            evidence.push(format!(
+                "fuzzy title match {:.0}%: {}",
+                best_title * 100.0,
+                best_title_name
+            ));
         }
 
         if issue.volume_hint_ids.contains(&volume_id) {
@@ -501,7 +598,11 @@ pub fn discover_volume_candidates(issue: &MatchIssue, provider_issues: &[Provide
             score += SOURCE_VOLUME_BONUS;
             evidence.push("CBL/source volume hint matches".to_string());
         }
-        let alias_hit = issue.aliases.iter().any(|a| names_to_check.iter().any(|n| normalize_title(a) == normalize_title(n)));
+        let alias_hit = issue.aliases.iter().any(|a| {
+            names_to_check
+                .iter()
+                .any(|n| normalize_title(a) == normalize_title(n))
+        });
         if alias_hit {
             score += ALIAS_BONUS;
             evidence.push("known alias matches volume name".to_string());
@@ -527,11 +628,16 @@ pub fn discover_volume_candidates(issue: &MatchIssue, provider_issues: &[Provide
         }
 
         let has_issue_label_evidence = rows.iter().any(|r| {
-            let Some(pn) = r.issue_number.as_deref().or(r.issue_name.as_deref()) else { return false };
+            let Some(pn) = r.issue_number.as_deref().or(r.issue_name.as_deref()) else {
+                return false;
+            };
             compare_issue_labels(&issue.issue_number, pn) != LabelMatch::None
         });
         if has_issue_label_evidence {
-            evidence.push(format!("issue label {} present on volume", issue.issue_number));
+            evidence.push(format!(
+                "issue label {} present on volume",
+                issue.issue_number
+            ));
         }
 
         // Do not surface volumes with no meaningful evidence.
@@ -543,7 +649,9 @@ pub fn discover_volume_candidates(issue: &MatchIssue, provider_issues: &[Provide
         if score <= 0.0 && has_issue_label_evidence {
             if best_title >= 0.35 {
                 score = 0.05;
-                evidence.push("weak candidate: issue label exists but series evidence is weak".to_string());
+                evidence.push(
+                    "weak candidate: issue label exists but series evidence is weak".to_string(),
+                );
             } else {
                 continue;
             }
@@ -558,20 +666,35 @@ pub fn discover_volume_candidates(issue: &MatchIssue, provider_issues: &[Provide
             evidence,
         });
     }
-    out.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal).then(a.comicvine_volume_id.cmp(&b.comicvine_volume_id)));
+    out.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(a.comicvine_volume_id.cmp(&b.comicvine_volume_id))
+    });
     out
 }
 
-pub fn match_issue_in_volume(issue: &MatchIssue, volume_id: i32, provider_issues: &[ProviderIssue]) -> Result<IssueMatch, UnmatchedIssue> {
+pub fn match_issue_in_volume(
+    issue: &MatchIssue,
+    volume_id: i32,
+    provider_issues: &[ProviderIssue],
+) -> Result<IssueMatch, UnmatchedIssue> {
     let mut candidates: Vec<IssueMatch> = Vec::new();
-    for row in provider_issues.iter().filter(|r| r.comicvine_volume_id == volume_id) {
+    for row in provider_issues
+        .iter()
+        .filter(|r| r.comicvine_volume_id == volume_id)
+    {
         let mut best = LabelMatch::None;
         let mut evidence = Vec::new();
         if let Some(num) = row.issue_number.as_deref() {
             let m = compare_issue_labels(&issue.issue_number, num);
             if m != LabelMatch::None {
                 best = m;
-                evidence.push(format!("issue number match: local={} provider={}", issue.issue_number, num));
+                evidence.push(format!(
+                    "issue number match: local={} provider={}",
+                    issue.issue_number, num
+                ));
             }
         }
         if best == LabelMatch::None {
@@ -579,7 +702,10 @@ pub fn match_issue_in_volume(issue: &MatchIssue, volume_id: i32, provider_issues
                 let m = compare_issue_labels(&issue.issue_number, name);
                 if m != LabelMatch::None {
                     best = m;
-                    evidence.push(format!("issue name match: local={} provider={}", issue.issue_number, name));
+                    evidence.push(format!(
+                        "issue name match: local={} provider={}",
+                        issue.issue_number, name
+                    ));
                 }
             }
         }
@@ -599,7 +725,12 @@ pub fn match_issue_in_volume(issue: &MatchIssue, volume_id: i32, provider_issues
             evidence,
         });
     }
-    candidates.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal).then(a.comicvine_issue_id.cmp(&b.comicvine_issue_id)));
+    candidates.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(a.comicvine_issue_id.cmp(&b.comicvine_issue_id))
+    });
     match candidates.as_slice() {
         [] => {
             let reason = format!(
@@ -623,7 +754,10 @@ pub fn match_issue_in_volume(issue: &MatchIssue, volume_id: i32, provider_issues
                     issue_number: issue.issue_number.clone(),
                     reason: format!(
                         "ambiguous issue match for {} in volume {}: candidates {} and {}",
-                        issue.issue_number, volume_id, first.comicvine_issue_id, second.comicvine_issue_id
+                        issue.issue_number,
+                        volume_id,
+                        first.comicvine_issue_id,
+                        second.comicvine_issue_id
                     ),
                     next_steps: default_next_steps(&issue.series_name),
                 })
@@ -634,7 +768,10 @@ pub fn match_issue_in_volume(issue: &MatchIssue, volume_id: i32, provider_issues
 
 fn default_next_steps(series_name: &str) -> Vec<String> {
     vec![
-        format!("Search by a different name (try an alias for \"{}\")", series_name),
+        format!(
+            "Search by a different name (try an alias for \"{}\")",
+            series_name
+        ),
         "Paste a ComicVine volume or issue URL".to_string(),
         "Map the issue manually in the Identity Inbox".to_string(),
     ]
@@ -659,26 +796,41 @@ pub fn plan_partial_series_match(
                 Err(u) => unmatched.push(u),
             }
         }
-        if matched.is_empty() && unmatched.iter().all(|u| u.reason.contains("not on it")) && volume.score < 0.15 {
+        if matched.is_empty()
+            && unmatched.iter().all(|u| u.reason.contains("not on it"))
+            && volume.score < 0.15
+        {
             continue;
         }
         let actionable_reason = if unmatched.is_empty() {
             format!(
                 "All {} issue(s) matched unambiguously in {} (volume {}).",
-                matched.len(), volume.volume_name, volume.comicvine_volume_id
+                matched.len(),
+                volume.volume_name,
+                volume.comicvine_volume_id
             )
         } else if !matched.is_empty() {
             format!(
                 "Partial match in {} (volume {}): {} matched, {} need review.",
-                volume.volume_name, volume.comicvine_volume_id, matched.len(), unmatched.len()
+                volume.volume_name,
+                volume.comicvine_volume_id,
+                matched.len(),
+                unmatched.len()
             )
         } else {
             format!(
                 "No unambiguous issue matches in {} (volume {}): {} issue(s) need review.",
-                volume.volume_name, volume.comicvine_volume_id, unmatched.len()
+                volume.volume_name,
+                volume.comicvine_volume_id,
+                unmatched.len()
             )
         };
-        plans.push(PartialSeriesMatch { volume, matched, unmatched, actionable_reason });
+        plans.push(PartialSeriesMatch {
+            volume,
+            matched,
+            unmatched,
+            actionable_reason,
+        });
     }
     plans
 }
@@ -741,8 +893,14 @@ mod tests {
         assert_eq!(compare_issue_labels("1", "1.0"), LabelMatch::Exact);
         assert_eq!(compare_issue_labels("½", "1/2"), LabelMatch::Exact);
         assert_eq!(compare_issue_labels("½", "0.5"), LabelMatch::Equivalent);
-        assert_eq!(compare_issue_labels("Annual 1", "annual #1"), LabelMatch::Exact);
-        assert_eq!(compare_issue_labels("Special", "special"), LabelMatch::Exact);
+        assert_eq!(
+            compare_issue_labels("Annual 1", "annual #1"),
+            LabelMatch::Exact
+        );
+        assert_eq!(
+            compare_issue_labels("Special", "special"),
+            LabelMatch::Exact
+        );
     }
 
     #[test]
@@ -753,7 +911,10 @@ mod tests {
         let volumes = discover_volume_candidates(&local, &providers);
         assert!(!volumes.is_empty());
         assert_eq!(volumes[0].comicvine_volume_id, 10);
-        assert!(volumes[0].evidence.iter().any(|e| e.contains("fuzzy title") || e.contains("alias")));
+        assert!(volumes[0]
+            .evidence
+            .iter()
+            .any(|e| e.contains("fuzzy title") || e.contains("alias")));
     }
 
     #[test]
@@ -766,7 +927,11 @@ mod tests {
 
     #[test]
     fn mixed_volume_series_produces_partial_match() {
-        let issues = vec![issue(1, "Saga", "1"), issue(2, "Saga", "2"), issue(3, "Saga", "3")];
+        let issues = vec![
+            issue(1, "Saga", "1"),
+            issue(2, "Saga", "2"),
+            issue(3, "Saga", "3"),
+        ];
         let providers = vec![
             provider(101, 30, "Saga", "1"),
             provider(102, 30, "Saga", "2"),
@@ -788,15 +953,27 @@ mod tests {
         let u = explain_no_match(&local, &providers);
         assert!(u.reason.contains("no volume found"));
         assert!(!u.next_steps.is_empty());
-        assert!(u.next_steps.iter().any(|s| s.to_lowercase().contains("different name")));
-        assert!(u.next_steps.iter().any(|s| s.to_lowercase().contains("url")));
-        assert!(u.next_steps.iter().any(|s| s.to_lowercase().contains("manual")));
+        assert!(u
+            .next_steps
+            .iter()
+            .any(|s| s.to_lowercase().contains("different name")));
+        assert!(u
+            .next_steps
+            .iter()
+            .any(|s| s.to_lowercase().contains("url")));
+        assert!(u
+            .next_steps
+            .iter()
+            .any(|s| s.to_lowercase().contains("manual")));
     }
 
     #[test]
     fn volume_found_but_issue_missing_gives_actionable_reason() {
         let local = issue(1, "Saga", "1.MU");
-        let providers = vec![provider(101, 30, "Saga", "1"), provider(102, 30, "Saga", "2")];
+        let providers = vec![
+            provider(101, 30, "Saga", "1"),
+            provider(102, 30, "Saga", "2"),
+        ];
         let u = explain_no_match(&local, &providers);
         assert!(u.reason.contains("volume"));
         assert!(u.reason.contains("1.MU"));
@@ -809,7 +986,10 @@ mod tests {
         // #4667/#4651 real cases: local naming often differs from ComicVine.
         // B.P.R.D. Hell on Earth #105-106 are A Cold Day in Hell parts 1-2.
         let mut i105 = issue(1051, "B.P.R.D. Hell on Earth", "105");
-        i105.aliases = vec!["BPRD: Hell on Earth".to_string(), "B.P.R.D.: Hell on Earth".to_string()];
+        i105.aliases = vec![
+            "BPRD: Hell on Earth".to_string(),
+            "B.P.R.D.: Hell on Earth".to_string(),
+        ];
         let mut i106 = issue(1052, "B.P.R.D. Hell on Earth", "106");
         i106.aliases = i105.aliases.clone();
         let providers = vec![
@@ -836,15 +1016,25 @@ mod tests {
         ];
         let plans = plan_partial_series_match(&[i105, i106], &providers);
         assert!(!plans.is_empty(), "should find a volume candidate");
-        let plan = plans.iter().find(|p| p.volume.comicvine_volume_id == 4050_31409).expect("BPRD volume");
-        assert_eq!(plan.matched.len(), 2, "both issues should match: {:?}", plan.unmatched);
+        let plan = plans
+            .iter()
+            .find(|p| p.volume.comicvine_volume_id == 4050_31409)
+            .expect("BPRD volume");
+        assert_eq!(
+            plan.matched.len(),
+            2,
+            "both issues should match: {:?}",
+            plan.unmatched
+        );
         assert!(plan.unmatched.is_empty());
     }
 
     #[test]
     fn hellboy_mismatched_series_name_alias_maps() {
         let mut local = issue(1, "Hellboy", "1");
-        local.aliases.push("Hellboy: Seed of Destruction".to_string());
+        local
+            .aliases
+            .push("Hellboy: Seed of Destruction".to_string());
         let providers = vec![ProviderIssue {
             comicvine_issue_id: 9001,
             comicvine_volume_id: 501,
@@ -869,11 +1059,14 @@ mod tests {
             provider(202, 40, "Spider-Man", "0.5"),
             provider(203, 40, "Spider-Man", "Annual 1"),
         ];
-        let m1 = match_issue_in_volume(&issue(1, "Spider-Man", "1.MU"), 40, &providers).expect("point one");
+        let m1 = match_issue_in_volume(&issue(1, "Spider-Man", "1.MU"), 40, &providers)
+            .expect("point one");
         assert_eq!(m1.comicvine_issue_id, 201);
-        let m2 = match_issue_in_volume(&issue(2, "Spider-Man", "½"), 40, &providers).expect("fraction");
+        let m2 =
+            match_issue_in_volume(&issue(2, "Spider-Man", "½"), 40, &providers).expect("fraction");
         assert_eq!(m2.comicvine_issue_id, 202);
-        let m3 = match_issue_in_volume(&issue(3, "Spider-Man", "Annual #1"), 40, &providers).expect("annual");
+        let m3 = match_issue_in_volume(&issue(3, "Spider-Man", "Annual #1"), 40, &providers)
+            .expect("annual");
         assert_eq!(m3.comicvine_issue_id, 203);
     }
 }
