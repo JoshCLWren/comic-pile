@@ -32,6 +32,10 @@ export interface DirectIssueMutation {
   status?: 'read' | 'unread' | null
   /** Effective rating in 0.5-point steps. Omit to keep the stored rating. */
   rating?: number | null
+  /** Alternate overall/story number (#4652). Omit to leave unchanged; null/empty to clear. */
+  issueNumberAlias?: string | null
+  /** True when issueNumberAlias is intentionally being set/cleared. */
+  issueNumberAliasProvided?: boolean
   /** Client-generated retry key; required by the native contract. */
   idempotencyKey: string
 }
@@ -79,12 +83,13 @@ export function createIssueCardsApi(client: HttpClient) {
      * out-of-Roll issues remain writable by their owner.
      */
     patchIssue: async (issueId: number, mutation: DirectIssueMutation): Promise<IssueReadRateResponse> => {
-      const body: components['schemas']['IssueReadRateRequest'] = {
+      const body: components['schemas']['IssueReadRateRequest'] & { issue_number_alias?: string | null } = {
         idempotency_key: mutation.idempotencyKey,
         source: 'direct',
       }
       if (mutation.status != null) body.status = mutation.status
       if (mutation.rating != null) body.rating = mutation.rating
+      if (mutation.issueNumberAliasProvided) body.issue_number_alias = mutation.issueNumberAlias ?? null
       return client.patch<IssueReadRateResponse, typeof body>(
         `/v2/issues/${encodeURIComponent(String(issueId))}`,
         body,
