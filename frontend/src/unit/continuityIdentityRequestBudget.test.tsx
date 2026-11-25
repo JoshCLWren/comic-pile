@@ -388,7 +388,7 @@ describe('/continuity-plans/:id/edit', () => {
 describe('/reading-lists', () => {
   it('loads the owned list index without fetching an arbitrary list', async () => {
     renderRoute('/reading-lists')
-    await screen.findByRole('heading', { name: 'Reading Lists', exact: true })
+    await screen.findByRole('heading', { name: /^Reading Lists$/ })
     await settle(1)
     expectExact([CUSTOM_LISTS])
   })
