@@ -13,6 +13,9 @@ import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import { useComicIssueMapping } from '../hooks/useComicIssueMapping'
 
+const setQueryDataSpy = vi.spyOn(queryClient, 'setQueryData')
+const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
 const { searchSeriesSpy, getIssueIdentitySpy, confirmIdentitySpy, replaceIdentitySpy, removeIdentitySpy } =
   vi.hoisted(() => ({
     searchSeriesSpy: vi.fn(),
@@ -204,11 +207,11 @@ describe('ComicIssueMappingAction', () => {
     fireEvent.click(screen.getByTestId('comic-mapping-remove'))
     fireEvent.click(await screen.findByText('Remove mapping'))
     await waitFor(() => expect(removeIdentitySpy).toHaveBeenCalledWith(77))
-    await waitFor(() => expect(queryClient.setQueryData).toHaveBeenCalledWith(
+    await waitFor(() => expect(setQueryDataSpy).toHaveBeenCalledWith(
       queryKeys.comicVine.issueIntelligence(77),
       null,
     ))
-    await waitFor(() => expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
+    await waitFor(() => expect(invalidateQueriesSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.comicVine.issueIntelligence(77),
       exact: true,
     }))

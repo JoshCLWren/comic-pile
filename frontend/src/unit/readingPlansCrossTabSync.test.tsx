@@ -8,27 +8,11 @@ import { applyCommittedReadingPlan } from '../query/cacheEffects'
 import { notifyReadingPlansChanged, subscribeToCrossTabChanges } from '../query/crossTabDataSync'
 import { queryClient } from '../query/queryClient'
 import { continuityPlansApi } from '../services/api-continuity-plans'
-import { cast } from '../utils/cast'
 import { isObject } from '../utils/runtimeChecks'
 
-vi.mock('../services/api-continuity-plans', async () => {
-  const actual = await vi.importActual<typeof import('../services/api-continuity-plans')>(
-    '../services/api-continuity-plans',
-  )
-  return {
-    ...actual,
-    continuityPlansApi: {
-      ...actual.continuityPlansApi,
-      list: vi.fn(),
-      update: vi.fn(),
-      delete: vi.fn(),
-    },
-  }
-})
-
-const mockList = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.list)
-const mockUpdate = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.update)
-const mockDelete = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.delete)
+const mockList = vi.spyOn(continuityPlansApi, 'list')
+const mockUpdate = vi.spyOn(continuityPlansApi, 'update')
+const mockDelete = vi.spyOn(continuityPlansApi, 'delete')
 
 const plan = {
   id: 1,
