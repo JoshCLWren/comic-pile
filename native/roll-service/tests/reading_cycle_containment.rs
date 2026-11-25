@@ -411,6 +411,57 @@ async fn confirmed_repair_revalidates_after_waiting_for_a_graph_writer() {
 }
 
 #[tokio::test]
+async fn create_issue_beyond_maximum_anchors_before_trailing_special() {
+    let Some((state, _db)) = database().await else {
+        return;
+    };
+    let (token, csrf, owner) = register(&state, "natural-maximum").await;
+    let labels = ["1", "2", "5", "7", "8", "Annual 1", "9", "10", "Special 0"];
+    let (thread, _issue_ids) = seed_thread(&state, owner, "Natural Maximum", 1, &labels).await;
+    let before = position_order(&state, thread).await;
+
+    let (status, created) = send(
+        &state,
+        (&token, &csrf),
+        "POST",
+        &format!("/api/v2/threads/{thread}/issues"),
+        Some(json!({"issue_range": "11"})),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    assert_eq!(created["issues"].as_array().unwrap().len(), 1);
+    assert_eq!(created["issues"][0]["issue_number"], "11");
+    let after = position_order(&state, thread).await;
+    assert_eq!(
+        after
+            .iter()
+            .map(|(label, _)| label.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "1",
+            "2",
+            "5",
+            "7",
+            "8",
+            "Annual 1",
+            "9",
+            "10",
+            "11",
+            "Special 0",
+        ]
+    );
+    let existing_after: Vec<(String, i32)> = after
+        .into_iter()
+        .filter(|(label, _)| label != "11")
+        .collect();
+    assert_eq!(
+        existing_after, before,
+        "existing issue order and identities must be preserved"
+    );
+}
+
+#[tokio::test]
 async fn bprd_normal_add_preserves_reader_order_and_return_master_history() {
     let Some((state, _db)) = database().await else {
         return;
