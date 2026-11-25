@@ -241,7 +241,7 @@ export default function QueuePage() {
           onRestoreGroup={handleRestoreGroup}
         />
 
-        {isError && threads !== null && (
+        {isError && queueLoader.isFetchNextPageError && threads !== null && (
           <div role="alert" className="text-sm text-red-400 text-center px-2 space-y-2">
             <p>Couldn&apos;t load the next batch of series.</p>
             {nextPageToken && (
