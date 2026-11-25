@@ -552,7 +552,7 @@ describe('Keyboard Accessibility', () => {
     expect(cards[0]).toHaveTextContent('Alpha')
     await user.type(screen.getByPlaceholderText('Search...'), 'missing')
     // Search is debounced (300ms) so the parent query only commits after the delay.
-    await waitFor(() => expect(screen.getByText('No active series match your search')).toBeInTheDocument(), { timeout: 2000 })
+    await waitFor(() => expect(screen.getByText(/No active series match your search/)).toBeInTheDocument(), { timeout: 2000 })
   })
 
   it('shows correct empty state when search matches only completed threads', async () => {
@@ -575,7 +575,7 @@ describe('Keyboard Accessibility', () => {
     })
     render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
     await user.type(screen.getByPlaceholderText('Search...'), 'done')
-    await waitFor(() => expect(screen.getByText('No active series match your search')).toBeInTheDocument(), { timeout: 2000 })
+    await waitFor(() => expect(screen.getByText(/No active series match your search/)).toBeInTheDocument(), { timeout: 2000 })
   })
 
   it('creates a simple issue range and marks the requested issues read', async () => {

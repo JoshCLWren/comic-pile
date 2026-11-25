@@ -429,13 +429,25 @@ mod tests {
                 "/api/v2/issue-read-markers",
                 "post",
                 "issue_read_state_bulk_mark_read",
-                "204",
+                "200",
             ),
             (
                 "/api/v2/issue-read-marker-removals",
                 "post",
                 "issue_read_state_bulk_mark_unread",
-                "204",
+                "200",
+            ),
+            (
+                "/api/v2/issue-read-operations/{operation_id}",
+                "get",
+                "issue_read_state_get_operation",
+                "200",
+            ),
+            (
+                "/api/v2/issue-read-operations/{operation_id}/undo",
+                "post",
+                "issue_read_state_undo_operation",
+                "200",
             ),
             (
                 "/api/v2/issues/{issue_id}/reader-context",
