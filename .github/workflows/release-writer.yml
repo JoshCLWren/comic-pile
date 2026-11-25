@@ -18,7 +18,7 @@ on:
   workflow_run:
     workflows:
       - Factory Ready Merge Drain
-      - Fixed Model Factory Dispatch
+      - Fixed Model Factory Dispatcher
     types: [completed]
 
 env:

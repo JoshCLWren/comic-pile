@@ -13,10 +13,8 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-RELEASE_WRITER_WORKFLOW = ROOT / ".github" / "workflows" / "release-writer.yml"
-MERGE_DRAIN_WORKFLOW = (
-    ROOT / ".rotisserie" / "runtime" / ".github" / "workflows" / "factory-ready-merge-drain.yml"
-)
+WORKFLOWS_DIR = ROOT / ".github" / "workflows"
+RELEASE_WRITER_WORKFLOW = WORKFLOWS_DIR / "release-writer.yml"
 
 
 def _release_writer() -> dict:
@@ -41,7 +39,7 @@ def test_release_writer_triggers_on_merge_drain_completion() -> None:
     workflow_run = triggers.get("workflow_run") or {}
     workflows = workflow_run.get("workflows") or []
     assert "Factory Ready Merge Drain" in workflows
-    assert "Fixed Model Factory Dispatch" in workflows
+    assert "Fixed Model Factory Dispatcher" in workflows
     types = workflow_run.get("types") or []
     assert "completed" in types
 
@@ -72,9 +70,24 @@ def test_generate_and_persist_only_handle_exact_pr_events() -> None:
     assert "workflow_run" not in generate_if
 
 
-def test_merge_drain_dispatches_release_writer_after_merge() -> None:
-    """Finding 1: merge-drain should explicitly dispatch release-writer for merged PR."""
-    text = MERGE_DRAIN_WORKFLOW.read_text(encoding="utf-8")
-    assert "release-writer.yml" in text
-    assert "pr_number=${merged_pr}" in text or "pr_number=" in text
-    assert "dispatch_release_writer" in text
+def test_workflow_run_names_match_installed_merge_workflows() -> None:
+    """Finding 1: recovery triggers must name real workflow `name:` values exactly.
+
+    GitHub matches ``workflow_run.workflows`` against the triggering workflow's
+    ``name:`` field, not its filename. A stale or invented name silently never
+    fires, which is the original 'factory releases never start' defect.
+    """
+    workflow = _release_writer()
+    triggers = workflow.get(True) or workflow.get("on") or {}
+    configured = set((triggers.get("workflow_run") or {}).get("workflows") or [])
+    assert configured, "workflow_run must name at least one factory merge workflow"
+
+    installed_names: set[str] = set()
+    for path in WORKFLOWS_DIR.glob("*.yml"):
+        parsed = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        name = parsed.get("name")
+        if isinstance(name, str):
+            installed_names.add(name)
+
+    unknown = configured - installed_names
+    assert not unknown, f"workflow_run names do not match any installed workflow: {sorted(unknown)}"

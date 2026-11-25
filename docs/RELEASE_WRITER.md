@@ -15,9 +15,9 @@ Release writing is internal GitHub Actions automation, not a user-facing API cli
 A trusted `pull_request_target` closed event processes only merged PRs using
 `main` code. Manual dispatch requires an exact merged PR number. Factory merges
 performed with `GITHUB_TOKEN` do not emit `pull_request_target`, so the writer
-also reacts to `Factory Ready Merge Drain` `workflow_run` completions by
-dispatching exact-PR release-writer runs for recently merged PRs (bounded
-lookback, not a historical reconciliation).
+also reacts to `Factory Ready Merge Drain` and `Fixed Model Factory Dispatcher`
+`workflow_run` completions by dispatching exact-PR release-writer runs for
+recently merged PRs (bounded lookback, not a historical reconciliation).
 
 Each PR gets its own release-writer concurrency group so a later merge cannot
 replace an earlier pending PR. Single-writer publication is preserved by the
