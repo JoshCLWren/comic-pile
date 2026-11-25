@@ -168,6 +168,7 @@ describe('IssueCorrectionDialog', () => {
       return listResponse(listCalls === 1 ? existing : [existing[0]!, created])
     })
     create.mockResolvedValueOnce(listResponse([created]))
+    bulkMarkRead.mockRejectedValueOnce(new Error('bulk read failed'))
 
     renderDialog()
     const input = await screen.findByLabelText(/what issue are you currently on/i)
