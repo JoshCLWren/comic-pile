@@ -49,8 +49,7 @@ pub struct DuplicateReadEvent {
     pub event_id: i32,
     pub timestamp: String,
     pub issue_number: Option<String>,
-    /// Per-event provenance: the event predates its issue's creation and is an
-    /// artificial suppression timestamp, never genuine reading evidence.
+    /// Per-event synthetic flag: true when the read timestamp predates its issue's creation.
     pub is_synthetic: bool,
 }
 
