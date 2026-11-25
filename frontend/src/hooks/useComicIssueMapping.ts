@@ -166,7 +166,8 @@ export function useComicIssueMapping({
       if (issueId) {
         // Clear stale A-identity creators/cover before refetching B so a late
         // in-flight response or React Query's retained previous data cannot
-        // resurrect the previous mapping during remap (#5695).
+        // resurrect the previous mapping during remap (#5695). An optimistic
+        // cover write here would replace B's server-confirmed intelligence.
         await clearComicVineIssueIntelligence(queryClient, issueId)
         await invalidateComicVineIssueIdentity(queryClient, issueId)
       }
