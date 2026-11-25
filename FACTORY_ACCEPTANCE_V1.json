@@ -1,0 +1,42 @@
+{
+  "issue": 5751,
+  "head": "cf3002f84f1075c79f7222039472a033cca04c1a",
+  "issue_digest": "5b1ab551dfe24c4523a88c6f87c76c8eeba08f520f5694871ed5cebefe906775",
+  "items": [
+    {
+      "id": "A1",
+      "status": "verified",
+      "file": "frontend/src/components/ComicIssueReadingCard.tsx",
+      "evidence": "New component created that wraps ComicIssueCard with provider identity (ComicIdentity) and TagSection, matching Roll page detail display",
+      "test": "src/unit/CompactIssueCardTrigger.test.tsx - 13 tests pass; src/unit/HistoryPage.issue-card.test.tsx - 2 tests pass; src/unit/QueueNextIssueCard.test.tsx - 18 tests pass"
+    },
+    {
+      "id": "A2",
+      "status": "verified",
+      "file": "frontend/src/components/ComicIssueCard.tsx",
+      "evidence": "Added onReadingDetailsRequest callback invocation when opening rating editor (line 294), triggers provider detail fetch for the exact issue",
+      "test": "src/unit/CompactIssueCardTrigger.test.tsx:128-143 (opens rating without writing; saving delegates to direct issue command)"
+    },
+    {
+      "id": "A3",
+      "status": "verified",
+      "file": "frontend/src/components/CompactIssueCardTrigger.tsx",
+      "evidence": "Changed ExpandedIssueCard to use ComicIssueReadingCard with showReadingDetails=true (line 58), ensures provider identity and tags render when expanded",
+      "test": "src/unit/CompactIssueCardTrigger.test.tsx:49-62 (uses owning list batch, renders exact cover, opens shared card)"
+    },
+    {
+      "id": "A4",
+      "status": "verified",
+      "file": "frontend/src/components/ReaderIssueActions.tsx",
+      "evidence": "Replaced ComicIssueCard with ComicIssueReadingCard in ReadNowIssueButton (line 74) and ReaderIssueActions (line 145), both with showReadingDetails=true",
+      "test": "src/unit/QueueNextIssueCard.test.tsx:114-125 (opens same provider details and tags a roll would show for the exact issue)"
+    },
+    {
+      "id": "A5",
+      "status": "verified",
+      "file": "frontend/src/unit/HistoryPage.issue-card.test.tsx",
+      "evidence": "Updated test to verify provider cover (ComicIdentity) renders via direct-read-comic-identity test ID instead of local cover image",
+      "test": "src/unit/HistoryPage.issue-card.test.tsx:138-156 (opens shared card with exact issue, provider identity, and direct actions)"
+    }
+  ]
+}
