@@ -199,8 +199,7 @@ async fn julix_4232_frontier_anthology_and_casualties_advance() {
     let ws2018_thread = thread(&conn, user_id, "Hellboy Winter Special 2018").await;
     let ws2017_thread = thread(&conn, user_id, "Hellboy Winter Special 2017").await;
     let casualties_thread = thread(&conn, user_id, "B.P.R.D.: Casualties").await;
-    let after_casualties_thread =
-        thread(&conn, user_id, "B.P.R.D.: Vampire").await;
+    let after_casualties_thread = thread(&conn, user_id, "B.P.R.D.: Vampire").await;
     let ws2016_thread = thread(&conn, user_id, "Hellboy Winter Special 2016").await;
     let ws2019_thread = thread(&conn, user_id, "Hellboy Winter Special 2019").await;
     let yule_cat_thread = thread(&conn, user_id, "Hellboy Winter Special: The Yule Cat").await;
@@ -274,22 +273,38 @@ async fn julix_4232_frontier_anthology_and_casualties_advance() {
     .await;
     assert_eq!(status, StatusCode::OK, "{eligible:?}");
     assert_eq!(eligible["issue_ids"], json!([casualties]), "{eligible:?}");
-    assert_eq!(eligible["thread_ids"], json!([casualties_thread]), "{eligible:?}");
+    assert_eq!(
+        eligible["thread_ids"],
+        json!([casualties_thread]),
+        "{eligible:?}"
+    );
 
     // (b) No anthology offered more than once - every issue_id appears once in
     // the list, and roll pool contains no duplicates.
     let issue_ids: Vec<i32> = entries.iter().map(|(id, _)| *id).collect();
     let unique: BTreeSet<i32> = issue_ids.iter().copied().collect();
-    assert_eq!(unique.len(), issue_ids.len(), "list must not duplicate physical issues");
+    assert_eq!(
+        unique.len(),
+        issue_ids.len(),
+        "list must not duplicate physical issues"
+    );
     let pool = eligible["issue_ids"].as_array().unwrap();
     let pool_set: BTreeSet<i64> = pool.iter().filter_map(Value::as_i64).collect();
-    assert_eq!(pool_set.len(), pool.len(), "roll pool must not duplicate issues");
+    assert_eq!(
+        pool_set.len(),
+        pool.len(),
+        "roll pool must not duplicate issues"
+    );
 
     // Reader projection: Casualties is the only available entry; later unread
     // entry is blocked/later, read anthologies are read, and no entry appears twice.
     let (status, reader) = send(
         &state,
-        get(&format!("/api/v2/reading-lists/{list_id}/reader"), &token, &csrf),
+        get(
+            &format!("/api/v2/reading-lists/{list_id}/reader"),
+            &token,
+            &csrf,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{reader:?}");
@@ -299,7 +314,11 @@ async fn julix_4232_frontier_anthology_and_casualties_advance() {
         .iter()
         .filter_map(|e| e["issue_id"].as_i64())
         .collect();
-    assert_eq!(seen.len(), reader_entries.len(), "reader must not duplicate issues");
+    assert_eq!(
+        seen.len(),
+        reader_entries.len(),
+        "reader must not duplicate issues"
+    );
     let by_id = |id: i32| {
         reader_entries
             .iter()
@@ -349,7 +368,11 @@ async fn julix_4232_frontier_anthology_and_casualties_advance() {
 
     let (status, reader_after) = send(
         &state,
-        get(&format!("/api/v2/reading-lists/{list_id}/reader"), &token, &csrf),
+        get(
+            &format!("/api/v2/reading-lists/{list_id}/reader"),
+            &token,
+            &csrf,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{reader_after:?}");
@@ -482,12 +505,19 @@ async fn julix_4232_omitted_in_thread_issues_classified_intentional_or_repaired(
 
     let (status, reader) = send(
         &state,
-        get(&format!("/api/v2/reading-lists/{list_id}/reader"), &token, &csrf),
+        get(
+            &format!("/api/v2/reading-lists/{list_id}/reader"),
+            &token,
+            &csrf,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{reader:?}");
     let reader_entries = reader["entries"].as_array().unwrap();
-    let seen: BTreeSet<i64> = reader_entries.iter().filter_map(|e| e["issue_id"].as_i64()).collect();
+    let seen: BTreeSet<i64> = reader_entries
+        .iter()
+        .filter_map(|e| e["issue_id"].as_i64())
+        .collect();
     assert_eq!(seen.len(), reader_entries.len());
     let by_id = |id: i32| {
         reader_entries
@@ -520,7 +550,10 @@ async fn julix_4232_omitted_in_thread_issues_classified_intentional_or_repaired(
         ),
     )
     .await;
-    assert!(status == StatusCode::OK || status == StatusCode::CREATED, "{status} {rate:?}");
+    assert!(
+        status == StatusCode::OK || status == StatusCode::CREATED,
+        "{status} {rate:?}"
+    );
 
     let (status, eligible_after) = send(
         &state,
