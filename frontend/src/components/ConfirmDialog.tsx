@@ -1,5 +1,5 @@
 import Modal from './Modal'
-import type { ReactNode } from 'react'
+import type { ReactNode, RefObject } from 'react'
 
 interface ConfirmDialogProps {
   isOpen: boolean
@@ -15,6 +15,8 @@ interface ConfirmDialogProps {
   error?: string | null
   onConfirm: () => void
   onCancel: () => void
+  /** Stable completion target when success unmounts the original trigger. */
+  returnFocusRef?: RefObject<HTMLElement | null>
   testId?: string
 }
 
@@ -37,12 +39,23 @@ export default function ConfirmDialog({
   error = null,
   onConfirm,
   onCancel,
+  returnFocusRef,
   testId,
 }: ConfirmDialogProps) {
   return (
-    <Modal isOpen={isOpen} title={title} onClose={onCancel} data-testid={testId}>
+    <Modal
+      isOpen={isOpen}
+      title={title}
+      onClose={() => { if (!isPending) onCancel() }}
+      closeDisabled={isPending}
+      returnFocusRef={returnFocusRef}
+      data-testid={testId}
+    >
       <div className="space-y-4">
         {children}
+        {isPending && pendingLabel && (
+          <p role="status" className="sr-only">{pendingLabel}</p>
+        )}
         {error && (
           <p
             role="alert"

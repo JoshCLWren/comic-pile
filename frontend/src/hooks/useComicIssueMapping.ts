@@ -4,6 +4,7 @@ import type { ComicVineIssueCandidate, IssueIdentityResponse } from '../services
 import { queryClient } from '../query/queryClient'
 import {
   applyComicVineCorrectionOptimistically,
+  clearComicVineIssueIntelligence,
   invalidateAfterIssueMappingChange,
   invalidateComicVineIssueIdentity,
   invalidateComicVineIssueIntelligenceMany,
@@ -110,6 +111,7 @@ export function useComicIssueMapping({
   const [removeMappingError, setRemoveMappingError] = useState<string | null>(null)
   const onMappedRef = useRef(onMapped)
   onMappedRef.current = onMapped
+  const removalIdentityRef = useRef<{ issueId: number; identity: IssueIdentityResponse } | null>(null)
 
   const fetchIdentity = useCallback(async () => {
     if (!issueId || !isOwned) {
@@ -121,6 +123,11 @@ export function useComicIssueMapping({
       const state = await comicVineApi.getIssueIdentity(issueId)
       setIdentityState(state)
       setIdentityError(false)
+      // A completed GET is authoritative, including a concurrent remap. The
+      // removal guard only bridges failed or still-pending reconciliation.
+      if (removalIdentityRef.current?.issueId === issueId) {
+        removalIdentityRef.current = null
+      }
     } catch {
       setIdentityError(true)
     } finally {
@@ -130,7 +137,20 @@ export function useComicIssueMapping({
 
   // A supplied batched identity is authoritative; only fetch when none exists.
   useEffect(() => {
+    if (removalIdentityRef.current && removalIdentityRef.current.issueId !== issueId) {
+      removalIdentityRef.current = null
+    }
     if (initialIdentity !== undefined && initialIdentity !== null) {
+      const removal = removalIdentityRef.current
+      if (
+        removal?.issueId === issueId
+        && statusFor(initialIdentity) !== statusFor(removal.identity)
+      ) {
+        // A failed card refresh can replay the pre-removal projection. Keep
+        // the committed DELETE result until reconciliation catches up.
+        return
+      }
+      if (removal?.issueId === issueId) removalIdentityRef.current = null
       setIdentityState(initialIdentity)
       setIdentityError(false)
       return
@@ -139,10 +159,11 @@ export function useComicIssueMapping({
       return
     }
     void fetchIdentity()
-  }, [initialIdentity, fetchEnabled, fetchIdentity])
+  }, [initialIdentity, fetchEnabled, fetchIdentity, issueId])
 
   const handleIdentityConfirmed = useCallback(
     async (selected?: ComicVineIssueCandidate | null) => {
+      removalIdentityRef.current = null
       if (issueId) {
         if (selected && selected.image_url !== undefined) {
           applyComicVineCorrectionOptimistically(queryClient, issueId, selected.image_url)
@@ -159,6 +180,9 @@ export function useComicIssueMapping({
 
   const handleSiblingsMapped = useCallback(
     async (confirmedIssueIds: number[]) => {
+      if (issueId && confirmedIssueIds.includes(issueId)) {
+        removalIdentityRef.current = null
+      }
       if (confirmedIssueIds.length > 0) {
         await invalidateComicVineIssueIntelligenceMany(queryClient, confirmedIssueIds)
         await Promise.all(
@@ -170,7 +194,7 @@ export function useComicIssueMapping({
       await invalidateAfterIssueMappingChange(queryClient)
       await onMappedRef.current?.()
     },
-    [],
+    [issueId],
   )
 
   const openMappingDialog = useCallback((mode: 'confirm' | 'replace' = 'confirm') => {
@@ -196,8 +220,14 @@ export function useComicIssueMapping({
     setRemoveMappingError(null)
     setIsRemovingMapping(true)
     try {
-      await comicVineApi.removeIdentity(issueId)
+      const removedIdentity = await comicVineApi.removeIdentity(issueId)
+      // The DELETE response is authoritative. Keep the successful removal
+      // visible even if the follow-up identity reconciliation cannot load.
+      removalIdentityRef.current = { issueId, identity: removedIdentity }
+      setIdentityState(removedIdentity)
+      setIdentityError(false)
       setIsRemoveDialogOpen(false)
+      await clearComicVineIssueIntelligence(queryClient, issueId)
       await invalidateComicVineIssueIdentity(queryClient, issueId)
       await fetchIdentity()
       await invalidateAfterIssueMappingChange(queryClient)
