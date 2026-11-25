@@ -40,6 +40,7 @@ vi.mock('../services/api-comicvine', () => ({
 
 vi.mock('../query/queryClient', () => ({
   queryClient: {
+    cancelQueries: vi.fn().mockResolvedValue(undefined),
     invalidateQueries: vi.fn().mockResolvedValue(undefined),
     setQueryData: vi.fn(),
     getQueriesData: vi.fn(() => []),

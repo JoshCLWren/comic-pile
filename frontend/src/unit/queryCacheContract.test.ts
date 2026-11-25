@@ -17,6 +17,7 @@ import {
   applyDeletedCustomCBL,
   applyCommittedReadingPlan,
   invalidateSessionRecoveryCache,
+  clearComicVineIssueIntelligence,
 } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
 import type { RateResponsePayload, Thread } from '../types'
@@ -44,11 +45,12 @@ const thread: Thread = {
 function createSpiedClient() {
   const client = new QueryClient()
   const setQueryData = vi.spyOn(client, 'setQueryData')
+  const cancelQueries = vi.spyOn(client, 'cancelQueries').mockResolvedValue()
   const invalidateQueries = vi.spyOn(client, 'invalidateQueries').mockResolvedValue()
   const removeQueries = vi.spyOn(client, 'removeQueries').mockResolvedValue()
   const resetQueries = vi.spyOn(client, 'resetQueries').mockResolvedValue()
 
-  return { client, setQueryData, invalidateQueries, removeQueries, resetQueries }
+  return { client, setQueryData, cancelQueries, invalidateQueries, removeQueries, resetQueries }
 }
 
 describe('canonical query keys', () => {
@@ -619,6 +621,23 @@ describe('targeted cache effects', () => {
       queryKey: queryKeys.roll.issueCardsAll(),
     })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.issueCards.all })
+  })
+
+  it('cancels stale issue intelligence before clearing and refetching the exact owned issue (#5695)', async () => {
+    const { client, cancelQueries, setQueryData, invalidateQueries } = createSpiedClient()
+    const filter = { queryKey: queryKeys.comicVine.issueIntelligence(77), exact: true }
+
+    await clearComicVineIssueIntelligence(client, 77)
+
+    expect(cancelQueries).toHaveBeenCalledWith(filter)
+    expect(setQueryData).toHaveBeenCalledWith(filter.queryKey, null)
+    expect(invalidateQueries).toHaveBeenCalledWith(filter)
+    expect(cancelQueries.mock.invocationCallOrder[0]).toBeLessThan(
+      setQueryData.mock.invocationCallOrder[0],
+    )
+    expect(setQueryData.mock.invocationCallOrder[0]).toBeLessThan(
+      invalidateQueries.mock.invocationCallOrder[0],
+    )
   })
 
   it('refreshes undo surfaces and reconciles open views while leaving session detail to its caller', async () => {
