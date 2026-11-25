@@ -263,7 +263,7 @@ pub async fn create_dependency(
     let next_unread = tx
         .query_opt(
             "SELECT i.issue_number, i.position FROM threads t
-             JOIN issues i ON i.id = t.next_unread_issue_id
+             JOIN issues i ON i.id = t.next_unread_issue_id AND i.merged_into_issue_id IS NULL
              WHERE t.id = $1",
             &[&target.thread_id],
         )

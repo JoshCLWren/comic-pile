@@ -91,7 +91,7 @@ const OUTGOING_SQL: &str = "SELECT d.id, ti.id, ti.issue_number, ti.thread_id, t
 const THREAD_SQL: &str = "SELECT t.id FROM threads t WHERE t.id = $1 AND t.user_id = $2";
 
 const THREAD_ISSUES_SQL: &str =
-    "SELECT i.id FROM issues i WHERE i.thread_id = $1 ORDER BY i.position, i.id";
+    "SELECT i.id FROM issues i WHERE i.thread_id = $1 AND i.merged_into_issue_id IS NULL ORDER BY i.position, i.id";
 
 const THREAD_INCOMING_SQL: &str = "SELECT d.id, d.target_issue_id, si.id, si.issue_number, si.thread_id, st.title FROM dependencies d JOIN issues si ON si.id = d.source_issue_id JOIN threads st ON st.id = si.thread_id WHERE d.target_issue_id = ANY($1::int[]) AND st.user_id = $2 ORDER BY d.id";
 

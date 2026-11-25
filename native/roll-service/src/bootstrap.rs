@@ -362,7 +362,7 @@ const CANDIDATES: &str = r#"
 SELECT t.id, t.title, t.format, t.last_activity_at::text, i.id, i.issue_number,
  mapping.metadata::text, mapping.status, series_mapping.status,
  (SELECT count(*) FROM issues owned WHERE owned.thread_id=t.id AND owned.status='read' AND owned.merged_into_issue_id IS NULL),
- (SELECT count(*) FROM issues owned WHERE owned.thread_id=t.id),
+ (SELECT count(*) FROM issues owned WHERE owned.thread_id=t.id AND owned.merged_into_issue_id IS NULL),
  (SELECT e.rating::double precision FROM events e JOIN sessions s ON s.id=e.session_id
     WHERE s.user_id=$1 AND e.thread_id=t.id AND e.type='rate' AND e.rating IS NOT NULL
     ORDER BY e.timestamp DESC,e.id DESC LIMIT 1),
@@ -403,7 +403,7 @@ LEFT JOIN LATERAL (
       AND e.provider='comicvine' AND e.entity_type='series'
     ORDER BY (m.status='confirmed') DESC,m.confidence DESC NULLS LAST,m.id LIMIT 1
 ) series_mapping ON TRUE
-WHERE t.user_id=$1 AND i.id=ANY($2::int[])
+WHERE t.user_id=$1 AND i.id=ANY($2::int[]) AND i.merged_into_issue_id IS NULL
 "#;
 
 async fn latest_session_read(
@@ -474,11 +474,11 @@ async fn current_active_thread(
         "SELECT t.id,t.title,t.format,t.issues_remaining,t.queue_position,
                t.total_issues,t.reading_progress,t.last_rating,t.next_unread_issue_id,
                i.issue_number,
-               (SELECT count(*)::int FROM issues read WHERE read.thread_id=t.id AND read.status='read'),
+               (SELECT count(*)::int FROM issues read WHERE read.thread_id=t.id AND read.status='read' AND read.merged_into_issue_id IS NULL),
                (SELECT e.result FROM events e WHERE e.session_id=$2 AND e.selected_thread_id=t.id
                  AND e.type='roll' ORDER BY e.timestamp DESC,e.id DESC LIMIT 1),
                {position} AS computed_position
-         FROM threads t LEFT JOIN issues i ON i.id=t.next_unread_issue_id AND i.thread_id=t.id
+         FROM threads t LEFT JOIN issues i ON i.id=t.next_unread_issue_id AND i.thread_id=t.id AND i.merged_into_issue_id IS NULL
          WHERE t.id=$1 AND t.user_id=$3",
     );
     let row = conn
@@ -644,7 +644,7 @@ async fn canonical_series_stats(
           JOIN issue_external_identity_mappings m ON m.issue_id=i.id AND m.status='confirmed'
           JOIN external_identities e ON e.id=m.external_identity_id
             AND e.provider='comicvine' AND e.entity_type='issue'
-          WHERE t.user_id=$1 AND i.status='read'
+          WHERE t.user_id=$1 AND i.status='read' AND i.merged_into_issue_id IS NULL
         ), rated AS (
           SELECT mapped.volume_id, mapped.id, rating.rating, rating.timestamp
           FROM mapped LEFT JOIN LATERAL (
