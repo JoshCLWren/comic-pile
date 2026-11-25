@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { NavigateFunction } from 'react-router-dom'
-import { threadsApi } from '../../services/api-threads'
 import { queryClient } from '../../query/queryClient'
 import { queryKeys } from '../../query/queryKeys'
 import {
@@ -14,7 +13,7 @@ import type { RollResponse } from '../../types'
 import type { RollUnsnoozeResponse } from '../../services/apiTypes'
 import type { SnoozeMutationOutcome } from '../../hooks/useSnooze'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
-import type { RatingThread, ThreadMetadata } from './types'
+import type { ThreadMetadata } from './types'
 
 interface RollMutations {
   setDieMutation: { mutate: (die: number) => Promise<void>; isPending: boolean }
@@ -42,7 +41,6 @@ interface UseRollActionsParams {
     result?: number | null,
     metadata?: ThreadMetadata | null,
   ) => Promise<void>
-  threadsApi: typeof import('../../services/api-threads').threadsApi
   /**
    * Reports that the committed snooze could not refresh authoritative Roll
    * state. The action sheet has already closed by then, so the page owns the
@@ -95,8 +93,6 @@ export function useRollActions({
     setIsShuffleOpen,
     setShuffleError,
     setErrorMessage,
-    setThreadToMigrate,
-    setShowMigrationDialog,
     setIsRolling,
   } = state
   const {
@@ -132,29 +128,9 @@ export function useRollActions({
     try {
       switch (action) {
         case 'read': {
-          const response = await threadsApi.setPending(selectedThread!.id)
-          const threadMetadata: ThreadMetadata = {
-            id: response.thread_id,
-            title: response.title,
-            format: response.format,
-            issues_remaining: response.issues_remaining,
-            queue_position: response.queue_position,
-            total_issues: response.total_issues,
-            reading_progress: response.reading_progress ?? null,
-            issue_id: response.issue_id,
-            issue_number: response.issue_number,
-            next_issue_id: response.next_issue_id,
-            next_issue_number: response.next_issue_number,
-            last_rolled_result: response.result ?? response.last_rolled_result,
-          }
-          if (response.total_issues === null) {
-            // SAFETY: threadMetadata is assembled from the roll response fields RatingThread requires when total_issues is null.
-            setThreadToMigrate(threadMetadata as RatingThread)
-            setShowMigrationDialog(true)
-          } else {
-            suppressPendingAutoOpenRef.current = true
-            enterRatingView(response.thread_id, response.result, threadMetadata)
-          }
+          // Explicit Read Now never enters the automatic Roll offer lifecycle.
+          // Resolve the exact owned issue in the shared card and write only on Save.
+          state.setIsDirectReadOpen(true)
           break
         }
         case 'set-current-issue': {

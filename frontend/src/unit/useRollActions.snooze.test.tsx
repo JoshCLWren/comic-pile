@@ -85,8 +85,6 @@ function renderActionSheet(options: HarnessOptions = {}) {
       },
       refetchBootstrap,
       enterRatingView: vi.fn(() => Promise.resolve()),
-      // SAFETY: the hook only calls setPending; the stub omits the rest of the API surface
-      threadsApi: { setPending: vi.fn() } as never,
       onSnoozeRefreshFailed,
     })
 

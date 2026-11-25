@@ -528,10 +528,7 @@ pub async fn search_issues(
     let clamped = limit.clamp(1, 50);
     let issue_id = q.issue_id.unwrap_or(0);
 
-    let api_key = std::env::var("COMICVINE_API_KEY")
-        .unwrap_or_default()
-        .trim()
-        .to_string();
+    let api_key = crate::comicvine_repair::provider_api_key().unwrap_or_default();
     if api_key.is_empty() {
         return Ok(Json(IdentityInboxSearchResponse {
             issue_id,

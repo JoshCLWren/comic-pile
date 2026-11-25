@@ -48,6 +48,7 @@ pub enum BlockerKind {
     Hold,
     AfterPrevious,
     Prerequisite,
+    ReadingCycle,
 }
 
 #[derive(Serialize, utoipa::ToSchema)]
@@ -126,9 +127,27 @@ pub struct ReadingBoundaryExplanationV2 {
     pub blockers: Vec<ReadingBoundaryBlocker>,
 }
 
+/// Deployment-level capability for the canonical evaluator behind this batch.
+///
+/// It mirrors the same `AppState::option_e` switch every handler resolves, so
+/// a client that has already observed one batch can skip the canonical read
+/// entirely on later loads when the evaluator cannot answer (`unavailable`)
+/// and consult the legacy blocking authority directly.
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BoundaryEvaluator {
+    /// Option E evaluated every requested thread in this batch.
+    Enabled,
+    /// The evaluator is not effective for this deployment: every explanation
+    /// in this batch carries `state: unavailable` and the stored
+    /// `threads.is_blocked` authority remains the blocking source of truth.
+    Unavailable,
+}
+
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct ReadingBoundaryBatchResponseV2 {
     pub threads: HashMap<i32, ReadingBoundaryExplanationV2>,
+    pub evaluator: BoundaryEvaluator,
 }
 
 #[derive(Debug, Serialize)]
@@ -199,6 +218,7 @@ fn blocker_kind_from_str(kind: &str) -> BlockerKind {
         "strict_order" => BlockerKind::StrictOrder,
         "hold" => BlockerKind::Hold,
         "after_previous" => BlockerKind::AfterPrevious,
+        "reading_cycle" => BlockerKind::ReadingCycle,
         _ => BlockerKind::Prerequisite,
     }
 }
@@ -310,11 +330,16 @@ fn blocker_reason(
 ) -> String {
     let label = gate_label(snapshot, labels, &gate.blocker);
     if gate.described_issue_ids.is_empty() {
-        format!("Also gated by {label}.")
-    } else {
-        let waiting = issue_names(labels, &gate.described_issue_ids);
-        format!("{label}: read {waiting} first")
+        if gate.blocker.kind == "reading_cycle" {
+            return "Blocked by a dependency cycle.".to_string();
+        }
+        return format!("Also gated by {label}.");
     }
+    let waiting = issue_names(labels, &gate.described_issue_ids);
+    if gate.blocker.kind == "reading_cycle" {
+        return format!("Blocked by a dependency cycle involving {waiting}.");
+    }
+    format!("{label}: read {waiting} first")
 }
 
 fn gate_label(
@@ -323,18 +348,20 @@ fn gate_label(
     blocker: &crate::reading_constraints::Blocker,
 ) -> String {
     if blocker.kind == "prerequisite" {
-        prerequisite_origin_label(blocker.origin.as_deref())
-    } else {
-        let list_name = list_name(snapshot, labels, blocker.list_id);
-        format!(
-            "{} in {list_name}",
-            KIND_TEXT
-                .iter()
-                .find(|(k, _)| *k == blocker.kind)
-                .map(|(_, v)| *v)
-                .unwrap_or(&blocker.kind)
-        )
+        return prerequisite_origin_label(blocker.origin.as_deref());
     }
+    if blocker.kind == "reading_cycle" {
+        return "Dependency cycle".to_string();
+    }
+    let list_name = list_name(snapshot, labels, blocker.list_id);
+    format!(
+        "{} in {list_name}",
+        KIND_TEXT
+            .iter()
+            .find(|(k, _)| *k == blocker.kind)
+            .map(|(_, v)| *v)
+            .unwrap_or(&blocker.kind)
+    )
 }
 
 fn project_blocker(
@@ -756,7 +783,11 @@ async fn get_reading_boundary_explanations(
             tx.rollback().await.map_err(db::query_error)?;
             return Err(ApiError::NotFound(format!("Thread {thread_id} not found")));
         }
-        let validated = option_inputs::load_validated_contained_in_transaction(&tx, user).await?;
+        let validated = if state.option_e {
+            Some(option_inputs::load_validated_contained_in_transaction(&tx, user).await?)
+        } else {
+            None
+        };
         tx.rollback().await.map_err(db::query_error)?;
         Ok::<_, ApiError>((labels, validated))
     })
@@ -775,6 +806,32 @@ async fn get_reading_boundary_explanations(
             values
         }
     };
+    let Some(validated) = validated else {
+        // Legacy execution checks ownership above but never evaluates or exposes
+        // canonical eligibility. This is the frozen Python batch behavior and
+        // keeps the deployment-level signal consistent with every row.
+        let mut threads = HashMap::new();
+        for thread_id in thread_ids {
+            let thread = labels
+                .threads
+                .get(&thread_id)
+                .ok_or(ApiError::NotFound(format!("Thread {thread_id} not found")))?;
+            threads.insert(
+                thread_id,
+                ReadingBoundaryExplanationV2 {
+                    thread_id,
+                    state: BoundaryState::Unavailable,
+                    summary: format!("Option E is not active for {}.", thread.title),
+                    next: None,
+                    blockers: vec![],
+                },
+            );
+        }
+        return Ok(ReadingBoundaryBatchResponseV2 {
+            threads,
+            evaluator: BoundaryEvaluator::Unavailable,
+        });
+    };
     let snapshot = build_eligibility_snapshot(&validated, &labels, &requested)?;
 
     let mut threads = HashMap::new();
@@ -785,7 +842,14 @@ async fn get_reading_boundary_explanations(
         );
     }
 
-    Ok(ReadingBoundaryBatchResponseV2 { threads })
+    Ok(ReadingBoundaryBatchResponseV2 {
+        threads,
+        evaluator: if state.option_e {
+            BoundaryEvaluator::Enabled
+        } else {
+            BoundaryEvaluator::Unavailable
+        },
+    })
 }
 
 fn build_eligibility_snapshot(
@@ -913,6 +977,23 @@ mod tests {
         let oversized = vec![1; MAX_BATCH_THREAD_IDS + 1];
         let rejected = validate_thread_ids(&oversized).expect_err("oversized batch is rejected");
         assert_eq!(rejected.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[test]
+    fn batch_response_exposes_the_deployment_evaluator() {
+        for (evaluator, wire_value) in [
+            (BoundaryEvaluator::Enabled, "enabled"),
+            (BoundaryEvaluator::Unavailable, "unavailable"),
+        ] {
+            let response = ReadingBoundaryBatchResponseV2 {
+                threads: HashMap::new(),
+                evaluator,
+            };
+            let value =
+                serde_json::to_value(response).expect("boundary batch response serializes to JSON");
+            assert_eq!(value["threads"], serde_json::json!({}));
+            assert_eq!(value["evaluator"], serde_json::json!(wire_value));
+        }
     }
 
     #[test]

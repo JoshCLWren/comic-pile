@@ -43,7 +43,11 @@ import {
 } from '../utils/cblAdoptionPlan'
 import { identityResolutionReason } from '../utils/cblResolutionReason'
 import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle } from '../utils/cblSourceDisplay'
+<<<<<<< HEAD
 import { catalogTotalLabel, isStaleBrowsePosition } from '../utils/cblCatalogBrowse'
+=======
+import { catalogSourceCount, catalogTotalLabel, isStaleBrowsePosition } from '../utils/cblCatalogBrowse'
+>>>>>>> origin/main
 import { isObject, isString } from '../utils/runtimeChecks'
 import { countPhraseWithArticle } from '../utils/countPhraseWithArticle'
 import { cblBrowseResultState } from '../utils/cblBrowseResultState'
@@ -285,7 +289,11 @@ export default function CblBrowserPage() {
     gcTime: 15 * 60 * 1000, // 15 minutes
   })
   const browsePage = browseQuery.data ?? null
+<<<<<<< HEAD
   const browseStale = isStaleBrowsePosition(browsePage, browseQuery.isFetching, folder, submittedQuery)
+=======
+  const browseStale = isStaleBrowsePosition(browsePage, browseQuery.isFetching, folder, submittedQuery, page)
+>>>>>>> origin/main
 
   // The server clamps an out-of-range page to the last valid page (#5381).
   // Adopt the returned page in the URL so Previous/Next step from the page
@@ -760,6 +768,7 @@ export default function CblBrowserPage() {
     preview && summary
       ? `${countPhraseWithArticle(preview.total_positions, 'entry', 'entries')} · ${summary.reused_existing_count} already in ComicPile · ${summary.missing_would_create_count} will be added${needsAttentionCount > 0 ? ` · ${countPhraseWithArticle(needsAttentionCount, 'needs attention', 'need attention')}` : ''}`
       : null
+<<<<<<< HEAD
   const {
     settledBrowsePage,
     firstShown,
@@ -774,6 +783,16 @@ export default function CblBrowserPage() {
     isFetching: browseQuery.isFetching,
     hasCatalogError: catalogError !== null,
   })
+=======
+  const firstShown =
+    browsePage && browsePage.items.length > 0
+      ? (browsePage.page - 1) * browsePage.page_size + 1
+      : 0
+  const lastShown = browsePage
+    ? (browsePage.page - 1) * browsePage.page_size + browsePage.items.length
+    : 0
+  const catalogTotal = browsePage ? catalogSourceCount(browsePage.folders, browsePage.total) : 0
+>>>>>>> origin/main
 
   const openConfirm = () => {
     if (!selectedSource || !preview || commitBlocked) return
@@ -1253,6 +1272,7 @@ export default function CblBrowserPage() {
 
           {browsePage && !catalogError && !browseStale && (
             <div className="space-y-4" data-testid="cbl-browse-results">
+<<<<<<< HEAD
               {browsePage.scope === 'folder' && !folder && catalogTotal > 0 && (
                 <p
                   role="status"
@@ -1262,6 +1282,9 @@ export default function CblBrowserPage() {
                   {catalogTotalLabel(catalogTotal, browsePage.folders.length)}
                 </p>
               )}
+=======
+              {browsePage.scope === 'folder' && !folder && catalogTotal > 0 && <p role="status" data-testid="cbl-catalog-total" className="text-xs text-[var(--theme-text-muted)]">{catalogTotalLabel(catalogTotal, browsePage.folders.length)}</p>}
+>>>>>>> origin/main
 
               {browsePage.scope === 'folder' && (
                 <nav aria-label="CBL folder path" className="flex flex-wrap items-center gap-1 text-xs">
