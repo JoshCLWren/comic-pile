@@ -13,6 +13,7 @@ interface CblBrowseResultStateInput {
  * Derive catalog totals only from the response for the currently applied
  * folder/search/page key. Placeholder rows remain renderable, but their counts
  * belong to the previous key and must not be presented as current (#3614).
+ * Same-key refreshes also withhold the previous totals until new ones settle.
  */
 export function cblBrowseResultState({
   browsePage,
@@ -21,7 +22,7 @@ export function cblBrowseResultState({
   isFetching,
   hasCatalogError,
 }: CblBrowseResultStateInput) {
-  const settledBrowsePage = isPlaceholderData ? null : browsePage
+  const settledBrowsePage = isPlaceholderData || isFetching ? null : browsePage
   const firstShown =
     settledBrowsePage && settledBrowsePage.items.length > 0
       ? (settledBrowsePage.page - 1) * settledBrowsePage.page_size + 1
@@ -30,7 +31,7 @@ export function cblBrowseResultState({
     ? (settledBrowsePage.page - 1) * settledBrowsePage.page_size + settledBrowsePage.items.length
     : 0
   const resultCountPending =
-    !hasCatalogError && (isPending || (isPlaceholderData && isFetching))
+    !hasCatalogError && (isPending || isFetching)
   // Folder pages paginate only their direct sources, while each child folder
   // already carries its recursive total. The applicable folder collection is
   // therefore direct sources plus all child-folder sources, not just this

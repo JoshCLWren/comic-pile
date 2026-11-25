@@ -56,6 +56,32 @@ describe('useQueueListLoading', () => {
     client.clear()
   })
 
+  it('ignores an older search request after the current zero-result key settles', async () => {
+    const client = new QueryClient()
+    void client
+      .fetchQuery({
+        queryKey: queueListKey('Saga'),
+        queryFn: () => new Promise<ThreadListResponse>(() => undefined),
+      })
+      .catch(() => undefined)
+    client.setQueryData(queueListKey('Spawn'), {
+      threads: [],
+      next_page_token: null,
+      active_count: 5,
+      filtered_count: 0,
+    })
+
+    const { result } = renderHook(() => useQueueListLoading('Spawn'), {
+      wrapper: makeWrapper(client),
+    })
+
+    await waitFor(() =>
+      expect(client.isFetching({ queryKey: queueListKey('Saga') })).toBe(1),
+    )
+    expect(result.current).toBe(false)
+    client.clear()
+  })
+
   it('ignores fetches that are not Queue pages', async () => {
     const client = new QueryClient()
     void client
@@ -65,7 +91,7 @@ describe('useQueueListLoading', () => {
       })
       .catch(() => undefined)
 
-    const { result } = renderHook(() => useQueueListLoading(), {
+    const { result } = renderHook(() => useQueueListLoading('Saga'), {
       wrapper: makeWrapper(client),
     })
 
@@ -80,7 +106,7 @@ describe('useQueueListLoading', () => {
     const client = new QueryClient()
     client.setQueryData(queueListKey('Saga'), { threads: [], active_count: 0 })
 
-    const { result } = renderHook(() => useQueueListLoading(), {
+    const { result } = renderHook(() => useQueueListLoading('Saga'), {
       wrapper: makeWrapper(client),
     })
 

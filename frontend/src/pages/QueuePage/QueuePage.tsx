@@ -80,7 +80,7 @@ export default function QueuePage() {
   const authoritativeActiveCount = activeCount ?? activeThreads.length
   // True while the Queue list is still fetching; the list uses it to tell
   // "still fetching" apart from a settled zero-match (#3912).
-  const queueListLoading = useQueueListLoading()
+  const queueListLoading = useQueueListLoading(searchQuery, sortBy)
 
   const actions = useQueueThreadActions({})
 
