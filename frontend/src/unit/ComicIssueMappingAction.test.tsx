@@ -6,9 +6,12 @@
  * runs only on demand, and provider-only entries never hit the owner-scoped
  * mapping mutation.
  */
-import { render, screen, waitFor, fireEvent } from './testingLibrary'
+import { act, render, renderHook, screen, waitFor, fireEvent } from './testingLibrary'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { IssueIdentityResponse } from '../services/api-comicvine'
+import { queryClient } from '../query/queryClient'
+import { queryKeys } from '../query/queryKeys'
+import { useComicIssueMapping } from '../hooks/useComicIssueMapping'
 
 const { searchSeriesSpy, getIssueIdentitySpy, confirmIdentitySpy, replaceIdentitySpy, removeIdentitySpy } =
   vi.hoisted(() => ({
@@ -76,6 +79,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   getIssueIdentitySpy.mockResolvedValue(UNMAPPED)
   confirmIdentitySpy.mockResolvedValue(MAPPED)
+  removeIdentitySpy.mockResolvedValue(UNMAPPED)
 })
 
 describe('ComicIssueMappingAction', () => {
@@ -188,6 +192,9 @@ describe('ComicIssueMappingAction', () => {
 
   it('removes the mapping through the accessible confirm dialog and refetches', async () => {
     const onMapped = vi.fn().mockResolvedValue(undefined)
+    const intelligenceKey = queryKeys.comicVine.issueIntelligence(77)
+    queryClient.setQueryData(intelligenceKey, { image_url: 'https://example.com/stale-cover.jpg' })
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
     render(
       <ComicIssueMappingAction
         issueId={77}
@@ -200,6 +207,106 @@ describe('ComicIssueMappingAction', () => {
     fireEvent.click(screen.getByTestId('comic-mapping-remove'))
     fireEvent.click(await screen.findByText('Remove mapping'))
     await waitFor(() => expect(removeIdentitySpy).toHaveBeenCalledWith(77))
+    await waitFor(() => expect(queryClient.getQueryData(intelligenceKey)).toBeNull())
+    await waitFor(() => expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: intelligenceKey,
+      exact: true,
+    }))
     await waitFor(() => expect(onMapped).toHaveBeenCalled())
+    expect(screen.getByTestId('comic-mapping-status')).toHaveTextContent('Not mapped')
+    expect(screen.getByTestId('comic-mapping-map')).toHaveTextContent('Map comic')
+    expect(screen.queryByTestId('comic-mapping-change')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('comic-mapping-remove')).not.toBeInTheDocument()
+    invalidateQueries.mockRestore()
+  })
+
+  it('keeps a successful removal visible when identity reconciliation fails', async () => {
+    const onMapped = vi.fn().mockResolvedValue(undefined)
+    getIssueIdentitySpy.mockRejectedValue(new Error('identity refresh offline'))
+    const { rerender } = render(
+      <ComicIssueMappingAction
+        issueId={77}
+        threadTitle="Hellboy in Hell"
+        issueNumber="1"
+        initialIdentity={MAPPED}
+        onMapped={onMapped}
+      />,
+    )
+
+    fireEvent.click(screen.getByTestId('comic-mapping-remove'))
+    fireEvent.click(await screen.findByText('Remove mapping'))
+
+    await waitFor(() => expect(removeIdentitySpy).toHaveBeenCalledWith(77))
+    await waitFor(() =>
+      expect(screen.getByTestId('comic-mapping-status')).toHaveTextContent('Not mapped'),
+    )
+    rerender(
+      <ComicIssueMappingAction
+        issueId={77}
+        threadTitle="Hellboy in Hell"
+        issueNumber="1"
+        initialIdentity={{ ...MAPPED }}
+        onMapped={onMapped}
+      />,
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('comic-mapping-status')).toHaveTextContent('Not mapped'),
+    )
+    expect(screen.getByTestId('comic-mapping-map')).toHaveTextContent('Map comic')
+    expect(screen.queryByTestId('comic-mapping-retry')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('comic-mapping-change')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('comic-mapping-remove')).not.toBeInTheDocument()
+    await waitFor(() => expect(onMapped).toHaveBeenCalled())
+  })
+
+  it('ignores close while a mapping removal is in flight', async () => {
+    let resolveRemoval!: (value: IssueIdentityResponse) => void
+    removeIdentitySpy.mockImplementation(
+      () => new Promise<IssueIdentityResponse>((resolve) => { resolveRemoval = resolve }),
+    )
+    const { result } = renderHook(() =>
+      useComicIssueMapping({
+        issueId: 77,
+        threadTitle: 'Hellboy in Hell',
+        issueNumber: '1',
+        initialIdentity: MAPPED,
+      }),
+    )
+
+    act(() => { result.current.openRemoveDialog() })
+    expect(result.current.isRemoveDialogOpen).toBe(true)
+
+    let removePromise!: Promise<void>
+    act(() => { removePromise = result.current.handleRemoveMapping() })
+    await waitFor(() => expect(result.current.isRemovingMapping).toBe(true))
+
+    act(() => { result.current.closeRemoveDialog() })
+    expect(result.current.isRemoveDialogOpen).toBe(true)
+
+    await act(async () => {
+      resolveRemoval(UNMAPPED)
+      await removePromise
+    })
+    expect(result.current.isRemoveDialogOpen).toBe(false)
+  })
+
+  it('shows a fallback message when mapping removal throws a non-Error value', async () => {
+    removeIdentitySpy.mockRejectedValue('boom')
+
+    render(
+      <ComicIssueMappingAction
+        issueId={77}
+        threadTitle="Hellboy in Hell"
+        issueNumber="1"
+        initialIdentity={MAPPED}
+      />,
+    )
+
+    fireEvent.click(screen.getByTestId('comic-mapping-remove'))
+    fireEvent.click(await screen.findByText('Remove mapping'))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not remove the ComicVine mapping.',
+    )
   })
 })
