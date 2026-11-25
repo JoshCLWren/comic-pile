@@ -6,10 +6,10 @@
 #![forbid(unsafe_code)]
 
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 use tokio_postgres::Transaction;
 use utoipa::ToSchema;
@@ -799,16 +799,6 @@ pub async fn preview_reconciliation(
     }))
 }
 
-fn is_synthetic_read(
-    read_at: Option<chrono::DateTime<chrono::Utc>>,
-    created_at: chrono::DateTime<chrono::Utc>,
-) -> bool {
-    match read_at {
-        Some(r) => r < created_at,
-        None => false,
-    }
-}
-
 #[utoipa::path(
     post,
     path = "/api/v2/issue-duplicate-reconciliation/apply",
@@ -943,7 +933,7 @@ pub async fn apply_reconciliation(
         }
         duplicates.push(dup);
     }
-    let (actions, mut warnings, can_apply) =
+    let (_, mut warnings, can_apply) =
         build_preview_actions(&canonical, &duplicates, &req.decisions);
     warnings.extend(pre_warnings);
     if !can_apply {
