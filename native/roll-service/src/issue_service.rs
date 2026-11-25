@@ -223,7 +223,7 @@ async fn card(
          FROM issues i
          JOIN threads t ON t.id=i.thread_id
          LEFT JOIN LATERAL (
-             SELECT m.status, x.external_id,
+             SELECT m.status, x.external_id, x.metadata_json->>'issue_number' AS provider_issue_number,
                  CASE WHEN m.status='confirmed' THEN
                      COALESCE(
                          NULLIF(BTRIM(x.metadata_json->>'image_url'), ''),
@@ -280,7 +280,7 @@ pub(crate) async fn cards(
          FROM issues i
          JOIN threads t ON t.id=i.thread_id
          LEFT JOIN LATERAL (
-             SELECT m.status, x.external_id,
+             SELECT m.status, x.external_id, x.metadata_json->>'issue_number' AS provider_issue_number,
                  CASE WHEN m.status='confirmed' THEN
                      COALESCE(
                          NULLIF(BTRIM(x.metadata_json->>'image_url'), ''),

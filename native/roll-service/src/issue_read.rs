@@ -49,6 +49,8 @@ pub struct IssueDetailResponse {
     pub id: i32,
     pub thread_id: i32,
     pub issue_number: String,
+    pub overall_issue_number: Option<String>,
+    pub identity_version: i64,
     pub position: i32,
     pub status: String,
     pub read_at: Option<String>,
