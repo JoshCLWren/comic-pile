@@ -74,6 +74,7 @@ function issueCard(id: number): IssueCardsResponse['items'][number] {
     thread_id: id,
     thread_title: `Series ${id}`,
     issue_number: '1',
+    identity_version: 1,
     status: 'unread',
     has_confirmed_identity: true,
     mapping_state: 'confirmed',
