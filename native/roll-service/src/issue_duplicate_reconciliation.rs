@@ -406,6 +406,13 @@ async fn detect_duplicates_for_user(
                   OR
                   -- other issue has same number as mapped issue's issue number
                   i2.issue_number = i1.issue_number
+                  OR
+                  -- provider overall number maps to a different story number:
+                  -- volume 4050-51622 numbers physical parts #100/#101/#102 while
+                  -- the owned original chapters are story #3/#4/#5.
+                  (ei.metadata_json->>'story_arc_number' IS NOT NULL
+                   AND ei.metadata_json->>'story_arc_number' <> ''
+                   AND i2.issue_number = ei.metadata_json->>'story_arc_number')
               )
               -- avoid flagging clearly different comics: require same CV volume family or
               -- explicit story/overall signal. We use: same comicvine volume id in metadata
