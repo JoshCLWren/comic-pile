@@ -400,7 +400,10 @@ async fn series_cover_still_renders_for_a_blocked_series() {
         .get()
         .await
         .unwrap()
-        .execute("UPDATE threads SET is_blocked = $1 WHERE id = $2", &[&true, &thread_id])
+        .execute(
+            "UPDATE threads SET is_blocked = $1 WHERE id = $2",
+            &[&true, &thread_id],
+        )
         .await
         .unwrap();
     seed_confirmed_cover(
@@ -414,7 +417,10 @@ async fn series_cover_still_renders_for_a_blocked_series() {
     let (status, body) = call(&ctx, "GET", "/api/v2/threads").await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     let threads = body["threads"].as_array().unwrap();
-    let row = threads.iter().find(|t| t["title"] == "Blocked Series").unwrap();
+    let row = threads
+        .iter()
+        .find(|t| t["title"] == "Blocked Series")
+        .unwrap();
     assert_eq!(row["is_blocked"].as_bool(), Some(true));
     assert_eq!(
         row["series_cover_image_url"].as_str(),
