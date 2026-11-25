@@ -724,6 +724,9 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         </div>
       </div>
       <p className="sr-only" aria-live="polite">{reorderAnnouncement}</p>
+      <p className="text-[11px] text-stone-500">
+        Read states: marked read = read without rating; read &amp; rated = read with rating; still unread = not read.
+      </p>
       {hasHiddenIssues && (
         <p className="text-xs text-stone-500 italic">
           Showing {visibleIssues.length} of {issues.length} issues around your current position
