@@ -612,6 +612,34 @@ export default function CustomCBLBuilder({
     setExpandedEntryOptions(null)
     setMessage(null)
   }
+  const moveIssueRelativeToIssue = (index: number, issueId: number, placement: 'before' | 'after') => {
+    const targetPosition = Number(moveTargets[issueId])
+    if (!Number.isSafeInteger(targetPosition) || targetPosition < 1 || targetPosition > entries.length) return
+    const targetIndex = targetPosition - 1
+    if (index === targetIndex) return
+    setEntries((current) => {
+      const next = [...current]
+      const [moved] = next.splice(index, 1)
+      if (!moved) return current
+      let insertAtIndex = targetIndex
+      if (index < targetIndex) insertAtIndex = targetIndex - 1
+      if (placement === 'after') insertAtIndex += 1
+      insertAtIndex = Math.max(0, Math.min(next.length, insertAtIndex))
+      next.splice(insertAtIndex, 0, moved)
+      return normalizePositions(next)
+    })
+    const finalIndex = (() => {
+      let insertAtIndex = targetIndex
+      if (index < targetIndex) insertAtIndex = targetIndex - 1
+      if (placement === 'after') insertAtIndex += 1
+      return Math.max(0, Math.min(entries.length - 1, insertAtIndex))
+    })()
+    setEntrySearch('')
+    setEntryPage(Math.floor(finalIndex / ENTRY_PAGE_SIZE))
+    focusListStart()
+    setExpandedEntryOptions(null)
+    setMessage(null)
+  }
   const jumpToPosition = () => {
     const position = Number(jumpPosition)
     if (!Number.isSafeInteger(position) || position < 1 || position > entries.length) return

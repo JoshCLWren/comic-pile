@@ -79,8 +79,10 @@ interface Props {
 /** A legible full-title card on phones, with per-issue settings revealed on demand. */
 export default function ReadingListEntryCard({
   entry, index, entryCount, isNextUnread, cardRef, mode, waitingOn, nameOf, expanded,
-  moveDestination, disabled, onCheckpoint, onMoveEarlier, onMoveLater,
-  onRemove, onToggleOptions, onGate, onSkip, onDestinationChange, onMoveToPosition, card, onIssueMutated,
+  moveDestination, moveTarget, disabled, insertActive, onCheckpoint, onMoveEarlier, onMoveLater,
+  onRemove, onToggleOptions, onGate, onSkip, onDestinationChange, onMoveToPosition,
+  onMoveTargetChange, onMoveBeforeIssue, onMoveAfterIssue, onInsertBefore, onInsertAfter,
+  card, onIssueMutated,
 }: Props) {
   const label = `${entry.series_name} #${entry.issue_number}`
   const waitText = waitDescription(entry, mode, waitingOn, nameOf)
@@ -158,6 +160,35 @@ export default function ReadingListEntryCard({
                             disabled={disabled || !Number.isSafeInteger(Number(moveDestination)) || Number(moveDestination) < 1 || Number(moveDestination) > entryCount}
                             className="min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-semibold disabled:opacity-40"
                           >Move here</button>
+                        </div>
+                        <div className="flex w-full flex-wrap items-end gap-2">
+                          <label className="text-xs text-[var(--theme-text-primary)]">
+                            Move before or after issue position
+                            <input type="number" inputMode="numeric" min={1} max={entryCount}
+                              aria-label={`Move ${label} relative to issue position`}
+                              value={moveTarget}
+                              onChange={(event) => onMoveTargetChange(event.target.value)}
+                              className="mt-1 block min-h-11 w-24 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 text-sm"
+                            />
+                          </label>
+                          <button type="button" onClick={() => onMoveBeforeIssue()}
+                            disabled={disabled || !Number.isSafeInteger(Number(moveTarget)) || Number(moveTarget) < 1 || Number(moveTarget) > entryCount}
+                            className="min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-semibold disabled:opacity-40"
+                          >Move before issue</button>
+                          <button type="button" onClick={() => onMoveAfterIssue()}
+                            disabled={disabled || !Number.isSafeInteger(Number(moveTarget)) || Number(moveTarget) < 1 || Number(moveTarget) > entryCount}
+                            className="min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-semibold disabled:opacity-40"
+                          >Move after issue</button>
+                        </div>
+                        <div className="flex w-full flex-wrap items-center gap-2">
+                          <span className="text-xs font-semibold text-[var(--theme-text-primary)]">Insert an issue here</span>
+                          <button type="button" onClick={() => onInsertBefore()} disabled={disabled}
+                            className={`min-h-11 rounded-lg border px-3 text-xs font-semibold disabled:opacity-40 ${insertActive === 'before' ? 'border-[var(--theme-continuity-accent)] text-[var(--theme-continuity-accent)]' : 'border-[var(--theme-border)] text-[var(--theme-text-primary)]'}`}
+                          >Insert before</button>
+                          <button type="button" onClick={() => onInsertAfter()} disabled={disabled}
+                            className={`min-h-11 rounded-lg border px-3 text-xs font-semibold disabled:opacity-40 ${insertActive === 'after' ? 'border-[var(--theme-continuity-accent)] text-[var(--theme-continuity-accent)]' : 'border-[var(--theme-border)] text-[var(--theme-text-primary)]'}`}
+                          >Insert after</button>
+                          {insertActive && <span className="text-xs text-[var(--theme-continuity-accent)]">Issue search will insert {insertActive} this entry.</span>}
                         </div>
                       </div>
                       {waitText && <p className={`mt-2 break-words text-xs text-[var(--theme-text-muted)] sm:pl-10 ${expanded ? 'block' : 'hidden sm:block'}`}>{waitText}</p>}
