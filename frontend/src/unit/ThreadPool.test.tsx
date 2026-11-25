@@ -230,4 +230,49 @@ describe('ThreadPool Component', () => {
     expect(screen.getByText(/every series is completed/i)).toBeInTheDocument()
     expect(screen.queryByText(/Every series is snoozed/i)).not.toBeInTheDocument()
   })
+
+  it('offers working add-comics and reset-dice recovery at zero choices (#5685)', () => {
+    const onResetDice = vi.fn().mockResolvedValue(true)
+    function LocationProbe() {
+      const location = useLocation()
+      return <output data-testid="location">{`${location.pathname} ${JSON.stringify(location.state)}`}</output>
+    }
+    render(
+      <MemoryRouter>
+        <ThreadPool
+          {...baseProps}
+          pool={[]}
+          snoozedThreads={[{ id: 2, title: 'Paused', format: 'Comic' }]}
+          onResetDice={onResetDice}
+        />
+        <LocationProbe />
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Comics' }))
+    expect(screen.getByTestId('location')).toHaveTextContent('/queue {"openCreate":true}')
+
+    fireEvent.click(screen.getByTestId('reset-dice-zero-choice'))
+    expect(onResetDice).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Go to Queue' }))
+    expect(screen.getByTestId('location')).toHaveTextContent('/queue null')
+  })
+
+  it('shows reset errors and prevents duplicate reset submissions (#5685)', () => {
+    const onResetDice = vi.fn()
+    renderPool({
+      pool: [],
+      snoozedThreads: [{ id: 2, title: 'Paused', format: 'Comic' }],
+      onResetDice,
+      resetDicePending: true,
+      resetDiceError: 'Reset could not be saved',
+    })
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Reset could not be saved')
+    const pendingReset = screen.getByRole('button', { name: 'Resetting…' })
+    expect(pendingReset).toBeDisabled()
+    fireEvent.click(pendingReset)
+    expect(onResetDice).not.toHaveBeenCalled()
+  })
 })
