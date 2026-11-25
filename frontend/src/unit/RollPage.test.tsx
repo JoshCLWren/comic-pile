@@ -434,7 +434,13 @@ it('shows a retry action when bootstrap loading fails', async () => {
   expect(refetch).toHaveBeenCalled()
 })
 
-it('recovers the real reset flow from browser-only snoozes without reading, rating or rewriting history', async () => {
+/**
+ * Wire Roll's reset action to the real mutation, transport and query cache.
+ * A browser-only snooze cookie and a non-d6 die are present; bootstrap still
+ * reports zero snoozes. `emptyPool` seeds the scoped pool as fully hidden by
+ * that cookie so the zero-choice CTA is the visible recovery path.
+ */
+async function setupRealResetHarness(emptyPool: boolean) {
   let currentDie = 20
   const rollClient = createHttpClientStub()
   rollClient.post.mockImplementation(async (path: string) => {
@@ -448,8 +454,6 @@ it('recovers the real reset flow from browser-only snoozes without reading, rati
   globalThis.sessionStorage?.removeItem('comicpile:roll:pending-reset')
   writeRollSnoozes([1])
 
-  // The scoped resources read the same cookie as the offer, so clearing it on
-  // a confirmed reset must restore the hidden face on the next scoped refresh.
   const resourcesApi: RollResourcesApi = {
     dieState: vi.fn(async () => ({
       die: currentDie,
@@ -496,14 +500,35 @@ it('recovers the real reset flow from browser-only snoozes without reading, rati
     isError: false,
     error: null,
   })
-  // Seed the exact pre-reset scoped snapshot: d20 and an empty pool caused
-  // only by the browser snooze cookie. Bootstrap still claims zero snoozes.
   queryClient.setQueryData(queryKeys.roll.dieState(), {
     die: 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null,
   })
-  queryClient.setQueryData(queryKeys.roll.eligibleIssueIds([1]), {
-    die: 20, issue_ids: [], thread_ids: [], pool_reason: 'ready',
-  })
+  if (emptyPool) {
+    queryClient.setQueryData(queryKeys.roll.eligibleIssueIds([1]), {
+      die: 20, issue_ids: [], thread_ids: [], pool_reason: 'ready',
+    })
+  }
+  return { rollClient, resourcesApi, rollMutate, rateMutate, bootstrapRefetch }
+}
+
+function expectRealResetEffects(
+  harness: Awaited<ReturnType<typeof setupRealResetHarness>>,
+): void {
+  expect(harness.rollClient.post).toHaveBeenCalledWith(
+    '/v2/roll/reset',
+    expect.objectContaining({ idempotency_key: expect.stringMatching(/^roll-[0-9a-f]{32}$/) }),
+  )
+  expect(harness.rollClient.post).toHaveBeenCalledTimes(1)
+  expect(readRollSnoozes()).toEqual([])
+  expect(harness.resourcesApi.eligibleIssueIds).toHaveBeenCalled()
+  expect(harness.rollMutate).not.toHaveBeenCalled()
+  expect(harness.rateMutate).not.toHaveBeenCalled()
+  expect(harness.bootstrapRefetch).not.toHaveBeenCalled()
+  expect(threadsApi.setPending).not.toHaveBeenCalled()
+}
+
+it('recovers the real reset flow from browser-only snoozes at zero choice without reading, rating or rewriting history', async () => {
+  const harness = await setupRealResetHarness(true)
 
   renderRollPage()
 
@@ -514,20 +539,24 @@ it('recovers the real reset flow from browser-only snoozes without reading, rati
 
   fireEvent.click(resetButton)
 
-  await waitFor(() => {
-    expect(rollClient.post).toHaveBeenCalledWith(
-      '/v2/roll/reset',
-      expect.objectContaining({ idempotency_key: expect.stringMatching(/^roll-[0-9a-f]{32}$/) }),
-    )
-  })
-  expect(rollClient.post).toHaveBeenCalledTimes(1)
-  expect(readRollSnoozes()).toEqual([])
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
   expect(screen.getByRole('button', { name: /current die d6/i })).toBeInTheDocument()
-  expect(resourcesApi.eligibleIssueIds).toHaveBeenCalled()
+  expectRealResetEffects(harness)
+})
 
-  expect(rollMutate).not.toHaveBeenCalled()
-  expect(rateMutate).not.toHaveBeenCalled()
-  expect(bootstrapRefetch).not.toHaveBeenCalled()
-  expect(threadsApi.setPending).not.toHaveBeenCalled()
+it('recovers the idle Roll reset action from the die modal with the real reset mutation', async () => {
+  const harness = await setupRealResetHarness(false)
+
+  renderRollPage()
+  expect(screen.getByText('Saga')).toBeInTheDocument()
+  expect(screen.queryByText('Every series is snoozed')).not.toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: /^current die d20$/i }))
+  const dieModal = screen.getByRole('dialog', { name: 'Select Die' })
+  const resetButton = within(dieModal).getByTestId('reset-dice')
+  expect(resetButton).not.toBeDisabled()
+  fireEvent.click(resetButton)
+
+  await waitFor(() => expect(screen.getByRole('button', { name: /current die d6/i })).toBeInTheDocument())
+  expectRealResetEffects(harness)
 })
