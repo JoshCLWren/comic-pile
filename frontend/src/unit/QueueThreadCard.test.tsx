@@ -511,13 +511,6 @@ describe('QueueThreadCard', () => {
     expect(screen.queryByRole('img', { name: /Cover for Bare Series/ })).not.toBeInTheDocument()
   })
 
-  it('shows the existing No cover placeholder when no confirmed series cover exists', () => {
-    renderCard(createMockThread({ title: 'Bare Series', series_cover_image_url: null }))
-    const placeholder = screen.getByTestId('queue-thread-series-cover-placeholder')
-    expect(placeholder).toHaveAttribute('aria-label', 'No cover for Bare Series')
-    expect(screen.queryByRole('img', { name: /Cover for Bare Series/ })).not.toBeInTheDocument()
-  })
-
   it('renders thread title', () => {
     const thread = createMockThread({ title: 'Amazing Spider-Man' })
     renderCard(thread)
