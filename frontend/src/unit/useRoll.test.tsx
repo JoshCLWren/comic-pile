@@ -76,9 +76,11 @@ it('calls override mutation', async () => {
   expect(mockedRollApi.override).toHaveBeenCalledWith(payload)
 })
 
-it('calls dismiss pending mutation', async () => {
+it('refreshes bootstrap and the scoped pool after dismissing a pending offer (#5685)', async () => {
+  vi.mocked(invalidateAfterRollDieModeUpdate).mockClear()
   await setupMutation(useDismissPending, undefined)
   expect(mockedRollApi.dismissPending).toHaveBeenCalled()
+  expect(invalidateAfterRollDieModeUpdate).toHaveBeenCalledTimes(1)
 })
 
 it('calls set die mutation', async () => {
