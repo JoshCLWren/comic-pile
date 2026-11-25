@@ -1629,3 +1629,63 @@ async fn bulk_read_operation_can_be_undone_without_reverting_unrelated_changes()
         row("active", 1, Some(issues[4]), 1, 5, "in_progress")
     );
 }
+
+#[tokio::test]
+async fn bulk_read_undo_skips_issues_changed_after_operation() {
+    let (state, token, csrf, user_id, _guard) = setup_user("irs-4655c").await;
+    let conn = state.pool.get().await.unwrap();
+    let (thread_id, issues) = series(
+        &conn,
+        user_id,
+        "Concurrent",
+        1,
+        "active",
+        &[("1", "unread"), ("2", "unread"), ("3", "unread")],
+    )
+    .await;
+
+    let (status, body) = send(
+        &state,
+        post(
+            "/api/v2/issue-read-markers",
+            &token,
+            &csrf,
+            Some(json!({"issue_ids": [issues[0], issues[1]]})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let operation_id = body["id"].as_i64().unwrap();
+
+    // Concurrent later change: issue 1 is marked unread again before undo.
+    let (status, _) = send(
+        &state,
+        unmark(
+            &format!("/api/v2/issues/{}/read-markers", issues[0]),
+            &token,
+            &csrf,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let (status, undo_body) = send(
+        &state,
+        authed(
+            "POST",
+            &format!("/api/v2/issue-read-operations/{operation_id}/undo"),
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{undo_body:?}");
+    let undone: Vec<i64> = undo_body["undone_issue_ids"].as_array().unwrap().iter().map(|v| v.as_i64().unwrap()).collect();
+    let skipped: Vec<i64> = undo_body["skipped_issue_ids"].as_array().unwrap().iter().map(|v| v.as_i64().unwrap()).collect();
+    assert_eq!(undone, vec![issues[1] as i64]);
+    assert_eq!(skipped, vec![issues[0] as i64]);
+    // Issue 0 stayed unread from concurrent change; issue 1 was undone to unread.
+    assert_eq!(issue_state(&conn, issues[0]).await, ("unread".into(), false));
+    assert_eq!(issue_state(&conn, issues[1]).await, ("unread".into(), false));
+}
