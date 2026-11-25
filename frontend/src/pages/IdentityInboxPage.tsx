@@ -252,6 +252,19 @@ function InboxItemCard({
               ))
             )}
 
+            {item.next_steps && item.next_steps.length > 0 && (
+              <div className="mt-2 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-base)] p-2">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--theme-text-muted)]">
+                  Next steps
+                </div>
+                <ul className="mt-1 list-disc pl-4 text-xs text-[var(--theme-text-muted)]">
+                  {item.next_steps.map((step, i) => (
+                    <li key={`${step}-${i}`}>{step}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {showRejectForm && (
               <div className="mt-2 p-2 bg-[var(--theme-danger)]/10 rounded-lg border border-[var(--theme-danger)]/30">
                 <label className="block text-xs font-medium text-[var(--theme-danger)] mb-1">Rejection reason</label>

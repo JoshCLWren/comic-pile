@@ -517,6 +517,7 @@ pub async fn list_inbox(
             provider: Some(provider),
             source_entry_summary: source_entry_summary(&thread_title, &issue_number, &metadata),
             why_stopped: why_stopped(&status, &evidence, candidates.len()),
+            next_steps: next_steps_for(&status, &evidence, candidates.len()),
             candidates,
             created_at,
             updated_at,
@@ -1393,8 +1394,10 @@ mod tests {
             why_stopped("candidate", &with_reason, 2),
             "2 candidates found: ambiguous title"
         );
-        // With no candidates the original evidence/status reasons still apply.
-        assert_eq!(why_stopped("unresolved", &empty, 0), "No candidates found");
+        // With no candidates, reasons remain actionable even without evidence.
+        let no_candidates = why_stopped("unresolved", &empty, 0);
+        assert!(no_candidates.contains("No candidates found"));
+        assert!(no_candidates.to_lowercase().contains("search by a different name"));
         assert_eq!(why_stopped("candidate", &with_reason, 0), "ambiguous title");
     }
 

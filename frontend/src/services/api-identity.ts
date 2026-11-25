@@ -23,6 +23,7 @@ export interface IdentityInboxItem {
   provider: string | null
   source_entry_summary: string
   why_stopped: string
+  next_steps?: string[]
   candidates: IdentityInboxCandidate[]
   created_at: number | null
   updated_at: number | null
