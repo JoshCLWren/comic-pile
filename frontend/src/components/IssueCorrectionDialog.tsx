@@ -19,6 +19,7 @@ export interface IssueCorrectionIssuesApi {
   bulkMarkRead: (issueIds: number[]) => Promise<IssueReadOperationResponse>
   bulkMarkUnread: (issueIds: number[]) => Promise<IssueReadOperationUndoResponse | IssueReadOperationResponse>
   move: (issueId: number, afterIssueId: number | null) => Promise<void>
+  undoReadOperation?: (operationId: number) => Promise<IssueReadOperationUndoResponse>
 }
 
 export interface IssueCorrectionDependenciesApi {
@@ -179,10 +180,7 @@ export default function IssueCorrectionDialog({
       const unreadBeforeTarget = issuesBeforeTarget.filter((issue) => issue.status !== 'read')
       let operation: IssueReadOperationResponse | null = null
       if (unreadBeforeTarget.length > 0) {
-        const result = await issuesService.bulkMarkRead(unreadBeforeTarget.map((issue) => issue.id))
-        if (result && typeof result === 'object' && 'id' in result) {
-          operation = result as IssueReadOperationResponse
-        }
+        operation = await issuesService.bulkMarkRead(unreadBeforeTarget.map((issue) => issue.id))
       }
 
       if (targetIssue.status === 'read') {
@@ -216,6 +214,7 @@ export default function IssueCorrectionDialog({
       if (!targetIssue) {
         // New issue will be created; preview based on current ordering plus target insertion at end/start/after.
         // For simplicity, treat as no existing affected issues before creation except by position.
+        // SAFETY: placeholder issue for preview when the target does not exist yet; creation path handles the real insert
         targetIssue = { id: -1, issue_number: targetNumber, status: 'unread' } as Issue
       }
       const targetIndex = orderedIssues.findIndex((issue) => issue.issue_number === targetNumber)
@@ -269,9 +268,8 @@ export default function IssueCorrectionDialog({
     setIsUndoing(true)
     setError(null)
     try {
-      const svc = issuesService as IssueCorrectionIssuesApi & { undoReadOperation?: (id: number) => Promise<unknown> }
-      if (svc.undoReadOperation) {
-        await svc.undoReadOperation(lastOperation.id)
+      if (issuesService.undoReadOperation) {
+        await issuesService.undoReadOperation(lastOperation.id)
       } else {
         await issuesApi.undoReadOperation(lastOperation.id)
       }
