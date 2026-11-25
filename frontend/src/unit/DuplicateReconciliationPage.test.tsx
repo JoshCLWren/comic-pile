@@ -181,7 +181,7 @@ describe('DuplicateReconciliationPage', () => {
 
     expect(screen.getByText('Mister Miracle #1')).toBeInTheDocument()
     expect(screen.getByText('4001')).toBeInTheDocument()
-    expect(screen.getByText('900')).toBeInTheDocument()
+    expect(screen.getAllByText('900')).toHaveLength(2)
     expect(screen.getAllByText('—').length).toBeGreaterThan(0)
     expect(screen.getAllByText(/^Canonical$/)).toHaveLength(1)
     expect(screen.getAllByText(/^Duplicate$/)).toHaveLength(1)
