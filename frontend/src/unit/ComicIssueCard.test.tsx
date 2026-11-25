@@ -405,6 +405,76 @@ describe('shared comic mapping integration', () => {
     expect(patch).not.toHaveBeenCalled()
   })
 
+  it('keeps mapping available while a saved rating draft survives a mapping refresh', async () => {
+    const view = render(
+      <ComicIssueCard
+        issueId={75}
+        card={{ ...card, mapping_state: 'confirmed', has_confirmed_identity: true, comicvine_issue_id: '987' }}
+        threadTitle="Cable"
+        issueNumber="Annual 1"
+        status="read"
+        variant="compact"
+      />,
+      { wrapper },
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit rating' }))
+    fireEvent.change(screen.getByRole('slider'), { target: { value: '4.5' } })
+    expect(screen.getByTestId('mapping-action')).toBeVisible()
+    await userEvent.click(screen.getByTestId('mapping-action'))
+    expect(patch).not.toHaveBeenCalled()
+
+    view.rerender(
+      <ComicIssueCard
+        issueId={75}
+        card={{ ...card, rating: 2, mapping_state: 'confirmed', has_confirmed_identity: true, comicvine_issue_id: '654' }}
+        threadTitle="Cable"
+        issueNumber="Annual 1"
+        status="read"
+        variant="compact"
+      />,
+    )
+
+    expect(screen.getByTestId('comic-issue-rating-editor')).toBeVisible()
+    expect(screen.getByRole('slider')).toHaveValue('4.5')
+    expect(screen.getByTestId('mapping-action')).toHaveAttribute('data-provider', '654')
+    await userEvent.click(screen.getByRole('button', { name: 'Save rating' }))
+    await waitFor(() =>
+      expect(patch).toHaveBeenCalledExactlyOnceWith(
+        75,
+        expect.objectContaining({ rating: 4.5, status: undefined }),
+      ),
+    )
+  })
+
+  it('keeps exact-issue mapping available while an unmapped comic is marked read', async () => {
+    render(
+      <ComicIssueCard
+        issueId={75}
+        card={{ ...card, status: 'unread', rating: null, mapping_state: 'unmapped', has_confirmed_identity: false }}
+        threadTitle="Cable"
+        issueNumber="Annual 1"
+        status="unread"
+      />,
+      { wrapper },
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: 'Read now' }))
+    fireEvent.change(screen.getByRole('slider'), { target: { value: '5' } })
+    expect(screen.getByTestId('mapping-action')).toBeVisible()
+    await userEvent.click(screen.getByTestId('mapping-action'))
+    expect(patch).not.toHaveBeenCalled()
+    expect(screen.getByRole('slider')).toHaveValue('5')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Mark read & save' }))
+    await waitFor(() =>
+      expect(patch).toHaveBeenCalledExactlyOnceWith(
+        75,
+        expect.objectContaining({ status: 'read', rating: 5 }),
+      ),
+    )
+  })
+
   it('marks ambiguous candidates for review while keeping direct read active', async () => {
     render(
       <ComicIssueCard

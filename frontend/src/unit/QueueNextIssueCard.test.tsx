@@ -14,6 +14,16 @@ vi.mock('../pages/RollPage/components/ComicIdentity', () => ({
   ),
 }))
 
+vi.mock('../hooks/useComicVineIssueIntelligence', () => ({
+  useComicVineIssueIntelligence: () => ({
+    metadata: { image_url: 'https://comicvine.gamespot.com/a/hellboy9.jpg' },
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+}))
+
 vi.mock('../components/Tags/TagSection', () => ({
   TagSection: ({ targetType, targetId, targetLabel }: {
     targetType: string

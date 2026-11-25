@@ -141,6 +141,10 @@ describe('manual read surface roll parity', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Could not load comic details: creators offline',
     )
+    expect(await screen.findByTestId('direct-read-action-card')).toHaveAttribute(
+      'data-show-cover',
+      'true',
+    )
     expect(await screen.findByText('Physical')).toBeVisible()
     fireEvent.click(screen.getByRole('button', { name: 'Retry comic details' }))
     expect(await screen.findByText('Fiona Staples')).toBeVisible()
@@ -194,6 +198,10 @@ describe('manual read surface roll parity', () => {
     expect(await screen.findByTestId('direct-read-action-card')).toHaveAttribute(
       'data-issue-id',
       '91',
+    )
+    expect(await screen.findByTestId('direct-read-action-card')).toHaveAttribute(
+      'data-show-cover',
+      'true',
     )
     expect(await screen.findByText('No tags yet.')).toBeVisible()
     expect(screen.queryByText('Fiona Staples')).not.toBeInTheDocument()
