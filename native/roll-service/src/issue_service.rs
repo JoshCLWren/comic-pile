@@ -48,6 +48,15 @@ pub(crate) fn display_issue_number(authored: &str, alias: Option<&str>) -> Strin
     }
 }
 
+fn deserialize_optional_alias<'de, D>(
+    deserializer: D,
+) -> Result<Option<Option<String>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(Some(Option::<String>::deserialize(deserializer)?))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct IssueReadRateRequest {
@@ -57,7 +66,7 @@ pub struct IssueReadRateRequest {
     pub rating: Option<f64>,
     /// Alternate overall/story number for the same physical comic (#4652).
     /// Set to a string to assign, empty string or null to clear. Omit to leave unchanged.
-    #[serde(default, deserialize_with = "crate::bug_reports::double_option::deserialize")]
+    #[serde(default, deserialize_with = "deserialize_optional_alias")]
     pub issue_number_alias: Option<Option<String>>,
     /// Client-generated retry key. Same key/payload replays the same receipt.
     pub idempotency_key: String,
@@ -185,8 +194,14 @@ pub(crate) fn validate(request: &IssueReadRateRequest) -> Result<(), ApiError> {
     if request.source.as_deref() == Some(ROLL_OFFER_SOURCE) && request.rating.is_none() {
         return Err(invalid("A Roll offer rating requires a rating"));
     }
-    if request.status.is_none() && request.rating.is_none() {
-        return Err(invalid("Provide status or rating"));
+    if let Some(Some(alias)) = &request.issue_number_alias {
+        let trimmed = alias.trim();
+        if trimmed.chars().count() > 50 {
+            return Err(invalid("Issue number alias must be 50 characters or fewer"));
+        }
+    }
+    if request.status.is_none() && request.rating.is_none() && request.issue_number_alias.is_none() {
+        return Err(invalid("Provide status, rating, or issue_number_alias"));
     }
     Ok(())
 }
