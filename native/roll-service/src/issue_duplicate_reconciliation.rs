@@ -6,10 +6,10 @@
 #![forbid(unsafe_code)]
 
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 use tokio_postgres::Transaction;
 use utoipa::ToSchema;
@@ -883,7 +883,7 @@ pub async fn apply_reconciliation(
         }
         duplicates.push(dup);
     }
-    let (actions, mut warnings, can_apply) = build_preview_actions(&canonical, &duplicates, &req.decisions);
+    let (_actions, mut warnings, can_apply) = build_preview_actions(&canonical, &duplicates, &req.decisions);
     warnings.extend(pre_warnings);
     if !can_apply {
         return Err(conflict("Preview has unresolved decisions; resolve them before applying"));
@@ -908,9 +908,6 @@ pub async fn apply_reconciliation(
     let mut moved_event_origins: Vec<serde_json::Value> = Vec::new();
     let mut moved_mapping_origins: Vec<serde_json::Value> = Vec::new();
     let mut moved_list_entry_origins: Vec<serde_json::Value> = Vec::new();
-
-    // Check if canonical already has a comicvine mapping
-    let canonical_has_cv = canonical.comicvine_issue_id.is_some();
 
     for dup in &duplicates {
         if dup.merged_into_issue_id == Some(req.canonical_issue_id) {
