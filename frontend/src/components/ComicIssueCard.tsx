@@ -354,6 +354,7 @@ export function ComicIssueCard({
   function openEditor(mode: 'read' | 'edit') {
     actions.reset()
     onReadingDetailsRequest?.()
+    setAliasEditor(null)
     setEditor({ mode, draftRating: resolvedRating ?? DIRECT_RATING_DEFAULT })
   }
 
@@ -428,12 +429,43 @@ export function ComicIssueCard({
               variant={variant}
             />
             <ComicIssueAvailability advisory={advisory} />
+            {card?.has_confirmed_identity && card.comicvine_issue_id && (
+              <p className="text-[11px] text-[var(--theme-text-muted)]" data-testid="comic-issue-provider-identity">
+                ComicVine #{card.comicvine_issue_id}
+                {card.provider_issue_number ? ` · provider issue #${card.provider_issue_number}` : ''}
+              </p>
+            )}
             {children}
           </div>
         </div>
       </div>
 
-      {!editor ? (
+      {aliasEditor ? (
+        <div className="mt-2 space-y-2 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-hover)] p-3" data-testid="comic-issue-alias-editor">
+          <p className="text-sm font-bold text-[var(--theme-text-primary)]">Alternate number for {issueLabel}</p>
+          <label className="block text-xs text-[var(--theme-text-muted)]" htmlFor={`${baseId}-alias`}>
+            Story-arc or overall number (leave blank to clear)
+          </label>
+          <input
+            id={`${baseId}-alias`}
+            type="text"
+            maxLength={50}
+            value={aliasEditor.draft}
+            onChange={(event) => setAliasEditor({ draft: event.target.value })}
+            disabled={actions.isPending}
+            className="min-h-11 w-full rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg)] px-3 py-2 text-sm text-[var(--theme-text-primary)]"
+            placeholder="e.g. 100"
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => void handleSaveAlias()} disabled={actions.isPending} className={primaryClass}>
+              {actions.isPending ? 'Saving…' : 'Save alias'}
+            </button>
+            <button type="button" onClick={() => setAliasEditor(null)} disabled={actions.isPending} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-muted)] transition-colors hover:text-[var(--theme-text-primary)] disabled:opacity-50">
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : !editor ? (
         <div className="mt-2 flex flex-wrap items-start gap-1" data-testid="comic-issue-actions">
           {!isOwned ? null : resolvedStatus !== 'read' ? (
             <>
@@ -473,6 +505,20 @@ export function ComicIssueCard({
                 {actions.isPending ? 'Saving…' : 'Mark unread'}
               </button>
             </>
+          )}
+          {isOwned && (
+            <button
+              type="button"
+              onClick={() => {
+                actions.reset()
+                setAliasEditor({ draft: resolvedAlias ?? '' })
+              }}
+              disabled={actions.isPending}
+              className={secondaryClass}
+              data-testid="comic-issue-edit-alias"
+            >
+              {resolvedAlias ? 'Edit alias' : 'Add alias'}
+            </button>
           )}
         </div>
       ) : (
@@ -535,7 +581,11 @@ export function ComicIssueCard({
           {getApiErrorDetail(actions.error) || 'Could not save. Your rating was not recorded — try again.'}
           <button
             type="button"
-            onClick={() => (editor ? void handleSave() : void handleMarkUnread())}
+            onClick={() => {
+              if (aliasEditor) return void handleSaveAlias()
+              if (editor) return void handleSave()
+              return void handleMarkUnread()
+            }}
             className="ml-2 font-bold underline"
           >
             Retry
