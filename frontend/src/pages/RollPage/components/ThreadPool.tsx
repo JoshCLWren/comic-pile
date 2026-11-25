@@ -28,6 +28,7 @@ interface ThreadPoolProps {
   shuffleIsPending: boolean
   eligibleThreadIds?: number[] | null
   issueCards?: IssueCardsResponse | null
+  browserSnoozedThreadIds?: number[] | null
   onResetDice?: () => void | Promise<void | boolean>
   resetDicePending?: boolean
   resetDiceError?: string
@@ -51,6 +52,7 @@ export function ThreadPool({
   shuffleIsPending,
   eligibleThreadIds,
   issueCards,
+  browserSnoozedThreadIds,
   onResetDice,
   resetDicePending = false,
   resetDiceError = '',
@@ -58,6 +60,8 @@ export function ThreadPool({
   const navigate = useNavigate()
   const wasRatingView = useRef(isRatingView)
   const snoozedTotal = snoozedCount ?? snoozedThreads.length
+  const hasBrowserSnoozes = (browserSnoozedThreadIds?.length ?? 0) > 0
+  const hasSnoozes = snoozedTotal > 0 || hasBrowserSnoozes
   const cardByIssueId = new Map((issueCards?.items ?? []).map((card) => [card.issue_id, card]))
   // An explicitly empty scoped result means zero eligible faces, not a bootstrap fallback.
   const displayPool = eligibleThreadIds != null
@@ -161,7 +165,7 @@ export function ThreadPool({
               Go to Queue
             </button>
           </div>
-        ) : displayPool.length === 0 && (snoozedTotal === 0 || emptyPoolReason === 'no_series') ? (
+        ) : displayPool.length === 0 && (!hasSnoozes || emptyPoolReason === 'no_series') ? (
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🎲</div>
             <div>
@@ -183,7 +187,7 @@ export function ThreadPool({
               </ul>
             </div>
           </div>
-        ) : displayPool.length === 0 && snoozedTotal > 0 ? (
+        ) : displayPool.length === 0 && hasSnoozes ? (
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🔒</div>
             <div>

@@ -548,6 +548,7 @@ export default function RollPage() {
               snoozedCount={bootstrap?.snoozed_count ?? snoozedThreads.length}
               snoozedCovers={snoozedCoverQuery.data}
               eligibleThreadIds={scopedEligibleIssueIds?.thread_ids ?? null}
+              browserSnoozedThreadIds={browserSnoozedThreadIds}
               issueCards={scopedIssueCards ?? null}
               snoozedExpanded={state.snoozedExpanded}
               onThreadClick={actions.handleThreadClick}
