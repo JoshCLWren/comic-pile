@@ -270,6 +270,7 @@ export default function IssueCorrectionDialog({
         }
       }
       const targetIndex = projectedIssues.findIndex((issue) => issue.id === targetIssue!.id)
+      console.log('DEBUG buildPreview', { targetNumber, insertPosition, projectedIds: projectedIssues.map(i => i.id), targetIndex })
       const effectiveIndex = targetIndex === -1 ? projectedIssues.length : targetIndex
       const issuesBeforeTarget = projectedIssues.slice(0, effectiveIndex)
       const unreadBeforeTarget = issuesBeforeTarget.filter((issue) => issue.status !== 'read')
@@ -467,7 +468,7 @@ export default function IssueCorrectionDialog({
                 <select
                   id="issue-position"
                   value={insertPosition}
-                  onChange={(event) => setInsertPosition(event.target.value)}
+                  onChange={(event) => { console.log('DEBUG select change', event.target.value); setInsertPosition(event.target.value) }}
                   disabled={isLoading}
                   className="w-full rounded-lg py-2 px-3 text-sm form-control"
                 >
