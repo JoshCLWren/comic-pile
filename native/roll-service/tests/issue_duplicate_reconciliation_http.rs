@@ -753,13 +753,14 @@ async fn seed_named_pair(
         .await
         .unwrap()
         .get(0);
-    let metadata = format!(
+    let metadata: serde_json::Value = serde_json::from_str(&format!(
         "{{\"volume_id\":4050,\"issue_number\":\"{cv_issue_number}\",\"story_arc_number\":\"{story_arc_number}\"}}"
-    );
+    ))
+    .unwrap();
     let identity_id: i32 = conn
         .query_one(
             "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
-             VALUES ('comicvine', 'issue', $1, $2::json, NOW(), NOW()) RETURNING id",
+             VALUES ('comicvine', 'issue', $1, $2, NOW(), NOW()) RETURNING id",
             &[&cv_id, &metadata],
         )
         .await
