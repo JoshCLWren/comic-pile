@@ -266,6 +266,7 @@ export function ComicIssueCard({
   advisory,
   children,
   onMutated,
+  onReadingDetailsRequest,
   showMapping = true,
   showCover = true,
   onAddToLibrary,
@@ -290,6 +291,7 @@ export function ComicIssueCard({
   /** Open the in-card rating editor without writing anything. */
   function openEditor(mode: 'read' | 'edit') {
     actions.reset()
+    onReadingDetailsRequest?.()
     setEditor({ mode, draftRating: resolvedRating ?? DIRECT_RATING_DEFAULT })
   }
 
