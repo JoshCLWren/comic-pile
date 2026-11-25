@@ -26,6 +26,7 @@ pub struct DuplicateIssueEvidence {
     pub status: String,
     pub read_at: Option<String>,
     pub created_at: String,
+    pub merged_into_issue_id: Option<i32>,
     pub comicvine_issue_id: Option<String>,
     pub comicvine_volume_id: Option<i32>,
     pub comicvine_issue_number: Option<String>,
@@ -166,7 +167,7 @@ async fn load_issue_evidence(
         .query_opt(
             r#"
             SELECT i.id, i.thread_id, t.title, i.issue_number, i.status,
-                   i.read_at, i.created_at
+                   i.read_at, i.created_at, i.merged_into_issue_id
             FROM issues i
             JOIN threads t ON t.id = i.thread_id
             WHERE i.id = $1 AND t.user_id = $2
@@ -180,15 +181,11 @@ async fn load_issue_evidence(
     let read_at = row_ts(&issue_row, 5);
     let created_at = required_ts(&issue_row, 6);
     let created_at_dt: chrono::DateTime<chrono::Utc> = issue_row.get(6);
-    let is_synthetic_placeholder_read = match (&read_at, issue_row.get::<_, chrono::DateTime<chrono::Utc>>(6)) {
-        (Some(_), _) => {
-            if let Some(read_dt) = issue_row.get::<_, Option<chrono::DateTime<chrono::Utc>>>(5) {
-                read_dt < created_at_dt
-            } else {
-                false
-            }
-        }
-        _ => false,
+    let merged_into_issue_id: Option<i32> = issue_row.get(7);
+    let is_synthetic_placeholder_read = if let Some(read_dt) = issue_row.get::<_, Option<chrono::DateTime<chrono::Utc>>>(5) {
+        read_dt < created_at_dt
+    } else {
+        false
     };
 
     // Comic Vine mapping
@@ -723,5 +720,369 @@ pub async fn preview_reconciliation(
         warnings,
         can_apply,
         preview_token,
+    }))
+}
+
+fn is_synthetic_read(read_at: Option<chrono::DateTime<chrono::Utc>>, created_at: chrono::DateTime<chrono::Utc>) -> bool {
+    match read_at {
+        Some(r) => r < created_at,
+        None => false,
+    }
+}
+
+pub async fn apply_reconciliation(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(req): Json<ReconcileApplyRequest>,
+) -> Result<Json<ReconcileApplyResponse>, ApiError> {
+    if req.duplicate_issue_ids.is_empty() {
+        return Err(bad_request("duplicate_issue_ids must not be empty"));
+    }
+    if req.duplicate_issue_ids.len() > MAX_GROUP_ISSUES {
+        return Err(bad_request("too many duplicate issues"));
+    }
+    if req.duplicate_issue_ids.contains(&req.canonical_issue_id) {
+        return Err(bad_request("canonical_issue_id must not be in duplicate_issue_ids"));
+    }
+
+    let mut conn = db::checkout(&state).await?;
+    let tx = conn
+        .build_transaction()
+        .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
+        .start()
+        .await
+        .map_err(db_err)?;
+
+    // Lock user row / advisory lock to avoid concurrent reconciliation races
+    tx.execute("SELECT pg_advisory_xact_lock($1, $2)", &[&4653i32, &user.id()])
+        .await
+        .map_err(db_err)?;
+
+    // Idempotency: if same preview token already applied, return prior result
+    let existing = tx
+        .query_opt(
+            r#"
+            SELECT canonical_issue_id, duplicate_issue_ids, details
+            FROM issue_duplicate_reconciliations
+            WHERE user_id = $1 AND preview_token = $2 AND undone_at IS NULL
+            ORDER BY applied_at DESC
+            LIMIT 1
+            "#,
+            &[&user.id(), &req.preview_token],
+        )
+        .await
+        .map_err(db_err)?;
+    if let Some(row) = existing {
+        let details: serde_json::Value = row.get(2);
+        tx.commit().await.map_err(db_err)?;
+        return Ok(Json(ReconcileApplyResponse {
+            canonical_issue_id: row.get(0),
+            merged_issue_ids: row.get(1),
+            moved_event_ids: details.get("moved_event_ids").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default(),
+            moved_mapping_ids: details.get("moved_mapping_ids").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default(),
+            moved_list_entry_ids: details.get("moved_list_entry_ids").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default(),
+            suppressed_duplicate_issue_ids: details.get("suppressed_duplicate_issue_ids").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default(),
+            undo_snapshot_id: details.get("undo_snapshot_id").and_then(|v| v.as_i64()).map(|v| v as i32),
+            warnings: details.get("warnings").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default(),
+        }));
+    }
+
+    // Lock issue rows
+    let mut all_ids = vec![req.canonical_issue_id];
+    all_ids.extend(req.duplicate_issue_ids.iter().copied());
+    all_ids.sort();
+    all_ids.dedup();
+    for iid in &all_ids {
+        let row = tx
+            .query_opt(
+                r#"SELECT i.id FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = $1 AND t.user_id = $2 FOR UPDATE"#,
+                &[iid, &user.id()],
+            )
+            .await
+            .map_err(db_err)?;
+        if row.is_none() {
+            return Err(not_found(&format!("Issue {iid} not found")));
+        }
+    }
+
+    // Load evidence and validate token
+    let canonical = load_issue_evidence(&tx, user.id(), req.canonical_issue_id).await?;
+    let mut duplicates = Vec::new();
+    for id in &req.duplicate_issue_ids {
+        let dup = load_issue_evidence(&tx, user.id(), *id).await?;
+        if dup.merged_into_issue_id().is_some() {
+            // already merged - idempotent if same target
+        }
+        duplicates.push(dup);
+    }
+    let (actions, mut warnings, can_apply) = build_preview_actions(&canonical, &duplicates, &req.decisions);
+    if !can_apply {
+        return Err(conflict("Preview has unresolved decisions; resolve them before applying".to_string()));
+    }
+    let expected_token = compute_preview_token(user.id(), req.canonical_issue_id, &req.duplicate_issue_ids, &canonical, &duplicates);
+    if expected_token != req.preview_token {
+        return Err(conflict("Stale preview token; refresh preview before applying".to_string()));
+    }
+
+    // Build undo snapshot
+    let undo_snapshot = json!({
+        "canonical_issue_id": req.canonical_issue_id,
+        "duplicate_issue_ids": req.duplicate_issue_ids,
+        "canonical": serde_json::to_value(&canonical).unwrap_or(json!(null)),
+        "duplicates": serde_json::to_value(&duplicates).unwrap_or(json!(null)),
+    });
+
+    let mut moved_event_ids: Vec<i32> = Vec::new();
+    let mut moved_mapping_ids: Vec<i32> = Vec::new();
+    let mut moved_list_entry_ids: Vec<i32> = Vec::new();
+    let mut suppressed_duplicate_issue_ids: Vec<i32> = Vec::new();
+
+    // Check if canonical already has a comicvine mapping
+    let canonical_has_cv = canonical.comicvine_issue_id.is_some();
+
+    for dup in &duplicates {
+        // Move comicvine mappings: reassign issue_external_identity_mappings from dup to canonical
+        let mapping_rows = tx
+            .query(
+                r#"
+                SELECT m.id, m.external_identity_id, m.status
+                FROM issue_external_identity_mappings m
+                WHERE m.issue_id = $1
+                "#,
+                &[&dup.issue_id],
+            )
+            .await
+            .map_err(db_err)?;
+        for mr in &mapping_rows {
+            let mapping_id: i32 = mr.get(0);
+            let ext_id: i32 = mr.get(1);
+            let status: String = mr.get(2);
+            // if canonical already has a mapping for same external identity, skip move
+            let exists = tx
+                .query_opt(
+                    "SELECT 1 FROM issue_external_identity_mappings WHERE issue_id = $1 AND external_identity_id = $2",
+                    &[&req.canonical_issue_id, &ext_id],
+                )
+                .await
+                .map_err(db_err)?;
+            if exists.is_some() {
+                // keep the mapping on canonical, remove from dup to avoid unique conflict issues? just leave - we'll suppress dup
+                warnings.push(format!("Mapping {mapping_id} already exists on canonical; skipping duplicate mapping move."));
+                continue;
+            }
+            // avoid violating unique (issue_id, external_identity_id) if moving
+            tx.execute(
+                "UPDATE issue_external_identity_mappings SET issue_id = $1, updated_at = now() WHERE id = $2",
+                &[&req.canonical_issue_id, &mapping_id],
+            )
+            .await
+            .map_err(db_err)?;
+            moved_mapping_ids.push(mapping_id);
+            let _ = status;
+        }
+
+        // Move rating events (real history) - always move, preserving timestamps
+        let rating_rows = tx
+            .query(
+                r#"SELECT id FROM events WHERE issue_id = $1 AND type = 'rate' AND rating IS NOT NULL"#,
+                &[&dup.issue_id],
+            )
+            .await
+            .map_err(db_err)?;
+        for rr in &rating_rows {
+            let eid: i32 = rr.get(0);
+            tx.execute(
+                "UPDATE events SET issue_id = $1 WHERE id = $2",
+                &[&req.canonical_issue_id, &eid],
+            )
+            .await
+            .map_err(db_err)?;
+            moved_event_ids.push(eid);
+        }
+
+        // Handle read events
+        let read_rows = tx
+            .query(
+                r#"SELECT id, "timestamp" FROM events WHERE issue_id = $1 AND type = 'issue_read'"#,
+                &[&dup.issue_id],
+            )
+            .await
+            .map_err(db_err)?;
+        let dup_created_at = tx
+            .query_one("SELECT created_at FROM issues WHERE id = $1", &[&dup.issue_id])
+            .await
+            .map_err(db_err)?
+            .get::<_, chrono::DateTime<chrono::Utc>>(0);
+        for rr in &read_rows {
+            let eid: i32 = rr.get(0);
+            let ts: chrono::DateTime<chrono::Utc> = rr.get(1);
+            if ts < dup_created_at {
+                // synthetic placeholder - do not move as real read evidence; keep on duplicate for provenance
+                warnings.push(format!("Event {eid} is a synthetic placeholder read (timestamp before issue creation); preserved as provenance on duplicate."));
+                continue;
+            }
+            tx.execute(
+                "UPDATE events SET issue_id = $1 WHERE id = $2",
+                &[&req.canonical_issue_id, &eid],
+            )
+            .await
+            .map_err(db_err)?;
+            moved_event_ids.push(eid);
+        }
+
+        // Move list memberships
+        let list_rows = tx
+            .query(
+                r#"SELECT id, list_id, "position" FROM custom_cbl_entries WHERE issue_id = $1"#,
+                &[&dup.issue_id],
+            )
+            .await
+            .map_err(db_err)?;
+        for lr in &list_rows {
+            let entry_id: i32 = lr.get(0);
+            let list_id: i32 = lr.get(1);
+            // If canonical already in same list, keep canonical membership, record conflict
+            let exists = tx
+                .query_opt(
+                    "SELECT id FROM custom_cbl_entries WHERE list_id = $1 AND issue_id = $2",
+                    &[&list_id, &req.canonical_issue_id],
+                )
+                .await
+                .map_err(db_err)?;
+            if exists.is_some() {
+                warnings.push(format!("Canonical issue already in list {list_id}; duplicate list entry {entry_id} left on duplicate for provenance."));
+                continue;
+            }
+            tx.execute(
+                "UPDATE custom_cbl_entries SET issue_id = $1 WHERE id = $2",
+                &[&req.canonical_issue_id, &entry_id],
+            )
+            .await
+            .map_err(db_err)?;
+            moved_list_entry_ids.push(entry_id);
+        }
+
+        // Suppress duplicate - mark as merged, not deleted
+        tx.execute(
+            "UPDATE issues SET merged_into_issue_id = $1, merged_at = now() WHERE id = $2",
+            &[&req.canonical_issue_id, &dup.issue_id],
+        )
+        .await
+        .map_err(db_err)?;
+        suppressed_duplicate_issue_ids.push(dup.issue_id);
+    }
+
+    // Reconcile canonical read state: preserve latest legitimate state.
+    // If canonical has real read events/ratings indicating read, keep it read.
+    // If canonical is unread but has moved real read events, update accordingly.
+    // Important: do NOT let synthetic placeholder reads on duplicates affect this.
+    let canonical_real_read = tx
+        .query_opt(
+            r#"
+            SELECT 1 FROM events e
+            JOIN issues i ON i.id = e.issue_id
+            WHERE e.issue_id = $1 AND e.type = 'issue_read'
+              AND e."timestamp" >= i.created_at
+            LIMIT 1
+            "#,
+            &[&req.canonical_issue_id],
+        )
+        .await
+        .map_err(db_err)?;
+    let canonical_latest_rating = tx
+        .query_opt(
+            r#"SELECT "timestamp" FROM events WHERE issue_id = $1 AND type = 'rate' AND rating IS NOT NULL ORDER BY "timestamp" DESC, id DESC LIMIT 1"#,
+            &[&req.canonical_issue_id],
+        )
+        .await
+        .map_err(db_err)?;
+
+    // If there's a real read event or rating, canonical should be read with appropriate read_at
+    if canonical_real_read.is_some() || canonical_latest_rating.is_some() {
+        // Determine the best read_at: latest real read event, or keep existing if real
+        let latest_real_read_ts: Option<chrono::DateTime<chrono::Utc>> = tx
+            .query_opt(
+                r#"
+                SELECT e."timestamp" FROM events e
+                JOIN issues i ON i.id = e.issue_id
+                WHERE e.issue_id = $1 AND e.type = 'issue_read'
+                  AND e."timestamp" >= i.created_at
+                ORDER BY e."timestamp" DESC, e.id DESC
+                LIMIT 1
+                "#,
+                &[&req.canonical_issue_id],
+            )
+            .await
+            .map_err(db_err)?
+            .map(|r| r.get(0));
+        let canonical_created: chrono::DateTime<chrono::Utc> = tx
+            .query_one("SELECT created_at FROM issues WHERE id = $1", &[&req.canonical_issue_id])
+            .await
+            .map_err(db_err)?
+            .get(0);
+        let canonical_read_at: Option<chrono::DateTime<chrono::Utc>> = tx
+            .query_one("SELECT read_at FROM issues WHERE id = $1", &[&req.canonical_issue_id])
+            .await
+            .map_err(db_err)?
+            .get(0);
+        let canonical_read_is_real = canonical_read_at.map(|r| r >= canonical_created).unwrap_or(false);
+
+        // Only update if we have a better real timestamp or canonical is unread
+        let new_read_at = latest_real_read_ts.or(if canonical_read_is_real { canonical_read_at } else { None });
+        if let Some(ts) = new_read_at {
+            tx.execute(
+                "UPDATE issues SET status = 'read', read_at = $1 WHERE id = $2",
+                &[&ts, &req.canonical_issue_id],
+            )
+            .await
+            .map_err(db_err)?;
+        } else if canonical_latest_rating.is_some() {
+            // Has rating but no real read event - keep current state, don't fabricate
+            // But ensure it's marked read if it has a real read_at
+            if canonical_read_is_real {
+                tx.execute(
+                    "UPDATE issues SET status = 'read' WHERE id = $1",
+                    &[&req.canonical_issue_id],
+                )
+                .await
+                .map_err(db_err)?;
+            }
+        }
+    }
+
+    let details = json!({
+        "moved_event_ids": moved_event_ids,
+        "moved_mapping_ids": moved_mapping_ids,
+        "moved_list_entry_ids": moved_list_entry_ids,
+        "suppressed_duplicate_issue_ids": suppressed_duplicate_issue_ids,
+        "undo_snapshot_id": null,
+        "warnings": warnings,
+    });
+
+    let rec_row = tx
+        .query_one(
+            r#"
+            INSERT INTO issue_duplicate_reconciliations
+                (user_id, canonical_issue_id, duplicate_issue_ids, preview_token, undo_snapshot, details)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id
+            "#,
+            &[&user.id(), &req.canonical_issue_id, &req.duplicate_issue_ids, &req.preview_token, &undo_snapshot, &details],
+        )
+        .await
+        .map_err(db_err)?;
+    let recon_id: i64 = rec_row.get(0);
+
+    tx.commit().await.map_err(db_err)?;
+
+    Ok(Json(ReconcileApplyResponse {
+        canonical_issue_id: req.canonical_issue_id,
+        merged_issue_ids: req.duplicate_issue_ids.clone(),
+        moved_event_ids,
+        moved_mapping_ids,
+        moved_list_entry_ids,
+        suppressed_duplicate_issue_ids,
+        undo_snapshot_id: Some(recon_id as i32),
+        warnings,
     }))
 }
