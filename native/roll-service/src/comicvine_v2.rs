@@ -1254,10 +1254,11 @@ async fn link_with_source(
 /// in a savepoint so its failure never undoes the mapping (#4631578606).
 async fn link_confirmed(
     tx: &Transaction<'_>,
+    user_id: i32,
     issue_id: i32,
     comicvine_issue_id: i32,
 ) -> Result<(), ApiError> {
-    let identity_id = link_with_source(tx, issue_id, comicvine_issue_id, "user_confirmed").await?;
+    let identity_id = link_with_source(tx, user_id, issue_id, comicvine_issue_id, "user_confirmed").await?;
     tx.batch_execute("SAVEPOINT comicvine_hydration_enqueue")
         .await
         .map_err(db::query_error)?;
