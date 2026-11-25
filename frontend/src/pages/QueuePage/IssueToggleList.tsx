@@ -167,6 +167,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     range: string
     response: import('../../services/api-issues').IssueEditPreviewResponse
     selectedStrategy: 'safe_default' | 'numeric_resort'
+    acceptedAliasIssueNumbers: string[]
   } | null>(null)
   const [isPreviewing, setIsPreviewing] = useState(false)
   /** Preview fetch failure, surfaced in a retryable modal (#4654). */
