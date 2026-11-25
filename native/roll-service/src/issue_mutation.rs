@@ -692,12 +692,132 @@ pub struct PreviewIssuesRequest {
     pub strategy: IssuePlacementStrategy,
 }
 
+/// Per-issue human-readable context carried in the preview payload so the
+/// Before/After rows can identify a specific series, its list memberships,
+/// identity/rating/read state and the Queue/Roll frontier it affects (#4654).
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct PreviewIssueItem {
     pub issue_id: Option<i32>,
     pub issue_number: String,
     pub position: i32,
     pub is_new: bool,
+    /// Title of the series (thread) this issue belongs to.
+    pub series_title: String,
+    /// Names of every custom reading list the issue is a member of.
+    pub source_lists: Vec<String>,
+    /// Whether the issue has already been read.
+    pub is_read: bool,
+    /// Whether the issue has a confirmed external identity/catalog mapping.
+    pub is_mapped: bool,
+    /// Whether rating history exists for this issue.
+    pub has_rating: bool,
+    /// Human label for the Queue/Roll frontier affected by this issue, if any.
+    pub frontier_label: Option<String>,
+    /// Human-readable description of the order effect on this issue.
+    pub effect: String,
+    /// Whether a second physical issue with the same number exists in the series.
+    pub is_duplicate: bool,
+}
+
+/// Set-based metadata gathered once per previewed thread (never per row) and
+/// keyed by issue id. `new` issues have no entry and use neutral defaults.
+#[derive(Debug, Clone, Default)]
+struct PreviewIssueMetadata {
+    source_lists: Vec<String>,
+    is_read: bool,
+    is_mapped: bool,
+    has_rating: bool,
+    is_frontier: bool,
+    is_duplicate: bool,
+}
+
+/// Load all preview context for a thread in a single grouped query. This keeps
+/// the preview free of N+1 round trips and is safe inside the preview savepoint.
+async fn load_preview_metadata(
+    tx: &Transaction<'_>,
+    thread_id: i32,
+) -> Result<(String, BTreeMap<i32, PreviewIssueMetadata>), ApiError> {
+    let rows = tx
+        .query(
+            "SELECT i.id,
+                    i.status = 'read' AS is_read,
+                    (i.catalog_issue_id IS NOT NULL OR EXISTS (
+                        SELECT 1 FROM issue_external_identity_mappings m
+                        WHERE m.issue_id = i.id AND m.status = 'confirmed'
+                    )) AS is_mapped,
+                    EXISTS (
+                        SELECT 1 FROM events e
+                        WHERE e.issue_id = i.id AND e.rating IS NOT NULL
+                    ) AS has_rating,
+                    COALESCE((
+                        SELECT array_agg(DISTINCT l.name ORDER BY l.name)::text[]
+                        FROM custom_cbl_entries ce
+                        JOIN custom_cbl_lists l ON l.id = ce.list_id
+                        WHERE ce.issue_id = i.id
+                    ), '{}'::text[]) AS source_lists,
+                    EXISTS (
+                        SELECT 1 FROM issues dup
+                        WHERE dup.thread_id = i.thread_id
+                          AND dup.issue_number = i.issue_number
+                          AND dup.id <> i.id
+                    ) AS is_duplicate,
+                    (t.next_unread_issue_id = i.id) AS is_frontier,
+                    t.title
+             FROM issues i
+             JOIN threads t ON t.id = i.thread_id
+             WHERE i.thread_id = $1",
+            &[&thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+    let mut series_title = String::new();
+    let mut by_id = BTreeMap::new();
+    for row in &rows {
+        let id: i32 = row.get(0);
+        let title: String = row.get(8);
+        if series_title.is_empty() {
+            series_title = title;
+        }
+        by_id.insert(
+            id,
+            PreviewIssueMetadata {
+                source_lists: row.get(4),
+                is_read: row.get(1),
+                is_mapped: row.get(2),
+                has_rating: row.get(3),
+                is_frontier: row.get(7),
+                is_duplicate: row.get(6),
+            },
+        );
+    }
+    Ok((series_title, by_id))
+}
+
+fn describe_effect(
+    number: &str,
+    is_new: bool,
+    before_position: Option<i32>,
+    after_position: i32,
+    is_duplicate: bool,
+) -> String {
+    if is_new {
+        return format!("new issue #{number} inserted at position {after_position}");
+    }
+    let order = match before_position {
+        Some(before) if before == after_position => {
+            format!("kept #{number} at position {after_position}")
+        }
+        Some(before) => format!(
+            "moved #{number} from position {before} to {after_position}"
+        ),
+        None => format!("repositioned #{number} to position {after_position}"),
+    };
+    if is_duplicate {
+        format!("{order}; possible physical duplicate of #{number}")
+    } else {
+        order
+    }
 }
 
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
@@ -724,24 +844,79 @@ pub struct IssueEditPreviewResponse {
 fn build_after_items(
     existing: &[(i32, String, i32)],
     merged: &[(i32, String)],
+    series_title: &str,
+    metadata: &BTreeMap<i32, PreviewIssueMetadata>,
 ) -> (Vec<PreviewIssueItem>, Vec<PreviewIssueItem>) {
     let before = existing
         .iter()
-        .map(|(id, number, position)| PreviewIssueItem {
-            issue_id: Some(*id),
-            issue_number: number.clone(),
-            position: *position,
-            is_new: false,
+        .map(|(id, number, position)| {
+            let meta = metadata.get(id);
+            PreviewIssueItem {
+                issue_id: Some(*id),
+                issue_number: number.clone(),
+                position: *position,
+                is_new: false,
+                series_title: series_title.to_string(),
+                source_lists: meta.map(|m| m.source_lists.clone()).unwrap_or_default(),
+                is_read: meta.is_some_and(|m| m.is_read),
+                is_mapped: meta.is_some_and(|m| m.is_mapped),
+                has_rating: meta.is_some_and(|m| m.has_rating),
+                frontier_label: meta
+                    .filter(|m| m.is_frontier)
+                    .map(|_| "current unread (Queue/Roll frontier)".to_string()),
+                effect: describe_effect(
+                    number,
+                    false,
+                    Some(*position),
+                    *position,
+                    meta.is_some_and(|m| m.is_duplicate),
+                ),
+                is_duplicate: meta.is_some_and(|m| m.is_duplicate),
+            }
         })
+        .collect();
+    let existing_positions: BTreeMap<i32, i32> = existing
+        .iter()
+        .map(|(id, _, position)| (*id, *position))
         .collect();
     let after = merged
         .iter()
         .enumerate()
-        .map(|(index, (id, number))| PreviewIssueItem {
-            issue_id: (*id != 0).then_some(*id),
-            issue_number: number.clone(),
-            position: index as i32 + 1,
-            is_new: *id == 0,
+        .map(|(index, (id, number))| {
+            let is_new = *id == 0;
+            let meta = if is_new {
+                None
+            } else {
+                metadata.get(id)
+            };
+            let after_position = index as i32 + 1;
+            let before_position = if is_new {
+                None
+            } else {
+                existing_positions.get(id).copied()
+            };
+            PreviewIssueItem {
+                issue_id: (*id != 0).then_some(*id),
+                issue_number: number.clone(),
+                position: after_position,
+                is_new,
+                series_title: series_title.to_string(),
+                source_lists: meta.map(|m| m.source_lists.clone()).unwrap_or_default(),
+                is_read: meta.is_some_and(|m| m.is_read),
+                is_mapped: meta.is_some_and(|m| m.is_mapped),
+                has_rating: meta.is_some_and(|m| m.has_rating),
+                frontier_label: meta
+                    .filter(|m| m.is_frontier)
+                    .map(|_| "current unread (Queue/Roll frontier)".to_string()),
+                effect: describe_effect(
+                    number,
+                    is_new,
+                    before_position,
+                    after_position,
+                    meta.is_some_and(|m| m.is_duplicate),
+                ),
+                is_duplicate: meta.is_some_and(|m| m.is_duplicate),
+            }
         })
         .collect();
     (before, after)
@@ -865,7 +1040,8 @@ async fn preview_outcome(
     strategy: IssuePlacementStrategy,
 ) -> Result<IssueEditPreviewOutcome, ApiError> {
     let (merged, preserves) = planned_merge(existing, new_numbers, request, strategy)?;
-    let (before, after) = build_after_items(existing, &merged);
+    let (series_title, metadata) = load_preview_metadata(tx, thread_id).await?;
+    let (before, after) = build_after_items(existing, &merged, &series_title, &metadata);
 
     let savepoint = format!(
         "sp_preview_{}",
@@ -1051,5 +1227,58 @@ mod tests {
             .filter_map(|value| ordinary(value))
             .collect();
         assert!(values.windows(2).any(|pair| pair[0] >= pair[1]));
+    }
+
+    #[test]
+    fn preview_effect_labels_are_human_readable() {
+        assert_eq!(
+            describe_effect("101", true, None, 3, false),
+            "new issue #101 inserted at position 3"
+        );
+        assert_eq!(
+            describe_effect("140", false, Some(2), 2, false),
+            "kept #140 at position 2"
+        );
+        assert_eq!(
+            describe_effect("130", false, Some(5), 9, false),
+            "moved #130 from position 5 to 9"
+        );
+        assert!(describe_effect("130", false, Some(5), 9, true)
+            .contains("possible physical duplicate"));
+    }
+
+    #[test]
+    fn preview_rows_carry_series_lists_frontier_and_effects() {
+        let existing = vec![(7, "129".to_string(), 1), (8, "140".to_string(), 2)];
+        let merged = vec![(7, "129".to_string()), (0, "101".to_string()), (8, "140".to_string())];
+        let mut metadata = BTreeMap::new();
+        metadata.insert(
+            7,
+            PreviewIssueMetadata {
+                source_lists: vec!["Julix".to_string()],
+                is_read: true,
+                is_mapped: true,
+                has_rating: true,
+                is_frontier: true,
+                is_duplicate: false,
+            },
+        );
+        let (before, after) =
+            build_after_items(&existing, &merged, "B.P.R.D.: Hell on Earth", &metadata);
+
+        assert_eq!(before[0].series_title, "B.P.R.D.: Hell on Earth");
+        assert_eq!(before[0].source_lists, vec!["Julix".to_string()]);
+        assert!(before[0].is_read);
+        assert!(before[0].is_mapped);
+        assert!(before[0].has_rating);
+        assert!(before[0]
+            .frontier_label
+            .as_deref()
+            .is_some_and(|label| label.contains("Queue/Roll")));
+
+        assert!(after[1].is_new);
+        assert_eq!(after[1].effect, "new issue #101 inserted at position 2");
+        assert_eq!(after[2].effect, "kept #140 at position 3");
+        assert!(after[0].source_lists.contains(&"Julix".to_string()));
     }
 }
