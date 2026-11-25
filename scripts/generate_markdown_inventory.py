@@ -108,12 +108,20 @@ def _content_disposition(path: str, text: str, default_action: str) -> tuple[str
             "historical — preserve",
             "Git history / ComicPile Wiki historical decisions",
         )
-    heading = "\n".join(text.splitlines()[:12]).casefold()
+    lines = text.splitlines()
+    heading = "\n".join(lines[:12]).casefold()
+    title = lines[0].casefold() if lines else ""
     if "superseded" in heading or "status:** historical" in heading:
         return (
             "Superseded record; follow the document's current-replacement notice.",
             "superseded — preserve with link",
             "See supersession notice in document",
+        )
+    if "historical" in title or "status:** point-in-time" in heading:
+        return (
+            "Point-in-time record; body is preserved for provenance, not current instructions.",
+            "historical — preserve",
+            "Git history / ComicPile Wiki historical decisions",
         )
     if path.startswith(("docs/recovery/", "docs/reports/", "docs/issue-plans/")):
         return (
@@ -213,10 +221,16 @@ def default_disposition(path: str) -> tuple[str, str, str, str]:
         "docs/CBL_COLLECTION_EXCLUSIONS.md",
         "docs/CBL_COMICVINE_LOOKUP.md",
         "docs/CBL_CREATE_CYCLE_FEEDBACK.md",
+        "docs/CBL_SERIES_NAMING.md",
+        "docs/CBL_SOURCE_LABELS.md",
         "docs/CHATGPT_FACTORY_PROMPT.md",
+        "docs/COMICVINE_RUNTIME_FALLBACK.md",
+        "docs/CREATOR_SUMMARY_READ.md",
         "docs/DATABASE_SAVE_LOAD.md",
         "docs/FRONTEND_OPENAPI_TYPES.md",
+        "docs/FRONTEND_VISUAL_GRAMMAR.md",
         "docs/GIT_HOOKS.md",
+        "docs/ISSUE_CARD_MOUNT_INVENTORY.md",
         "docs/ISSUE_EXECUTION_PROTOCOL.md",
         "docs/NAVIGATION_ENTRY_POINTS.md",
         "docs/PLAYWRIGHT_VERSION_POLICY.md",
@@ -225,9 +239,14 @@ def default_disposition(path: str) -> tuple[str, str, str, str]:
         "docs/PRODUCT_ACCEPTANCE_PROTOCOL.md",
         "docs/REACT_ARCHITECTURE.md",
         "docs/REACT_INTERACTION_POLICY.md",
+        "docs/READING_LIST_EXECUTION_ADR.md",
         "docs/RELEASE_COLLECTION_EXCLUSIONS.md",
+        "docs/REPOSITORY_STRUCTURE_DECISION.md",
         "docs/RUST_FACTORY_ENDPOINT_PATTERN.md",
+        "docs/VERCEL_ARCHITECTURE.md",
         "docs/VERCEL_DEPLOYMENT.md",
+        "docs/frontend-request-audit-4499.md",
+        "docs/images/README.md",
         "docs/WIKI_HANDOFF.md",
         "docs/api/PASSWORD_POLICY.md",
         "docs/api/READING_LIST_AUTHORING.md",
