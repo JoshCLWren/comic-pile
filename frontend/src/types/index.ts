@@ -973,6 +973,7 @@ export interface DuplicateReadEvent {
   event_id: number
   timestamp: string
   issue_number: string | null
+  is_synthetic: boolean
 }
 
 export interface DuplicateListMembership {

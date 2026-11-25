@@ -31,9 +31,26 @@ function IssueEvidenceCard({
         <div>Read at: <span className="text-[var(--theme-text-primary)]">{evidence.read_at ?? '—'}</span></div>
         <div>Created: <span className="text-[var(--theme-text-primary)]">{evidence.created_at}</span></div>
         <div>CV issue: <span className="text-[var(--theme-text-primary)]">{evidence.comicvine_issue_id ?? '—'}</span></div>
+        <div>CV volume: <span className="text-[var(--theme-text-primary)]">{evidence.comicvine_volume_id ?? '—'}</span></div>
         <div>Ratings: <span className="text-[var(--theme-text-primary)]">{evidence.rating_events.length}</span></div>
+        {evidence.rating_events.map((event) => (
+          <div key={`rating-${event.event_id}`} className="pl-2">
+            {event.rating} at {event.timestamp}
+          </div>
+        ))}
         <div>Read events: <span className="text-[var(--theme-text-primary)]">{evidence.read_events.length}</span></div>
+        {evidence.read_events.map((event) => (
+          <div key={`read-${event.event_id}`} className="pl-2">
+            {event.timestamp}
+            {event.is_synthetic ? ' (synthetic placeholder)' : ''}
+          </div>
+        ))}
         <div>List memberships: <span className="text-[var(--theme-text-primary)]">{evidence.list_memberships.length}</span></div>
+        {evidence.list_memberships.map((membership) => (
+          <div key={`list-${membership.entry_id}`} className="pl-2">
+            {membership.list_name} (position {membership.position})
+          </div>
+        ))}
         {evidence.is_synthetic_placeholder_read && (
           <div className="mt-1 rounded bg-[var(--theme-danger)]/15 px-2 py-1 text-[var(--theme-danger)]">
             Invalid synthetic placeholder read (read_at before created_at)

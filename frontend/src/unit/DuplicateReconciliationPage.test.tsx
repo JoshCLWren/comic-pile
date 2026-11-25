@@ -42,7 +42,9 @@ function evidence(overrides: Partial<DuplicateIssueEvidence> = {}): DuplicateIss
     comicvine_issue_number: '1',
     comicvine_story_number: null,
     rating_events: [{ event_id: 5, rating: 5, timestamp: '2026-01-02T00:00:00Z' }],
-    read_events: [{ event_id: 6, timestamp: '2026-01-02T00:00:00Z', issue_number: '1' }],
+    read_events: [
+      { event_id: 6, timestamp: '2026-01-02T00:00:00Z', issue_number: '1', is_synthetic: false },
+    ],
     list_memberships: [{ list_id: 7, list_name: 'Owned', position: 1, entry_id: 8 }],
     is_synthetic_placeholder_read: false,
     ...overrides,
@@ -86,7 +88,7 @@ function previewResponse(
         description: 'Move a conflicting genuine rating',
         safe: false,
         requires_decision: true,
-        decision_key: 'rating_conflict',
+        decision_key: 'cross_volume:11',
       },
     ],
     warnings: ['Artificial suppression timestamp excluded'],
@@ -179,7 +181,8 @@ describe('DuplicateReconciliationPage', () => {
 
     expect(screen.getByText('Mister Miracle #1')).toBeInTheDocument()
     expect(screen.getByText('4001')).toBeInTheDocument()
-    expect(screen.getByText('—')).toBeInTheDocument()
+    expect(screen.getByText('900')).toBeInTheDocument()
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0)
     expect(screen.getAllByText(/^Canonical$/)).toHaveLength(1)
     expect(screen.getAllByText(/^Duplicate$/)).toHaveLength(1)
     expect(screen.queryAllByText(/^Related$/)).toHaveLength(0)
@@ -205,7 +208,7 @@ describe('DuplicateReconciliationPage', () => {
     expect(screen.getByRole('checkbox', { name: 'Duplicate: #Annual 1 (11)' })).toBeDisabled()
   })
 
-  it('previews canonical, aliases, actions, warnings and Queue/Roll changes', async () => {
+  it('previews the canonical, aliases, actions and warnings', async () => {
     await renderWithGroup()
 
     await userEvent.click(screen.getByRole('button', { name: 'Preview resolution' }))
@@ -220,18 +223,29 @@ describe('DuplicateReconciliationPage', () => {
     })
   })
 
-  it('re-previews with the reader decision and applies the token, then undoes it', async () => {
+  it('offers a reversible safe-link versus keep-distinct choice, applies and undoes', async () => {
     await renderWithGroup()
     await userEvent.click(screen.getByRole('button', { name: 'Preview resolution' }))
     await screen.findByText('Move a conflicting genuine rating')
 
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Confirm merge despite warning' }))
-
+    await userEvent.click(screen.getByRole('button', { name: 'Keep distinct' }))
     await waitFor(() => expect(preview).toHaveBeenCalledTimes(2))
     expect(preview).toHaveBeenLastCalledWith({
       canonical_issue_id: 10,
       duplicate_issue_ids: [11],
-      decisions: { rating_conflict: 'merge' },
+      decisions: { 'cross_volume:11': 'keep_distinct' },
+    })
+    expect(screen.getByRole('button', { name: 'Keep distinct' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: 'Safe link (merge)' }))
+    await waitFor(() => expect(preview).toHaveBeenCalledTimes(3))
+    expect(preview).toHaveBeenLastCalledWith({
+      canonical_issue_id: 10,
+      duplicate_issue_ids: [11],
+      decisions: { 'cross_volume:11': 'merge' },
     })
 
     await userEvent.click(screen.getByRole('button', { name: 'Apply reconciliation' }))
@@ -239,13 +253,27 @@ describe('DuplicateReconciliationPage', () => {
     expect(apply).toHaveBeenCalledWith({
       canonical_issue_id: 10,
       duplicate_issue_ids: [11],
-      decisions: { rating_conflict: 'merge' },
+      decisions: { 'cross_volume:11': 'merge' },
       preview_token: 'token-1',
     })
 
     await userEvent.click(screen.getByRole('button', { name: 'Undo #55' }))
     expect(await screen.findByText('Undid reconciliation 55')).toBeInTheDocument()
     expect(undo).toHaveBeenCalledWith({ reconciliation_id: 55 })
+  })
+
+  it('keeps Undo available when the applied group disappears from detections', async () => {
+    await renderWithGroup()
+    await userEvent.click(screen.getByRole('button', { name: 'Preview resolution' }))
+    await screen.findByText('Move a conflicting genuine rating')
+    detect.mockResolvedValue(detections([]))
+    await userEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+    await waitFor(() => expect(screen.getByText('No duplicate groups detected.')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: 'Apply reconciliation' }))
+    expect(await screen.findByRole('button', { name: 'Undo #55' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Undo #55' }))
+    expect(await screen.findByText('Undid reconciliation 55')).toBeInTheDocument()
   })
 
   it('keeps a distinct option when the preview is not applicable', async () => {
