@@ -1100,7 +1100,7 @@ describe('IssueToggleList deferred mode (#3267)', () => {
     expect(mockedIssuesApi.create).toHaveBeenCalledTimes(3)
     expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(1, 99, '7', { strategy: 'safe_default' })
     expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(2, 99, 'Annual 2', { strategy: 'safe_default' })
-    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(3, 99, '10-12')
+    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(3, 99, '10-12', { strategy: 'safe_default' })
     expect(ref.current?.hasPendingMutations()).toBe(false)
   })
 
