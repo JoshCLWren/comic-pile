@@ -1813,6 +1813,13 @@ async fn bootstrap_cookie_snoozes_survive_session_turnover_and_no_snooze_case() 
         let conn = state.pool.get().await.unwrap();
         let ids = rollable_threads(&conn, user_id, 8).await;
         let foreign = thread(&conn, other_user, "Other reader's turnover series").await;
+        conn.execute(
+            "INSERT INTO sessions (user_id, started_at, start_die)
+             VALUES ($1, NOW(), 6)",
+            &[&user_id],
+        )
+        .await
+        .unwrap();
         (ids, foreign)
     };
 
