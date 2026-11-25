@@ -18,7 +18,9 @@ await injectModuleDoubles(await import('./injectModuleDoubles.fixture'), async (
 })
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
+  readDouble.mockImplementation((value) => `double:${value}`)
+  serviceDouble.read.mockImplementation((value) => `double:${value}`)
 })
 
 afterEach(() => {
