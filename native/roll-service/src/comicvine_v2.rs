@@ -1099,15 +1099,17 @@ fn requested_alias(value: Option<&str>) -> Result<Option<Option<String>>, ApiErr
 }
 
 /// Check optimistic state under the owned row lock and apply only the alias
-/// portion. A replay of the already-committed target returns false; a stale
-/// different intent fails before any alias or mapping write.
+/// portion. Returns `(changed, identity_changed)` so an alias-only edit never
+/// rewrites confirmed mapping provenance. A replay of the already-committed
+/// target returns `(false, false)`; a stale different intent fails before any
+/// alias or mapping write.
 async fn prepare_identity_edit(
     tx: &Transaction<'_>,
     issue_id: i32,
     comicvine_issue_id: i32,
     expected_version: Option<i64>,
     alias: &Option<Option<String>>,
-) -> Result<bool, ApiError> {
+) -> Result<(bool, bool), ApiError> {
     let row = tx
         .query_one(
             "SELECT i.overall_issue_number, i.identity_version, \
@@ -1129,7 +1131,7 @@ async fn prepare_identity_edit(
     let identity_matches =
         current_identity.as_deref() == Some(comicvine_issue_id.to_string().as_str());
     if alias_matches && identity_matches {
-        return Ok(false);
+        return Ok((false, false));
     }
     if expected_version.is_some_and(|expected| expected != current_version) {
         return Err(ApiError::Conflict(format!(
