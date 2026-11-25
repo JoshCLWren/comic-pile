@@ -208,7 +208,7 @@ async fn create_preserves_non_monotonic_order_and_preview_reports_resort_cycle()
     // Numeric resort should report a cycle.
     let resort = &body["numeric_resort_outcome"];
     assert!(!resort.is_null(), "resort outcome should be present");
-    assert_eq!(resort["can_commit"].as_bool().unwrap(), false);
+    assert!(!resort["can_commit"].as_bool().unwrap());
     let cycles = resort["graph"]["cycles"].as_array().unwrap();
     assert!(
         !cycles.is_empty(),
