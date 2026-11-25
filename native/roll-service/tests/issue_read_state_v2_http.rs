@@ -862,7 +862,8 @@ async fn bulk_mark_unread_reactivates_completed_series_with_not_started_progress
         ),
     )
     .await;
-    assert_eq!(status, StatusCode::NO_CONTENT, "{body:?}");
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["operation_type"], "bulk_mark_unread");
     assert_eq!(
         thread_row(&conn, done).await,
         row("active", 3, Some(d[0]), 2, 2, "not_started")
@@ -894,7 +895,8 @@ async fn bulk_mark_unread_seats_reactivated_series_after_retained_queue_position
         ),
     )
     .await;
-    assert_eq!(status, StatusCode::NO_CONTENT, "{body:?}");
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["operation_type"], "bulk_mark_unread");
     // The retained position 5 counts toward the end of the queue, so the series
     // without a seat is appended after it (Python `max_queue_position + 1`).
     assert_eq!(thread_row(&conn, first).await.queue_position, 1);
