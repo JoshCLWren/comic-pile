@@ -7,7 +7,6 @@ import CustomCBLBuilder from '../components/CustomCBLBuilder'
 import { issueCardsApi } from '../services/issueCardsApi'
 import { existingList } from './fixtures/customCblFixture'
 import { queryKeys } from '../query/queryKeys'
-
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   get: vi.fn(),
@@ -18,7 +17,6 @@ const mocks = vi.hoisted(() => ({
   apply: vi.fn(),
   exportXml: vi.fn(),
 }))
-
 vi.mock('../services/api-custom-cbl', async () => {
   const actual = await vi.importActual<typeof import('../services/api-custom-cbl')>(
     '../services/api-custom-cbl',
@@ -28,12 +26,10 @@ vi.mock('../services/api-custom-cbl', async () => {
     customCBLApi: mocks,
   }
 })
-
 const cblMocks = vi.hoisted(() => ({
   discover: vi.fn(),
   preview: vi.fn(),
 }))
-
 vi.mock('../services/api-cbl-sources', async () => {
   const actual = await vi.importActual<typeof import('../services/api-cbl-sources')>(
     '../services/api-cbl-sources',
@@ -43,7 +39,6 @@ vi.mock('../services/api-cbl-sources', async () => {
     cblSourcesApi: cblMocks,
   }
 })
-
 function renderBuilder(onApplied = vi.fn()) {
   const client = new QueryClient({
     defaultOptions: {
@@ -65,7 +60,6 @@ function renderBuilder(onApplied = vi.fn()) {
   )
   return { client, onApplied }
 }
-
 const globalSource = {
   id: 9001,
   name: 'Global Starman CBL',
@@ -75,7 +69,6 @@ const globalSource = {
   content_hash: 'review-hash',
   revision_sha: 'review-revision',
 }
-
 type PreviewRow = {
   cbl_position: number
   cbl_entry_id: number
@@ -89,7 +82,6 @@ type PreviewRow = {
   resolution_status: string
   collection_excluded?: boolean
 }
-
 function previewResponse(entries: PreviewRow[]) {
   return {
     source: {
@@ -117,7 +109,6 @@ function previewResponse(entries: PreviewRow[]) {
     },
   }
 }
-
 async function openReplacementReview(repeatSourceEntry = false) {
   cblMocks.discover.mockResolvedValue([globalSource])
   const rows = existingList.entries.map((entry) => ({
@@ -144,7 +135,6 @@ async function openReplacementReview(repeatSourceEntry = false) {
   fireEvent.click(await screen.findByRole('button', { name: /Global Starman CBL/ }))
   await screen.findByTestId('confirm-replace')
 }
-
 const waitingChange = {
   issue_id: 30001,
   issue_name: 'All-Star Comics #1',
@@ -153,7 +143,6 @@ const waitingChange = {
   after_issue_ids: [26360],
   after_issue_names: ['Starman #55'],
 }
-
 const waitingConfirmationError = {
   isAxiosError: true,
   response: {
@@ -164,7 +153,6 @@ const waitingConfirmationError = {
     } },
   },
 }
-
 describe('CustomCBLBuilder', () => {
   it('says so when a global CBL source search matches nothing instead of rendering silently (#5485)', async () => {
     cblMocks.discover.mockResolvedValue([])
@@ -247,7 +235,6 @@ describe('CustomCBLBuilder', () => {
     renderBuilder()
     fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
-
     await screen.findByText('Hellboy and the B.P.R.D.: The Long Night #1')
     expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(30)
     await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith(entries.slice(0, 30).map((entry) => entry.issue_id)))
@@ -255,7 +242,6 @@ describe('CustomCBLBuilder', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Next 30' })[0])
     expect(screen.getByText('Hellboy and the B.P.R.D.: The Long Night #31')).toBeInTheDocument()
     expect(screen.queryByText('Hellboy and the B.P.R.D.: The Long Night #1')).not.toBeInTheDocument()
-
     fireEvent.change(screen.getByLabelText('Jump to reading list position'), { target: { value: '65' } })
     fireEvent.click(screen.getByRole('button', { name: 'Go to position' }))
     expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(5)
@@ -276,7 +262,6 @@ describe('CustomCBLBuilder', () => {
       expect(payload.issue_ids).toHaveLength(65)
       expect(payload.issue_ids.slice(0, 3)).toEqual([80000, 80064, 80001])
     })
-
     fireEvent.change(screen.getByLabelText('Find an issue in this reading list'), { target: { value: '#49' } })
     expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(1)
     expect(screen.getByText('Hellboy and the B.P.R.D.: The Long Night #49')).toBeInTheDocument()
@@ -420,20 +405,16 @@ describe('CustomCBLBuilder', () => {
       skipped_existing_issue_ids: [26360],
     })
     const { onApplied } = renderBuilder()
-
     fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     const select = await screen.findByLabelText('Custom CBL')
     fireEvent.change(select, { target: { value: '9' } })
-
     expect(await screen.findByText('Starman #55')).toBeInTheDocument()
     expect(screen.getByText('All-Star Comics #1')).toBeInTheDocument()
-
     fireEvent.change(screen.getByLabelText('Search issues for custom CBL'), {
       target: { value: 'JSA' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Find issues' }))
     fireEvent.click(await screen.findByRole('button', { name: /JSA #1/ }))
-
     fireEvent.click(screen.getByRole('button', { name: 'Save custom CBL' }))
     await waitFor(() => {
       expect(mocks.update).toHaveBeenCalledWith(9, {
@@ -450,11 +431,9 @@ describe('CustomCBLBuilder', () => {
         checkpoint_issue_ids: [],
       })
     })
-
     const applyButton = await screen.findByRole('button', { name: 'Apply to this Reading Plan' })
     await waitFor(() => expect(applyButton).not.toBeDisabled())
     fireEvent.click(applyButton)
-
     await waitFor(() => expect(mocks.apply).toHaveBeenCalledWith(9, 18))
     await waitFor(() => expect(onApplied).toHaveBeenCalledTimes(1))
   })
@@ -473,13 +452,11 @@ describe('CustomCBLBuilder', () => {
     mocks.create.mockResolvedValue(created)
     mocks.get.mockResolvedValue(created)
     renderBuilder()
-
     fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     fireEvent.change(screen.getByLabelText('New custom CBL name'), {
       target: { value: '  Cosmic detour  ' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Create' }))
-
     await waitFor(() => {
       expect(mocks.create).toHaveBeenCalledWith({ name: 'Cosmic detour', issue_ids: [] })
     })
@@ -509,19 +486,15 @@ describe('CustomCBLBuilder', () => {
       configurable: true,
       value: vi.fn(),
     })
-
     renderBuilder()
     fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
     expect(await screen.findByText('Starman #55')).toBeInTheDocument()
-
     fireEvent.click(screen.getByRole('button', { name: 'Move All-Star Comics #1 earlier' }))
     fireEvent.click(screen.getByRole('button', { name: 'Remove Starman #55' }))
     fireEvent.change(screen.getByLabelText('Description'), { target: { value: '   ' } })
-
     expect(screen.getByText('Save this custom CBL before applying or exporting it.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Save custom CBL' }))
-
     await waitFor(() => {
       expect(mocks.update).toHaveBeenCalledWith(9, {
         expected_updated_at: '2026-09-14T03:00:00Z',
@@ -535,7 +508,6 @@ describe('CustomCBLBuilder', () => {
         checkpoint_issue_ids: [],
       })
     })
-
     const exportButton = await screen.findByRole('button', { name: 'Export .cbl' })
     await waitFor(() => expect(exportButton).not.toBeDisabled())
     fireEvent.click(exportButton)
@@ -543,25 +515,21 @@ describe('CustomCBLBuilder', () => {
     expect(URL.createObjectURL).toHaveBeenCalled()
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:custom-cbl')
     expect(anchorClick).toHaveBeenCalled()
-
     // Delete confirms through an in-page dialog QA automation can operate,
     // not a native window.confirm the harness auto-dismisses.
     const deleteButton = screen.getByRole('button', { name: 'Delete' })
     fireEvent.click(deleteButton)
     expect(screen.getByRole('dialog', { name: 'Delete custom CBL' })).toBeInTheDocument()
     expect(mocks.delete).not.toHaveBeenCalled()
-
     // Cancelling keeps the saved list exactly as it is.
     fireEvent.click(within(screen.getByRole('dialog', { name: 'Delete custom CBL' })).getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Delete custom CBL' })).not.toBeInTheDocument())
     expect(mocks.delete).not.toHaveBeenCalled()
     expect(screen.getByLabelText('Custom CBL')).toHaveValue('9')
-
     fireEvent.click(deleteButton)
     fireEvent.click(screen.getByRole('button', { name: 'Delete custom CBL' }))
     await waitFor(() => expect(mocks.delete).toHaveBeenCalledWith(9))
     expect(await screen.findByRole('status')).toHaveTextContent('Custom CBL deleted.')
-
     anchorClick.mockRestore()
   })
   it('keeps the delete confirmation open with a visible error when deletion fails', async () => {
@@ -570,15 +538,12 @@ describe('CustomCBLBuilder', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
     expect(await screen.findByText('Starman #55')).toBeInTheDocument()
-
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     fireEvent.click(screen.getByRole('button', { name: 'Delete custom CBL' }))
-
     const dialog = screen.getByRole('dialog', { name: 'Delete custom CBL' })
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('Deletion unavailable')
     // The list survives the failed deletion and stays loaded for a retry.
     expect(screen.getByText('Starman #55')).toBeInTheDocument()
-
     // Reopening must not resurrect the previous failure as if it just happened.
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
@@ -597,10 +562,8 @@ describe('CustomCBLBuilder', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
     expect(await screen.findByText('Starman #55')).toBeInTheDocument()
-
     fireEvent.click(screen.getByRole('button', { name: 'Mark Starman #55 as crossover checkpoint' }))
     fireEvent.click(screen.getByRole('button', { name: 'Save custom CBL' }))
-
     await waitFor(() => {
       expect(mocks.update).toHaveBeenCalledWith(9, {
         expected_updated_at: '2026-09-14T03:00:00Z',
@@ -629,16 +592,13 @@ describe('CustomCBLBuilder', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
     expect(await screen.findByText('All-Star Comics #1')).toBeInTheDocument()
-
     fireEvent.click(screen.getByRole('radio', { name: /^Strict/ }))
     fireEvent.change(screen.getByLabelText('Wait behavior for All-Star Comics #1'), {
       target: { value: 'after_previous' },
     })
     fireEvent.click(screen.getByLabelText('Skip Starman #55 in this list'))
-
     expect(await screen.findByText('Skipped in this list')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Save custom CBL' }))
-
     await waitFor(() => {
       expect(mocks.update).toHaveBeenCalledWith(9, {
         expected_updated_at: '2026-09-14T03:00:00Z',
@@ -683,22 +643,17 @@ describe('CustomCBLBuilder', () => {
           { ...existingList.entries[1], gate: 'after_previous' },
         ],
       })
-
     renderBuilder()
     fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
     expect(await screen.findByText('Starman #55')).toBeInTheDocument()
-
     fireEvent.change(screen.getByLabelText('Wait behavior for All-Star Comics #1'), {
       target: { value: 'after_previous' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Save custom CBL' }))
-
     const dialog = await screen.findByRole('dialog', { name: 'Confirm waiting changes' })
     expect(dialog).toHaveTextContent('All-Star Comics #1 now waits on Starman #55.')
-
     fireEvent.click(screen.getByRole('button', { name: 'Confirm and save' }))
-
     await waitFor(() => {
       expect(mocks.update).toHaveBeenNthCalledWith(2, 9, {
         expected_updated_at: '2026-09-14T03:00:00Z',
@@ -741,12 +696,10 @@ describe('CustomCBLBuilder', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
     expect(await screen.findByText('Starman #55')).toBeInTheDocument()
-
     fireEvent.change(screen.getByLabelText('Wait behavior for All-Star Comics #1'), {
       target: { value: 'after_previous' },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Save custom CBL' }))
-
     const confirmDialog = await screen.findByRole('dialog', { name: 'Confirm waiting changes' })
     fireEvent.click(within(confirmDialog).getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Confirm waiting changes' })).not.toBeInTheDocument())
@@ -791,7 +744,6 @@ describe('CustomCBLBuilder', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
     expect(await screen.findByText('Starman #55')).toBeInTheDocument()
-
     fireEvent.change(screen.getByLabelText('Wait behavior for All-Star Comics #1'), {
       target: { value: 'after_previous' },
     })
@@ -799,7 +751,6 @@ describe('CustomCBLBuilder', () => {
     expect(saveButton).toBeEnabled()
     fireEvent.click(saveButton)
     await waitFor(() => expect(mocks.update).toHaveBeenCalled())
-
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent(
       'This order would create a reading cycle: Starman #55 → JSA #1 → Starman #55.',
@@ -816,7 +767,6 @@ describe('CustomCBLBuilder', () => {
       target: { value: 'after_previous' },
     })
     fireEvent.click(screen.getByLabelText('Skip Starman #55 in this list'))
-
     // Force a changed query result for the same identity, as a background refresh
     // can do while the reader has an unsaved draft.
     mocks.get.mockResolvedValueOnce({ ...existingList, updated_at: '2026-09-14T05:00:00Z' })
@@ -902,7 +852,6 @@ describe('CustomCBLBuilder', () => {
     const select = await screen.findByLabelText('Custom CBL')
     fireEvent.change(select, { target: { value: '9' } })
     expect(await screen.findByText('Starman #55')).toBeInTheDocument()
-
     fireEvent.change(screen.getByLabelText('Wait behavior for All-Star Comics #1'), {
       target: { value: 'after_previous' },
     })
@@ -911,7 +860,6 @@ describe('CustomCBLBuilder', () => {
     expect(saveButton).toBeEnabled()
     fireEvent.click(saveButton)
     expect(await screen.findByRole('alert')).toHaveTextContent('create a reading cycle')
-
     fireEvent.change(select, { target: { value: '10' } })
     expect(await screen.findByText('JSA #1')).toBeInTheDocument()
     await waitFor(() => {
@@ -928,10 +876,8 @@ describe('CustomCBLBuilder', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
     expect(await screen.findByText('Starman #55')).toBeInTheDocument()
-
     fireEvent.click(screen.getByRole('radio', { name: /^Strict/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Save custom CBL' }))
-
     expect(await screen.findByText('Coverage warnings')).toBeInTheDocument()
     expect(
       screen.getByText('Strict list omits 2 unread Issues from Golden Path Series: #2, #3'),
@@ -1060,25 +1006,20 @@ describe('CustomCBLBuilder', () => {
       .mockResolvedValueOnce(existingList)
       .mockResolvedValueOnce(existingList)
       .mockResolvedValue(replacedList)
-
     renderBuilder()
     await user.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     await user.selectOptions(await screen.findByLabelText('Custom CBL'), '9')
     expect(await screen.findByText('Starman #55')).toBeInTheDocument()
-
     await user.click(screen.getByRole('button', { name: 'Replace using CBL' }))
     await user.type(screen.getByLabelText('Search global CBL sources'), 'Starman')
     await user.click(screen.getByRole('button', { name: 'Find CBLs' }))
     await user.click(await screen.findByRole('button', { name: /Global Starman CBL/ }))
-
     expect(await screen.findByTestId('cbl-replace-review')).toBeInTheDocument()
     expect(screen.getByTestId('cbl-replace-graph-impact')).toHaveTextContent('Waits-on links')
     expect(screen.getByTestId('default-30002')).toHaveTextContent('default')
     expect(screen.getByTestId('manual-30001')).toHaveTextContent('(manual)')
     expect(screen.getByText(/1 source entry is not in your library yet/)).toBeInTheDocument()
-
     await user.click(screen.getByTestId('confirm-replace'))
-
     await waitFor(() =>
       expect(mocks.update).toHaveBeenCalledWith(9, {
         expected_updated_at: '2026-09-14T03:00:00Z',
@@ -1095,9 +1036,7 @@ describe('CustomCBLBuilder', () => {
       }),
     )
     expect(await screen.findByRole('status')).toHaveTextContent('Replaced this Reading List')
-
     await user.click(screen.getByRole('button', { name: 'Undo last save' }))
-
     await waitFor(() =>
       expect(mocks.update).toHaveBeenLastCalledWith(9, {
         expected_updated_at: '2026-09-14T03:10:00Z',
@@ -1165,24 +1104,20 @@ describe('CustomCBLBuilder', () => {
         },
       ],
     })
-
     renderBuilder()
     await user.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     await user.selectOptions(await screen.findByLabelText('Custom CBL'), '9')
     expect(await screen.findByText('Starman #55')).toBeInTheDocument()
-
     await user.click(screen.getByRole('button', { name: 'Replace using CBL' }))
     await user.type(screen.getByLabelText('Search global CBL sources'), 'Starman')
     await user.click(screen.getByRole('button', { name: 'Find CBLs' }))
     await user.click(await screen.findByRole('button', { name: /Global Starman CBL/ }))
     expect(await screen.findByTestId('cbl-replace-review')).toBeInTheDocument()
-
     mocks.get.mockResolvedValue({
       ...existingList,
       updated_at: '2026-09-14T04:00:00Z',
     })
     await user.click(screen.getByTestId('confirm-replace'))
-
     expect(await screen.findByRole('alert')).toHaveTextContent('changed after you reviewed it')
     expect(mocks.update).not.toHaveBeenCalled()
   })
@@ -1247,7 +1182,6 @@ describe('CustomCBLBuilder', () => {
         ],
       })
     mocks.get.mockResolvedValue(existingList)
-
     renderBuilder()
     await user.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     await user.selectOptions(await screen.findByLabelText('Custom CBL'), '9')
@@ -1257,15 +1191,12 @@ describe('CustomCBLBuilder', () => {
     await user.click(screen.getByRole('button', { name: 'Find CBLs' }))
     await user.click(await screen.findByRole('button', { name: /Global Starman CBL/ }))
     await user.click(await screen.findByTestId('confirm-replace'))
-
     const dialog = await screen.findByRole('dialog', {
       name: 'Confirm replacement waiting changes',
     })
     expect(dialog).toHaveTextContent('All-Star Comics #1 now waits on Starman #55.')
     expect(mocks.update).toHaveBeenCalledTimes(1)
-
     await user.click(screen.getByRole('button', { name: 'Confirm and replace' }))
-
     await waitFor(() => {
       expect(mocks.update).toHaveBeenNthCalledWith(2, 9, {
         expected_updated_at: '2026-09-14T03:00:00Z',
@@ -1317,7 +1248,6 @@ describe('CustomCBLBuilder', () => {
     }
     mocks.update.mockResolvedValueOnce(replacedList).mockResolvedValueOnce(savedAfterMove)
     mocks.get.mockResolvedValue(existingList)
-
     renderBuilder()
     await user.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     await user.selectOptions(await screen.findByLabelText('Custom CBL'), '9')
@@ -1328,7 +1258,6 @@ describe('CustomCBLBuilder', () => {
     await user.click(await screen.findByRole('button', { name: /Global Starman CBL/ }))
     await user.click(await screen.findByTestId('confirm-replace'))
     expect(await screen.findByRole('button', { name: 'Undo last save' })).toBeInTheDocument()
-
     // A later save creates a new list-scoped undo snapshot for that save.
     await user.click(screen.getByRole('button', { name: 'Move All-Star Comics #1 earlier' }))
     await user.click(screen.getByRole('button', { name: 'Save custom CBL' }))
@@ -1365,7 +1294,6 @@ describe('CustomCBLBuilder', () => {
       .mockResolvedValueOnce(existingList)
       .mockResolvedValueOnce(existingList)
       .mockResolvedValue({ ...existingList, updated_at: '2026-09-14T04:00:00Z' })
-
     renderBuilder()
     await user.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     await user.selectOptions(await screen.findByLabelText('Custom CBL'), '9')
@@ -1376,7 +1304,6 @@ describe('CustomCBLBuilder', () => {
     await user.click(await screen.findByRole('button', { name: /Global Starman CBL/ }))
     await user.click(await screen.findByTestId('confirm-replace'))
     await user.click(await screen.findByRole('button', { name: 'Undo last save' }))
-
     expect(await screen.findByRole('alert')).toHaveTextContent('Undo is no longer available')
     expect(mocks.update).toHaveBeenCalledTimes(1)
     await waitFor(() => {
@@ -1424,7 +1351,6 @@ describe('CustomCBLBuilder', () => {
       .mockResolvedValueOnce(checkpointList)
       .mockResolvedValueOnce(checkpointList)
       .mockResolvedValue(replacedList)
-
     renderBuilder()
     await user.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     await user.selectOptions(await screen.findByLabelText('Custom CBL'), '9')
@@ -1435,7 +1361,6 @@ describe('CustomCBLBuilder', () => {
     await user.click(await screen.findByRole('button', { name: /Global Starman CBL/ }))
     await user.click(await screen.findByTestId('confirm-replace'))
     await user.click(await screen.findByRole('button', { name: 'Undo last save' }))
-
     await waitFor(() => {
       expect(mocks.update).toHaveBeenLastCalledWith(9, expect.objectContaining({
         expected_updated_at: '2026-09-14T03:10:00Z',
@@ -1496,7 +1421,6 @@ describe('CustomCBLBuilder', () => {
         },
       ]),
     )
-
     renderBuilder()
     await user.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     await user.selectOptions(await screen.findByLabelText('Custom CBL'), '9')
@@ -1505,7 +1429,6 @@ describe('CustomCBLBuilder', () => {
     await user.type(screen.getByLabelText('Search global CBL sources'), 'Starman')
     await user.click(screen.getByRole('button', { name: 'Find CBLs' }))
     await user.click(await screen.findByRole('button', { name: /Global Starman CBL/ }))
-
     // An excluded row that was already saved stays visible as a saved selection;
     // a never-saved excluded row does not become a checked default.
     expect(await screen.findByTestId('toggle-30001')).toBeChecked()
@@ -1518,14 +1441,12 @@ describe('CustomCBLBuilder', () => {
     cblMocks.discover
       .mockRejectedValueOnce(new Error('Source registry unavailable'))
       .mockResolvedValueOnce([globalSource])
-
     renderBuilder()
     await user.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     await user.selectOptions(await screen.findByLabelText('Custom CBL'), '9')
     await user.click(screen.getByRole('button', { name: 'Replace using CBL' }))
     await user.type(screen.getByLabelText('Search global CBL sources'), 'Starman')
     await user.click(screen.getByRole('button', { name: 'Find CBLs' }))
-
     expect(await screen.findByRole('alert')).toHaveTextContent('Source registry unavailable')
     await user.click(screen.getByRole('button', { name: 'Retry source search' }))
     expect(await screen.findByRole('button', { name: /Global Starman CBL/ })).toBeInTheDocument()
@@ -1551,7 +1472,6 @@ describe('CustomCBLBuilder', () => {
           },
         ]),
       )
-
     renderBuilder()
     await user.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     await user.selectOptions(await screen.findByLabelText('Custom CBL'), '9')
@@ -1560,7 +1480,6 @@ describe('CustomCBLBuilder', () => {
     await user.type(screen.getByLabelText('Search global CBL sources'), 'Starman')
     await user.click(screen.getByRole('button', { name: 'Find CBLs' }))
     await user.click(await screen.findByRole('button', { name: /Global Starman CBL/ }))
-
     expect(await screen.findByRole('alert')).toHaveTextContent('Preview unavailable')
     await user.click(screen.getByRole('button', { name: 'Retry preview' }))
     expect(await screen.findByTestId('cbl-replace-review')).toBeInTheDocument()
@@ -1578,18 +1497,14 @@ describe('CustomCBLBuilder', () => {
       configurable: true,
       value: vi.fn(),
     })
-
     renderBuilder()
     fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     fireEvent.change(await screen.findByLabelText('Custom CBL'), { target: { value: '9' } })
     expect(await screen.findByText('Starman #55')).toBeInTheDocument()
-
     fireEvent.click(screen.getByRole('button', { name: 'Export .cbl' }))
-
     expect(await screen.findByRole('alert')).toHaveTextContent('Download blocked')
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:failed-custom-cbl')
     expect(document.querySelector('a[download]')).not.toBeInTheDocument()
-
     anchorClick.mockRestore()
   })
   it('confirms restored waits before Undo and sends only the reviewed confirmation', async () => {
@@ -1685,7 +1600,6 @@ describe('CustomCBLBuilder', () => {
     await screen.findByText('Starman #55')
     fireEvent.click(screen.getByRole('button', { name: 'Apply to this Reading Plan' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Apply unavailable')
-
     // The delete failure keeps the in-page confirmation open with the error
     // visible, so the list stays editable and retryable without a reload.
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
@@ -1709,6 +1623,4 @@ describe('CustomCBLBuilder', () => {
       },
     }))
   })
-
 })
-
