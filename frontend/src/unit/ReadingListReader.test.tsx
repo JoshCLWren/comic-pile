@@ -28,6 +28,7 @@ const view: ReaderView = {
 function cardFor(issueId: number): IssueCard {
   if (issueId === 30) {
     return {
+      identity_version: 1,
       issue_id: 30, thread_id: 3, thread_title: 'Starman', issue_number: '55',
       status: 'unread', rating: null, mapping_state: 'confirmed',
       has_confirmed_identity: true,
@@ -37,6 +38,7 @@ function cardFor(issueId: number): IssueCard {
   const entry = view.entries?.find((row) => row.issue_id === issueId) ?? view.entries?.[0]
   if (!entry) throw new Error('Missing fixture')
   return { issue_id: issueId, thread_id: entry.thread_id, thread_title: entry.series_name,
+           identity_version: 1,
     issue_number: entry.issue_number, status: entry.status, rating: null,
     mapping_state: 'unmapped', has_confirmed_identity: false }
 }

@@ -62,6 +62,7 @@ const list = vi.spyOn(issuesApi, 'list')
 const get = vi.spyOn(issuesApi, 'get')
 const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards')
 const card: IssueCard = {
+  identity_version: 1,
   issue_id: 37, thread_id: 42, thread_title: 'Hellboy', issue_number: '9',
   status: 'unread', rating: null, mapping_state: 'confirmed',
   has_confirmed_identity: true, cover_image_url: 'https://comicvine.gamespot.com/a/hellboy9.jpg',

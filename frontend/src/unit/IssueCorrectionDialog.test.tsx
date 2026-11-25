@@ -231,12 +231,14 @@ describe('IssueCorrectionDialog', () => {
     const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards')
     const patchIssue = vi.spyOn(issueCardsApi, 'patchIssue')
     fetchCards.mockResolvedValue([{
+      identity_version: 1,
       issue_id: 10, thread_id: 42, thread_title: 'Test Comic', issue_number: 'Annual 1',
       status: 'unread', rating: null, mapping_state: 'unmapped',
       has_confirmed_identity: false,
     }])
     patchIssue.mockResolvedValue({
       issue: {
+        identity_version: 1,
         issue_id: 10, thread_id: 42, thread_title: 'Test Comic', issue_number: 'Annual 1',
         status: 'read', rating: 3.5, mapping_state: 'unmapped',
         has_confirmed_identity: false,

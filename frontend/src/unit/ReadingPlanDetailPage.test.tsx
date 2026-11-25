@@ -212,6 +212,7 @@ const patchIssue = vi.spyOn(issueCardsApi, 'patchIssue')
 function cardFor(issueId: number): IssueCard {
   const issue = [availableIssue, blockedIssue, laterIssue].find((row) => row.issue_id === issueId) ?? laterIssue
   return { issue_id: issueId, thread_id: issue.thread_id, thread_title: issue.thread_title,
+           identity_version: 1,
     issue_number: issue.issue_number, status: 'unread', rating: null,
     mapping_state: 'unmapped', has_confirmed_identity: false }
 }

@@ -43,6 +43,7 @@ const issue: Issue = {
 }
 
 const card: IssueCard = {
+  identity_version: 1,
   issue_id: 91,
   thread_id: 7,
   thread_title: 'Saga',

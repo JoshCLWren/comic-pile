@@ -147,6 +147,7 @@ function canonicalNextBoundary(title: string) {
 
 function canonicalNextCard(title: string): IssueCard {
   return {
+    identity_version: 1,
     issue_id: 401,
     thread_id: 1,
     thread_title: title,
@@ -214,6 +215,7 @@ it('loads the next issue cover before expansion and shares its card batch with I
   const cover = 'https://comicvine.example/saga-3.jpg'
   const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards').mockImplementation(async (ids) =>
     ids.map((id): IssueCard => ({
+      identity_version: 1,
       issue_id: id, thread_id: 1, thread_title: 'Saga',
       issue_number: id === 401 ? '3' : '4', status: 'unread',
       rating: null, mapping_state: 'confirmed',

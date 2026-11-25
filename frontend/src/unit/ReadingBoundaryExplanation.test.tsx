@@ -351,6 +351,7 @@ describe('ReadingBoundaryExplanation', () => {
     const blocked = issue({ issue_id: 9, thread_title: 'One Year In', issue_number: '1' })
     const next = issue({ issue_id: 12, thread_id: 3, thread_title: 'Saga', issue_number: '7', label: 'Saga #7' })
     const card = (item: BoundaryIssue, coverImageUrl: string): IssueCard => ({
+      identity_version: 1,
       issue_id: item.issue_id,
       thread_id: item.thread_id,
       thread_title: item.thread_title,

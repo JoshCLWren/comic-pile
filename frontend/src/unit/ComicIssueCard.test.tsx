@@ -36,6 +36,7 @@ vi.mock('../components/ComicIssueMappingAction', () => ({
 }))
 
 const card: IssueCard = {
+  identity_version: 1,
   issue_id: 75, thread_id: 8, thread_title: 'Cable', issue_number: 'Annual 1', status: 'read',
   rating: 4, mapping_state: 'unmapped', has_confirmed_identity: false,
 }

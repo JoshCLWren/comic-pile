@@ -161,6 +161,7 @@ describe('CblComicFinder', () => {
   it('shows exact owned issue cover/read/rate/map in source finder without a collapsed-row request', async () => {
     mocks.getIssueIdentity.mockResolvedValue(identityResponse(['4000-1']))
     fetchCards.mockResolvedValue([{
+      identity_version: 1,
       issue_id: 5,
       thread_id: 3,
       thread_title: 'Ultimate Spider-Man',

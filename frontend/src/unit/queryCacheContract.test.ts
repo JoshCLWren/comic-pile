@@ -388,6 +388,7 @@ describe('targeted cache effects', () => {
       die_after: null,
       final_rating: null,
       issue: {
+        identity_version: 1,
         issue_id: 12,
         thread_id: thread.id,
         issue_number: '12',

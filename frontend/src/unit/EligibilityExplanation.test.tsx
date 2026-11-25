@@ -42,6 +42,7 @@ it('distinguishes completed from missing-explanation and available states', () =
 
 it('uses the owner card batch for exact prerequisite art while preserving the deep link', () => {
   const card: IssueCard = {
+    identity_version: 1,
     issue_id: 44, thread_id: 4, thread_title: 'One Year In', issue_number: '1',
     status: 'unread', rating: null, mapping_state: 'confirmed',
     has_confirmed_identity: true,

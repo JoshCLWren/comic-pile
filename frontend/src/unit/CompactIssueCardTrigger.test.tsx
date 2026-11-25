@@ -10,6 +10,7 @@ vi.mock('../components/ComicIssueMappingAction', () => ({
 }))
 
 const card: IssueCard = {
+  identity_version: 1,
   issue_id: 37, thread_id: 10, thread_title: 'Hellboy', issue_number: '9',
   status: 'unread', rating: null, read_at: null,
   mapping_state: 'confirmed', has_confirmed_identity: true,

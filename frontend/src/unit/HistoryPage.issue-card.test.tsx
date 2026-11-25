@@ -25,6 +25,7 @@ vi.mock('../components/ComicIssueMappingAction', () => ({
 }))
 
 const sagaCard: IssueCard = {
+  identity_version: 1,
   issue_id: 1121330,
   thread_id: 3153,
   thread_title: 'Saga',

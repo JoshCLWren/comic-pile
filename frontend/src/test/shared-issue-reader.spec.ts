@@ -18,6 +18,7 @@ for (const width of [390, 1280]) {
       release_sources: [], release_candidates: [],
     }
     const card: IssueCard = {
+      identity_version: 1,
       issue_id: 75, thread_id: 8, thread_title: 'Cable', issue_number: '75', status: 'unread',
       rating: null, mapping_state: 'unmapped', has_confirmed_identity: false,
     }
