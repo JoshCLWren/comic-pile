@@ -55,39 +55,23 @@ describe('issue cover render guard (#5433)', () => {
     expect(violations, violations.join('\n')).toHaveLength(0)
   })
 
-  it('keeps cover-bearing source on shared presentation components', () => {
+  it('keeps cover image URLs flowing through shared image components', () => {
     const files = collectSourceFiles(SOURCE_ROOT).filter((file) => {
       const rel = relativeToSource(file)
       return !rel.startsWith('unit/') && !rel.startsWith('test/')
     })
     const violations: string[] = []
-    const coverFieldPattern = /\b(cover_image_url|series_cover_image_url)\b/
-    const sharedPresentationPattern =
-      /ComicIssueCover|CompactIssueCardTrigger|ComicIssueReadingCard|ComicIssueCard|ImageWithLoading|DirectReadIssuePanel|ReaderIssueActions/
+    // Catch bespoke image rendering: <img src={...cover...}> or similar direct src bindings.
+    const bespokeCoverSrc =
+      /<img\b[\s\S]{0,200}?src=\{[^}]*(cover_image_url|series_cover_image_url|coverImageUrl|image_url)[^}]*\}/
 
     for (const file of files) {
       const rel = relativeToSource(file)
-      if (
-        rel === 'components/ImageWithLoading.tsx' ||
-        rel === 'components/ComicIssueCard.tsx' ||
-        rel === 'components/CompactIssueCardTrigger.tsx' ||
-        rel === 'components/ComicIssueReadingCard.tsx' ||
-        rel === 'types/index.ts' ||
-        rel === 'services/api-comicvine.ts' ||
-        rel === 'services/issueCardsApi.ts' ||
-        rel === 'generated/openapi.ts'
-      ) {
-        continue
-      }
+      if (RAW_IMG_ALLOWLIST.has(rel)) continue
       const content = readFileSync(file, 'utf-8')
-      if (!coverFieldPattern.test(content)) continue
-      if (sharedPresentationPattern.test(content)) continue
-      // Allow data plumbing/hooks that pass cover fields through without rendering.
-      const rendersJsx = /<[A-Za-z]/.test(content)
-      if (!rendersJsx) continue
-      violations.push(
-        `${rel}: references cover fields in JSX but does not use a shared cover presentation component`,
-      )
+      if (bespokeCoverSrc.test(content)) {
+        violations.push(`${rel}: binds cover URL directly to <img>; use ComicIssueCover/ImageWithLoading`)
+      }
     }
 
     expect(violations, violations.join('\n')).toHaveLength(0)
