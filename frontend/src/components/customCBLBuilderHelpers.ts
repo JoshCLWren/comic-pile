@@ -11,6 +11,62 @@ import { decodeCustomCBLError } from '../utils/readingListAuthoring'
 
 const DEFAULT_GATE: ReadingListGate = 'none'
 
+export interface ReadingListUndoSnapshot {
+  payload: CustomCBLWrite
+  baseline: string
+}
+
+function undoStorageKey(userId: number, listId: number): string {
+  return `comic-pile:reading-list-undo:${userId}:${listId}`
+}
+
+function isUndoSnapshot(value: unknown, updatedAt: string): value is ReadingListUndoSnapshot {
+  if (typeof value !== 'object' || value === null) return false
+  const candidate = value as Partial<ReadingListUndoSnapshot>
+  return (
+    candidate.baseline === updatedAt &&
+    typeof candidate.payload === 'object' &&
+    candidate.payload !== null &&
+    Array.isArray(candidate.payload.issue_ids)
+  )
+}
+
+/** Restore only the Undo snapshot for this owner, list, and exact saved version. */
+export function restoreReadingListUndo(
+  userId: number,
+  listId: number,
+  updatedAt: string,
+): ReadingListUndoSnapshot | null {
+  try {
+    const key = undoStorageKey(userId, listId)
+    const stored = window.sessionStorage.getItem(key)
+    if (!stored) return null
+    const parsed: unknown = JSON.parse(stored)
+    if (isUndoSnapshot(parsed, updatedAt)) return parsed
+    window.sessionStorage.removeItem(key)
+    return null
+  } catch {
+    // Storage can be unavailable or contain invalid JSON; the saved list is
+    // still editable and a future save can create a fresh in-memory Undo.
+    return null
+  }
+}
+
+/** Persist one list-scoped Undo across reloads without storing reads or ratings. */
+export function writeReadingListUndo(
+  userId: number,
+  listId: number,
+  snapshot: ReadingListUndoSnapshot | null,
+): void {
+  try {
+    const key = undoStorageKey(userId, listId)
+    if (snapshot) window.sessionStorage.setItem(key, JSON.stringify(snapshot))
+    else window.sessionStorage.removeItem(key)
+  } catch {
+    // The in-memory Undo remains available when browser storage is restricted.
+  }
+}
+
 export function normalizePositions(entries: CustomCBLEntry[]): CustomCBLEntry[] {
   return entries.map((entry, position) => ({
     ...entry,
