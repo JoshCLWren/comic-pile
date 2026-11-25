@@ -8199,6 +8199,94 @@
         ],
         "type": "object"
       },
+      "IssueReadOperationItem": {
+        "description": "One issue affected by a bulk read/unread operation.",
+        "properties": {
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "previous_status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "issue_id",
+          "thread_id",
+          "issue_number",
+          "previous_status"
+        ],
+        "type": "object"
+      },
+      "IssueReadOperationResponse": {
+        "description": "Reviewable, reversible record of a bulk read/unread operation (#4655).",
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/IssueReadOperationItem"
+            },
+            "type": "array"
+          },
+          "operation_type": {
+            "type": "string"
+          },
+          "undone_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "operation_type",
+          "created_at",
+          "items"
+        ],
+        "type": "object"
+      },
+      "IssueReadOperationUndoResponse": {
+        "description": "Result of undoing a bulk read/unread operation (#4655).",
+        "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/IssueReadOperationResponse"
+          },
+          "skipped_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "undone_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "operation",
+          "undone_issue_ids",
+          "skipped_issue_ids"
+        ],
+        "type": "object"
+      },
       "IssueReadRateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -25002,8 +25090,15 @@
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "Every issue marked unread atomically"
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueReadOperationResponse"
+                }
+              }
+            },
+            "description": "Every issue marked unread atomically; returns a reviewable undo operation"
           },
           "400": {
             "description": "An issue is already marked as unread"
@@ -25046,8 +25141,15 @@
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "Every issue marked read atomically"
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueReadOperationResponse"
+                }
+              }
+            },
+            "description": "Every issue marked read atomically; returns a reviewable undo operation"
           },
           "400": {
             "description": "An issue is already marked as read"
@@ -25071,6 +25173,109 @@
           }
         ],
         "summary": "Documentation-only operation for creating read markers in bulk.",
+        "tags": [
+          "issues"
+        ]
+      }
+    },
+    "/api/v2/issue-read-operations/{operation_id}": {
+      "get": {
+        "operationId": "issue_read_operation_get",
+        "parameters": [
+          {
+            "description": "Owned bulk issue-read operation",
+            "in": "path",
+            "name": "operation_id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueReadOperationResponse"
+                }
+              }
+            },
+            "description": "Bulk issue-read operation"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Operation not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for fetching a bulk issue-read operation.",
+        "tags": [
+          "issues"
+        ]
+      }
+    },
+    "/api/v2/issue-read-operations/{operation_id}/undo": {
+      "post": {
+        "operationId": "issue_read_operation_undo",
+        "parameters": [
+          {
+            "description": "Owned bulk issue-read operation",
+            "in": "path",
+            "name": "operation_id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueReadOperationUndoResponse"
+                }
+              }
+            },
+            "description": "Operation undone with compensating events; concurrently changed issues are skipped"
+          },
+          "400": {
+            "description": "Operation already undone"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Operation not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for undoing a bulk issue-read operation.",
         "tags": [
           "issues"
         ]
