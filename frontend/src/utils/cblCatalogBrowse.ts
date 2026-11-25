@@ -17,10 +17,7 @@ export interface CatalogServedPosition {
   scope: string
   query: string | null
   folder: string
-<<<<<<< HEAD
-=======
   page: number | null
->>>>>>> origin/main
 }
 
 /**
@@ -70,13 +67,6 @@ export function isStaleBrowsePosition(
   fetching: boolean,
   folder: string,
   submittedQuery: string,
-<<<<<<< HEAD
-): boolean {
-  if (!fetching || served === null) return false
-  return submittedQuery
-    ? served.scope !== 'search' || (served.query ?? '') !== submittedQuery
-    : served.scope === 'search' || served.folder !== folder
-=======
   page: number,
 ): boolean {
   if (!fetching || served === null) return false
@@ -84,5 +74,4 @@ export function isStaleBrowsePosition(
     return served.scope !== 'search' || (served.query ?? '') !== submittedQuery || (served.page ?? 1) !== page
   }
   return served.scope === 'search' || served.folder !== folder || (served.page ?? 1) !== page
->>>>>>> origin/main
 }
