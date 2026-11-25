@@ -68,8 +68,8 @@ describe('IssueCorrectionDialog', () => {
     vi.clearAllMocks()
     markRead.mockResolvedValue(undefined)
     markUnread.mockResolvedValue(undefined)
-    bulkMarkRead.mockResolvedValue(undefined)
-    bulkMarkUnread.mockResolvedValue(undefined)
+    bulkMarkRead.mockResolvedValue({ id: 1, operation_type: 'bulk_mark_read', created_at: '', items: [] })
+    bulkMarkUnread.mockResolvedValue({ id: 2, operation_type: 'bulk_mark_unread', created_at: '', items: [] })
     move.mockResolvedValue(undefined)
   })
 
@@ -99,6 +99,8 @@ describe('IssueCorrectionDialog', () => {
     expect(markUnread).toHaveBeenCalledWith(2)
     expect(create).not.toHaveBeenCalled()
     expect(onSuccess).toHaveBeenCalledOnce()
+    await screen.findByTestId('bulk-read-review')
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }))
     expect(onClose).toHaveBeenCalledOnce()
   })
 
