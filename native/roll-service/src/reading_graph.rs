@@ -537,6 +537,55 @@ fn project(
     }
 }
 
+fn repair_receipt_context(action: &ReadingGraphRepairAction) -> serde_json::Value {
+    match action {
+        ReadingGraphRepairAction::DeleteList { list_id } => {
+            json!({"action": "delete_list", "list_id": list_id})
+        }
+        ReadingGraphRepairAction::DeletePrerequisite { prerequisite_id } => {
+            json!({"action": "delete_prerequisite", "prerequisite_id": prerequisite_id})
+        }
+        ReadingGraphRepairAction::DeleteListEntry { list_id, issue_id } => {
+            json!({"action": "delete_list_entry", "list_id": list_id, "issue_id": issue_id})
+        }
+    }
+}
+
+async fn repair_receipt_exists(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    action: &ReadingGraphRepairAction,
+) -> Result<bool, crate::ApiError> {
+    let context = repair_receipt_context(action).to_string();
+    let receipt = tx
+        .query_opt(
+            "SELECT id FROM events
+             WHERE user_id=$1 AND type='reading_graph_repair'
+               AND context::jsonb @> $2::text::jsonb
+             ORDER BY id DESC LIMIT 1",
+            &[&user_id, &context],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(receipt.is_some())
+}
+
+async fn record_repair_receipt(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    action: &ReadingGraphRepairAction,
+) -> Result<(), crate::ApiError> {
+    let context = repair_receipt_context(action).to_string();
+    tx.execute(
+        "INSERT INTO events (type,timestamp,user_id,context)
+         VALUES ('reading_graph_repair',NOW(),$1,$2::text::json)",
+        &[&user_id, &context],
+    )
+    .await
+    .map_err(db::query_error)?;
+    Ok(())
+}
+
 fn repair_target_exists(inputs: &OptionInputs, action: &ReadingGraphRepairAction) -> bool {
     match action {
         ReadingGraphRepairAction::DeleteList { list_id } => {
