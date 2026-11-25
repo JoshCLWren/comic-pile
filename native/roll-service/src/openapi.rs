@@ -440,13 +440,13 @@ mod tests {
             (
                 "/api/v2/issue-read-operations/{operation_id}",
                 "get",
-                "issue_read_state_get_operation",
+                "issue_read_operation_get",
                 "200",
             ),
             (
                 "/api/v2/issue-read-operations/{operation_id}/undo",
                 "post",
-                "issue_read_state_undo_operation",
+                "issue_read_operation_undo",
                 "200",
             ),
             (
