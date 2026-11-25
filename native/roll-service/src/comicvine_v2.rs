@@ -1001,7 +1001,12 @@ async fn identity_state(
             created_at: row.get(6),
         };
         match mapping.status.as_str() {
-            "confirmed" => confirmed.push(mapping),
+            "confirmed" => {
+                if confirmed.is_empty() {
+                    provider_issue_number = row.get(7);
+                }
+                confirmed.push(mapping);
+            }
             "candidate" => candidates.push(mapping),
             "unresolved" => has_unresolved = true,
             _ => {}
