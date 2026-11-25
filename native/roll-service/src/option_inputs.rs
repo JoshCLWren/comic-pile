@@ -245,7 +245,7 @@ fn frontier_diagnostics_statement() -> &'static str {
              \x20        d.classification, d.provenance, d.note,\n\
              \x20        (si.id IS NOT NULL) AS source_owned\n\
              \x20 FROM dependencies d\n\
-             \x20 JOIN owned_issues ti ON ti.id = d.target_issue_id AND ti.status = 'unread'\n\
+             \x20 JOIN owned_issues ti ON ti.id = d.target_issue_id AND ti.status = 'unread' AND ti.merged_into_issue_id IS NULL\n\
              \x20 LEFT JOIN owned_issues si ON si.id = d.source_issue_id\n\
              \x20 WHERE d.origin IS DISTINCT FROM 'reader'\n\
              \x20   AND (si.id IS NULL OR si.status <> 'read')\n\
