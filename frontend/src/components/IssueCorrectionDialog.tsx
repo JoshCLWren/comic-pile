@@ -133,7 +133,7 @@ export default function IssueCorrectionDialog({
     }
   }, [isOpen, currentIssueNumber, fetchIssues])
 
-  const handleSubmit = useCallback(async () => {
+  const applyCorrection = useCallback(async () => {
     const targetNumber = selectedIssueNumber.trim()
     if (!targetNumber) {
       setError('Please enter an issue identifier')
@@ -171,22 +171,115 @@ export default function IssueCorrectionDialog({
 
       const issuesBeforeTarget = orderedIssues.slice(0, targetIndex)
       const unreadBeforeTarget = issuesBeforeTarget.filter((issue) => issue.status !== 'read')
+      let operation: IssueReadOperationResponse | null = null
       if (unreadBeforeTarget.length > 0) {
-        await issuesService.bulkMarkRead(unreadBeforeTarget.map((issue) => issue.id))
+        const result = await issuesService.bulkMarkRead(unreadBeforeTarget.map((issue) => issue.id))
+        if (result && typeof result === 'object' && 'id' in result) {
+          operation = result as IssueReadOperationResponse
+        }
       }
 
       if (targetIssue.status === 'read') {
         await issuesService.markUnread(targetIssue.id)
       }
 
+      setLastOperation(operation)
+      setPreview(null)
       onSuccess()
-      onClose()
+      if (!operation) onClose()
     } catch (_err) {
       setError('Failed to update issue. Please try again.')
     } finally {
       setIsLoading(false)
     }
   }, [selectedIssueNumber, allIssues, insertPosition, threadId, loadAllIssues, issuesService, onSuccess, onClose])
+
+
+  const buildPreview = useCallback(async () => {
+    const targetNumber = selectedIssueNumber.trim()
+    if (!targetNumber) {
+      setError('Please enter an issue identifier')
+      return
+    }
+
+    setIsLoading(true)
+    setError(null)
+    try {
+      let targetIssue = allIssues.find((issue) => issue.issue_number === targetNumber)
+      let orderedIssues = await loadAllIssues()
+      if (!targetIssue) {
+        // New issue will be created; preview based on current ordering plus target insertion at end/start/after.
+        // For simplicity, treat as no existing affected issues before creation except by position.
+        targetIssue = { id: -1, issue_number: targetNumber, status: 'unread' } as Issue
+      }
+      const targetIndex = orderedIssues.findIndex((issue) => issue.issue_number === targetNumber)
+      const effectiveIndex = targetIndex === -1 ? orderedIssues.length : targetIndex
+      const issuesBeforeTarget = orderedIssues.slice(0, effectiveIndex)
+      const unreadBeforeTarget = issuesBeforeTarget.filter((issue) => issue.status !== 'read')
+
+      let dependentFrontier: string[] = []
+      try {
+        const deps = await issueDependenciesApi.listForThread(threadId)
+        const affectedIds = new Set(unreadBeforeTarget.map((i) => i.id))
+        const frontier = new Set<string>()
+        for (const issueDep of deps.issues ?? []) {
+          const hasAffectedSource = (issueDep.dependencies ?? []).some((d: { source_issue_id?: number }) => affectedIds.has(d.source_issue_id ?? -1))
+          if (hasAffectedSource) frontier.add(`#${issueDep.issue_number ?? issueDep.issue_id}`)
+        }
+        dependentFrontier = Array.from(frontier)
+      } catch {
+        // best-effort preview
+      }
+
+      const willCompleteSeries = orderedIssues.length > 0
+        && orderedIssues.every((issue) => issue.issue_number === targetNumber || issue.status === 'read' || unreadBeforeTarget.some((u) => u.id === issue.id))
+
+      if (unreadBeforeTarget.length === 0) {
+        // No bulk read preview needed; apply directly.
+        await applyCorrection()
+        return
+      }
+
+      setPreview({ targetIssueNumber: targetNumber, affected: unreadBeforeTarget, willCompleteSeries, dependentFrontier })
+    } catch {
+      setError('Failed to prepare issue correction preview. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [selectedIssueNumber, allIssues, threadId, loadAllIssues])
+
+
+  const handleSubmit = useCallback(async () => {
+    if (preview) {
+      await applyCorrection()
+      return
+    }
+    await buildPreview()
+  }, [preview, applyCorrection, buildPreview])
+
+
+  const handleUndo = useCallback(async () => {
+    if (!lastOperation) return
+    setIsUndoing(true)
+    setError(null)
+    try {
+      await issuesService.bulkMarkUnread(lastOperation.items.map((i) => i.issue_id))
+      // Prefer dedicated undo endpoint when available.
+      try {
+        const svc = issuesService as IssueCorrectionIssuesApi & { undoReadOperation?: (id: number) => Promise<unknown> }
+        if (svc.undoReadOperation) await svc.undoReadOperation(lastOperation.id)
+      } catch {
+        // fallback already applied bulk unread above
+      }
+      setLastOperation(null)
+      onSuccess()
+      onClose()
+    } catch {
+      setError('Failed to undo bulk read operation. Please try again.')
+    } finally {
+      setIsUndoing(false)
+    }
+  }, [lastOperation, issuesService, onSuccess, onClose])
 
   const adjustIssue = useCallback((delta: number) => {
     const currentValue = selectedIssueNumber
