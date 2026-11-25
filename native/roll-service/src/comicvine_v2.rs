@@ -2471,7 +2471,17 @@ pub async fn import_series(
                 };
                 identity_specs.push((cv_text.clone(), item.url.clone(), metadata));
             }
-            let found = all.iter().position(|issue| issue.number == number);
+            let found = all
+                .iter()
+                .position(|issue| issue.number == number)
+                .or_else(|| {
+                    all.iter().position(|issue| {
+                        !matches!(
+                            crate::comicvine_matching::compare_issue_labels(&issue.number, &number),
+                            crate::comicvine_matching::LabelMatch::None
+                        )
+                    })
+                });
             let (sim, created) = match found {
                 Some(sim) => (sim, false),
                 None => (sim_place(&mut all, &number), true),
