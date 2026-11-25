@@ -1,5 +1,10 @@
 # Production-to-local data clone workflow
 
+> **Status: historical/superseded.** `scripts.clone_prod_to_local` is not tracked.
+> Use the PostgreSQL-native backup and loopback-only restore procedure in
+> [DATABASE_SAVE_LOAD.md](DATABASE_SAVE_LOAD.md); do not run the commands below.
+<!-- docs-path-check: historical -->
+
 This workflow copies one ComicPile user's data from the production PostgreSQL database into a local development database. Production PostgreSQL is hosted by Neon. The export is read-only, the import remaps every exported ID, and authentication secrets are never copied.
 
 ## Prerequisites

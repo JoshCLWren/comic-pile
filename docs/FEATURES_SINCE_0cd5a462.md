@@ -1,5 +1,10 @@
 # New Features Guide (Since `0cd5a462ef405f96f591ec31abb66531a1e99a9e`)
 
+> **Status: historical feature snapshot.** Several endpoints and implementation
+> paths below are retired. Use [API.md](API.md) and the current product docs rather
+> than this snapshot as an active feature inventory.
+<!-- docs-path-check: historical -->
+
 This guide covers the major user-facing features added after commit `0cd5a462ef405f96f591ec31abb66531a1e99a9e`.
 
 ## What Was Added

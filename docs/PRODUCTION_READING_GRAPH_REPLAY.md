@@ -1,5 +1,10 @@
 # Production reading-graph golden replay
 
+> **Status: historical incident/replay harness.** The Python exporter, fixtures, and
+> tests below are no longer tracked. Current read-only graph/frontier evidence uses
+> the native resources in [API.md](API.md); preserve this document as provenance.
+<!-- docs-path-check: historical -->
+
 This fixture is a **read-only snapshot of the actual production reader's Option E inputs**, not a synthetic subset or a dump of current Roll results.
 
 ## Artifacts

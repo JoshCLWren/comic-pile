@@ -1,5 +1,10 @@
 # Frontend/Backend Asset Coupling Audit
 
+> **Status: historical FastAPI asset audit.** Current static/native ingress is
+> documented in [VERCEL_ARCHITECTURE.md](VERCEL_ARCHITECTURE.md) and
+> [DEPLOYMENT.md](DEPLOYMENT.md).
+<!-- docs-path-check: historical -->
+
 Date: 2026-02-17
 Scope: FastAPI static asset serving, frontend build/deploy flow, CI/deploy guardrails, and related test/doc drift.
 

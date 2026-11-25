@@ -14,14 +14,14 @@ Local testing is your opportunity to catch issues before they reach CI. Take adv
 
 ## What runs where
 
-Comic Pile has no Python application runtime. Testing is split across three
+Comic Pile has no Python application runtime. Testing is split across four
 surfaces:
 
 | Surface | Location | Command |
 | --- | --- | --- |
 | Rust API behavior | `native/roll-service` (unit + DB-backed HTTP tests) | `cargo test -p comicpile-roll-service <filter>` |
 | Frontend unit/contract tests | `frontend/src/unit`, colocated `*.test.ts(x)` | `pnpm --filter frontend exec vitest run <file>` |
-| Browser E2E (Chromium) | `frontend/src/test` (Playwright, TypeScript) | `BASE_URL=http://localhost:5173 make verify-e2e` |
+| Browser E2E (Chromium) | `frontend/src/test` (Playwright, TypeScript) | `cd frontend && pnpm run build && BASE_URL=http://localhost:5173 pnpm exec playwright test <spec> --project=chromium` |
 | Repository tooling | `tests/` (pytest, Node test files) | `uv run python -m pytest tests/test_<name>.py` |
 
 The legacy Python pytest/Playwright suite under `tests_e2e/` was removed with
@@ -73,8 +73,9 @@ cargo run --locked -p comicpile-roll-service
 ```
 
 `make docker-test-up` builds the frontend and starts the maintained same-origin
-test topology (PostgreSQL on 5437, the native service behind nginx on 8000). Use
-`BASE_URL=http://localhost:8000 make verify-e2e` with that topology. See
+test topology (PostgreSQL on 5437, the native service behind nginx on 8000). From
+`frontend/`, run `BASE_URL=http://localhost:8000 pnpm exec playwright test <spec> --project=chromium`
+with that topology. See
 [`docs/E2E_CHROMIUM_REGRESSION.md`](docs/E2E_CHROMIUM_REGRESSION.md) for the full
 ingress contract and the inventory-driven regression lane.
 
@@ -87,8 +88,8 @@ cargo test -p comicpile-roll-service roll_offer
 # Frontend: one focused file
 pnpm --filter frontend exec vitest run src/unit/queryKeys.test.ts
 
-# Browser: Chromium Playwright (builds first; requires a running same-origin server)
-BASE_URL=http://localhost:5173 make verify-e2e
+# Browser: one focused Chromium spec (build first; requires a running same-origin server)
+(cd frontend && pnpm run build && BASE_URL=http://localhost:5173 pnpm exec playwright test <spec> --project=chromium)
 
 # Repository tooling: one test file
 uv run python -m pytest tests/test_markdown_docs.py -v

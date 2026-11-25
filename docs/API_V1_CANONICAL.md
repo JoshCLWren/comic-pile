@@ -1,5 +1,11 @@
 # Canonical `/api/v1` API Surface
 
+> **Status: historical/superseded.** This migration-era v1 catalogue is not the
+> current client contract. Use [API.md](API.md), the generated native/same-path
+> contracts, and [the route inventory](api/v2-route-inventory.json). Retained v1
+> paths are native compatibility operations, not permission for new v1 clients.
+<!-- docs-path-check: historical -->
+
 This document is the authoritative reference for ComicPile's versioned API surface. It
 supports issue #638 (Developer experience and frontend simplification) and the
 #642 `/api/v1` normalization audit (#954). The companion contract test

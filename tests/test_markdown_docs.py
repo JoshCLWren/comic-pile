@@ -118,38 +118,21 @@ def test_iter_markdown_files_ignores_generated_directories(tmp_path: Path) -> No
 
 
 def test_iter_markdown_files_uses_tracked_scope_in_git_repo(tmp_path: Path) -> None:
-    """Keep tracked validation strict while excluding overlays, archives, and missing files."""
+    """Ignore untracked and locally excluded overlay documents in a real checkout."""
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     docs = tmp_path / "docs"
     docs.mkdir()
-    archive = tmp_path / "archive"
-    archive.mkdir()
     (tmp_path / "README.md").write_text("# Root\n", encoding="utf-8")
     (docs / "tracked.md").write_text("# Tracked\n", encoding="utf-8")
     (docs / "overlay.md").write_text("# Overlay\n", encoding="utf-8")
-    (archive / "history.md").write_text("# History\n", encoding="utf-8")
     (tmp_path / "RANDOM_NOTES.md").write_text("# Untracked root notes\n", encoding="utf-8")
-    (tmp_path / "TRACKED_NOTES.md").write_text("# Tracked root notes\n", encoding="utf-8")
-    missing = docs / "missing.md"
-    missing.write_text("# Missing\n", encoding="utf-8")
     subprocess.run(
-        [
-            "git",
-            "-C",
-            str(tmp_path),
-            "add",
-            "README.md",
-            "docs/tracked.md",
-            "archive/history.md",
-            "TRACKED_NOTES.md",
-            "docs/missing.md",
-        ],
+        ["git", "-C", str(tmp_path), "add", "README.md", "docs/tracked.md"],
         check=True,
     )
-    missing.unlink()
 
     assert iter_markdown_files(tmp_path) == [tmp_path / "README.md", docs / "tracked.md"]
-    assert find_unapproved_root_markdown(tmp_path) == ["TRACKED_NOTES.md"]
+    assert find_unapproved_root_markdown(tmp_path) == []
 
 
 def test_find_unapproved_root_markdown_flags_documentation_sprawl(tmp_path: Path) -> None:

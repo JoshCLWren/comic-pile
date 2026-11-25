@@ -1,5 +1,10 @@
 # Retired shadowed Python handlers
 
+> **Status: completed historical deletion record.** No Python application handlers
+> remain. Current runtime/route authority is the native router, generated contracts,
+> and [route inventory](../api/v2-route-inventory.json).
+<!-- docs-path-check: historical -->
+
 The owner requested removal of the unused Python implementations, their obsolete
 tests, and confirmed test-only code in one PR. The public API operations remain
 implemented by the existing Rust router; this cleanup does not retire their URLs.

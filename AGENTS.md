@@ -265,9 +265,10 @@ cd frontend && pnpm run typecheck                # Frontend TypeScript check
 ### E2E Tests (Playwright)
 **⚠️ MUST build frontend first:**
 ```bash
-make verify-e2e                         # Builds + runs TypeScript Playwright tests (set BASE_URL)
-cd frontend && pnpm run test:e2e:quick  # Skip build (faster iteration)
-cd frontend && pnpm run build && pnpm exec playwright test --headed  # Run with browser visible
+cd frontend && pnpm run build
+BASE_URL=http://localhost:5173 pnpm exec playwright test <spec> --project=chromium
+# Full suite only when explicitly requested:
+cd .. && BASE_URL=http://localhost:5173 make verify-e2e
 ```
 
 **Why build first?** `make verify-e2e` runs the frontend build before Playwright.
@@ -276,7 +277,7 @@ The Docker/nginx and rendered-audit paths serve `static/react`, so tests fail wi
 server serves source assets instead; the build step still runs but is not the
 served bundle.
 
-**Inventory-driven Chromium regression lane** (`make verify-e2e-regression`, `pnpm test:e2e:regression`, scheduled `e2e-chromium-regression` workflow): before running, fixing, or triaging it, load the `e2e-chromium-regression` skill (`.agents/skills/e2e-chromium-regression/SKILL.md`) — it documents the mandatory `TEST_ENVIRONMENT=true` backend contract, scope rules (P0 must stay green; P1/P2 reds reconcile into one canonical issue), and the verified failure-class triage table.
+**Inventory-driven Chromium regression lane** (`make verify-e2e-regression`, `pnpm test:e2e:regression`, scheduled `e2e-chromium-regression` workflow): before running, fixing, or triaging it, load the `e2e-chromium-regression` skill (`.agents/skills/e2e-chromium-regression/SKILL.md`) — it documents the mandatory `TEST_ENVIRONMENT=true` backend contract, scope rules (P0 must stay green; P1/P2 evidence attaches to an existing issue/PR, and a new issue requires explicit owner authorization), and the verified failure-class triage table.
 
 ## Python tooling style
 
@@ -383,11 +384,12 @@ if thread.user_id != current_user.id {
 ```bash
 make setup
 make dev
-BASE_URL=http://localhost:5173 make verify-e2e
+cd frontend && pnpm run build
+BASE_URL=http://localhost:5173 pnpm exec playwright test <spec> --project=chromium
 ```
 
-For the Docker same-origin test topology, run `make docker-test-up` and use
-`BASE_URL=http://localhost:8000 make verify-e2e` instead.
+For the Docker same-origin test topology, run `make docker-test-up`, then from
+`frontend/` use `BASE_URL=http://localhost:8000 pnpm exec playwright test <spec> --project=chromium`.
 
 **Common Commands (from `frontend/`):** `pnpm exec playwright test --project=chromium` (all), `pnpm exec playwright test roll.spec.ts` (single file), `pnpm exec playwright test --ui` (interactive), `pnpm exec playwright test --headed` (browser visible), `pnpm exec playwright test --debug` (debug mode).
 

@@ -105,9 +105,11 @@ issue read state, event count, full undo snapshot content, and live thread state
 3. Browser timezone is accepted by the initialization POST. The GET may carry the
    legacy query parameter, but it never persists timezone, infers bandwidth,
    creates a session, or writes an undo snapshot.
-4. The GET loads die/ladder, session mode, pending state, durable exclusions,
-   canonical eligibility, recovery, issue identities, provider artwork URLs,
-   reader stats, group routes, and session-scoped last-read.
+4. The GET loads die/ladder internally for selection, plus session mode, pending
+   state, durable exclusions, canonical eligibility, recovery, issue identities,
+   provider artwork URLs, reader stats, group routes, and session-scoped last-read.
+   Die fields are not in the current Bootstrap response; clients read them from
+   `GET /api/v2/roll/die-state`.
 5. Canonical eligibility is loaded even when the rollout setting is off. The pool
    takes the top-`die` eligible window first, then removes this browser's temporary
    snoozes, with no backfill from deeper ranks.

@@ -20,7 +20,7 @@
 
 ## MQA-QUEUE-003: Snooze and re-admit
 
-**Test:** Snooze a QA series, inspect its queue/roll state, then unsnooze or satisfy the relevant backoff rule.
+**Test:** Snooze a QA series, inspect its queue/roll state, then use Unsnooze, Reset Dice, or wait for the browser-local midnight expiry.
 
 **Expected:** Excluded series do not roll while excluded, without being deleted or silently re-prioritized; they return when eligible. Temporary snoozes are browser-scoped reroll exclusions that expire at local midnight or on Reset Dice ([#4405](https://github.com/JoshCLWren/comic-pile/issues/4405); UPDATE 2026-11-18). Durable exclusion is Remove from Queue, which is non-destructive and restorable from the excluded section.
 

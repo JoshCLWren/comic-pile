@@ -1,5 +1,10 @@
 # Read-only Option E dependency and frontier census
 
+> **Status: historical Python report harness.** The census command and Python
+> fixtures below are retired. Current dependency/eligibility authority is documented
+> in [Reading List runtime](READING_LIST_RUNTIME.md) and [API.md](API.md).
+<!-- docs-path-check: historical -->
+
 Issue #3661 adds an offline evidence report. It does not change Roll, classify historical
 edges as approved, repair pointers, or execute the production operation in #3588.
 

@@ -52,7 +52,8 @@ evidence and issue identity:
   identity projection.
 - `native/roll-service/src/catalog_commit.rs` persists external identities,
   confirmed Issue/Thread mappings, and provider metadata through the native
-  series-mapping commit flow.
+  series-mapping commit flow. It does not create catalog rows or write the
+  reader-library `catalog_series_id` / `catalog_issue_id` links.
 
 There is no current public API that creates `catalog_series` or `catalog_issues`
 rows, and the retired Python `ensure_catalog_series` / `ensure_catalog_issue`

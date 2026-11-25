@@ -1,260 +1,53 @@
-# Frontend Tests
+# Frontend browser tests
 
-## 🚫 CORE PRINCIPLE: NEVER SKIP TESTS
+Maintained browser coverage lives here as TypeScript Playwright `*.spec.ts` files. The normal configuration runs Chromium only; Firefox and WebKit are optional diagnostics, not required release coverage.
 
-**TESTS MUST NEVER BE SKIPPED - EVER.**
+## Setup
 
-When a frontend test fails:
-- ✅ Fix the test
-- ✅ Fix the code that breaks the test
-- ✅ Investigate root cause (timing, async issues, race conditions)
-- ❌ **NEVER skip the test**
-- ❌ **NEVER use `test.skip()` to work around failures**
-- ❌ **NEVER mark tests as flaky without fixing them**
+Follow the root README to install prerequisites, start PostgreSQL, apply migrations, and run `make dev` (Vite on `:5173`, native Rust API on `:8010`). Export the native environment variables documented in the README; the standalone service does not load `.env` itself.
 
-Frontend tests catch real user-facing bugs. Respect them. Fix them.
-
-## Unit Tests (Vitest)
-
-Fast, in-process tests — no server required.
-
-**Location:** `frontend/src/unit/`
-
-**Run:**
-```bash
-cd frontend && pnpm test
-```
-
-**What belongs here:**
-- Pure logic: hooks, utility functions, geometry helpers
-- Component rendering: props, state transitions, conditional output
-- Regression guards: e.g. `no-debug-artifacts.test.ts` scans source for banned patterns
-
-**What belongs in E2E instead:**
-- Full user flows (roll → rate → history)
-- Real API calls and database state
-- Browser-specific behaviour (drag-and-drop, animations, scroll)
-
----
-
-## E2E Tests (Playwright)
-
-Playwright end-to-end tests for the Comic Pile application.
-
-### Test Structure
-
-```
-frontend/src/
-├── unit/                # Vitest unit tests (no server needed)
-│   ├── api.test.ts
-│   ├── Dice3D.test.tsx
-│   ├── no-debug-artifacts.test.ts
-│   └── ...
-└── test/                # Playwright E2E tests (requires backend)
-    ├── fixtures.ts          # Test fixtures (auth, pages)
-    ├── helpers.ts           # Test utilities and factories
-    ├── auth.spec.ts         # Authentication flow tests
-    ├── threads.spec.ts      # Thread management tests
-    ├── roll.spec.ts         # Dice rolling feature tests
-    ├── rate.spec.ts         # Rating functionality tests
-    ├── history.spec.ts      # Session history tests
-    ├── accessibility.spec.ts # WCAG accessibility tests
-    ├── visual.spec.ts       # Visual regression tests
-    ├── network.spec.ts      # Network/API integration tests
-    └── edge-cases.spec.ts   # Edge case and error handling tests
-```
-
-### Running E2E Tests
-
-`pnpm run test:e2e` builds the frontend automatically before running. If you
-invoke Playwright directly (e.g. `npx playwright test`), build first:
+Build before Playwright, then run one focused spec:
 
 ```bash
-cd frontend && pnpm run build
+cd frontend
+pnpm run build
+BASE_URL=http://localhost:5173 pnpm exec playwright test <spec> --project=chromium
 ```
+
+For the Docker same-origin topology, run `make docker-test-up`, then from `frontend/`:
 
 ```bash
-# Run all E2E tests (builds frontend first)
-cd frontend && pnpm run test:e2e
-
-# Run tests in UI mode (interactive)
-pnpm run test:e2e:ui
-
-# Run tests in headed mode (visible browser)
-pnpm run test:e2e:headed
-
-# Debug tests
-pnpm run test:e2e:debug
-
-# Run specific test file (requires prior pnpm run build)
-npx playwright test auth.spec.ts
-
-# Run tests matching a pattern (requires prior pnpm run build)
-npx playwright test -g "should login"
+BASE_URL=http://localhost:8000 pnpm exec playwright test <spec> --project=chromium
 ```
 
-## Test Categories
+`BASE_URL` defaults to `http://localhost:9000` when unset. Full suites and aggregate coverage run in CI unless explicitly requested; use focused files for local iteration.
 
-### 1. Authentication Tests (`auth.spec.ts`)
-- User registration
-- Login/logout flows
-- Password validation
-- Session persistence
-- Token handling
+## Current spec families
 
-### 2. Thread Management Tests (`threads.spec.ts`)
-- Create/edit/delete threads
-- Queue ordering
-- Form validation
-- Thread metadata
+The directory contains P0 core-journey specs (`p0-*.spec.ts`) and issue/behavior specs covering Roll, direct manual Read/Rate, Queue, dependencies/reading order, Reading Lists, continuity plans, auth/outage recovery, ComicVine identity, creators, SEO, accessibility, responsive geometry, and request budgets. Examples include:
 
-### 3. Roll Feature Tests (`roll.spec.ts`)
-- Dice rolling functionality
-- 3D dice rendering
-- Die size selection
-- Roll animation
-- Session state
+- `p0-roll-selection.spec.ts`
+- `issue-5525-roll-manual-read.spec.ts`
+- `p0-snooze-unsnooze.spec.ts`
+- `reading-list-gate-authoring.spec.ts`
+- `issue-3923-comicvine-mapping.spec.ts`
+- `issue-3068-seo-route-cleanup.spec.ts`
 
-### 4. Rate Feature Tests (`rate.spec.ts`)
-- Rating submission
-- Snooze functionality
-- Issues tracking
-- Session completion
-- Form validation
+Treat this as a navigation sample, not an exhaustive inventory. The canonical inventory-driven lane uses `docs/e2e-behavior-inventory.yaml` and `frontend/playwright.regression.config.ts`; see `docs/E2E_CHROMIUM_REGRESSION.md`.
 
-### 5. History Tests (`history.spec.ts`)
-- Session history
-- Pagination
-- Session details
-- Filtering
+## Fixtures and helpers
 
-### 6. Accessibility Tests (`accessibility.spec.ts`)
-- WCAG 2.1 AA compliance
-- ARIA attributes
-- Keyboard navigation
-- Color contrast
-- Focus management
+Use the shared fixtures and helpers in this directory rather than duplicating login/setup logic. `authenticatedWithThreadsPage` creates isolated deterministic data; helpers such as `waitForQueueReady`, `dismissRollNudgeIfPresent`, and the scroll helpers live in `helpers.ts`. Keep API mocking at the shared fixture/service boundary so tests exercise the same client behavior as the browser.
 
-### 7. Visual Regression Tests (`visual.spec.ts`)
-- Page screenshots
-- Component screenshots
-- Cross-browser checks
-- Responsive design
+## Evidence and debugging
 
-### 8. Network Tests (`network.spec.ts`)
-- API request validation
-- Error handling
-- Retry logic
-- Rate limiting
-- CORS
-
-### 9. Edge Cases Tests (`edge-cases.spec.ts`)
-- Empty states
-- Invalid inputs
-- Network failures
-- Concurrent operations
-- Browser storage issues
-
-## Writing New Tests
-
-### Using Fixtures
-
-```typescript
-import { test, expect } from './fixtures';
-
-test('my test', async ({ authenticatedPage }) => {
-  // authenticatedPage is already logged in
-  await authenticatedPage.goto('/');
-  await expect(authenticatedPage.locator('h1')).toBeVisible();
-});
-```
-
-### Using Helpers
-
-```typescript
-import { test, expect } from './fixtures';
-import { generateTestUser, loginUser, createThread, SELECTORS } from './helpers';
-
-test('my test', async ({ page }) => {
-  const user = generateTestUser();
-  await registerUser(page, user);
-  await loginUser(page, user);
-
-  await createThread(page, {
-    title: 'Test Comic',
-    format: 'Comic',
-    issues_remaining: 5,
-  });
-});
-```
-
-### Using Selectors
-
-```typescript
-import { SELECTORS } from './helpers';
-
-await page.click(SELECTORS.auth.submitButton);
-await expect(page.locator(SELECTORS.roll.dieSelector)).toBeVisible();
-```
-
-## Best Practices
-
-1. **Isolation**: Each test should be independent and clean up after itself
-2. **Fixtures**: Use provided fixtures for common operations (auth, pages)
-3. **Selectors**: Use centralized selectors from `helpers.ts`
-4. **Waits**: Avoid arbitrary timeouts; use `waitForSelector` or `waitForURL`
-5. **Assertions**: Be specific with expectations (text, visibility, state)
-6. **Data**: Use helper functions to generate test data
-7. **Accessibility**: Include a11y checks for new features
-8. **Network**: Verify API calls and error handling
-
-## Debugging
-
-### Playwright Inspector
+The normal config retains traces on failure and captures screenshots on failure. Video is not enabled by default. Useful commands:
 
 ```bash
-pnpm run test:e2e:debug
+cd frontend
+pnpm exec playwright test <spec> --project=chromium --debug
+pnpm exec playwright show-trace test-results/<test-name>/trace.zip
+pnpm exec playwright show-report
 ```
 
-### Screenshots
-
-Screenshots are automatically captured on failure. View them in:
-- `test-results/` - Latest run
-- `playwright-report/` - HTML report
-
-### Traces
-
-Traces are captured on first retry. View them:
-```bash
-npx playwright show-trace trace.zip
-```
-
-### HTML Report
-
-```bash
-npx playwright show-report
-```
-
-## CI/CD
-
-Tests run in CI with:
-- Single worker (avoid conflicts)
-- 2 retries on failure
-- Video recording
-- Screenshot capture
-- Trace recording
-
-## Cross-Browser Testing
-
-Tests run on:
-- Chromium (Chrome)
-- Firefox
-- WebKit (Safari)
-- Mobile Chrome (Pixel 5)
-- Mobile Safari (iPhone 12)
-
-To run specific browsers:
-```bash
-npx playwright test --project=chromium
-npx playwright test --project=firefox
-```
+When a test fails, preserve the trace/network evidence and reproduce against the exact head. Never add retries, sleeps, skips, or weakened assertions merely to get green.

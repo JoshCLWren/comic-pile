@@ -1,5 +1,11 @@
 # Production startup diagnostics
 
+> **Status: historical Python diagnostics.** The lifespan, middleware headers,
+> query timing, and CPU fields below do not describe the native runtime. Current
+> health/build identity, startup metrics, and tracing are documented in
+> [OPERATIONAL_HEALTH.md](OPERATIONAL_HEALTH.md).
+<!-- docs-path-check: historical -->
+
 ComicPile emits structured process and request timing so a slow first request can be separated into application startup, dependency work, and route execution. The Vercel entry point imports the startup clock before the application factory. It cannot measure Vercel provisioning before Python begins executing. Timing measurements inside the application must not be confused with worker lifetime.
 
 ## Cold versus warm

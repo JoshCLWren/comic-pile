@@ -37,7 +37,7 @@ Prerequisites:
 git clone https://github.com/JoshCLWren/comic-pile.git
 cd comic-pile
 cp .env.example .env
-# edit .env and set SECRET_KEY (python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
+# edit .env and set SECRET_KEY (openssl rand -base64 32)
 set -a; . ./.env; set +a
 export RUST_ROLL_DATABASE_URL=postgresql://comicpile:comicpile_password@localhost:5435/comicpile
 export RUST_ROLL_JWT_SECRET="$SECRET_KEY"
@@ -210,8 +210,8 @@ make dev-native    # native Rust Roll/auth service only, on :8010
 make migrate    # run migrations (refinery runner, native/migrate)
 make db-up      # start local PostgreSQL
 make db-down    # stop local PostgreSQL without deleting data
-make lint       # repository lint/type checks
-make verify-e2e # Chromium browser validation when required (set BASE_URL)
+make lint       # repository static checks + frontend ESLint
+make verify-e2e # full Chromium suite only when explicitly requested (set BASE_URL)
 make tidy       # sweep local generated artifacts
 ```
 

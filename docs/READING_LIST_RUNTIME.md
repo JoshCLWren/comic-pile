@@ -67,8 +67,11 @@ Current behavior is not uniform across every surface:
   not restore a stored-flag Roll fallback. This is a recorded runtime discrepancy,
   not the intended setting-off contract.
 
-Production activation remains an operator decision requiring fresh owner-approved
-read-only acceptance across reader cohorts, not merely a deployment.
+Reading List execution is current canonical behavior. The rollout setting controls
+only the per-surface compatibility projections listed above; this document does
+not establish the live deployed value. Changing that value remains an operator
+decision requiring fresh owner-approved read-only acceptance across reader cohorts,
+not merely a deployment.
 
 ## Prerequisites and exclusions
 

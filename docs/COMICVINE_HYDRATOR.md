@@ -1,5 +1,12 @@
 # ComicVine hydrator
 
+> **Status: historical/retired operator CLI.** The Python hydrator/backfill scripts
+> and local SQLite workflow were deleted with the Python application. Current
+> provider work uses the native durable repair queue and maintenance worker; see
+> [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md#comicvine-creator-repair-cadence-4623)
+> and [API.md](API.md). Do not run the commands below.
+<!-- docs-path-check: historical -->
+
 The ComicVine hydrator inspects comics that already exist in ComicPile and writes a machine-readable JSON report. It does not modify threads, issues, reading progress, ratings, dependencies, continuity rules, or confirmed provider mappings.
 
 ## Read-issue identity and creator backfill

@@ -1,5 +1,11 @@
 # ComicPile FastAPI Database Round-Trip Audit
 
+> **Status: historical Python/FastAPI audit (August 2026).** Its pool, ORM, and
+> query-path observations are point-in-time evidence. Current architecture is
+> documented in [ARCHITECTURE.md](ARCHITECTURE.md) and
+> [OPERATIONAL_HEALTH.md](OPERATIONAL_HEALTH.md).
+<!-- docs-path-check: historical -->
+
 ## Executive summary
 
 ComicPile's current performance bottleneck is primarily excessive sequential database round trips rather than raw Python compute. Controlled benchmarking against the production Neon database showed:

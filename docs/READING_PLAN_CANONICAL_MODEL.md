@@ -1,5 +1,11 @@
 # Canonical Reader Execution Model - Decision Record
 
+> **Status: historical #1619 decision record.** Its Python model/runtime details
+> are superseded. Reading Lists are the current sequence and eligibility authority;
+> see [READING_LIST_RUNTIME.md](READING_LIST_RUNTIME.md) and
+> [READING_LIST_EXECUTION_ADR.md](READING_LIST_EXECUTION_ADR.md).
+<!-- docs-path-check: historical -->
+
 **Issue:** #1619 (child of #1612)  
 **Original decision:** 2026-08-22  
 **Reconciled:** 2026-09-07 under #2363 and #2366  
