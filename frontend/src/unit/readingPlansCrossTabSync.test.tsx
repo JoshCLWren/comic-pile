@@ -18,7 +18,7 @@ let mockDelete: MockInstance<typeof continuityPlansApi.delete>
 const plan = {
   id: 1,
   name: 'QA-F-Order',
-  ordering_mode: 'informational',
+  ordering_mode: 'informational' as const,
   lane_count: 1,
   step_count: 3,
   // SAFETY: this fixture declares no source paths

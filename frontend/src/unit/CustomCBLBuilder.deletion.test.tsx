@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CustomCBLBuilder from '../components/CustomCBLBuilder'
 import { customCBLApi } from '../services/api-custom-cbl'
-import { cblSourcesApi } from '../services/api-cbl-sources'
+import { cblSourcesApi, type CBLAdoptionPreview } from '../services/api-cbl-sources'
 import { issueCardsApi } from '../services/issueCardsApi'
 import { existingList } from './fixtures/customCblFixture'
 
@@ -22,6 +22,32 @@ const mocks = {
 const cblMocks = {
   discover: vi.spyOn(cblSourcesApi, 'discover'),
   preview: vi.spyOn(cblSourcesApi, 'preview'),
+}
+
+const emptyPreview: CBLAdoptionPreview = {
+  source: {
+    source_list_id: 1,
+    source_repository: 'test',
+    source_path: 'list.cbl',
+    content_hash: 'hash',
+    revision_sha: 'revision',
+  },
+  total_positions: 0,
+  entries: [],
+  summary: {
+    reused_existing_count: 0,
+    missing_would_create_count: 0,
+    excluded_count: 0,
+    unresolved_count: 0,
+    awaiting_opt_in_count: 0,
+    final_adopted_count: 0,
+    final_adopted_order: [],
+    reused_existing_positions: [],
+    missing_would_create_positions: [],
+    excluded_positions: [],
+    unresolved_positions: [],
+    awaiting_opt_in_positions: [],
+  },
 }
 
 function renderCanonicalBuilder() {
@@ -52,7 +78,7 @@ describe('canonical Custom CBL deletion accessibility', () => {
     mocks.get.mockResolvedValue(existingList)
     mocks.searchIssues.mockResolvedValue([])
     cblMocks.discover.mockResolvedValue([])
-    cblMocks.preview.mockResolvedValue(null)
+    cblMocks.preview.mockResolvedValue(emptyPreview)
   })
 
   it('keeps pending deletion focused and undismissable, then restores focus after success', async () => {
