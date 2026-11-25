@@ -77,3 +77,43 @@ describe('comicVineApi native v2 provider reads (#4835)', () => {
     expect(COMICVINE_ROSTER_TIMEOUT_MS).toBeGreaterThan(50_000)
   })
 })
+
+describe('comicVineApi identity edits (#4652)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    post.mockResolvedValue({})
+  })
+
+  it('includes overall issue number and expected version when confirming identity', async () => {
+    await comicVineApi.confirmIdentity(43, 364132, {
+      overallIssueNumber: '100',
+      expectedVersion: 2,
+    })
+
+    expect(post).toHaveBeenCalledWith('/v2/comicvine/issues/43/identity:confirm', {
+      comicvine_issue_id: 364132,
+      overall_issue_number: '100',
+      expected_version: 2,
+    })
+  })
+
+  it('includes only provided identity edit fields when replacing identity', async () => {
+    await comicVineApi.replaceIdentity(43, 364132, 'wrong match', {
+      overallIssueNumber: '101',
+    })
+
+    expect(post).toHaveBeenCalledWith('/v2/comicvine/issues/43/identity:replace', {
+      comicvine_issue_id: 364132,
+      reason: 'wrong match',
+      overall_issue_number: '101',
+    })
+  })
+
+  it('omits identity edit fields when no edit is provided', async () => {
+    await comicVineApi.confirmIdentity(43, 364132)
+
+    expect(post).toHaveBeenCalledWith('/v2/comicvine/issues/43/identity:confirm', {
+      comicvine_issue_id: 364132,
+    })
+  })
+})
