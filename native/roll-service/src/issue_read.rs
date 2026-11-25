@@ -265,8 +265,8 @@ const THREAD_ISSUES_PAGE_SQL: &str = r#"
 WITH owned AS (
     SELECT id FROM threads WHERE id = $1 AND user_id = $2
 ), matching AS (
-    SELECT i.id, i.thread_id, i.issue_number, i.position,
-           i.status, i.read_at, i.created_at
+    SELECT i.id, i.thread_id, i.issue_number, i.overall_issue_number,
+           i.identity_version, i.position, i.status, i.read_at, i.created_at
     FROM issues i
     JOIN owned t ON t.id = i.thread_id
     WHERE ($3::text IS NULL OR i.status = $3)
