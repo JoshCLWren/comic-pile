@@ -21,3 +21,10 @@ credential = "GEMINI_API_KEY"
 endpoint = "https://generativelanguage.googleapis.com/v1beta/openai"
 name = "Google Gemini API Free"
 headers = { "x-goog-api-client" = "comic-pile-factory-oai/1.0" }
+
+[issues]
+# Issues the factory must never claim, implement or close.
+reserved = [679, 1093, 1109]
+
+[dashboard]
+auth_url = "https://comic-pile.vercel.app/api/v2/factory/github"
