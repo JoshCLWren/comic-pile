@@ -211,6 +211,7 @@ export default function QueueThreadCard({
           threadTitle={thread.title}
           issueNumber=""
           variant="compact"
+          loading="eager"
           testId="queue-thread-series-cover"
           placeholderTestId="queue-thread-series-cover-placeholder"
         />
