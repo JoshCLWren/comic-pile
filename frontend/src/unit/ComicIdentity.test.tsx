@@ -1673,6 +1673,38 @@ describe('ComicIdentity creator status (issue #4149)', () => {
     unmount()
   })
 
+  it('stops an unchanged active repair at the poll budget and offers manual recovery (#5695)', async () => {
+    const pending = intelligenceResponse({
+      comicvine_issue_id: '2050',
+      metadata_status: 'refresh_pending',
+      refresh_retry_after_seconds: null,
+    })
+    getIntelligence.mockResolvedValue(pending)
+
+    vi.useFakeTimers()
+    const { unmount } = renderIdentity()
+    await flushInitialLoad()
+    expect(getIntelligence).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS * (MAX_REFRESH_POLLS + 1))
+    })
+    await flushQueryNotification()
+
+    expect(getIntelligence).toHaveBeenCalledTimes(MAX_REFRESH_POLLS + 1)
+    expect(screen.getByTestId('creator-status-delayed')).toHaveTextContent(
+      'Creator credits are still waiting for ComicVine. Retry refresh or check again later.',
+    )
+    expect(screen.getByRole('button', { name: 'Retry refresh' })).toBeEnabled()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS * 3)
+    })
+    expect(getIntelligence).toHaveBeenCalledTimes(MAX_REFRESH_POLLS + 1)
+
+    unmount()
+  })
+
   it('does not overlap refetches while a slow repair response is still in flight', async () => {
     const pending = intelligenceResponse({
       comicvine_issue_id: '2100',
