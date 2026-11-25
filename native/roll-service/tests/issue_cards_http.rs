@@ -254,6 +254,7 @@ async fn authenticated_issue_cards_are_owner_scoped_and_bounded() {
             "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, created_at, updated_at)
              VALUES ('comicvine', 'issue', '4000-42', $1, NOW(), NOW()) RETURNING id",
             &[&json!({
+                "issue_number": "100",
                 "image": {
                     "medium_url": "https://comicvine.example/medium/4000-42.jpg",
                     "original_url": "https://comicvine.example/original/4000-42.jpg"
@@ -291,6 +292,7 @@ async fn authenticated_issue_cards_are_owner_scoped_and_bounded() {
             "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, created_at, updated_at)
              VALUES ('comicvine', 'issue', '4000-45', $1, NOW(), NOW()) RETURNING id",
             &[&json!({
+                "issue_number": "1",
                 "primary_image": "https://comicvine.example/original/4000-45.jpg"
             })],
         )
@@ -387,12 +389,15 @@ async fn authenticated_issue_cards_are_owner_scoped_and_bounded() {
                 "thread_id": hellboy_id,
                 "thread_title": "Hellboy in Hell",
                 "issue_number": "10",
+                "overall_issue_number": "100",
+                "identity_version": 1,
                 "status": "read",
                 "read_at": "2026-01-02T03:04:05.123Z",
                 "rating": 4.5,
                 "has_confirmed_identity": true,
                 "mapping_state": "confirmed",
                 "comicvine_issue_id": "4000-42",
+                "provider_issue_number": "100",
                 "cover_image_url": "https://comicvine.example/original/4000-42.jpg"
             },
             {
@@ -400,12 +405,15 @@ async fn authenticated_issue_cards_are_owner_scoped_and_bounded() {
                 "thread_id": hellboy_id,
                 "thread_title": "Hellboy in Hell",
                 "issue_number": "2",
+                "overall_issue_number": null,
+                "identity_version": 1,
                 "status": "unread",
                 "read_at": null,
                 "rating": null,
                 "has_confirmed_identity": false,
                 "mapping_state": "candidate",
                 "comicvine_issue_id": null,
+                "provider_issue_number": null,
                 "cover_image_url": null
             },
             {
@@ -413,12 +421,15 @@ async fn authenticated_issue_cards_are_owner_scoped_and_bounded() {
                 "thread_id": hellboy_id,
                 "thread_title": "Hellboy in Hell",
                 "issue_number": "1",
+                "overall_issue_number": null,
+                "identity_version": 1,
                 "status": "unread",
                 "read_at": null,
                 "rating": null,
                 "has_confirmed_identity": false,
                 "mapping_state": "unmapped",
                 "comicvine_issue_id": null,
+                "provider_issue_number": null,
                 "cover_image_url": null
             },
             {
@@ -426,12 +437,15 @@ async fn authenticated_issue_cards_are_owner_scoped_and_bounded() {
                 "thread_id": bprd_id,
                 "thread_title": "B.P.R.D.",
                 "issue_number": "1",
+                "overall_issue_number": null,
+                "identity_version": 1,
                 "status": "unread",
                 "read_at": null,
                 "rating": null,
                 "has_confirmed_identity": true,
                 "mapping_state": "confirmed",
                 "comicvine_issue_id": "4000-45",
+                "provider_issue_number": "1",
                 "cover_image_url": "https://comicvine.example/original/4000-45.jpg"
             }
         ]
