@@ -1584,7 +1584,7 @@ pub async fn confirm_identity(
     let tx = connection.transaction().await.map_err(db::query_error)?;
     crate::queue::lock_queue(&tx, user.id()).await?;
     lock_owned_issue(&tx, user.id(), issue_id).await?;
-    let changed = prepare_identity_edit(
+    let (changed, identity_changed) = prepare_identity_edit(
         &tx,
         issue_id,
         request.comicvine_issue_id,
@@ -1593,13 +1593,15 @@ pub async fn confirm_identity(
     )
     .await?;
     if changed {
-        link_confirmed(&tx, user.id(), issue_id, request.comicvine_issue_id).await?;
+        if identity_changed {
+            link_confirmed(&tx, user.id(), issue_id, request.comicvine_issue_id).await?;
+        }
         finish_identity_edit(&tx, issue_id).await?;
     }
     let response = identity_state(&tx, user.id(), issue_id).await?;
     tx.commit().await.map_err(db::query_error)?;
     drop(connection);
-    if changed {
+    if identity_changed {
         hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started).await;
     }
     Ok(Json(response))
@@ -1647,7 +1649,7 @@ pub async fn replace_identity(
     let tx = connection.transaction().await.map_err(db::query_error)?;
     crate::queue::lock_queue(&tx, user.id()).await?;
     lock_owned_issue(&tx, user.id(), issue_id).await?;
-    let changed = prepare_identity_edit(
+    let (changed, identity_changed) = prepare_identity_edit(
         &tx,
         issue_id,
         request.comicvine_issue_id,
@@ -1656,28 +1658,30 @@ pub async fn replace_identity(
     )
     .await?;
     if changed {
-        // Python `reason or "replaced by user"`.
-        let reason = request
-            .reason
-            .filter(|reason| !reason.is_empty())
-            .unwrap_or_else(|| "replaced by user".to_owned());
-        tx.execute(
-            "UPDATE issue_external_identity_mappings m \
-             SET status = 'rejected', rejection_reason = $2, updated_at = now() \
-             FROM external_identities e \
-             WHERE m.external_identity_id = e.id AND m.issue_id = $1 \
-               AND m.status = 'confirmed' AND e.provider = 'comicvine'",
-            &[&issue_id, &reason],
-        )
-        .await
-        .map_err(db::query_error)?;
-        link_confirmed(&tx, user.id(), issue_id, request.comicvine_issue_id).await?;
+        if identity_changed {
+            // Python `reason or "replaced by user"`.
+            let reason = request
+                .reason
+                .filter(|reason| !reason.is_empty())
+                .unwrap_or_else(|| "replaced by user".to_owned());
+            tx.execute(
+                "UPDATE issue_external_identity_mappings m \
+                 SET status = 'rejected', rejection_reason = $2, updated_at = now() \
+                 FROM external_identities e \
+                 WHERE m.external_identity_id = e.id AND m.issue_id = $1 \
+                   AND m.status = 'confirmed' AND e.provider = 'comicvine'",
+                &[&issue_id, &reason],
+            )
+            .await
+            .map_err(db::query_error)?;
+            link_confirmed(&tx, user.id(), issue_id, request.comicvine_issue_id).await?;
+        }
         finish_identity_edit(&tx, issue_id).await?;
     }
     let response = identity_state(&tx, user.id(), issue_id).await?;
     tx.commit().await.map_err(db::query_error)?;
     drop(connection);
-    if changed {
+    if identity_changed {
         hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started).await;
     }
     Ok(Json(response))
