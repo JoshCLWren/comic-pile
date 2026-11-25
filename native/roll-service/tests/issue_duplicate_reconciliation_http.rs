@@ -864,6 +864,13 @@ async fn suppressed_alias_is_absent_from_roll_candidates() {
     assert!(after.contains(&json!(canonical)), "{eligible:?}");
     assert!(!after.contains(&json!(duplicate)), "{eligible:?}");
 
+    let conn = ctx.state.pool.get().await.unwrap();
+    conn.execute(
+        "INSERT INTO sessions (user_id, started_at, start_die) VALUES ($1, NOW(), 6)",
+        &[&ctx.user_id],
+    )
+    .await
+    .unwrap();
     let (status, bootstrap) = send(
         &ctx.state,
         authed("GET", "/api/v2/roll/bootstrap", &ctx.token, &ctx.csrf, None),
