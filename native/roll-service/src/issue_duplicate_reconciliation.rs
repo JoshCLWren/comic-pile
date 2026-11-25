@@ -6,10 +6,10 @@
 #![forbid(unsafe_code)]
 
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 use tokio_postgres::Transaction;
 use utoipa::ToSchema;
@@ -139,10 +139,6 @@ fn bad_request(msg: &str) -> ApiError {
 
 fn conflict(msg: impl Into<String>) -> ApiError {
     ApiError::Conflict(msg.into())
-}
-
-fn internal(msg: &str) -> ApiError {
-    ApiError::Internal(msg.to_string())
 }
 
 fn iso(ts: chrono::DateTime<chrono::Utc>) -> String {
@@ -803,16 +799,6 @@ pub async fn preview_reconciliation(
     }))
 }
 
-fn is_synthetic_read(
-    read_at: Option<chrono::DateTime<chrono::Utc>>,
-    created_at: chrono::DateTime<chrono::Utc>,
-) -> bool {
-    match read_at {
-        Some(r) => r < created_at,
-        None => false,
-    }
-}
-
 #[utoipa::path(
     post,
     path = "/api/v2/issue-duplicate-reconciliation/apply",
@@ -947,7 +933,7 @@ pub async fn apply_reconciliation(
         }
         duplicates.push(dup);
     }
-    let (actions, mut warnings, can_apply) =
+    let (_actions, mut warnings, can_apply) =
         build_preview_actions(&canonical, &duplicates, &req.decisions);
     warnings.extend(pre_warnings);
     if !can_apply {
@@ -983,9 +969,6 @@ pub async fn apply_reconciliation(
     let mut moved_event_origins: Vec<serde_json::Value> = Vec::new();
     let mut moved_mapping_origins: Vec<serde_json::Value> = Vec::new();
     let mut moved_list_entry_origins: Vec<serde_json::Value> = Vec::new();
-
-    // Check if canonical already has a comicvine mapping
-    let canonical_has_cv = canonical.comicvine_issue_id.is_some();
 
     for dup in &duplicates {
         if dup.merged_into_issue_id == Some(req.canonical_issue_id) {
