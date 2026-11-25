@@ -197,7 +197,7 @@ export default function CustomCBLBuilder({
       if (!selectedId) throw new Error('Choose a custom CBL first.')
       return customCBLApi.update(
         selectedId,
-        buildWritePayload(name, description, mode, entries, confirmed),
+        buildWritePayload(name, description, mode, entries, confirmed, null, persisted?.updated_at ?? null),
       )
     },
     onSuccess: async (saved) => {

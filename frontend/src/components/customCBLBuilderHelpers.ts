@@ -70,6 +70,7 @@ export function buildWritePayload(
   entries: CustomCBLEntry[],
   confirmed: ReadingListPredecessorChange[] | null,
   checkpointTargets: Record<number, number[]> | null = null,
+  expectedUpdatedAt: string | null = null,
 ): CustomCBLWrite {
   const issueIds: number[] = []
   const checkpointIds: number[] = []
@@ -89,6 +90,7 @@ export function buildWritePayload(
   }
   if (confirmed) payload.confirmed_predecessor_changes = confirmed
   if (checkpointTargets) payload.checkpoint_targets = checkpointTargets
+  if (expectedUpdatedAt) payload.expected_updated_at = expectedUpdatedAt
   return payload
 }
 
