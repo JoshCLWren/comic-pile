@@ -559,6 +559,7 @@ export default function RollPage() {
               shuffleIsPending={shuffleQueueMutation.isPending}
               onResetDice={handleResetDice}
               resetDicePending={resetDiceMutation.isPending}
+              resetDiceError={resetDiceError}
             />
           </div>
         </div>

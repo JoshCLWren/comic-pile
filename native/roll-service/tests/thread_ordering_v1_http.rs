@@ -1895,6 +1895,108 @@ async fn bootstrap_cookie_snoozes_survive_session_turnover_and_no_snooze_case() 
     assert!(visible.contains(&selected), "offer not in displayed pool");
 }
 
+#[tokio::test]
+async fn bootstrap_cookie_snoozes_match_display_across_dice_and_reset() {
+    let (state, token, csrf, user_id, _guard) = setup_user_with("roll-dice-reset", true).await;
+    let (ids, foreign) = {
+        let conn = state.pool.get().await.unwrap();
+        let ids = rollable_threads(&conn, user_id, 10).await;
+        let (_, _, other_user) = register_extra_user(&state, "roll-dice-reset-other").await;
+        let foreign = thread(&conn, other_user, "Other reader's die series").await;
+        (ids, foreign)
+    };
+
+    for (start_die, expected_no_snooze) in [(6_i32, 6_usize), (8, 8), (20, 10)] {
+        {
+            let conn = state.pool.get().await.unwrap();
+            conn.execute(
+                "UPDATE sessions SET ended_at = NOW() WHERE user_id = $1 AND ended_at IS NULL",
+                &[&user_id],
+            )
+            .await
+            .unwrap();
+            conn.execute(
+                "INSERT INTO sessions (user_id, started_at, start_die, snoozed_thread_ids)
+                 VALUES ($1, NOW(), $2, $3::text::json)",
+                &[&user_id, &start_die, &json!([ids[0]]).to_string()],
+            )
+            .await
+            .unwrap();
+        }
+
+        let (status, clear) = send(&state, get("/api/v2/roll/bootstrap", &token, &csrf)).await;
+        assert_eq!(status, StatusCode::OK, "d{start_die} no-snooze: {clear:?}");
+        assert_eq!(clear["snoozed_count"], json!(0), "d{start_die}");
+        assert_eq!(
+            clear["rollable"].as_array().unwrap().len(),
+            expected_no_snooze,
+            "d{start_die} no-snooze pool"
+        );
+
+        let cookie_ids = vec![ids[1], ids[2], foreign];
+        let cookie = format!(
+            "csrf_token={csrf}; comicpile_roll_snoozes={}",
+            json!(cookie_ids)
+        );
+        let mut request = get("/api/v2/roll/bootstrap", &token, &csrf);
+        request
+            .headers_mut()
+            .insert(header::COOKIE, cookie.parse().unwrap());
+        let (status, bootstrap) = send(&state, request).await;
+        assert_eq!(status, StatusCode::OK, "d{start_die} cookie: {bootstrap:?}");
+        assert_eq!(bootstrap["snoozed_count"], json!(2), "d{start_die}");
+        assert_eq!(
+            bootstrap["snoozed_thread_ids"],
+            json!([ids[1], ids[2]]),
+            "d{start_die}"
+        );
+        let visible: Vec<_> = bootstrap["rollable"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| row["thread"]["id"].as_i64().unwrap() as i32)
+            .collect();
+        assert!(visible.contains(&ids[0]), "d{start_die} stale session snooze leaked");
+        assert!(!visible.contains(&ids[1]));
+        assert!(!visible.contains(&ids[2]));
+
+        let (status, offer) = send(
+            &state,
+            post(
+                "/api/v2/roll/offer",
+                &token,
+                &csrf,
+                Some(json!({
+                    "idempotency_key": format!("roll-dice-offer-{start_die}"),
+                    "snoozed_thread_ids": [ids[1], ids[2]]
+                })),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "d{start_die} offer: {offer:?}");
+        let selected = offer["thread_id"].as_i64().unwrap() as i32;
+        assert!(visible.contains(&selected), "d{start_die} offer not in displayed pool");
+    }
+
+    let (status, reset) = send(
+        &state,
+        post(
+            "/api/v2/roll/reset",
+            &token,
+            &csrf,
+            Some(json!({ "idempotency_key": "roll-dice-reset-001" })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{reset:?}");
+    assert_eq!(reset["die"], json!(6));
+
+    let (status, after_reset) = send(&state, get("/api/v2/roll/bootstrap", &token, &csrf)).await;
+    assert_eq!(status, StatusCode::OK, "{after_reset:?}");
+    assert_eq!(after_reset["snoozed_count"], json!(0));
+    assert_eq!(after_reset["snoozed_thread_ids"], json!([]));
+}
+
 async fn offer_value(
     state: &Arc<AppState>,
     token: &str,
