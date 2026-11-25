@@ -33,7 +33,10 @@ fn embedded_migration_versions_are_unique_and_ordered() {
     let versions = embedded_versions();
     let mut unique = versions.clone();
     unique.sort_unstable();
-    assert_eq!(versions, unique, "embedded migrations must be in version order");
+    assert_eq!(
+        versions, unique,
+        "embedded migrations must be in version order"
+    );
     unique.dedup();
     assert_eq!(
         versions, unique,
@@ -172,7 +175,10 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
     let db = Scratch::create().await;
     let mut client = db.client().await;
     let report = run(&mut client).await.unwrap();
-    assert_eq!((report.applied, report.adopted), (versions_after(0), vec![]));
+    assert_eq!(
+        (report.applied, report.adopted),
+        (versions_after(0), vec![])
+    );
 
     let stamp: String = client
         .query_one("SELECT version_num FROM public.alembic_version", &[])
