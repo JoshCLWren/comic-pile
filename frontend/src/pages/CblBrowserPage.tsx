@@ -43,11 +43,7 @@ import {
 } from '../utils/cblAdoptionPlan'
 import { identityResolutionReason } from '../utils/cblResolutionReason'
 import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle } from '../utils/cblSourceDisplay'
-<<<<<<< HEAD
 import { catalogTotalLabel, isStaleBrowsePosition } from '../utils/cblCatalogBrowse'
-=======
-import { catalogSourceCount, catalogTotalLabel, isStaleBrowsePosition } from '../utils/cblCatalogBrowse'
->>>>>>> origin/main
 import { isObject, isString } from '../utils/runtimeChecks'
 import { countPhraseWithArticle } from '../utils/countPhraseWithArticle'
 import { cblBrowseResultState } from '../utils/cblBrowseResultState'
