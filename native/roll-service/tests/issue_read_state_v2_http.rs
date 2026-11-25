@@ -1523,7 +1523,6 @@ async fn mark_unread_and_roll_offer_patch_on_same_thread_do_not_deadlock() {
     assert_eq!(reactivated.queue_position, 1);
 }
 
-
 #[tokio::test]
 async fn bulk_read_operation_can_be_undone_without_reverting_unrelated_changes() {
     // #4655 acceptance: original Thread 18873-like scenario. Issues 1-3 read,
@@ -1589,7 +1588,10 @@ async fn bulk_read_operation_can_be_undone_without_reverting_unrelated_changes()
         undo_body["undone_issue_ids"].as_array().unwrap(),
         &vec![json!(issues[3]), json!(issues[4])]
     );
-    assert!(undo_body["skipped_issue_ids"].as_array().unwrap().is_empty());
+    assert!(undo_body["skipped_issue_ids"]
+        .as_array()
+        .unwrap()
+        .is_empty());
     assert!(undo_body["operation"]["undone_at"].as_str().is_some());
 
     // Thread is ACTIVE with exactly two unread and next #4.
@@ -1597,13 +1599,22 @@ async fn bulk_read_operation_can_be_undone_without_reverting_unrelated_changes()
         thread_row(&conn, thread_id).await,
         row("active", 1, Some(issues[3]), 2, 5, "in_progress")
     );
-    assert_eq!(issue_state(&conn, issues[3]).await, ("unread".into(), false));
-    assert_eq!(issue_state(&conn, issues[4]).await, ("unread".into(), false));
+    assert_eq!(
+        issue_state(&conn, issues[3]).await,
+        ("unread".into(), false)
+    );
+    assert_eq!(
+        issue_state(&conn, issues[4]).await,
+        ("unread".into(), false)
+    );
 
     // Audit preserved plus compensating correction events.
     let history = events(&conn, user_id).await;
     assert_eq!(
-        history.iter().map(|e| (e.0.as_str(), e.3.unwrap())).collect::<Vec<_>>(),
+        history
+            .iter()
+            .map(|e| (e.0.as_str(), e.3.unwrap()))
+            .collect::<Vec<_>>(),
         vec![
             ("issue_read", issues[3]),
             ("issue_read", issues[4]),
@@ -1681,11 +1692,27 @@ async fn bulk_read_undo_skips_issues_changed_after_operation() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{undo_body:?}");
-    let undone: Vec<i64> = undo_body["undone_issue_ids"].as_array().unwrap().iter().map(|v| v.as_i64().unwrap()).collect();
-    let skipped: Vec<i64> = undo_body["skipped_issue_ids"].as_array().unwrap().iter().map(|v| v.as_i64().unwrap()).collect();
+    let undone: Vec<i64> = undo_body["undone_issue_ids"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_i64().unwrap())
+        .collect();
+    let skipped: Vec<i64> = undo_body["skipped_issue_ids"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_i64().unwrap())
+        .collect();
     assert_eq!(undone, vec![issues[1] as i64]);
     assert_eq!(skipped, vec![issues[0] as i64]);
     // Issue 0 stayed unread from concurrent change; issue 1 was undone to unread.
-    assert_eq!(issue_state(&conn, issues[0]).await, ("unread".into(), false));
-    assert_eq!(issue_state(&conn, issues[1]).await, ("unread".into(), false));
+    assert_eq!(
+        issue_state(&conn, issues[0]).await,
+        ("unread".into(), false)
+    );
+    assert_eq!(
+        issue_state(&conn, issues[1]).await,
+        ("unread".into(), false)
+    );
 }

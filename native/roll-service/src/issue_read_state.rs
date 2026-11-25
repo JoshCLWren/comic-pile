@@ -571,7 +571,10 @@ async fn bulk_mark(
 
     let op_item_issue_ids: Vec<i32> = issues.iter().map(|issue| issue.id).collect();
     let op_item_thread_ids: Vec<i32> = issues.iter().map(|issue| issue.thread_id).collect();
-    let op_item_numbers: Vec<String> = issues.iter().map(|issue| issue.issue_number.clone()).collect();
+    let op_item_numbers: Vec<String> = issues
+        .iter()
+        .map(|issue| issue.issue_number.clone())
+        .collect();
     let op_item_statuses: Vec<String> = issues.iter().map(|issue| issue.status.clone()).collect();
     let op_item_read_ats: Vec<Option<chrono::DateTime<chrono::Utc>>> =
         issues.iter().map(|issue| issue.read_at).collect();
@@ -1210,7 +1213,13 @@ pub async fn undo_issue_read_operation(
         // Compensating events: reversing a read is issue_unread, reversing an unread is issue_read.
         let compensating_types: Vec<&str> = undo_previous_statuses
             .iter()
-            .map(|status| if status == "read" { "issue_read" } else { "issue_unread" })
+            .map(|status| {
+                if status == "read" {
+                    "issue_read"
+                } else {
+                    "issue_unread"
+                }
+            })
             .collect();
         let user_ids: Vec<i32> = vec![user.id(); undo_issue_ids.len()];
         tx.execute(
@@ -1574,4 +1583,3 @@ mod tests {
         assert_eq!(expected.trim_end(), generated.trim_end());
     }
 }
-
