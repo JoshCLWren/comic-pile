@@ -2,11 +2,16 @@ name: ComicVine Metadata Repair Drain
 # GitHub Actions provides a free cadence that Vercel Hobby cron cannot.
 # Only main may call the production worker; never run secret-bearing PR code.
 #
-# Backoff (#4748): when the queue is empty the drain returns claimed=0 and the
-# next wake is the sparse fallback cron (4 DB-touching invocations/day, down
-# from 96). Newly enqueued repairs fire a repository_dispatch wake signal so
-# pickup stays within minutes; the fallback cron bounds pickup at <= 6 hours
-# if dispatch is unavailable. Manual dispatch is preserved for operator use.
+# Backoff (#4748): the cron runs 4 times/day (03:17, 09:17, 15:17, 21:17 UTC)
+# instead of the previous 96 invocations/day. That is a deterministic cadence
+# reduction in DB-touching production calls, not a measured Neon wakeup or
+# expense result; no such before/after measurement is recorded for #4748.
+# An empty queue is reported as queue_empty=true with claimed=0. New enqueues
+# best-effort fire a repository_dispatch wake, but only when a GitHub token is
+# configured in the Vercel runtime; no production dispatch run has been
+# observed for this change. When dispatch is unavailable the sparse fallback
+# cron bounds pickup at <= 6 hours, so no queue is permanently stuck. Manual
+# dispatch is preserved for operator use.
 on:
   schedule:
     - cron: '17 3,9,15,21 * * *'

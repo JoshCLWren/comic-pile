@@ -1173,6 +1173,9 @@ fn preserve_cached_credits(patch: &mut Value, cached: Option<&Value>) {
 
 const REPAIR_DISPATCH_EVENT: &str = "comicvine-metadata-repair-enqueued";
 
+/// Optional dispatch credential. Absence is a supported state, not a silent
+/// failure: `notify_repair_enqueued` logs the fallback and the sparse cron
+/// bounds pickup at <= 6 hours (#4748).
 fn repair_dispatch_token() -> Option<String> {
     std::env::var("COMICVINE_REPAIR_DISPATCH_TOKEN")
         .ok()
@@ -1236,12 +1239,18 @@ async fn dispatch_repair_wake(state: &AppState, token: &str) {
 }
 
 /// Best-effort wake signal for newly enqueued metadata repairs (#4748).
-/// Fires a GitHub repository_dispatch so the sparse-cron drain workflow picks
-/// up new work within minutes. Failures are logged and ignored: the sparse
-/// fallback cron bounds pickup when dispatch is unavailable.
+/// Fires a GitHub repository_dispatch so the sparse-cron drain can pick up new
+/// work earlier, but only when `COMICVINE_REPAIR_DISPATCH_TOKEN` or
+/// `GITHUB_TOKEN` is configured in the runtime. The signal is not guaranteed:
+/// when no token is configured, or the dispatch is rejected, pickup falls back
+/// to the sparse cron, which bounds it at <= 6 hours (#4748). No queue is
+/// permanently stuck because non-terminal rows stay claimable.
 pub(crate) async fn notify_repair_enqueued(state: &AppState) {
     let Some(token) = repair_dispatch_token() else {
-        tracing::debug!("comicvine repair dispatch skipped: no GitHub token configured");
+        tracing::warn!(
+            "comicvine repair dispatch skipped: no GitHub token configured; \
+             pickup falls back to the <=6h sparse cron (#4748)"
+        );
         return;
     };
     dispatch_repair_wake(state, &token).await;
