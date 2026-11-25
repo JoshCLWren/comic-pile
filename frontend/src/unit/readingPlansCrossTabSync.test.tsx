@@ -7,7 +7,7 @@ import ContinuityPlansIndexPage from '../pages/ContinuityPlansIndexPage'
 import { applyCommittedReadingPlan } from '../query/cacheEffects'
 import { notifyReadingPlansChanged, subscribeToCrossTabChanges } from '../query/crossTabDataSync'
 import { queryClient } from '../query/queryClient'
-import { continuityPlansApi } from '../services/api-continuity-plans'
+import { cast } from '../utils/cast'
 import { isObject } from '../utils/runtimeChecks'
 import { injectModuleDoubles } from './injectModuleDoubles'
 
