@@ -16,7 +16,7 @@ const SQL_BUDGET_SOURCES_PATH = 'docs/api/sql-budget-sources.json';
 const REWRITE_FRAGMENT_PATH = path.posix.join(FRAGMENT_DIR, 'vercel-rewrites.json');
 const VERCEL_PATH = 'vercel.json';
 const AGENTS_PATH = 'AGENTS.md';
-const NATIVE_DESTINATIONS = new Set(['/api/native_roll.rs', '/api/native_issue.rs']);
+const NATIVE_DESTINATIONS = new Set(['/api/native_roll.rs']);
 const PYTHON_DESTINATION = '/api/index.py';
 const VERCEL_DESTINATIONS = new Set([...NATIVE_DESTINATIONS, PYTHON_DESTINATION]);
 const CATCH_ALL_SRC = '/api(?:/.*)?';
@@ -825,7 +825,7 @@ function _renderAgentsBlock(enriched, fullSummary = null) {
     '> API version is not implementation language.',
     '',
     `- Live v2 operations: ${total} (${native} native-rust + ${pythonTotal} python-fastapi).`,
-    '- Native ingress: `/api/native_roll.rs`, `/api/native_issue.rs` (via `vercel.json`).',
+    '- Native ingress: `/api/native_roll.rs` (via `vercel.json`).',
   ];
   if (fullSummary !== null) {
     const v1Total = fullSummary.v1_total;

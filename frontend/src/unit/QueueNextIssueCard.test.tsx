@@ -9,6 +9,7 @@ import { issueCardsApi, type IssueCard } from '../services/issueCardsApi'
 import type { IssueListResponse } from '../types'
 import { injectModuleDoubles } from './injectModuleDoubles'
 
+<<<<<<< HEAD
 await injectModuleDoubles(await import('../components/ComicIssueCard'), () => ({
   ComicIssueCard: ({
     issueId, threadTitle, issueNumber, card, onMutated,
@@ -23,8 +24,57 @@ await injectModuleDoubles(await import('../components/ComicIssueCard'), () => ({
       {threadTitle} #{issueNumber} {card?.cover_image_url ?? 'No cover'}
       <button type="button" onClick={onMutated}>Simulate direct save</button>
     </article>
+=======
+vi.mock('../pages/RollPage/components/ComicIdentity', () => ({
+  ComicIdentity: ({ issueId }: { issueId: number | null | undefined }) => (
+    <div data-testid="direct-read-comic-identity">{issueId}</div>
+>>>>>>> origin/main
   ),
 }))
+
+vi.mock('../hooks/useComicVineIssueIntelligence', () => ({
+  useComicVineIssueIntelligence: () => ({
+    metadata: { image_url: 'https://comicvine.gamespot.com/a/hellboy9.jpg' },
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+}))
+
+vi.mock('../components/Tags/TagSection', () => ({
+  TagSection: ({ targetType, targetId, targetLabel }: {
+    targetType: string
+    targetId: number
+    targetLabel: string
+  }) => (
+    <div data-testid="direct-read-tag-section" data-target={`${targetType}:${targetId}`}>
+      {targetLabel}
+    </div>
+  ),
+}))
+
+vi.mock('../components/ComicIssueCard', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../components/ComicIssueCard')>()
+  return {
+    // Keep the shared cover export: the roll-parity details render it for real.
+    ...actual,
+    ComicIssueCard: ({
+      issueId, threadTitle, issueNumber, card, onMutated,
+    }: {
+      issueId: number
+      threadTitle: string
+      issueNumber: string
+      card?: IssueCard | null
+      onMutated?: () => void
+    }) => (
+      <article data-testid="shared-queue-card" data-issue-id={issueId}>
+        {threadTitle} #{issueNumber} {card?.cover_image_url ?? 'No cover'}
+        <button type="button" onClick={onMutated}>Simulate direct save</button>
+      </article>
+    ),
+  }
+})
 
 const list = vi.spyOn(issuesApi, 'list')
 const get = vi.spyOn(issuesApi, 'get')
@@ -77,6 +127,19 @@ describe('Queue exact-issue shared actions', () => {
     await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith([37]))
     expect(list).toHaveBeenCalledExactlyOnceWith(42, { status: 'unread', page_size: 1 })
     expect(screen.getByText(/pending Roll and die are preserved/)).toBeVisible()
+  })
+
+  it('opens the same provider details and tags a roll would show for the exact issue (#5751)', async () => {
+    setup()
+    expect(await screen.findByTestId('shared-queue-card')).toHaveAttribute('data-issue-id', '37')
+    // The read surface reuses the post-roll provider identity (cover, summary,
+    // creators, story arcs) and that exact issue's tag editor so a reader can
+    // map or inspect credits without rolling first.
+    expect(screen.getByTestId('direct-read-comic-identity')).toHaveTextContent('37')
+    const tags = screen.getByTestId('direct-read-tag-section')
+    expect(tags).toHaveAttribute('data-target', 'Issue:37')
+    expect(tags).toHaveTextContent('Hellboy #9')
+    expect(within(screen.getByTestId('direct-read-comic-details')).getAllByTestId('direct-read-comic-identity')).toHaveLength(1)
   })
 
   it('chooses an alternate owned issue without altering the pending automatic Roll offer', async () => {
