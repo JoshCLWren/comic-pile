@@ -109,7 +109,53 @@ pub fn normalize_title(value: &str) -> String {
             prev_space = false;
         }
     }
-    out.trim().to_string()
+    let spaced = out.trim().to_string();
+    compact_acronym_tokens(&spaced)
+}
+
+/// Collapse runs of single-character tokens produced by punctuation-separated
+/// acronyms: "b p r d" -> "bprd", but keep normal words separated.
+fn compact_acronym_tokens(value: &str) -> String {
+    let tokens: Vec<&str> = value.split_whitespace().collect();
+    if tokens.is_empty() {
+        return String::new();
+    }
+    let mut out = String::new();
+    let mut i = 0;
+    while i < tokens.len() {
+        let is_single = tokens[i].chars().count() == 1;
+        if is_single {
+            let start = i;
+            while i < tokens.len() && tokens[i].chars().count() == 1 {
+                i += 1;
+            }
+            let run_len = i - start;
+            if run_len >= 2 {
+                if !out.is_empty() {
+                    out.push(' ');
+                }
+                for t in &tokens[start..i] {
+                    out.push_str(t);
+                }
+            } else {
+                if !out.is_empty() {
+                    out.push(' ');
+                }
+                out.push_str(tokens[start]);
+            }
+        } else {
+            if !out.is_empty() {
+                out.push(' ');
+            }
+            out.push_str(tokens[i]);
+            i += 1;
+        }
+    }
+    out
+}
+
+fn compact_title(value: &str) -> String {
+    normalize_title(value).replace(' ', "")
 }
 
 fn title_tokens(value: &str) -> BTreeSet<String> {
@@ -129,13 +175,58 @@ fn dice_coefficient(a: &str, b: &str) -> f64 {
     if na == nb {
         return 1.0;
     }
+    let ca = compact_title(a);
+    let cb = compact_title(b);
+    if !ca.is_empty() && ca == cb {
+        return 1.0;
+    }
     let ta = title_tokens(a);
     let tb = title_tokens(b);
     if ta.is_empty() || tb.is_empty() {
         return 0.0;
     }
     let intersection = ta.intersection(&tb).count() as f64;
-    (2.0 * intersection) / (ta.len() as f64 + tb.len() as f64)
+    let token_score = (2.0 * intersection) / (ta.len() as f64 + tb.len() as f64);
+    // Also score by character bigrams on compact form for acronym/punctuation variance.
+    let bigram_score = bigram_dice(&ca, &cb);
+    token_score.max(bigram_score)
+}
+
+fn bigram_dice(a: &str, b: &str) -> f64 {
+    fn bigrams(s: &str) -> Vec<String> {
+        let chars: Vec<char> = s.chars().collect();
+        if chars.len() < 2 {
+            return vec![s.to_string()];
+        }
+        chars.windows(2).map(|w| w.iter().collect()).collect()
+    }
+    if a.is_empty() || b.is_empty() {
+        return 0.0;
+    }
+    if a == b {
+        return 1.0;
+    }
+    let ba = bigrams(a);
+    let bb = bigrams(b);
+    let mut bcount: BTreeMap<&str, usize> = BTreeMap::new();
+    // use owned strings - easier
+    let ba_owned = ba;
+    let bb_owned = bb;
+    let mut map: BTreeMap<String, usize> = BTreeMap::new();
+    for bg in &ba_owned {
+        *map.entry(bg.clone()).or_insert(0) += 1;
+    }
+    let mut inter = 0usize;
+    for bg in &bb_owned {
+        if let Some(c) = map.get_mut(bg) {
+            if *c > 0 {
+                *c -= 1;
+                inter += 1;
+            }
+        }
+    }
+    let _ = bcount;
+    (2.0 * inter as f64) / (ba_owned.len() as f64 + bb_owned.len() as f64)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
