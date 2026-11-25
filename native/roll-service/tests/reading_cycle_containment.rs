@@ -1953,6 +1953,18 @@ async fn reading_graph_repair_confirm_is_idempotent_after_success() {
     assert_eq!(retried["applied"], false);
     assert_eq!(retried["removed"], "Constraint already removed");
 
+    // The original receipt is owner-scoped: it must not make the same absent
+    // identifier look successfully repaired to another reader.
+    let (status, foreign_retry) = send(
+        &state,
+        other_auth,
+        "POST",
+        "/api/v2/reading-graph/repairs",
+        Some(json!({"action": "delete_list", "list_id": list, "confirm": true})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{foreign_retry}");
+
     let (status, graph_after) = send(&state, auth, "GET", "/api/v2/reading-graph", None).await;
     assert_eq!(status, StatusCode::OK, "{graph_after}");
     assert_eq!(graph_after["status"], "ok");
