@@ -530,7 +530,9 @@ async fn julix_4232_omitted_in_thread_issues_classified_intentional_or_repaired(
             .unwrap()
     };
     assert_eq!(by_id(foundry_2_repaired)["availability"], "available");
-    assert_eq!(by_id(tail_issue)["availability"], "later");
+    // tail_issue is the next unread in its own thread but blocked behind the
+    // repaired frontier by strict ordering.
+    assert_eq!(by_id(tail_issue)["availability"], "blocked");
     assert!(
         reader_entries
             .iter()
