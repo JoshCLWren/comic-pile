@@ -56,7 +56,8 @@ export interface UseComicIssueMapping {
   isAmbiguous: boolean
   isLoading: boolean
   isError: boolean
-  fetchIdentity: () => Promise<void>
+  fetchIdentity: () => Promise<IssueIdentityResponse | null>
+  reloadConflict: () => Promise<IssueIdentityResponse | null>
   searchMode: 'confirm' | 'replace'
   isSearchDialogOpen: boolean
   /** Alias/version intent captured when the dialog was opened (#4652). */
@@ -123,35 +124,34 @@ export function useComicIssueMapping({
   const fetchIdentity = useCallback(async () => {
     if (!issueId || !isOwned) {
       setIdentityState(null)
-      return
+      return null
     }
     setIsLoadingIdentity(true)
     try {
       const state = await comicVineApi.getIssueIdentity(issueId)
       setIdentityState(state)
       setIdentityError(false)
-      // #4652: a completed GET is authoritative. A version captured when the
-      // dialog opened is stale after a 409, so rebase the edit to keep only the
-      // authored alias intent. Both dialog callers then fall back to the fresh
-      // identity_version for their retried write instead of replaying the
-      // rejected version forever.
-      setMappingEdit((previous) => {
-        if (previous == null || previous.expectedVersion === undefined) return previous
-        const rebased: IssueIdentityEdit = { ...previous }
-        delete rebased.expectedVersion
-        return Object.keys(rebased).length > 0 ? rebased : null
-      })
       // A completed GET is authoritative, including a concurrent remap. The
       // removal guard only bridges failed or still-pending reconciliation.
       if (removalIdentityRef.current?.issueId === issueId) {
         removalIdentityRef.current = null
       }
+      return state
     } catch {
       setIdentityError(true)
+      return null
     } finally {
       setIsLoadingIdentity(false)
     }
   }, [issueId, isOwned])
+
+  // Only an explicit conflict reload may replace the version captured at open.
+  const reloadConflict = useCallback(async () => {
+    const state = await fetchIdentity()
+    if (state?.identity_version == null) return null
+    setMappingEdit((previous) => ({ ...previous, expectedVersion: state.identity_version }))
+    return state
+  }, [fetchIdentity])
 
   // A supplied batched identity is authoritative; only fetch when none exists.
   useEffect(() => {
@@ -220,9 +220,9 @@ export function useComicIssueMapping({
     edit: IssueIdentityEdit = {},
   ) => {
     setSearchMode(mode)
-    setMappingEdit(Object.keys(edit).length > 0 ? edit : null)
+    setMappingEdit({ ...edit, expectedVersion: edit.expectedVersion ?? identityState?.identity_version })
     setIsSearchDialogOpen(true)
-  }, [])
+  }, [identityState])
 
   const closeSearchDialog = useCallback(() => setIsSearchDialogOpen(false), [])
 
@@ -280,6 +280,7 @@ export function useComicIssueMapping({
     isLoading: status === 'loading',
     isError: status === 'error',
     fetchIdentity,
+    reloadConflict,
     searchMode,
     isSearchDialogOpen,
     mappingEdit,

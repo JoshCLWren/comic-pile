@@ -338,12 +338,15 @@ describe('ComicIssueMappingAction', () => {
     })
     expect(result.current.mappingEdit).toEqual({ overallIssueNumber: '100', expectedVersion: 7 })
 
-    // onConflictRetry from the dialog is this same fetchIdentity. The reload
-    // must drop the rejected version while preserving the authored alias.
+    // Background refresh must not silently advance the editor's version.
     await act(async () => { await result.current.fetchIdentity() })
-
     expect(result.current.identity?.identity_version).toBe(8)
-    expect(result.current.mappingEdit).toEqual({ overallIssueNumber: '100' })
-    expect(result.current.mappingEdit?.expectedVersion).toBeUndefined()
+    expect(result.current.mappingEdit).toEqual({ overallIssueNumber: '100', expectedVersion: 7 })
+    getIssueIdentitySpy.mockRejectedValueOnce(new Error('offline'))
+    await act(async () => { expect(await result.current.reloadConflict()).toBeNull() })
+    expect(result.current.mappingEdit?.expectedVersion).toBe(7)
+    getIssueIdentitySpy.mockResolvedValueOnce(freshIdentity)
+    await act(async () => { expect(await result.current.reloadConflict()).toEqual(freshIdentity) })
+    expect(result.current.mappingEdit).toEqual({ overallIssueNumber: '100', expectedVersion: 8 })
   })
 })

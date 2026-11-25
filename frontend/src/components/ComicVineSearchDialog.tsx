@@ -12,7 +12,7 @@ import SiblingSeriesMappingOffer from './SiblingSeriesMappingOffer'
 import { LatestRequestGuard, type LoadPhase, type RequestTicket } from '../utils/latestRequest'
 import { formatIssueCount } from '../utils/formatIssueCount'
 import { getApiErrorDetail, getApiErrorStatus } from '../utils/apiError'
-import type { IssueIdentityEdit } from '../services/api-comicvine'
+import type { IssueIdentityEdit, IssueIdentityResponse } from '../services/api-comicvine'
 
 interface ComicVineSearchDialogProps {
   isOpen: boolean
@@ -25,7 +25,7 @@ interface ComicVineSearchDialogProps {
   /** Identity version observed by the editor; the server rejects a stale replay. */
   expectedVersion?: number | null
   /** Refetch current identity after a stale/conflict refusal before retrying. */
-  onConflictRetry?: () => Promise<void> | void
+  onConflictRetry?: () => Promise<IssueIdentityResponse | null>
   onClose: () => void
   onConfirmed: (selected?: ComicVineIssueCandidate | null) => void
   onSiblingsMapped?: (confirmedIssueIds: number[]) => void
@@ -150,6 +150,8 @@ export default function ComicVineSearchDialog({
   const [isConfirming, setIsConfirming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmConflict, setConfirmConflict] = useState(false)
+  const [isReloadingConflict, setIsReloadingConflict] = useState(false)
+  const [reloadedIdentity, setReloadedIdentity] = useState<IssueIdentityResponse | null>(null)
   const [siblingScope, setSiblingScope] = useState<SiblingScope | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -460,7 +462,7 @@ export default function ComicVineSearchDialog({
 
   const handleConfirm = useCallback(async () => {
     const targetIssue = directIssue ?? selectedIssue
-    if (!issueId || !targetIssue) return
+    if (!issueId || !targetIssue || confirmConflict || isReloadingConflict) return
     setIsConfirming(true)
     setError(null)
     setConfirmConflict(false)
@@ -469,7 +471,8 @@ export default function ComicVineSearchDialog({
     // different comic's mapping or overwrite another reader's alias.
     const edit: IssueIdentityEdit = {}
     if (overallIssueNumber != null) edit.overallIssueNumber = overallIssueNumber
-    if (expectedVersion != null) edit.expectedVersion = expectedVersion
+    const version = reloadedIdentity?.identity_version ?? expectedVersion
+    if (version != null) edit.expectedVersion = version
     const hasEdit = Object.keys(edit).length > 0
     try {
       if (mode === 'replace') {
@@ -509,15 +512,28 @@ export default function ComicVineSearchDialog({
     } finally {
       setIsConfirming(false)
     }
-  }, [issueId, directIssue, selectedIssue, mode, overallIssueNumber, expectedVersion, onConfirmed, onClose, selectedSeries, threadTitle])
+  }, [issueId, directIssue, selectedIssue, mode, overallIssueNumber, expectedVersion, reloadedIdentity, confirmConflict, isReloadingConflict, onConfirmed, onClose, selectedSeries, threadTitle])
 
   const handleRetry = useCallback(async () => {
     if (confirmConflict) {
       // A 409 is definitive: reload the current version before the reader can
       // retry. The caller owns the identity GET, so it supplies the refresh.
-      await onConflictRetry?.()
-      setError(null)
-      setConfirmConflict(false)
+      if (isReloadingConflict) return
+      setIsReloadingConflict(true)
+      try {
+        const state = await onConflictRetry?.()
+        if (state?.identity_version == null) {
+          setError('Could not reload the current identity. Retry before confirming.')
+          return
+        }
+        setReloadedIdentity(state)
+        setError(null)
+        setConfirmConflict(false)
+      } catch {
+        setError('Could not reload the current identity. Retry before confirming.')
+      } finally {
+        setIsReloadingConflict(false)
+      }
       return
     }
     if (step === 'select-issue' && selectedSeries) {
@@ -527,7 +543,7 @@ export default function ComicVineSearchDialog({
     if (query.trim()) {
       await handleSearch(query)
     }
-  }, [confirmConflict, onConflictRetry, step, selectedSeries, query, handleSelectSeries, handleSearch])
+  }, [confirmConflict, isReloadingConflict, onConflictRetry, step, selectedSeries, query, handleSelectSeries, handleSearch])
 
   const handleDismissSiblings = useCallback(() => {
     setSiblingScope(null)
@@ -577,10 +593,11 @@ export default function ComicVineSearchDialog({
               <button
                 type="button"
                 onClick={handleRetry}
+                disabled={isReloadingConflict}
                 data-testid="comicvine-retry"
                 className="min-h-11 px-4 rounded-lg text-sm font-bold text-rose-100 bg-rose-800/60 border border-rose-600/50 hover:bg-rose-800 transition"
               >
-                Retry
+                {isReloadingConflict ? 'Reloading…' : 'Retry'}
               </button>
             )}
           </div>
@@ -799,10 +816,17 @@ export default function ComicVineSearchDialog({
                   : `This will confirm ${threadTitle} ${issueNumber ? `#${issueNumber}` : ''} maps to this ComicVine issue.`}
               </p>
             </div>
+            {reloadedIdentity && (
+              <div role="status" className="text-sm text-stone-300">
+                Current identity reloaded: {reloadedIdentity.comicvine_issue_id ? `ComicVine #${reloadedIdentity.comicvine_issue_id}` : 'Not mapped'}.
+                {reloadedIdentity.overall_issue_number && ` Overall #${reloadedIdentity.overall_issue_number}.`}
+                {' '}Review your selected match before confirming again.
+              </div>
+            )}
             <button
               type="button"
               onClick={handleConfirm}
-              disabled={isConfirming}
+              disabled={isConfirming || confirmConflict || isReloadingConflict}
               className="w-full min-h-11 rounded-xl px-4 text-sm font-bold text-stone-900 bg-amber-500 hover:bg-amber-400 transition disabled:opacity-50"
             >
               {isConfirming ? 'Confirming...' : 'Confirm Identity'}

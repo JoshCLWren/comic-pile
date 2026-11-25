@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useState, type ReactNode } from 'react'
+import type { IssueIdentityResponse } from '../services/api-comicvine'
 
 const { confirmIdentitySpy, replaceIdentitySpy, searchSeriesSpy, getSeriesIssuesSpy, resolveIdentitySpy } = vi.hoisted(() => ({
   // SAFETY: mock payload supplies only the fields this test asserts
@@ -122,6 +123,12 @@ const mockIssue = {
   site_detail_url: null,
 }
 
+const reloadedIdentity: IssueIdentityResponse = {
+  issue_id: 43, thread_id: 1, thread_title: 'Stormwatch', identity_version: 8,
+  has_confirmed_identity: false, comicvine_issue_id: null,
+  confirmed_mappings: [], candidate_mappings: [], has_unresolved: false,
+}
+
 const defaultProps = (overrides = {}) => ({
   isOpen: true,
   issueId: 43,
@@ -203,7 +210,7 @@ describe('ComicVineSearchDialog mode branching', () => {
       message: 'Request failed',
     }
     confirmIdentitySpy.mockRejectedValueOnce(conflict)
-    const onConflictRetry = vi.fn().mockResolvedValue(undefined)
+    const onConflictRetry = vi.fn().mockResolvedValue(reloadedIdentity)
     render(<ComicVineSearchDialog {...defaultProps({ expectedVersion: 7, onConflictRetry })} />)
 
     const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
@@ -217,7 +224,7 @@ describe('ComicVineSearchDialog mode branching', () => {
     expect(screen.getByTestId('comicvine-retry')).toBeInTheDocument()
     fireEvent.click(screen.getByTestId('comicvine-retry'))
     await waitFor(() => expect(onConflictRetry).toHaveBeenCalledOnce())
-    expect(screen.queryByText(/reload version 8 and retry/)).toBeNull()
+    await waitFor(() => expect(screen.queryByText(/reload version 8 and retry/)).toBeNull())
     // The conflict was definitive: no second write happened before the reload.
     expect(confirmIdentitySpy).toHaveBeenCalledTimes(1)
   })
@@ -244,7 +251,7 @@ describe('ComicVineSearchDialog mode branching', () => {
             expectedVersion: version,
             onConflictRetry: () => {
               setVersion(8)
-              return Promise.resolve()
+              return Promise.resolve(reloadedIdentity)
             },
           })}
         />

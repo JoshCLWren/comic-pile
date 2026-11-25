@@ -155,9 +155,9 @@ export default function ComicIssueMappingAction({
           threadTitle={threadTitle}
           issueNumber={issueNumber}
           mode={mapping.searchMode}
-          overallIssueNumber={mapping.mappingEdit?.overallIssueNumber ?? mapping.identity?.overall_issue_number}
-          expectedVersion={mapping.mappingEdit?.expectedVersion ?? mapping.identity?.identity_version}
-          onConflictRetry={mapping.fetchIdentity}
+          overallIssueNumber={mapping.mappingEdit?.overallIssueNumber}
+          expectedVersion={mapping.mappingEdit?.expectedVersion}
+          onConflictRetry={mapping.reloadConflict}
           onClose={mapping.closeSearchDialog}
           onConfirmed={mapping.handleIdentityConfirmed}
           onSiblingsMapped={mapping.handleSiblingsMapped}
