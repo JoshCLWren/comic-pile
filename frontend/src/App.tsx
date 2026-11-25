@@ -698,6 +698,15 @@ function AppRoutes() {
             </ServiceUnavailableWrapper>
           </ProtectedRoute>
         } />
+        <Route path="/reading-lists" element={
+          <ProtectedRoute>
+            <ServiceUnavailableWrapper>
+              <AuthenticatedLayout onBugReportSubmit={submit}>
+                <ReadingListEditorPage />
+              </AuthenticatedLayout>
+            </ServiceUnavailableWrapper>
+          </ProtectedRoute>
+        } />
         <Route path="/reading-lists/:id" element={
           <ProtectedRoute>
             <ServiceUnavailableWrapper>
