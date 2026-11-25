@@ -1716,3 +1716,165 @@ async fn bulk_read_undo_skips_issues_changed_after_operation() {
         ("unread".into(), false)
     );
 }
+
+#[tokio::test]
+async fn bulk_read_undo_preserves_an_aba_sequence_after_the_operation() {
+    // #4655 review R1: mark read -> unread -> read looks identical by status, so
+    // a status-only check would revert a later genuine read. The event cursor
+    // must detect the newer mutations and skip that issue (#5428-style ABA).
+    let (state, token, csrf, user_id, _guard) = setup_user("irs-4655-aba").await;
+    let conn = state.pool.get().await.unwrap();
+    let (_thread_id, issues) = series(
+        &conn,
+        user_id,
+        "ABA",
+        1,
+        "active",
+        &[("1", "unread"), ("2", "unread"), ("3", "unread")],
+    )
+    .await;
+
+    let (status, body) = send(
+        &state,
+        post(
+            "/api/v2/issue-read-markers",
+            &token,
+            &csrf,
+            Some(json!({"issue_ids": [issues[0], issues[1]]})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let operation_id = body["id"].as_i64().unwrap();
+
+    // Later genuine actions on issue 0: unread, then read again (ABA).
+    let (status, _) = send(
+        &state,
+        unmark(
+            &format!("/api/v2/issues/{}/read-markers", issues[0]),
+            &token,
+            &csrf,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _) = send(
+        &state,
+        mark(
+            &format!("/api/v2/issues/{}/read-markers", issues[0]),
+            &token,
+            &csrf,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let (status, undo_body) = send(
+        &state,
+        authed(
+            "POST",
+            &format!("/api/v2/issue-read-operations/{operation_id}/undo"),
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{undo_body:?}");
+    let undone: Vec<i64> = undo_body["undone_issue_ids"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_i64().unwrap())
+        .collect();
+    let skipped: Vec<i64> = undo_body["skipped_issue_ids"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_i64().unwrap())
+        .collect();
+    assert_eq!(undone, vec![issues[1] as i64]);
+    assert_eq!(skipped, vec![issues[0] as i64]);
+    // The later genuine read of issue 0 survives the stale undo.
+    assert_eq!(issue_state(&conn, issues[0]).await, ("read".into(), true));
+    assert_eq!(issue_state(&conn, issues[1]).await, ("unread".into(), false));
+}
+
+#[tokio::test]
+async fn bulk_unread_undo_restores_the_recorded_read_timestamp() {
+    // #4655 review R2: undo must restore the persisted previous_read_at rather
+    // than substituting NOW() for an issue that was already read before the
+    // bulk operation.
+    let (state, token, csrf, user_id, _guard) = setup_user("irs-4655-read-at").await;
+    let conn = state.pool.get().await.unwrap();
+    let (thread_id, issues) = series(
+        &conn,
+        user_id,
+        "History fidelity",
+        1,
+        "active",
+        &[("1", "read"), ("2", "unread")],
+    )
+    .await;
+    conn.execute(
+        "UPDATE issues SET read_at = '2026-01-02T03:04:05Z'::timestamptz WHERE id = $1",
+        &[&issues[0]],
+    )
+    .await
+    .unwrap();
+    let original_read_at: Option<String> = conn
+        .query_one(
+            "SELECT to_char(read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')
+             FROM issues WHERE id = $1",
+            &[&issues[0]],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert!(original_read_at.is_some());
+
+    let (status, body) = send(
+        &state,
+        post(
+            "/api/v2/issue-read-marker-removals",
+            &token,
+            &csrf,
+            Some(json!({"issue_ids": [issues[0]]})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let operation_id = body["id"].as_i64().unwrap();
+    assert_eq!(body["operation_type"], "bulk_mark_unread");
+
+    let (status, undo_body) = send(
+        &state,
+        authed(
+            "POST",
+            &format!("/api/v2/issue-read-operations/{operation_id}/undo"),
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{undo_body:?}");
+    assert_eq!(undo_body["undone_issue_ids"], json!([issues[0]]));
+
+    let restored_read_at: Option<String> = conn
+        .query_one(
+            "SELECT to_char(read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')
+             FROM issues WHERE id = $1",
+            &[&issues[0]],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(restored_read_at, original_read_at);
+    assert_eq!(
+        thread_row(&conn, thread_id).await,
+        row("active", 1, Some(issues[1]), 1, 2, "in_progress")
+    );
+    let history = events(&conn, user_id).await;
+    assert!(history.iter().any(|e| e.0 == "issue_read" && e.3 == Some(issues[0])));
+}
