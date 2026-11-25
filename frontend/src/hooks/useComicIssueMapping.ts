@@ -3,7 +3,6 @@ import { comicVineApi } from '../services/api-comicvine'
 import type { ComicVineIssueCandidate, IssueIdentityResponse } from '../services/api-comicvine'
 import { queryClient } from '../query/queryClient'
 import {
-  applyComicVineCorrectionOptimistically,
   clearComicVineIssueIntelligence,
   clearComicVineIssueIntelligenceMany,
   invalidateAfterIssueMappingChange,
@@ -162,16 +161,13 @@ export function useComicIssueMapping({
   }, [initialIdentity, fetchEnabled, fetchIdentity, issueId])
 
   const handleIdentityConfirmed = useCallback(
-    async (selected?: ComicVineIssueCandidate | null) => {
+    async (_selected?: ComicVineIssueCandidate | null) => {
       removalIdentityRef.current = null
       if (issueId) {
         // Clear stale A-identity creators/cover before refetching B so a late
         // in-flight response or React Query's retained previous data cannot
         // resurrect the previous mapping during remap (#5695).
         await clearComicVineIssueIntelligence(queryClient, issueId)
-        if (selected && selected.image_url !== undefined) {
-          applyComicVineCorrectionOptimistically(queryClient, issueId, selected.image_url)
-        }
         await invalidateComicVineIssueIdentity(queryClient, issueId)
       }
       await fetchIdentity()

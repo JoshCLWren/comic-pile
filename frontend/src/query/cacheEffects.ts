@@ -693,33 +693,6 @@ export async function invalidateComicVineIssueIdentity(
 }
 
 /**
- * Update the cached `image_url` for an issue's ComicVine intelligence in-place
- * so the newly selected cover renders immediately after a correction. The
- * subsequent invalidation/refetch confirms the optimistic value from the server.
- */
-export function applyComicVineCorrectionOptimistically(
-  client: QueryClient,
-  issueId: number,
-  imageUrl: string | null,
-): void {
-  if (imageUrl === undefined) return
-  client.setQueryData(queryKeys.comicVine.issueIntelligence(issueId), (old: unknown) => {
-    if (!old || !isObject(old)) {
-      // SAFETY: non-object cache values are intentionally discarded unchanged; the never widen preserves the cache value type.
-      return old as never
-    }
-    // SAFETY: isObject(old) above narrows the cache value to a record shape that supports the 'in' probe.
-    const record = old as Record<string, string | null>
-    if (!('image_url' in record)) {
-      // SAFETY: the 'in' check above confirms the record already has the image_url key before reading it.
-      return old as never
-    }
-    // SAFETY: isObject(old) and the 'in' probe guarantee the spread source is an assignable object.
-    return { ...(old as object), image_url: imageUrl } as never
-  })
-}
-
-/**
  * Update a single thread's metadata in every loaded Queue infinite-query page
  * in-place. Use this for mutations that change thread metadata (title, format,
  * notes, issues_remaining, rating) without changing queue ordering or membership.
@@ -1228,8 +1201,6 @@ async function invalidateReadingEligibility(
         : { queryKey: queryKeys.roll.bootstrap(), exact: true, refetchType: 'none' },
     ),
     client.invalidateQueries({ queryKey: queryKeys.dependencies.all }),
-    // Reader context includes neighboring issues' statuses and rating counts.
-    client.invalidateQueries({ queryKey: queryKeys.readerContext.all }),
     client.invalidateQueries({ queryKey: queryKeys.readingPlans.all }),
     client.invalidateQueries({ queryKey: includeAuthoringLists ? queryKeys.customCBLs.all : queryKeys.customCBLs.readers() }),
     client.invalidateQueries({ queryKey: queryKeys.session.all }),
