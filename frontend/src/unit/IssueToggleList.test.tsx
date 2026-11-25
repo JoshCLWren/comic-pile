@@ -1100,7 +1100,7 @@ describe('IssueToggleList deferred mode (#3267)', () => {
     expect(mockedIssuesApi.create).toHaveBeenCalledTimes(3)
     expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(1, 99, '7', { strategy: 'safe_default' })
     expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(2, 99, 'Annual 2', { strategy: 'safe_default' })
-    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(3, 99, '10-12')
+    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(3, 99, '10-12', { strategy: 'safe_default' })
     expect(ref.current?.hasPendingMutations()).toBe(false)
   })
 
@@ -1116,10 +1116,16 @@ describe('IssueToggleList deferred mode (#3267)', () => {
 
     fireEvent.change(input, { target: { value: '7' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
     fireEvent.change(input, { target: { value: 'Annual 2' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
     fireEvent.change(input, { target: { value: '10-12' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
 
     // The failed create is reported to the caller, so the Edit Series dialog
     // stays open instead of closing over a lost create.
@@ -1130,8 +1136,8 @@ describe('IssueToggleList deferred mode (#3267)', () => {
     // The queue stops at the failed create; the create after it stays queued
     // so the reader can retry it.
     expect(mockedIssuesApi.create).toHaveBeenCalledTimes(2)
-    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(1, 99, '7')
-    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(2, 99, 'Annual 2')
+    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(1, 99, '7', { strategy: 'safe_default' })
+    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(2, 99, 'Annual 2', { strategy: 'safe_default' })
     // Error should be surfaced for the failed one
     expect(screen.getByText('Issue number already exists')).toBeInTheDocument()
     expect(ref.current?.hasPendingMutations()).toBe(true)
@@ -1196,6 +1202,8 @@ describe('IssueToggleList deferred mode (#3267)', () => {
     const input = screen.getByTestId('issue-add-input')
     fireEvent.change(input, { target: { value: '2b' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
 
     await act(async () => {
       await ref.current?.flush()
