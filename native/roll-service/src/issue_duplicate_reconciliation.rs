@@ -981,6 +981,7 @@ pub async fn apply_reconciliation(
             .await
             .map_err(db_err)?;
             moved_list_entry_ids.push(entry_id);
+            moved_list_entry_origins.push(json!({"entry_id": entry_id, "original_issue_id": dup.issue_id}));
         }
 
         // Suppress duplicate - mark as merged, not deleted
@@ -1075,6 +1076,9 @@ pub async fn apply_reconciliation(
         "moved_event_ids": moved_event_ids,
         "moved_mapping_ids": moved_mapping_ids,
         "moved_list_entry_ids": moved_list_entry_ids,
+        "moved_event_origins": moved_event_origins,
+        "moved_mapping_origins": moved_mapping_origins,
+        "moved_list_entry_origins": moved_list_entry_origins,
         "suppressed_duplicate_issue_ids": suppressed_duplicate_issue_ids,
         "undo_snapshot_id": null,
         "warnings": warnings,
@@ -1104,6 +1108,197 @@ pub async fn apply_reconciliation(
         moved_list_entry_ids,
         suppressed_duplicate_issue_ids,
         undo_snapshot_id: Some(recon_id as i32),
+        warnings,
+    }))
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct ReconcileUndoRequest {
+    pub reconciliation_id: i32,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ReconcileUndoResponse {
+    pub reconciliation_id: i32,
+    pub undone: bool,
+    pub warnings: Vec<String>,
+}
+
+pub async fn undo_reconciliation(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(req): Json<ReconcileUndoRequest>,
+) -> Result<Json<ReconcileUndoResponse>, ApiError> {
+    let mut conn = db::checkout(&state).await?;
+    let tx = conn
+        .build_transaction()
+        .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
+        .start()
+        .await
+        .map_err(db_err)?;
+
+    tx.execute("SELECT pg_advisory_xact_lock($1, $2)", &[&4653i32, &user.id()])
+        .await
+        .map_err(db_err)?;
+
+    let row = tx
+        .query_opt(
+            r#"
+            SELECT id, canonical_issue_id, duplicate_issue_ids, undone_at, details, undo_snapshot
+            FROM issue_duplicate_reconciliations
+            WHERE id = $1 AND user_id = $2
+            FOR UPDATE
+            "#,
+            &[&(req.reconciliation_id as i64), &user.id()],
+        )
+        .await
+        .map_err(db_err)?
+        .ok_or_else(|| not_found("Reconciliation not found"))?;
+
+    let undone_at: Option<chrono::DateTime<chrono::Utc>> = row.get(3);
+    if undone_at.is_some() {
+        tx.commit().await.map_err(db_err)?;
+        return Ok(Json(ReconcileUndoResponse {
+            reconciliation_id: req.reconciliation_id,
+            undone: true,
+            warnings: vec!["Reconciliation was already undone.".to_string()],
+        }));
+    }
+
+    let canonical_issue_id: i32 = row.get(1);
+    let duplicate_issue_ids: Vec<i32> = row.get(2);
+    let details: serde_json::Value = row.get(4);
+    let undo_snapshot: serde_json::Value = row.get(5);
+    let mut warnings: Vec<String> = Vec::new();
+
+    // Reverse event moves
+    if let Some(origins) = details.get("moved_event_origins").and_then(|v| v.as_array()) {
+        for o in origins {
+            let event_id = o.get("event_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            let original_issue_id = o.get("original_issue_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            if event_id > 0 && original_issue_id > 0 {
+                let updated = tx.execute(
+                    "UPDATE events SET issue_id = $1 WHERE id = $2 AND issue_id = $3",
+                    &[&original_issue_id, &event_id, &canonical_issue_id],
+                ).await.map_err(db_err)?;
+                if updated == 0 {
+                    warnings.push(format!("Event {event_id} could not be moved back; it may have changed."));
+                }
+            }
+        }
+    }
+
+    // Reverse mapping moves
+    if let Some(origins) = details.get("moved_mapping_origins").and_then(|v| v.as_array()) {
+        for o in origins {
+            let mapping_id = o.get("mapping_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            let original_issue_id = o.get("original_issue_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            if mapping_id > 0 && original_issue_id > 0 {
+                // Check for conflict on original issue
+                let conflict_exists = tx.query_opt(
+                    "SELECT 1 FROM issue_external_identity_mappings m1 WHERE m1.id = $1 AND EXISTS (SELECT 1 FROM issue_external_identity_mappings m2 WHERE m2.issue_id = $2 AND m2.external_identity_id = m1.external_identity_id AND m2.id <> m1.id)",
+                    &[&mapping_id, &original_issue_id],
+                ).await.map_err(db_err)?;
+                if conflict_exists.is_some() {
+                    warnings.push(format!("Mapping {mapping_id} could not be moved back due to conflict."));
+                    continue;
+                }
+                let updated = tx.execute(
+                    "UPDATE issue_external_identity_mappings SET issue_id = $1, updated_at = now() WHERE id = $2 AND issue_id = $3",
+                    &[&original_issue_id, &mapping_id, &canonical_issue_id],
+                ).await.map_err(db_err)?;
+                if updated == 0 {
+                    warnings.push(format!("Mapping {mapping_id} could not be moved back."));
+                }
+            }
+        }
+    }
+
+    // Reverse list entry moves
+    if let Some(origins) = details.get("moved_list_entry_origins").and_then(|v| v.as_array()) {
+        for o in origins {
+            let entry_id = o.get("entry_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            let original_issue_id = o.get("original_issue_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            if entry_id > 0 && original_issue_id > 0 {
+                let updated = tx.execute(
+                    "UPDATE custom_cbl_entries SET issue_id = $1 WHERE id = $2 AND issue_id = $3",
+                    &[&original_issue_id, &entry_id, &canonical_issue_id],
+                ).await.map_err(db_err)?;
+                if updated == 0 {
+                    warnings.push(format!("List entry {entry_id} could not be moved back."));
+                }
+            }
+        }
+    }
+
+    // Unmerge duplicates
+    for dup_id in &duplicate_issue_ids {
+        tx.execute(
+            "UPDATE issues SET merged_into_issue_id = NULL, merged_at = NULL WHERE id = $1 AND merged_into_issue_id = $2",
+            &[dup_id, &canonical_issue_id],
+        ).await.map_err(db_err)?;
+    }
+
+    // Restore canonical/duplicate states from snapshot where possible
+    if let Some(canon_snap) = undo_snapshot.get("canonical") {
+        let status = canon_snap.get("status").and_then(|v| v.as_str());
+        let read_at_str = canon_snap.get("read_at").and_then(|v| v.as_str());
+        if let Some(status) = status {
+            if let Some(ra_str) = read_at_str {
+                if let Ok(ra) = chrono::DateTime::parse_from_rfc3339(ra_str) {
+                    let ra_utc = ra.with_timezone(&chrono::Utc);
+                    tx.execute(
+                        "UPDATE issues SET status = $1, read_at = $2 WHERE id = $3",
+                        &[&status, &ra_utc, &canonical_issue_id],
+                    ).await.map_err(db_err)?;
+                } else {
+                    tx.execute(
+                        "UPDATE issues SET status = $1 WHERE id = $2",
+                        &[&status, &canonical_issue_id],
+                    ).await.map_err(db_err)?;
+                }
+            } else {
+                tx.execute(
+                    "UPDATE issues SET status = $1, read_at = NULL WHERE id = $2",
+                    &[&status, &canonical_issue_id],
+                ).await.map_err(db_err)?;
+            }
+        }
+    }
+    if let Some(dups_snap) = undo_snapshot.get("duplicates").and_then(|v| v.as_array()) {
+        for d in dups_snap {
+            let did = d.get("issue_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            let status = d.get("status").and_then(|v| v.as_str());
+            let read_at_str = d.get("read_at").and_then(|v| v.as_str());
+            if did > 0 {
+                if let Some(status) = status {
+                    if let Some(ra_str) = read_at_str {
+                        if let Ok(ra) = chrono::DateTime::parse_from_rfc3339(ra_str) {
+                            let ra_utc = ra.with_timezone(&chrono::Utc);
+                            tx.execute(
+                                "UPDATE issues SET status = $1, read_at = $2 WHERE id = $3",
+                                &[&status, &ra_utc, &did],
+                            ).await.map_err(db_err)?;
+                        } else {
+                            tx.execute("UPDATE issues SET status = $1 WHERE id = $2", &[&status, &did]).await.map_err(db_err)?;
+                        }
+                    } else {
+                        tx.execute("UPDATE issues SET status = $1, read_at = NULL WHERE id = $2", &[&status, &did]).await.map_err(db_err)?;
+                    }
+                }
+            }
+        }
+    }
+
+    tx.execute(
+        "UPDATE issue_duplicate_reconciliations SET undone_at = now() WHERE id = $1",
+        &[&(req.reconciliation_id as i64)],
+    ).await.map_err(db_err)?;
+
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(ReconcileUndoResponse {
+        reconciliation_id: req.reconciliation_id,
+        undone: true,
         warnings,
     }))
 }

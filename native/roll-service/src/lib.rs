@@ -1203,6 +1203,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(issue_duplicate_reconciliation::apply_reconciliation),
         )
         .route(
+            "/api/v2/issue-duplicate-reconciliation/undo",
+            post(issue_duplicate_reconciliation::undo_reconciliation),
+        )
+        .route(
             "/api/v2/threads/{thread_id}/issues",
             post(issue_mutation::create_issues),
         )
