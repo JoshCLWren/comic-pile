@@ -38,8 +38,8 @@ const MAX_COMMAND_BYTES: usize = 4096;
 const WRITE_WORKFLOW: &str = "rotisserie-operator.yml";
 const READ_WORKFLOW: &str = "rotisserie-operator-read.yml";
 pub(crate) const OPERATOR_WORKFLOWS: [&str; 2] = [WRITE_WORKFLOW, READ_WORKFLOW];
-/// Mirrors `WRITE_OPERATIONS` in Rotisserie's `control_contract.py` (main plus #252).
-const WRITE_OPERATIONS: [&str; 18] = [
+/// Mirrors `WRITE_OPERATIONS` in Rotisserie's `control_contract.py` (main plus #252, #258 and #304).
+const WRITE_OPERATIONS: [&str; 22] = [
     "run",
     "cancel",
     "prioritize",
@@ -58,6 +58,10 @@ const WRITE_OPERATIONS: [&str; 18] = [
     "estimate_neon",
     "close",
     "backoffs_reset",
+    "allow_self_review",
+    "store_selftest",
+    "store_export",
+    "store_migrate",
 ];
 
 #[derive(Debug, Serialize, Deserialize)]

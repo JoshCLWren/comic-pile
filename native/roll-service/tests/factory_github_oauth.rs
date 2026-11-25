@@ -365,7 +365,7 @@ async fn mounted_oauth_flow_preserves_pkce_admin_sessions_and_dispatch_boundarie
     assert_eq!(fake.calls().len(), 5);
 }
 
-const WRITE_OPERATIONS: [&str; 18] = [
+const WRITE_OPERATIONS: [&str; 22] = [
     "run",
     "cancel",
     "prioritize",
@@ -384,6 +384,10 @@ const WRITE_OPERATIONS: [&str; 18] = [
     "estimate_neon",
     "close",
     "backoffs_reset",
+    "allow_self_review",
+    "store_selftest",
+    "store_export",
+    "store_migrate",
 ];
 const WORKFLOWS: &str = "/repos/JoshCLWren/comic-pile/actions/workflows";
 
