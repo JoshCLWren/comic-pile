@@ -310,6 +310,56 @@ async fn series_cover_falls_back_to_first_confirmed_issue() {
 }
 
 #[tokio::test]
+async fn option_e_cover_uses_the_evaluated_next_unread_issue() {
+    let ctx = setup_with_option_e("sc-option-e", true).await;
+    let thread_id = seed_thread(&ctx, ctx.user_id, "Evaluated Frontier", "active", 1).await;
+    seed_issue(&ctx, thread_id, "1", 1, "read").await;
+    let stored_frontier = seed_issue(&ctx, thread_id, "2", 2, "unread").await;
+    let evaluated_frontier = seed_issue(&ctx, thread_id, "3", 3, "unread").await;
+    set_frontier(&ctx, thread_id, Some(stored_frontier)).await;
+    seed_confirmed_cover(
+        &ctx,
+        stored_frontier,
+        "stored-frontier-cover-id",
+        Some("https://cv.example/stored-frontier.jpg"),
+    )
+    .await;
+    seed_confirmed_cover(
+        &ctx,
+        evaluated_frontier,
+        "evaluated-frontier-cover-id",
+        Some("https://cv.example/evaluated-frontier.jpg"),
+    )
+    .await;
+    ctx.state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .execute(
+            "INSERT INTO collection_exclusions (user_id, issue_id, created_at) \
+             VALUES ($1, $2, NOW())",
+            &[&ctx.user_id, &stored_frontier],
+        )
+        .await
+        .unwrap();
+
+    let (status, body) = call(&ctx, "GET", "/api/v2/threads").await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let thread = body["threads"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|thread| thread["id"].as_i64() == Some(i64::from(thread_id)))
+        .unwrap();
+    assert_eq!(thread["next_unread_issue_number"], "3");
+    assert_eq!(
+        thread["series_cover_image_url"].as_str(),
+        Some("https://cv.example/evaluated-frontier.jpg")
+    );
+}
+
+#[tokio::test]
 async fn series_cover_uses_the_issue_card_mapping_preference() {
     // Two confirmed ComicVine mappings on one issue, both carrying covers. The
     // issue card picks the higher-confidence mapping, so the series cover must
