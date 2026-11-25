@@ -365,12 +365,17 @@ pub async fn create_issues(
     let mut created = vec![];
     // Natural placement is only safe when persisted numeric order is already
     // monotonic. A non-monotonic series is reader-authored; appending must not
-    // silently re-sort it into a different strict-list relationship.
+    // silently re-sort it into a different strict-list relationship. An explicit
+    // NumericResort is a deliberate action that may re-seat ordinary numbers.
     let numbered: Option<Vec<i64>> = existing
         .iter()
         .map(|(_, number, _)| ordinary(number))
         .collect();
-    let mixed_natural_order = if !request.append_to_end
+    let monotonic = numbered
+        .as_ref()
+        .is_some_and(|values| values.windows(2).all(|pair| pair[0] < pair[1]));
+    let mixed_natural_order = if matches!(request.strategy, IssuePlacementStrategy::SafeDefault)
+        && !request.append_to_end
         && request.insert_after_issue_id.is_none()
         && numbered.is_none()
     {
@@ -382,9 +387,9 @@ pub async fn create_issues(
     } else {
         None
     };
-    let append = request.append_to_end
-        || (request.insert_after_issue_id.is_none()
-            && numbered.is_none_or(|values| values.windows(2).any(|pair| pair[0] >= pair[1])));
+    let append = matches!(request.strategy, IssuePlacementStrategy::SafeDefault)
+        && (request.append_to_end
+            || (request.insert_after_issue_id.is_none() && !monotonic && mixed_natural_order.is_none()));
 
     if let Some(anchor) = request.insert_after_issue_id {
         let anchor_position = existing
@@ -439,6 +444,7 @@ pub async fn create_issues(
             created.push(insert_issue(&tx, thread_id, number, next + offset as i32 + 1).await?);
         }
     } else {
+        // Monotonic numeric placement or explicit NumericResort.
         let mut merged = existing.clone();
         for number in &new_numbers {
             merged.push((0, number.clone(), 0));

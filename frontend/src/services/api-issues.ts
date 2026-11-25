@@ -38,6 +38,36 @@ interface CreateIssuesPayload {
   issue_range: string
   insert_after_issue_id?: number
   append_to_end?: boolean
+  strategy?: 'safe_default' | 'numeric_resort'
+}
+
+export interface IssuePreviewItem {
+  issue_id: number | null
+  issue_number: string
+  position: number
+  is_new: boolean
+}
+
+export interface IssueEditPreviewOutcome {
+  strategy: 'safe_default' | 'numeric_resort'
+  can_commit: boolean
+  preserves_existing_relative_order: boolean
+  before: IssuePreviewItem[]
+  after: IssuePreviewItem[]
+  added_issue_numbers: string[]
+  graph: {
+    status: string
+    cycles: Array<{ message: string; edges: Array<{ source: { issue_id: number; issue_number: string; series_title: string }; target: { issue_id: number; issue_number: string; series_title: string }; origin: string; list_name?: string | null }> }>
+  }
+  conflict_message: string | null
+}
+
+export interface IssueEditPreviewResponse {
+  thread_id: number
+  thread_title: string
+  requested_strategy: 'safe_default' | 'numeric_resort'
+  default_outcome: IssueEditPreviewOutcome
+  numeric_resort_outcome: IssueEditPreviewOutcome | null
 }
 
 /** Query parameters accepted by the thread issue list endpoint. */
