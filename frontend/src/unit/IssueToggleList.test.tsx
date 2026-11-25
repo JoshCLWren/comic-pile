@@ -1202,6 +1202,8 @@ describe('IssueToggleList deferred mode (#3267)', () => {
     const input = screen.getByTestId('issue-add-input')
     fireEvent.change(input, { target: { value: '2b' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
 
     await act(async () => {
       await ref.current?.flush()

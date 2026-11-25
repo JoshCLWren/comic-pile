@@ -261,8 +261,6 @@ describe('ThreadDetailView Edit dialog rejects invalid issue entries (#3586)', (
     const { user, addInput } = await openEditDialog()
     await user.type(addInput, ',')
     await user.click(screen.getByTestId('issue-add-button'))
-    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
-    await user.click(screen.getByTestId('confirm-preview-add'))
 
     expect(screen.queryByTestId('pending-creates')).not.toBeInTheDocument()
     expect(mockedIssuesApiCreate).not.toHaveBeenCalled()
