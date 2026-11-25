@@ -198,7 +198,7 @@ async fn detect_preview_apply_and_undo_preserve_real_history() {
         .query_one(
             "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
              VALUES ('comicvine', 'issue', '364132', \
-                     '{\"volume_id\":\"4050\",\"issue_number\":\"100\",\"story_arc_number\":\"3\"}'::json, \
+                     '{\"volume_id\":4050,\"issue_number\":\"100\",\"story_arc_number\":\"3\"}'::json, \
                      NOW(), NOW()) RETURNING id",
             &[],
         )
@@ -268,6 +268,26 @@ async fn detect_preview_apply_and_undo_preserve_real_history() {
             "INSERT INTO custom_cbl_entries (list_id, issue_id, position, created_at, is_checkpoint, checkpoint_target_issue_ids, gate, skipped) \
              VALUES ($1, $2, 0, NOW(), false, '[]'::json, 'none', false) RETURNING id",
             &[&list_id, &canonical],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    // The synthetic duplicate also appears in a different saved list; its exact
+    // entry must move to the canonical without losing list identity or position.
+    let duplicate_list_id: i32 = conn
+        .query_one(
+            "INSERT INTO custom_cbl_lists (user_id, name, description, mode, created_at, updated_at, overlap_decisions_updated_at) \
+             VALUES ($1, 'Overall', NULL, 'loose', NOW(), NOW(), NOW()) RETURNING id",
+            &[&ctx.user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let duplicate_membership_entry: i32 = conn
+        .query_one(
+            "INSERT INTO custom_cbl_entries (list_id, issue_id, position, created_at, is_checkpoint, checkpoint_target_issue_ids, gate, skipped) \
+             VALUES ($1, $2, 3, NOW(), false, '[]'::json, 'none', false) RETURNING id",
+            &[&duplicate_list_id, &duplicate],
         )
         .await
         .unwrap()
