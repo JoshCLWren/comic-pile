@@ -153,4 +153,21 @@ describe('CustomCBLBuilder Julix 466-entry regression', () => {
     expect(undoPayload.issue_ids).toHaveLength(466)
     expect(undoPayload.issue_ids[0]).toBe(50000)
   })
+
+  it('supports keyboard insertion and move controls', async () => {
+    const user = userEvent.setup()
+    renderBuilder()
+    await user.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    await user.selectOptions(await screen.findByLabelText('Custom CBL'), '2')
+    await screen.findByText('Justice League #1')
+
+    const firstEntry = screen.getAllByTestId('reading-list-entry')[0]
+    const settings = within(firstEntry).getByRole('button', { name: /Show settings for/ })
+    settings.focus()
+    await user.keyboard('{Enter}')
+    const insertBefore = within(firstEntry).getByRole('button', { name: 'Insert before' })
+    insertBefore.focus()
+    await user.keyboard('{Enter}')
+    expect(screen.getByText(/Next added issue will be inserted before position 1/)).toBeInTheDocument()
+  })
 })

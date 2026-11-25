@@ -1226,7 +1226,7 @@ export default function CustomCBLBuilder({
                   <p className="mt-1 text-xs text-[var(--theme-text-muted)]">
                     First unread before save: {semanticPreview.oldFirstUnread ?? 'None'}. After save: {semanticPreview.newFirstUnread ?? 'None'}.
                   </p>
-                  <p className="mt-1 text-xs text-[var(--theme-text-muted)]">Cross-list cycle: validated on save.</p>
+                  <p className="mt-1 text-xs text-[var(--theme-text-muted)]">Cross-list cycle: checked on save; the save is rejected if a new cross-list cycle would be created.</p>
                   <ul className="mt-2 space-y-2 text-xs text-[var(--theme-text-primary)]">
                     {semanticPreview.changed.map((change) => (
                       <li key={change.issueId} className="rounded-lg border border-[var(--theme-border)] p-2">
