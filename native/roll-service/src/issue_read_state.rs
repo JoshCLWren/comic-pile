@@ -872,9 +872,9 @@ pub async fn create_read_markers(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     body: Bytes,
-) -> Result<StatusCode, ApiError> {
+) -> Result<Json<IssueReadOperationResponse>, ApiError> {
     let ids = parse_bulk_body(&body)?;
-    bulk_mark(&state, user, &ids, true).await
+    bulk_mark(&state, user, &ids, true).await.map(Json)
 }
 
 /// `POST /api/v2/issue-read-marker-removals` — mark many issues unread atomically.
@@ -882,9 +882,9 @@ pub async fn remove_read_markers(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     body: Bytes,
-) -> Result<StatusCode, ApiError> {
+) -> Result<Json<IssueReadOperationResponse>, ApiError> {
     let ids = parse_bulk_body(&body)?;
-    bulk_mark(&state, user, &ids, false).await
+    bulk_mark(&state, user, &ids, false).await.map(Json)
 }
 
 /// Request body for `PUT /api/v2/issues/{issue_id}/position`.
