@@ -983,11 +983,11 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         <button
           type="button"
           onClick={() => handleAddIssues()}
-          disabled={isAdding || !addRange.trim() || !isAddRangeValid}
+          disabled={isAdding || isPreviewing || !addRange.trim() || !isAddRangeValid}
           className="px-3 py-3 md:py-4 bg-white/5 border border-white/10 rounded-lg text-xs font-bold text-stone-300 hover:bg-white/10 disabled:opacity-50"
           data-testid="issue-add-button"
         >
-          {isAdding ? '…' : 'Add'}
+          {(isAdding || isPreviewing) ? '…' : 'Add'}
         </button>
       </div>
       {addValidationError && (
@@ -1145,9 +1145,16 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
                         </div>
                       )}
                       {previewState.response.numeric_resort_outcome.graph.cycles.length > 0 && (
-                        <div className="text-xs text-stone-400 mt-1">
+                        <div className="text-xs text-stone-400 mt-1 space-y-1" data-testid="numeric-resort-cycle-path">
                           {previewState.response.numeric_resort_outcome.graph.cycles.map((cycle, idx) => (
-                            <div key={idx}>{cycle.edges.map((e) => `${e.source.series_title} #${e.source.issue_number}`).join(' -> ')}</div>
+                            <div key={idx}>
+                              {cycle.edges.map((e, i) => (
+                                <span key={i}>
+                                  {i > 0 ? ' -> ' : ''}{e.source.series_title} #{e.source.issue_number}
+                                  {i === cycle.edges.length - 1 ? ` -> ${e.target.series_title} #${e.target.issue_number}` : ''}
+                                </span>
+                              ))}
+                            </div>
                           ))}
                         </div>
                       )}
