@@ -1716,6 +1716,7 @@ pub async fn remove_identity(
             "No confirmed ComicVine identity mapping found for issue {issue_id}"
         )));
     }
+    finish_identity_edit(&tx, issue_id).await?;
     let response = identity_state(&tx, user.id(), issue_id).await?;
     tx.commit().await.map_err(db::query_error)?;
     Ok(Json(response))
