@@ -7017,7 +7017,7 @@
             "type": "integer"
           },
           "is_synthetic": {
-            "description": "Per-event provenance: the event predates its issue's creation and is an\nartificial suppression timestamp, never genuine reading evidence.",
+            "description": "Per-event synthetic flag: true when the read timestamp predates its issue's creation.",
             "type": "boolean"
           },
           "issue_number": {

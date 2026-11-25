@@ -5704,10 +5704,7 @@ export interface components {
         DuplicateReadEvent: {
             /** Format: int32 */
             event_id: number;
-            /**
-             * Per-event provenance: the event predates its issue's creation and is an
-             * artificial suppression timestamp, never genuine reading evidence.
-             */
+            /** @description Per-event synthetic flag: true when the read timestamp predates its issue's creation. */
             is_synthetic: boolean;
             issue_number?: string | null;
             timestamp: string;
