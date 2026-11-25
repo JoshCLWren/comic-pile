@@ -11,6 +11,7 @@ import { PotentialDuplicateAdvisory } from './PotentialDuplicateAdvisory'
 import { usePotentialDuplicates } from '../../hooks/usePotentialDuplicates'
 import { getManualCreatorCreditList } from '../../types'
 import type { Thread, ThreadListItem } from '../../types'
+import { DEFAULT_CREATE_STATE } from './types'
 import type { QueueFormState, ManualCreatorCredit } from './types'
 import type { ParsedTokenBreakdown } from '../../utils/issueParser'
 
@@ -307,7 +308,8 @@ export function QueueModals({
   // mutations when Save is clicked; closing without saving discards them.
   const editIssueListRef = useRef<IssueToggleListHandle>(null)
   const [hasPendingIssueEdits, setHasPendingIssueEdits] = useState(false)
-  const [showDiscardPrompt, setShowDiscardPrompt] = useState(false)
+  // Which dialog's unsaved draft the "Discard changes?" prompt is guarding.
+  const [discardPrompt, setDiscardPrompt] = useState<'create' | 'edit' | null>(null)
   // Verbatim "Issues already read" text. A numeric input sanitizes a lone "-"
   // to an empty value, so "-1" used to become "01" and silently coerce to 1
   // with no inline error (#4181 / MQA-QUEUE-008). Holding the typed text keeps
@@ -315,11 +317,9 @@ export function QueueModals({
   const [lastReadInput, setLastReadInput] = useState('')
 
   useEffect(() => {
-    if (openModal !== 'edit') {
-      setHasPendingIssueEdits(false)
-      setShowDiscardPrompt(false)
-    }
-  }, [openModal])
+    if (openModal !== 'edit') setHasPendingIssueEdits(false)
+    if (openModal !== discardPrompt) setDiscardPrompt(null)
+  }, [openModal, discardPrompt])
 
   useEffect(() => {
     if (openModal !== 'create') setLastReadInput('')
@@ -337,10 +337,30 @@ export function QueueModals({
 
   const handleEditClose = () => {
     if (editHasUnsavedChanges) {
-      setShowDiscardPrompt(true)
+      setDiscardPrompt('edit')
       return
     }
     onCloseEdit()
+  }
+
+  // An Add Series draft is dirty once any field differs from a fresh draft
+  // (#5612 / MQA-QUEUE-008). The verbatim "Issues already read" text counts too
+  // because an invalid entry is held outside the form state.
+  const createFormIsDirty =
+    createForm.title !== DEFAULT_CREATE_STATE.title ||
+    createForm.format !== DEFAULT_CREATE_STATE.format ||
+    createForm.issues !== DEFAULT_CREATE_STATE.issues ||
+    createForm.notes !== DEFAULT_CREATE_STATE.notes ||
+    createForm.lastIssueRead !== DEFAULT_CREATE_STATE.lastIssueRead ||
+    createForm.manualCreatorCredits.length > 0 ||
+    lastReadInput !== ''
+
+  const handleCreateClose = () => {
+    if (createFormIsDirty) {
+      setDiscardPrompt('create')
+      return
+    }
+    onCloseCreate()
   }
 
   const handleEditSubmit = async (event: FormEvent) => {
@@ -402,7 +422,7 @@ export function QueueModals({
 
   return (
     <>
-      <Modal isOpen={openModal === 'create'} title="Add Series" onClose={onCloseCreate}>
+      <Modal isOpen={openModal === 'create'} title="Add Series" onClose={handleCreateClose}>
         <form className="space-y-4" onSubmit={onCreateSubmit}>
           <div className="space-y-2">
             <label
@@ -763,10 +783,12 @@ export function QueueModals({
       </Modal>
 
       <Modal
-        isOpen={showDiscardPrompt}
+        isOpen={discardPrompt !== null}
         title="Discard changes?"
-        onClose={() => setShowDiscardPrompt(false)}
-        data-testid="discard-edit-changes-dialog"
+        onClose={() => setDiscardPrompt(null)}
+        data-testid={
+          discardPrompt === 'create' ? 'discard-create-changes-dialog' : 'discard-edit-changes-dialog'
+        }
       >
         <div className="space-y-4">
           <p className="text-sm text-[var(--theme-text-muted)]">
@@ -775,7 +797,7 @@ export function QueueModals({
           <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
             <button
               type="button"
-              onClick={() => setShowDiscardPrompt(false)}
+              onClick={() => setDiscardPrompt(null)}
               className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
             >
               Keep editing
@@ -783,8 +805,10 @@ export function QueueModals({
             <button
               type="button"
               onClick={() => {
-                setShowDiscardPrompt(false)
-                onCloseEdit()
+                const target = discardPrompt
+                setDiscardPrompt(null)
+                if (target === 'create') onCloseCreate()
+                else onCloseEdit()
               }}
               className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black text-white hover:bg-[var(--theme-danger-hover)] transition-colors"
             >
