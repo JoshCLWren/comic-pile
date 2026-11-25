@@ -159,7 +159,7 @@ export function createIssuesApi(client: HttpClient) {
       return client.post(`/v2/issue-read-markers`, { issue_ids: issueIds })
     },
 
-    bulkMarkUnread: async (issueIds: number[]): Promise<IssueReadOperationUndoResponse | IssueReadOperationResponse> => {
+    bulkMarkUnread: async (issueIds: number[]): Promise<IssueReadOperationResponse> => {
       return client.post(`/v2/issue-read-marker-removals`, { issue_ids: issueIds })
     },
 
