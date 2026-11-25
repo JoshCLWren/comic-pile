@@ -169,6 +169,8 @@ describe('IssueToggleList partial issue load (#3764)', () => {
 
     fireEvent.change(screen.getByTestId('issue-add-input'), { target: { value: '4' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
 
     await act(async () => {
       await expect(ref.current?.flush()).rejects.toThrow(/save aborted/i)

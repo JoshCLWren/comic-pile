@@ -1116,10 +1116,16 @@ describe('IssueToggleList deferred mode (#3267)', () => {
 
     fireEvent.change(input, { target: { value: '7' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
     fireEvent.change(input, { target: { value: 'Annual 2' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
     fireEvent.change(input, { target: { value: '10-12' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
 
     // The failed create is reported to the caller, so the Edit Series dialog
     // stays open instead of closing over a lost create.
