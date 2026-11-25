@@ -560,10 +560,7 @@ fn compute_preview_token(
 
 /// Whether an explicitly reviewed duplicate must remain distinct instead of
 /// being merged into the canonical issue.
-fn is_kept_distinct(
-    dup: &DuplicateIssueEvidence,
-    decisions: &HashMap<String, String>,
-) -> bool {
+fn is_kept_distinct(dup: &DuplicateIssueEvidence, decisions: &HashMap<String, String>) -> bool {
     decisions
         .get(&format!("cross_volume:{}", dup.issue_id))
         .is_some_and(|choice| choice == "keep_distinct")
@@ -1640,11 +1637,67 @@ mod tests {
     fn preview_token_changes_with_state() {
         let canonical = evidence(10, "unread", None, "2026-01-01T00:00:00Z");
         let dup = evidence(20, "unread", None, "2026-01-02T00:00:00Z");
-        let t1 = compute_preview_token(1, 10, &[20], &canonical, std::slice::from_ref(&dup));
+        let t1 = compute_preview_token(
+            1,
+            10,
+            &[20],
+            &canonical,
+            std::slice::from_ref(&dup),
+            &HashMap::new(),
+        );
         let mut dup2 = dup;
         dup2.status = "read".to_string();
-        let t2 = compute_preview_token(1, 10, &[20], &canonical, &[dup2]);
+        let t2 = compute_preview_token(1, 10, &[20], &canonical, &[dup2], &HashMap::new());
         assert_ne!(t1, t2);
+    }
+
+    #[test]
+    fn keep_distinct_decision_excludes_alias_from_merge_actions() {
+        let canonical = evidence(
+            10,
+            "read",
+            Some("2026-11-05T06:03:08Z"),
+            "2026-01-01T00:00:00Z",
+        );
+        let mut dup = evidence(
+            20,
+            "read",
+            Some("2026-11-05T05:47:59Z"),
+            "2026-11-05T05:11:33Z",
+        );
+        dup.rating_events.push(DuplicateRatingEvent {
+            event_id: 1,
+            rating: 4.0,
+            timestamp: "2026-11-05T05:47:59Z".to_string(),
+        });
+        let mut decisions = HashMap::new();
+        decisions.insert("cross_volume:20".to_string(), "keep_distinct".to_string());
+        let (actions, _warnings, can_apply) =
+            build_preview_actions(&canonical, &[dup.clone()], &decisions);
+        assert!(can_apply);
+        assert!(actions.iter().any(|a| a.kind == "keep_distinct"));
+        assert!(!actions.iter().any(|a| a.kind == "move_rating_events"));
+        assert!(!actions.iter().any(|a| a.kind == "suppress_duplicate"));
+
+        // A changed decision must invalidate the preview token.
+        let token_keep = compute_preview_token(
+            1,
+            10,
+            &[20],
+            &canonical,
+            std::slice::from_ref(&dup),
+            &decisions,
+        );
+        decisions.insert("cross_volume:20".to_string(), "merge".to_string());
+        let token_merge = compute_preview_token(
+            1,
+            10,
+            &[20],
+            &canonical,
+            std::slice::from_ref(&dup),
+            &decisions,
+        );
+        assert_ne!(token_keep, token_merge);
     }
 }
 

@@ -64,14 +64,14 @@ export default function DuplicateReconciliationPage() {
   })
 
   const previewMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: (nextDecisions: Record<string, string>) => {
       if (canonicalId == null || duplicateIds.length === 0) {
         throw new Error('Select canonical and duplicate issues')
       }
       return issueDuplicateReconciliationApi.preview({
         canonical_issue_id: canonicalId,
         duplicate_issue_ids: duplicateIds,
-        decisions,
+        decisions: nextDecisions,
       })
     },
     onSuccess: (data) => {
@@ -245,7 +245,7 @@ export default function DuplicateReconciliationPage() {
                     type="button"
                     className="rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                     disabled={canonicalId == null || duplicateIds.length === 0 || previewMutation.isPending}
-                    onClick={() => previewMutation.mutate()}
+                    onClick={() => previewMutation.mutate(decisions)}
                   >
                     {previewMutation.isPending ? 'Previewing…' : 'Preview resolution'}
                   </button>
@@ -294,12 +294,14 @@ export default function DuplicateReconciliationPage() {
                         <input
                           type="checkbox"
                           checked={decisions[action.decision_key] === 'merge'}
-                          onChange={(e) =>
-                            setDecisions((prev) => ({
-                              ...prev,
+                          onChange={(e) => {
+                            const next = {
+                              ...decisions,
                               [action.decision_key!]: e.target.checked ? 'merge' : 'keep_distinct',
-                            }))
-                          }
+                            }
+                            setDecisions(next)
+                            previewMutation.mutate(next)
+                          }}
                         />
                         Confirm merge despite warning
                       </label>
