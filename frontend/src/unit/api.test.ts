@@ -223,8 +223,8 @@ it('handles request defaults and issue dependency payloads', async () => {
   expect(post).toHaveBeenCalledWith('/v2/dependencies/', {
     source_type: 'issue', source_id: 8, target_type: 'issue', target_id: 9,
   })
-  await sessionApi.list()
-  expect(get).toHaveBeenCalledWith('/v1/sessions/', { params: undefined })
+  await sessionApi.getDetails(7)
+  expect(get).toHaveBeenCalledWith('/v2/reading-sessions/7/details')
 })
 
 it('handles missing request URLs and cookies while sharing csrf bootstrap work', async () => {
