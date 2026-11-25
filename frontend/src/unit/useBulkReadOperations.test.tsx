@@ -183,4 +183,29 @@ describe('useBulkReadOperations', () => {
     expect(window.localStorage.getItem(`${BULK_READ_OPERATION_KEY_PREFIX}42`)).toBe('12')
     expect(result.current.operations).toHaveLength(1)
   })
+
+  it('removes a two-part receipt whose operation id is out of range', async () => {
+    const invalidKey = `${BULK_READ_OPERATION_KEY_PREFIX}42:0`
+    window.localStorage.setItem(invalidKey, '1')
+    const api = fakeApi()
+    const { result } = renderHook(() => useBulkReadOperations(api))
+
+    await waitFor(() => expect(window.localStorage.getItem(invalidKey)).toBeNull())
+    expect(api.getReadOperation).not.toHaveBeenCalled()
+    expect(result.current.operations).toHaveLength(0)
+  })
+
+  it('keeps a retryable discovery message when receipt storage is unreadable', async () => {
+    window.localStorage.setItem(bulkReadReceiptKey(42, 15), '1')
+    const keySpy = vi.spyOn(Storage.prototype, 'key').mockImplementation(() => {
+      throw new Error('storage blocked')
+    })
+    const api = fakeApi()
+    const { result } = renderHook(() => useBulkReadOperations(api))
+
+    await waitFor(() => expect(result.current.message).toMatch(/receipts could not be read/i))
+    expect(api.getReadOperation).not.toHaveBeenCalled()
+    expect(window.localStorage.getItem(bulkReadReceiptKey(42, 15))).toBe('1')
+    keySpy.mockRestore()
+  })
 })
