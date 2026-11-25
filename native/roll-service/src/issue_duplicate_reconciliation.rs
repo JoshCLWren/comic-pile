@@ -141,10 +141,6 @@ fn conflict(msg: impl Into<String>) -> ApiError {
     ApiError::Conflict(msg.into())
 }
 
-fn internal(msg: &str) -> ApiError {
-    ApiError::Internal(msg.to_string())
-}
-
 fn iso(ts: chrono::DateTime<chrono::Utc>) -> String {
     ts.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
 }
@@ -983,9 +979,6 @@ pub async fn apply_reconciliation(
     let mut moved_event_origins: Vec<serde_json::Value> = Vec::new();
     let mut moved_mapping_origins: Vec<serde_json::Value> = Vec::new();
     let mut moved_list_entry_origins: Vec<serde_json::Value> = Vec::new();
-
-    // Check if canonical already has a comicvine mapping
-    let canonical_has_cv = canonical.comicvine_issue_id.is_some();
 
     for dup in &duplicates {
         if dup.merged_into_issue_id == Some(req.canonical_issue_id) {
