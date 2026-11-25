@@ -66,6 +66,10 @@ pub struct IdentityInboxItem {
     pub provider: Option<String>,
     pub source_entry_summary: String,
     pub why_stopped: String,
+    /// Actionable next steps for the reviewer when the match is unresolved,
+    /// ambiguous, or missing. Empty when no guidance is needed.
+    #[serde(default)]
+    pub next_steps: Vec<String>,
     pub candidates: Vec<IdentityInboxCandidate>,
     pub created_at: Option<f64>,
     pub updated_at: Option<f64>,
@@ -169,9 +173,7 @@ fn why_stopped(status: &str, evidence: &Value, candidate_count: usize) -> String
     // contradict the candidate cards shown on expand (#5382). Reflect the real
     // candidate state first. When candidates exist, keep any non-empty
     // decision_reason so the header still explains why review is needed; only
-    // the empty-evidence "No candidates found" fallback is replaced by the
-    // count. The reasons below apply only when there are genuinely no
-    // candidates for the issue.
+    // the empty-evidence fallback is replaced by the count.
     if candidate_count > 0 {
         let count_text = if candidate_count == 1 {
             "1 candidate found".to_string()
@@ -188,11 +190,11 @@ fn why_stopped(status: &str, evidence: &Value, candidate_count: usize) -> String
         return count_text;
     }
     let is_empty_evidence = evidence.is_null()
-        || evidence.as_object().map(|o| o.is_empty()).unwrap_or(false)
+        || evidence
+            .as_object()
+            .map(|o| o.is_empty())
+            .unwrap_or(false)
         || evidence.as_array().map(|a| a.is_empty()).unwrap_or(false);
-    if is_empty_evidence {
-        return "No candidates found".to_string();
-    }
     if let Some(obj) = evidence.as_object() {
         if let Some(reason) = obj.get("decision_reason").and_then(|v| v.as_str()) {
             if !reason.is_empty() {
@@ -200,13 +202,46 @@ fn why_stopped(status: &str, evidence: &Value, candidate_count: usize) -> String
             }
         }
     }
+    if is_empty_evidence {
+        return "No candidates found. Try searching by a different name, pasting a ComicVine URL, or mapping manually.".to_string();
+    }
     if status == "unresolved" {
-        return "No validated local candidate".to_string();
+        return "No validated local candidate. Try searching by a different name, pasting a ComicVine URL, or mapping manually.".to_string();
     }
     if status == "candidate" {
-        return "Multiple candidates require explicit review".to_string();
+        return "Multiple candidates require explicit review. Confirm the correct match or map manually.".to_string();
     }
     format!("Status: {status}")
+}
+
+fn next_steps_for(status: &str, evidence: &Value, candidate_count: usize) -> Vec<String> {
+    if let Some(obj) = evidence.as_object() {
+        if let Some(steps) = obj.get("next_steps").and_then(|v| v.as_array()) {
+            let parsed: Vec<String> = steps
+                .iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .filter(|s| !s.trim().is_empty())
+                .collect();
+            if !parsed.is_empty() {
+                return parsed;
+            }
+        }
+    }
+    if candidate_count > 0 {
+        if status == "candidate" || status == "unresolved" || status == "deferred" {
+            return vec![
+                "Confirm the correct candidate if one matches exactly.".to_string(),
+                "Search by a different name or paste a ComicVine URL.".to_string(),
+                "Map manually if no candidate is correct.".to_string(),
+            ];
+        }
+        return Vec::new();
+    }
+    vec![
+        "Search by a different series name or alias.".to_string(),
+        "Paste a ComicVine volume or issue URL.".to_string(),
+        "Map the issue manually in the Identity Inbox.".to_string(),
+    ]
 }
 
 fn parse_json_text(text: Option<String>) -> Value {
@@ -339,6 +374,7 @@ async fn fetch_item(
         provider,
         source_entry_summary: source_entry_summary(&thread_title, &issue_number, &metadata),
         why_stopped: why_stopped(&status, &evidence, candidates.len()),
+        next_steps: next_steps_for(&status, &evidence, candidates.len()),
         candidates,
         created_at,
         updated_at,

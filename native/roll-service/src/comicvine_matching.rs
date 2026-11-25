@@ -752,5 +752,92 @@ mod tests {
         let u = explain_no_match(&local, &providers);
         assert!(u.reason.contains("no volume found"));
         assert!(!u.next_steps.is_empty());
+        assert!(u.next_steps.iter().any(|s| s.to_lowercase().contains("different name")));
+        assert!(u.next_steps.iter().any(|s| s.to_lowercase().contains("url")));
+        assert!(u.next_steps.iter().any(|s| s.to_lowercase().contains("manual")));
+    }
+
+    #[test]
+    fn volume_found_but_issue_missing_gives_actionable_reason() {
+        let local = issue(1, "Saga", "1.MU");
+        let providers = vec![provider(101, 30, "Saga", "1"), provider(102, 30, "Saga", "2")];
+        let u = explain_no_match(&local, &providers);
+        assert!(u.reason.contains("volume"));
+        assert!(u.reason.contains("1.MU"));
+        assert!(u.reason.contains("not on it"));
+        assert!(!u.next_steps.is_empty());
+    }
+
+    #[test]
+    fn bprd_hellboy_real_case_mismatched_name_maps() {
+        // #4667/#4651 real cases: local naming often differs from ComicVine.
+        // B.P.R.D. Hell on Earth #105-106 are A Cold Day in Hell parts 1-2.
+        let mut i105 = issue(1051, "B.P.R.D. Hell on Earth", "105");
+        i105.aliases = vec!["BPRD: Hell on Earth".to_string(), "B.P.R.D.: Hell on Earth".to_string()];
+        let mut i106 = issue(1052, "B.P.R.D. Hell on Earth", "106");
+        i106.aliases = i105.aliases.clone();
+        let providers = vec![
+            ProviderIssue {
+                comicvine_issue_id: 391845,
+                comicvine_volume_id: 4050_31409,
+                volume_name: "B.P.R.D.: Hell on Earth".to_string(),
+                publisher: Some("Dark Horse Comics".to_string()),
+                start_year: Some(2010),
+                issue_number: Some("105".to_string()),
+                issue_name: Some("A Cold Day in Hell, Part 1".to_string()),
+                aliases: vec![],
+            },
+            ProviderIssue {
+                comicvine_issue_id: 397545,
+                comicvine_volume_id: 4050_31409,
+                volume_name: "B.P.R.D.: Hell on Earth".to_string(),
+                publisher: Some("Dark Horse Comics".to_string()),
+                start_year: Some(2010),
+                issue_number: Some("106".to_string()),
+                issue_name: Some("A Cold Day in Hell, Part 2".to_string()),
+                aliases: vec![],
+            },
+        ];
+        let plans = plan_partial_series_match(&[i105, i106], &providers);
+        assert!(!plans.is_empty(), "should find a volume candidate");
+        let plan = plans.iter().find(|p| p.volume.comicvine_volume_id == 4050_31409).expect("BPRD volume");
+        assert_eq!(plan.matched.len(), 2, "both issues should match: {:?}", plan.unmatched);
+        assert!(plan.unmatched.is_empty());
+    }
+
+    #[test]
+    fn hellboy_mismatched_series_name_alias_maps() {
+        let mut local = issue(1, "Hellboy", "1");
+        local.aliases.push("Hellboy: Seed of Destruction".to_string());
+        let providers = vec![ProviderIssue {
+            comicvine_issue_id: 9001,
+            comicvine_volume_id: 501,
+            volume_name: "Hellboy: Seed of Destruction".to_string(),
+            publisher: Some("Dark Horse Comics".to_string()),
+            start_year: Some(1994),
+            issue_number: Some("1".to_string()),
+            issue_name: None,
+            aliases: vec![],
+        }];
+        let volumes = discover_volume_candidates(&local, &providers);
+        assert!(!volumes.is_empty());
+        assert_eq!(volumes[0].comicvine_volume_id, 501);
+        let m = match_issue_in_volume(&local, 501, &providers).expect("issue match");
+        assert_eq!(m.comicvine_issue_id, 9001);
+    }
+
+    #[test]
+    fn variant_label_fixture_point_one_fraction_annual() {
+        let providers = vec![
+            provider(201, 40, "Spider-Man", "1.MU"),
+            provider(202, 40, "Spider-Man", "0.5"),
+            provider(203, 40, "Spider-Man", "Annual 1"),
+        ];
+        let m1 = match_issue_in_volume(&issue(1, "Spider-Man", "1.MU"), 40, &providers).expect("point one");
+        assert_eq!(m1.comicvine_issue_id, 201);
+        let m2 = match_issue_in_volume(&issue(2, "Spider-Man", "½"), 40, &providers).expect("fraction");
+        assert_eq!(m2.comicvine_issue_id, 202);
+        let m3 = match_issue_in_volume(&issue(3, "Spider-Man", "Annual #1"), 40, &providers).expect("annual");
+        assert_eq!(m3.comicvine_issue_id, 203);
     }
 }
