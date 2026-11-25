@@ -1575,17 +1575,29 @@ pub async fn confirm_identity(
     let started = Instant::now();
     let issue_id = path_int(issue_id)?;
     let Json(request) = request.map_err(|_| validation_failed())?;
+    let alias = requested_alias(request.overall_issue_number.as_deref())?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
     crate::queue::lock_queue(&tx, user.id()).await?;
     lock_owned_issue(&tx, user.id(), issue_id).await?;
-    link_confirmed(&tx, issue_id, request.comicvine_issue_id).await?;
+    let changed = prepare_identity_edit(
+        &tx,
+        issue_id,
+        request.comicvine_issue_id,
+        request.expected_version,
+        &alias,
+    )
+    .await?;
+    if changed {
+        link_confirmed(&tx, user.id(), issue_id, request.comicvine_issue_id).await?;
+        finish_identity_edit(&tx, issue_id).await?;
+    }
     let response = identity_state(&tx, user.id(), issue_id).await?;
     tx.commit().await.map_err(db::query_error)?;
-    // Release the pooled connection before inline hydration checks one out;
-    // on a small pool the handler holding it would starve the hydrator.
     drop(connection);
-    hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started).await;
+    if changed {
+        hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started).await;
+    }
     Ok(Json(response))
 }
 
