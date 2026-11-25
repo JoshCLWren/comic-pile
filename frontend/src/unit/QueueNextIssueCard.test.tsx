@@ -15,19 +15,12 @@ await injectModuleDoubles(await import('../pages/RollPage/components/ComicIdenti
   ),
 }))
 
-<<<<<<< HEAD
 await injectModuleDoubles(await import('../hooks/useComicVineIssueIntelligence'), () => ({
-  useComicVineIssueIntelligence: () => ({
-    metadata: { image_url: 'https://comicvine.gamespot.com/a/hellboy9.jpg' },
-    isLoading: false,
-=======
-vi.mock('../hooks/useComicVineIssueIntelligence', () => ({
   useComicVineIssueIntelligence: () => ({
     metadata: { image_url: 'https://comicvine.gamespot.com/a/hellboy9.jpg' },
     isLoading: false,
     isError: false,
     error: null,
->>>>>>> origin/main
     refetch: vi.fn(),
   }),
 }))

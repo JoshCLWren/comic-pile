@@ -207,18 +207,9 @@ describe('ComicIssueMappingAction', () => {
     fireEvent.click(screen.getByTestId('comic-mapping-remove'))
     fireEvent.click(await screen.findByText('Remove mapping'))
     await waitFor(() => expect(removeIdentitySpy).toHaveBeenCalledWith(77))
-<<<<<<< HEAD
     await waitFor(() => expect(queryClient.getQueryData(intelligenceKey)).toBeNull())
     await waitFor(() => expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: intelligenceKey,
-=======
-    await waitFor(() => expect(queryClient.setQueryData).toHaveBeenCalledWith(
-      queryKeys.comicVine.issueIntelligence(77),
-      null,
-    ))
-    await waitFor(() => expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.comicVine.issueIntelligence(77),
->>>>>>> origin/main
       exact: true,
     }))
     await waitFor(() => expect(onMapped).toHaveBeenCalled())
