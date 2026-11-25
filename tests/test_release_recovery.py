@@ -119,6 +119,37 @@ def test_select_missing_source_is_oldest_first_and_exact_retry_is_noop() -> None
     )
 
 
+def test_final_deploy_backlog_drains_despite_repeated_generation_failure(tmp_path: Path) -> None:
+    """Independent batches retry the poison source without starving later sources."""
+    sources = [source(number) for number in range(1, 10)]
+    rows: list[tuple[int | None, str | None]] = []
+    cache = tmp_path / "attempts.json"
+    for now in (100, 200, 300):
+        attempts = recovery._load_attempts(cache, now)
+        selected = recovery.select_missing_sources(sources, rows, attempts=attempts)
+        assert len(selected) <= 4
+        recovery._save_attempts(cache, attempts, selected, now)
+        # PR 1 fails permanently, but the other candidate artifacts publish.
+        rows.extend(
+            (candidate.number, candidate.merge_commit_sha)
+            for candidate in selected
+            if candidate.number != 1
+        )
+    assert {number for number, _ in rows} == set(range(2, 10))
+    assert len(rows) == 8
+    assert recovery.select_missing_sources(
+        sources, rows, attempts=recovery._load_attempts(cache, 400)
+    ) == [sources[0]]
+
+
+def test_attempt_hint_prefers_unattempted_source_over_failed_older_batch() -> None:
+    """Even if every member of the first batch fails, newer sources get a turn."""
+    sources = [source(number) for number in range(1, 7)]
+    attempts = {candidate.merge_commit_sha: 100 for candidate in sources[:4]}
+    selected = recovery.select_missing_sources(sources, [], attempts=attempts)
+    assert selected[:2] == sources[4:]
+
+
 def test_select_missing_source_fails_on_partial_or_ambiguous_provenance() -> None:
     """Partial legacy identities and cross-bound rows never get overwritten."""
     candidate = source(7)
@@ -252,15 +283,22 @@ def test_workflow_recovers_only_after_deploy_success_and_rechecks_before_publish
         "branches": ["main"],
     }
 
+    assert triggers["schedule"] == [{"cron": "17 */3 * * *"}]
     discover = workflow["jobs"]["discover"]
     assert "workflow_run.conclusion == 'success'" in discover["if"]
+    assert "github.event_name == 'schedule'" in discover["if"]
+    assert any(step.get("uses") == "actions/cache/save@v5" for step in discover["steps"])
     generate = workflow["jobs"]["generate"]
     assert generate["needs"] == "discover"
+    assert generate["strategy"]["fail-fast"] is False
+    assert generate["strategy"]["max-parallel"] == 2
     assert "RELEASE_NEON_DATABASE_URL" not in yaml.dump(generate)
     assert "NEON_API_KEY" not in yaml.dump(generate)
 
     persist = workflow["jobs"]["persist"]
     assert persist["needs"] == ["discover", "generate"]
+    assert "!cancelled()" in persist["if"]
+    assert persist["strategy"] == generate["strategy"]
     assert persist["steps"][0]["with"]["fetch-depth"] == 0
     steps = {step["name"]: step for step in persist["steps"] if "name" in step}
     verify = steps["Verify selected merge is live before publication"]
@@ -278,8 +316,8 @@ def test_release_writer_documents_the_bounded_automatic_delay() -> None:
     """The operating contract states the automatic retry and execution bounds."""
     document = (ROOT / "docs" / "RELEASE_WRITER.md").read_text(encoding="utf-8")
     assert "72-hour lookback" in document
-    assert "at most 70 minutes of job execution" in document
-    assert "one per run, oldest first" in document
-    assert "does not change any automation schedule" in document
+    assert "130 minutes of job execution" in document
+    assert "least recently attempted" in document
+    assert "three-hour" in document
     assert "manual refresh" in document
     assert "durable internal outcome" in document

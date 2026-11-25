@@ -1,8 +1,8 @@
 name: Release writer
 
 # Reactivated after the 2026-10-20 Fluid Compute incident.
-# One run stages at most one merged PR. Deployment completions recover missed or
-# failed events from a bounded recent window; no schedule or unbounded rescan.
+# Exact events stage one merged PR; recovery runs stage at most four independently.
+# A three-hour bounded retry also drains the last deployment's backlog.
 # pull_request_target runs only trusted main code, including for external contributors.
 on:
   pull_request_target:
@@ -12,6 +12,8 @@ on:
     workflows: [Deploy Production]
     types: [completed]
     branches: [main]
+  schedule:
+    - cron: '17 */3 * * *'
   workflow_dispatch:
     inputs:
       pr_number:
@@ -41,14 +43,14 @@ jobs:
       ${{
         (github.event_name == 'pull_request_target' && github.event.pull_request.merged == true) ||
         (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
-        github.event_name == 'workflow_dispatch'
+        github.event_name == 'workflow_dispatch' ||
+        github.event_name == 'schedule'
       }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
       needed: ${{ steps.select.outputs.needed }}
-      pr_number: ${{ steps.select.outputs.pr_number }}
-      merge_sha: ${{ steps.select.outputs.merge_sha }}
+      matrix: ${{ steps.select.outputs.matrix }}
     steps:
       - name: Checkout trusted main
         uses: actions/checkout@v7
@@ -62,7 +64,13 @@ jobs:
           python-version: "3.14"
       - name: Install Neon client
         run: python -m pip install 'psycopg[binary]>=3.2,<4'
-      - name: Select one missing deployed ledger source
+      - name: Restore bounded release attempt hints
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ runner.temp }}/release-recovery-attempts.json
+          key: release-writer-attempts-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: release-writer-attempts-v1-
+      - name: Select bounded missing deployed ledger sources
         id: select
         shell: bash
         env:
@@ -83,11 +91,17 @@ jobs:
             [[ -n "$uri" && "$uri" != "null" ]] || exit 1
             echo "::add-mask::$uri"
           fi
-          args=(select --repository "$GITHUB_REPOSITORY")
+          args=(select --repository "$GITHUB_REPOSITORY" --attempt-state "$RUNNER_TEMP/release-recovery-attempts.json")
           if [[ -n "$INPUT_PR" ]]; then
             args+=(--pr "$INPUT_PR")
           fi
           RELEASE_NEON_DATABASE_URL="$uri" python scripts/release_recovery.py "${args[@]}"
+      - name: Save selected source attempt hints before generation
+        if: steps.select.outputs.needed == 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ runner.temp }}/release-recovery-attempts.json
+          key: release-writer-attempts-v1-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Write discovery summary
         if: always()
         run: |
@@ -95,13 +109,17 @@ jobs:
             echo '## Release recovery discovery'
             echo
             echo '- Needed: ${{ steps.select.outputs.needed }}'
-            echo '- PR: ${{ steps.select.outputs.pr_number }}'
-            echo '- Merge SHA: ${{ steps.select.outputs.merge_sha }}'
+            echo '- Missing deployed sources: ${{ steps.select.outputs.missing_count }}'
+            echo '- Selected sources: ${{ steps.select.outputs.matrix }}'
           } >> "$GITHUB_STEP_SUMMARY"
 
   generate:
     needs: discover
     if: needs.discover.outputs.needed == 'true'
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -125,7 +143,7 @@ jobs:
 
       - name: Validate exact scope and model credential
         env:
-          INPUT_PR: ${{ needs.discover.outputs.pr_number }}
+          INPUT_PR: ${{ matrix.pr_number }}
         run: |
           set -Eeuo pipefail
           [[ "$INPUT_PR" =~ ^[1-9][0-9]*$ ]] || { echo 'Exact PR number required' >&2; exit 1; }
@@ -160,7 +178,7 @@ jobs:
       - name: Generate one staged candidate (no DB credentials)
         env:
           GH_TOKEN: ${{ github.token }}
-          INPUT_PR: ${{ needs.discover.outputs.pr_number }}
+          INPUT_PR: ${{ matrix.pr_number }}
           RELEASE_WRITER_MODELS: ${{ steps.model.outputs.models }}
         run: |
           set -Eeuo pipefail
@@ -174,9 +192,10 @@ jobs:
       - name: Upload candidate (no secrets)
         uses: actions/upload-artifact@v7
         with:
-          name: release-writer-candidate
+          name: release-writer-candidate-${{ matrix.pr_number }}
           path: ${{ runner.temp }}/release-writer/candidate.json
           if-no-files-found: error
+          overwrite: true
           retention-days: 1
 
       - name: Write preparation summary
@@ -188,6 +207,13 @@ jobs:
 
   persist:
     needs: [discover, generate]
+    # A failed generation must not skip persistence for other staged sources.
+    # A missing per-source artifact fails before any credential is loaded.
+    if: ${{ !cancelled() && needs.discover.result == 'success' && needs.discover.outputs.needed == 'true' }}
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -218,13 +244,13 @@ jobs:
       - name: Download staged candidate
         uses: actions/download-artifact@v8
         with:
-          name: release-writer-candidate
+          name: release-writer-candidate-${{ matrix.pr_number }}
           path: ${{ runner.temp }}/release-candidate
 
       - name: Verify selected merge is live before publication
         shell: bash
         env:
-          INPUT_MERGE_SHA: ${{ needs.discover.outputs.merge_sha }}
+          INPUT_MERGE_SHA: ${{ matrix.merge_sha }}
         run: |
           set -Eeuo pipefail
           # Generation can take long enough for a rollback or failed deployment.
@@ -236,7 +262,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          INPUT_PR: ${{ needs.discover.outputs.pr_number }}
+          INPUT_PR: ${{ matrix.pr_number }}
         run: |
           set -Eeuo pipefail
           # A complete bounded merged diff of only test files is developer-only
@@ -251,7 +277,7 @@ jobs:
       - name: Validate and publish directly to Neon
         shell: bash
         env:
-          INPUT_PR: ${{ needs.discover.outputs.pr_number }}
+          INPUT_PR: ${{ matrix.pr_number }}
           GH_TOKEN: ${{ github.token }}
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}

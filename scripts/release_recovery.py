@@ -12,7 +12,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -32,6 +32,9 @@ _TEST_FILE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _MAX_CANDIDATE_BYTES = 32768
+_RECOVERY_BATCH_SIZE = 4
+_MAX_ATTEMPT_RECORDS = 1000
+_ATTEMPT_RETENTION_SECONDS = 7 * 24 * 60 * 60
 
 
 class RecoveryError(RuntimeError):
@@ -210,6 +213,19 @@ def select_missing_source(
     existing_rows: Sequence[tuple[int | None, str | None]],
 ) -> Source | None:
     """Select the oldest absent source, failing on ambiguous existing provenance."""
+    missing = select_missing_sources(sources, existing_rows, attempts={}, limit=1)
+    return missing[0] if missing else None
+
+
+def select_missing_sources(
+    sources: Sequence[Source],
+    existing_rows: Sequence[tuple[int | None, str | None]],
+    *,
+    attempts: Mapping[str, int],
+    limit: int = _RECOVERY_BATCH_SIZE,
+) -> list[Source]:
+    """Prefer never-attempted sources, then least recently attempted exact SHAs."""
+    missing: list[Source] = []
     for source in sources:
         related = [
             row
@@ -217,10 +233,47 @@ def select_missing_source(
             if row[0] == source.number or row[1] == source.merge_commit_sha
         ]
         if not related:
-            return source
-        if len(related) != 1 or related[0] != (source.number, source.merge_commit_sha):
+            missing.append(source)
+        elif len(related) != 1 or related[0] != (source.number, source.merge_commit_sha):
             raise RecoveryError(f"release-ledger provenance conflict for PR #{source.number}")
-    return None
+    return sorted(
+        missing,
+        key=lambda source: (
+            attempts.get(source.merge_commit_sha, 0),
+            _parse_timestamp(source.merged_at),
+            source.number,
+        ),
+    )[:limit]
+
+
+def _load_attempts(path: Path, now: int) -> dict[str, int]:
+    """Restore bounded, non-authoritative scheduling hints from the Actions cache."""
+    if not path.exists():
+        return {}
+    if path.is_symlink() or not path.is_file() or path.stat().st_size > 131072:
+        raise RecoveryError("invalid release recovery attempt cache")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RecoveryError("invalid release recovery attempt cache") from exc
+    if not isinstance(payload, dict) or len(payload) > _MAX_ATTEMPT_RECORDS:
+        raise RecoveryError("invalid release recovery attempt cache")
+    return {
+        sha: timestamp
+        for sha, timestamp in payload.items()
+        if _SHA_PATTERN.fullmatch(sha)
+        and isinstance(timestamp, int)
+        and not isinstance(timestamp, bool)
+        and now - _ATTEMPT_RETENTION_SECONDS <= timestamp <= now
+    }
+
+
+def _save_attempts(path: Path, attempts: dict[str, int], selected: Sequence[Source], now: int) -> None:
+    """Record selections before generation, including candidates that later fail."""
+    attempts.update({source.merge_commit_sha: now for source in selected})
+    bounded = dict(sorted(attempts.items(), key=lambda item: item[1], reverse=True)[:_MAX_ATTEMPT_RECORDS])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(bounded, separators=(",", ":")) + "\n", encoding="utf-8")
 
 
 def is_public_publication(payload: object) -> bool:
@@ -426,6 +479,7 @@ def _select(args: argparse.Namespace) -> int:
         "needed": False,
         "pr_number": "",
         "merge_sha": "",
+        "matrix": '{"include":[]}',
         "live_sha": live_sha,
         "deployed_sources": len(deployed),
     }
@@ -438,15 +492,44 @@ def _select(args: argparse.Namespace) -> int:
         _write_outputs(outputs)
         return 0
 
-    selected = select_missing_source(deployed, _existing_source_rows(args.repository, deployed))
-    if selected is None:
+    now = int(datetime.now(UTC).timestamp())
+    attempt_path = Path(args.attempt_state) if args.attempt_state else None
+    attempts = _load_attempts(attempt_path, now) if attempt_path is not None else {}
+    missing = select_missing_sources(
+        deployed,
+        _existing_source_rows(args.repository, deployed),
+        attempts=attempts,
+        limit=len(deployed),
+    )
+    selected = missing[:_RECOVERY_BATCH_SIZE]
+    outputs["missing_count"] = len(missing)
+    if not selected:
         outputs["reason"] = "already_present"
     else:
+        if attempt_path is not None:
+            _save_attempts(attempt_path, attempts, selected, now)
+        aging = [
+            source.number
+            for source in missing
+            if _parse_timestamp(source.merged_at).timestamp()
+            <= now - max(0, args.since_hours - 12) * 3600
+        ]
+        if aging:
+            print(f"::warning::Missing deployed release sources approaching lookback expiry: {aging}")
         outputs.update(
             {
                 "needed": True,
-                "pr_number": selected.number,
-                "merge_sha": selected.merge_commit_sha,
+                "pr_number": selected[0].number,
+                "merge_sha": selected[0].merge_commit_sha,
+                "matrix": json.dumps(
+                    {
+                        "include": [
+                            {"pr_number": source.number, "merge_sha": source.merge_commit_sha}
+                            for source in selected
+                        ]
+                    },
+                    separators=(",", ":"),
+                ),
                 "reason": "selected",
             }
         )
@@ -467,10 +550,11 @@ def _verify_deployed(args: argparse.Namespace) -> int:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    select = commands.add_parser("select", help="select one missing deployed ledger source")
+    select = commands.add_parser("select", help="select a bounded batch of missing deployed ledger sources")
     select.add_argument("--repository", required=True)
     select.add_argument("--pr", type=int)
     select.add_argument("--since-hours", type=int, default=72)
+    select.add_argument("--attempt-state", help="optional bounded scheduling-hint cache file")
     select.set_defaults(handler=_select)
     verify = commands.add_parser("verify-deployed", help="require a merge SHA in live production")
     verify.add_argument("--merge-sha", required=True)
