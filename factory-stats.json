@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-25T10:32:05+00:00",
+  "generated_at": "2026-11-25T10:48:54.984045+00:00",
   "models": [
     {
       "health": {
@@ -2183,7 +2183,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T20:34:28+00:00",
+        "cooldown_until": "2026-11-25T09:52:24+00:00",
         "last_outcome": "provider_failure",
         "status": "cooling"
       },
@@ -2212,7 +2212,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-24T00:43:42+00:00",
+        "cooldown_until": "2026-11-25T09:52:24+00:00",
         "last_outcome": "provider_failure",
         "status": "cooling"
       },
@@ -2299,7 +2299,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-22T19:26:38+00:00",
+        "cooldown_until": "2026-11-25T09:52:24+00:00",
         "last_outcome": "provider_failure",
         "status": "cooling"
       },
@@ -2326,8 +2326,8 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-24T13:51:41+00:00",
-        "last_outcome": "provider_throttle",
+        "cooldown_until": "2026-11-25T09:52:24+00:00",
+        "last_outcome": "provider_failure",
         "status": "cooling"
       },
       "model": "kilo-auto/small",
@@ -2702,13 +2702,13 @@
       "source": "nvidia",
       "windows": {
         "24h": {
-          "completed": 1,
-          "delivered": 1,
-          "failed": 7,
+          "completed": 0,
+          "delivered": 0,
+          "failed": 5,
           "failures": {
             "agent_timeout": 1,
-            "control_plane_failure": 2,
-            "work_failure": 4
+            "control_plane_failure": 1,
+            "work_failure": 3
           },
           "idle": 0,
           "kinds": {
@@ -2734,17 +2734,16 @@
               "runs": 2
             }
           },
-          "runs": 8
+          "runs": 5
         },
         "7d": {
           "completed": 3,
           "delivered": 2,
-          "failed": 38,
+          "failed": 35,
           "failures": {
-            "agent_timeout": 8,
+            "agent_timeout": 6,
             "control_plane_failure": 5,
             "provider_quota": 1,
-            "unknown_failure": 1,
             "work_failure": 23
           },
           "idle": 4,
@@ -2771,7 +2770,7 @@
               "runs": 2
             }
           },
-          "runs": 45
+          "runs": 42
         }
       }
     },
@@ -2804,22 +2803,22 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-25T07:06:10+00:00",
-        "last_outcome": "provider_throttle",
-        "status": "cooling"
+        "cooldown_until": null,
+        "last_outcome": "success",
+        "status": "healthy"
       },
       "model": "moonshotai/kimi-k3.1-pro",
       "source": "nvidia",
       "windows": {
         "24h": {
-          "completed": 7,
-          "delivered": 7,
-          "failed": 18,
+          "completed": 10,
+          "delivered": 10,
+          "failed": 16,
           "failures": {
             "agent_timeout": 2,
-            "control_plane_failure": 4,
+            "control_plane_failure": 3,
             "provider_throttle": 6,
-            "work_failure": 6
+            "work_failure": 5
           },
           "idle": 1,
           "kinds": {
@@ -2846,15 +2845,15 @@
               "runs": 5
             },
             "review": {
-              "completed": 3,
-              "delivered": 3,
+              "completed": 6,
+              "delivered": 6,
               "failed": 5,
               "failures": {
                 "provider_throttle": 3,
                 "work_failure": 2
               },
               "idle": 0,
-              "runs": 8
+              "runs": 11
             },
             "review-findings": {
               "completed": 0,
@@ -2867,11 +2866,11 @@
               "runs": 1
             }
           },
-          "runs": 26
+          "runs": 27
         },
         "7d": {
-          "completed": 44,
-          "delivered": 43,
+          "completed": 47,
+          "delivered": 46,
           "failed": 145,
           "failures": {
             "agent_timeout": 58,
@@ -2906,15 +2905,15 @@
               "runs": 5
             },
             "review": {
-              "completed": 3,
-              "delivered": 3,
+              "completed": 6,
+              "delivered": 6,
               "failed": 5,
               "failures": {
                 "provider_throttle": 3,
                 "work_failure": 2
               },
               "idle": 0,
-              "runs": 8
+              "runs": 11
             },
             "review-findings": {
               "completed": 0,
@@ -2927,7 +2926,7 @@
               "runs": 1
             }
           },
-          "runs": 191
+          "runs": 194
         }
       }
     },
@@ -3093,8 +3092,8 @@
             "unknown_failure": 4,
             "work_failure": 14
           },
-          "idle": 27,
-          "runs": 49
+          "idle": 26,
+          "runs": 48
         }
       }
     },
@@ -3120,15 +3119,15 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 12,
+          "failed": 11,
           "failures": {
             "control_plane_failure": 2,
             "provider_failure": 2,
             "provider_throttle": 2,
-            "work_failure": 6
+            "work_failure": 5
           },
           "idle": 1,
-          "runs": 13
+          "runs": 12
         }
       }
     },
@@ -3467,12 +3466,12 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 22,
+          "failed": 20,
           "failures": {
-            "control_plane_failure": 22
+            "control_plane_failure": 20
           },
-          "idle": 3,
-          "runs": 25
+          "idle": 0,
+          "runs": 20
         },
         "7d": {
           "completed": 0,
@@ -4244,8 +4243,8 @@
           "delivered": 0,
           "failed": 0,
           "failures": {},
-          "idle": 18,
-          "runs": 18
+          "idle": 16,
+          "runs": 16
         },
         "7d": {
           "completed": 0,
@@ -5196,9 +5195,9 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-25T09:40:21+00:00",
-        "last_outcome": "provider_throttle",
-        "status": "cooling"
+        "cooldown_until": "2026-11-25T15:55:44+00:00",
+        "last_outcome": "model_unavailable",
+        "status": "unavailable"
       },
       "model": "hungerg-free",
       "source": "opencode-free",
@@ -5356,14 +5355,14 @@
         "24h": {
           "completed": 17,
           "delivered": 17,
-          "failed": 46,
+          "failed": 44,
           "failures": {
-            "control_plane_failure": 13,
+            "control_plane_failure": 9,
             "provider_failure": 2,
             "unknown_failure": 1,
-            "work_failure": 30
+            "work_failure": 32
           },
-          "idle": 28,
+          "idle": 29,
           "kinds": {
             "implement": {
               "completed": 8,
@@ -5388,41 +5387,41 @@
             "review": {
               "completed": 3,
               "delivered": 3,
-              "failed": 13,
+              "failed": 16,
               "failures": {
                 "control_plane_failure": 1,
                 "provider_failure": 2,
                 "unknown_failure": 1,
-                "work_failure": 9
+                "work_failure": 12
               },
-              "idle": 2,
-              "runs": 18
+              "idle": 3,
+              "runs": 22
             },
             "review-findings": {
               "completed": 3,
               "delivered": 3,
-              "failed": 2,
+              "failed": 3,
               "failures": {
-                "work_failure": 2
+                "work_failure": 3
               },
               "idle": 1,
-              "runs": 6
+              "runs": 7
             }
           },
-          "runs": 91
+          "runs": 90
         },
         "7d": {
           "completed": 38,
           "delivered": 38,
-          "failed": 135,
+          "failed": 139,
           "failures": {
             "control_plane_failure": 28,
             "provider_failure": 5,
             "provider_quota": 1,
             "unknown_failure": 2,
-            "work_failure": 99
+            "work_failure": 103
           },
-          "idle": 62,
+          "idle": 63,
           "kinds": {
             "implement": {
               "completed": 8,
@@ -5447,28 +5446,28 @@
             "review": {
               "completed": 3,
               "delivered": 3,
-              "failed": 13,
+              "failed": 16,
               "failures": {
                 "control_plane_failure": 1,
                 "provider_failure": 2,
                 "unknown_failure": 1,
-                "work_failure": 9
+                "work_failure": 12
               },
-              "idle": 2,
-              "runs": 18
+              "idle": 3,
+              "runs": 22
             },
             "review-findings": {
               "completed": 3,
               "delivered": 3,
-              "failed": 2,
+              "failed": 3,
               "failures": {
-                "work_failure": 2
+                "work_failure": 3
               },
               "idle": 1,
-              "runs": 6
+              "runs": 7
             }
           },
-          "runs": 235
+          "runs": 240
         }
       }
     },
@@ -5961,12 +5960,12 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 8,
+          "failed": 7,
           "failures": {
-            "control_plane_failure": 8
+            "control_plane_failure": 7
           },
           "idle": 0,
-          "runs": 8
+          "runs": 7
         },
         "7d": {
           "completed": 0,
@@ -5982,7 +5981,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-25T06:08:29+00:00",
+        "cooldown_until": "2026-11-25T10:12:05+00:00",
         "last_outcome": "provider_throttle",
         "status": "cooling"
       },
@@ -6093,8 +6092,8 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-22T22:20:34+00:00",
-        "last_outcome": "provider_quota",
+        "cooldown_until": "2026-11-25T10:38:39+00:00",
+        "last_outcome": "provider_throttle",
         "status": "cooling"
       },
       "model": "google/gemma-4-26b-a4b-it:free",
@@ -6120,8 +6119,8 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T02:27:22+00:00",
-        "last_outcome": "provider_quota",
+        "cooldown_until": "2026-11-25T10:38:39+00:00",
+        "last_outcome": "provider_throttle",
         "status": "cooling"
       },
       "model": "google/gemma-4-31b-it:free",
@@ -6174,7 +6173,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-25T06:06:41+00:00",
+        "cooldown_until": "2026-11-25T09:57:02+00:00",
         "last_outcome": "provider_throttle",
         "status": "cooling"
       },
@@ -6201,9 +6200,9 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T13:03:38+00:00",
-        "last_outcome": "provider_quota",
-        "status": "cooling"
+        "cooldown_until": null,
+        "last_outcome": "no_work",
+        "status": "healthy"
       },
       "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
       "source": "openrouter-free",
@@ -6211,45 +6210,117 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 0,
-          "failures": {},
-          "idle": 0,
-          "runs": 0
+          "failed": 1,
+          "failures": {
+            "agent_timeout": 1
+          },
+          "idle": 1,
+          "kinds": {
+            "review": {
+              "completed": 0,
+              "delivered": 0,
+              "failed": 1,
+              "failures": {
+                "agent_timeout": 1
+              },
+              "idle": 1,
+              "runs": 2
+            }
+          },
+          "runs": 2
         },
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 0,
-          "failures": {},
-          "idle": 0,
-          "runs": 0
+          "failed": 1,
+          "failures": {
+            "agent_timeout": 1
+          },
+          "idle": 1,
+          "kinds": {
+            "review": {
+              "completed": 0,
+              "delivered": 0,
+              "failed": 1,
+              "failures": {
+                "agent_timeout": 1
+              },
+              "idle": 1,
+              "runs": 2
+            }
+          },
+          "runs": 2
         }
       }
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T02:27:22+00:00",
-        "last_outcome": "provider_quota",
-        "status": "cooling"
+        "cooldown_until": null,
+        "last_outcome": "environment_failure",
+        "status": "healthy"
       },
       "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
       "source": "openrouter-free",
       "windows": {
         "24h": {
-          "completed": 0,
-          "delivered": 0,
-          "failed": 0,
-          "failures": {},
+          "completed": 1,
+          "delivered": 1,
+          "failed": 1,
+          "failures": {
+            "environment_failure": 1
+          },
           "idle": 0,
-          "runs": 0
+          "kinds": {
+            "implement": {
+              "completed": 1,
+              "delivered": 1,
+              "failed": 0,
+              "failures": {},
+              "idle": 0,
+              "runs": 1
+            },
+            "review": {
+              "completed": 0,
+              "delivered": 0,
+              "failed": 1,
+              "failures": {
+                "environment_failure": 1
+              },
+              "idle": 0,
+              "runs": 1
+            }
+          },
+          "runs": 2
         },
         "7d": {
-          "completed": 0,
-          "delivered": 0,
-          "failed": 0,
-          "failures": {},
+          "completed": 1,
+          "delivered": 1,
+          "failed": 1,
+          "failures": {
+            "environment_failure": 1
+          },
           "idle": 0,
-          "runs": 0
+          "kinds": {
+            "implement": {
+              "completed": 1,
+              "delivered": 1,
+              "failed": 0,
+              "failures": {},
+              "idle": 0,
+              "runs": 1
+            },
+            "review": {
+              "completed": 0,
+              "delivered": 0,
+              "failed": 1,
+              "failures": {
+                "environment_failure": 1
+              },
+              "idle": 0,
+              "runs": 1
+            }
+          },
+          "runs": 2
         }
       }
     },
@@ -6291,7 +6362,7 @@
           "failures": {
             "work_failure": 1
           },
-          "idle": 1,
+          "idle": 0,
           "kinds": {
             "review-findings": {
               "completed": 0,
@@ -6304,15 +6375,15 @@
               "runs": 1
             }
           },
-          "runs": 2
+          "runs": 1
         }
       }
     },
     {
       "health": {
-        "cooldown_until": "2026-11-22T22:55:24+00:00",
-        "last_outcome": "provider_quota",
-        "status": "cooling"
+        "cooldown_until": null,
+        "last_outcome": "no_work",
+        "status": "healthy"
       },
       "model": "nvidia/nemotron-3.5-super-vl:free",
       "source": "openrouter-free",
@@ -6322,16 +6393,36 @@
           "delivered": 0,
           "failed": 0,
           "failures": {},
-          "idle": 0,
-          "runs": 0
+          "idle": 1,
+          "kinds": {
+            "review": {
+              "completed": 0,
+              "delivered": 0,
+              "failed": 0,
+              "failures": {},
+              "idle": 1,
+              "runs": 1
+            }
+          },
+          "runs": 1
         },
         "7d": {
           "completed": 0,
           "delivered": 0,
           "failed": 0,
           "failures": {},
-          "idle": 0,
-          "runs": 0
+          "idle": 1,
+          "kinds": {
+            "review": {
+              "completed": 0,
+              "delivered": 0,
+              "failed": 0,
+              "failures": {},
+              "idle": 1,
+              "runs": 1
+            }
+          },
+          "runs": 1
         }
       }
     },
@@ -22713,12 +22804,10 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 1,
-          "failures": {
-            "provider_quota": 1
-          },
+          "failed": 0,
+          "failures": {},
           "idle": 0,
-          "runs": 1
+          "runs": 0
         },
         "7d": {
           "completed": 0,
@@ -23102,18 +23191,18 @@
       "source": "nvidia",
       "windows": {
         "24h": {
-          "completed": 8,
-          "delivered": 8,
-          "failed": 59,
-          "idle": 13,
-          "runs": 80
+          "completed": 10,
+          "delivered": 10,
+          "failed": 53,
+          "idle": 10,
+          "runs": 73
         },
         "7d": {
-          "completed": 59,
-          "delivered": 57,
-          "failed": 572,
-          "idle": 272,
-          "runs": 903
+          "completed": 62,
+          "delivered": 60,
+          "failed": 568,
+          "idle": 271,
+          "runs": 901
         }
       }
     },
@@ -23124,8 +23213,8 @@
           "completed": 0,
           "delivered": 0,
           "failed": 0,
-          "idle": 18,
-          "runs": 18
+          "idle": 16,
+          "runs": 16
         },
         "7d": {
           "completed": 0,
@@ -23142,16 +23231,16 @@
         "24h": {
           "completed": 29,
           "delivered": 29,
-          "failed": 69,
-          "idle": 28,
-          "runs": 126
+          "failed": 66,
+          "idle": 29,
+          "runs": 124
         },
         "7d": {
           "completed": 74,
           "delivered": 68,
-          "failed": 386,
-          "idle": 87,
-          "runs": 547
+          "failed": 390,
+          "idle": 88,
+          "runs": 552
         }
       }
     },
@@ -23159,18 +23248,18 @@
       "source": "openrouter-free",
       "windows": {
         "24h": {
-          "completed": 0,
-          "delivered": 0,
-          "failed": 8,
-          "idle": 0,
-          "runs": 8
+          "completed": 1,
+          "delivered": 1,
+          "failed": 10,
+          "idle": 2,
+          "runs": 13
         },
         "7d": {
-          "completed": 0,
-          "delivered": 0,
-          "failed": 42,
-          "idle": 2,
-          "runs": 44
+          "completed": 1,
+          "delivered": 1,
+          "failed": 44,
+          "idle": 3,
+          "runs": 48
         }
       }
     },
@@ -23256,9 +23345,9 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 1,
+          "failed": 0,
           "idle": 6,
-          "runs": 7
+          "runs": 6
         },
         "7d": {
           "completed": 0,
@@ -23275,9 +23364,9 @@
     "24h": "24 hours",
     "7d": "7 days"
   },
-  "counts_generated_at": "2026-11-25T09:41:46.325595+00:00",
+  "counts_generated_at": "2026-11-25T10:48:54.984045+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-25T10:32:07Z",
+    "generated_at": "2026-11-25T10:48:56Z",
     "sources": {
       "kilo-auto": [
         "kilo-auto/free",
@@ -23313,6 +23402,7 @@
       ],
       "opencode-free": [
         "hungerg-free",
+        "iceman-contributor-free",
         "beam-free",
         "hy4-flash-free"
       ],
@@ -23345,10 +23435,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-25T10:32:07.586888+00:00",
-    "days_elapsed": 24.439,
+    "checked_at": "2026-11-25T10:48:56.267906+00:00",
+    "days_elapsed": 24.451,
     "days_in_month": 30.0,
-    "days_left": 5.56,
+    "days_left": 5.55,
     "in_use": true,
     "label": "",
     "metrics": {
@@ -23364,31 +23454,31 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 8352629,
-        "organization": 8352629,
+        "database": 8625655,
+        "organization": 8625655,
         "owner_target": 50000000,
-        "projected_database": 10253237,
-        "projected_organization": 10253237,
-        "projected_share": 0.0205,
-        "share_used": 0.0167
+        "projected_database": 10583193,
+        "projected_organization": 10583193,
+        "projected_share": 0.0212,
+        "share_used": 0.0173
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 117980,
-        "organization": 117980,
+        "database": 118652,
+        "organization": 118652,
         "owner_target": 1000000,
-        "projected_database": 144826,
-        "projected_organization": 144826,
-        "projected_share": 0.0145,
-        "share_used": 0.0118
+        "projected_database": 145579,
+        "projected_organization": 145579,
+        "projected_share": 0.0146,
+        "share_used": 0.0119
       },
       "storage_bytes": {
         "allowance": 5000000000,
-        "database": 17801216,
-        "organization": 17801216,
+        "database": 17833984,
+        "organization": 17833984,
         "owner_target": 250000000,
-        "projected_database": 17801216,
-        "projected_organization": 17801216,
+        "projected_database": 17833984,
+        "projected_organization": 17833984,
         "projected_share": 0.0036,
         "share_used": 0.0036
       }
