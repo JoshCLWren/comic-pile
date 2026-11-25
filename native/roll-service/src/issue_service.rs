@@ -1292,6 +1292,7 @@ mod tests {
         IssueReadRateRequest {
             status: status.map(str::to_owned),
             rating,
+            issue_number_alias: None,
             idempotency_key: "direct-issue-012345".into(),
             source: None,
         }
@@ -1302,6 +1303,7 @@ mod tests {
         IssueReadRateRequest {
             status: Some("read".into()),
             rating,
+            issue_number_alias: None,
             idempotency_key: key.into(),
             source: Some(ROLL_OFFER_SOURCE.into()),
         }
@@ -1570,6 +1572,7 @@ mod tests {
         let correction = IssueReadRateRequest {
             status: None,
             rating: Some(3.5),
+            issue_number_alias: None,
             idempotency_key: "direct-issue-correction-01".into(),
             source: None,
         };

@@ -84,7 +84,9 @@ const THREADS_DETAIL_SQL: &str = "SELECT t.id, t.title, t.format, t.issues_remai
      (SELECT i.issue_number FROM issues i WHERE i.id = t.next_unread_issue_id) \
      AS next_unread_issue_number, t.manual_creator_credits::text AS manual_creator_credits \
      FROM threads t WHERE t.id = ANY($1::int[])";
-const ISSUES_DETAIL_SQL: &str = "SELECT i.id, i.thread_id, i.issue_number, i.position, i.status, \
+const ISSUES_DETAIL_SQL: &str = "SELECT i.id, i.thread_id, i.issue_number, \
+     NULLIF(BTRIM(i.issue_number_alias), '') AS issue_number_alias, \
+     i.position, i.status, \
      to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS read_at, \
      to_char(i.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS created_at \
      FROM issues i WHERE i.id = ANY($1::int[])";
@@ -678,16 +680,23 @@ async fn issues_by_ids(
         .await
         .map_err(db::query_error)?;
     for row in rows {
+        let issue_number: String = row.get(2);
+        let issue_number_alias: Option<String> = row.get(3);
         result.insert(
             row.get(0),
             Some(IssueDetailResponse {
                 id: row.get(0),
                 thread_id: row.get(1),
-                issue_number: row.get(2),
-                position: row.get(3),
-                status: row.get(4),
-                read_at: row.get(5),
-                created_at: row.get(6),
+                display_issue_number: crate::issue_service::display_issue_number(
+                    &issue_number,
+                    issue_number_alias.as_deref(),
+                ),
+                issue_number,
+                issue_number_alias,
+                position: row.get(4),
+                status: row.get(5),
+                read_at: row.get(6),
+                created_at: row.get(7),
             }),
         );
     }
