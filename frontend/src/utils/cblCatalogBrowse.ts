@@ -17,10 +17,7 @@ export interface CatalogServedPosition {
   scope: string
   query: string | null
   folder: string
-<<<<<<< HEAD
-=======
   page: number | null
->>>>>>> origin/main
 }
 
 /**
@@ -63,6 +60,7 @@ export function catalogTotalLabel(total: number, folderCount: number): string {
  * @param fetching - Whether a new browse request is in flight.
  * @param folder - Folder in the current URL.
  * @param submittedQuery - Search term in the current URL.
+ * @param page - Page in the current URL.
  * @returns True while stale results are on screen.
  */
 export function isStaleBrowsePosition(
@@ -70,13 +68,6 @@ export function isStaleBrowsePosition(
   fetching: boolean,
   folder: string,
   submittedQuery: string,
-<<<<<<< HEAD
-): boolean {
-  if (!fetching || served === null) return false
-  return submittedQuery
-    ? served.scope !== 'search' || (served.query ?? '') !== submittedQuery
-    : served.scope === 'search' || served.folder !== folder
-=======
   page: number,
 ): boolean {
   if (!fetching || served === null) return false
@@ -84,5 +75,4 @@ export function isStaleBrowsePosition(
     return served.scope !== 'search' || (served.query ?? '') !== submittedQuery || (served.page ?? 1) !== page
   }
   return served.scope === 'search' || served.folder !== folder || (served.page ?? 1) !== page
->>>>>>> origin/main
 }
