@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 import { render, screen, within } from './testingLibrary'
-=======
-import { render, screen, within } from '@testing-library/react'
->>>>>>> origin/main
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { ReactElement, ReactNode } from 'react'
