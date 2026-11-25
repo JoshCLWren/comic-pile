@@ -1,5 +1,5 @@
 import { ReadingListReader } from './ReadingListReader'
-import { FormEvent, KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { FormEvent, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { applyCommittedReadingPlan, applyCreatedCustomCBL, applyUpdatedCustomCBL, applyDeletedCustomCBL } from '../query/cacheEffects'
@@ -400,7 +400,7 @@ export default function CustomCBLBuilder({
     for (const entry of entries) names.set(entry.issue_id, `${entry.series_name} #${entry.issue_number}`)
     return names
   }, [entries])
-  const nameFor = (issueId: number): string => entryNames.get(issueId) ?? `Issue #${issueId}`
+  const nameFor = useCallback((issueId: number): string => entryNames.get(issueId) ?? `Issue #${issueId}`, [entryNames])
 
   const requirements = useMemo(() => computeEntryRequirements(mode, entries), [mode, entries])
   const persistedRequirements = useMemo(
@@ -515,7 +515,7 @@ export default function CustomCBLBuilder({
       target.scrollIntoView?.({ block: 'center' })
       target.focus({ preventScroll: true })
     })
-  }, [entries, currentPage, entrySearch])
+  }, [entries, currentPage, entrySearch, progressIndex])
   useLayoutEffect(() => {
     if (!nextUnreadIssueId) return
     if (pendingUnreadRevealRef.current !== nextUnreadIssueId) return
