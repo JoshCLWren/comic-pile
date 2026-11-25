@@ -205,16 +205,17 @@ async fn detect_preview_apply_and_undo_preserve_real_history() {
         .await
         .unwrap()
         .get(0);
-    for issue_id in [canonical, duplicate] {
-        conn.execute(
-            "INSERT INTO issue_external_identity_mappings \
-             (issue_id, external_identity_id, status, evidence_source, evidence_json, created_at, updated_at) \
-             VALUES ($1, $2, 'confirmed', 'test', '{}'::json, NOW(), NOW())",
-            &[&issue_id, &identity_id],
-        )
-        .await
-        .unwrap();
-    }
+    // Only the synthetic overall issue carries the Comic Vine identity; the
+    // original story issue is linked by the explicit story/overall relationship
+    // in the mapping metadata (`story_arc_number = 3`).
+    conn.execute(
+        "INSERT INTO issue_external_identity_mappings \
+         (issue_id, external_identity_id, status, evidence_source, evidence_json, created_at, updated_at) \
+         VALUES ($1, $2, 'confirmed', 'test', '{}'::json, NOW(), NOW())",
+        &[&duplicate, &identity_id],
+    )
+    .await
+    .unwrap();
 
     // Real 4.0 rating on the canonical and on the duplicate (must be moved,
     // never erased or double-counted).
@@ -397,10 +398,8 @@ async fn detect_preview_apply_and_undo_preserve_real_history() {
     let moved_events = applied["moved_event_ids"].as_array().unwrap();
     assert!(moved_events.contains(&json!(duplicate_rating_event)));
     assert!(!moved_events.contains(&json!(synthetic_read_event)));
-    assert!(applied["moved_list_entry_ids"]
-        .as_array()
-        .unwrap()
-        .is_empty());
+    let moved_entries = applied["moved_list_entry_ids"].as_array().unwrap();
+    assert!(moved_entries.contains(&json!(duplicate_membership_entry)));
 
     let merged_into: Option<i32> = conn
         .query_one(
@@ -534,7 +533,8 @@ async fn detect_preview_apply_and_undo_preserve_real_history() {
         .get(0);
     assert_eq!(canonical_status_after_undo, "read");
 
-    // The list entry was already on the canonical and was never moved or erased.
+    // The list entry already on the canonical was never moved or erased, and
+    // the duplicate's own entry is restored to its exact original issue.
     let entry_owner: i32 = conn
         .query_one(
             "SELECT issue_id FROM custom_cbl_entries WHERE id = $1",
@@ -544,6 +544,15 @@ async fn detect_preview_apply_and_undo_preserve_real_history() {
         .unwrap()
         .get(0);
     assert_eq!(entry_owner, canonical);
+    let duplicate_entry_owner: i32 = conn
+        .query_one(
+            "SELECT issue_id FROM custom_cbl_entries WHERE id = $1",
+            &[&duplicate_membership_entry],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(duplicate_entry_owner, duplicate);
 }
 
 #[tokio::test(flavor = "multi_thread")]
