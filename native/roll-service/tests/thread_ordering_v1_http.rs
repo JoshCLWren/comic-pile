@@ -1863,7 +1863,10 @@ async fn bootstrap_cookie_snoozes_survive_session_turnover_and_no_snooze_case() 
         .iter()
         .map(|row| row["thread"]["id"].as_i64().unwrap() as i32)
         .collect();
-    assert!(visible.contains(&ids[0]), "stale session snooze leaked after turnover");
+    assert!(
+        visible.contains(&ids[0]),
+        "stale session snooze leaked after turnover"
+    );
     assert!(!visible.contains(&ids[1]));
     assert!(!visible.contains(&ids[2]));
 
