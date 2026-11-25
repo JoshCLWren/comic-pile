@@ -597,11 +597,23 @@ pub async fn reading_graph(
         return Ok(Json(invalid_response(&diagnostics.inputs)));
     }
     let validated = option_inputs::validated_contained(diagnostics.inputs)?;
-    Ok(Json(project(
+    let response = project(
         validated.inputs(),
         &validated,
         Some(&diagnostics.legacy_dependencies),
-    )))
+    );
+    if response.status != "ok" {
+        tracing::warn!(
+            user_id = user.id(),
+            status = response.status.as_str(),
+            cycle_count = response.cycles.len(),
+            affected_lists = response.affected_lists.len(),
+            affected_threads = response.affected_threads.len(),
+            unresolved_reference_count = response.unresolved_reference_count,
+            "reading_graph reports recoverable problem"
+        );
+    }
+    Ok(Json(response))
 }
 
 fn remove_from_inputs(
