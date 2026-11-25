@@ -74,6 +74,7 @@ export default function IssueCorrectionDialog({
     targetIssueNumber: string
     affected: Issue[]
     affectedIds: number[]
+    affectedRatings: Record<number, number | null>
     willCompleteSeries: boolean
     dependentFrontier: string[]
   } | null>(null)
@@ -281,6 +282,18 @@ export default function IssueCorrectionDialog({
       const issuesBeforeTarget = projectedIssues.slice(0, effectiveIndex)
       const unreadBeforeTarget = issuesBeforeTarget.filter((issue) => issue.status !== 'read')
 
+      // Read state alone cannot distinguish marked read from read & rated, so
+      // fetch the affected ratings in one bounded batch for the review panel.
+      let affectedRatings: Record<number, number | null> = {}
+      if (unreadBeforeTarget.length > 0) {
+        try {
+          const cards = await cardsService.fetchCards(unreadBeforeTarget.map((issue) => issue.id))
+          affectedRatings = Object.fromEntries(cards.map((card) => [card.issue_id, card.rating]))
+        } catch {
+          // Best-effort preview: ratings are explanatory, not authorization.
+        }
+      }
+
       let dependentFrontier: string[] = []
       try {
         const deps = await depsService.listForThread(threadId)
@@ -307,13 +320,20 @@ export default function IssueCorrectionDialog({
       // Always present the review step, even when no issue is about to be bulk
       // read: creating or moving the target is itself a correction the reader
       // must be able to cancel after seeing the projected completion effects.
-      setPreview({ targetIssueNumber: targetNumber, affected: unreadBeforeTarget, affectedIds: unreadBeforeTarget.map((i) => i.id), willCompleteSeries, dependentFrontier })
+      setPreview({
+        targetIssueNumber: targetNumber,
+        affected: unreadBeforeTarget,
+        affectedIds: unreadBeforeTarget.map((i) => i.id),
+        affectedRatings,
+        willCompleteSeries,
+        dependentFrontier,
+      })
     } catch {
       setError('Failed to prepare issue correction preview. Please try again.')
     } finally {
       setIsLoading(false)
     }
-  }, [selectedIssueNumber, allIssues, insertPosition, threadId, loadAllIssues, depsService])
+  }, [selectedIssueNumber, allIssues, insertPosition, threadId, loadAllIssues, depsService, cardsService])
 
 
   const handleSubmit = useCallback(async () => {
@@ -501,6 +521,9 @@ export default function IssueCorrectionDialog({
               {preview.affected.map((issue) => (
                 <li key={issue.id}>
                   #{issue.issue_number} — current: {issue.status}
+                  {preview.affectedRatings[issue.id] != null
+                    ? ` · rated ${preview.affectedRatings[issue.id]?.toFixed(1)}`
+                    : ' · no rating'}
                 </li>
               ))}
             </ul>
