@@ -376,6 +376,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     try {
       while (pendingMutationsRef.current.length > 0) {
         const currentMutation = pendingMutationsRef.current[0]
+        let mutationSucceeded = false
         try {
           await runIssueMutation(currentMutation)
           if (currentMutation.type === 'create') {
@@ -405,11 +406,12 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
             baseIssuesRef.current = applyIssueMutation(baseIssuesRef.current, currentMutation)
           }
           hadSuccess = true
+          mutationSucceeded = true
         } catch (err: unknown) {
           // A failed mutation stops the queue and is reported to the caller:
           // the mutations that were not applied stay queued so the reader can
           // retry them, and the rejected flush keeps the Edit Series dialog
-          // open instead of closing it over a lost create.
+          // open instead of closing it over a lost create (#4654 A7).
           //
           // The base list is resynchronized with the server first. When that
           // resynchronization is itself incomplete, later mutations would be
@@ -453,9 +455,11 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
           setActionError(getApiErrorDetail(err))
           throw err
         } finally {
-          pendingMutationsRef.current = pendingMutationsRef.current.filter(
-            (mutation) => mutation.id !== currentMutation.id
-          )
+          if (mutationSucceeded) {
+            pendingMutationsRef.current = pendingMutationsRef.current.filter(
+              (mutation) => mutation.id !== currentMutation.id
+            )
+          }
           syncOptimisticIssues(baseIssuesRef.current, pendingMutationsRef.current)
           notifyPendingMutations()
         }

@@ -53,6 +53,10 @@ pub struct CreateIssuesRequest {
     /// The server rejects unaccepted mapped-existing numbers (#4654 A5).
     #[serde(default)]
     pub accepted_alias_issue_numbers: Vec<String>,
+    /// Expected current issue IDs in order. When provided, the server rejects
+    /// the write if the series changed after the preview was taken (#4654 A7).
+    #[serde(default)]
+    pub expected_issue_ids: Option<Vec<i32>>,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -718,6 +722,10 @@ pub struct PreviewIssuesRequest {
     /// explicitly accepted by the reader as alias/mapping alternatives.
     #[serde(default)]
     pub accepted_alias_issue_numbers: Vec<String>,
+    /// Expected current issue IDs in order. When provided, the server rejects
+    /// the preview if the series changed after the caller last observed it.
+    #[serde(default)]
+    pub expected_issue_ids: Option<Vec<i32>>,
 }
 
 /// Per-issue human-readable context carried in the preview payload so the
