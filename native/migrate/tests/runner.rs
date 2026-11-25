@@ -119,18 +119,12 @@ async fn alembic_managed_at_baseline(client: &Client) {
         .unwrap();
 }
 
-/// Simulate an Alembic-managed database at the pre-alias head: V1 through V3
-/// are present, so the runner adopts them and applies the native V4 migration.
+/// Simulate an Alembic-managed database at the current native head before V4:
+/// V1 and V2 are present, so the runner adopts them and applies V3 and V4.
 async fn alembic_managed_at_head(client: &Client) {
     alembic_managed_at_baseline(client).await;
     client
         .batch_execute(include_str!("../migrations/V2__queue_exclusion_groups.sql"))
-        .await
-        .unwrap();
-    client
-        .batch_execute(include_str!(
-            "../migrations/V3__release_subscriptions_target_reading_lists.sql"
-        ))
         .await
         .unwrap();
     client.batch_execute("RESET ALL").await.unwrap();
