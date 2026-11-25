@@ -9,6 +9,7 @@ interface DiscoveredOperation {
   operation: { id: number; items: unknown[] }
 }
 
+// SAFETY: vi.hoisted fixtures run before imports; these typed literals mirror the mocked hooks' operation, message and activity contracts.
 const mocks = vi.hoisted(() => ({
   operations: [] as DiscoveredOperation[],
   message: null as string | null,

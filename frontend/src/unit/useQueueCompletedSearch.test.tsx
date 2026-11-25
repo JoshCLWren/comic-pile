@@ -7,6 +7,7 @@ interface MatchableThread {
   title: string
 }
 
+// SAFETY: vi.hoisted fixtures run before imports; these typed literals mirror the mocked shelf hooks' thread shapes.
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   showToast: vi.fn(),
