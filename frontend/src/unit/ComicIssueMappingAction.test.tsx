@@ -6,11 +6,7 @@
  * runs only on demand, and provider-only entries never hit the owner-scoped
  * mapping mutation.
  */
-<<<<<<< HEAD
-import { render, screen, waitFor, fireEvent } from './testingLibrary'
-=======
-import { render, screen, waitFor, fireEvent, renderHook, act } from '@testing-library/react'
->>>>>>> origin/main
+import { act, fireEvent, render, renderHook, screen, waitFor } from './testingLibrary'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { IssueIdentityResponse } from '../services/api-comicvine'
 import { queryClient } from '../query/queryClient'
@@ -25,6 +21,9 @@ const { searchSeriesSpy, getIssueIdentitySpy, confirmIdentitySpy, replaceIdentit
     replaceIdentitySpy: vi.fn(),
     removeIdentitySpy: vi.fn(),
   }))
+
+const setQueryData = vi.spyOn(queryClient, 'setQueryData')
+const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
 
 await injectModuleDoubles(await import('../services/api-comicvine'), () => ({
   comicVineApi: {
@@ -208,11 +207,11 @@ describe('ComicIssueMappingAction', () => {
     fireEvent.click(screen.getByTestId('comic-mapping-remove'))
     fireEvent.click(await screen.findByText('Remove mapping'))
     await waitFor(() => expect(removeIdentitySpy).toHaveBeenCalledWith(77))
-    await waitFor(() => expect(queryClient.setQueryData).toHaveBeenCalledWith(
+    await waitFor(() => expect(setQueryData).toHaveBeenCalledWith(
       queryKeys.comicVine.issueIntelligence(77),
       null,
     ))
-    await waitFor(() => expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
+    await waitFor(() => expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.comicVine.issueIntelligence(77),
       exact: true,
     }))

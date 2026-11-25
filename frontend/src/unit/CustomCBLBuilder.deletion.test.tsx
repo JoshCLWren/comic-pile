@@ -18,19 +18,15 @@ const mocks = vi.hoisted(() => ({
   exportXml: vi.fn(),
 }))
 
-vi.mock('../services/api-custom-cbl', async () => {
-  const actual = await vi.importActual<typeof import('../services/api-custom-cbl')>(
-    '../services/api-custom-cbl',
-  )
+await injectModuleDoubles(await import('../services/api-custom-cbl'), async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/api-custom-cbl')>()
   return { ...actual, customCBLApi: mocks }
 })
 
 const cblMocks = vi.hoisted(() => ({ discover: vi.fn(), preview: vi.fn() }))
 
-vi.mock('../services/api-cbl-sources', async () => {
-  const actual = await vi.importActual<typeof import('../services/api-cbl-sources')>(
-    '../services/api-cbl-sources',
-  )
+await injectModuleDoubles(await import('../services/api-cbl-sources'), async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/api-cbl-sources')>()
   return { ...actual, cblSourcesApi: cblMocks }
 })
 

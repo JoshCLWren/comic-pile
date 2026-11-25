@@ -12,7 +12,7 @@ import { injectModuleDoubles } from './injectModuleDoubles'
 
 // The action card has its own suite; this suite proves the reading surface
 // renders the post-roll provider detail and tags for the exact selected issue.
-vi.mock('../components/ComicIssueCard', async (importOriginal) => {
+await injectModuleDoubles(await import('../components/ComicIssueCard'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../components/ComicIssueCard')>()
   return {
     // Only the action card is replaced: the provider cover the post-roll pillar
