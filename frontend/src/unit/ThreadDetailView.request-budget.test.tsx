@@ -195,6 +195,7 @@ describe('Thread detail request budget', () => {
       'POST /v2/reading-boundaries': 1,
       'GET /v1/threads/42': 1,
       'GET /v1/threads/42/connected': 1,
+      'GET /v2/reading-graph': 1,
       'GET /v2/tags/effective/threads/42': 1,
       'POST /v1/threads/groups:batch': 1,
       'POST /v1/threads:getBlockingInfo': 1,
@@ -222,6 +223,7 @@ describe('Thread detail request budget', () => {
       'POST /v2/reading-boundaries': 1,
       'GET /v1/threads/42': 1,
       'GET /v1/threads/42/connected': 1,
+      'GET /v2/reading-graph': 1,
       'GET /v2/tags/effective/threads/42': 1,
       'POST /v1/threads/groups:batch': 1,
     })
