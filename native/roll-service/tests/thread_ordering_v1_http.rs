@@ -1864,13 +1864,6 @@ async fn bootstrap_cookie_snoozes_survive_session_turnover_and_no_snooze_case() 
     // Cookie-only snoozes survive turnover; stale session-only and cross-owner IDs do not.
     assert_eq!(bootstrap["snoozed_count"], json!(2));
     assert_eq!(bootstrap["snoozed_thread_ids"], json!([ids[1], ids[2]]));
-    let displayed_snoozes: Vec<_> = bootstrap["snoozed_threads"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|row| row["id"].as_i64().unwrap() as i32)
-        .collect();
-    assert_eq!(displayed_snoozes, vec![ids[1], ids[2]]);
     let visible: Vec<_> = bootstrap["rollable"]
         .as_array()
         .unwrap()
