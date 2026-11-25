@@ -219,6 +219,8 @@ describe('ComicIssueMappingAction', () => {
     expect(screen.getByTestId('comic-mapping-map')).toHaveTextContent('Map comic')
     expect(screen.queryByTestId('comic-mapping-change')).not.toBeInTheDocument()
     expect(screen.queryByTestId('comic-mapping-remove')).not.toBeInTheDocument()
+    setQueryData.mockRestore()
+    invalidateQueries.mockRestore()
   })
 
   it('keeps a successful removal visible when identity reconciliation fails', async () => {
