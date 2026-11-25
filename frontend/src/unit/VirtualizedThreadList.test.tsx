@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { expect, it, vi, beforeAll, beforeEach } from 'vitest'
-import { getRowThreads } from '../pages/QueuePage/VirtualizedThreadList.helpers'
+import { getRowThreads, ROW_HEIGHT_WITH_GAP } from '../pages/QueuePage/VirtualizedThreadList.helpers'
 import VirtualizedThreadList from '../pages/QueuePage/VirtualizedThreadList'
+import { ComicIssueCover } from '../components/ComicIssueCard'
 import type {
   QueueVirtualizer,
   UseWindowVirtualizerOptions,
