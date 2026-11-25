@@ -51,6 +51,12 @@ SELECT e.id, e.metadata_json::text
 FROM external_identities e
 WHERE e.provider = 'comicvine'
   AND e.entity_type = 'issue'
+  AND NOT COALESCE(
+    (e.metadata_json::jsonb->'raw_provider_payload') ?& ARRAY[
+      'id', 'name', 'issue_number', 'cover_date', 'store_date', 'image',
+      'volume', 'person_credits', 'character_credits', 'team_credits',
+      'story_arc_credits', 'date_last_updated'
+    ], false)
   AND EXISTS (
     SELECT 1 FROM issue_external_identity_mappings m
     WHERE m.external_identity_id = e.id
@@ -1233,7 +1239,7 @@ async fn drain_authorized(
         provider_configured: key.is_some(),
         ..Default::default()
     };
-    reconcile_orphaned_refresh_requests(&state).await?;
+    reconcile_orphaned_refresh_requests(state).await?;
     for index in 0..BATCH_LIMIT {
         let Some(job) = claim(state).await? else {
             break;

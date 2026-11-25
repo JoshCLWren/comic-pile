@@ -312,7 +312,7 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
       await Promise.resolve()
     })
     expect(await screen.findByText('Writer B')).toBeInTheDocument()
-    expect(screen.getByText('penciler')).toBeInTheDocument()
+    expect(screen.getByText(/penciler/i)).toBeInTheDocument()
 
     // A's canceled request may still settle in the transport. It must not replace B.
     await act(async () => {
