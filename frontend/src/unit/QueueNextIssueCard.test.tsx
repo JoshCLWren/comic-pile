@@ -54,52 +54,6 @@ await injectModuleDoubles(await import('../components/Tags/TagSection'), () => (
   ),
 }))
 
-  ),
-}))
-
-vi.mock('../hooks/useComicVineIssueIntelligence', () => ({
-  useComicVineIssueIntelligence: () => ({
-    metadata: { image_url: 'https://comicvine.gamespot.com/a/hellboy9.jpg' },
-    isLoading: false,
-    isError: false,
-    error: null,
-    refetch: vi.fn(),
-  }),
-}))
-
-vi.mock('../components/Tags/TagSection', () => ({
-  TagSection: ({ targetType, targetId, targetLabel }: {
-    targetType: string
-    targetId: number
-    targetLabel: string
-  }) => (
-    <div data-testid="direct-read-tag-section" data-target={`${targetType}:${targetId}`}>
-      {targetLabel}
-    </div>
-  ),
-}))
-
-vi.mock('../components/ComicIssueCard', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../components/ComicIssueCard')>()
-  return {
-    // Keep the shared cover export: the roll-parity details render it for real.
-    ...actual,
-    ComicIssueCard: ({
-      issueId, threadTitle, issueNumber, card, onMutated,
-    }: {
-      issueId: number
-      threadTitle: string
-      issueNumber: string
-      card?: IssueCard | null
-      onMutated?: () => void
-    }) => (
-      <article data-testid="shared-queue-card" data-issue-id={issueId}>
-        {threadTitle} #{issueNumber} {card?.cover_image_url ?? 'No cover'}
-        <button type="button" onClick={onMutated}>Simulate direct save</button>
-      </article>
-    ),
-  }
-})
 
 const list = vi.spyOn(issuesApi, 'list')
 const get = vi.spyOn(issuesApi, 'get')
