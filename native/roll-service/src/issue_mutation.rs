@@ -775,7 +775,7 @@ async fn load_preview_metadata(
     let mut by_id = BTreeMap::new();
     for row in &rows {
         let id: i32 = row.get(0);
-        let title: String = row.get(8);
+        let title: String = row.get(7);
         if series_title.is_empty() {
             series_title = title;
         }
@@ -786,8 +786,8 @@ async fn load_preview_metadata(
                 is_read: row.get(1),
                 is_mapped: row.get(2),
                 has_rating: row.get(3),
-                is_frontier: row.get(7),
-                is_duplicate: row.get(6),
+                is_frontier: row.get(6),
+                is_duplicate: row.get(5),
             },
         );
     }
