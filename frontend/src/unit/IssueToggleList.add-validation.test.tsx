@@ -225,7 +225,7 @@ describe('IssueToggleList Add box validation (#3586)', () => {
     await act(async () => {
       await ref.current?.flush()
     })
-    expect(mockedIssuesApi.create).toHaveBeenCalledWith(99, '19-24', { strategy: 'safe_default' })
+    expect(mockedIssuesApi.create).toHaveBeenCalledWith(99, '19-24', { strategy: 'safe_default', expected_issue_ids: [1, 2] })
   })
 
   it('stages a named issue such as Annual 1 as a pending issue chip after preview confirm', async () => {
@@ -243,7 +243,7 @@ describe('IssueToggleList Add box validation (#3586)', () => {
     await act(async () => {
       await ref.current?.flush()
     })
-    expect(mockedIssuesApi.create).toHaveBeenCalledWith(99, 'Annual 1', { strategy: 'safe_default' })
+    expect(mockedIssuesApi.create).toHaveBeenCalledWith(99, 'Annual 1', { strategy: 'safe_default', expected_issue_ids: [1, 2] })
   })
 
   it('keeps a whitespace-only entry from staging a chip', async () => {
