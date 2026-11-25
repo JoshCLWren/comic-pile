@@ -49,7 +49,10 @@ pub async fn csrf_middleware(request: Request, next: Next) -> Response {
     // ambient credential (the reset token arrives out of band).
     let exempt = matches!(
         path,
-        "/api/v2/auth/login"
+        // Rotisserie uses a non-ambient, short-lived GitHub OAuth bearer token.
+        // Its handler independently verifies signature, allowlist, and Origin.
+        "/api/v2/factory/github/dispatch"
+            | "/api/v2/auth/login"
             | "/api/v2/auth/register"
             | "/api/v2/auth/refresh"
             | "/api/v2/auth/forgot-password"

@@ -250,7 +250,7 @@ impl ComicVineLimits {
             Admission::Go => {}
         }
         match provider_exchange(outbound, resource, extra_query, api_key).await? {
-            Exchange::Payload(value) if browser_envelope_ok(&value) => {
+            Exchange::Payload(value) if python_envelope_ok(&value) => {
                 self.record_success(
                     bucket,
                     cache_key,
@@ -281,7 +281,7 @@ impl ComicVineLimits {
 /// Python `_request_async` envelope rule: the body must be an object whose
 /// `status_code` is absent, `null` or equal to `1` (`status_code not in
 /// (None, 1)` raises).
-fn browser_envelope_ok(payload: &Value) -> bool {
+pub(crate) fn python_envelope_ok(payload: &Value) -> bool {
     let Some(object) = payload.as_object() else {
         return false;
     };
@@ -294,7 +294,7 @@ fn browser_envelope_ok(payload: &Value) -> bool {
 
 /// Python `_parse_retry_after`: delta-seconds (any float) or an HTTP date
 /// measured from `now`; anything else is `None` (a header-less throttle).
-fn parse_retry_after(raw: &str, now: DateTime<Utc>) -> Option<f64> {
+pub(crate) fn parse_retry_after(raw: &str, now: DateTime<Utc>) -> Option<f64> {
     let value = raw.trim();
     if value.is_empty() {
         return None;
@@ -541,7 +541,7 @@ mod tests {
             (json!({"status_code": "1"}), false),
             (json!([]), false),
         ] {
-            assert_eq!(browser_envelope_ok(&payload), ok, "{payload}");
+            assert_eq!(python_envelope_ok(&payload), ok, "{payload}");
         }
     }
 

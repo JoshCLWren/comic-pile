@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useRollNudge } from './useRollNudge'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
@@ -41,7 +40,6 @@ import { useQueueModals as useQueueModalsHook } from './useQueueModals'
  * never introduced.
  */
 export default function QueuePage() {
-  const navigate = useNavigate()
   const { showToast } = useToast()
   const [sortBy, setSortBy] = useState<QueueSortBy>('position')
   const [searchQuery, setSearchQuery] = useState('')
@@ -84,15 +82,7 @@ export default function QueuePage() {
   // "still fetching" apart from a settled zero-match (#3912).
   const queueListLoading = useQueueListLoading()
 
-  const navigateToRoll = useCallback(
-    (_thread: ThreadListItem, response: unknown) => {
-      navigate('/', { state: { rollResponse: response } })
-    },
-    [navigate],
-  )
-  const actions = useQueueThreadActions({
-    navigateToRoll,
-  })
+  const actions = useQueueThreadActions({})
 
   const submitCreate = useCallback(
     (input: ThreadCreatePayload) =>

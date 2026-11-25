@@ -643,6 +643,176 @@ async fn adoption_commit_creates_plan_with_valid_fingerprint() {
     assert!(body["unresolved_positions"].is_array(), "{body}");
 }
 
+async fn crossover_snapshot(
+    state: &Arc<AppState>,
+) -> Vec<(
+    i32,
+    i32,
+    String,
+    Option<i32>,
+    Option<i32>,
+    Option<i32>,
+    Option<i32>,
+    Option<i32>,
+)> {
+    let conn = state.pool.get().await.unwrap();
+    conn.query(
+        "SELECT g.id, g.user_id, g.name,
+                m.id, m.group_id, m.thread_id, m.issue_id, m.sequence_order
+         FROM dependency_groups g
+         LEFT JOIN dependency_group_memberships m ON m.group_id = g.id
+         ORDER BY g.id, m.id",
+        &[],
+    )
+    .await
+    .unwrap()
+    .iter()
+    .map(|row| {
+        (
+            row.get(0),
+            row.get(1),
+            row.get(2),
+            row.get(3),
+            row.get(4),
+            row.get(5),
+            row.get(6),
+            row.get(7),
+        )
+    })
+    .collect()
+}
+
+async fn seed_crossover_sentinel(state: &Arc<AppState>, user_id: i32) {
+    let conn = state.pool.get().await.unwrap();
+    conn.batch_execute(&format!(
+        r#"
+        INSERT INTO threads
+          (id, user_id, title, format, issues_remaining, queue_position, status,
+           total_issues, reading_progress, created_at)
+        VALUES
+          (351700, {user_id}, 'Existing crossover thread', 'comic', 1, 90, 'active',
+           1, 'not_started', NOW());
+        INSERT INTO issues (id, thread_id, issue_number, position, status, created_at)
+        VALUES (351701, 351700, '1', 0, 'unread', NOW());
+        INSERT INTO dependency_groups (id, user_id, name, created_at)
+        VALUES (351702, {user_id}, 'Reader-created crossover', NOW());
+        INSERT INTO dependency_group_memberships
+          (id, group_id, issue_id, sequence_order)
+        VALUES (351703, 351702, 351701, 0);
+        "#
+    ))
+    .await
+    .unwrap();
+}
+
+fn one_selected_adoption_payload() -> Value {
+    json!({
+        "entry_decisions": {},
+        "series_decisions": [],
+        "series_overrides": [
+            {"cbl_position": 0, "decision": "include"},
+            {"cbl_position": 1, "decision": "exclude"}
+        ],
+        "content_hash": "h-mm",
+        "revision_sha": "rev-1"
+    })
+}
+
+fn assert_one_selected_adoption(body: &Value, plan_id: i64) {
+    assert_eq!(body["id"], plan_id, "{body}");
+    assert_eq!(body["created_positions"], json!([0]), "{body}");
+    assert_eq!(body["reused_positions"], json!([]), "{body}");
+    assert_eq!(body["excluded_positions"], json!([1]), "{body}");
+    assert_eq!(body["unresolved_positions"], json!([]), "{body}");
+    let nodes = body["nodes"].as_array().unwrap();
+    assert_eq!(
+        nodes.len(),
+        1,
+        "only the selected entry belongs in the plan: {body}"
+    );
+    assert_eq!(nodes[0]["node_type"], "issue", "{body}");
+    assert_eq!(nodes[0]["label"], "Mister Miracle #1", "{body}");
+    assert!(nodes[0]["ref_id"].as_i64().unwrap() > 0, "{body}");
+}
+
+#[tokio::test]
+async fn adoption_commit_does_not_create_crossover_event_label_issue_3517() {
+    let (state, token, csrf, _guard) = setup().await;
+    let (status, me) = get(&state, &token, "/api/v1/auth/me").await;
+    assert_eq!(status, StatusCode::OK, "{me}");
+    let user_id = me["id"].as_i64().unwrap() as i32;
+    seed_crossover_sentinel(&state, user_id).await;
+    let before = crossover_snapshot(&state).await;
+    assert_eq!(
+        before.len(),
+        1,
+        "the sentinel must make this a non-empty check"
+    );
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/adoption-commits",
+        one_selected_adoption_payload(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{status} {body}");
+    let plan_id = body["id"].as_i64().expect("plan id");
+    assert_one_selected_adoption(&body, plan_id);
+
+    assert_eq!(
+        crossover_snapshot(&state).await,
+        before,
+        "CBL adoption must neither create event labels nor change their memberships (issue #3517): {body}"
+    );
+}
+
+#[tokio::test]
+async fn targeted_adoption_commit_does_not_create_crossover_event_label_issue_3517() {
+    let (state, token, csrf, _guard) = setup().await;
+    let (status, me) = get(&state, &token, "/api/v1/auth/me").await;
+    assert_eq!(status, StatusCode::OK, "{me}");
+    let user_id = me["id"].as_i64().unwrap() as i32;
+    seed_crossover_sentinel(&state, user_id).await;
+    let conn = state.pool.get().await.unwrap();
+    conn.execute(
+        "INSERT INTO continuity_plans
+           (id, user_id, name, ordering_mode, lanes_json, nodes_json, created_at, updated_at)
+         VALUES
+           (351710, $1, 'Fresh target plan', 'informational',
+            '[{\"id\":\"default\",\"name\":\"Default\",\"order\":0}]'::jsonb,
+            '[]'::jsonb, NOW(), NOW())",
+        &[&user_id],
+    )
+    .await
+    .unwrap();
+    drop(conn);
+    let before = crossover_snapshot(&state).await;
+    assert_eq!(
+        before.len(),
+        1,
+        "the sentinel must make this a non-empty check"
+    );
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/reading-plans/351710/adoption-commits",
+        one_selected_adoption_payload(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{status} {body}");
+    assert_one_selected_adoption(&body, 351710);
+
+    assert_eq!(
+        crossover_snapshot(&state).await,
+        before,
+        "Targeted CBL adoption must neither create event labels nor change their memberships (issue #3517): {body}"
+    );
+}
+
 #[tokio::test]
 async fn adoption_plan_reports_title_number_ambiguity_statuses() {
     let (state, token, csrf, _guard) = setup().await;
