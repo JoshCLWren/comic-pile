@@ -707,17 +707,16 @@ async fn seed_pair(
 
 /// A pair with distinct provider numbers so three pairs never cross-match in
 /// the story/overall detection rule. Returns `(canonical, duplicate)`.
-#[allow(clippy::too_many_arguments)]
 async fn seed_named_pair(
     ctx: &Ctx,
     cv_id: &str,
-    cv_issue_number: &str,
-    story_arc_number: &str,
     canonical_number: &str,
     canonical_created: &str,
     duplicate_created: &str,
 ) -> (i32, i32) {
     let conn = ctx.state.pool.get().await.unwrap();
+    let cv_issue_number = format!("1{canonical_number}");
+    let story_arc_number = canonical_number.to_string();
     let canonical_thread: i32 = conn
         .query_one(
             "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status, created_at) \
@@ -1130,8 +1129,6 @@ async fn three_alias_pairs_leave_one_rollable_identity_and_full_history() {
     let (c1, d1) = seed_named_pair(
         &ctx,
         "777100",
-        "101",
-        "3",
         "3",
         "2026-01-01T00:00:00Z",
         "2026-11-05T05:11:33Z",
@@ -1142,8 +1139,6 @@ async fn three_alias_pairs_leave_one_rollable_identity_and_full_history() {
     let (c2, d2) = seed_named_pair(
         &ctx,
         "777200",
-        "102",
-        "4",
         "4",
         "2026-01-01T00:00:00Z",
         "2026-11-05T05:11:33Z",
@@ -1152,8 +1147,6 @@ async fn three_alias_pairs_leave_one_rollable_identity_and_full_history() {
     let (c3, d3) = seed_named_pair(
         &ctx,
         "777300",
-        "103",
-        "5",
         "5",
         "2026-01-01T00:00:00Z",
         "2026-11-05T05:11:33Z",
@@ -1161,7 +1154,8 @@ async fn three_alias_pairs_leave_one_rollable_identity_and_full_history() {
     .await;
 
     let conn = ctx.state.pool.get().await.unwrap();
-    for (canonical, duplicate, number) in [(c1, d1, "101"), (c2, d2, "102"), (c3, d3, "103")] {
+    for (canonical, duplicate, canonical_number) in [(c1, d1, "3"), (c2, d2, "4"), (c3, d3, "5")] {
+        let number = format!("1{canonical_number}");
         // Artificial suppression timestamp on the alias, before its creation.
         conn.execute(
             "INSERT INTO events (type, timestamp, user_id, issue_id, issue_number) \
@@ -1239,7 +1233,10 @@ async fn three_alias_pairs_leave_one_rollable_identity_and_full_history() {
     }
 
     let rating_owner: i32 = conn
-        .query_one("SELECT issue_id FROM events WHERE id = $1", &[&genuine_rating])
+        .query_one(
+            "SELECT issue_id FROM events WHERE id = $1",
+            &[&genuine_rating],
+        )
         .await
         .unwrap()
         .get(0);
@@ -1253,7 +1250,10 @@ async fn three_alias_pairs_leave_one_rollable_identity_and_full_history() {
         .await
         .unwrap()
         .get(0);
-    assert_eq!(reconciliation_rows, 3, "every alias pair keeps its audit row");
+    assert_eq!(
+        reconciliation_rows, 3,
+        "every alias pair keeps its audit row"
+    );
 
     let (status, eligible) = send(
         &ctx.state,
