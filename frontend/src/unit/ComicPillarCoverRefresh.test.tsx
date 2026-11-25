@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 
-const { searchSeriesSpy, getSeriesIssuesSpy, getIssueIdentitySpy, confirmIdentitySpy, replaceIdentitySpy, getIntelligenceSpy } =
+const { searchSeriesSpy, getSeriesIssuesSpy, getIssueIdentitySpy, confirmIdentitySpy, replaceIdentitySpy, removeIdentitySpy, getIntelligenceSpy } =
   vi.hoisted(() => ({
     searchSeriesSpy: vi.fn(),
     getSeriesIssuesSpy: vi.fn(),
@@ -13,6 +13,16 @@ const { searchSeriesSpy, getSeriesIssuesSpy, getIssueIdentitySpy, confirmIdentit
     confirmIdentitySpy: vi.fn().mockResolvedValue({} as never),
     // SAFETY: mock payload supplies only the fields this test asserts
     replaceIdentitySpy: vi.fn().mockResolvedValue({} as never),
+    removeIdentitySpy: vi.fn().mockResolvedValue({
+      issue_id: 77,
+      thread_id: 7,
+      thread_title: 'Stormwatch Vol. 1',
+      has_confirmed_identity: false,
+      comicvine_issue_id: null,
+      confirmed_mappings: [],
+      candidate_mappings: [],
+      has_unresolved: false,
+    }),
     getIntelligenceSpy: vi.fn(),
   }))
 
@@ -24,6 +34,7 @@ vi.mock('../services/api-comicvine', () => ({
     getIssueIdentity: getIssueIdentitySpy,
     confirmIdentity: confirmIdentitySpy,
     replaceIdentity: replaceIdentitySpy,
+    removeIdentity: removeIdentitySpy,
     refreshMetadata: vi.fn(),
     applyCorrection: vi.fn(),
     listCorrections: vi.fn(),
@@ -232,6 +243,54 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
 
     // Component was not remounted (container identity preserved)
     expect(container).toBeInTheDocument()
+  })
+
+  it('removing a mapping clears cached provider details even when refresh fails', async () => {
+    getIssueIdentitySpy
+      .mockResolvedValueOnce({
+        has_confirmed_identity: true,
+        comicvine_issue_id: '111',
+        confirmed_mappings: [{ comicvine_id: 111 }],
+        candidate_mappings: [],
+        has_unresolved: false,
+        issue_id: 77,
+        thread_id: 7,
+        thread_title: 'Stormwatch Vol. 1',
+      })
+      .mockResolvedValue({
+        has_confirmed_identity: false,
+        comicvine_issue_id: null,
+        confirmed_mappings: [],
+        candidate_mappings: [],
+        has_unresolved: false,
+        issue_id: 77,
+        thread_id: 7,
+        thread_title: 'Stormwatch Vol. 1',
+      })
+    getIntelligenceSpy
+      .mockResolvedValueOnce(staleIntelligence('https://images.example/stale-cover.jpg'))
+      .mockRejectedValueOnce(Object.assign(new Error('metadata refresh unavailable'), {
+        response: { status: 400 },
+      }))
+
+    render(<ComicPillar activeRatingThread={confirmedThread} onRefreshThread={vi.fn()} />)
+    expect((await screen.findByAltText('')).getAttribute('src')).toBe(
+      'https://images.example/stale-cover.jpg',
+    )
+
+    fireEvent.click(screen.getByTestId('comic-mapping-remove'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove mapping' }))
+
+    await waitFor(() => expect(removeIdentitySpy).toHaveBeenCalledWith(77))
+    await waitFor(() => expect(getIntelligenceSpy).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(
+      queryClient.getQueryData(queryKeys.comicVine.issueIntelligence(77)),
+    ).toBeNull())
+    expect(screen.queryByAltText('')).not.toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not load comic details: metadata refresh unavailable',
+    )
+    expect(await screen.findByText('Not mapped')).toBeInTheDocument()
   })
 
   it('correction to an issue with no cover shows placeholder and does not spin forever', async () => {
