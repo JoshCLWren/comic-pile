@@ -172,15 +172,6 @@ async fn issue(conn: &Conn, thread_id: i32, number: &str, position: i32, status:
     .get(0)
 }
 
-async fn frontier(conn: &Conn, thread_id: i32, issue_id: i32) {
-    conn.execute(
-        "UPDATE threads SET next_unread_issue_id = $2 WHERE id = $1",
-        &[&thread_id, &issue_id],
-    )
-    .await
-    .unwrap();
-}
-
 /// #4232 (a, b, c): strict Julix frontier, anthology single-placement, and
 /// reading the frontier exposes the correctly ordered next entry.
 ///
