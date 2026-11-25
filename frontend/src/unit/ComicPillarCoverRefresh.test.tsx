@@ -131,7 +131,10 @@ const confirmedThread = {
   last_rolled_result: null,
 }
 
-function staleIntelligence(imageUrl: string | null) {
+function staleIntelligence(
+  imageUrl: string | null,
+  creators: { name: string; roles: string[] }[] = [],
+) {
   return {
     comicvine_issue_id: 'stale',
     comicvine_url: 'https://comicvine.example/stale',
@@ -143,12 +146,15 @@ function staleIntelligence(imageUrl: string | null) {
     image_url: imageUrl,
     cover_date: '1993-01-01',
     store_date: null,
-    creators: [],
+    creators,
     story_arcs: [],
   }
 }
 
-function freshIntelligence(imageUrl: string | null) {
+function freshIntelligence(
+  imageUrl: string | null,
+  creators: { name: string; roles: string[] }[] = [],
+) {
   return {
     comicvine_issue_id: 'fresh',
     comicvine_url: 'https://comicvine.example/fresh',
@@ -160,7 +166,7 @@ function freshIntelligence(imageUrl: string | null) {
     image_url: imageUrl,
     cover_date: '1993-02-01',
     store_date: null,
-    creators: [],
+    creators,
     story_arcs: [],
   }
 }
@@ -243,6 +249,81 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
 
     // Component was not remounted (container identity preserved)
     expect(container).toBeInTheDocument()
+  })
+
+  it('clears identity A credits during remap and ignores a late A response after B renders', async () => {
+    const staleA = staleIntelligence('https://images.example/a-cover.jpg', [
+      { name: 'Writer A', roles: ['writer'] },
+    ])
+    const freshB = freshIntelligence('https://images.example/b-cover.jpg', [
+      { name: 'Writer B', roles: ['penciler'] },
+    ])
+    let resolveStaleRefresh: ((value: ReturnType<typeof staleIntelligence>) => void) | undefined
+    let resolveFreshRefresh: ((value: ReturnType<typeof freshIntelligence>) => void) | undefined
+    const staleRefresh = new Promise<ReturnType<typeof staleIntelligence>>((resolve) => {
+      resolveStaleRefresh = resolve
+    })
+    const freshRefresh = new Promise<ReturnType<typeof freshIntelligence>>((resolve) => {
+      resolveFreshRefresh = resolve
+    })
+    getIntelligenceSpy
+      .mockResolvedValueOnce(staleA)
+      .mockReturnValueOnce(staleRefresh)
+      .mockReturnValueOnce(freshRefresh)
+
+    getSeriesIssuesSpy.mockResolvedValue({
+      comicvine_volume_id: 42,
+      series_name: 'Stormwatch',
+      issues: [mockIssueWithCover],
+    })
+
+    render(<ComicPillar activeRatingThread={confirmedThread} onRefreshThread={vi.fn()} />)
+    expect(await screen.findByText('Writer A')).toBeInTheDocument()
+
+    // Start an A refetch that stays in flight while the reader remaps to B.
+    act(() => {
+      void queryClient
+        .refetchQueries({ queryKey: queryKeys.comicVine.issueIntelligence(77), exact: true })
+        .catch(() => undefined)
+    })
+    await waitFor(() => expect(getIntelligenceSpy).toHaveBeenCalledTimes(2))
+
+    fireEvent.click(await openReplaceMapping())
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    fireEvent.change(screen.getByPlaceholderText('Search series title or paste a ComicVine URL'), {
+      target: { value: 'Stormwatch' },
+    })
+    await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalledWith('Stormwatch', 10, 0))
+    fireEvent.click(await screen.findByText('Stormwatch'))
+    await waitFor(() => expect(screen.getByText('#1')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('#1'))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Identity' }))
+
+    await waitFor(() => expect(replaceIdentitySpy).toHaveBeenCalledWith(77, 99999))
+    await waitFor(() => expect(getIntelligenceSpy).toHaveBeenCalledTimes(3))
+
+    // The committed replacement must not leave A's identity-bound credits visible
+    // while B's intelligence request is still pending.
+    expect(screen.queryByText('Writer A')).not.toBeInTheDocument()
+    expect(screen.queryByText('Writer B')).not.toBeInTheDocument()
+
+    await act(async () => {
+      resolveFreshRefresh?.(freshB)
+      await Promise.resolve()
+    })
+    expect(await screen.findByText('Writer B')).toBeInTheDocument()
+    expect(screen.getByText('penciler')).toBeInTheDocument()
+
+    // A's canceled request may still settle in the transport. It must not replace B.
+    await act(async () => {
+      resolveStaleRefresh?.(staleA)
+      await Promise.resolve()
+    })
+    await waitFor(() => {
+      expect(queryClient.getQueryData(queryKeys.comicVine.issueIntelligence(77))).toEqual(freshB)
+    })
+    expect(screen.queryByText('Writer A')).not.toBeInTheDocument()
+    expect(screen.getByText('Writer B')).toBeInTheDocument()
   })
 
   it('removing a mapping clears cached provider details even when refresh fails', async () => {

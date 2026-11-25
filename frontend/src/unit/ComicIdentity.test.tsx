@@ -1676,7 +1676,7 @@ describe('ComicIdentity creator status (issue #4149)', () => {
     unmount()
   })
 
-  it('replaces A creator credits with B after a remap refetch and stops polling', async () => {
+  it('stops polling once a remapped intelligence response completes', async () => {
     const intelligence = (overrides: Partial<ComicVineIssueIntelligence> = {}) => ({
       comicvine_issue_id: '1',
       comicvine_url: null,
@@ -1718,21 +1718,18 @@ describe('ComicIdentity creator status (issue #4149)', () => {
     expect(getIntelligence).toHaveBeenCalledTimes(1)
     expect(screen.getByTestId('creator-status-fetching')).toBeInTheDocument()
 
-    // A remap invalidates the intelligence query; the bounded poller refetches
-    // and now returns the remapped intelligence B.
+    // The next intelligence response represents the remapped issue B.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS)
     })
     await flushQueryNotification()
     expect(getIntelligence).toHaveBeenCalledTimes(2)
 
-    // B's credits replace A's pending state; the fetching message is gone.
+    // B's credits replace the pending state; the fetching message is gone.
     expect(screen.getByText('Writer B')).toBeInTheDocument()
     expect(screen.queryByTestId('creator-status-fetching')).not.toBeInTheDocument()
-    expect(screen.queryByText('Writer A')).not.toBeInTheDocument()
 
-    // Once complete, the bounded poller is disarmed: a late A response cannot
-    // resurrect stale content through this component's polling.
+    // Once complete, the bounded poller is disarmed.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS * 2)
     })
