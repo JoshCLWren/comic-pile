@@ -44,12 +44,12 @@ export interface IssueToggleListApi {
   create: (
     threadId: number,
     issueRange: string,
-    options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort'; accepted_alias_issue_numbers?: string[] },
+    options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort'; accepted_alias_issue_numbers?: string[]; expected_issue_ids?: number[] },
   ) => Promise<IssueListResponse>
   previewCreate: (
     threadId: number,
     issueRange: string,
-    options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort'; accepted_alias_issue_numbers?: string[] },
+    options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort'; accepted_alias_issue_numbers?: string[]; expected_issue_ids?: number[] },
   ) => Promise<import('../../services/api-issues').IssueEditPreviewResponse>
   markRead: (issueId: number) => Promise<void>
   markUnread: (issueId: number) => Promise<void>
@@ -353,9 +353,10 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         await issuesService.reorder(threadId, normalizeIssueOrder(baseIssuesRef.current, mutation.issueIds))
         return
       case 'create': {
-        const options: { strategy?: 'safe_default' | 'numeric_resort'; accepted_alias_issue_numbers?: string[] } = {}
+        const options: { strategy?: 'safe_default' | 'numeric_resort'; accepted_alias_issue_numbers?: string[]; expected_issue_ids?: number[] } = {}
         if (mutation.strategy) options.strategy = mutation.strategy
         if (mutation.acceptedAliasIssueNumbers?.length) options.accepted_alias_issue_numbers = mutation.acceptedAliasIssueNumbers
+        if (mutation.expectedIssueIds?.length) options.expected_issue_ids = mutation.expectedIssueIds
         await issuesService.create(
           threadId,
           mutation.issueRange,
@@ -634,12 +635,16 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     if (deferred) {
       setIsPreviewing(true)
       try {
-        const response = await issuesService.previewCreate(threadId, range)
+        const expectedIssueIds = baseIssuesRef.current.map((issue) => issue.id)
+        const response = await issuesService.previewCreate(threadId, range, {
+          expected_issue_ids: expectedIssueIds,
+        })
         setPreviewState({
           range,
           response,
           selectedStrategy: 'safe_default',
           acceptedAliasIssueNumbers: [],
+          expectedIssueIds,
         })
       } catch (err: unknown) {
         console.error('[IssueToggleList] Error previewing issues:', err)
@@ -674,6 +679,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     try {
       const response = await issuesService.previewCreate(threadId, previewState.range, {
         accepted_alias_issue_numbers: nextAccepted.length > 0 ? nextAccepted : undefined,
+        expected_issue_ids: previewState.expectedIssueIds,
       })
       setPreviewState((current) => current ? {
         ...current,
@@ -703,6 +709,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       issueRange: previewState.range,
       strategy: previewState.selectedStrategy,
       acceptedAliasIssueNumbers,
+      expectedIssueIds: previewState.expectedIssueIds,
     })
     setAddRange('')
     setPreviewState(null)

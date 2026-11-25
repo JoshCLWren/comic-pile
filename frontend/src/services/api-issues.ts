@@ -144,7 +144,7 @@ export function createIssuesApi(client: HttpClient) {
     create: async (
       threadId: number,
       issueRange: string,
-      options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort'; accepted_alias_issue_numbers?: string[] }
+      options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort'; accepted_alias_issue_numbers?: string[]; expected_issue_ids?: number[] }
     ): Promise<IssueListResponse> => {
       const payload: CreateIssuesPayload = {
         issue_range: issueRange,
@@ -160,6 +160,7 @@ export function createIssuesApi(client: HttpClient) {
       }
       if (options?.strategy) payload.strategy = options.strategy
       if (options?.accepted_alias_issue_numbers?.length) payload.accepted_alias_issue_numbers = options.accepted_alias_issue_numbers
+      if (options?.expected_issue_ids) payload.expected_issue_ids = options.expected_issue_ids
 
       return client.post(`/v2/threads/${threadId}/issues`, payload)
     },
@@ -167,7 +168,7 @@ export function createIssuesApi(client: HttpClient) {
     previewCreate: async (
       threadId: number,
       issueRange: string,
-      options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort'; accepted_alias_issue_numbers?: string[] }
+      options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort'; accepted_alias_issue_numbers?: string[]; expected_issue_ids?: number[] }
     ): Promise<IssueEditPreviewResponse> => {
       const payload: CreateIssuesPayload = { issue_range: issueRange }
       if (options && 'insert_after_issue_id' in options) {
@@ -176,6 +177,7 @@ export function createIssuesApi(client: HttpClient) {
       }
       if (options?.strategy) payload.strategy = options.strategy
       if (options?.accepted_alias_issue_numbers?.length) payload.accepted_alias_issue_numbers = options.accepted_alias_issue_numbers
+      if (options?.expected_issue_ids) payload.expected_issue_ids = options.expected_issue_ids
       return client.post(`/v2/threads/${threadId}/issues/preview`, payload)
     },
 
