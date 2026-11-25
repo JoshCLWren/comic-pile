@@ -1797,7 +1797,10 @@ async fn bulk_read_undo_preserves_an_aba_sequence_after_the_operation() {
     assert_eq!(skipped, vec![issues[0] as i64]);
     // The later genuine read of issue 0 survives the stale undo.
     assert_eq!(issue_state(&conn, issues[0]).await, ("read".into(), true));
-    assert_eq!(issue_state(&conn, issues[1]).await, ("unread".into(), false));
+    assert_eq!(
+        issue_state(&conn, issues[1]).await,
+        ("unread".into(), false)
+    );
 }
 
 #[tokio::test]
@@ -1876,5 +1879,7 @@ async fn bulk_unread_undo_restores_the_recorded_read_timestamp() {
         row("active", 1, Some(issues[1]), 1, 2, "in_progress")
     );
     let history = events(&conn, user_id).await;
-    assert!(history.iter().any(|e| e.0 == "issue_read" && e.3 == Some(issues[0])));
+    assert!(history
+        .iter()
+        .any(|e| e.0 == "issue_read" && e.3 == Some(issues[0])));
 }
