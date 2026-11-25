@@ -2881,6 +2881,16 @@ mod tests {
             .expect("reconciled request");
         assert_eq!(request.get::<_, String>(0), "completed");
         assert_eq!(request.get::<_, i32>(1), 1);
+        let metadata_text: String = connection
+            .query_one(
+                "SELECT metadata_json::text FROM external_identities WHERE id = $1",
+                &[&orphan],
+            )
+            .await
+            .expect("hydrated metadata")
+            .get(0);
+        let metadata: Value = serde_json::from_str(&metadata_text).expect("hydrated JSON");
+        assert_eq!(metadata["creator_credits"][0]["name"], "Writer");
         let fresh_requests: i64 = connection
             .query_one(
                 "SELECT count(*) FROM comicvine_metadata_refresh_requests \
