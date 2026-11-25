@@ -1160,6 +1160,34 @@ async function invalidateReadingEligibility(
     refetchRollBootstrap = true,
     resetQueue = false,
   } = options
+  // An initial request with no cached data is not restarted by invalidateQueries.
+  // It may have started before the committed read and return stale blockers or
+  // progress. Cancel those requests before refetching the same projections.
+  const refreshPrefixes = [
+    queryKeys.thread.all,
+    queryKeys.issueCards.all,
+    queryKeys.queue.all,
+    queryKeys.completed.pages(),
+    queryKeys.roll.eligibleIssueIdsAll(),
+    queryKeys.roll.issueCardsAll(),
+    queryKeys.roll.dieState(),
+    queryKeys.roll.lastRead(),
+    ...(refetchRollBootstrap ? [queryKeys.roll.bootstrap()] : []),
+    queryKeys.dependencies.all,
+    queryKeys.readerContext.all,
+    queryKeys.readingPlans.all,
+    includeAuthoringLists ? queryKeys.customCBLs.all : queryKeys.customCBLs.readers(),
+    queryKeys.session.all,
+    queryKeys.activity.all,
+  ]
+  await client.cancelQueries({
+    predicate: (query) =>
+      query.state.data === undefined &&
+      query.state.fetchStatus === 'fetching' &&
+      refreshPrefixes.some((prefix) =>
+        prefix.every((part, index) => query.queryKey[index] === part),
+      ),
+  })
   await Promise.all([
     client.invalidateQueries({ queryKey: queryKeys.thread.all }),
     // Legacy read/unread and direct v2 writes change the shared card status too.
@@ -1186,6 +1214,8 @@ async function invalidateReadingEligibility(
         : { queryKey: queryKeys.roll.bootstrap(), exact: true, refetchType: 'none' },
     ),
     client.invalidateQueries({ queryKey: queryKeys.dependencies.all }),
+    // Reader context includes neighboring issues' statuses and rating counts.
+    client.invalidateQueries({ queryKey: queryKeys.readerContext.all }),
     client.invalidateQueries({ queryKey: queryKeys.readingPlans.all }),
     client.invalidateQueries({ queryKey: includeAuthoringLists ? queryKeys.customCBLs.all : queryKeys.customCBLs.readers() }),
     client.invalidateQueries({ queryKey: queryKeys.session.all }),
@@ -1250,8 +1280,8 @@ export async function applyIssueCardMutation(
       ...cached,
       issues_remaining: progress.issues_remaining,
       status: progress.status as Thread['status'],
-      last_rating: progress.last_rating ?? cached.last_rating ?? null,
-      reading_progress: progress.reading_progress ?? cached.reading_progress ?? null,
+      last_rating: progress.last_rating !== undefined ? progress.last_rating : cached.last_rating ?? null,
+      reading_progress: progress.reading_progress !== undefined ? progress.reading_progress : cached.reading_progress ?? null,
       next_unread_issue_id: progress.next_unread_issue_id ?? null,
     }
   }
