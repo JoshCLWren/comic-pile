@@ -9,38 +9,23 @@ import { issueCardsApi, type IssueCard } from '../services/issueCardsApi'
 import type { IssueListResponse } from '../types'
 import { injectModuleDoubles } from './injectModuleDoubles'
 
-<<<<<<< HEAD
 await injectModuleDoubles(await import('../pages/RollPage/components/ComicIdentity'), () => ({
-=======
-vi.mock('../pages/RollPage/components/ComicIdentity', () => ({
->>>>>>> origin/main
   ComicIdentity: ({ issueId }: { issueId: number | null | undefined }) => (
     <div data-testid="direct-read-comic-identity">{issueId}</div>
   ),
 }))
 
-<<<<<<< HEAD
 await injectModuleDoubles(await import('../hooks/useComicVineIssueIntelligence'), () => ({
-  useComicVineIssueIntelligence: () => ({
-    metadata: { image_url: 'https://comicvine.gamespot.com/a/hellboy9.jpg' },
-    isLoading: false,
-=======
-vi.mock('../hooks/useComicVineIssueIntelligence', () => ({
   useComicVineIssueIntelligence: () => ({
     metadata: { image_url: 'https://comicvine.gamespot.com/a/hellboy9.jpg' },
     isLoading: false,
     isError: false,
     error: null,
->>>>>>> origin/main
     refetch: vi.fn(),
   }),
 }))
 
-<<<<<<< HEAD
 await injectModuleDoubles(await import('../components/Tags/TagSection'), () => ({
-=======
-vi.mock('../components/Tags/TagSection', () => ({
->>>>>>> origin/main
   TagSection: ({ targetType, targetId, targetLabel }: {
     targetType: string
     targetId: number
@@ -52,11 +37,7 @@ vi.mock('../components/Tags/TagSection', () => ({
   ),
 }))
 
-<<<<<<< HEAD
 await injectModuleDoubles(await import('../components/ComicIssueCard'), async (importOriginal) => {
-=======
-vi.mock('../components/ComicIssueCard', async (importOriginal) => {
->>>>>>> origin/main
   const actual = await importOriginal<typeof import('../components/ComicIssueCard')>()
   return {
     // Keep the shared cover export: the roll-parity details render it for real.
