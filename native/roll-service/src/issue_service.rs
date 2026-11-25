@@ -1401,6 +1401,16 @@ mod tests {
     }
 
     #[test]
+    fn display_issue_number_shows_alias_only_when_distinct() {
+        assert_eq!(display_issue_number("23", None), "23");
+        assert_eq!(display_issue_number("23", Some("")), "23");
+        assert_eq!(display_issue_number("23", Some("23")), "23");
+        assert_eq!(display_issue_number("23", Some(" 23 ")), "23");
+        assert_eq!(display_issue_number("23", Some("2")), "23 (2)");
+        assert_eq!(display_issue_number("1", Some("100")), "1 (100)");
+    }
+
+    #[test]
     fn validates_status_rating_and_idempotency_without_truncating() {
         for rating in [0.5, 3.5, 5.0] {
             assert!(validate(&request(Some("read"), Some(rating))).is_ok());
