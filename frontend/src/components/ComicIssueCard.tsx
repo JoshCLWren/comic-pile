@@ -337,6 +337,7 @@ export function ComicIssueCard({
   const ratingValueId = `${baseId}-value`
   const actions = useComicIssueActions(issueId, { onMutated })
   const [editor, setEditor] = useState<{ mode: 'read' | 'edit'; draftRating: number } | null>(null)
+  const [aliasEditor, setAliasEditor] = useState<{ draft: string } | null>(null)
 
   const resolvedTitle = card?.thread_title || threadTitle
   const resolvedNumber = card?.issue_number || issueNumber
@@ -376,6 +377,17 @@ export function ComicIssueCard({
     if (actions.isPending) return
     try {
       await actions.markUnread()
+    } catch {
+      // Error renders below.
+    }
+  }
+
+  async function handleSaveAlias() {
+    if (!aliasEditor || actions.isPending) return
+    const trimmed = aliasEditor.draft.trim()
+    try {
+      await actions.updateIssueNumberAlias(trimmed === '' ? null : trimmed)
+      setAliasEditor(null)
     } catch {
       // Error renders below.
     }
