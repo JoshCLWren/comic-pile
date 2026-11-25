@@ -32,6 +32,70 @@ export interface IssueCorrectionCardsApi {
   fetchCards: (issueIds: number[]) => Promise<Array<{ issue_id: number; rating?: number | null }>>
 }
 
+interface ProjectedCorrection {
+  orderedIssues: Issue[]
+  targetIssue: Issue
+  /** Anchor handed to create; null means append at the end. */
+  createAfterIssueId: number | null
+}
+
+interface ReviewedCorrection {
+  ids: number[]
+  version: string
+}
+
+/**
+ * Project the selected insertion position onto one fresh issue list. Preview
+ * and confirmation both use this projection, so the reviewed affected set and
+ * the mutation can never disagree about where the target lands (#4655 F2/R3).
+ */
+function projectCorrection(
+  issues: Issue[],
+  targetNumber: string,
+  insertPosition: string,
+): ProjectedCorrection {
+  const existing = issues.find((issue) => issue.issue_number === targetNumber)
+  if (existing) {
+    return { orderedIssues: issues, targetIssue: existing, createAfterIssueId: null }
+  }
+
+  // SAFETY: sentinel id identifies the proposed target in the preview only.
+  const proposed = { id: -1, issue_number: targetNumber, status: 'unread' } as Issue
+  const projected = [...issues]
+  if (insertPosition === 'start') {
+    projected.unshift(proposed)
+    return { orderedIssues: projected, targetIssue: proposed, createAfterIssueId: null }
+  }
+
+  const anchorId =
+    insertPosition !== 'end' && insertPosition !== '' ? Number(insertPosition) : null
+  const anchorIndex =
+    anchorId !== null && Number.isFinite(anchorId)
+      ? projected.findIndex((issue) => issue.id === anchorId)
+      : -1
+  if (anchorIndex >= 0) {
+    projected.splice(anchorIndex + 1, 0, proposed)
+    return { orderedIssues: projected, targetIssue: proposed, createAfterIssueId: anchorId }
+  }
+
+  // A stale/missing anchor (or an explicit end choice) is projected to the end.
+  projected.push(proposed)
+  return { orderedIssues: projected, targetIssue: proposed, createAfterIssueId: null }
+}
+
+/** Fingerprint of the exact pre-mutation state the reader reviewed. */
+function correctionVersion(
+  projection: ProjectedCorrection,
+  targetNumber: string,
+  insertPosition: string,
+): string {
+  return JSON.stringify({
+    target: targetNumber,
+    insertPosition,
+    issues: projection.orderedIssues.map((issue) => [issue.id, issue.status]),
+  })
+}
+
 interface IssueCorrectionDialogProps {
   isOpen: boolean
   threadId: number
@@ -77,6 +141,7 @@ export default function IssueCorrectionDialog({
     affectedRatings: Record<number, number | null>
     willCompleteSeries: boolean
     dependentFrontier: string[]
+    version: string
   } | null>(null)
   const [lastOperation, setLastOperation] = useState<IssueReadOperationResponse | null>(null)
   const [isUndoing, setIsUndoing] = useState(false)
