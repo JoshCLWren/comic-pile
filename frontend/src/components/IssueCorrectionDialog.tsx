@@ -406,7 +406,7 @@ export default function IssueCorrectionDialog({
           </div>
         )}
 
-        <div className="flex gap-3">
+        <div className={`flex gap-3 ${pendingAliasNumber ? 'hidden' : ''}`}>
           <button
             type="button"
             onClick={onClose}

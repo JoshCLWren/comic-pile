@@ -254,6 +254,15 @@ export function ComicPillar({
           totalIssues={activeRatingThread.total_issues}
           threadTitle={activeRatingThread.title}
           onClose={() => setIsCorrectionDialogOpen(false)}
+          onOverallAliasIntent={(overallIssueNumber) => {
+            // Preferred #4652 path: an alternate overall number is added to the
+            // same owned issue while its ComicVine identity is mapped. No new
+            // owned row is created behind the reader's back.
+            mapping.openMappingDialog('confirm', {
+              overallIssueNumber,
+              expectedVersion: identityState?.identity_version,
+            })
+          }}
           onSuccess={(options) => {
             setIsCorrectionDialogOpen(false)
             if (options?.alreadyRefreshed) {

@@ -473,14 +473,15 @@ export default function ComicVineSearchDialog({
     const hasEdit = Object.keys(edit).length > 0
     try {
       if (mode === 'replace') {
-        await comicVineApi.replaceIdentity(
-          issueId,
-          targetIssue.comicvine_issue_id,
-          undefined,
-          hasEdit ? edit : undefined,
-        )
+        if (hasEdit) {
+          await comicVineApi.replaceIdentity(issueId, targetIssue.comicvine_issue_id, undefined, edit)
+        } else {
+          await comicVineApi.replaceIdentity(issueId, targetIssue.comicvine_issue_id)
+        }
+      } else if (hasEdit) {
+        await comicVineApi.confirmIdentity(issueId, targetIssue.comicvine_issue_id, edit)
       } else {
-        await comicVineApi.confirmIdentity(issueId, targetIssue.comicvine_issue_id, hasEdit ? edit : undefined)
+        await comicVineApi.confirmIdentity(issueId, targetIssue.comicvine_issue_id)
       }
       onConfirmed(targetIssue)
       // Issue #3159: confirming one issue's volume licenses sibling scope, so the
@@ -503,7 +504,7 @@ export default function ComicVineSearchDialog({
         setConfirmConflict(true)
         setError(detail || 'This comic changed since you opened it. Reload it before retrying.')
       } else {
-        setError(detail || 'Failed to confirm identity. Please try again.')
+        setError('Failed to confirm identity. Please try again.')
       }
     } finally {
       setIsConfirming(false)
