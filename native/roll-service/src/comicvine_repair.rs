@@ -2922,6 +2922,73 @@ mod tests {
         );
     }
 
+    /// #5695: a provider that keeps failing must reach a terminal "failed" state
+    /// instead of lingering in deferred forever. Three consecutive unavailable
+    /// attempts exhaust the bounded retry budget and record the real error
+    /// category, so the frontend can report "Refresh failed" rather than
+    /// leaving the reader stuck at "Creator credits queued for fetch…".
+    #[tokio::test]
+    async fn drain_reaches_terminal_failed_state_after_exhausting_retries() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_identity(&state).await;
+        seed_request(&state, identity_id, "pending", 0, "0 seconds", None).await;
+
+        // Three consecutive provider outages: the first two defer with backoff,
+        // the third (attempt >= 3) fails permanently.
+        for _ in 0..3 {
+            state
+                .recording_fake()
+                .expect("recording provider")
+                .push_ok(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    HeaderMap::new(),
+                    Bytes::new(),
+                );
+        }
+
+        let first = drain_for_test(&state).await;
+        assert_eq!(first.claimed, 1);
+        assert_eq!(first.deferred, 1);
+        assert_eq!(first.failed, 0);
+
+        let second = drain_for_test(&state).await;
+        assert_eq!(second.claimed, 1);
+        assert_eq!(second.deferred, 1);
+        assert_eq!(second.failed, 0);
+
+        let third = drain_for_test(&state).await;
+        assert_eq!(third.claimed, 1);
+        assert_eq!(third.failed, 1);
+        assert_eq!(third.deferred, 0);
+
+        let connection = db::checkout(&state).await.expect("request connection");
+        let row = connection
+            .query_one(
+                "SELECT state, attempts, last_error, next_attempt_at > now() \
+                 FROM comicvine_metadata_refresh_requests WHERE external_identity_id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("failed request");
+        assert_eq!(row.get::<_, String>(0), "failed");
+        assert_eq!(row.get::<_, i32>(1), 3);
+        assert_eq!(
+            row.get::<_, Option<String>>(2).as_deref(),
+            Some("provider_unavailable")
+        );
+        assert!(row.get::<_, bool>(3));
+        drop(Object::take(connection));
+
+        // A fourth drain must not re-claim a terminal failed row whose backoff
+        // has not yet elapsed.
+        let fourth = drain_for_test(&state).await;
+        assert_eq!(fourth.claimed, 0);
+        assert_eq!(fourth.failed, 0);
+    }
+
     /// #5592: a sparse/empty fresh roster must not overwrite previously hydrated credits.
     #[tokio::test]
     async fn drain_preserves_previously_hydrated_credits_on_sparse_refresh() {
