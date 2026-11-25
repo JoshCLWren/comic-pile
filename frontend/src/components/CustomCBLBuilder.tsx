@@ -385,6 +385,7 @@ export default function CustomCBLBuilder({
       if (error instanceof StaleReadingListUndoError) {
         setUndoPayload(null)
         setUndoBaseline(null)
+        if (selectedId && persisted) writeReadingListUndo(persisted.user_id, selectedId, null)
       }
       setUndoConfirmation(null)
       setReplaceError(messageFor(error, 'Unable to undo this Reading List replacement.'))
