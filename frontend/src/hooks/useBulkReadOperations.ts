@@ -14,6 +14,13 @@ export interface PersistedBulkReadOperation {
   operation: IssueReadOperationResponse
 }
 
+/** Named contract for the discovery hook so exported callers keep inference. */
+export interface BulkReadOperationsResult {
+  operations: PersistedBulkReadOperation[]
+  message: string | null
+  undo: (threadId: number, operationId: number) => Promise<void>
+}
+
 interface IssuesApiForDiscovery {
   getReadOperation: (operationId: number) => Promise<IssueReadOperationResponse>
   undoReadOperation: (operationId: number) => Promise<{ skipped_issue_ids: number[] }>
@@ -27,11 +34,7 @@ interface IssuesApiForDiscovery {
  */
 export function useBulkReadOperations(
   issuesApi: IssuesApiForDiscovery = defaultIssuesApi,
-): {
-  operations: PersistedBulkReadOperation[]
-  message: string | null
-  undo: (threadId: number, operationId: number) => Promise<void>
-} {
+): BulkReadOperationsResult {
   const [operations, setOperations] = useState<PersistedBulkReadOperation[]>([])
   const [message, setMessage] = useState<string | null>(null)
 

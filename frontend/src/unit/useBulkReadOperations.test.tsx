@@ -18,7 +18,9 @@ function operation(id: number): IssueReadOperationResponse {
 function fakeApi() {
   return {
     getReadOperation: vi.fn(async (id: number) => operation(id)),
-    undoReadOperation: vi.fn(async (_id: number) => ({ skipped_issue_ids: [] as number[] })),
+    undoReadOperation: vi.fn(
+      async (_id: number): Promise<{ skipped_issue_ids: number[] }> => ({ skipped_issue_ids: [] }),
+    ),
   }
 }
 
