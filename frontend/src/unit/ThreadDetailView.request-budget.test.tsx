@@ -7,10 +7,11 @@
  * the id; it now reads in parallel. The closed tag editor must not add the
  * usable-tag catalog request.
  *
+ * The owner-scoped graph health read is shared with the other reading surfaces.
  * Two deployment shapes are asserted because the legacy blocking fallback only
  * runs when the canonical evaluator reports `unavailable`:
- * - canonical available: 6 reads before, 5 after (catalog removed)
- * - Option-E off (`unavailable`): 7 reads before, 6 after (catalog removed)
+ * - canonical available: 7 reads before, 6 after (catalog removed)
+ * - Option-E off (`unavailable`): 8 reads before, 7 after (catalog removed)
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom'
@@ -86,6 +87,18 @@ function makeHandler(state: BoundaryState): Responder {
   return (call: RecordedCall) => {
     if (call.url === '/v2/reading-boundaries') {
       return boundaryBatch(state, requestedThreadIds(call))
+    }
+    if (call.url === '/v2/reading-graph') {
+      return {
+        status: 'ok',
+        cycles: [],
+        cyclic_issue_ids: [],
+        affected_lists: [],
+        affected_threads: [],
+        repairs: [],
+        unresolved_reference_count: 0,
+        frontier_audit: null,
+      }
     }
     if (call.url === '/v1/threads/42') return THREADS[42]
     if (call.url === '/v1/threads/43') return THREADS[43]
@@ -182,6 +195,7 @@ describe('Thread detail request budget', () => {
       'POST /v2/reading-boundaries': 1,
       'GET /v1/threads/42': 1,
       'GET /v1/threads/42/connected': 1,
+      'GET /v2/reading-graph': 1,
       'GET /v2/tags/effective/threads/42': 1,
       'POST /v1/threads/groups:batch': 1,
       'POST /v1/threads:getBlockingInfo': 1,
@@ -196,7 +210,7 @@ describe('Thread detail request budget', () => {
     expect(calls).toHaveLength(callCount)
   })
 
-  it('canonical available: five reads, no legacy blocking probe', async () => {
+  it('canonical available: six reads, no legacy blocking probe', async () => {
     const { calls, client } = createRequestRecorder(makeHandler('available'))
     setDefaultHttpClient(client)
 
@@ -209,6 +223,7 @@ describe('Thread detail request budget', () => {
       'POST /v2/reading-boundaries': 1,
       'GET /v1/threads/42': 1,
       'GET /v1/threads/42/connected': 1,
+      'GET /v2/reading-graph': 1,
       'GET /v2/tags/effective/threads/42': 1,
       'POST /v1/threads/groups:batch': 1,
     })
