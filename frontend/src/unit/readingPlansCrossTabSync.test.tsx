@@ -1,4 +1,4 @@
-import { act, render, renderHook, screen, waitFor } from '@testing-library/react'
+import { act, render, renderHook, screen, waitFor } from './testingLibrary'
 import { QueryClient } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -8,16 +8,17 @@ import { applyCommittedReadingPlan } from '../query/cacheEffects'
 import { notifyReadingPlansChanged, subscribeToCrossTabChanges } from '../query/crossTabDataSync'
 import { queryClient } from '../query/queryClient'
 import { continuityPlansApi } from '../services/api-continuity-plans'
+import { cast } from '../utils/cast'
 import { isObject } from '../utils/runtimeChecks'
 
-const mockList = vi.spyOn(continuityPlansApi, 'list')
-const mockUpdate = vi.spyOn(continuityPlansApi, 'update')
-const mockDelete = vi.spyOn(continuityPlansApi, 'delete')
+const mockList = vi.fn()
+const mockUpdate = vi.fn()
+const mockDelete = vi.fn()
 
 const plan = {
   id: 1,
   name: 'QA-F-Order',
-  ordering_mode: 'informational',
+  ordering_mode: 'informational' as const,
   lane_count: 1,
   step_count: 3,
   // SAFETY: this fixture declares no source paths
@@ -86,6 +87,12 @@ function renderPlansIndex() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockList.mockReset()
+  mockUpdate.mockReset()
+  mockDelete.mockReset()
+  vi.spyOn(continuityPlansApi, 'list').mockImplementation(mockList)
+  vi.spyOn(continuityPlansApi, 'update').mockImplementation(mockUpdate)
+  vi.spyOn(continuityPlansApi, 'delete').mockImplementation(mockDelete)
   FakeBroadcastChannel.reset()
   vi.stubGlobal('BroadcastChannel', FakeBroadcastChannel)
 })
