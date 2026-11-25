@@ -35,6 +35,10 @@ interface CustomCBLBuilderProps {
   initialListId?: number
   /** When true, keep the editor bound to initialListId and prevent switching lists. */
   lockListSelection?: boolean
+  /** Open the standalone list chooser even when no list has been selected. */
+  initiallyOpen?: boolean
+  /** Standalone routes own the selected list ID, including newly created lists. */
+  onListSelected?: (listId: number) => void
   disabled?: boolean
   onApplied?: (plan: ContinuityPlan) => void
   onPendingChange?: (pending: boolean) => void
@@ -70,6 +74,8 @@ export default function CustomCBLBuilder({
   planId,
   initialListId,
   lockListSelection = false,
+  initiallyOpen = false,
+  onListSelected,
   disabled = false,
   onApplied,
   onPendingChange,
@@ -86,7 +92,7 @@ export default function CustomCBLBuilder({
   const pendingProgressRevealRef = useRef<number | null>(null)
   const pendingUnreadRevealRef = useRef<number | null>(null)
   const [readerOpen, setReaderOpen] = useState(false)
-  const [open, setOpen] = useState(initialListId !== undefined)
+  const [open, setOpen] = useState(initiallyOpen || initialListId !== undefined)
   const [selectedId, setSelectedId] = useState<number | null>(initialListId ?? null)
   const [loadedListId, setLoadedListId] = useState<number | null>(null)
   const [newName, setNewName] = useState('')
@@ -186,6 +192,10 @@ export default function CustomCBLBuilder({
     mutationFn: () => customCBLApi.create({ name: newName.trim(), issue_ids: [] }),
     onSuccess: async (created) => {
       await applyCreatedCustomCBL(queryClient, created)
+      if (onListSelected) {
+        onListSelected(created.id)
+        return
+      }
       saveMutation.reset()
       setSelectedId(created.id)
       setNewName('')
@@ -632,10 +642,14 @@ export default function CustomCBLBuilder({
     setMessage(null)
   }
   const chooseList = (value: string) => {
-    if (lockListSelection) return
-    createMutation.reset()
     const next = value ? Number(value) : null
     if (next === selectedId) return
+    if (onListSelected) {
+      if (next !== null) onListSelected(next)
+      return
+    }
+    if (lockListSelection) return
+    createMutation.reset()
     // Saving can fail with a structured preview/cycle error tied to the list that
     // was submitted; switching lists must not carry that feedback onto another list.
     saveMutation.reset()
@@ -744,7 +758,7 @@ export default function CustomCBLBuilder({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 id="custom-cbl-heading" ref={customCBLHeadingRef} tabIndex={-1} className="text-sm font-black text-[var(--theme-text-primary)]">Custom CBLs</h3>
-          <p className="mt-1 text-xs text-[var(--theme-text-muted)]">Build one ordered list of real comics, choose a strict or loose reading order, add optional waits, and apply it to this Reading Plan.</p>
+          <p className="mt-1 text-xs text-[var(--theme-text-muted)]">Build one ordered list of real comics, choose a strict or loose reading order, and add optional waits.{planId ? ' Apply it to this Reading Plan when ready.' : ''}</p>
         </div>
         <button type="button" onClick={() => setOpen((value) => !value)} disabled={disabled || isPending} className="min-h-10 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)] disabled:opacity-50" aria-expanded={open}>
           {open ? 'Close custom CBLs' : 'Create or edit custom CBL'}
@@ -765,11 +779,11 @@ export default function CustomCBLBuilder({
                 aria-label="Custom CBL"
                 value={selectedId ?? ''}
                 onChange={(event) => chooseList(event.target.value)}
-                disabled={disabled || isPending || lockListSelection}
+                disabled={disabled || isPending || (lockListSelection && !onListSelected)}
                 className="mt-1 min-h-11 w-full rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 text-sm text-[var(--theme-text-primary)] disabled:opacity-50"
               >
                 {!lockListSelection && <option value="">Choose a custom CBL</option>}
-                {(listsQuery.data ?? []).map((list) => <option key={list.id} value={list.id}>{list.name} · {list.issue_count} issues · {list.mode}</option>)}
+                {(listsQuery.data ?? []).map((list) => <option key={list.id} value={list.id}>{list.name} · {list.issue_count} issues · {list.mode}{onListSelected ? ` · #${list.id}` : ''}</option>)}
               </select>
             </label>
           )}
