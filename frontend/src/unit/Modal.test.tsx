@@ -124,6 +124,65 @@ it('wraps focus in both tab directions and restores the trigger focus', async ()
   trigger.remove()
 })
 
+it('blocks dismissal and contains focus while close is disabled', () => {
+  const onClose = vi.fn()
+  const { rerender } = render(
+    <Modal isOpen title="Pending" onClose={onClose}>
+      <button type="button">Action</button>
+    </Modal>,
+  )
+  screen.getByRole('button', { name: 'Action' }).focus()
+
+  rerender(
+    <Modal isOpen title="Pending" onClose={onClose} closeDisabled>
+      <button type="button" disabled>Action</button>
+    </Modal>,
+  )
+
+  const dialog = screen.getByRole('dialog', { name: 'Pending' })
+  expect(dialog).toHaveFocus()
+  expect(screen.getByRole('button', { name: /close modal/i })).toBeDisabled()
+  fireEvent.keyDown(document, { key: 'Escape' })
+  const backdrop = document.querySelector('[data-overlay-root="true"] [aria-hidden="true"]')
+  if (!backdrop) throw new Error('Backdrop not found')
+  fireEvent.click(backdrop)
+  expect(onClose).not.toHaveBeenCalled()
+
+  rerender(
+    <Modal isOpen title="Pending" onClose={onClose}>
+      <button type="button">Action</button>
+    </Modal>,
+  )
+  expect(dialog).toHaveFocus()
+  fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
+  expect(screen.getByRole('button', { name: 'Action' })).toHaveFocus()
+})
+
+it('restores focus to an explicit completion target when the trigger is gone', () => {
+  const trigger = document.createElement('button')
+  const completionTarget = document.createElement('button')
+  trigger.textContent = 'Trigger'
+  completionTarget.textContent = 'Reading Lists'
+  document.body.append(trigger, completionTarget)
+  trigger.focus()
+
+  const { unmount } = render(
+    <Modal
+      isOpen
+      title="Deleted"
+      onClose={() => {}}
+      returnFocusRef={{ current: completionTarget }}
+    >
+      <button type="button">Action</button>
+    </Modal>,
+  )
+  unmount()
+
+  expect(completionTarget).toHaveFocus()
+  trigger.remove()
+  completionTarget.remove()
+})
+
 it('keeps the root lock until overlapping modals have both closed', () => {
   const root = document.createElement('div')
   root.id = 'root'

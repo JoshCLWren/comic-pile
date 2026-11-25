@@ -743,6 +743,52 @@ it('lists a circular dependency once instead of under both directions (#3239)', 
   expect(screen.getByRole('link', { name: 'Open Sequel' })).toHaveAttribute('href', '/thread/4')
 })
 
+it('states a circular dependency as the blocker when only cycle blockers exist (#3518)', async () => {
+  vi.mocked(readingBoundariesApi.batch).mockResolvedValue({
+    evaluator: 'enabled',
+    threads: { 1: {
+      thread_id: 1,
+      state: 'blocked',
+      summary: 'Saga #2 is blocked by an active reading rule.',
+      blockers: [{
+        kind: 'reading_cycle',
+        origin: 'reader_prerequisite',
+        reason: 'Blocked by a dependency cycle.',
+        waiting_on: [],
+        editor: null,
+      }],
+    } },
+  })
+  mockedConnectedThreads.mockResolvedValue({
+    thread_id: 1,
+    connected_threads: [
+      { thread_id: 9, title: 'Magneto Rex', connection_type: 'blocks & blocked_by', dependency_id: 11, issue_number: '42', is_circular: true },
+    ],
+  })
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+
+  expect(screen.getByRole('heading', { name: /Circular Dependencies/ })).toBeInTheDocument()
+  expect(screen.getByText('Blocked by a dependency cycle.')).toBeInTheDocument()
+  expect(screen.getByText(/Blocked by the circular dependency listed above/)).toBeInTheDocument()
+  expect(screen.queryByText('No recorded incoming prerequisites')).not.toBeInTheDocument()
+})
+
+it('does not call a recorded cycle an active blocker when the canonical evaluator is available', async () => {
+  mockedConnectedThreads.mockResolvedValue({
+    thread_id: 1,
+    connected_threads: [
+      { thread_id: 9, title: 'Magneto Rex', connection_type: 'blocks & blocked_by', dependency_id: 11, issue_number: '42', is_circular: true },
+    ],
+  })
+  renderPage()
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+
+  expect(screen.getByRole('heading', { name: /Circular Dependencies/ })).toBeInTheDocument()
+  expect(screen.queryByText(/Blocked by the circular dependency listed above/)).not.toBeInTheDocument()
+  expect(screen.getByText('No recorded incoming prerequisites')).toBeInTheDocument()
+})
+
 it('passes onIssueChanged callback to IssueToggleList', async () => {
   vi.mocked(issuesApi.list).mockResolvedValue({
     issues: [

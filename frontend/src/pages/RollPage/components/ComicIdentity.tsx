@@ -58,7 +58,7 @@ function ArrowTopRightOnSquareIcon({ className }: { className?: string }) {
 }
 
 export function ComicIdentity({ issueId }: ComicIdentityProps) {
-  const { metadata, isLoading, refetch } = useComicVineIssueIntelligence(issueId)
+  const { metadata, isLoading, isError, error, refetch } = useComicVineIssueIntelligence(issueId)
   const storyArcCards = useIssueCards(metadata?.story_arcs.flatMap((arc) => arc.related_issues.flatMap((related) => related.comicpile_matches.map((match) => match.issue_id))) ?? [], { enabled: !isLoading })
   const cardsByIssue = indexIssueCards(storyArcCards.data)
   const [coverRatio, setCoverRatio] = useState<number | null>(null)
@@ -196,7 +196,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
   const summaries = creatorSummaries?.summaries ?? {}
   const coverage = creatorSummaries?.coverage ?? null
 
-  if (!issueId || (!isLoading && !metadata)) return null
+  if (!issueId) return null
   if (isLoading) {
     return (
       <div
@@ -208,6 +208,22 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
         className="relative mx-auto overflow-hidden rounded-xl bg-white/5 animate-pulse"
         style={{ ...coverStyle, ...coverFrameBorder }}
       />
+    )
+  }
+  if (isError) {
+    return (
+      <div role="alert" className="surface-panel space-y-2 rounded-xl p-3 text-sm">
+        <p className="text-[var(--theme-error)]">
+          Could not load comic details{error ? `: ${error.message}` : '.'}
+        </p>
+        <button
+          type="button"
+          onClick={() => void refetch()}
+          className="min-h-11 rounded-lg px-3 font-bold text-[var(--theme-primary-action)] hover:underline"
+        >
+          Retry comic details
+        </button>
+      </div>
     )
   }
   if (!metadata) return null
