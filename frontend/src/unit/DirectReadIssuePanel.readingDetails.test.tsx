@@ -8,6 +8,7 @@ import { comicVineApi, type ComicVineIssueIntelligence } from '../services/api-c
 import { issueCardsApi, type IssueCard } from '../services/issueCardsApi'
 import { tagsApi, type EffectiveTagsResponse, type Tag } from '../services/api-tags'
 import type { Issue } from '../types'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 // The action card has its own suite; this suite proves the reading surface
 // renders the post-roll provider detail and tags for the exact selected issue.
