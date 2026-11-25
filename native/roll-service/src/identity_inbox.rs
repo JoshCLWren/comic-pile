@@ -1397,7 +1397,8 @@ mod tests {
         // With no candidates, reasons remain actionable even without evidence.
         let no_candidates = why_stopped("unresolved", &empty, 0);
         assert!(no_candidates.contains("No candidates found"));
-        assert!(no_candidates.to_lowercase().contains("search by a different name"));
+        assert!(no_candidates.to_lowercase().contains("different name"));
+        assert!(no_candidates.to_lowercase().contains("url"));
         assert_eq!(why_stopped("candidate", &with_reason, 0), "ambiguous title");
     }
 

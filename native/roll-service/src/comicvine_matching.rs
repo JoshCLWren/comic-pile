@@ -268,15 +268,22 @@ fn parse_numeric(value: &str) -> Option<String> {
         return None;
     }
     if s.chars().all(|c| c.is_ascii_digit()) {
-        // Preserve numeric identity but drop insignificant leading zeros.
         let trimmed = s.trim_start_matches('0');
         return Some(if trimmed.is_empty() { "0".to_string() } else { trimmed.to_string() });
     }
     if let Some((a, b)) = s.split_once('.') {
-        if !a.is_empty() && !b.is_empty() && a.chars().all(|c| c.is_ascii_digit()) && b.chars().all(|c| c.is_ascii_digit()) {
+        if !a.is_empty()
+            && !b.is_empty()
+            && a.chars().all(|c| c.is_ascii_digit())
+            && b.chars().all(|c| c.is_ascii_digit())
+        {
             let a_trim = a.trim_start_matches('0');
             let a_norm = if a_trim.is_empty() { "0" } else { a_trim };
-            return Some(format!("{a_norm}.{}", b.trim_end_matches('0').trim_end_matches('.')));
+            let b_trim = b.trim_end_matches('0');
+            if b_trim.is_empty() {
+                return Some(a_norm.to_string());
+            }
+            return Some(format!("{a_norm}.{b_trim}"));
         }
     }
     None
@@ -383,6 +390,14 @@ pub fn compare_issue_labels(local: &str, provider: &str) -> LabelMatch {
         (LabelKind::Fraction { numerator: an, denominator: ad }, LabelKind::Fraction { numerator: bn, denominator: bd }) => {
             if an * bd == bn * ad { LabelMatch::Equivalent } else { LabelMatch::None }
         }
+        (LabelKind::Fraction { numerator, denominator }, LabelKind::Decimal { value })
+        | (LabelKind::Decimal { value }, LabelKind::Fraction { numerator, denominator }) => {
+            if decimal_matches_fraction(value, *numerator, *denominator) {
+                LabelMatch::Equivalent
+            } else {
+                LabelMatch::None
+            }
+        }
         (LabelKind::Annual { value: a }, LabelKind::Annual { value: b })
         | (LabelKind::Special { value: a }, LabelKind::Special { value: b }) => {
             if a == b { LabelMatch::Exact } else { LabelMatch::None }
@@ -407,6 +422,22 @@ fn normalize_decimal(value: &str) -> String {
     } else {
         parse_numeric(value).unwrap_or_else(|| value.to_string())
     }
+}
+
+fn decimal_matches_fraction(value: &str, numerator: u32, denominator: u32) -> bool {
+    let Some((int_part, frac_part)) = normalize_decimal(value).split_once('.').map(|(a, b)| (a.to_string(), b.to_string())) else {
+        // integer decimal like "1" - only matches n/d if exact
+        if let Ok(int_val) = normalize_decimal(value).parse::<i64>() {
+            return int_val * denominator as i64 == numerator as i64;
+        }
+        return false;
+    };
+    // Compare value == numerator/denominator by cross-multiplying with decimal scale.
+    let scale = 10_i64.pow(frac_part.len() as u32);
+    let Ok(int_val) = int_part.parse::<i64>() else { return false };
+    let Ok(frac_val) = frac_part.parse::<i64>() else { return false };
+    let scaled = int_val.saturating_mul(scale).saturating_add(frac_val);
+    scaled.saturating_mul(denominator as i64) == (numerator as i64).saturating_mul(scale)
 }
 
 fn normalized_publisher(value: &str) -> String {
@@ -508,10 +539,14 @@ pub fn discover_volume_candidates(issue: &MatchIssue, provider_issues: &[Provide
             continue;
         }
         // If only issue label matched but title/publisher/year/hints gave nothing,
-        // keep it only as a weak candidate.
+        // keep it only when there is at least some series-title signal.
         if score <= 0.0 && has_issue_label_evidence {
-            score = 0.05;
-            evidence.push("weak candidate: issue label exists but series evidence is weak".to_string());
+            if best_title >= 0.35 {
+                score = 0.05;
+                evidence.push("weak candidate: issue label exists but series evidence is weak".to_string());
+            } else {
+                continue;
+            }
         }
 
         out.push(VolumeCandidate {
@@ -703,8 +738,9 @@ mod tests {
     #[test]
     fn normalizes_variant_issue_labels() {
         assert_eq!(compare_issue_labels("1.MU", "1.MU"), LabelMatch::Exact);
-        assert_eq!(compare_issue_labels("1", "1.0"), LabelMatch::Equivalent);
-        assert_eq!(compare_issue_labels("½", "1/2"), LabelMatch::Equivalent);
+        assert_eq!(compare_issue_labels("1", "1.0"), LabelMatch::Exact);
+        assert_eq!(compare_issue_labels("½", "1/2"), LabelMatch::Exact);
+        assert_eq!(compare_issue_labels("½", "0.5"), LabelMatch::Equivalent);
         assert_eq!(compare_issue_labels("Annual 1", "annual #1"), LabelMatch::Exact);
         assert_eq!(compare_issue_labels("Special", "special"), LabelMatch::Exact);
     }
