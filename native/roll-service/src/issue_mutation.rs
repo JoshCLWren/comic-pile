@@ -808,9 +808,7 @@ fn describe_effect(
         Some(before) if before == after_position => {
             format!("kept #{number} at position {after_position}")
         }
-        Some(before) => format!(
-            "moved #{number} from position {before} to {after_position}"
-        ),
+        Some(before) => format!("moved #{number} from position {before} to {after_position}"),
         None => format!("repositioned #{number} to position {after_position}"),
     };
     if is_duplicate {
@@ -884,11 +882,7 @@ fn build_after_items(
         .enumerate()
         .map(|(index, (id, number))| {
             let is_new = *id == 0;
-            let meta = if is_new {
-                None
-            } else {
-                metadata.get(id)
-            };
+            let meta = if is_new { None } else { metadata.get(id) };
             let after_position = index as i32 + 1;
             let before_position = if is_new {
                 None
@@ -1243,14 +1237,19 @@ mod tests {
             describe_effect("130", false, Some(5), 9, false),
             "moved #130 from position 5 to 9"
         );
-        assert!(describe_effect("130", false, Some(5), 9, true)
-            .contains("possible physical duplicate"));
+        assert!(
+            describe_effect("130", false, Some(5), 9, true).contains("possible physical duplicate")
+        );
     }
 
     #[test]
     fn preview_rows_carry_series_lists_frontier_and_effects() {
         let existing = vec![(7, "129".to_string(), 1), (8, "140".to_string(), 2)];
-        let merged = vec![(7, "129".to_string()), (0, "101".to_string()), (8, "140".to_string())];
+        let merged = vec![
+            (7, "129".to_string()),
+            (0, "101".to_string()),
+            (8, "140".to_string()),
+        ];
         let mut metadata = BTreeMap::new();
         metadata.insert(
             7,

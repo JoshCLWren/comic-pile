@@ -249,3 +249,235 @@ async fn create_preserves_non_monotonic_order_and_preview_reports_resort_cycle()
     expected.push("102".into());
     assert_eq!(got, expected);
 }
+
+async fn issue_order(state: &Arc<AppState>, thread_id: i32) -> Vec<String> {
+    state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query(
+            "SELECT issue_number FROM issues WHERE thread_id=$1 ORDER BY position, id",
+            &[&thread_id],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| row.get::<_, String>(0))
+        .collect()
+}
+
+async fn events_count(state: &Arc<AppState>, thread_id: i32) -> i64 {
+    state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one(
+            "SELECT count(*) FROM events WHERE thread_id=$1 AND type='issues_created'",
+            &[&thread_id],
+        )
+        .await
+        .unwrap()
+        .get::<_, i64>(0)
+}
+
+#[tokio::test]
+async fn explicit_numeric_resort_commit_reorders_existing_numbers() {
+    let (state, token, csrf, user_id, _guard) = setup_user("bprd-4654-resort").await;
+    let thread_id = seed_thread(&state, user_id, "Resort series").await;
+    for (pos, num) in ["129", "140", "130"].iter().enumerate() {
+        seed_issue(&state, thread_id, num, pos as i32 + 1).await;
+    }
+
+    let preview = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/threads/{thread_id}/issues/preview"),
+            &token,
+            &csrf,
+            json!({"issue_range": "101"}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(preview.status(), StatusCode::OK);
+    let bytes = to_bytes(preview.into_body(), 256 * 1024).await.unwrap();
+    let body: Value = serde_json::from_slice(&bytes).unwrap();
+    assert!(
+        body["numeric_resort_outcome"]["can_commit"]
+            .as_bool()
+            .unwrap(),
+        "numeric resort should be committable without a strict-list constraint: {body}"
+    );
+
+    let created = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/threads/{thread_id}/issues"),
+            &token,
+            &csrf,
+            json!({"issue_range": "101", "strategy": "numeric_resort"}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(created.status(), StatusCode::CREATED);
+    assert_eq!(
+        issue_order(&state, thread_id).await,
+        vec!["101", "129", "130", "140"]
+    );
+}
+
+#[tokio::test]
+async fn preview_cancel_leaves_thread_unchanged() {
+    let (state, token, csrf, user_id, _guard) = setup_user("bprd-4654-cancel").await;
+    let thread_id = seed_thread(&state, user_id, "Cancel series").await;
+    for (pos, num) in ["129", "140", "130"].iter().enumerate() {
+        seed_issue(&state, thread_id, num, pos as i32 + 1).await;
+    }
+    let before = issue_order(&state, thread_id).await;
+    let events_before = events_count(&state, thread_id).await;
+
+    // A preview alone is a cancel: the reader closes without confirming.
+    let preview = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/threads/{thread_id}/issues/preview"),
+            &token,
+            &csrf,
+            json!({"issue_range": "101-102"}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(preview.status(), StatusCode::OK);
+
+    assert_eq!(issue_order(&state, thread_id).await, before);
+    assert_eq!(events_count(&state, thread_id).await, events_before);
+}
+
+#[tokio::test]
+async fn foreign_reader_cannot_preview_or_create_thread() {
+    let (state, token, csrf, user_id, _guard) = setup_user("bprd-4654-owner").await;
+    let thread_id = seed_thread(&state, user_id, "Private series").await;
+    seed_issue(&state, thread_id, "1", 1).await;
+    let (foreign_token, foreign_csrf, _) = register_user(
+        &state,
+        &format!("foreign-{}-{}", std::process::id(), unique_suffix()),
+    )
+    .await;
+
+    let preview = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/threads/{thread_id}/issues/preview"),
+            &foreign_token,
+            &foreign_csrf,
+            json!({"issue_range": "2"}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(preview.status(), StatusCode::NOT_FOUND);
+
+    let create = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/threads/{thread_id}/issues"),
+            &foreign_token,
+            &foreign_csrf,
+            json!({"issue_range": "2"}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(create.status(), StatusCode::NOT_FOUND);
+    assert_eq!(issue_order(&state, thread_id).await, vec!["1"]);
+
+    // The owner still sees the unchanged thread.
+    let _ = (token, csrf);
+}
+
+#[tokio::test]
+async fn failed_resort_commit_then_safe_retry_preserves_state() {
+    let (state, token, csrf, user_id, _guard) = setup_user("bprd-4654-retry").await;
+    let thread_id = seed_thread(&state, user_id, "Retry series").await;
+    let ids = vec![
+        seed_issue(&state, thread_id, "129", 1).await,
+        seed_issue(&state, thread_id, "140", 2).await,
+        seed_issue(&state, thread_id, "130", 3).await,
+    ];
+    seed_strict_list(&state, user_id, "Authored order", &ids).await;
+    let before = issue_order(&state, thread_id).await;
+    let events_before = events_count(&state, thread_id).await;
+
+    let failed = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/threads/{thread_id}/issues"),
+            &token,
+            &csrf,
+            json!({"issue_range": "101", "strategy": "numeric_resort"}),
+        ))
+        .await
+        .unwrap();
+    assert!(
+        !failed.status().is_success(),
+        "resort against a strict authored order must be rejected atomically"
+    );
+    assert_eq!(issue_order(&state, thread_id).await, before);
+    assert_eq!(events_count(&state, thread_id).await, events_before);
+
+    // Retry with the safe default; order survives and the new issue is appended.
+    let retried = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/threads/{thread_id}/issues"),
+            &token,
+            &csrf,
+            json!({"issue_range": "101", "strategy": "safe_default"}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(retried.status(), StatusCode::CREATED);
+    assert_eq!(
+        issue_order(&state, thread_id).await,
+        vec!["129", "140", "130", "101"]
+    );
+}
+
+#[tokio::test]
+async fn concurrent_sibling_previews_do_not_corrupt_thread_state() {
+    let (state, token, csrf, user_id, _guard) = setup_user("bprd-4654-concurrent").await;
+    let thread_id = seed_thread(&state, user_id, "Concurrent series").await;
+    for (pos, num) in ["129", "140", "130"].iter().enumerate() {
+        seed_issue(&state, thread_id, num, pos as i32 + 1).await;
+    }
+    let before = issue_order(&state, thread_id).await;
+
+    let (first, second) = tokio::join!(
+        async {
+            router(state.clone())
+                .oneshot(authed(
+                    "POST",
+                    &format!("/api/v2/threads/{thread_id}/issues/preview"),
+                    &token,
+                    &csrf,
+                    json!({"issue_range": "101"}),
+                ))
+                .await
+                .unwrap()
+        },
+        async {
+            router(state.clone())
+                .oneshot(authed(
+                    "POST",
+                    &format!("/api/v2/threads/{thread_id}/issues/preview"),
+                    &token,
+                    &csrf,
+                    json!({"issue_range": "102"}),
+                ))
+                .await
+                .unwrap()
+        },
+    );
+    assert_eq!(first.status(), StatusCode::OK);
+    assert_eq!(second.status(), StatusCode::OK);
+    assert_eq!(issue_order(&state, thread_id).await, before);
+}
