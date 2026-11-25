@@ -55,6 +55,7 @@ const renderDialog = (props: Partial<Parameters<typeof IssueCorrectionDialog>[0]
       onClose={onClose}
       onSuccess={onSuccess}
       issuesApi={issuesApi}
+      dependenciesApi={{ listForThread: vi.fn().mockResolvedValue({ issues: [] }) }}
       {...props}
     />
   )
@@ -79,6 +80,7 @@ describe('IssueCorrectionDialog', () => {
       issue({ id: 3, issue_number: '2' }),
     ]
     list
+      .mockResolvedValueOnce(listResponse(issues))
       .mockResolvedValueOnce(listResponse(issues))
       .mockResolvedValueOnce(listResponse(issues))
 
@@ -110,6 +112,7 @@ describe('IssueCorrectionDialog', () => {
 
     list
       .mockResolvedValueOnce(listResponse(initialIssues))
+      .mockResolvedValueOnce(listResponse(initialIssues))
       .mockResolvedValueOnce(listResponse(updatedIssues))
     create.mockResolvedValueOnce(listResponse([createdIssue]))
 
@@ -120,6 +123,8 @@ describe('IssueCorrectionDialog', () => {
     await userEvent.type(input, 'Annual 1')
     await userEvent.selectOptions(screen.getByLabelText(/place new issue/i), '1')
     await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+    await screen.findByTestId('bulk-read-preview')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
 
     await waitFor(() => {
       expect(create).toHaveBeenCalledWith(42, 'Annual 1', {
