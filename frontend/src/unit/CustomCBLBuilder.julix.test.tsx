@@ -438,7 +438,7 @@ describe('CustomCBLBuilder Julix 466-entry regression', () => {
     render(<MemoryRouter><ReadingBoundaryExplanation compact explanation={explanation} /></MemoryRouter>)
 
     expect(screen.getByRole('link', {
-      name: `Open ${waitingOn.label.replace(/#/, ' issue #')}`,
+      name: `Open ${waitingOn.thread_title} issue #${waitingOn.issue_number}`,
     })).toHaveAttribute('href', `/thread/${waitingOn.thread_id}?issue=${waitingOn.issue_id}#issue-${waitingOn.issue_id}`)
     expect(screen.getByRole('link', { name: `Edit ${julixList.name}` })).toHaveAttribute('href', `/reading-lists/${julixList.id}`)
     expect(screen.queryByText(/rating/i)).not.toBeInTheDocument()
