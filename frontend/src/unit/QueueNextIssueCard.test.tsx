@@ -25,11 +25,7 @@ await injectModuleDoubles(await import('../hooks/useComicVineIssueIntelligence')
   }),
 }))
 
-<<<<<<< HEAD
 await injectModuleDoubles(await import('../components/Tags/TagSection'), () => ({
-=======
-vi.mock('../components/Tags/TagSection', () => ({
->>>>>>> origin/main
   TagSection: ({ targetType, targetId, targetLabel }: {
     targetType: string
     targetId: number
