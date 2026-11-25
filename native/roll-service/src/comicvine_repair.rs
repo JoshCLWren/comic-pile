@@ -2954,10 +2954,35 @@ mod tests {
         assert_eq!(first.deferred, 1);
         assert_eq!(first.failed, 0);
 
+        // Make the deferred retry due before the next drain.
+        let connection = db::checkout(&state).await.expect("request connection");
+        connection
+            .execute(
+                "UPDATE comicvine_metadata_refresh_requests \
+                 SET next_attempt_at = now() - interval '1 second' \
+                 WHERE external_identity_id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("make first retry due");
+        drop(Object::take(connection));
+
         let second = drain_for_test(&state).await;
         assert_eq!(second.claimed, 1);
         assert_eq!(second.deferred, 1);
         assert_eq!(second.failed, 0);
+
+        connection = db::checkout(&state).await.expect("request connection");
+        connection
+            .execute(
+                "UPDATE comicvine_metadata_refresh_requests \
+                 SET next_attempt_at = now() - interval '1 second' \
+                 WHERE external_identity_id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("make second retry due");
+        drop(Object::take(connection));
 
         let third = drain_for_test(&state).await;
         assert_eq!(third.claimed, 1);
