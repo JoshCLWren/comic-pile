@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { comicVineApi } from '../services/api-comicvine'
-import type { ComicVineIssueCandidate, IssueIdentityResponse } from '../services/api-comicvine'
+import type {
+  ComicVineIssueCandidate,
+  IssueIdentityEdit,
+  IssueIdentityResponse,
+} from '../services/api-comicvine'
 import { queryClient } from '../query/queryClient'
 import {
   applyComicVineCorrectionOptimistically,
@@ -55,7 +59,9 @@ export interface UseComicIssueMapping {
   fetchIdentity: () => Promise<void>
   searchMode: 'confirm' | 'replace'
   isSearchDialogOpen: boolean
-  openMappingDialog: (mode?: 'confirm' | 'replace') => void
+  /** Alias/version intent captured when the dialog was opened (#4652). */
+  mappingEdit: IssueIdentityEdit | null
+  openMappingDialog: (mode?: 'confirm' | 'replace', edit?: IssueIdentityEdit) => void
   closeSearchDialog: () => void
   handleIdentityConfirmed: (selected?: ComicVineIssueCandidate | null) => Promise<void>
   handleSiblingsMapped: (confirmedIssueIds: number[]) => Promise<void>
@@ -106,6 +112,7 @@ export function useComicIssueMapping({
   const [identityError, setIdentityError] = useState(false)
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false)
   const [searchMode, setSearchMode] = useState<'confirm' | 'replace'>('confirm')
+  const [mappingEdit, setMappingEdit] = useState<IssueIdentityEdit | null>(null)
   const [isRemoveDialogOpen, setIsRemoveDialogOpen] = useState(false)
   const [isRemovingMapping, setIsRemovingMapping] = useState(false)
   const [removeMappingError, setRemoveMappingError] = useState<string | null>(null)
@@ -197,8 +204,12 @@ export function useComicIssueMapping({
     [issueId],
   )
 
-  const openMappingDialog = useCallback((mode: 'confirm' | 'replace' = 'confirm') => {
+  const openMappingDialog = useCallback((
+    mode: 'confirm' | 'replace' = 'confirm',
+    edit: IssueIdentityEdit = {},
+  ) => {
     setSearchMode(mode)
+    setMappingEdit(Object.keys(edit).length > 0 ? edit : null)
     setIsSearchDialogOpen(true)
   }, [])
 
@@ -260,6 +271,7 @@ export function useComicIssueMapping({
     fetchIdentity,
     searchMode,
     isSearchDialogOpen,
+    mappingEdit,
     openMappingDialog,
     closeSearchDialog,
     handleIdentityConfirmed,
