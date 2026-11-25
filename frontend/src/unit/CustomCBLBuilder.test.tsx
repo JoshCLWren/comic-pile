@@ -1112,7 +1112,7 @@ describe('CustomCBLBuilder', () => {
     )
     expect(await screen.findByRole('status')).toHaveTextContent('Replaced this Reading List')
 
-    await user.click(screen.getByRole('button', { name: 'Undo last replacement' }))
+    await user.click(screen.getByRole('button', { name: 'Undo last save' }))
 
     await waitFor(() =>
       expect(mocks.update).toHaveBeenLastCalledWith(9, {
@@ -1344,14 +1344,14 @@ describe('CustomCBLBuilder', () => {
     await user.click(screen.getByRole('button', { name: 'Find CBLs' }))
     await user.click(await screen.findByRole('button', { name: /Global Starman CBL/ }))
     await user.click(await screen.findByTestId('confirm-replace'))
-    expect(await screen.findByRole('button', { name: 'Undo last replacement' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Undo last save' })).toBeInTheDocument()
 
     // A later save invalidates the replacement snapshot instead of letting
     // Undo silently erase it.
     await user.click(screen.getByRole('button', { name: 'Move All-Star Comics #1 earlier' }))
     await user.click(screen.getByRole('button', { name: 'Save custom CBL' }))
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Undo last replacement' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Undo last save' })).not.toBeInTheDocument()
     })
   })
 
@@ -1394,12 +1394,12 @@ describe('CustomCBLBuilder', () => {
     await user.click(screen.getByRole('button', { name: 'Find CBLs' }))
     await user.click(await screen.findByRole('button', { name: /Global Starman CBL/ }))
     await user.click(await screen.findByTestId('confirm-replace'))
-    await user.click(await screen.findByRole('button', { name: 'Undo last replacement' }))
+    await user.click(await screen.findByRole('button', { name: 'Undo last save' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Undo is no longer available')
     expect(mocks.update).toHaveBeenCalledTimes(1)
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Undo last replacement' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Undo last save' })).not.toBeInTheDocument()
     })
   })
 
@@ -1454,7 +1454,7 @@ describe('CustomCBLBuilder', () => {
     await user.click(screen.getByRole('button', { name: 'Find CBLs' }))
     await user.click(await screen.findByRole('button', { name: /Global Starman CBL/ }))
     await user.click(await screen.findByTestId('confirm-replace'))
-    await user.click(await screen.findByRole('button', { name: 'Undo last replacement' }))
+    await user.click(await screen.findByRole('button', { name: 'Undo last save' }))
 
     await waitFor(() => {
       expect(mocks.update).toHaveBeenLastCalledWith(9, {
@@ -1624,7 +1624,7 @@ describe('CustomCBLBuilder', () => {
     fireEvent.click(screen.getByTestId('confirm-replace'))
     await screen.findByText(/Replaced this Reading List/)
     mocks.get.mockResolvedValue(replaced)
-    fireEvent.click(screen.getByRole('button', { name: 'Undo last replacement' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Undo last save' }))
     const dialog = await screen.findByRole('dialog', { name: 'Confirm undo waiting changes' })
     expect(dialog).toHaveTextContent('All-Star Comics #1 now waits on Starman #55.')
     expect(mocks.update).toHaveBeenCalledTimes(2)
@@ -1633,7 +1633,7 @@ describe('CustomCBLBuilder', () => {
     expect(mocks.update).toHaveBeenLastCalledWith(9, expect.objectContaining({
       issue_ids: [26360, 30001], confirmed_predecessor_changes: [waitingChange],
     }))
-    expect(screen.queryByRole('button', { name: 'Undo last replacement' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Undo last save' })).not.toBeInTheDocument()
   })
 
   it('cancels an Undo confirmation without discarding its retryable snapshot', async () => {
@@ -1643,12 +1643,12 @@ describe('CustomCBLBuilder', () => {
     fireEvent.click(screen.getByTestId('confirm-replace'))
     await screen.findByText(/Replaced this Reading List/)
     mocks.get.mockResolvedValue(replaced)
-    fireEvent.click(screen.getByRole('button', { name: 'Undo last replacement' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Undo last save' }))
     await screen.findByRole('dialog', { name: 'Confirm undo waiting changes' })
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(mocks.update).toHaveBeenCalledTimes(2)
-    expect(screen.getByRole('button', { name: 'Undo last replacement' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Undo last save' })).toBeEnabled()
   })
 
   it('retains Undo after a transient write failure so the reader can retry', async () => {
@@ -1659,9 +1659,9 @@ describe('CustomCBLBuilder', () => {
     fireEvent.click(screen.getByTestId('confirm-replace'))
     await screen.findByText(/Replaced this Reading List/)
     mocks.get.mockResolvedValue(replaced)
-    fireEvent.click(screen.getByRole('button', { name: 'Undo last replacement' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Undo last save' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Connection lost')
-    fireEvent.click(screen.getByRole('button', { name: 'Undo last replacement' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Undo last save' }))
     await screen.findByText(/Restored the previous list membership/)
     expect(mocks.update).toHaveBeenCalledTimes(3)
   })
