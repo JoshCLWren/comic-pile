@@ -1080,18 +1080,21 @@ pub async fn undo_issue_read_operation(
         }
     };
 
-    // Collect all affected issue ids so a single query can detect any read/unread
-    // event recorded after this operation (concurrent later actions must be
-    // preserved, including read -> unread -> read ABA sequences).
+    // Preserve later genuine reads, rating corrections and explicit issue saves,
+    // not just read/unread markers. The direct read/rate endpoint records "rate"
+    // for a rating change (even on an already-read issue) and "issue_command"
+    // for a successful explicit save with unchanged values. Both express a later
+    // reader action and must not be overwritten by this older bulk undo.
     let item_issue_ids: Vec<i32> = item_rows.iter().map(|row| row.get(0)).collect();
     let later_changed: std::collections::HashSet<i32> = if let Some(cursor) = applied_event_cursor {
         let rows = tx
             .query(
                 "SELECT DISTINCT issue_id FROM events
                  WHERE issue_id = ANY($1::int[])
-                   AND type IN ('issue_read', 'issue_unread')
-                   AND id > $2",
-                &[&item_issue_ids, &cursor],
+                   AND type IN ('issue_read', 'issue_unread', 'rate', 'issue_command')
+                   AND id > $2
+                   AND user_id = $3",
+                &[&item_issue_ids, &cursor, &user.id()],
             )
             .await
             .map_err(db::query_error)?;
