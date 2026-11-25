@@ -9,7 +9,7 @@ use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 use tokio_postgres::Transaction;
 use utoipa::ToSchema;
@@ -49,6 +49,9 @@ pub struct DuplicateReadEvent {
     pub event_id: i32,
     pub timestamp: String,
     pub issue_number: Option<String>,
+    /// Per-event provenance: the event predates its issue's creation and is an
+    /// artificial suppression timestamp, never genuine reading evidence.
+    pub is_synthetic: bool,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -196,8 +199,8 @@ async fn load_issue_evidence(
             LEFT JOIN external_identities ev ON ev.provider = 'comicvine'
                 AND ev.entity_type = 'series'
                 AND ev.external_id = (ei.metadata_json->>'volume_id')
-            WHERE m.issue_id = $1 AND m.status IN ('confirmed', 'candidate')
-            ORDER BY CASE m.status WHEN 'confirmed' THEN 0 ELSE 1 END, m.id ASC
+            WHERE m.issue_id = $1 AND m.status = 'confirmed'
+            ORDER BY m.id ASC
             LIMIT 1
             "#,
             &[&issue_id],
@@ -273,10 +276,14 @@ async fn load_issue_evidence(
         .map_err(db_err)?;
     let read_events = read_rows
         .iter()
-        .map(|r| DuplicateReadEvent {
-            event_id: r.get(0),
-            timestamp: required_ts(r, 1),
-            issue_number: r.get(2),
+        .map(|r| {
+            let event_ts: chrono::DateTime<chrono::Utc> = r.get(1);
+            DuplicateReadEvent {
+                event_id: r.get(0),
+                timestamp: required_ts(r, 1),
+                issue_number: r.get(2),
+                is_synthetic: event_ts < created_at_dt,
+            }
         })
         .collect();
 
@@ -324,44 +331,188 @@ async fn load_issue_evidence(
     })
 }
 
-async fn detect_duplicates_for_user(
+/// A verified identity/alias relationship between two owned issues.
+///
+/// This is the single source of truth for the detection predicate. Preview and
+/// apply re-run it so an arbitrary pair of owned issues can never be collapsed
+/// without a detected, reviewed relationship (#4653).
+#[derive(Debug, Clone)]
+struct DetectedPair {
+    issue_ids: [i32; 2],
+    group_key: String,
+    confidence: String,
+    reason: String,
+}
+
+fn normalized_pair(a: i32, b: i32) -> (i32, i32) {
+    if a < b { (a, b) } else { (b, a) }
+}
+
+/// Load every verified duplicate relationship for one reader.
+///
+/// Only `confirmed` provider mappings count as verified identity. A `candidate`
+/// mapping needs explicit review in the identity inbox and must never be
+/// presented here as an established provider identity.
+async fn load_detected_pairs(
     tx: &Transaction<'_>,
     user_id: i32,
-) -> Result<Vec<DuplicateCandidateGroup>, ApiError> {
-    let mut groups: Vec<DuplicateCandidateGroup> = Vec::new();
-    let mut seen_groups: BTreeSet<String> = BTreeSet::new();
+) -> Result<Vec<DetectedPair>, ApiError> {
+    let mut pairs = Vec::new();
 
-    // 1) Exact provider identity: same comicvine issue external_id mapped to multiple issues
-    let dup_cv_rows = tx
+    // 1) Verified provider identity: two owned issues share one confirmed
+    // Comic Vine issue mapping. Pairs are generated set-wise with a self join.
+    let cv_rows = tx
         .query(
             r#"
-            SELECT ei.external_id, array_agg(DISTINCT m.issue_id ORDER BY m.issue_id) AS issue_ids
-            FROM issue_external_identity_mappings m
-            JOIN external_identities ei ON ei.id = m.external_identity_id
-            JOIN issues i ON i.id = m.issue_id
-            JOIN threads t ON t.id = i.thread_id
+            SELECT ei.external_id, m1.issue_id, m2.issue_id
+            FROM issue_external_identity_mappings m1
+            JOIN issue_external_identity_mappings m2
+              ON m2.external_identity_id = m1.external_identity_id
+             AND m2.issue_id > m1.issue_id
+            JOIN external_identities ei ON ei.id = m1.external_identity_id
+            JOIN issues i1 ON i1.id = m1.issue_id
+            JOIN threads t1 ON t1.id = i1.thread_id
+            JOIN issues i2 ON i2.id = m2.issue_id
+            JOIN threads t2 ON t2.id = i2.thread_id
             WHERE ei.provider = 'comicvine' AND ei.entity_type = 'issue'
-              AND m.status IN ('confirmed', 'candidate')
-              AND t.user_id = $1
-            GROUP BY ei.external_id
-            HAVING count(DISTINCT m.issue_id) > 1
-            ORDER BY ei.external_id
+              AND m1.status = 'confirmed' AND m2.status = 'confirmed'
+              AND t1.user_id = $1 AND t2.user_id = $1
+            ORDER BY ei.external_id, m1.issue_id, m2.issue_id
             LIMIT $2
             "#,
             &[&user_id, &(MAX_CANDIDATE_GROUPS as i64)],
         )
         .await
         .map_err(db_err)?;
-
-    for row in dup_cv_rows {
+    for row in cv_rows {
         let cv_id: String = row.get(0);
-        let issue_ids: Vec<i32> = row.get(1);
+        let a: i32 = row.get(1);
+        let b: i32 = row.get(2);
+        pairs.push(DetectedPair {
+            issue_ids: [a, b],
+            group_key: format!("cv-issue:{cv_id}"),
+            confidence: "high".to_string(),
+            reason: format!("Multiple owned issues map to the same Comic Vine issue {cv_id}"),
+        });
+    }
+
+    // 2) Explicit story/overall-number relationship backed by a confirmed CV
+    // mapping (volume family or story arc number on the provider metadata).
+    let story_rows = tx
+        .query(
+            r#"
+            SELECT DISTINCT ON (i1.id, i2.id)
+                   i1.id AS mapped_issue_id, i2.id AS other_issue_id,
+                   ei.external_id AS cv_issue_id
+            FROM issue_external_identity_mappings m
+            JOIN external_identities ei ON ei.id = m.external_identity_id
+                AND ei.provider = 'comicvine' AND ei.entity_type = 'issue'
+            JOIN issues i1 ON i1.id = m.issue_id
+            JOIN threads t1 ON t1.id = i1.thread_id
+            JOIN threads t2 ON t2.user_id = t1.user_id AND t2.id <> t1.id
+            JOIN issues i2 ON i2.thread_id = t2.id
+            WHERE t1.user_id = $1
+              AND m.status = 'confirmed'
+              AND i2.id <> i1.id
+              AND (
+                  (ei.metadata_json->>'issue_number' IS NOT NULL
+                   AND ei.metadata_json->>'issue_number' <> ''
+                   AND i2.issue_number = ei.metadata_json->>'issue_number')
+                  OR i2.issue_number = i1.issue_number
+                  OR (ei.metadata_json->>'story_arc_number' IS NOT NULL
+                      AND ei.metadata_json->>'story_arc_number' <> ''
+                      AND i2.issue_number = ei.metadata_json->>'story_arc_number')
+              )
+              AND (
+                  (ei.metadata_json->>'volume_id' IS NOT NULL
+                   AND EXISTS (
+                       SELECT 1 FROM issue_external_identity_mappings m2
+                       JOIN external_identities ei2 ON ei2.id = m2.external_identity_id
+                       WHERE m2.issue_id = i2.id AND ei2.provider = 'comicvine'
+                         AND ei2.entity_type = 'issue'
+                         AND ei2.metadata_json->>'volume_id' = ei.metadata_json->>'volume_id'
+                   ))
+                  OR (ei.metadata_json->>'story_arc_number' IS NOT NULL
+                      AND ei.metadata_json->>'story_arc_number' = i2.issue_number)
+                  OR (ei.metadata_json->>'issue_number' IS NOT NULL
+                      AND i1.issue_number <> i2.issue_number
+                      AND ei.metadata_json->>'issue_number' = i2.issue_number)
+              )
+            ORDER BY i1.id, i2.id
+            LIMIT $2
+            "#,
+            &[&user_id, &(MAX_CANDIDATE_GROUPS as i64)],
+        )
+        .await
+        .map_err(db_err)?;
+    for row in story_rows {
+        let mapped_id: i32 = row.get(0);
+        let other_id: i32 = row.get(1);
+        let cv_id: String = row.get(2);
+        let (a, b) = normalized_pair(mapped_id, other_id);
+        pairs.push(DetectedPair {
+            issue_ids: [a, b],
+            group_key: format!("story-overall:{a}:{b}"),
+            confidence: "medium".to_string(),
+            reason: format!(
+                "Issues share a story/overall-number relationship via Comic Vine issue {cv_id}"
+            ),
+        });
+    }
+
+    Ok(pairs)
+}
+
+/// Re-run the verified-predicate for every submitted alias before any write.
+async fn require_detected_pairs(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    canonical_id: i32,
+    duplicate_ids: &[i32],
+) -> Result<(), ApiError> {
+    if duplicate_ids.is_empty() {
+        return Ok(());
+    }
+    let pairs = load_detected_pairs(tx, user_id).await?;
+    let detected: BTreeSet<(i32, i32)> = pairs
+        .iter()
+        .map(|p| normalized_pair(p.issue_ids[0], p.issue_ids[1]))
+        .collect();
+    for dup_id in duplicate_ids {
+        if !detected.contains(&normalized_pair(canonical_id, *dup_id)) {
+            return Err(conflict(format!(
+                "Issues {canonical_id} and {dup_id} are not a detected duplicate pair; refresh detections before reconciling"
+            )));
+        }
+    }
+    Ok(())
+}
+
+async fn detect_duplicates_for_user(
+    tx: &Transaction<'_>,
+    user_id: i32,
+) -> Result<Vec<DuplicateCandidateGroup>, ApiError> {
+    let pairs = load_detected_pairs(tx, user_id).await?;
+    let mut groups: Vec<DuplicateCandidateGroup> = Vec::new();
+    let mut seen_groups: BTreeSet<String> = BTreeSet::new();
+
+    // Exact provider identity groups: every issue sharing one confirmed CV
+    // identity is offered together, matching the historical group semantics.
+    let mut cv_members: BTreeMap<String, BTreeSet<i32>> = BTreeMap::new();
+    for pair in &pairs {
+        if let Some(cv_id) = pair.group_key.strip_prefix("cv-issue:") {
+            let members = cv_members.entry(cv_id.to_string()).or_default();
+            members.insert(pair.issue_ids[0]);
+            members.insert(pair.issue_ids[1]);
+        }
+    }
+    for (cv_id, member_ids) in cv_members {
         let group_key = format!("cv-issue:{cv_id}");
         if !seen_groups.insert(group_key.clone()) {
             continue;
         }
         let mut evidence = Vec::new();
-        for iid in &issue_ids {
+        for iid in &member_ids {
             evidence.push(load_issue_evidence(tx, user_id, *iid).await?);
         }
         let (canonical, dups) = suggest_canonical_and_duplicates(&evidence);
@@ -375,95 +526,22 @@ async fn detect_duplicates_for_user(
         });
     }
 
-    // 2) Story/overall-number relationship: CV-mapped issue has issue_number that
-    // matches another unmapped issue in a different thread (same user), or a
-    // CV issue number matches while story numbering differs. We look for cases
-    // where a comicvine issue mapping's metadata issue_number matches an owned
-    // issue's issue_number in a different thread AND the mapped issue is in a
-    // different thread - indicating same physical comic represented twice.
-    let story_rows = tx
-        .query(
-            r#"
-            SELECT DISTINCT ON (i1.id, i2.id)
-                   i1.id AS mapped_issue_id, i2.id AS other_issue_id,
-                   ei.external_id AS cv_issue_id,
-                   ei.metadata_json->>'issue_number' AS cv_issue_number
-            FROM issue_external_identity_mappings m
-            JOIN external_identities ei ON ei.id = m.external_identity_id
-                AND ei.provider = 'comicvine' AND ei.entity_type = 'issue'
-            JOIN issues i1 ON i1.id = m.issue_id
-            JOIN threads t1 ON t1.id = i1.thread_id
-            JOIN threads t2 ON t2.user_id = t1.user_id AND t2.id <> t1.id
-            JOIN issues i2 ON i2.thread_id = t2.id
-            WHERE t1.user_id = $1
-              AND m.status IN ('confirmed', 'candidate')
-              AND i2.id <> i1.id
-              AND (
-                  -- other issue has same number as CV issue number (overall-number alias)
-                  (ei.metadata_json->>'issue_number' IS NOT NULL
-                   AND ei.metadata_json->>'issue_number' <> ''
-                   AND i2.issue_number = ei.metadata_json->>'issue_number')
-                  OR
-                  -- other issue has same number as mapped issue's issue number
-                  i2.issue_number = i1.issue_number
-                  OR
-                  -- provider overall number maps to a different story number:
-                  -- volume 4050-51622 numbers physical parts #100/#101/#102 while
-                  -- the owned original chapters are story #3/#4/#5.
-                  (ei.metadata_json->>'story_arc_number' IS NOT NULL
-                   AND ei.metadata_json->>'story_arc_number' <> ''
-                   AND i2.issue_number = ei.metadata_json->>'story_arc_number')
-              )
-              -- avoid flagging clearly different comics: require same CV volume family or
-              -- explicit story/overall signal. We use: same comicvine volume id in metadata
-              -- OR the CV issue's story_arc_number matches the other issue's number.
-              AND (
-                  (ei.metadata_json->>'volume_id' IS NOT NULL
-                   AND EXISTS (
-                       SELECT 1 FROM issue_external_identity_mappings m2
-                       JOIN external_identities ei2 ON ei2.id = m2.external_identity_id
-                       WHERE m2.issue_id = i2.id AND ei2.provider = 'comicvine'
-                         AND ei2.entity_type = 'issue'
-                         AND ei2.metadata_json->>'volume_id' = ei.metadata_json->>'volume_id'
-                   ))
-                  OR
-                  (ei.metadata_json->>'story_arc_number' IS NOT NULL
-                   AND ei.metadata_json->>'story_arc_number' = i2.issue_number)
-                  OR
-                  (ei.metadata_json->>'issue_number' IS NOT NULL
-                   AND i1.issue_number <> i2.issue_number
-                   AND ei.metadata_json->>'issue_number' = i2.issue_number)
-              )
-            ORDER BY i1.id, i2.id
-            LIMIT $2
-            "#,
-            &[&user_id, &(MAX_CANDIDATE_GROUPS as i64)],
-        )
-        .await
-        .map_err(db_err)?;
-
-    for row in story_rows {
-        let mapped_id: i32 = row.get(0);
-        let other_id: i32 = row.get(1);
-        let cv_id: String = row.get(2);
-        let mut pair = vec![mapped_id, other_id];
-        pair.sort();
-        let group_key = format!("story-overall:{}:{}", pair[0], pair[1]);
-        if !seen_groups.insert(group_key.clone()) {
+    for pair in &pairs {
+        if pair.group_key.starts_with("cv-issue:") {
             continue;
         }
-        // Skip if both already in a same-CV group
+        if !seen_groups.insert(pair.group_key.clone()) {
+            continue;
+        }
         let mut evidence = Vec::new();
-        for iid in &pair {
-            evidence.push(load_issue_evidence(tx, user_id, *iid).await?);
+        for iid in pair.issue_ids {
+            evidence.push(load_issue_evidence(tx, user_id, iid).await?);
         }
         let (canonical, dups) = suggest_canonical_and_duplicates(&evidence);
         groups.push(DuplicateCandidateGroup {
-            group_key,
-            confidence: "medium".to_string(),
-            reason: format!(
-                "Issues share a story/overall-number relationship via Comic Vine issue {cv_id}"
-            ),
+            group_key: pair.group_key.clone(),
+            confidence: pair.confidence.clone(),
+            reason: pair.reason.clone(),
             suggested_canonical_issue_id: canonical,
             suggested_duplicate_issue_ids: dups,
             evidence,
@@ -634,30 +712,33 @@ fn build_preview_actions(
         }
 
         if !dup.read_events.is_empty() {
-            let synthetic = dup.is_synthetic_placeholder_read;
-            if synthetic {
+            // Every read event carries its own provenance. Preview and apply
+            // both use this per-event predicate, so mixed genuine/synthetic
+            // histories are described exactly as they will be written.
+            let synthetic_count = dup.read_events.iter().filter(|e| e.is_synthetic).count();
+            let real_count = dup.read_events.len() - synthetic_count;
+            if synthetic_count > 0 {
                 warnings.push(format!(
-                    "Duplicate {} has read events with read_at before created_at; these are invalid synthetic placeholders and will not be treated as actual reading completion.",
+                    "Duplicate {} has {synthetic_count} read event(s) before its creation; those are invalid synthetic placeholders and will not be treated as actual reading completion.",
                     dup.issue_id
                 ));
                 actions.push(ReconcilePreviewAction {
                     kind: "suppress_synthetic_read_events".to_string(),
                     description: format!(
-                        "Suppress {} synthetic placeholder read event(s) on duplicate {} (invalid timestamp order); canonical reading history is preserved.",
-                        dup.read_events.len(), dup.issue_id
+                        "Suppress {synthetic_count} synthetic placeholder read event(s) on duplicate {} (invalid timestamp order); canonical reading history is preserved.",
+                        dup.issue_id
                     ),
                     safe: true,
                     requires_decision: false,
                     decision_key: None,
                 });
-            } else {
+            }
+            if real_count > 0 {
                 actions.push(ReconcilePreviewAction {
                     kind: "move_read_events".to_string(),
                     description: format!(
-                        "Move {} read event(s) from duplicate {} to canonical {}",
-                        dup.read_events.len(),
-                        dup.issue_id,
-                        canonical.issue_id
+                        "Move {real_count} genuine read event(s) from duplicate {} to canonical {}",
+                        dup.issue_id, canonical.issue_id
                     ),
                     safe: true,
                     requires_decision: false,
@@ -810,6 +891,11 @@ pub async fn preview_reconciliation(
         .await
         .map_err(db_err)?;
 
+    // An arbitrary pair of owned issues is never a reconciliation candidate:
+    // re-run the same verified predicate detection uses (#4653).
+    require_detected_pairs(&tx, user.id(), req.canonical_issue_id, &req.duplicate_issue_ids)
+        .await?;
+
     let canonical = load_issue_evidence(&tx, user.id(), req.canonical_issue_id).await?;
     let mut duplicates = Vec::new();
     for id in &req.duplicate_issue_ids {
@@ -879,10 +965,15 @@ pub async fn apply_reconciliation(
         .await
         .map_err(db_err)?;
 
-    // Lock user row / advisory lock to avoid concurrent reconciliation races
-    tx.execute(
-        "SELECT pg_advisory_xact_lock($1, $2)",
-        &[&4653i32, &user.id()],
+    // Reconciliation rewrites owned issue rows and their queue-facing state, so
+    // it must serialize with every sibling writer that takes those same row
+    // locks. Queue lock first, then the per-reader dice lock, matching
+    // issue_service::persist and dice_mutation::persist_in_transaction; both
+    // come before any FOR UPDATE row lock (#5398/#5419 lock order).
+    crate::queue::lock_queue(&tx, user.id()).await?;
+    tx.query_one(
+        "SELECT pg_advisory_xact_lock($1::bigint)",
+        &[&(user.id() as i64)],
     )
     .await
     .map_err(db_err)?;
@@ -952,6 +1043,11 @@ pub async fn apply_reconciliation(
             return Err(not_found(&format!("Issue {iid} not found")));
         }
     }
+
+    // Re-run detection for the submitted pair set. Row ownership is already
+    // proven above, so a non-detected pair is a conflict rather than a 404.
+    require_detected_pairs(&tx, user.id(), req.canonical_issue_id, &req.duplicate_issue_ids)
+        .await?;
 
     // Load evidence and validate token
     let canonical = load_issue_evidence(&tx, user.id(), req.canonical_issue_id).await?;
@@ -1091,27 +1187,12 @@ pub async fn apply_reconciliation(
             moved_event_origins.push(json!({"event_id": eid, "original_issue_id": dup.issue_id}));
         }
 
-        // Handle read events
-        let read_rows = tx
-            .query(
-                r#"SELECT id, "timestamp" FROM events WHERE issue_id = $1 AND type = 'issue_read'"#,
-                &[&dup.issue_id],
-            )
-            .await
-            .map_err(db_err)?;
-        let dup_created_at = tx
-            .query_one(
-                "SELECT created_at FROM issues WHERE id = $1",
-                &[&dup.issue_id],
-            )
-            .await
-            .map_err(db_err)?
-            .get::<_, chrono::DateTime<chrono::Utc>>(0);
-        for rr in &read_rows {
-            let eid: i32 = rr.get(0);
-            let ts: chrono::DateTime<chrono::Utc> = rr.get(1);
-            if ts < dup_created_at {
-                // synthetic placeholder - do not move as real read evidence; keep on duplicate for provenance
+        // Handle read events from the exact per-event provenance preview used.
+        // Synthetic placeholder events stay on the duplicate as repair audit
+        // provenance; genuine events are moved with their original timestamps.
+        for event in &dup.read_events {
+            let eid = event.event_id;
+            if event.is_synthetic {
                 warnings.push(format!("Event {eid} is a synthetic placeholder read (timestamp before issue creation); preserved as provenance on duplicate."));
                 continue;
             }
@@ -1173,16 +1254,20 @@ pub async fn apply_reconciliation(
     // If canonical has real read events/ratings indicating read, keep it read.
     // If canonical is unread but has moved real read events, update accordingly.
     // Important: do NOT let synthetic placeholder reads on duplicates affect this.
+    // Moved read events were already validated against the *duplicate's*
+    // creation time before the move. Never re-filter them against the
+    // canonical's creation time: an older duplicate's genuine read would
+    // otherwise be discarded (#4653).
     let canonical_real_read = tx
         .query_opt(
             r#"
             SELECT 1 FROM events e
             JOIN issues i ON i.id = e.issue_id
             WHERE e.issue_id = $1 AND e.type = 'issue_read'
-              AND e."timestamp" >= i.created_at
+              AND (e.id = ANY($2::int[]) OR e."timestamp" >= i.created_at)
             LIMIT 1
             "#,
-            &[&req.canonical_issue_id],
+            &[&req.canonical_issue_id, &moved_event_ids],
         )
         .await
         .map_err(db_err)?;
@@ -1203,11 +1288,11 @@ pub async fn apply_reconciliation(
                 SELECT e."timestamp" FROM events e
                 JOIN issues i ON i.id = e.issue_id
                 WHERE e.issue_id = $1 AND e.type = 'issue_read'
-                  AND e."timestamp" >= i.created_at
+                  AND (e.id = ANY($2::int[]) OR e."timestamp" >= i.created_at)
                 ORDER BY e."timestamp" DESC, e.id DESC
                 LIMIT 1
                 "#,
-                &[&req.canonical_issue_id],
+                &[&req.canonical_issue_id, &moved_event_ids],
             )
             .await
             .map_err(db_err)?
@@ -1336,9 +1421,11 @@ pub async fn undo_reconciliation(
         .await
         .map_err(db_err)?;
 
-    tx.execute(
-        "SELECT pg_advisory_xact_lock($1, $2)",
-        &[&4653i32, &user.id()],
+    // Undo takes the same locks in the same order as apply for the same reason.
+    crate::queue::lock_queue(&tx, user.id()).await?;
+    tx.query_one(
+        "SELECT pg_advisory_xact_lock($1::bigint)",
+        &[&(user.id() as i64)],
     )
     .await
     .map_err(db_err)?;

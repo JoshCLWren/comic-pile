@@ -4386,5 +4386,50 @@ ALTER TABLE ONLY public.threads
 
 
 --
+-- Name: issue_duplicate_reconciliations; Type: TABLE; Schema: public; Owner: -
+--
+-- #4653: guided canonical duplicate-comic reconciliation (native V4 migration).
+
+CREATE TABLE public.issue_duplicate_reconciliations (
+    id bigint NOT NULL,
+    user_id integer NOT NULL,
+    canonical_issue_id integer NOT NULL,
+    duplicate_issue_ids integer[] NOT NULL,
+    preview_token text NOT NULL,
+    applied_at timestamp with time zone DEFAULT now() NOT NULL,
+    undone_at timestamp with time zone,
+    undo_snapshot jsonb,
+    details jsonb DEFAULT '{}'::jsonb NOT NULL
+);
+
+
+--
+-- Name: issue_duplicate_reconciliations_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.issue_duplicate_reconciliations_id_seq
+    AS bigint
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.issue_duplicate_reconciliations_id_seq OWNED BY public.issue_duplicate_reconciliations.id;
+ALTER TABLE ONLY public.issue_duplicate_reconciliations ALTER COLUMN id SET DEFAULT nextval('public.issue_duplicate_reconciliations_id_seq'::regclass);
+ALTER TABLE ONLY public.issue_duplicate_reconciliations
+    ADD CONSTRAINT issue_duplicate_reconciliations_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.issue_duplicate_reconciliations
+    ADD CONSTRAINT issue_duplicate_reconciliations_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+ALTER TABLE ONLY public.issue_duplicate_reconciliations
+    ADD CONSTRAINT issue_duplicate_reconciliations_canonical_issue_id_fkey FOREIGN KEY (canonical_issue_id) REFERENCES public.issues(id);
+ALTER TABLE ONLY public.issues
+    ADD CONSTRAINT issues_merged_into_issue_id_fkey FOREIGN KEY (merged_into_issue_id) REFERENCES public.issues(id);
+CREATE INDEX idx_issues_merged_into_issue_id ON public.issues(merged_into_issue_id) WHERE merged_into_issue_id IS NOT NULL;
+CREATE INDEX idx_issue_duplicate_reconciliations_user ON public.issue_duplicate_reconciliations(user_id, applied_at DESC);
+
+
+--
 -- PostgreSQL database dump complete
 --
