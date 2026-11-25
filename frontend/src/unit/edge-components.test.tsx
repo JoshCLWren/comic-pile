@@ -39,8 +39,6 @@ describe('edge component behavior', () => {
     await waitFor(() => expect(screen.getByLabelText('Increase issue number')).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'Decrease issue number' }))
     await user.click(screen.getByRole('button', { name: 'Review changes' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm bulk read' })).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
     await waitFor(() => expect(onSuccess).toHaveBeenCalled())
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(onClose).toHaveBeenCalled()
