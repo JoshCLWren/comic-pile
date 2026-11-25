@@ -187,6 +187,6 @@ These are known discrepancies, not supported API guidance:
 - `frontend/src/services/api-sessions.ts` still calls the retired v1 session
   list/get paths. The v2 details/snapshots calls are current; the list/get caller
   drift requires a focused repair.
-- Earlier documentation referred to a separate `api/native_issue.rs` ingress.
+- Earlier documentation referred to a separate `api/native_issue.rs` ingress. <!-- docs-path-check: ignore -->
   Current `main` builds only `api/native_roll.rs`; bot-owned route outputs are
   regenerated from the route fragments. Do not hand-edit generated route outputs.

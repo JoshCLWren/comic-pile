@@ -148,7 +148,11 @@ def test_iter_markdown_files_uses_tracked_scope_in_git_repo(tmp_path: Path) -> N
     )
     missing.unlink()
 
-    assert iter_markdown_files(tmp_path) == [tmp_path / "README.md", docs / "tracked.md"]
+    assert iter_markdown_files(tmp_path) == [
+        tmp_path / "README.md",
+        tmp_path / "TRACKED_NOTES.md",
+        docs / "tracked.md",
+    ]
     assert find_unapproved_root_markdown(tmp_path) == ["TRACKED_NOTES.md"]
 
 
