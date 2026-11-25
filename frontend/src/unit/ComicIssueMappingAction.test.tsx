@@ -192,6 +192,8 @@ describe('ComicIssueMappingAction', () => {
 
   it('removes the mapping through the accessible confirm dialog and refetches', async () => {
     const onMapped = vi.fn().mockResolvedValue(undefined)
+    const setQueryData = vi.spyOn(queryClient, 'setQueryData')
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
     render(
       <ComicIssueMappingAction
         issueId={77}
@@ -204,11 +206,11 @@ describe('ComicIssueMappingAction', () => {
     fireEvent.click(screen.getByTestId('comic-mapping-remove'))
     fireEvent.click(await screen.findByText('Remove mapping'))
     await waitFor(() => expect(removeIdentitySpy).toHaveBeenCalledWith(77))
-    await waitFor(() => expect(queryClient.setQueryData).toHaveBeenCalledWith(
+    await waitFor(() => expect(setQueryData).toHaveBeenCalledWith(
       queryKeys.comicVine.issueIntelligence(77),
       null,
     ))
-    await waitFor(() => expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
+    await waitFor(() => expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.comicVine.issueIntelligence(77),
       exact: true,
     }))
@@ -217,6 +219,8 @@ describe('ComicIssueMappingAction', () => {
     expect(screen.getByTestId('comic-mapping-map')).toHaveTextContent('Map comic')
     expect(screen.queryByTestId('comic-mapping-change')).not.toBeInTheDocument()
     expect(screen.queryByTestId('comic-mapping-remove')).not.toBeInTheDocument()
+    setQueryData.mockRestore()
+    invalidateQueries.mockRestore()
   })
 
   it('keeps a successful removal visible when identity reconciliation fails', async () => {
