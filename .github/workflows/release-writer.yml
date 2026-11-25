@@ -3,6 +3,8 @@ name: Release writer
 # Reactivated after the 2026-10-20 Fluid Compute incident.
 # One event = one merged PR. No Vercel API, schedule, or historical rescan.
 # pull_request_target runs only trusted main code, including for external contributors.
+# workflow_run recovers PRs merged by factory actors whose GITHUB_TOKEN merges
+# do not emit pull_request_target events (issue #5752).
 on:
   pull_request_target:
     types: [closed]
@@ -13,6 +15,11 @@ on:
         description: Exact merged pull request to process
         required: true
         type: string
+  workflow_run:
+    workflows:
+      - Factory Ready Merge Drain
+      - Fixed Model Factory Dispatch
+    types: [completed]
 
 env:
   # Operator settings (rotisserie factory settings) reach every factory script.
@@ -23,15 +30,50 @@ permissions:
   contents: read
   pull-requests: read
   issues: read
+  actions: write
 
 concurrency:
-  group: release-writer
+  group: release-writer-${{ github.event_name == 'workflow_run' && format('drain-{0}', github.event.workflow_run.id) || github.event.pull_request.number || inputs.pr_number || github.run_id }}
   cancel-in-progress: false
 
 jobs:
+  dispatch-missed:
+    # Factory merges use GITHUB_TOKEN so pull_request_target never fires.
+    # When merge-drain completes, dispatch exact-PR release-writer runs for
+    # recently merged PRs that may have been missed. Idempotent: persist
+    # revalidates and the Neon ledger dedupes by source identity.
+    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'cancelled' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Dispatch release-writer for recently merged PRs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          # Bounded lookback: only PRs merged in the last 30 minutes.
+          cutoff="$(date -u -d '30 minutes ago' +%Y-%m-%dT%H:%M:%SZ)"
+          mapfile -t prs < <(
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls?state=closed&base=main&sort=updated&direction=desc&per_page=20" \
+              --jq ".[] | select(.merged_at != null and .merged_at >= \"$cutoff\") | .number" \
+            | head -20
+          )
+          if (( ${#prs[@]} == 0 )); then
+            echo "No recently merged PRs found"
+            exit 0
+          fi
+          for pr in "${prs[@]}"; do
+            [[ "$pr" =~ ^[1-9][0-9]*$ ]] || continue
+            echo "Dispatching release-writer for PR #${pr}"
+            gh workflow run release-writer.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              -f "pr_number=${pr}" || echo "::warning::Failed to dispatch release-writer for PR #${pr}"
+          done
+
   generate:
     # Closed, unmerged PRs are ignored. Only merged PRs or manual exact PRs run.
-    if: ${{ github.event_name != 'pull_request_target' || github.event.pull_request.merged == true }}
+    if: ${{ (github.event_name == 'pull_request_target' && github.event.pull_request.merged == true) || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
