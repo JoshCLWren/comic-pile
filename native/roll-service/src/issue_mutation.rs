@@ -761,7 +761,7 @@ async fn load_preview_metadata(
                           AND dup.issue_number = i.issue_number
                           AND dup.id <> i.id
                     ) AS is_duplicate,
-                    (t.next_unread_issue_id = i.id) AS is_frontier,
+                    COALESCE(t.next_unread_issue_id = i.id, false) AS is_frontier,
                     t.title
              FROM issues i
              JOIN threads t ON t.id = i.thread_id
