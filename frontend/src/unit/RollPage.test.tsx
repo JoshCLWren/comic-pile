@@ -18,9 +18,9 @@ import {
 } from '../hooks/useRoll'
 import { useSnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../hooks/useQueue'
-import { useRate } from '../hooks'
+import { useRate, useResetDice } from '../hooks'
 import { threadsApi } from '../services/api-threads'
-import { writeRollSnoozes } from '../services/api-roll'
+import { readRollSnoozes, writeRollSnoozes } from '../services/api-roll'
 import { cast } from '../utils/cast'
 
 const navigateSpy = vi.fn()
@@ -426,4 +426,40 @@ it('shows a retry action when bootstrap loading fails', async () => {
 
   await user.click(screen.getByRole('button', { name: 'Retry' }))
   expect(refetch).toHaveBeenCalled()
+})
+
+it('recovers from browser snoozes and a non-d6 die through the visible zero-choice Reset Dice action', async () => {
+  const user = (await import('@testing-library/user-event')).default.setup()
+  const resetMutate = vi.fn().mockResolvedValue({ die: 6, replayed: false })
+  vi.mocked(useResetDice).mockReturnValue({
+    mutate: resetMutate,
+    isPending: false,
+  } as ReturnType<typeof useResetDice>)
+
+  writeRollSnoozes([1])
+  mockedUseRollDieState.mockReturnValue({ data: { die: 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null } })
+  mockedUseRollEligibleIssueIds.mockReturnValue({ data: { die: 20, issue_ids: [], thread_ids: [], pool_reason: 'ready' } })
+  mockedUseRollIssueCards.mockReturnValue({ data: { items: [] } })
+  mockedUseRollBootstrap.mockReturnValue({
+    data: {
+      ...bootstrap,
+      current_die: 20,
+      roll_pool: [{ id: 1, title: 'Saga', format: 'Comic' }],
+      snoozed_threads: [],
+      snoozed_count: 0,
+    },
+    refetch: vi.fn().mockResolvedValue(bootstrap),
+    isPending: false,
+    isError: false,
+    error: null,
+  })
+
+  renderRollPage()
+
+  expect(screen.getByText('Every series is snoozed')).toBeInTheDocument()
+  const resetButton = screen.getByTestId('reset-dice-zero-choice')
+  await user.click(resetButton)
+
+  expect(resetMutate).toHaveBeenCalledTimes(1)
+  expect(readRollSnoozes()).toEqual([])
 })
