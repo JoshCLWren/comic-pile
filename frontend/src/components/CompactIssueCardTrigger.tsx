@@ -77,7 +77,9 @@ export default function CompactIssueCardTrigger({
   const resolved = (card?.issue_id === issueId ? card : null)
     ?? (loadedCard?.issue_id === issueId ? loadedCard : null)
   const title = resolved?.thread_title || threadTitle
-  const number = resolved?.issue_number || issueNumber
+  const authoredNumber = resolved?.issue_number || issueNumber
+  const aliasNumber = resolved?.issue_number_alias?.trim() || null
+  const number = resolved?.display_issue_number || (aliasNumber && aliasNumber.toLowerCase() !== authoredNumber.trim().toLowerCase() ? `${authoredNumber} (${aliasNumber})` : authoredNumber)
   const isRead = (resolved?.status ?? status) === 'read'
 
   return (

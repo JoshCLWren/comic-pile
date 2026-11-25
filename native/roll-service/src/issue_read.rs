@@ -280,15 +280,22 @@ const THREAD_ISSUES_PAGE_SQL: &str = r#"
 WITH owned AS (
     SELECT id FROM threads WHERE id = $1 AND user_id = $2
 ), matching AS (
-    SELECT i.id, i.thread_id, i.issue_number, i.position,
-           i.status, i.read_at, i.created_at
+    SELECT i.id, i.thread_id, i.issue_number,
+           NULLIF(BTRIM(i.issue_number_alias), '') AS issue_number_alias,
+           i.position, i.status, i.read_at, i.created_at
     FROM issues i
     JOIN owned t ON t.id = i.thread_id
     WHERE ($3::text IS NULL OR i.status = $3)
 ), totals AS (
     SELECT count(*) AS total_count FROM matching
 ), paged AS (
-    SELECT m.id, m.thread_id, m.issue_number, m.position, m.status,
+    SELECT m.id, m.thread_id, m.issue_number, m.issue_number_alias,
+           CASE
+             WHEN m.issue_number_alias IS NULL THEN m.issue_number
+             WHEN lower(m.issue_number_alias) = lower(BTRIM(m.issue_number)) THEN m.issue_number
+             ELSE m.issue_number || ' (' || m.issue_number_alias || ')'
+           END AS display_issue_number,
+           m.position, m.status,
            to_char(m.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS read_at,
            to_char(m.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at
     FROM matching m

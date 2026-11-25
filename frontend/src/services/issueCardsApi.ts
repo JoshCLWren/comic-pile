@@ -1,7 +1,14 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
 import type { components } from '../generated/openapi'
 
-export type IssueCard = components['schemas']['IssueCard']
+export type IssueCard = components['schemas']['IssueCard'] & {
+  /** Alternate overall/story number for the same physical comic (#4652). */
+  issue_number_alias?: string | null
+  /** Authored number with alias when distinct, e.g. "23 (#2)". */
+  display_issue_number?: string
+  /** Provider's issue number from the confirmed identity, when known. */
+  provider_issue_number?: string | null
+}
 export type IssueReadRateResponse = components['schemas']['IssueReadRateResponse']
 
 /** Server-bound batch ceiling for one `POST /v2/issues/cards` call (#4443). */
