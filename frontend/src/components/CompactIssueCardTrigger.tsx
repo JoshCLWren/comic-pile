@@ -81,8 +81,7 @@ export default function CompactIssueCardTrigger({
     ?? (loadedCard?.issue_id === issueId ? loadedCard : null)
   const title = resolved?.thread_title || threadTitle
   const authoredNumber = resolved?.issue_number || issueNumber
-  const aliasNumber = resolved?.issue_number_alias?.trim() || null
-  const number = resolved?.display_issue_number || (aliasNumber && aliasNumber.toLowerCase() !== authoredNumber.trim().toLowerCase() ? `${authoredNumber} (${aliasNumber})` : authoredNumber)
+  const aliasNumber = resolved?.issue_number_alias?.trim() || issueNumberAlias?.trim() || null
   const isRead = (resolved?.status ?? status) === 'read'
 
   return (
@@ -97,7 +96,7 @@ export default function CompactIssueCardTrigger({
         <ComicIssueCover
           coverImageUrl={resolved?.cover_image_url ?? null}
           threadTitle={title}
-          issueNumber={number}
+          issueNumber={authoredNumber}
           variant="compact"
         />
         <span className="min-w-0">
@@ -123,7 +122,8 @@ export default function CompactIssueCardTrigger({
           issueId={issueId}
           card={resolved}
           threadTitle={title}
-          issueNumber={number}
+          issueNumber={authoredNumber}
+          issueNumberAlias={aliasNumber}
           status={isRead ? 'read' : 'unread'}
           rating={rating}
           onMutated={onMutated}

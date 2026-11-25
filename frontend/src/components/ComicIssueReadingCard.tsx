@@ -26,6 +26,7 @@ export function ComicIssueReadingCard({
   card,
   threadTitle,
   issueNumber,
+  issueNumberAlias,
   ...cardProps
 }: ComicIssueReadingCardProps) {
   const [requestedIssueId, setRequestedIssueId] = useState<number | null>(null)
@@ -37,6 +38,10 @@ export function ComicIssueReadingCard({
     detailsOpen && !intelligence.isError && (intelligence.isLoading || intelligence.metadata != null)
   const resolvedTitle = card?.thread_title || threadTitle
   const resolvedNumber = card?.issue_number || issueNumber
+  const resolvedAlias = card?.issue_number_alias ?? issueNumberAlias ?? null
+  const aliasSuffix = resolvedAlias && resolvedAlias.trim().toLowerCase() !== resolvedNumber.trim().toLowerCase()
+    ? ` (alt #${resolvedAlias.trim()})`
+    : ''
 
   return (
     <div className="min-w-0 space-y-4" data-testid="comic-issue-reading-card">
@@ -46,7 +51,7 @@ export function ComicIssueReadingCard({
           <TagSection
             targetType="Issue"
             targetId={issueId}
-            targetLabel={`${resolvedTitle} #${resolvedNumber}`}
+            targetLabel={`${resolvedTitle} #${resolvedNumber}${aliasSuffix}`}
           />
         </div>
       )}
@@ -57,6 +62,7 @@ export function ComicIssueReadingCard({
         card={card}
         threadTitle={threadTitle}
         issueNumber={issueNumber}
+        issueNumberAlias={resolvedAlias}
         isOwned={isOwned}
         showCover={showCover && !providerCoverVisible}
         onReadingDetailsRequest={() => setRequestedIssueId(issueId)}
