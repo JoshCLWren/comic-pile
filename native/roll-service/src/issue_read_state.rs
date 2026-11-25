@@ -846,6 +846,34 @@ pub struct IssueBulkRequest {
     pub issue_ids: Vec<i32>,
 }
 
+/// One issue affected by a bulk read/unread operation.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct IssueReadOperationItem {
+    pub issue_id: i32,
+    pub thread_id: i32,
+    pub issue_number: String,
+    pub previous_status: String,
+}
+
+/// Reviewable, reversible record of a bulk read/unread operation (#4655).
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct IssueReadOperationResponse {
+    pub id: i64,
+    pub operation_type: String,
+    pub created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub undone_at: Option<String>,
+    pub items: Vec<IssueReadOperationItem>,
+}
+
+/// Result of undoing a bulk read/unread operation (#4655).
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct IssueReadOperationUndoResponse {
+    pub operation: IssueReadOperationResponse,
+    pub undone_issue_ids: Vec<i32>,
+    pub skipped_issue_ids: Vec<i32>,
+}
+
 /// Documentation-only operation for creating an issue read marker.
 #[utoipa::path(
     post,
