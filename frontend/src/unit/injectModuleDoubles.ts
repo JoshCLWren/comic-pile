@@ -1,23 +1,28 @@
 import { vi } from 'vitest'
 import { cast } from '../utils/cast'
-import { isFunction } from '../utils/runtimeChecks'
+import { isFunction, isPlainObject } from '../utils/runtimeChecks'
 
 type InjectableFunction = (...args: never[]) => void
 type InjectableFunctionTable = Record<string, InjectableFunction>
 type ImportOriginal = <OriginalModule = object>() => Promise<OriginalModule>
-type ModuleDoubleFactory = (importOriginal: ImportOriginal) => object | Promise<object>
+type ModuleDoubleMap<ModuleExports extends object> = Partial<
+  Record<Extract<keyof ModuleExports, string>, unknown>
+>
+type ModuleDoubleFactory<ModuleExports extends object> = (
+  importOriginal: ImportOriginal,
+) => ModuleDoubleMap<ModuleExports> | Promise<ModuleDoubleMap<ModuleExports>>
 
 /**
  * Installs explicit test doubles on Vitest's configurable ES-module exports.
  *
  * Unlike hoisted module replacement, this preserves every unmentioned export and
  * uses spies for function exports, so tests can inspect and reset the injected
- * boundary with the normal Vitest mock API. Object-valued service namespaces are
- * replaced directly because they are dependency containers rather than calls.
+ * boundary with the normal Vitest mock API. Object-valued service namespaces keep
+ * their real identity contract while the named dependency methods are replaced.
  */
 export async function injectModuleDoubles<ModuleExports extends object>(
   moduleExports: ModuleExports,
-  factory: ModuleDoubleFactory,
+  factory: ModuleDoubleFactory<ModuleExports>,
 ): Promise<void> {
   // SAFETY: this is the same generic actual-module boundary exposed by Vitest.
   // Snapshot the exports before installing doubles so wrappers retain the real
