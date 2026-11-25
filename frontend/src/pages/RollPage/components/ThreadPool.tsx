@@ -28,6 +28,8 @@ interface ThreadPoolProps {
   shuffleIsPending: boolean
   eligibleThreadIds?: number[] | null
   issueCards?: IssueCardsResponse | null
+  onResetDice?: () => void | Promise<boolean>
+  resetDicePending?: boolean
 }
 
 export function ThreadPool({
@@ -48,6 +50,8 @@ export function ThreadPool({
   shuffleIsPending,
   eligibleThreadIds,
   issueCards,
+  onResetDice,
+  resetDicePending = false,
 }: ThreadPoolProps) {
   const navigate = useNavigate()
   const wasRatingView = useRef(isRatingView)
@@ -188,9 +192,22 @@ export function ThreadPool({
                 Reset Dice or visit your queue to choose what to read next.
               </p>
             </div>
+            {onResetDice ? (
+              <button
+                type="button"
+                onClick={() => {
+                  void onResetDice()
+                }}
+                disabled={resetDicePending}
+                data-testid="reset-dice-zero-choice"
+                className="w-full h-11 min-h-[44px] bg-[var(--theme-comic-accent)]/10 hover:bg-[var(--theme-comic-accent)]/20 border border-[var(--theme-comic-accent)]/20 rounded-xl text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] transition-colors disabled:opacity-50"
+              >
+                {resetDicePending ? 'Resetting…' : 'Reset Dice'}
+              </button>
+            ) : null}
             <button
               onClick={() => navigate('/queue')}
-              className="w-full h-11 min-h-[44px] bg-[var(--theme-comic-accent)]/10 hover:bg-[var(--theme-comic-accent)]/20 border border-[var(--theme-comic-accent)]/20 rounded-xl text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] transition-colors"
+              className="w-full h-11 min-h-[44px] bg-transparent hover:bg-white/5 border border-[var(--theme-border)] rounded-xl text-xs font-black uppercase tracking-widest text-stone-300 transition-colors"
             >
               Go to Queue
             </button>
