@@ -9,13 +9,13 @@ export type IssueMutation =
   | { id: number; type: 'delete'; issueId: number }
   | { id: number; type: 'reorder'; issueIds: number[] }
   | { id: number; type: 'toggle'; issueId: number; nextStatus: Issue['status'] }
-  | { id: number; type: 'create'; issueRange: string; strategy?: 'safe_default' | 'numeric_resort'; acceptedAliasIssueNumbers?: string[] }
+  | { id: number; type: 'create'; issueRange: string; strategy?: 'safe_default' | 'numeric_resort'; acceptedAliasIssueNumbers?: string[]; expectedIssueIds?: number[] }
 
 export type QueuedIssueMutation =
   | { type: 'delete'; issueId: number }
   | { type: 'reorder'; issueIds: number[] }
   | { type: 'toggle'; issueId: number; nextStatus: Issue['status'] }
-  | { type: 'create'; issueRange: string; strategy?: 'safe_default' | 'numeric_resort'; acceptedAliasIssueNumbers?: string[] }
+  | { type: 'create'; issueRange: string; strategy?: 'safe_default' | 'numeric_resort'; acceptedAliasIssueNumbers?: string[]; expectedIssueIds?: number[] }
 
 export type QueueFormState = {
   title: string

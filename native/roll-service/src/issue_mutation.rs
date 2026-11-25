@@ -348,6 +348,14 @@ pub async fn create_issues(
         .iter()
         .map(|row| (row.get(0), row.get(1), row.get(2)))
         .collect();
+    if let Some(expected) = &request.expected_issue_ids {
+        let actual: Vec<i32> = existing.iter().map(|(id, _, _)| *id).collect();
+        if &actual != expected {
+            return Err(ApiError::Conflict(
+                "Issue list changed since preview; reload before committing".to_string(),
+            ));
+        }
+    }
     let existing_numbers: BTreeSet<String> = existing
         .iter()
         .map(|(_, number, _)| number.clone())
@@ -1258,6 +1266,14 @@ pub async fn preview_issue_create(
         .iter()
         .map(|row| (row.get(0), row.get(1), row.get(2)))
         .collect();
+    if let Some(expected) = &request.expected_issue_ids {
+        let actual: Vec<i32> = existing.iter().map(|(id, _, _)| *id).collect();
+        if &actual != expected {
+            return Err(ApiError::Conflict(
+                "Issue list changed since preview; reload before committing".to_string(),
+            ));
+        }
+    }
     let existing_numbers: BTreeSet<String> = existing.iter().map(|(_, n, _)| n.clone()).collect();
     let accepted_aliases: BTreeSet<String> = request
         .accepted_alias_issue_numbers

@@ -40,6 +40,7 @@ interface CreateIssuesPayload {
   append_to_end?: boolean
   strategy?: 'safe_default' | 'numeric_resort'
   accepted_alias_issue_numbers?: string[]
+  expected_issue_ids?: number[]
 }
 
 export interface IssuePreviewItem {
