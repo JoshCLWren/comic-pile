@@ -217,8 +217,50 @@ demonstrably outdated, or concretely rebutted; and independent exact-head
 semantic/acceptance review must confirm that the declared scope is complete and
 safe to integrate.
 
+<<<<<<< HEAD
 Reviewer independence and provenance are determined by the current factory
 controller, not by a hand-maintained model-name comparison in this document.
 Do not fabricate approval markers or formal self-approval. `factory:approved` is
 visibility only, and labels never replace review or CI evidence. Never enable
 auto-merge or merge a moved or unverified head.
+=======
+1. One thorough code review by a model that did **not author the current
+   head**. A review by the head's author model does not count. A model that
+   authored only an earlier head may review (owner decision, 2026-11-24). A
+   review recorded against a previous SHA does not count after the head moves.
+2. CI is green on that head.
+
+There are no extra pre-merge QA, preview, smoke, or migration-rehearsal
+steps. Do not add a `factory:approved` label; controller provenance is the
+authority.
+
+The review controller writes those models as `github-actions[bot]` comments.
+It records the author model from the factory roster when the producing worker
+records the head, and the reviewer model when it launches and interprets an
+independent factory review. Cursor cloud-agent ids (`bc-…`) in a PR footer
+are a distinct identity token, not a substitute for the controller marker.
+
+Only `github-actions[bot]` model markers count. OWNER/MEMBER/COLLABORATOR
+comments — including Cursor agents posting as the repository owner — cannot
+satisfy the gate. Two author markers for one head that disagree exclude
+every model they name.
+
+Markers (entire comment body, written only by the controller):
+
+- Author:
+  `<!-- comic-pile-agent-model-author-v1:pr-<n>:head-<sha>:model-<model>:agent-<author-id> -->`
+- Reviewer:
+  `<!-- comic-pile-agent-model-review-v1:pr-<n>:head-<sha>:author-<author-model>:reviewer-<reviewer-model>:author-agent-<author-id>:reviewer-agent-<reviewer-id>:verdict-approve -->`
+
+The reviewer agent id must differ from the author agent id. Model comparison
+uses the model family: a leading `cursor-` prefix and effort/speed suffixes
+(`none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, `thinking`,
+`fast`) are stripped, so `cursor-grok-4.6-high-fast` and `cursor-grok-4.6-low`
+are the same model.
+
+The factory merge drain refuses the PR when the reviewer model authored the
+current head, the review SHA is stale, or required CI is red. Every model the
+head's author records name is excluded, even when the records disagree. A
+sync merge of `main` carries the author of the commit it merged into. A head
+with no author record (a human push) excludes no model.
+>>>>>>> origin/main
