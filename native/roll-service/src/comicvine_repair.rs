@@ -51,12 +51,10 @@ SELECT e.id, e.metadata_json::text
 FROM external_identities e
 WHERE e.provider = 'comicvine'
   AND e.entity_type = 'issue'
-  AND NOT COALESCE(
-    (e.metadata_json::jsonb->'raw_provider_payload') ?& ARRAY[
-      'id', 'name', 'issue_number', 'cover_date', 'store_date', 'image',
-      'volume', 'person_credits', 'character_credits', 'team_credits',
-      'story_arc_credits', 'date_last_updated'
-    ], false)
+  -- Do not prefilter on raw payload shape here. A complete 12-key payload can
+  -- still need a provider fetch (missing/invalid deep timestamp, stale empty
+  -- credits, or a newer provider revision). Freshness is decided by the
+  -- canonical needs_provider_fetch predicate in process() after claim.
   AND EXISTS (
     SELECT 1 FROM issue_external_identity_mappings m
     WHERE m.external_identity_id = e.id
@@ -1191,18 +1189,17 @@ async fn reconcile_orphaned_refresh_requests(state: &AppState) -> Result<(), Api
         .query(RECONCILE_ORPHANED, &[&RECONCILE_SCAN_LIMIT])
         .await
         .map_err(db::query_error)?;
-    let now = chrono::Utc::now();
+    // Every confirmed identity without a ledger row is a candidate. The
+    // canonical freshness predicate is applied by process() on claim: a fresh
+    // row settles as completed/no_credits from cache without a provider call,
+    // then gains a ledger row and leaves this scan. Bounded enqueue plus that
+    // immediate settle is what advances the scan past fresh rows instead of
+    // reselecting the same page on every drain. A SQL shape prefilter here
+    // would silently exclude full-shaped but stale payloads (#5695).
     let missing: Vec<i32> = rows
         .iter()
-        .filter_map(|row| {
-            let id: i32 = row.get(0);
-            let metadata = row
-                .get::<_, Option<String>>(1)
-                .and_then(|text| serde_json::from_str::<Value>(&text).ok())
-                .unwrap_or(Value::Null);
-            needs_provider_fetch(&metadata, now).then_some(id)
-        })
         .take(BATCH_LIMIT)
+        .map(|row| row.get::<_, i32>(0))
         .collect();
     if missing.is_empty() {
         return Ok(());
@@ -2872,8 +2869,11 @@ mod tests {
         queue_deep_provider_result(&state, 30001, "2026-11-01 17:33:53");
 
         let report = drain_for_test(&state).await;
-        assert_eq!(report.claimed, 1);
-        assert_eq!(report.completed, 1);
+        // Both discovered orphans are reconciled: the empty one is fetched and
+        // hydrated, the full-shaped fresh one is claimed and settled from cache
+        // without a provider call so the bounded scan advances past it.
+        assert_eq!(report.claimed, 2);
+        assert_eq!(report.completed, 2);
         assert_eq!(report.deferred, 0);
 
         let connection = db::checkout(&state).await.expect("assert connection");
@@ -2897,16 +2897,29 @@ mod tests {
             .get(0);
         let metadata: Value = serde_json::from_str(&metadata_text).expect("hydrated JSON");
         assert_eq!(metadata["creator_credits"][0]["name"], "Writer");
-        let fresh_requests: i64 = connection
+        let fresh_request = connection
             .query_one(
-                "SELECT count(*) FROM comicvine_metadata_refresh_requests \
+                "SELECT state, attempts, completed_at IS NOT NULL \
+                 FROM comicvine_metadata_refresh_requests \
                  WHERE external_identity_id = $1",
                 &[&fresh],
             )
             .await
-            .expect("fresh request count")
-            .get(0);
-        assert_eq!(fresh_requests, 0, "fresh metadata must not be enqueued");
+            .expect("fresh row reconciled into the ledger");
+        assert_eq!(fresh_request.get::<_, String>(0), "completed");
+        assert_eq!(fresh_request.get::<_, i32>(1), 1);
+        assert!(
+            fresh_request.get::<_, bool>(2),
+            "fresh metadata must settle, never stay pending"
+        );
+        let calls = state
+            .recording_fake()
+            .expect("recording provider")
+            .calls();
+        assert!(
+            calls.iter().all(|call| !call.path.contains("4000-30002")),
+            "fresh metadata must settle from cache without a provider call"
+        );
 
         let thread = connection
             .query_one(
