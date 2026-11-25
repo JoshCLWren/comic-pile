@@ -6,6 +6,7 @@ import { useInfiniteCollection } from '../pagination'
 import { invalidateAfterQueueMovement, invalidateAfterQueueMutation } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
+import { QUEUE_PAGE_SIZE } from '../query/queueConfig'
 import { queueApi } from '../services/api-queue'
 import { threadsApi } from '../services/api-threads'
 import { getApiErrorDetail } from '../utils/apiError'
@@ -13,9 +14,7 @@ import type { MoveToPositionPayload, Thread, ThreadListItem, ThreadListResponse,
 import type { QueueSortBy } from '../pages/QueuePage/useQueueFilters'
 import type { QueueSort } from '../query/queryKeys'
 
-/** Bounded initial page size for Queue. The cursor (`next_page_token`) drives
- * every subsequent page, so later pages never need an explicit page_size. */
-export const QUEUE_PAGE_SIZE = 50
+export { QUEUE_PAGE_SIZE } from '../query/queueConfig'
 
 /** Bounded page size for the excluded library view. Excluded series are a
  * curated shelf a reader opens deliberately, not a list they scroll, so one
