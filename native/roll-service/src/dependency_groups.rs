@@ -684,10 +684,12 @@ async fn issues_by_ids(
                 id: row.get(0),
                 thread_id: row.get(1),
                 issue_number: row.get(2),
-                position: row.get(3),
-                status: row.get(4),
-                read_at: row.get(5),
-                created_at: row.get(6),
+                overall_issue_number: row.get(3),
+                identity_version: row.get(4),
+                position: row.get(5),
+                status: row.get(6),
+                read_at: row.get(7),
+                created_at: row.get(8),
             }),
         );
     }
