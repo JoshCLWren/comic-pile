@@ -2955,7 +2955,7 @@ mod tests {
         assert_eq!(first.failed, 0);
 
         // Make the deferred retry due before the next drain.
-        let connection = db::checkout(&state).await.expect("request connection");
+        let mut connection = db::checkout(&state).await.expect("request connection");
         connection
             .execute(
                 "UPDATE comicvine_metadata_refresh_requests \
