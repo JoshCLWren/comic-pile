@@ -282,10 +282,17 @@ export const comicVineApi = {
     api.get<ComicVineSeriesIssuesResponse>(`/v2/comicvine/series/${volumeId}/issues`, { params: { series_name: seriesName }, timeout: COMICVINE_ROSTER_TIMEOUT_MS }),
   getIssueIdentity: (issueId: number) =>
     api.get<IssueIdentityResponse>(`/v2/comicvine/issues/${issueId}/identity`),
-  confirmIdentity: (issueId: number, comicvineIssueId: number) =>
-    api.post<IssueIdentityResponse>(`/v2/comicvine/issues/${issueId}/identity:confirm`, { comicvine_issue_id: comicvineIssueId }),
-  replaceIdentity: (issueId: number, comicvineIssueId: number, reason?: string) =>
-    api.post<IssueIdentityResponse>(`/v2/comicvine/issues/${issueId}/identity:replace`, { comicvine_issue_id: comicvineIssueId, reason }),
+  confirmIdentity: (issueId: number, comicvineIssueId: number, edit: IssueIdentityEdit = {}) =>
+    api.post<IssueIdentityResponse>(`/v2/comicvine/issues/${issueId}/identity:confirm`, {
+      comicvine_issue_id: comicvineIssueId,
+      ...identityEditFields(edit),
+    }),
+  replaceIdentity: (issueId: number, comicvineIssueId: number, reason?: string, edit: IssueIdentityEdit = {}) =>
+    api.post<IssueIdentityResponse>(`/v2/comicvine/issues/${issueId}/identity:replace`, {
+      comicvine_issue_id: comicvineIssueId,
+      reason,
+      ...identityEditFields(edit),
+    }),
   refreshMetadata: (issueId: number) =>
     api.post<MetadataRefreshResponse>(`/v2/comicvine/issues/${issueId}/metadata:refresh`),
   applyCorrection: (issueId: number, fieldName: string, canonicalValue: string, reason?: string) =>

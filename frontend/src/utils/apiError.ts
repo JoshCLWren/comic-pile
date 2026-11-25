@@ -1,8 +1,16 @@
 import axios from 'axios'
 import { isNonNullObject, hasProperty, isString } from './runtimeChecks'
 
-export type ApiErrorPayload = { detail?: string }
+export type ApiErrorPayload = {
+  detail?: string | { code?: string; message?: string }
+}
 export type ApiLikeError = { response?: { status?: number; data?: ApiErrorPayload } }
+
+function errorDetail(detail: ApiErrorPayload['detail']): string | null {
+  if (typeof detail === 'string') return detail
+  if (detail && typeof detail.message === 'string') return detail.message
+  return null
+}
 
 const GENERIC_NETWORK_ERRORS = ['Network Error', 'Failed to fetch', 'Network request failed']
 
@@ -58,8 +66,9 @@ function isTransportFailure(error: unknown): boolean {
 
 export function getApiErrorDetail(error: unknown): string {
   if (axios.isAxiosError<ApiErrorPayload>(error)) {
-    if (error.response?.data?.detail) {
-      return error.response.data.detail
+    const detail = errorDetail(error.response?.data?.detail)
+    if (detail) {
+      return detail
     }
     if (isGenericNetworkError(error.message ?? '')) {
       return 'Network error. Please check your connection.'
