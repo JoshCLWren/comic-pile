@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-25T03:15:35.258088+00:00",
+  "generated_at": "2026-11-25T03:31:56+00:00",
   "models": [
     {
       "health": {
@@ -23038,18 +23038,14 @@
   },
   "counts_generated_at": "2026-11-25T03:15:35.258088+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-25T03:15:35Z",
+    "generated_at": "2026-11-25T03:31:57Z",
     "sources": {
-      "groq-free": [
-        "whisper-large-v3"
-      ],
       "kilo-auto": [
         "kilo-auto/free"
       ],
       "nvidia": [
         "bigcode/starcoder2-15b",
         "google/diffusiongemma-26b-a4b-it",
-        "google/gemma-3-12b-it",
         "minimaxai/minimax-m3",
         "moonshotai/kimi-k3",
         "nvidia/llama-3.3-nemotron-super-49b-v1.5",
@@ -23068,11 +23064,11 @@
         "nvidia/riva-translate-4b-instruct-v2",
         "google/gemma-3-4b-it",
         "stepfun-ai/step-5-preview",
+        "google/gemma-3-12b-it",
         "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
         "nvidia/nemotron-3.5-bolt-e4b"
       ],
       "opencode-free": [
-        "iceman-contributor-free",
         "beam-free",
         "hy4-flash-free"
       ]
@@ -23084,10 +23080,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-25T03:15:36.002862+00:00",
-    "days_elapsed": 24.136,
+    "checked_at": "2026-11-25T03:31:57.118725+00:00",
+    "days_elapsed": 24.147,
     "days_in_month": 30.0,
-    "days_left": 5.86,
+    "days_left": 5.85,
     "in_use": true,
     "label": "",
     "metrics": {
@@ -23103,31 +23099,31 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 3304223,
-        "organization": 3304223,
+        "database": 3485251,
+        "organization": 3485251,
         "owner_target": 50000000,
-        "projected_database": 4107006,
-        "projected_organization": 4107006,
-        "projected_share": 0.0082,
-        "share_used": 0.0066
+        "projected_database": 4330042,
+        "projected_organization": 4330042,
+        "projected_share": 0.0087,
+        "share_used": 0.007
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 107686,
-        "organization": 107686,
+        "database": 108277,
+        "organization": 108277,
         "owner_target": 1000000,
-        "projected_database": 133849,
-        "projected_organization": 133849,
-        "projected_share": 0.0134,
+        "projected_database": 134522,
+        "projected_organization": 134522,
+        "projected_share": 0.0135,
         "share_used": 0.0108
       },
       "storage_bytes": {
         "allowance": 5000000000,
-        "database": 17285120,
-        "organization": 17285120,
+        "database": 17301504,
+        "organization": 17301504,
         "owner_target": 250000000,
-        "projected_database": 17285120,
-        "projected_organization": 17285120,
+        "projected_database": 17301504,
+        "projected_organization": 17301504,
         "projected_share": 0.0035,
         "share_used": 0.0035
       }
