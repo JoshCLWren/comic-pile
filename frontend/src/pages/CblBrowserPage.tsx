@@ -1253,7 +1253,6 @@ export default function CblBrowserPage() {
 
           {browsePage && !catalogError && !browseStale && (
             <div className="space-y-4" data-testid="cbl-browse-results">
-<<<<<<< HEAD
               {browsePage.scope === 'folder' && !folder && catalogTotal > 0 && (
                 <p
                   role="status"
@@ -1263,9 +1262,6 @@ export default function CblBrowserPage() {
                   {catalogTotalLabel(catalogTotal, browsePage.folders.length)}
                 </p>
               )}
-=======
-              {browsePage.scope === 'folder' && !folder && catalogTotal > 0 && <p role="status" data-testid="cbl-catalog-total" className="text-xs text-[var(--theme-text-muted)]">{catalogTotalLabel(catalogTotal, browsePage.folders.length)}</p>}
->>>>>>> origin/main
 
               {browsePage.scope === 'folder' && (
                 <nav aria-label="CBL folder path" className="flex flex-wrap items-center gap-1 text-xs">
