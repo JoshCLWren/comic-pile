@@ -51,11 +51,9 @@ export function ComicPillar({
   const progress = getProgressPercentage(activeRatingThread)
   const { metadata } = useComicVineIssueIntelligence(issueId)
   const storyTitle = metadata?.name ?? null
-  // #4652: one physical comic can carry an authored story-local number, an
-  // alternate overall-series number and the provider volume's own number.
-  // Roll shows the alias beside the confirmed ComicVine identity so a reader
-  // can see why story #4 and overall #101 are the same comic.
-  const overallAlias = identityState?.overall_issue_number?.trim() || null
+  // #4652: numbering labels are rendered by the shared ComicIssueIdentity so
+  // Roll, Queue, List, Issue and Mapping show the same authored/overall/provider
+  // properties of one physical comic. No Roll-only numbering projection remains.
   // Read counts cannot identify an issue's ordinal when later issues are read.
   // Keep the canonical number until the actual tracked position is available.
   // The publication date is rendered once, beside the cover in ComicIdentity.
@@ -157,22 +155,6 @@ export function ComicPillar({
         <div className="min-w-0 space-y-3" data-testid="comic-header-row">
           {/* Provider eyebrow and title block */}
           <div className="space-y-2">
-            {identityState?.has_confirmed_identity && identityState.comicvine_issue_id && (
-              <div
-                className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-black uppercase tracking-[0.18em]"
-                style={{ color: 'var(--theme-comic-accent)' }}
-              >
-                <span>COMICVINE #{identityState.comicvine_issue_id}</span>
-                {identityState.provider_issue_number ? (
-                  <span data-testid="comic-provider-issue-number">
-                    VOLUME #{identityState.provider_issue_number}
-                  </span>
-                ) : null}
-                {overallAlias ? (
-                  <span data-testid="comic-overall-alias">OVERALL #{overallAlias}</span>
-                ) : null}
-              </div>
-            )}
             <div className="flex flex-col gap-2">
               {rollResultLine ? (
                 <p
@@ -191,6 +173,10 @@ export function ComicPillar({
                 heading
                 headingTestId="comic-header-title"
                 showStatus={false}
+                overallIssueNumber={identityState?.overall_issue_number}
+                providerIssueNumber={identityState?.provider_issue_number}
+                comicvineIssueId={identityState?.comicvine_issue_id}
+                hasConfirmedIdentity={identityState?.has_confirmed_identity ?? false}
               />
               {storyTitle ? (
                 <p data-testid="comic-story-title" className="text-sm font-semibold leading-snug text-stone-300 break-words">

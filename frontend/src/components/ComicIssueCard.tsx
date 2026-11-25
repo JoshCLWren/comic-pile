@@ -89,6 +89,43 @@ export function ComicIssueCover({
   )
 }
 
+/**
+ * The distinct numbering properties of one physical comic (#4652). The authored
+ * story-local number is rendered by `ComicIssueIdentity`; this adds the alternate
+ * overall-series alias, and — only once a provider identity is confirmed — the
+ * provider volume's own issue number and exact provider issue id. The alias is
+ * intentionally shown before confirmation so a reader can see that story #4 and
+ * overall #101 name the same owned issue without first creating a mapping.
+ */
+export function ComicIssueNumberLabels({
+  overallIssueNumber,
+  providerIssueNumber,
+  comicvineIssueId,
+  hasConfirmedIdentity = false,
+}: {
+  overallIssueNumber?: string | null
+  providerIssueNumber?: string | null
+  comicvineIssueId?: string | null
+  hasConfirmedIdentity?: boolean
+}) {
+  const overall = overallIssueNumber?.trim() || null
+  const provider = providerIssueNumber?.trim() || null
+  const confirmed = hasConfirmedIdentity && !!comicvineIssueId
+  if (!overall && !confirmed) return null
+  return (
+    <div
+      className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-black uppercase tracking-[0.18em] text-[var(--theme-comic-accent)]"
+      data-testid="comic-issue-number-labels"
+    >
+      {confirmed ? <span>COMICVINE #{comicvineIssueId}</span> : null}
+      {confirmed && provider ? (
+        <span data-testid="comic-provider-issue-number">VOLUME #{provider}</span>
+      ) : null}
+      {overall ? <span data-testid="comic-overall-alias">OVERALL #{overall}</span> : null}
+    </div>
+  )
+}
+
 /** Canonical identity line: series, exact issue number, read/rating state. */
 export function ComicIssueIdentity({
   threadTitle,
@@ -99,6 +136,10 @@ export function ComicIssueIdentity({
   heading = false,
   headingTestId,
   showStatus = true,
+  overallIssueNumber,
+  providerIssueNumber,
+  comicvineIssueId,
+  hasConfirmedIdentity = false,
 }: {
   threadTitle: string
   issueNumber: string
@@ -109,6 +150,12 @@ export function ComicIssueIdentity({
   heading?: boolean
   headingTestId?: string
   showStatus?: boolean
+  /** Alternate overall-series label for this same owned issue (#4652). */
+  overallIssueNumber?: string | null
+  /** Provider volume's own issue number, known only once confirmed. */
+  providerIssueNumber?: string | null
+  comicvineIssueId?: string | null
+  hasConfirmedIdentity?: boolean
 }) {
   const titleClass = variant === 'featured' ? 'text-xl' : 'text-sm'
   const Title = heading ? 'h2' : 'p'
@@ -117,6 +164,12 @@ export function ComicIssueIdentity({
       <Title data-testid={headingTestId} className={`break-words ${heading ? 'font-black' : 'font-bold'} leading-snug text-[var(--theme-text-primary)] ${titleClass}`}>
         {threadTitle} <span className="text-[var(--theme-comic-accent)]">#{issueNumber}</span>
       </Title>
+      <ComicIssueNumberLabels
+        overallIssueNumber={overallIssueNumber}
+        providerIssueNumber={providerIssueNumber}
+        comicvineIssueId={comicvineIssueId}
+        hasConfirmedIdentity={hasConfirmedIdentity}
+      />
       {showStatus && <p className="mt-1 text-xs text-[var(--theme-text-muted)]">
         {status === 'read' ? (
           <>
@@ -234,6 +287,10 @@ function buildIdentity(card: IssueCard | null | undefined, threadTitle: string):
     issue_id: card.issue_id,
     thread_id: card.thread_id,
     thread_title: card.thread_title || threadTitle,
+    issue_number: card.issue_number,
+    overall_issue_number: card.overall_issue_number ?? null,
+    identity_version: card.identity_version,
+    provider_issue_number: card.provider_issue_number ?? null,
     has_confirmed_identity: card.has_confirmed_identity,
     comicvine_issue_id: card.comicvine_issue_id ?? null,
     confirmed_mappings: [],
@@ -348,6 +405,10 @@ export function ComicIssueCard({
               status={resolvedStatus}
               rating={resolvedRating}
               variant={variant}
+              overallIssueNumber={card?.overall_issue_number}
+              providerIssueNumber={card?.provider_issue_number}
+              comicvineIssueId={card?.comicvine_issue_id}
+              hasConfirmedIdentity={card?.has_confirmed_identity ?? false}
             />
             <ComicIssueAvailability advisory={advisory} />
             {children}
