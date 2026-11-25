@@ -584,6 +584,7 @@ export default function ComicVineSearchDialog({
       isOpen={isOpen}
       title={dialogTitle}
       onClose={onClose}
+      closeDisabled={isReloadingConflict}
       size="large"
     >
       <div className="space-y-4">

@@ -152,12 +152,14 @@ test('mixed-number provider mapping preserves the authored row across cancel and
         body = { detail: 'Identity changed; reload before retrying' }
       } else {
         card.identity_version = 9
-        card.mapping_state = 'mapped'
+        card.mapping_state = 'confirmed'
         card.has_confirmed_identity = true
         card.provider_issue_number = '100'
         card.comicvine_issue_id = '8100'
         body = { ...identity, identity_version: 9, has_confirmed_identity: true, comicvine_issue_id: '8100', provider_issue_number: '100' }
       }
+    } else if (path === '/api/v1/catalog/series-mappings/preview' || path === '/api/v2/catalog/series-mappings/preview') {
+      body = { preview_token: null, scope: { status: 'available', scope_key: 'synthetic', origin_issue_id: 75, series_label: 'Synthetic arc', basis: 'confirmed' }, provider_series: null, counts: { already_confirmed: 1, safe_exact_match: 0, needs_review_ambiguous: 0, needs_review_conflict: 0, unresolved: 0, excluded_special: 0 }, rows: [], issued_at: 1, expires_at: null }
     } else if (method !== 'GET') {
       unexpectedWrites.push(`${method} ${path}`)
     }
@@ -195,8 +197,9 @@ test('mixed-number provider mapping preserves the authored row across cancel and
     { comicvine_issue_id: 8100, expected_version: 7 },
     { comicvine_issue_id: 8100, expected_version: 8 },
   ])
+  await expect(page.getByRole('dialog', { name: 'Map Sibling Issues' })).toBeVisible()
   await page.getByRole('button', { name: 'Close modal' }).click()
-  await expect(row.getByTestId('comic-provider-issue-number')).toHaveText('PROVIDER #100')
+  await expect(row.getByTestId('comic-provider-issue-number')).toHaveText('VOLUME #100')
   await expect(row.getByTestId('comic-overall-alias')).toHaveText('OVERALL #100')
   await expect(page.getByTestId('blocked-next').getByRole('article')).toHaveCount(1)
   expect(unexpectedWrites).toEqual([])
