@@ -526,6 +526,11 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                   return null;
               }
             })()}
+            {refreshRecoveryError && (
+              <p role="alert" data-testid="creator-refresh-error" className="mt-1 text-[11px] text-[var(--theme-error)]">
+                {refreshRecoveryError}
+              </p>
+            )}
           </div>
         )}
 
