@@ -128,7 +128,9 @@ Once one worker has a valid lease on the highest-priority issue, peers select th
 
 When fewer than four substantive implementation PRs are open and executable unclaimed issues exist, idle workers must prefer opening coherent implementations for separate issues over embellishing existing PRs.
 
-OmniRoute's shared free coding pool cannot absorb a full roster tick. Fixed-model Entry sessions that smoke or run `auto/coding:free` are limited by the configured `FACTORY_OMNIROUTE_FREE_ENTRY_CAP` (default three) concurrent in-flight units: active Entry runs plus equivalent fixed-model leases. Dispatcher, completion drain, and capacity refill must refuse new Entry assignments when that cap is exhausted. The four-PR throughput floor remains the selection preference; it does not override the free-pool cap.
+OmniRoute's shared free coding pool cannot absorb a full roster tick. Fixed-model Entry sessions that smoke or run `auto/coding:free` are limited to at most three concurrent in-flight units (active Entry runs plus equivalent fixed-model leases). Dispatcher, completion drain, and capacity refill must refuse new Entry assignments when that cap is exhausted. The four-PR throughput floor remains the selection preference; it does not override the free-pool cap.
+
+> **Known policy/runtime mismatch:** the runtime exposes `FACTORY_OMNIROUTE_FREE_ENTRY_CAP` with a default of three. That setting does not authorize changing the owner policy's hard cap of three; reconcile runtime configuration through the authorized automation process rather than silently redefining policy in documentation.
 
 A substantive implementation PR changes product behavior, correctness, performance, architecture, deployment behavior, data, or meaningful automated coverage required by its issue. Comments, labels, reviews, PR metadata, help text, and optional test embellishment do not count toward this floor.
 
@@ -158,12 +160,9 @@ do not apply to local sessions. Detailed Codex routing lives in
 Factory ownership is a connection-pool lock around the next action, not a permanent assignment to the model or worker that first touched the issue or PR.
 
 - Exactly one active owner label may hold an issue or PR at a time.
-- **Inactivity is bounded.** A local `factory:local` lease uses `FACTORY_LOCAL_LEASE_TTL_SECONDS`
-  (current runtime default 86400 seconds / 24 hours) without GitHub-recorded target
-  activity; a numbered fixed-model lease uses `FACTORY_FIXED_LEASE_TTL_SECONDS`
-  (current runtime default 7500 seconds / 125 minutes) when there is no active
-  workflow run. Older 60-minute/15-minute values in historical guidance are not
-  the current runtime defaults. The controller
+- **Inactivity is bounded.** A local `factory:local` lease expires after 60
+  minutes without GitHub-recorded target activity; a numbered fixed-model lease
+  uses a 15-minute TTL when there is no active workflow run. The controller
   considers trusted lease markers and the target's `updatedAt` timestamp,
   so missing or untrusted marker comments cannot keep an otherwise inactive
   claim alive forever. Do not use the issue's `createdAt` as a lease clock,
@@ -180,8 +179,8 @@ Factory ownership is a connection-pool lock around the next action, not a perman
 - Cross-worker takeover and merge are allowed after the prior lease is released.
 - A factory that creates or advances a PR releases active ownership when its implementation attempt ends, including while CI or review is pending.
 - Provider failure, timeout, no useful persisted change, or another stable handoff state releases the lease so another worker can try later. Review independence is based on factory identity and exact-head provenance.
-- Review independence excludes every factory worker that authored the exact head under review, not only the worker that opened the PR. Factory pushes share one Git identity, so contributor identity comes from the controller-authored `comic-pile-factory-head-contributor-v1` record written at every push or repair, unioned with the declared branch/body producer and with every other record on the same pull request, because repairs stack onto the previous head instead of rewriting it. A head is authorized by one independent reviewer only when a record exists for that exact head; when one does not, it fails closed to two distinct eligible reviewers instead of assuming the apparent reviewer is independent. Queue selection excludes recorded contributors from semantic-review assignment so a head reaches another eligible reviewer on its own; refusing a contributor's verdict is a backstop, not the routing mechanism.
-- **2026-11-24 owner decision (model rule):** only the model that authored the **current head** may not review it. A model that authored an earlier head may review once a later commit by someone else is the head. The head author is every controller author-model marker for that exact head (all of them when they disagree), else the head commit's `Model:` trailer. A sync (a merge of `main` with no change of its own) carries the author of the commit it merged into, even over a `human` record on the merge. A conflict-resolving merge does not. A head that a factory worker pushed without a model record, a merge that cannot be proven to be a clean sync, or more than five syncs in a row excludes every recorded author. A `human` record, or no record at all, excludes no model. An approval counts only for the exact head it reviewed. A reviewer worker whose executed model is not the head author is independent even if the same worker contributed earlier with another model. Rotisserie's shared review-exclusion resolver implements the rule (JoshCLWren/rotisserie#279). For reviewer selection, apply this model rule: earlier-head authors are eligible once a later head exists, and worker identity alone does not exclude a different executed model.
+- Exact-head contributor provenance comes from the controller-authored `comic-pile-factory-head-contributor-v1` record written at every push or repair, unioned with the declared branch/body producer and every other record on the same pull request, because repairs stack onto earlier heads instead of rewriting them. Reviewer eligibility and queue selection use the shared current-head model resolver below; contributor history alone does not exclude an earlier-head author once a later head exists.
+- **2026-11-24 owner decision (model rule):** only the model that authored the **current head** may not review it. A model that authored an earlier head may review once a later commit by someone else is the head. The head author is every controller author-model marker for that exact head (all of them when they disagree), else the head commit's `Model:` trailer. A sync (a merge of `main` with no change of its own) carries the author of the commit it merged into, even over a `human` record on the merge. A conflict-resolving merge does not. A head that a factory worker pushed without a model record, a merge that cannot be proven to be a clean sync, or more than five syncs in a row excludes every recorded author. A `human` record, or no record at all, excludes no model. An approval counts only for the exact head it reviewed. A reviewer worker whose executed model is not the head author is independent even if the same worker contributed earlier with another model. Rotisserie's shared review-exclusion resolver implements the rule (JoshCLWren/rotisserie#279).
 - A controller claim is not durable until the worker reaches an executable session. Smoke, executor-selection, credential, and other pre-session failures release the owner to `factory:unowned` immediately, preserve the truthful stage, and post `comic-pile-factory-claim-released-v3`. Do not wait for the 900s stale-lease TTL.
   The reusable runner records when the worker session starts. If it never starts,
   a separate trusted-main cleanup job releases the lease before the per-worker
@@ -510,9 +509,10 @@ Rules:
   branch code and never execute the fork checkout with their write token.
   Enrollment does not attest provenance, approve code, or bypass exact-head gates.
 
-- Fixed-model push and PR creation use `PR_REBASE_TOKEN` unless that worker has a
-  fully configured provisioned App. Worker 48 currently uses its Mark Cordova App
-  installation token when all three App secrets exist; other workers keep using
+- Fixed-model push and PR creation use `PR_REBASE_TOKEN` unless the worker has a
+  fully configured App. Worker 48 uses its Mark Cordova App when its mapping and
+  all three App secrets exist; otherwise any worker, including 48, uses the shared
+  factory App when its three secrets exist. Without either App it falls back to
   `PR_REBASE_TOKEN`. Keep the workflow token for trusted controller comments and
   labels. See [worker App identities](../.github/factory-worker-github-apps.md).
 - Never push directly to `main`.
@@ -672,6 +672,8 @@ Use the existing canonical marker schemas:
 - issue claim: `<!-- comic-pile-factory-implement-claim-v3:issue-<n>:<worker>:<epoch>:attempt-<n> -->`
 - issue progress: `<!-- comic-pile-factory-implement-progress-v3:issue-<n>:<worker>:<epoch> -->`
 - review claim: `<!-- comic-pile-factory-review-claim-v2:<sha>:<worker>:<epoch> -->`
+- author model: `<!-- comic-pile-agent-model-author-v1:pr-<pr>:head-<sha>:model-<model>:agent-<author-id> -->`
+- reviewer model: `<!-- comic-pile-agent-model-review-v1:pr-<pr>:head-<sha>:author-<author-model>:reviewer-<reviewer-model>:author-agent-<author-id>:reviewer-agent-<reviewer-id>:verdict-approve -->`
 - current semantic review verdict: `<!-- comic-pile-factory-semantic-review-v1:pr-<pr>:head-<sha>:reviewer-<worker>:producer-<worker-or-unknown>:verdict-<approve-or-repair> -->`
 - legacy review pass verdict: `<!-- comic-pile-factory-review-v2:<sha>:pass -->`
 - legacy review changes-required verdict: `<!-- comic-pile-factory-review-v2:<sha>:changes-required -->`
@@ -704,7 +706,9 @@ Updated by: <durable worker ID and UTC timestamp>
 
 Record observed facts, distinguish local checks from CI, include no secrets, and keep the packet short. A takeover worker reads the current packet before reconstructing context, verifies that its recorded head still matches, and updates or discards stale claims instead of trusting them blindly. The packet is operational state, not a substitute for commits, tests, review markers, issue acceptance criteria, or truthful labels. Completed and verified work does not require a packet.
 
-Review leases default to 45 minutes. Repair and implementation leases default to 60 minutes after the latest real progress. Fixed-model and local owner leases use the configurable runtime TTLs documented above (defaults 7500 and 86400 seconds respectively). Lease expiry permits another worker to continue that issue but does not require a peer to choose it over higher-priority work.
+Review leases last 45 minutes. Repair and implementation leases last 60 minutes after the latest real progress. Lease expiry permits another worker to continue that issue but does not require a peer to choose it over higher-priority work.
+
+> **Known policy/runtime mismatch:** runtime settings `FACTORY_LOCAL_LEASE_TTL_SECONDS` and `FACTORY_FIXED_LEASE_TTL_SECONDS` currently default to 86400 and 7500 seconds. Preserve the 60-minute/15-minute policy above and repair runtime/settings through the authorized automation process; documentation work must not silently change either value.
 
 ## Z.AI free account quota backoff
 
