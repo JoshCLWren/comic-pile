@@ -179,8 +179,9 @@ Factory ownership is a connection-pool lock around the next action, not a perman
   next-action stage. Never overwrite a freshly changed owner during cleanup.
 - Cross-worker takeover and merge are allowed after the prior lease is released.
 - A factory that creates or advances a PR releases active ownership when its implementation attempt ends, including while CI or review is pending.
-- Provider failure, timeout, no useful persisted change, or another stable handoff state releases the lease so another worker can try later. Review independence is based on factory identity and exact-head provenance, not on requiring a different model; OmniRoute may route both workers through the same upstream model.
+- Provider failure, timeout, no useful persisted change, or another stable handoff state releases the lease so another worker can try later. Review independence is based on factory identity and exact-head provenance.
 - Review independence excludes every factory worker that authored the exact head under review, not only the worker that opened the PR. Factory pushes share one Git identity, so contributor identity comes from the controller-authored `comic-pile-factory-head-contributor-v1` record written at every push or repair, unioned with the declared branch/body producer and with every other record on the same pull request, because repairs stack onto the previous head instead of rewriting it. A head is authorized by one independent reviewer only when a record exists for that exact head; when one does not, it fails closed to two distinct eligible reviewers instead of assuming the apparent reviewer is independent. Queue selection excludes recorded contributors from semantic-review assignment so a head reaches another eligible reviewer on its own; refusing a contributor's verdict is a backstop, not the routing mechanism.
+- **2026-11-24 owner decision (model rule):** only the model that authored the **current head** may not review it. A model that authored an earlier head may review once a later commit by someone else is the head. The head author is every controller author-model marker for that exact head (all of them when they disagree), else the head commit's `Model:` trailer. A sync (a merge of `main` with no change of its own) carries the author of the commit it merged into, even over a `human` record on the merge. A conflict-resolving merge does not. A head that a factory worker pushed without a model record, a merge that cannot be proven to be a clean sync, or more than five syncs in a row excludes every recorded author. A `human` record, or no record at all, excludes no model. An approval counts only for the exact head it reviewed. A reviewer worker whose executed model is not the head author is independent even if the same worker contributed earlier with another model. Rotisserie's shared review-exclusion resolver implements the rule (JoshCLWren/rotisserie#279). For reviewer selection, apply this model rule: earlier-head authors are eligible once a later head exists, and worker identity alone does not exclude a different executed model.
 - A controller claim is not durable until the worker reaches an executable session. Smoke, executor-selection, credential, and other pre-session failures release the owner to `factory:unowned` immediately, preserve the truthful stage, and post `comic-pile-factory-claim-released-v3`. Do not wait for the 900s stale-lease TTL.
   The reusable runner records when the worker session starts. If it never starts,
   a separate trusted-main cleanup job releases the lease before the per-worker
@@ -724,7 +725,7 @@ assuming the account is available.
 
 ## External scheduled-factory heartbeat
 
-The former registry issue #1093 is retired as factory heartbeat/registry infrastructure (2026-11-16). GitHub refuses new comments on threads with more than 2,500 comments, and GitHub comments must not be operational infrastructure. No worker, workflow, or controller may read, create, or update #1093 comments. Worker lifecycle (started/exit) is written to Neon by the run workflow's trusted jobs, and attempt outcomes, model health, failover and transitions are persisted to Neon from the trusted Actions job log. Neon and those job logs are authoritative. Issue #1093 and the watchdog's alert issue remain protected and non-executable: workers must never claim, implement, label, or close them.
+The former registry issue #1093 is retired as factory heartbeat/registry infrastructure (2026-11-16). GitHub refuses new comments on threads with more than 2,500 comments, and GitHub comments must not be operational infrastructure. No worker, workflow, or controller may read, create, or update #1093 comments. Worker lifecycle (started/exit) is written to the factory state store by the run workflow's trusted jobs, and attempt outcomes, model health, failover and transitions are persisted there from the trusted Actions job log. The store and those job logs are authoritative. Current callers use Turso; the one-time Factory Store Migrate workflow can copy legacy Neon state. Issue #1093 and the watchdog's alert issue remain protected and non-executable: workers must never claim, implement, label, or close them.
 
 Heartbeat telemetry never counts as substantive progress, never satisfies a valid heartbeat outcome while executable work exists, never outranks executable product work, never extends a lease, and never justifies ending a run early. The external watchdog may report missing or stuck heartbeats, but only Josh or an interactive session acting on his direct instruction may change a scheduled task.
 
@@ -865,9 +866,9 @@ calling to paid Pro access. Do not add a fake free contributor slot. Its text-on
 free tier may be considered for a separately implemented independent static
 reviewer, subject to review-stage routing and separate credentials.
 
-Adding worker IDs does not provision provider accounts or secrets. Existing Neon
-model-health exclusions, source cooldowns, account-level budget accounting, and
-runtime authorization must remain authoritative.
+Adding worker IDs does not provision provider accounts or secrets. Existing
+factory-store model-health exclusions, source cooldowns, account-level budget
+accounting, and runtime authorization must remain authoritative.
 
 ## Owner-authorized persisted work PRs (2026-11-15, #5183)
 

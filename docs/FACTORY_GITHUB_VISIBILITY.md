@@ -111,7 +111,7 @@ Independent reviewers should submit formal `APPROVE` or `REQUEST_CHANGES` review
 
 ## Active heartbeat monitoring
 
-Issue [#1093](https://github.com/JoshCLWren/comic-pile/issues/1093) is retired as the heartbeat/registry: factories never read or write its comments. Active worker identities and capacity are derived from the provider/slot registry at runtime; there is no committed expected-worker JSON or static model roster. Worker lifecycle and terminal outcomes are written to Neon by trusted workflow jobs and logs. <!-- docs-path-check: ignore -->
+Issue [#1093](https://github.com/JoshCLWren/comic-pile/issues/1093) is retired as the heartbeat/registry: factories never read or write its comments. Active worker identities and capacity are derived from the provider/slot registry at runtime; there is no committed expected-worker JSON or static model roster. Worker lifecycle and terminal outcomes are written to the factory state store by trusted workflow jobs and logs. Current callers use Turso; the one-time Factory Store Migrate workflow can copy legacy Neon state. <!-- docs-path-check: ignore -->
 
 `.github/workflows/fixed-model-factory-dispatch-recovery.yml` runs every 15 minutes. It records per-worker freshness, last heartbeat timestamp, last run, and the latest classified runtime outcome in the job summary and the `factory-heartbeat-health` JSON artifact. The generated GitHub Pages fleet scoreboard uses the same observations. At 20 minutes an observation becomes stale; missing heartbeats are reported separately. One fresh worker cannot hide stale peers in these diagnostics.
 
@@ -148,7 +148,7 @@ Historically, workers replaced the same comment at run end. That behavior is ret
 
 The former `.github/workflows/factory-heartbeat-watchdog.yml` workflow is absent. It does not monitor current workers. Do not resurrect disabled schedules or infer active-worker failures from these historical comments. <!-- docs-path-check: ignore -->
 
-No heartbeat write is mandatory or permitted for the retired registry. Current lifecycle telemetry is written only by trusted workflows to Neon and never counts as substantive factory progress, extends a lease, or justifies ending a run.
+No heartbeat write is mandatory or permitted for the retired registry. Current lifecycle telemetry is written only by trusted workflows to the factory state store and never counts as substantive factory progress, extends a lease, or justifies ending a run.
 
 ## Durable GitHub App identity contract
 
@@ -199,7 +199,7 @@ The review controller writes `comic-pile-factory-semantic-review-v1` and `comic-
 A native-style GitHub `APPROVE` review **does not** satisfy `head_has_authorized_approval` / `approval_can_promote` without controller marker provenance:
 - When `provenance_complete == False` (no controller marker for the exact head), the head is fail-closed: **two distinct eligible reviewers** are required, and the producer cannot self-approve.
 - When `provenance_complete == True`, **one eligible reviewer** authorizes the head.
-- Every factory worker that authored the exact head under review is excluded from the eligible reviewer set, not only the worker that opened the PR. Contributor provenance is the union of controller head-contributor records and the declared branch/body producer.
+- Reviewer eligibility excludes the model that authored the current exact head, using every matching author-model marker when they disagree. A reviewer that executed a different model remains eligible even if the same worker contributed an earlier head. Contributor provenance is still the union of controller head-contributor records and the declared branch/body producer; see the 2026-11-24 owner decision in [AUTONOMOUS_FACTORY_POLICY.md](AUTONOMOUS_FACTORY_POLICY.md).
 
 This contract ensures that worker GitHub Apps can push and create PRs, but they cannot forge review authorization or trusted marker provenance.
 
