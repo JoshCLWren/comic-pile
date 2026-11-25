@@ -94,27 +94,30 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
     }
   }, [metadata])
 
-  // Bounded refetch while metadata repair is in progress.
-  // Re-arms after every refetch while repair remains active, so a server that
-  // returns unchanged metadata (React Query keeps the existing reference) still
-  // gets a subsequent refresh instead of leaving credits hidden until a manual
-  // reload. The timer is cancelled on unmount and whenever the effect re-runs
-  // because the metadata moved out of a pending/running repair status.
+  const refreshPollingKey = issueId && metadata ? `${issueId}:${metadata.comicvine_issue_id}` : null
   useEffect(() => {
-    if (!issueId || !metadata) return
+    if (refreshPollingKeyRef.current === refreshPollingKey) return
+    refreshPollingKeyRef.current = refreshPollingKey
+    refreshPollCountRef.current = 0
+    setIsRefreshPollingExhausted(false)
+    setRefreshRecoveryError(null)
+  }, [refreshPollingKey])
+
+  // Bounded refetch while metadata repair is in progress. Re-arm after every
+  // refetch, including structurally unchanged pending responses, but stop after
+  // a fixed attempt budget and expose manual recovery instead of polling forever.
+  // The timer is cancelled on unmount, identity replacement, and terminal states.
+  useEffect(() => {
+    if (!issueId || !metadata || isRefreshPollingExhausted) return
 
     const status = metadata.metadata_status
     const retryAfter = metadata.refresh_retry_after_seconds
 
     if (status !== 'refresh_pending' && status !== 'refresh_running') return
 
-    let delaySeconds: number
-    if (retryAfter == null || retryAfter <= 0) {
-      delaySeconds = METADATA_REFRESH_FALLBACK_SECONDS
-    } else {
-      delaySeconds = retryAfter
-    }
-
+    const delaySeconds = retryAfter != null && retryAfter > 0
+      ? retryAfter
+      : METADATA_REFRESH_FALLBACK_SECONDS
     let cancelled = false
     let timeoutId: ReturnType<typeof setTimeout>
 
@@ -123,10 +126,19 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
     const arm = () => {
       timeoutId = setTimeout(() => {
         if (cancelled) return
-        void refetch().then(() => {
-          if (!cancelled) {
-            arm()
+        if (refreshPollCountRef.current >= METADATA_REFRESH_MAX_POLLS) {
+          setIsRefreshPollingExhausted(true)
+          return
+        }
+        refreshPollCountRef.current += 1
+        void refetch().then((refreshed) => {
+          if (cancelled) return
+          const refreshedStatus = refreshed?.metadata_status
+          if (refreshedStatus !== 'refresh_pending' && refreshedStatus !== 'refresh_running') {
+            refreshPollCountRef.current = 0
+            return
           }
+          arm()
         })
       }, delaySeconds * 1000)
     }
@@ -137,7 +149,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
       cancelled = true
       clearTimeout(timeoutId)
     }
-  }, [issueId, metadata, refetch])
+  }, [issueId, metadata, refetch, isRefreshPollingExhausted])
 
   const handleRetryRefresh = useCallback(async () => {
     if (!issueId || isRetryingRefresh) return
