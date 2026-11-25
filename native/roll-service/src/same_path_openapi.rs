@@ -41,6 +41,7 @@ use utoipa::OpenApi;
     crate::continuity_plans_project_preview::documentation,
     crate::issue_identity_adoption_preview::documentation,
     crate::issue_identity_cbl_reading_graph_preview::documentation,
+    crate::issue_duplicate_reconciliation::documentation,
 ))]
 struct SamePathApi;
 

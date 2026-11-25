@@ -663,6 +663,16 @@ fn build_preview_actions(
     (actions, warnings, can_apply)
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v2/issue-duplicate-reconciliation/detect",
+    operation_id = "issue_duplicate_reconciliation_detect",
+    responses(
+        (status = 200, description = "Detected duplicate groups", body = DuplicateDetectionResponse),
+        (status = 401, description = "Unauthorized"),
+    ),
+    security(("HTTPBearer" = []))
+)]
 pub async fn detect_duplicates(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -679,6 +689,19 @@ pub async fn detect_duplicates(
     Ok(Json(DuplicateDetectionResponse { groups }))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v2/issue-duplicate-reconciliation/preview",
+    operation_id = "issue_duplicate_reconciliation_preview",
+    request_body = ReconcilePreviewRequest,
+    responses(
+        (status = 200, description = "Preview reconciliation", body = ReconcilePreviewResponse),
+        (status = 400, description = "Bad request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Not found"),
+    ),
+    security(("HTTPBearer" = []))
+)]
 pub async fn preview_reconciliation(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -731,6 +754,20 @@ fn is_synthetic_read(read_at: Option<chrono::DateTime<chrono::Utc>>, created_at:
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v2/issue-duplicate-reconciliation/apply",
+    operation_id = "issue_duplicate_reconciliation_apply",
+    request_body = ReconcileApplyRequest,
+    responses(
+        (status = 200, description = "Apply reconciliation", body = ReconcileApplyResponse),
+        (status = 400, description = "Bad request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Not found"),
+        (status = 409, description = "Conflict"),
+    ),
+    security(("HTTPBearer" = []))
+)]
 pub async fn apply_reconciliation(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1124,6 +1161,18 @@ pub struct ReconcileUndoResponse {
     pub warnings: Vec<String>,
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v2/issue-duplicate-reconciliation/undo",
+    operation_id = "issue_duplicate_reconciliation_undo",
+    request_body = ReconcileUndoRequest,
+    responses(
+        (status = 200, description = "Undo reconciliation", body = ReconcileUndoResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Not found"),
+    ),
+    security(("HTTPBearer" = []))
+)]
 pub async fn undo_reconciliation(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1366,3 +1415,6 @@ mod tests {
         assert_ne!(t1, t2);
     }
 }
+
+#[utoipa::path(get, path = "/__docs__/issue-duplicate-reconciliation", responses((status = 200)))]
+pub fn documentation() {}
