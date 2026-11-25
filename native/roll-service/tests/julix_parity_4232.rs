@@ -15,16 +15,13 @@
 //! 466 entries (382 unread). Production numeric IDs below are historical
 //! evidence labels; tests allocate fresh PKs and map symbolic identities.
 
-mod incident_fixtures;
-use incident_fixtures as fixture;
-
 use axum::{
     body::{to_bytes, Body},
     http::{header, Request, StatusCode},
 };
 use comicpile_roll_service::{config::Config, router, test_support, AppState};
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc,
@@ -149,10 +146,6 @@ fn authed(method: &str, path: &str, token: &str, csrf: &str, body: Option<Value>
 
 fn get(path: &str, token: &str, csrf: &str) -> Request<Body> {
     authed("GET", path, token, csrf, None)
-}
-
-fn post_req(path: &str, token: &str, csrf: &str, body: Option<Value>) -> Request<Body> {
-    authed("POST", path, token, csrf, body)
 }
 
 type Conn = deadpool_postgres::Object;
