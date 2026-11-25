@@ -663,6 +663,27 @@ fn build_preview_actions(
     (actions, warnings, can_apply)
 }
 
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    paths(detect_duplicates, preview_reconciliation, apply_reconciliation, undo_reconciliation),
+    components(schemas(
+        DuplicateIssueEvidence,
+        DuplicateRatingEvent,
+        DuplicateReadEvent,
+        DuplicateListMembership,
+        DuplicateCandidateGroup,
+        DuplicateDetectionResponse,
+        ReconcilePreviewRequest,
+        ReconcilePreviewAction,
+        ReconcilePreviewResponse,
+        ReconcileApplyRequest,
+        ReconcileApplyResponse,
+        ReconcileUndoRequest,
+        ReconcileUndoResponse,
+    ))
+)]
+pub struct IssueDuplicateReconciliationApi;
+
 #[utoipa::path(
     get,
     path = "/api/v2/issue-duplicate-reconciliation/detect",
