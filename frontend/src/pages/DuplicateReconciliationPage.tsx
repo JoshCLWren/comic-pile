@@ -55,6 +55,9 @@ export default function DuplicateReconciliationPage() {
   const [duplicateIds, setDuplicateIds] = useState<number[]>([])
   const [preview, setPreview] = useState<ReconcilePreviewResponse | null>(null)
   const [decisions, setDecisions] = useState<Record<string, string>>({})
+  // Keys are retained across re-previews so the explicit choice never
+  // disappears when a re-preview no longer returns the warning action.
+  const [decisionKeys, setDecisionKeys] = useState<string[]>([])
   const [lastUndoId, setLastUndoId] = useState<number | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
@@ -76,6 +79,16 @@ export default function DuplicateReconciliationPage() {
     },
     onSuccess: (data) => {
       setPreview(data)
+      setDecisionKeys((previous) =>
+        Array.from(
+          new Set([
+            ...previous,
+            ...data.actions.flatMap((action) =>
+              action.decision_key ? [action.decision_key] : [],
+            ),
+          ]),
+        ).sort(),
+      )
       setMessage(null)
     },
     onError: (err) => {
@@ -132,14 +145,23 @@ export default function DuplicateReconciliationPage() {
     setDuplicateIds(group.suggested_duplicate_issue_ids)
     setPreview(null)
     setDecisions({})
+    setDecisionKeys([])
     setMessage(null)
   }
 
   const toggleDuplicate = (issueId: number) => {
     setPreview(null)
+    setDecisions({})
+    setDecisionKeys([])
     setDuplicateIds((prev) =>
       prev.includes(issueId) ? prev.filter((id) => id !== issueId) : [...prev, issueId],
     )
+  }
+
+  const chooseDecision = (key: string, choice: string) => {
+    const next = { ...decisions, [key]: choice }
+    setDecisions(next)
+    previewMutation.mutate(next)
   }
 
   return (
@@ -154,6 +176,22 @@ export default function DuplicateReconciliationPage() {
       {message && (
         <div className="mb-4 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 py-3 text-sm text-[var(--theme-text-primary)]">
           {message}
+        </div>
+      )}
+
+      {lastUndoId != null && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-4 py-3">
+          <span className="text-sm text-[var(--theme-text-muted)]">
+            Last reconciliation can still be undone.
+          </span>
+          <button
+            type="button"
+            className="rounded-lg border border-[var(--theme-border)] px-4 py-2 text-sm text-[var(--theme-text-primary)] disabled:opacity-50"
+            disabled={undoMutation.isPending}
+            onClick={() => undoMutation.mutate(lastUndoId)}
+          >
+            {undoMutation.isPending ? 'Undoing…' : `Undo #${lastUndoId}`}
+          </button>
         </div>
       )}
 
@@ -249,16 +287,6 @@ export default function DuplicateReconciliationPage() {
                   >
                     {previewMutation.isPending ? 'Previewing…' : 'Preview resolution'}
                   </button>
-                  {lastUndoId != null && (
-                    <button
-                      type="button"
-                      className="rounded-lg border border-[var(--theme-border)] px-4 py-2 text-sm text-[var(--theme-text-primary)]"
-                      disabled={undoMutation.isPending}
-                      onClick={() => undoMutation.mutate(lastUndoId)}
-                    >
-                      {undoMutation.isPending ? 'Undoing…' : `Undo #${lastUndoId}`}
-                    </button>
-                  )}
                 </div>
               </div>
 
@@ -286,29 +314,61 @@ export default function DuplicateReconciliationPage() {
               )}
               <div className="space-y-2">
                 {preview.actions.map((action, i) => (
-                  <div key={i} className="rounded border border-[var(--theme-border)] px-3 py-2 text-sm">
-                    <div className="font-medium text-[var(--theme-text-primary)]">{action.kind}</div>
+                  <div key={`${action.kind}-${i}`} className="rounded border border-[var(--theme-border)] px-3 py-2 text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-[var(--theme-text-primary)]">{action.kind}</span>
+                      <span
+                        className={
+                          action.safe
+                            ? 'text-xs text-[var(--theme-success)]'
+                            : 'text-xs text-[var(--theme-warning)]'
+                        }
+                      >
+                        {action.safe ? 'Safe' : 'Needs review'}
+                      </span>
+                    </div>
                     <div className="text-xs text-[var(--theme-text-muted)]">{action.description}</div>
-                    {action.requires_decision && action.decision_key && (
-                      <label className="mt-2 flex items-center gap-2 text-xs text-[var(--theme-text-muted)]">
-                        <input
-                          type="checkbox"
-                          checked={decisions[action.decision_key] === 'merge'}
-                          onChange={(e) => {
-                            const next = {
-                              ...decisions,
-                              [action.decision_key!]: e.target.checked ? 'merge' : 'keep_distinct',
-                            }
-                            setDecisions(next)
-                            previewMutation.mutate(next)
-                          }}
-                        />
-                        Confirm merge despite warning
-                      </label>
-                    )}
                   </div>
                 ))}
               </div>
+
+              {decisionKeys.length > 0 && (
+                <div className="mt-4 space-y-3 rounded-lg border border-[var(--theme-border)] p-3">
+                  <div className="text-sm font-medium text-[var(--theme-text-primary)]">
+                    Choose how to resolve each flagged alias
+                  </div>
+                  {decisionKeys.map((key) => (
+                    <div key={key} className="space-y-2">
+                      <div className="text-xs text-[var(--theme-text-muted)]">{key}</div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          aria-pressed={decisions[key] !== 'keep_distinct'}
+                          className="rounded-lg border border-[var(--theme-primary-action)] px-3 py-1.5 text-xs text-[var(--theme-text-primary)] aria-pressed:bg-[var(--theme-primary-action)]/15 disabled:opacity-50"
+                          disabled={previewMutation.isPending}
+                          onClick={() => chooseDecision(key, 'merge')}
+                        >
+                          Safe link (merge)
+                        </button>
+                        <button
+                          type="button"
+                          aria-pressed={decisions[key] === 'keep_distinct'}
+                          className="rounded-lg border border-[var(--theme-border)] px-3 py-1.5 text-xs text-[var(--theme-text-primary)] aria-pressed:bg-[var(--theme-bg-hover)] disabled:opacity-50"
+                          disabled={previewMutation.isPending}
+                          onClick={() => chooseDecision(key, 'keep_distinct')}
+                        >
+                          Keep distinct
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {!preview.can_apply && (
+                <p className="mt-3 text-xs text-[var(--theme-warning)]">
+                  Apply is disabled until every flagged alias has an explicit “Safe link” or “Keep distinct” choice. You can change a choice at any time before applying.
+                </p>
+              )}
               <div className="mt-4 flex gap-2">
                 <button
                   type="button"
