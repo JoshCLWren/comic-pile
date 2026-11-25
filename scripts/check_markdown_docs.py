@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
@@ -24,12 +25,37 @@ ALLOWED_ROOT_MARKDOWN = {
 IGNORED_DIRECTORIES = {".git", ".venv", ".vercel", "node_modules", "archive"}
 
 
+def _git_tracked_markdown_files(root: Path) -> list[Path] | None:
+    """Return tracked Markdown files from git, or None when git is unavailable."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "--", "*.md", "**/*.md"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    files: list[Path] = []
+    for line in result.stdout.splitlines():
+        if not line:
+            continue
+        rel = Path(line)
+        if any(part in IGNORED_DIRECTORIES for part in rel.parts):
+            continue
+        files.append((root / rel).resolve())
+    return sorted(files)
+
+
 def iter_markdown_files(root: Path) -> list[Path]:
     """Return Markdown paths that should participate in documentation checks.
 
-    Historical archive documents are intentionally excluded because they preserve point-in-time
-    evidence and may contain dead links or machine-local paths that must not become current
-    repository contracts.
+    In git checkouts, only tracked Markdown files are validated so untracked or
+    ignored overlays do not invalidate repository documentation checks.
+
+    Historical archive documents are intentionally excluded because they preserve
+    point-in-time evidence and may contain dead links or machine-local paths that
+    must not become current repository contracts.
 
     Args:
         root: Repository root to inspect.
@@ -37,6 +63,9 @@ def iter_markdown_files(root: Path) -> list[Path]:
     Returns:
         Sorted Markdown paths included in validation.
     """
+    tracked = _git_tracked_markdown_files(root)
+    if tracked is not None:
+        return tracked
     return sorted(
         path
         for path in root.rglob("*.md")

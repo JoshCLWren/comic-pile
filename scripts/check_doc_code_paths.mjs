@@ -118,11 +118,26 @@ function walk(root, skip) {
 
 /** Return Markdown paths (sorted) that participate in documentation checks. */
 export function iterMarkdownFiles(root) {
-  return walk(root, IGNORED_DIRECTORIES)
-    .filter((file) => file.endsWith('.md'))
-    .sort((a, b) =>
-      compareParts(path.relative(root, a).split(path.sep).join('/'), path.relative(root, b).split(path.sep).join('/')),
-    );
+  try {
+    const out = execFileSync('git', ['-C', root, 'ls-files', '--', '*.md', '**/*.md'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      maxBuffer: 256 * 1024 * 1024,
+    });
+    const tracked = out
+      .split('\n')
+      .filter(Boolean)
+      .filter((rel) => !rel.split('/').some((part) => IGNORED_DIRECTORIES.has(part)))
+      .sort(compareParts)
+      .map((rel) => path.join(root, ...rel.split('/')));
+    return tracked;
+  } catch {
+    return walk(root, IGNORED_DIRECTORIES)
+      .filter((file) => file.endsWith('.md'))
+      .sort((a, b) =>
+        compareParts(path.relative(root, a).split(path.sep).join('/'), path.relative(root, b).split(path.sep).join('/')),
+      );
+  }
 }
 
 /** Return repository-relative tracked file paths, falling back to a directory walk. */
