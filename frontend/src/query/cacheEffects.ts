@@ -1284,15 +1284,3 @@ export async function invalidateAfterReadingGraphRepair(
     invalidateReadingEligibility(client, { includeAuthoringLists: true }),
   ])
 }
-
-export async function invalidateAfterDuplicateReconciliation(client: QueryClient): Promise<void> {
-  await Promise.all([
-    client.invalidateQueries({ queryKey: queryKeys.issueDuplicateReconciliation.all }),
-    client.invalidateQueries({ queryKey: queryKeys.thread.all }),
-    client.invalidateQueries({ queryKey: queryKeys.queue.all }),
-    client.invalidateQueries({ queryKey: queryKeys.roll.all }),
-    client.invalidateQueries({ queryKey: queryKeys.activity.all }),
-    client.invalidateQueries({ queryKey: queryKeys.customCBLs.all }),
-    client.invalidateQueries({ queryKey: queryKeys.issueCards.all }),
-  ])
-}
