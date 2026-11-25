@@ -1,0 +1,777 @@
+//! GitHub OAuth sign-in for the public Rotisserie control room.
+//!
+//! ComicPile only hosts the OAuth exchange and authorized workflow dispatch.
+//! GitHub remains the identity provider and Rotisserie owns factory policy.
+//! No GitHub access token or application secret ever reaches the public page.
+#![forbid(unsafe_code)]
+
+use crate::{outbound::OutboundRequest, ApiError, AppState};
+use axum::{
+    body::HttpBody,
+    extract::{Query, State},
+    http::{header, HeaderMap, HeaderValue, Method, StatusCode},
+    response::{IntoResponse, Response},
+    Json,
+};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use bytes::Bytes as HttpBytes;
+use http_body_util::BodyExt;
+use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
+use std::{sync::Arc, time::Duration};
+use uuid::Uuid;
+
+pub(crate) const REPO: &str = "JoshCLWren/comic-pile";
+const PAGES_URL: &str = "https://joshclwren.github.io/comic-pile/";
+const PAGES_ORIGIN: &str = "https://joshclwren.github.io";
+const CALLBACK_URL: &str = "https://comic-pile.vercel.app/api/v2/factory/github/callback";
+const STATE_COOKIE: &str = "rotisserie_github_oauth";
+const COOKIE_PATH: &str = "/api/v2/factory/github";
+const SESSION_AUDIENCE: &str = "rotisserie-github-admin";
+const STATE_AUDIENCE: &str = "rotisserie-github-oauth-state";
+const STATE_TTL_SECONDS: usize = 300;
+const SESSION_TTL_SECONDS: usize = 20 * 60;
+const MAX_PROVIDER_RESPONSE: usize = 20_000;
+const MAX_COMMAND_BYTES: usize = 4096;
+const WRITE_WORKFLOW: &str = "rotisserie-operator.yml";
+const READ_WORKFLOW: &str = "rotisserie-operator-read.yml";
+pub(crate) const OPERATOR_WORKFLOWS: [&str; 2] = [WRITE_WORKFLOW, READ_WORKFLOW];
+/// Mirrors `WRITE_OPERATIONS` in Rotisserie's `control_contract.py` (main plus #252).
+const WRITE_OPERATIONS: [&str; 18] = [
+    "run",
+    "cancel",
+    "prioritize",
+    "sync",
+    "unstick",
+    "settings",
+    "provider_switch",
+    "model_switch",
+    "incident_start",
+    "incident_stop",
+    "doctor_fix",
+    "release_expired",
+    "claim",
+    "finish",
+    "labels",
+    "estimate_neon",
+    "close",
+    "backoffs_reset",
+];
+
+#[derive(Debug, Serialize, Deserialize)]
+struct OAuthState {
+    aud: String,
+    nonce: String,
+    verifier: String,
+    exp: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct AdminSession {
+    aud: String,
+    sub: String,
+    login: String,
+    iat: usize,
+    exp: usize,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CallbackParams {
+    code: Option<String>,
+    state: Option<String>,
+    error: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct OAuthToken {
+    access_token: Option<String>,
+    error: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GitHubUser {
+    id: u64,
+    login: String,
+}
+
+fn seconds() -> usize {
+    chrono::Utc::now().timestamp().max(0) as usize
+}
+
+fn configured() -> Result<(String, String), ApiError> {
+    let client_id = std::env::var("ROTISSERIE_GITHUB_OAUTH_CLIENT_ID").unwrap_or_default();
+    let client_secret = std::env::var("ROTISSERIE_GITHUB_OAUTH_CLIENT_SECRET").unwrap_or_default();
+    if client_id.is_empty() || client_secret.is_empty() {
+        return Err(ApiError::ServiceUnavailable(
+            "GitHub sign-in is not configured yet".into(),
+        ));
+    }
+    Ok((client_id, client_secret))
+}
+
+/// The allowlist always includes the owner's immutable GitHub user ID.
+/// Only trusted server configuration can grant additional access.
+fn allowed(id: u64, extra: &str) -> bool {
+    if id == 4_014_199 {
+        return true;
+    }
+    if extra.is_empty() {
+        return false;
+    }
+    if extra
+        .split(',')
+        .any(|value| value.is_empty() || !value.bytes().all(|byte| byte.is_ascii_digit()))
+    {
+        return false;
+    }
+    extra
+        .split(',')
+        .filter_map(|value| value.parse::<u64>().ok())
+        .any(|value| value == id)
+}
+
+fn is_admin(id: u64) -> bool {
+    allowed(
+        id,
+        &std::env::var("ROTISSERIE_ADMIN_GITHUB_IDS").unwrap_or_default(),
+    )
+}
+
+fn oauth_encoding_key(state: &AppState) -> Result<EncodingKey, ApiError> {
+    EncodingKey::from_secret(state.jwt_secret.as_bytes())
+        .map_err(|_| ApiError::Internal("GitHub sign-in unavailable".into()))
+}
+
+fn oauth_decoding_key(state: &AppState) -> Result<DecodingKey, ApiError> {
+    DecodingKey::from_secret(state.jwt_secret.as_bytes())
+        .map_err(|_| ApiError::Unauthorized("GitHub sign-in unavailable".into()))
+}
+
+fn jwt_validation(audience: &str) -> Validation {
+    let mut validation = Validation::new(Algorithm::HS256);
+    validation.set_audience(&[audience]);
+    validation.required_spec_claims.insert("exp".into());
+    // OAuth state and administrator sessions have exact short lifetimes; the
+    // jsonwebtoken default leeway would otherwise accept them after expiry.
+    validation.leeway = 0;
+    validation
+}
+
+fn verified_session(state: &AppState, token: &str) -> Result<AdminSession, ApiError> {
+    let claims = decode::<AdminSession>(
+        token,
+        &oauth_decoding_key(state)?,
+        &jwt_validation(SESSION_AUDIENCE),
+    )
+    .map_err(|_| ApiError::Unauthorized("GitHub sign-in expired or invalid".into()))?
+    .claims;
+    // `decode` validates the audience and rejects expired tokens. Keep a
+    // separate upper bound so a valid signature cannot create an excessively
+    // long-lived administrator session.
+    if claims
+        .sub
+        .parse::<u64>()
+        .ok()
+        .is_none_or(|id| !is_admin(id))
+        || claims.exp > seconds().saturating_add(SESSION_TTL_SECONDS)
+    {
+        return Err(ApiError::Forbidden("Not a Rotisserie administrator".into()));
+    }
+    Ok(claims)
+}
+
+pub(crate) fn session_from_headers(
+    state: &AppState,
+    headers: &HeaderMap,
+) -> Result<AdminSession, ApiError> {
+    let bearer = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "))
+        .ok_or_else(|| ApiError::Unauthorized("Sign in with GitHub first".into()))?;
+    verified_session(state, bearer)
+}
+
+fn state_cookie(headers: &HeaderMap) -> Option<&str> {
+    headers
+        .get(header::COOKIE)?
+        .to_str()
+        .ok()?
+        .split(';')
+        .map(str::trim)
+        .find_map(|part| part.strip_prefix(STATE_COOKIE)?.strip_prefix('='))
+}
+
+fn secure_response(mut response: Response) -> Response {
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response.headers_mut().insert(
+        header::REFERRER_POLICY,
+        HeaderValue::from_static("no-referrer"),
+    );
+    response
+}
+
+fn redirect(location: &str) -> Response {
+    let mut response = StatusCode::SEE_OTHER.into_response();
+    if let Ok(header) = HeaderValue::from_str(location) {
+        response.headers_mut().insert(header::LOCATION, header);
+    }
+    secure_response(response)
+}
+
+fn with_cookie(mut response: Response, value: &str) -> Response {
+    if let Ok(cookie) = HeaderValue::from_str(value) {
+        response.headers_mut().insert(header::SET_COOKIE, cookie);
+    }
+    response
+}
+
+fn clear_cookie(response: Response) -> Response {
+    with_cookie(
+        response,
+        &format!("{STATE_COOKIE}=; Path={COOKIE_PATH}; Max-Age=0; Secure; HttpOnly; SameSite=Lax"),
+    )
+}
+
+pub(crate) fn cors(mut response: Response) -> Response {
+    let headers = response.headers_mut();
+    headers.insert(
+        header::ACCESS_CONTROL_ALLOW_ORIGIN,
+        HeaderValue::from_static(PAGES_ORIGIN),
+    );
+    headers.insert(
+        header::ACCESS_CONTROL_ALLOW_METHODS,
+        HeaderValue::from_static("GET, POST, OPTIONS"),
+    );
+    headers.insert(
+        header::ACCESS_CONTROL_ALLOW_HEADERS,
+        HeaderValue::from_static("Authorization, Content-Type"),
+    );
+    headers.insert(header::VARY, HeaderValue::from_static("Origin"));
+    secure_response(response)
+}
+
+/// Navigating here starts an OAuth authorization-code + PKCE redirect.
+/// The random verifier and nonce remain in an HTTP-only signed cookie.
+pub async fn start(State(state): State<Arc<AppState>>) -> Response {
+    let (client_id, _) = match configured() {
+        Ok(value) => value,
+        Err(error) => return secure_response(error.into_response()),
+    };
+    let nonce = Uuid::new_v4().simple().to_string();
+    let verifier = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple(),);
+    let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
+    let pending = OAuthState {
+        aud: STATE_AUDIENCE.into(),
+        nonce: nonce.clone(),
+        verifier,
+        exp: seconds() + STATE_TTL_SECONDS,
+    };
+    let key = match oauth_encoding_key(&state) {
+        Ok(value) => value,
+        Err(error) => return secure_response(error.into_response()),
+    };
+    let cookie_value = match encode(&Header::new(Algorithm::HS256), &pending, &key) {
+        Ok(value) => value,
+        Err(_) => {
+            return secure_response(
+                ApiError::Internal("Sign-in unavailable".into()).into_response(),
+            )
+        }
+    };
+    let query = form_urlencoded::Serializer::new(String::new())
+        .append_pair("client_id", &client_id)
+        .append_pair("redirect_uri", CALLBACK_URL)
+        .append_pair("scope", "read:user")
+        .append_pair("state", &nonce)
+        .append_pair("code_challenge", &challenge)
+        .append_pair("code_challenge_method", "S256")
+        .finish();
+    with_cookie(
+        redirect(&format!("https://github.com/login/oauth/authorize?{query}")),
+        &format!(
+            "{STATE_COOKIE}={cookie_value}; Path={COOKIE_PATH}; Max-Age=300; Secure; HttpOnly; SameSite=Lax"
+        ),
+    )
+}
+
+async fn provider_json(
+    state: &AppState,
+    host: &str,
+    request: OutboundRequest,
+) -> Result<(StatusCode, Value), ApiError> {
+    let response =
+        tokio::time::timeout(Duration::from_secs(10), state.outbound.send(host, request))
+            .await
+            .map_err(|_| ApiError::ServiceUnavailable("GitHub authentication timed out".into()))?
+            .map_err(|_| {
+                ApiError::ServiceUnavailable("GitHub authentication unavailable".into())
+            })?;
+    if response
+        .body
+        .size_hint()
+        .upper()
+        .is_some_and(|length| length > MAX_PROVIDER_RESPONSE as u64)
+    {
+        return Err(ApiError::ServiceUnavailable(
+            "Invalid GitHub response".into(),
+        ));
+    }
+    let status = response.status;
+    let bytes = tokio::time::timeout(Duration::from_secs(10), response.body.collect())
+        .await
+        .map_err(|_| ApiError::ServiceUnavailable("GitHub response timed out".into()))?
+        .map_err(|_| ApiError::ServiceUnavailable("Invalid GitHub response".into()))?
+        .to_bytes();
+    if bytes.len() > MAX_PROVIDER_RESPONSE {
+        return Err(ApiError::ServiceUnavailable(
+            "GitHub response too large".into(),
+        ));
+    }
+    let data: Value = serde_json::from_slice(&bytes)
+        .map_err(|_| ApiError::ServiceUnavailable("Invalid GitHub response".into()))?;
+    Ok((status, data))
+}
+
+/// Stable, non-secret categories for callback failures. Do not log raw OAuth
+/// query parameters, cookies, provider bodies, or access tokens.
+fn oauth_failure_stage(error: &ApiError) -> &'static str {
+    match error {
+        ApiError::Unauthorized(message) => match message.as_str() {
+            "GitHub sign-in was cancelled" => "github_authorization_cancelled",
+            "Missing authorization code" => "authorization_code_missing",
+            "Missing OAuth state" => "oauth_state_missing",
+            "Missing OAuth state cookie" => "oauth_cookie_missing",
+            "OAuth state expired" => "oauth_cookie_invalid_or_expired",
+            "OAuth state mismatch" => "oauth_state_mismatch",
+            "GitHub authorization failed" => "github_token_exchange_failed",
+            "Could not verify GitHub identity" => "github_user_lookup_failed",
+            _ => "authorization_rejected",
+        },
+        ApiError::Forbidden(_) => "github_identity_not_authorized",
+        ApiError::ServiceUnavailable(_) => "github_provider_unavailable",
+        ApiError::Internal(_) => "oauth_internal_error",
+        _ => "oauth_other_error",
+    }
+}
+
+fn github_provider_error_code(error: &str) -> &'static str {
+    match error {
+        "incorrect_client_credentials" => "incorrect_client_credentials",
+        "redirect_uri_mismatch" => "redirect_uri_mismatch",
+        "bad_verification_code" => "bad_verification_code",
+        "unverified_user_email" => "unverified_user_email",
+        "application_suspended" => "application_suspended",
+        "access_denied" => "access_denied",
+        _ => "other_provider_error",
+    }
+}
+
+async fn finish_callback(
+    state: Arc<AppState>,
+    headers: HeaderMap,
+    params: CallbackParams,
+) -> Result<Response, ApiError> {
+    if let Some(provider_error) = params.error.as_deref() {
+        tracing::warn!(
+            oauth_stage = "github_authorization",
+            provider_error = github_provider_error_code(provider_error),
+            "Rotisserie OAuth authorization rejected before callback exchange"
+        );
+        return Err(ApiError::Unauthorized(
+            "GitHub sign-in was cancelled".into(),
+        ));
+    }
+    let code = params
+        .code
+        .filter(|v| !v.is_empty() && v.len() < 1024)
+        .ok_or_else(|| ApiError::Unauthorized("Missing authorization code".into()))?;
+    let presented_nonce = params
+        .state
+        .ok_or_else(|| ApiError::Unauthorized("Missing OAuth state".into()))?;
+    let signed_state = state_cookie(&headers)
+        .ok_or_else(|| ApiError::Unauthorized("Missing OAuth state cookie".into()))?;
+    let pending = decode::<OAuthState>(
+        signed_state,
+        &oauth_decoding_key(&state)?,
+        &jwt_validation(STATE_AUDIENCE),
+    )
+    .map_err(|_| ApiError::Unauthorized("OAuth state expired".into()))?
+    .claims;
+    if pending.aud != STATE_AUDIENCE || pending.nonce != presented_nonce {
+        return Err(ApiError::Unauthorized("OAuth state mismatch".into()));
+    }
+    let (client_id, client_secret) = configured()?;
+    let form = form_urlencoded::Serializer::new(String::new())
+        .append_pair("client_id", &client_id)
+        .append_pair("client_secret", &client_secret)
+        .append_pair("code", &code)
+        .append_pair("redirect_uri", CALLBACK_URL)
+        .append_pair("code_verifier", &pending.verifier)
+        .finish();
+    let request = OutboundRequest {
+        method: Method::POST,
+        path: "/login/oauth/access_token".into(),
+        headers: vec![
+            ("Accept".into(), "application/json".into()),
+            (
+                "Content-Type".into(),
+                "application/x-www-form-urlencoded".into(),
+            ),
+            ("User-Agent".into(), "ComicPile-Rotisserie".into()),
+        ],
+        body: HttpBytes::from(form),
+    };
+    let (status, token_body) = match provider_json(&state, "github.com", request).await {
+        Ok(value) => value,
+        Err(error) => {
+            tracing::warn!(
+                oauth_stage = "github_token_transport",
+                failure_stage = oauth_failure_stage(&error),
+                "Rotisserie OAuth token exchange unavailable"
+            );
+            return Err(error);
+        }
+    };
+    if !status.is_success() {
+        tracing::warn!(
+            oauth_stage = "github_token_status",
+            github_status = status.as_u16(),
+            "Rotisserie OAuth token exchange rejected"
+        );
+        return Err(ApiError::Unauthorized("GitHub authorization failed".into()));
+    }
+    let token: OAuthToken = serde_json::from_value(token_body)
+        .map_err(|_| ApiError::Unauthorized("GitHub authorization failed".into()))?;
+    if let Some(provider_error) = token.error {
+        tracing::warn!(
+            oauth_stage = "github_token_rejection",
+            provider_error = github_provider_error_code(&provider_error),
+            "Rotisserie OAuth token exchange rejected"
+        );
+        return Err(ApiError::Unauthorized("GitHub authorization failed".into()));
+    }
+    let access_token = token
+        .access_token
+        .filter(|token| !token.is_empty())
+        .ok_or_else(|| ApiError::Unauthorized("GitHub authorization failed".into()))?;
+    let request = OutboundRequest::get(
+        "/user",
+        vec![
+            ("Accept".into(), "application/vnd.github+json".into()),
+            ("Authorization".into(), format!("Bearer {access_token}")),
+            ("User-Agent".into(), "ComicPile-Rotisserie".into()),
+        ],
+    );
+    let (status, user_body) = match provider_json(&state, "api.github.com", request).await {
+        Ok(value) => value,
+        Err(error) => {
+            tracing::warn!(
+                oauth_stage = "github_user_transport",
+                failure_stage = oauth_failure_stage(&error),
+                "Rotisserie OAuth identity lookup unavailable"
+            );
+            return Err(error);
+        }
+    };
+    if !status.is_success() {
+        tracing::warn!(
+            oauth_stage = "github_user_status",
+            github_status = status.as_u16(),
+            "Rotisserie OAuth identity lookup rejected"
+        );
+        return Err(ApiError::Unauthorized(
+            "Could not verify GitHub identity".into(),
+        ));
+    }
+    let user: GitHubUser = serde_json::from_value(user_body)
+        .map_err(|_| ApiError::Unauthorized("Could not verify GitHub identity".into()))?;
+    if !is_admin(user.id) {
+        tracing::warn!(github_user_id = user.id, "Rotisserie OAuth admin denied");
+        return Err(ApiError::Forbidden(
+            "GitHub user is not a Rotisserie administrator".into(),
+        ));
+    }
+    let now = seconds();
+    let session = AdminSession {
+        aud: SESSION_AUDIENCE.into(),
+        sub: user.id.to_string(),
+        login: user.login,
+        iat: now,
+        exp: now + SESSION_TTL_SECONDS,
+    };
+    let key = oauth_encoding_key(&state)?;
+    let signed = encode(&Header::new(Algorithm::HS256), &session, &key)
+        .map_err(|_| ApiError::Internal("Sign-in unavailable".into()))?;
+    tracing::info!(github_user_id = user.id, "Rotisserie OAuth admin signed in");
+    Ok(redirect(&format!(
+        "{PAGES_URL}#rotisserie_session={signed}"
+    )))
+}
+
+/// The server exchanges the code, verifies /user and returns only a short-lived
+/// Rotisserie session to the public site. The GitHub token is discarded.
+pub async fn callback(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(params): Query<CallbackParams>,
+) -> Response {
+    let result = finish_callback(state, headers, params).await;
+    match result {
+        Ok(response) => clear_cookie(response),
+        Err(error) => {
+            tracing::warn!(
+                error_kind = "github_oauth_rejected",
+                failure_stage = oauth_failure_stage(&error),
+                "Rotisserie OAuth sign-in failed"
+            );
+            let code = match error {
+                ApiError::Forbidden(_) => "not_admin",
+                _ => "sign_in_failed",
+            };
+            clear_cookie(redirect(&format!("{PAGES_URL}#rotisserie_error={code}")))
+        }
+    }
+}
+
+pub(crate) fn same_origin(headers: &HeaderMap) -> bool {
+    headers
+        .get(header::ORIGIN)
+        .and_then(|value| value.to_str().ok())
+        == Some(PAGES_ORIGIN)
+}
+
+pub async fn options() -> Response {
+    cors(StatusCode::NO_CONTENT.into_response())
+}
+
+/// Recheck signed identity and server-side allowlist on every read.
+pub async fn session(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response {
+    let result = (|| -> Result<Value, ApiError> {
+        if !same_origin(&headers) {
+            return Err(ApiError::Forbidden("Invalid dashboard origin".into()));
+        }
+        let session = session_from_headers(&state, &headers)?;
+        Ok(
+            json!({"authenticated": true, "login": session.login, "github_id": session.sub,
+            "expires_at": session.exp}),
+        )
+    })();
+    cors(match result {
+        Ok(payload) => Json(payload).into_response(),
+        Err(error) => error.into_response(),
+    })
+}
+
+/// Only send allowlisted command shapes to the existing Rotisserie workflow.
+/// That workflow remains responsible for interpreting operations and leases.
+pub async fn dispatch(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(command): Json<Value>,
+) -> Response {
+    let result = dispatch_inner(state, headers, command).await;
+    cors(match result {
+        Ok(payload) => (StatusCode::ACCEPTED, Json(payload)).into_response(),
+        Err(error) => error.into_response(),
+    })
+}
+
+pub(crate) fn github_token() -> Result<String, ApiError> {
+    std::env::var("GITHUB_TOKEN")
+        .ok()
+        .filter(|token| !token.is_empty())
+        .ok_or_else(|| ApiError::ServiceUnavailable("GitHub workflow dispatch unavailable".into()))
+}
+
+pub(crate) async fn send_github(
+    state: &AppState,
+    host: &str,
+    request: OutboundRequest,
+) -> Result<crate::outbound::OutboundResponse, ApiError> {
+    tokio::time::timeout(Duration::from_secs(10), state.outbound.send(host, request))
+        .await
+        .map_err(|_| ApiError::ServiceUnavailable("GitHub request timed out".into()))?
+        .map_err(|_| ApiError::ServiceUnavailable("GitHub unavailable".into()))
+}
+
+/// Reads at most `limit` bytes while the body streams; `None` past the cap.
+pub(crate) async fn read_limited(body: axum::body::Body, limit: usize) -> Option<HttpBytes> {
+    if body
+        .size_hint()
+        .upper()
+        .is_some_and(|length| length > limit as u64)
+    {
+        return None;
+    }
+    tokio::time::timeout(
+        Duration::from_secs(10),
+        http_body_util::Limited::new(body, limit).collect(),
+    )
+    .await
+    .ok()?
+    .ok()
+    .map(|collected| collected.to_bytes())
+}
+
+/// Same rule as `REQUEST_ID` in Rotisserie's `control_contract.py`.
+fn request_id(command: &Value) -> Result<Option<&str>, ApiError> {
+    match command.get("request_id") {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(value)) if value.is_empty() => Ok(None),
+        Some(Value::String(value))
+            if (8..=64).contains(&value.len())
+                && value
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-') =>
+        {
+            Ok(Some(value))
+        }
+        Some(_) => Err(ApiError::BadRequest("Invalid request_id".into())),
+    }
+}
+
+fn workflow_for(operation: &str) -> Option<&'static str> {
+    if operation == "read" {
+        Some(READ_WORKFLOW)
+    } else if WRITE_OPERATIONS.contains(&operation) {
+        Some(WRITE_WORKFLOW)
+    } else {
+        None
+    }
+}
+
+async fn dispatched_run(response: crate::outbound::OutboundResponse) -> Option<u64> {
+    if response.status != StatusCode::OK {
+        return None;
+    }
+    let bytes = read_limited(response.body, MAX_PROVIDER_RESPONSE).await?;
+    let data: Value = serde_json::from_slice(&bytes).ok()?;
+    data.get("workflow_run_id").and_then(Value::as_u64)
+}
+
+async fn dispatch_inner(
+    state: Arc<AppState>,
+    headers: HeaderMap,
+    command: Value,
+) -> Result<Value, ApiError> {
+    if !same_origin(&headers) {
+        return Err(ApiError::Forbidden("Invalid dashboard origin".into()));
+    }
+    let signed = session_from_headers(&state, &headers)?;
+    let operation = command
+        .get("operation")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let workflow = workflow_for(operation)
+        .ok_or_else(|| ApiError::BadRequest("Unsupported factory operation".into()))?;
+    let request_id = request_id(&command)?;
+    let serialized = serde_json::to_string(&command)
+        .map_err(|_| ApiError::BadRequest("Invalid command".into()))?;
+    if serialized.len() > MAX_COMMAND_BYTES {
+        return Err(ApiError::BadRequest("Factory command too large".into()));
+    }
+    let token = github_token()?;
+    let request = OutboundRequest {
+        method: Method::POST,
+        path: format!("/repos/{REPO}/actions/workflows/{workflow}/dispatches"),
+        headers: vec![
+            ("Accept".into(), "application/vnd.github+json".into()),
+            ("Authorization".into(), format!("Bearer {token}")),
+            ("User-Agent".into(), "ComicPile-Rotisserie".into()),
+            ("Content-Type".into(), "application/json".into()),
+            ("X-GitHub-Api-Version".into(), "2026-03-10".into()),
+        ],
+        body: HttpBytes::from(
+            serde_json::to_vec(&json!({
+                "ref": "main",
+                "inputs": {"request": serialized},
+            }))
+            .map_err(|_| ApiError::Internal("Could not serialize command".into()))?,
+        ),
+    };
+    let result = send_github(&state, "api.github.com", request)
+        .await
+        .map_err(|_| ApiError::ServiceUnavailable("GitHub dispatch unavailable".into()))?;
+    if !matches!(result.status, StatusCode::OK | StatusCode::NO_CONTENT) {
+        tracing::warn!(
+            github_user_id = signed.sub.as_str(),
+            status = result.status.as_u16(),
+            operation,
+            "Rotisserie operator dispatch failed"
+        );
+        return Err(ApiError::ServiceUnavailable(
+            "GitHub did not accept the factory command".into(),
+        ));
+    }
+    // GitHub already accepted the command, so a missing run ID is not an error.
+    let run_id = dispatched_run(result).await;
+    tracing::info!(
+        github_user_id = signed.sub.as_str(),
+        operation,
+        workflow,
+        run_id,
+        "Rotisserie operator dispatched"
+    );
+    let workflow_url = format!("https://github.com/{REPO}/actions/workflows/{workflow}");
+    let run_url = run_id.map(|id| format!("https://github.com/{REPO}/actions/runs/{id}"));
+    Ok(json!({
+        "result": "accepted",
+        "request_id": request_id,
+        "run_id": run_id,
+        "run_url": run_url,
+        "exit_code": 0,
+        "scheduler_url": run_url.clone().unwrap_or(workflow_url),
+    }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        allowed, github_provider_error_code, oauth_failure_stage, ApiError, CALLBACK_URL,
+        PAGES_ORIGIN,
+    };
+
+    #[test]
+    fn callback_error_diagnostics_never_emit_untrusted_provider_text() {
+        assert_eq!(
+            oauth_failure_stage(&ApiError::Unauthorized("Missing OAuth state cookie".into())),
+            "oauth_cookie_missing"
+        );
+        assert_eq!(
+            oauth_failure_stage(&ApiError::Unauthorized("OAuth state mismatch".into())),
+            "oauth_state_mismatch"
+        );
+        assert_eq!(
+            github_provider_error_code("incorrect_client_credentials"),
+            "incorrect_client_credentials"
+        );
+        assert_eq!(
+            github_provider_error_code("untrusted_code_with_secret"),
+            "other_provider_error"
+        );
+    }
+
+    #[test]
+    fn admin_allowlist_uses_immutable_github_ids_and_fails_closed() {
+        assert!(allowed(4_014_199, ""));
+        assert!(allowed(123, "123,456"));
+        assert!(!allowed(123, "123,malformed"));
+        assert!(!allowed(123, "123,,456"));
+        assert!(!allowed(124, "123,456"));
+        assert!(!allowed(12, "123,456"));
+    }
+
+    #[test]
+    fn oauth_callback_is_exact_and_hosted_origin_is_pinned() {
+        assert_eq!(
+            CALLBACK_URL,
+            "https://comic-pile.vercel.app/api/v2/factory/github/callback"
+        );
+        assert_eq!(PAGES_ORIGIN, "https://joshclwren.github.io");
+    }
+}

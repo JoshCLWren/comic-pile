@@ -1,0 +1,22 @@
+name: Rotisserie Operator Read
+run-name: Rotisserie live read
+on:
+  workflow_dispatch:
+    inputs:
+      request:
+        description: 'One JSON Rotisserie read request (not a shell command)'
+        required: true
+        type: string
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  actions: read
+jobs:
+  rotisserie:
+    uses: JoshCLWren/rotisserie/.github/workflows/rotisserie-operator-read.yml@main
+    with:
+      request: ${{ inputs.request }}
+    secrets:
+      FACTORY_TURSO_READ_TOKEN: ${{ secrets.FACTORY_TURSO_READ_TOKEN }}
+      FACTORY_TURSO_URL: ${{ secrets.FACTORY_TURSO_URL }}
