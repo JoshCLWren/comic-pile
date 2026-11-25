@@ -273,7 +273,8 @@ WITH owned AS (
 ), totals AS (
     SELECT count(*) AS total_count FROM matching
 ), paged AS (
-    SELECT m.id, m.thread_id, m.issue_number, m.position, m.status,
+    SELECT m.id, m.thread_id, m.issue_number, m.overall_issue_number,
+           m.identity_version, m.position, m.status,
            to_char(m.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS read_at,
            to_char(m.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at
     FROM matching m
@@ -569,6 +570,8 @@ mod tests {
                 id: 7,
                 thread_id: 3,
                 issue_number: "Annual 1".into(),
+                overall_issue_number: None,
+                identity_version: 1,
                 position: 2,
                 status: "unread".into(),
                 read_at: None,
