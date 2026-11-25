@@ -34,6 +34,7 @@ const COVER_HEIGHT_CAP_VH = 45
 const COVER_RATIO_FALLBACK = 2 / 3
 const SUMMARY_LONG_THRESHOLD = 280
 const METADATA_REFRESH_FALLBACK_SECONDS = 10
+const METADATA_REFRESH_MAX_POLLS = 30
 
 function formatRating(value: number): string {
   const normalized = parseFloat(value.toFixed(2))
