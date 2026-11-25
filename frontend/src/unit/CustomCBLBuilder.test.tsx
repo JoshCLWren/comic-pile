@@ -1354,12 +1354,11 @@ describe('CustomCBLBuilder', () => {
     await user.click(await screen.findByTestId('confirm-replace'))
     expect(await screen.findByRole('button', { name: 'Undo last save' })).toBeInTheDocument()
 
-    // A later save invalidates the replacement snapshot instead of letting
-    // Undo silently erase it.
+    // A later save creates a new list-scoped undo snapshot for that save.
     await user.click(screen.getByRole('button', { name: 'Move All-Star Comics #1 earlier' }))
     await user.click(screen.getByRole('button', { name: 'Save custom CBL' }))
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Undo last save' })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Undo last save' })).toBeInTheDocument()
     })
   })
 
