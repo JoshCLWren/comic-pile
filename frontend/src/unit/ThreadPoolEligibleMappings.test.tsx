@@ -147,6 +147,7 @@ describe('ThreadPool eligible mappings', () => {
               thread_id: 1,
               thread_title: 'Canonical comic',
               issue_number: '7',
+              identity_version: 1,
               cover_image_url: 'https://example.test/canonical-7.jpg',
               status: 'unread',
               has_confirmed_identity: true,
