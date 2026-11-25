@@ -1253,7 +1253,7 @@ export default function CblBrowserPage() {
 
           {browsePage && !catalogError && !browseStale && (
             <div className="space-y-4" data-testid="cbl-browse-results">
-{browsePage.scope === 'folder' && !folder && catalogTotal > 0 && (
+              {browsePage.scope === 'folder' && !folder && catalogTotal > 0 && (
                 <p role="status" data-testid="cbl-catalog-total" className="text-xs text-[var(--theme-text-muted)]">
                   {catalogTotalLabel(catalogTotal, browsePage.folders.length)}
                 </p>
