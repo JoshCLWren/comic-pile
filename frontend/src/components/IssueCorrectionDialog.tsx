@@ -325,10 +325,15 @@ export default function IssueCorrectionDialog({
     try {
       // SAFETY: issuesService is injectable; widen only to probe optional undoReadOperation.
       const svc = issuesService as IssueCorrectionIssuesApi & { undoReadOperation?: (id: number) => Promise<IssueReadOperationUndoResponse> }
+      let undoResponse: IssueReadOperationUndoResponse | null = null
       if (svc.undoReadOperation) {
-        await svc.undoReadOperation(lastOperation.id)
+        undoResponse = await svc.undoReadOperation(lastOperation.id)
       } else {
-        await issuesApi.undoReadOperation(lastOperation.id)
+        undoResponse = await issuesApi.undoReadOperation(lastOperation.id)
+      }
+      try { window.localStorage.removeItem(`issueReadOperation:${threadId}`) } catch { /* ignore */ }
+      if (undoResponse && undoResponse.skipped_issue_ids.length > 0) {
+        setError(`Undo skipped ${undoResponse.skipped_issue_ids.length} issue(s) changed later.`)
       }
       setLastOperation(null)
       setPreview(null)
