@@ -1036,6 +1036,100 @@ describe('IssueToggleList deferred mode (#3267)', () => {
     expect(ref.current?.hasPendingMutations()).toBe(false)
   })
 
+  it('shows human-readable series, list, state and frontier labels in Before/After (#4654)', async () => {
+    await renderDeferred()
+    const existing = {
+      issue_id: 1,
+      issue_number: '129',
+      position: 1,
+      is_new: false,
+      series_title: 'B.P.R.D.: Hell on Earth',
+      source_lists: ['Julix reading order'],
+      is_read: true,
+      is_mapped: true,
+      has_rating: true,
+      frontier_label: 'current unread (Queue/Roll frontier)',
+      effect: 'kept #129 at position 1',
+      is_duplicate: false,
+    }
+    const added = {
+      issue_id: null,
+      issue_number: '101',
+      position: 2,
+      is_new: true,
+      series_title: 'B.P.R.D.: Hell on Earth',
+      source_lists: [],
+      is_read: false,
+      is_mapped: false,
+      has_rating: false,
+      frontier_label: null,
+      effect: 'new issue #101 inserted at position 2',
+      is_duplicate: true,
+    }
+    mockedIssuesApi.previewCreate.mockResolvedValueOnce({
+      thread_id: 99,
+      thread_title: 'B.P.R.D.: Hell on Earth',
+      requested_strategy: 'safe_default',
+      default_outcome: {
+        strategy: 'safe_default',
+        can_commit: true,
+        preserves_existing_relative_order: true,
+        before: [existing],
+        after: [existing, added],
+        added_issue_numbers: ['101'],
+        graph: { status: 'ok', cycles: [] },
+        conflict_message: null,
+      },
+      numeric_resort_outcome: null,
+    })
+
+    fireEvent.change(screen.getByTestId('issue-add-input'), { target: { value: '101' } })
+    fireEvent.click(screen.getByTestId('issue-add-button'))
+
+    const modal = await screen.findByTestId('edit-series-preview-modal')
+    expect(screen.getByTestId('preview-before-after')).toBeInTheDocument()
+    expect(modal).toHaveTextContent('B.P.R.D.: Hell on Earth #129')
+    expect(modal).toHaveTextContent('List: Julix reading order')
+    expect(modal).toHaveTextContent('kept #129 at position 1')
+    expect(modal).toHaveTextContent('current unread (Queue/Roll frontier)')
+    expect(modal).toHaveTextContent('new issue #101 inserted at position 2')
+    expect(modal).toHaveTextContent('Possible physical duplicate')
+    expect(screen.getAllByTestId('preview-issue-row').length).toBeGreaterThanOrEqual(2)
+    expect(screen.getAllByTestId('preview-source-list').length).toBeGreaterThan(0)
+    expect(screen.getAllByTestId('preview-mapped').length).toBeGreaterThan(0)
+  })
+
+  it('surfaces a failed preview in a retryable modal (#4654)', async () => {
+    await renderDeferred()
+    mockedIssuesApi.previewCreate.mockRejectedValueOnce(new Error('preview exploded'))
+
+    fireEvent.change(screen.getByTestId('issue-add-input'), { target: { value: '4' } })
+    fireEvent.click(screen.getByTestId('issue-add-button'))
+
+    const errorModal = await screen.findByTestId('edit-series-preview-error-modal')
+    expect(errorModal).toHaveTextContent('preview exploded')
+    expect(mockedIssuesApi.create).not.toHaveBeenCalled()
+
+    mockedIssuesApi.previewCreate.mockResolvedValueOnce({
+      thread_id: 99,
+      thread_title: 'Test',
+      requested_strategy: 'safe_default',
+      default_outcome: {
+        strategy: 'safe_default',
+        can_commit: true,
+        preserves_existing_relative_order: true,
+        before: [],
+        after: [{ issue_id: null, issue_number: '4', position: 1, is_new: true }],
+        added_issue_numbers: ['4'],
+        graph: { status: 'ok', cycles: [] },
+        conflict_message: null,
+      },
+      numeric_resort_outcome: null,
+    })
+    fireEvent.click(screen.getByTestId('retry-preview-add'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+  })
+
   it('requires an explicit numeric resort choice when safe insertion would cycle', async () => {
     const ref = await renderDeferred()
     const safe = {
