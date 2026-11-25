@@ -18,7 +18,8 @@ import {
 } from '../hooks/useRoll'
 import { useSnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../hooks/useQueue'
-import { useRate, useResetDice } from '../hooks'
+import { useRate } from '../hooks'
+import { useResetDice } from '../hooks/useRoll'
 import { threadsApi } from '../services/api-threads'
 import { readRollSnoozes, writeRollSnoozes } from '../services/api-roll'
 import { cast } from '../utils/cast'
@@ -48,7 +49,7 @@ vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: vi.fn()
 vi.mock('../hooks/useRoll', () => ({
   useUnsnooze: () => ({ mutate: vi.fn().mockResolvedValue({}), isPending: false }),
   useSetDie: vi.fn(),
-  useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
+  useResetDice: vi.fn(() => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false })),
   useRoll: vi.fn(),
   useOverrideRoll: vi.fn(),
   useDismissPending: vi.fn(),
@@ -431,7 +432,11 @@ it('shows a retry action when bootstrap loading fails', async () => {
 
 it('recovers from browser snoozes and a non-d6 die through the visible zero-choice Reset Dice action', async () => {
   const user = (await import('@testing-library/user-event')).default.setup()
-  const resetMutate = vi.fn().mockResolvedValue({ die: 6, replayed: false })
+  const resetMutate = vi.fn().mockImplementation(async () => {
+    writeRollSnoozes([])
+    return { die: 6, replayed: false }
+  })
+  resetMutate.mockName('resetMutate')
   vi.mocked(useResetDice).mockReturnValue({
     mutate: resetMutate,
     isPending: false,

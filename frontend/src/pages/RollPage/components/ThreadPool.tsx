@@ -211,7 +211,7 @@ export function ThreadPool({
               {onResetDice && (
                 <button
                   type="button"
-                  onClick={() => { console.log('ZERO RESET CLICK', typeof onResetDice); void onResetDice?.() }}
+                  onClick={() => void onResetDice()}
                   disabled={resetDicePending}
                   data-testid="reset-dice-zero-choice"
                   className="w-full h-11 min-h-[44px] bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-xs font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 transition-colors disabled:opacity-60"
