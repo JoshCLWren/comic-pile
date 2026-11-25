@@ -1,7 +1,5 @@
 import { useIsFetching } from '@tanstack/react-query'
-import { QUEUE_PAGE_SIZE } from '../../hooks/useQueue'
-import type { QueueSortBy } from './useQueueFilters'
-import { queryKeys } from '../../query/queryKeys'
+import type { QueryKey } from '@tanstack/react-query'
 
 /**
  * True while the currently applied Queue page query is fetching.
@@ -13,15 +11,9 @@ import { queryKeys } from '../../query/queryKeys'
  * an older request that settles late must not keep a newer zero-result view
  * stuck on "Loading" (#3614).
  *
- * @param searchTerm - Currently applied Queue search term.
- * @param sort - Currently applied Queue sort order.
+ * @param queryKey - Exact canonical key for the currently applied Queue page.
  * @returns True while the matching Queue page query is in flight.
  */
-export function useQueueListLoading(
-  searchTerm?: string,
-  sort: QueueSortBy = 'position',
-): boolean {
-  return useIsFetching({
-    queryKey: queryKeys.queue.list({ search: searchTerm, sort, pageSize: QUEUE_PAGE_SIZE }),
-  }) > 0
+export function useQueueListLoading(queryKey: QueryKey): boolean {
+  return useIsFetching({ queryKey }) > 0
 }

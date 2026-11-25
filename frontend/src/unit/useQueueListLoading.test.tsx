@@ -28,7 +28,7 @@ describe('useQueueListLoading', () => {
       .fetchQuery({ queryKey: queueListKey('Saga'), queryFn: () => pending })
       .catch(() => undefined)
 
-    const { result } = renderHook(() => useQueueListLoading('Saga'), {
+    const { result } = renderHook(() => useQueueListLoading(queueListKey('Saga')), {
       wrapper: makeWrapper(client),
     })
 
@@ -48,7 +48,7 @@ describe('useQueueListLoading', () => {
       })
       .catch(() => undefined)
 
-    const { result } = renderHook(() => useQueueListLoading('Spawn'), {
+    const { result } = renderHook(() => useQueueListLoading(queueListKey('Spawn')), {
       wrapper: makeWrapper(client),
     })
 
@@ -71,7 +71,7 @@ describe('useQueueListLoading', () => {
       filtered_count: 0,
     })
 
-    const { result } = renderHook(() => useQueueListLoading('Spawn'), {
+    const { result } = renderHook(() => useQueueListLoading(queueListKey('Spawn')), {
       wrapper: makeWrapper(client),
     })
 
@@ -91,7 +91,7 @@ describe('useQueueListLoading', () => {
       })
       .catch(() => undefined)
 
-    const { result } = renderHook(() => useQueueListLoading('Saga'), {
+    const { result } = renderHook(() => useQueueListLoading(queueListKey('Saga')), {
       wrapper: makeWrapper(client),
     })
 
@@ -106,7 +106,7 @@ describe('useQueueListLoading', () => {
     const client = new QueryClient()
     client.setQueryData(queueListKey('Saga'), { threads: [], active_count: 0 })
 
-    const { result } = renderHook(() => useQueueListLoading('Saga'), {
+    const { result } = renderHook(() => useQueueListLoading(queueListKey('Saga')), {
       wrapper: makeWrapper(client),
     })
 

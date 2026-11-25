@@ -39,6 +39,7 @@ vi.mock('../hooks/useThread', () => ({
 }))
 
 vi.mock('../hooks/useQueue', () => ({
+  QUEUE_PAGE_SIZE: 50,
   useExcludedThreads: vi.fn(() => ({ threads: [], isPending: false, isError: false })),
   useRestoreThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
   useRestoreExclusionGroup: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),

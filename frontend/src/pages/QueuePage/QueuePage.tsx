@@ -3,13 +3,14 @@ import { useRollNudge } from './useRollNudge'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
 import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hooks/useThread'
-import { useExcludedThreads, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../../hooks/useQueue'
+import { useExcludedThreads, useMoveToPosition, useQueueThreads, useShuffleQueue, QUEUE_PAGE_SIZE } from '../../hooks/useQueue'
 import { useCompletedThreads } from '../../hooks/useCompletedThreads'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
 import { useRollPendingSync } from './useRollPendingSync'
 import { useToast } from '../../contexts/useToast'
 import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../../query/cacheEffects'
 import { queryClient } from '../../query/queryClient'
+import { queryKeys } from '../../query/queryKeys'
 import { PositionMenuProvider } from '../../contexts/PositionMenuProvider'
 import type { ThreadListItem, ThreadCreatePayload, ThreadUpdatePayload } from '../../types'
 import CompletedThreadsSection from './CompletedThreadsSection'
@@ -80,7 +81,9 @@ export default function QueuePage() {
   const authoritativeActiveCount = activeCount ?? activeThreads.length
   // True while the Queue list is still fetching; the list uses it to tell
   // "still fetching" apart from a settled zero-match (#3912).
-  const queueListLoading = useQueueListLoading(searchQuery, sortBy)
+  const queueListLoading = useQueueListLoading(
+    queryKeys.queue.list({ search: searchQuery, sort: sortBy, pageSize: QUEUE_PAGE_SIZE }),
+  )
 
   const actions = useQueueThreadActions({})
 
