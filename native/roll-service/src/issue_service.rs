@@ -306,17 +306,26 @@ pub(crate) async fn cards(
     }
     let rows = connection
         .query(
-            "SELECT i.id, i.thread_id, t.title, i.issue_number, i.status,
+            "SELECT i.id, i.thread_id, t.title, i.issue_number,
+                NULLIF(BTRIM(i.issue_number_alias), '') AS issue_number_alias,
+                i.status,
                 to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'),
                 (SELECT e.rating FROM events e WHERE e.user_id=$1 AND e.issue_id=i.id
                     AND e.type='rate' AND e.rating IS NOT NULL
                     ORDER BY e.timestamp DESC, e.id DESC LIMIT 1),
                 COALESCE(mapping.status, 'unmapped'), mapping.external_id,
+                mapping.provider_issue_number,
                 mapping.cover_url
          FROM issues i
          JOIN threads t ON t.id=i.thread_id
          LEFT JOIN LATERAL (
              SELECT m.status, x.external_id,
+                 CASE WHEN m.status='confirmed' THEN
+                     NULLIF(BTRIM(COALESCE(
+                         x.metadata_json->>'issue_number',
+                         x.metadata_json#>>'{raw_provider_payload,issue_number}'
+                     )), '')
+                 ELSE NULL END AS provider_issue_number,
                  CASE WHEN m.status='confirmed' THEN
                      COALESCE(
                          NULLIF(BTRIM(x.metadata_json->>'image_url'), ''),
