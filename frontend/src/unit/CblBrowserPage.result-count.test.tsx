@@ -137,6 +137,35 @@ describe('CblBrowserPage source list result count (#3614)', () => {
     await waitFor(() => expect(countLine()).toHaveTextContent('1 of 13 source lists'))
   })
 
+  it('withholds old totals and page ranges during a same-key refresh', async () => {
+    let resolveRefresh: (page: ReturnType<typeof browsePage>) => void = () => undefined
+    mockBrowse
+      .mockResolvedValueOnce(browsePage({ total: 13, catalog_total: 13 }))
+      .mockImplementationOnce(
+        () => new Promise((resolve) => { resolveRefresh = resolve }),
+      )
+    renderPage()
+    await expectInitialCatalogCount()
+
+    act(() => {
+      void queryClient.refetchQueries({
+        queryKey: queryKeys.cblSources.browse('', '', 1),
+        exact: true,
+      })
+    })
+
+    await waitFor(() => expect(countLine()).toHaveTextContent('Updating source list count…'))
+    expect(countLine()).not.toHaveTextContent('13 of 13 source lists')
+    expect(screen.queryByText(/^Showing \d+–\d+ of /)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^Page \d+ of \d+$/)).not.toBeInTheDocument()
+
+    await act(async () => {
+      resolveRefresh(browsePage({ items: [source], total: 12, catalog_total: 12 }))
+    })
+    await waitFor(() => expect(countLine()).toHaveTextContent('12 of 12 source lists'))
+    expect(screen.getByText('Showing 1–1 of 12 sources')).toBeInTheDocument()
+  })
+
   it('keeps the newest query count when an older request settles late', async () => {
     const user = userEvent.setup()
     let resolveAlpha: (page: ReturnType<typeof searchPage>) => void = () => undefined

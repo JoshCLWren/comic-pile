@@ -249,6 +249,7 @@ describe('Queue search with incomplete data', () => {
     renderQueue()
 
     const searchInput = screen.getByPlaceholderText('Search...')
+    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('2 of 2 series')
     await user.type(searchInput, 'Saga')
 
     await vi.waitFor(() => {
@@ -257,6 +258,108 @@ describe('Queue search with incomplete data', () => {
       expect(screen.queryByText('Loading series...')).not.toBeInTheDocument()
       expect(screen.queryByText('No active series match your search')).not.toBeInTheDocument()
       expect(screen.queryByText('Spawn')).not.toBeInTheDocument()
+      expect(screen.getByTestId('queue-result-count')).toHaveTextContent('1 of 2 series')
     })
+
+    await user.click(screen.getByRole('button', { name: 'Clear search' }))
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('queue-result-count')).toHaveTextContent('2 of 2 series')
+      expect(screen.getByText('Saga')).toBeInTheDocument()
+      expect(screen.getByText('Spawn')).toBeInTheDocument()
+    })
+
+    await user.type(searchInput, 'zzz')
+    await vi.waitFor(() => {
+      expect(mockedUseQueueThreads).toHaveBeenLastCalledWith('zzz', 'position')
+      expect(screen.getByTestId('queue-result-count')).toHaveTextContent('0 of 2 series')
+      expect(screen.getByText('No active series match your search')).toBeInTheDocument()
+    })
+  })
+
+  it('shows a load error instead of an empty queue when the initial request fails', async () => {
+    const user = userEvent.setup()
+    const refetch = vi.fn().mockResolvedValue(undefined)
+    mockedUseQueueThreads.mockReturnValue({
+      data: null,
+      isPending: false,
+      isError: true,
+      isFetchNextPageError: false,
+      refetch,
+      nextPageToken: null,
+      loadMore: vi.fn().mockResolvedValue(undefined),
+      activeCount: null,
+      filteredCount: null,
+      isPlaceholderData: false,
+      resultCountText: 'Series count unavailable.',
+    })
+
+    renderQueue()
+
+    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('Series count unavailable.')
+    expect(screen.getByTestId('queue-load-error')).toHaveTextContent("Couldn't load your queue.")
+    expect(screen.queryByText('Nothing to roll yet')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(refetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows a search error instead of a zero-match state when the applied request fails', async () => {
+    const user = userEvent.setup()
+    const refetch = vi.fn().mockResolvedValue(undefined)
+    const rows = [
+      {
+        id: 1,
+        title: 'Saga',
+        format: 'Comic',
+        status: 'active',
+        queue_position: 1,
+        issues_remaining: 5,
+      },
+    ]
+    mockedUseQueueThreads.mockImplementation((search?: string) =>
+      search?.trim()
+        ? {
+            data: null,
+            isPending: false,
+            isError: true,
+            isFetchNextPageError: false,
+            refetch,
+            nextPageToken: null,
+            loadMore: vi.fn().mockResolvedValue(undefined),
+            activeCount: null,
+            filteredCount: null,
+            isPlaceholderData: false,
+            resultCountText: 'Series count unavailable.',
+          }
+        : {
+            data: rows,
+            isPending: false,
+            isError: false,
+            isFetchNextPageError: false,
+            refetch,
+            nextPageToken: null,
+            loadMore: vi.fn().mockResolvedValue(undefined),
+            activeCount: 1,
+            filteredCount: 1,
+            isPlaceholderData: false,
+            resultCountText: '1 of 1 series',
+          },
+    )
+
+    renderQueue()
+    expect(screen.getByTestId('queue-result-count')).toHaveTextContent('1 of 1 series')
+
+    await user.type(screen.getByPlaceholderText('Search...'), 'Saga')
+
+    await vi.waitFor(() => {
+      expect(mockedUseQueueThreads).toHaveBeenCalledWith('Saga', 'position')
+      expect(screen.getByTestId('queue-result-count')).toHaveTextContent('Series count unavailable.')
+      expect(screen.getByTestId('queue-load-error')).toHaveTextContent("Couldn't load series matching your search.")
+      expect(screen.queryByText('No active series match your search')).not.toBeInTheDocument()
+      expect(screen.queryByText('Saga')).not.toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(refetch).toHaveBeenCalledTimes(1)
   })
 })

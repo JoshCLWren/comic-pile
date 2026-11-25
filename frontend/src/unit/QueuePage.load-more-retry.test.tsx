@@ -195,6 +195,7 @@ it('does not offer a retry affordance when there is no further page', async () =
     ],
     isPending: false,
     isError: true,
+    isFetchNextPageError: true,
     refetch: vi.fn(),
     nextPageToken: null,
     loadMore: vi.fn().mockResolvedValue(undefined),

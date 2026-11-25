@@ -13,7 +13,9 @@ import type { MoveToPositionPayload, Thread, ThreadListItem, ThreadListResponse,
 import type { QueueSortBy } from '../pages/QueuePage/useQueueFilters'
 import type { QueueSort } from '../query/queryKeys'
 
-export { QUEUE_PAGE_SIZE } from '../query/queueConfig'
+/** Bounded initial page size for Queue. The cursor (`next_page_token`) drives
+ * every subsequent page, so later pages never need an explicit page_size. */
+export const QUEUE_PAGE_SIZE = 50
 
 /** Bounded page size for the excluded library view. Excluded series are a
  * curated shelf a reader opens deliberately, not a list they scroll, so one
