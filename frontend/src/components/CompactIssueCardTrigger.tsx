@@ -9,6 +9,7 @@ interface Props {
   issueId: number
   threadTitle: string
   issueNumber: string
+  issueNumberAlias?: string | null
   status?: 'read' | 'unread'
   rating?: number | null
   card?: IssueCard | null
@@ -23,7 +24,7 @@ interface Props {
 
 /** On-demand detail loader: a dense collapsed list does not mount a query per row. */
 function ExpandedIssueCard({
-  issueId, card, threadTitle, issueNumber, status, rating, onMutated, onCardLoaded, expandedVariant = 'compact',
+  issueId, card, threadTitle, issueNumber, issueNumberAlias, status, rating, onMutated, onCardLoaded, expandedVariant = 'compact',
 }: Omit<Props, 'hideTitle'> & { onCardLoaded: (card: IssueCard) => void }) {
   const fetched = useIssueCards([issueId], { enabled: card == null })
   const fetchedExact = fetched.data?.find((item) => item.issue_id === issueId) ?? null
@@ -33,6 +34,7 @@ function ExpandedIssueCard({
   const resolved = card ?? fetchedExact
   const title = resolved?.thread_title || threadTitle
   const number = resolved?.issue_number || issueNumber
+  const alias = resolved?.issue_number_alias ?? issueNumberAlias ?? null
   const isRead = (resolved?.status ?? status) === 'read'
 
   return (
@@ -51,6 +53,7 @@ function ExpandedIssueCard({
         card={resolved}
         threadTitle={title}
         issueNumber={number}
+        issueNumberAlias={alias}
         status={isRead ? 'read' : 'unread'}
         rating={rating}
         variant={expandedVariant}
@@ -67,7 +70,7 @@ function ExpandedIssueCard({
  * The full action surface is ComicIssueCard, not a separate imitation.
  */
 export default function CompactIssueCardTrigger({
-  issueId, threadTitle, issueNumber, status = 'unread',
+  issueId, threadTitle, issueNumber, issueNumberAlias = null, status = 'unread',
   rating = null, card, onMutated, hideTitle = false, actionLabel, expandedVariant = 'compact',
 }: Props) {
   const [open, setOpen] = useState(false)
