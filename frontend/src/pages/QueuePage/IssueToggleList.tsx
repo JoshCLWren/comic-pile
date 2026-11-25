@@ -1222,6 +1222,34 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
               Existing relative issue order is preserved by default.
             </p>
 
+            {(previewState.response.alias_offers?.length ?? 0) > 0 && (
+              <div className="rounded-xl border border-[var(--theme-danger)]/40 bg-[var(--theme-danger)]/5 p-3 space-y-2" data-testid="alias-offers">
+                <div className="text-sm font-bold text-[var(--theme-text-primary)]">Mapped existing issues need an explicit choice</div>
+                <p className="text-xs text-stone-400">
+                  These requested numbers already exist in this series with identity mapping evidence. Choose alias/mapping instead of creating a duplicate before commit.
+                </p>
+                {previewState.response.alias_offers!.map((offer) => {
+                  const accepted = previewState.acceptedAliasIssueNumbers.includes(offer.requested_issue_number)
+                  return (
+                    <label key={offer.requested_issue_number} className="flex items-start gap-2 text-xs cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={accepted}
+                        disabled={isPreviewing}
+                        onChange={(e) => { void handleToggleAliasOffer(offer.requested_issue_number, e.target.checked) }}
+                        data-testid={`alias-offer-${offer.requested_issue_number}`}
+                      />
+                      <span>
+                        <span className="font-bold text-[var(--theme-text-primary)]">#{offer.requested_issue_number}</span>{' '}
+                        maps to existing {offer.series_title} #{offer.existing_issue_number} (issue {offer.existing_issue_id}).{' '}
+                        {offer.reason}
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+            )}
+
             <div className="space-y-2">
               <div className={`rounded-xl border p-3 ${previewState.selectedStrategy === 'safe_default' ? 'border-[var(--theme-primary-action)]' : 'border-white/10'}`}>
                 <label className="flex items-start gap-2 cursor-pointer">
