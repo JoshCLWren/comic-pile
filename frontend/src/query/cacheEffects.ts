@@ -1182,6 +1182,7 @@ async function invalidateReadingEligibility(
   ]
   await client.cancelQueries({
     predicate: (query) =>
+      query.isActive() &&
       query.state.data === undefined &&
       query.state.fetchStatus === 'fetching' &&
       refreshPrefixes.some((prefix) =>
