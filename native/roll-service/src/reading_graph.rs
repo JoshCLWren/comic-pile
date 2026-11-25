@@ -537,6 +537,55 @@ fn project(
     }
 }
 
+fn repair_receipt_context(action: &ReadingGraphRepairAction) -> serde_json::Value {
+    match action {
+        ReadingGraphRepairAction::DeleteList { list_id } => {
+            json!({"action": "delete_list", "list_id": list_id})
+        }
+        ReadingGraphRepairAction::DeletePrerequisite { prerequisite_id } => {
+            json!({"action": "delete_prerequisite", "prerequisite_id": prerequisite_id})
+        }
+        ReadingGraphRepairAction::DeleteListEntry { list_id, issue_id } => {
+            json!({"action": "delete_list_entry", "list_id": list_id, "issue_id": issue_id})
+        }
+    }
+}
+
+async fn repair_receipt_exists(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    action: &ReadingGraphRepairAction,
+) -> Result<bool, crate::ApiError> {
+    let context = repair_receipt_context(action).to_string();
+    let receipt = tx
+        .query_opt(
+            "SELECT id FROM events
+             WHERE user_id=$1 AND type='reading_graph_repair'
+               AND context::jsonb @> $2::text::jsonb
+             ORDER BY id DESC LIMIT 1",
+            &[&user_id, &context],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(receipt.is_some())
+}
+
+async fn record_repair_receipt(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    action: &ReadingGraphRepairAction,
+) -> Result<(), crate::ApiError> {
+    let context = repair_receipt_context(action).to_string();
+    tx.execute(
+        "INSERT INTO events (type,timestamp,user_id,context)
+         VALUES ('reading_graph_repair',NOW(),$1,$2::text::json)",
+        &[&user_id, &context],
+    )
+    .await
+    .map_err(db::query_error)?;
+    Ok(())
+}
+
 fn repair_target_exists(inputs: &OptionInputs, action: &ReadingGraphRepairAction) -> bool {
     match action {
         ReadingGraphRepairAction::DeleteList { list_id } => {
@@ -597,11 +646,23 @@ pub async fn reading_graph(
         return Ok(Json(invalid_response(&diagnostics.inputs)));
     }
     let validated = option_inputs::validated_contained(diagnostics.inputs)?;
-    Ok(Json(project(
+    let response = project(
         validated.inputs(),
         &validated,
         Some(&diagnostics.legacy_dependencies),
-    )))
+    );
+    if response.status != "ok" {
+        tracing::warn!(
+            user_id = user.id(),
+            status = response.status.as_str(),
+            cycle_count = response.cycles.len(),
+            affected_lists = response.affected_lists.len(),
+            affected_threads = response.affected_threads.len(),
+            unresolved_reference_count = response.unresolved_reference_count,
+            "reading_graph reports recoverable problem"
+        );
+    }
+    Ok(Json(response))
 }
 
 fn remove_from_inputs(
@@ -751,6 +812,33 @@ pub async fn repair(
     };
     let action = request.action()?;
     if !repair_target_exists(&inputs, &action) {
+        if request.confirm {
+            // A retry is distinguishable from a missing or foreign constraint
+            // only by this owner's durable receipt, committed atomically with
+            // the original repair. Never turn every absent target into success.
+            let replayed = match transaction.as_ref() {
+                Some(tx) => repair_receipt_exists(tx, user.id(), &action).await?,
+                None => false,
+            };
+            if replayed {
+                if let Some(tx) = transaction {
+                    tx.commit().await.map_err(db::query_error)?;
+                }
+                tracing::info!(
+                    user_id = user.id(),
+                    action = request.action.as_str(),
+                    status_before = status_before,
+                    "reading_graph repair retry: original receipt found"
+                );
+                return Ok(Json(ReadingGraphRepairResponse {
+                    applied: false,
+                    status_before: status_before.to_string(),
+                    status_after: status_before.to_string(),
+                    removed: "Constraint already removed".to_string(),
+                    graph: project(&inputs, &validated, None),
+                }));
+            }
+        }
         return Err(crate::ApiError::NotFound(
             "Constraint not found".to_string(),
         ));
@@ -772,7 +860,14 @@ pub async fn repair(
                 "Constraint not found".to_string(),
             ));
         }
+        record_repair_receipt(&tx, user.id(), &action).await?;
         tx.commit().await.map_err(db::query_error)?;
+        tracing::info!(
+            user_id = user.id(),
+            action = request.action.as_str(),
+            status_before = status_before,
+            "reading_graph repair applied"
+        );
     }
 
     if request.confirm {
@@ -780,14 +875,22 @@ pub async fn repair(
         // pre-transaction snapshot with an in-memory deletion applied.
         let fresh = option_inputs::load_option_diagnostics(&state, user).await?;
         let after = option_inputs::validated_contained(fresh)?;
+        let status_after = if after.graph_problem().is_some() {
+            "cycle"
+        } else {
+            "ok"
+        };
+        tracing::info!(
+            user_id = user.id(),
+            action = request.action.as_str(),
+            status_before = status_before,
+            status_after = status_after,
+            "reading_graph repair confirmed"
+        );
         return Ok(Json(ReadingGraphRepairResponse {
             applied: true,
             status_before: status_before.to_string(),
-            status_after: if after.graph_problem().is_some() {
-                "cycle".to_string()
-            } else {
-                "ok".to_string()
-            },
+            status_after: status_after.to_string(),
             removed,
             graph: project(after.inputs(), &after, None),
         }));
