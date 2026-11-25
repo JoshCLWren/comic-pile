@@ -1278,7 +1278,7 @@ mod tests {
 
         assert!(after[1].is_new);
         assert_eq!(after[1].effect, "new issue #101 inserted at position 2");
-        assert_eq!(after[2].effect, "kept #140 at position 3");
+        assert_eq!(after[2].effect, "moved #140 from position 2 to 3");
         assert!(after[0].source_lists.contains(&"Julix".to_string()));
     }
 }
