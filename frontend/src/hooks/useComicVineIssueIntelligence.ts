@@ -23,11 +23,13 @@ export function useComicVineIssueIntelligence(
     enabled,
   })
 
-  // Expose an awaitable refetch: callers that re-arm a bounded timer need to
-  // know when the in-flight request settled, otherwise a slow provider response
-  // overlaps with the next scheduled refetch and React Query cancels it.
+  // Expose an awaitable refetch and its latest value: callers that re-arm a
+  // bounded timer need to know when the request settled and whether repair
+  // reached a terminal state. Otherwise a slow response overlaps with the next
+  // scheduled refetch and React Query cancels it.
   const refetch = useCallback(async () => {
-    await queryRefetch()
+    const result = await queryRefetch()
+    return result.data ?? null
   }, [queryRefetch])
 
   return {
