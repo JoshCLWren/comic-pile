@@ -1085,6 +1085,77 @@ async fn lock_owned_issue(tx: &Transaction<'_>, user: i32, issue_id: i32) -> Res
     .ok_or_else(|| not_found(format!("Issue {issue_id} not found")))
 }
 
+/// Validate an optional alias edit. `None` leaves the stored alias untouched;
+/// an explicitly blank value clears it without touching the authored number.
+fn requested_alias(value: Option<&str>) -> Result<Option<Option<String>>, ApiError> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    let trimmed = value.trim();
+    if trimmed.chars().count() > 50 {
+        return Err(unprocessable("overall_issue_number is too long"));
+    }
+    Ok(Some((!trimmed.is_empty()).then(|| trimmed.to_owned())))
+}
+
+/// Check optimistic state under the owned row lock and apply only the alias
+/// portion. A replay of the already-committed target returns false; a stale
+/// different intent fails before any alias or mapping write.
+async fn prepare_identity_edit(
+    tx: &Transaction<'_>,
+    issue_id: i32,
+    comicvine_issue_id: i32,
+    expected_version: Option<i64>,
+    alias: &Option<Option<String>>,
+) -> Result<bool, ApiError> {
+    let row = tx
+        .query_one(
+            "SELECT i.overall_issue_number, i.identity_version, \
+                (SELECT e.external_id FROM issue_external_identity_mappings m \
+                 JOIN external_identities e ON e.id = m.external_identity_id \
+                 WHERE m.issue_id = i.id AND m.status = 'confirmed' \
+                   AND e.provider = 'comicvine' ORDER BY m.id LIMIT 1) AS confirmed_id \
+             FROM issues i WHERE i.id = $1",
+            &[&issue_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let current_alias: Option<String> = row.get(0);
+    let current_version: i64 = row.get(1);
+    let current_identity: Option<String> = row.get(2);
+    let alias_matches = alias
+        .as_ref()
+        .is_none_or(|requested| current_alias.as_deref() == requested.as_deref());
+    let identity_matches = current_identity.as_deref() == Some(comicvine_issue_id.to_string().as_str());
+    if alias_matches && identity_matches {
+        return Ok(false);
+    }
+    if expected_version.is_some_and(|expected| expected != current_version) {
+        return Err(ApiError::Conflict(format!(
+            "Issue identity changed; reload version {current_version} and retry"
+        )));
+    }
+    if let Some(requested) = alias {
+        tx.execute(
+            "UPDATE issues SET overall_issue_number = $2 WHERE id = $1",
+            &[&issue_id, requested],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
+    Ok(true)
+}
+
+async fn finish_identity_edit(tx: &Transaction<'_>, issue_id: i32) -> Result<(), ApiError> {
+    tx.execute(
+        "UPDATE issues SET identity_version = identity_version + 1 WHERE id = $1",
+        &[&issue_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+    Ok(())
+}
+
 /// Python `upsert_external_identity(provider="comicvine", entity_type="issue")`:
 /// the canonical identity row, created on first use. An existing row keeps its
 /// metadata and `updated_at` (a URL rewrite is not a provider refresh).
