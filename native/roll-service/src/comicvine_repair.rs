@@ -2002,6 +2002,84 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn deferred_provider_failure_retries_then_completes() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_identity(&state).await;
+        seed_request(&state, identity_id, "pending", 0, "0 seconds", None).await;
+
+        // First attempt: provider unavailable -> deferred with bounded backoff.
+        let job = claim(&state).await.expect("claim").expect("due job");
+        let outcome = process(&state, &job, Some("TESTKEY123"))
+            .await
+            .expect("process deferred");
+        assert_eq!(outcome, "deferred");
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let (state_after, attempts, last_error): (String, i32, Option<String>) = connection
+            .query_one(
+                "SELECT state, attempts, last_error \
+                 FROM comicvine_metadata_refresh_requests \
+                 WHERE external_identity_id=$1",
+                &[&identity_id],
+            )
+            .await
+            .map(|row| (row.get(0), row.get(1), row.get(2)))
+            .expect("read deferred request");
+        assert_eq!(state_after, "deferred");
+        assert_eq!(attempts, 1);
+        assert_eq!(last_error.as_deref(), Some("provider_unavailable"));
+
+        // Make the row due now, then succeed on retry.
+        connection
+            .execute(
+                "UPDATE comicvine_metadata_refresh_requests \
+                 SET next_attempt_at = now() - interval '1 second', updated_at = now() \
+                 WHERE external_identity_id=$1",
+                &[&identity_id],
+            )
+            .await
+            .expect("make deferred due");
+        drop(Object::take(connection));
+
+        queue_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
+        let job = claim(&state).await.expect("claim retry").expect("due retry job");
+        let outcome = process(&state, &job, Some("TESTKEY123"))
+            .await
+            .expect("process completed");
+        assert_eq!(outcome, "completed");
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let (final_state, final_attempts): (String, i32) = connection
+            .query_one(
+                "SELECT state, attempts FROM comicvine_metadata_refresh_requests \
+                 WHERE external_identity_id=$1",
+                &[&identity_id],
+            )
+            .await
+            .map(|row| (row.get(0), row.get(1)))
+            .expect("read completed request");
+        assert_eq!(final_state, "completed");
+        assert_eq!(final_attempts, 2);
+        let metadata: Value = serde_json::from_str(
+            connection
+                .query_one(
+                    "SELECT metadata_json::text FROM external_identities WHERE id=$1",
+                    &[&identity_id],
+                )
+                .await
+                .expect("read metadata")
+                .get::<_, String>(0)
+                .as_str(),
+        )
+        .expect("metadata json");
+        assert_eq!(metadata["creator_credits"][0]["name"], "Writer");
+        drop(Object::take(connection));
+    }
+
+    #[tokio::test]
     async fn expired_lease_is_reclaimed_and_persist_is_fenced() {
         let Some(state) = crate::test_support::test_state(2).await else {
             return;

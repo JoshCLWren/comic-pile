@@ -460,17 +460,37 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                   );
                 case 'refresh_deferred':
                   return (
-                    <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-deferred">
-                      {retryAfter != null && retryAfter > 0
-                        ? `Refresh deferred — retry in ${retryAfter}s`
-                        : 'Refresh deferred'}
-                    </p>
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-deferred">
+                        {retryAfter != null && retryAfter > 0
+                          ? `Refresh deferred — retry in ${retryAfter}s`
+                          : 'Refresh deferred'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void handleRetryRefresh()}
+                        disabled={isRetryingRefresh}
+                        className="inline-flex min-h-6 items-center text-[10px] font-bold text-amber-500 hover:text-amber-400 disabled:opacity-50 focus:ring-2 focus:ring-amber-500 rounded"
+                      >
+                        {isRetryingRefresh ? 'Retrying…' : 'Retry refresh'}
+                      </button>
+                    </div>
                   );
                 case 'refresh_failed':
                   return (
-                    <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-failed">
-                      Refresh failed
-                    </p>
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-failed">
+                        Refresh failed
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void handleRetryRefresh()}
+                        disabled={isRetryingRefresh}
+                        className="inline-flex min-h-6 items-center text-[10px] font-bold text-amber-500 hover:text-amber-400 disabled:opacity-50 focus:ring-2 focus:ring-amber-500 rounded"
+                      >
+                        {isRetryingRefresh ? 'Retrying…' : 'Retry refresh'}
+                      </button>
+                    </div>
                   );
                 case 'deep_fetched_no_credits':
                   return (
