@@ -10,8 +10,8 @@ interface MatchableThread {
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   showToast: vi.fn(),
-  completedThreads: [] as MatchableThread[],
-  excludedThreads: [] as MatchableThread[],
+  completedThreads: [] as MatchableThread[] | undefined,
+  excludedThreads: [] as MatchableThread[] | undefined,
   list: vi.fn(),
   bulkMarkUnread: vi.fn(),
 }))
