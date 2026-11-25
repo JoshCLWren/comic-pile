@@ -348,9 +348,28 @@ pub async fn create_issues(
         .iter()
         .map(|(_, number, _)| number.clone())
         .collect();
+    let accepted_aliases: BTreeSet<String> = request
+        .accepted_alias_issue_numbers
+        .iter()
+        .cloned()
+        .collect();
+    let mapped_existing = mapped_existing_for_requested(&tx, thread_id, &requested).await?;
+    let (_alias_offers, unaccepted_aliases) =
+        build_alias_offers("", &mapped_existing, &accepted_aliases);
+    if !unaccepted_aliases.is_empty() {
+        return Err(ApiError::BadRequest(format!(
+            "Mapped existing issues require an explicit alias/mapping choice before commit: {}",
+            unaccepted_aliases
+                .iter()
+                .map(|n| format!("#{n}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )));
+    }
     let new_numbers: Vec<String> = requested
-        .into_iter()
-        .filter(|number| !existing_numbers.contains(number))
+        .iter()
+        .filter(|number| !existing_numbers.contains(*number))
+        .cloned()
         .collect();
     if new_numbers.is_empty() {
         return Err(ApiError::BadRequest(
@@ -1232,29 +1251,80 @@ pub async fn preview_issue_create(
         .map(|row| (row.get(0), row.get(1), row.get(2)))
         .collect();
     let existing_numbers: BTreeSet<String> = existing.iter().map(|(_, n, _)| n.clone()).collect();
-    let new_numbers: Vec<String> = requested
-        .into_iter()
-        .filter(|n| !existing_numbers.contains(n))
+    let accepted_aliases: BTreeSet<String> = request
+        .accepted_alias_issue_numbers
+        .iter()
+        .cloned()
         .collect();
-    if new_numbers.is_empty() {
+    let mapped_existing = mapped_existing_for_requested(&tx, thread_id, &requested).await?;
+    let (alias_offers, unaccepted_aliases) =
+        build_alias_offers(&thread_title, &mapped_existing, &accepted_aliases);
+    let new_numbers: Vec<String> = requested
+        .iter()
+        .filter(|n| !existing_numbers.contains(*n))
+        .cloned()
+        .collect();
+    if new_numbers.is_empty() && alias_offers.is_empty() {
         return Err(ApiError::BadRequest(
             "All issues in range already exist".to_string(),
         ));
     }
 
-    let default_outcome = preview_outcome(
-        &tx,
-        user,
-        thread_id,
-        &existing,
-        &new_numbers,
-        &request,
-        IssuePlacementStrategy::SafeDefault,
-    )
-    .await?;
+    let mut default_outcome = if new_numbers.is_empty() {
+        let (series_title, metadata) = load_preview_metadata(&tx, thread_id).await?;
+        let before: Vec<PreviewIssueItem> = existing
+            .iter()
+            .map(|(id, number, position)| {
+                let meta = metadata.get(id);
+                PreviewIssueItem {
+                    issue_id: Some(*id),
+                    issue_number: number.clone(),
+                    position: *position,
+                    is_new: false,
+                    series_title: series_title.clone(),
+                    source_lists: meta.map(|m| m.source_lists.clone()).unwrap_or_default(),
+                    is_read: meta.is_some_and(|m| m.is_read),
+                    is_mapped: meta.is_some_and(|m| m.is_mapped),
+                    has_rating: meta.is_some_and(|m| m.has_rating),
+                    frontier_label: if meta.is_some_and(|m| m.is_frontier) {
+                        Some("current unread (Queue/Roll frontier)".to_string())
+                    } else {
+                        None
+                    },
+                    effect: describe_effect(number, false, Some(*position), *position, meta.is_some_and(|m| m.is_duplicate)),
+                    is_duplicate: meta.is_some_and(|m| m.is_duplicate),
+                }
+            })
+            .collect();
+        IssueEditPreviewOutcome {
+            strategy: IssuePlacementStrategy::SafeDefault,
+            can_commit: false,
+            preserves_existing_relative_order: true,
+            before: before.clone(),
+            after: before,
+            added_issue_numbers: vec![],
+            graph: crate::reading_graph::ReadingGraphResponse {
+                status: "ok".to_string(),
+                cycles: vec![],
+                lanes: vec![],
+            },
+            conflict_message: None,
+        }
+    } else {
+        preview_outcome(
+            &tx,
+            user,
+            thread_id,
+            &existing,
+            &new_numbers,
+            &request,
+            IssuePlacementStrategy::SafeDefault,
+        )
+        .await?
+    };
 
-    let numeric_resort_outcome =
-        if request.insert_after_issue_id.is_none() && !request.append_to_end {
+    let mut numeric_resort_outcome =
+        if !new_numbers.is_empty() && request.insert_after_issue_id.is_none() && !request.append_to_end {
             let resort = preview_outcome(
                 &tx,
                 user,
@@ -1268,7 +1338,6 @@ pub async fn preview_issue_create(
             if resort.preserves_existing_relative_order
                 && default_outcome.preserves_existing_relative_order
             {
-                // Same effective result; no need to show a separate resort option.
                 None
             } else {
                 Some(resort)
@@ -1277,6 +1346,23 @@ pub async fn preview_issue_create(
             None
         };
 
+    if !unaccepted_aliases.is_empty() {
+        let msg = format!(
+            "Mapped existing issues require an explicit alias/mapping choice before commit: {}",
+            unaccepted_aliases
+                .iter()
+                .map(|n| format!("#{n}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        default_outcome.can_commit = false;
+        default_outcome.conflict_message = Some(msg.clone());
+        if let Some(resort) = numeric_resort_outcome.as_mut() {
+            resort.can_commit = false;
+            resort.conflict_message = Some(msg);
+        }
+    }
+
     tx.rollback().await.map_err(db::query_error)?;
     Ok(Json(IssueEditPreviewResponse {
         thread_id,
@@ -1284,6 +1370,7 @@ pub async fn preview_issue_create(
         requested_strategy: request.strategy,
         default_outcome,
         numeric_resort_outcome,
+        alias_offers,
     }))
 }
 
