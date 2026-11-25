@@ -642,8 +642,13 @@ export async function clearComicVineIssueIntelligence(
   client: QueryClient,
   issueId: number,
 ): Promise<void> {
-  client.setQueryData(queryKeys.comicVine.issueIntelligence(issueId), null)
-  await invalidateComicVineIssueIntelligence(client, issueId)
+  const filter = { queryKey: queryKeys.comicVine.issueIntelligence(issueId), exact: true }
+  // Active queries are not removed by removeQueries. Cancel the old identity's
+  // request before clearing its data, then refetch the same owned-issue key so
+  // a late response cannot restore stale cover or creator credits (#5695).
+  await client.cancelQueries(filter)
+  client.setQueryData(filter.queryKey, null)
+  await client.invalidateQueries(filter)
 }
 
 /**

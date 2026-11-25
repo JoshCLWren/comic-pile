@@ -6,6 +6,7 @@ import type { Thread, ThreadListItem, ThreadListResponse, ThreadQueueExclusionGr
 type ThreadDetail = components['schemas']['ThreadResponse']
 type QueueThreadListItem = components['schemas']['QueueThreadListItem']
 type QueueThreadListResponse = components['schemas']['QueueThreadListResponse']
+type NativeThreadListResponse = components['schemas']['ThreadListResponse']
 
 describe('OpenAPI Thread contract adoption (#2781)', () => {
   it('exports the thread detail response from OpenAPI', () => {
@@ -25,8 +26,13 @@ describe('OpenAPI Thread contract adoption (#2781)', () => {
     >()
   })
 
-  it('exports the paginated queue thread list response from OpenAPI', () => {
-    expectTypeOf<ThreadListResponse>().toEqualTypeOf<QueueThreadListResponse>()
+  it('exports the paginated queue thread list response from OpenAPI plus the native filtered count', () => {
+    expectTypeOf<
+      Omit<ThreadListResponse, 'filtered_count'>
+    >().toEqualTypeOf<QueueThreadListResponse>()
+    expectTypeOf<ThreadListResponse['filtered_count']>().toEqualTypeOf<
+      NativeThreadListResponse['filtered_count']
+    >()
     expectTypeOf<ThreadListResponse['threads']>().toEqualTypeOf<QueueThreadListItem[]>()
   })
 

@@ -1949,6 +1949,68 @@ async fn stale_rejects_invalid_parameters() {
     }
 }
 
+#[tokio::test]
+async fn queue_list_filtered_count_covers_search_sort_and_cursor_pages() {
+    let ctx = setup("lcqueuecount").await;
+    let (_, _, other_id) = second_user(&ctx).await;
+    seed_thread(&ctx, other_id, "Alpha Other", "active", 1, 1).await;
+    seed_thread(&ctx, ctx.user_id, "Alpha One", "active", 1, 1).await;
+    seed_thread(&ctx, ctx.user_id, "Alpha Two", "active", 2, 1).await;
+    seed_thread(&ctx, ctx.user_id, "Beta", "active", 3, 1).await;
+    seed_thread(&ctx, ctx.user_id, "Alpha Complete", "completed", 0, 0).await;
+
+    let (status, first) = call(
+        &ctx,
+        "GET",
+        "/api/v2/threads?search=ALPHA&sort=title&page_size=1",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{first:?}");
+    assert_eq!(first["active_count"], 3);
+    assert_eq!(first["filtered_count"], 2);
+    assert_eq!(first["threads"].as_array().unwrap().len(), 1);
+    let token = first["next_page_token"].as_str().unwrap().to_string();
+
+    let (status, second) = call(
+        &ctx,
+        "GET",
+        &format!("/api/v2/threads?search=ALPHA&sort=title&page_token={token}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{second:?}");
+    assert_eq!(second["active_count"], 3);
+    assert_eq!(second["filtered_count"], 2);
+    assert_eq!(second["threads"].as_array().unwrap().len(), 1);
+    assert_eq!(second["next_page_token"], Value::Null);
+
+    for sort in ["position", "created"] {
+        let (status, page) = call(
+            &ctx,
+            "GET",
+            &format!("/api/v2/threads?search=alpha&sort={sort}"),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{sort}: {page:?}");
+        assert_eq!(page["active_count"], 3);
+        assert_eq!(page["filtered_count"], 2);
+        assert_eq!(page["threads"].as_array().unwrap().len(), 2);
+    }
+
+    let (_, unfiltered) = call(&ctx, "GET", "/api/v2/threads?page_size=1", None).await;
+    assert_eq!(unfiltered["active_count"], 3);
+    assert_eq!(unfiltered["filtered_count"], 3);
+    assert_eq!(unfiltered["threads"].as_array().unwrap().len(), 1);
+
+    let (_, empty) = call(&ctx, "GET", "/api/v2/threads?search=no-match", None).await;
+    assert_eq!(empty["active_count"], 3);
+    assert_eq!(empty["filtered_count"], 0);
+    assert_eq!(empty["threads"], json!([]));
+    assert_eq!(empty["next_page_token"], Value::Null);
+}
+
 // ---------------------------------------------------------------------------
 // excluded list
 // ---------------------------------------------------------------------------

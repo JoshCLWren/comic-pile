@@ -214,6 +214,8 @@ export interface ComicIssueCardProps {
   children?: ReactNode
   /** Notified after a committed mutation so parents can reconcile snapshots. */
   onMutated?: (response: IssueReadRateResponse) => void
+  /** Request the shared provider/tag reading details when an editor opens. */
+  onReadingDetailsRequest?: () => void
   /** Hide the mapping control (provider-only entries use Add to ComicPile instead). */
   showMapping?: boolean
   /**
@@ -264,6 +266,7 @@ export function ComicIssueCard({
   advisory,
   children,
   onMutated,
+  onReadingDetailsRequest,
   showMapping = true,
   showCover = true,
   onAddToLibrary,
@@ -288,6 +291,7 @@ export function ComicIssueCard({
   /** Open the in-card rating editor without writing anything. */
   function openEditor(mode: 'read' | 'edit') {
     actions.reset()
+    onReadingDetailsRequest?.()
     setEditor({ mode, draftRating: resolvedRating ?? DIRECT_RATING_DEFAULT })
   }
 
