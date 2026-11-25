@@ -263,15 +263,14 @@ export default function IssueCorrectionDialog({
     setIsUndoing(true)
     setError(null)
     try {
-      await issuesService.bulkMarkUnread(lastOperation.items.map((i) => i.issue_id))
-      // Prefer dedicated undo endpoint when available.
-      try {
-        const svc = issuesService as IssueCorrectionIssuesApi & { undoReadOperation?: (id: number) => Promise<unknown> }
-        if (svc.undoReadOperation) await svc.undoReadOperation(lastOperation.id)
-      } catch {
-        // fallback already applied bulk unread above
+      const svc = issuesService as IssueCorrectionIssuesApi & { undoReadOperation?: (id: number) => Promise<unknown> }
+      if (svc.undoReadOperation) {
+        await svc.undoReadOperation(lastOperation.id)
+      } else {
+        await issuesApi.undoReadOperation(lastOperation.id)
       }
       setLastOperation(null)
+      setPreview(null)
       onSuccess()
       onClose()
     } catch {
@@ -420,6 +419,52 @@ export default function IssueCorrectionDialog({
           </div>
         )}
 
+        {preview && (
+          <div className="rounded-lg border border-amber-600/30 bg-amber-600/10 p-3 space-y-2" data-testid="bulk-read-preview">
+            <p className="text-sm font-bold text-stone-200">Review bulk read changes</p>
+            <p className="text-xs text-stone-400">
+              Marking {preview.affected.length} issue{preview.affected.length === 1 ? '' : 's'} as read before #{preview.targetIssueNumber}.
+            </p>
+            <ul className="text-xs text-stone-300 space-y-1 max-h-32 overflow-auto">
+              {preview.affected.map((issue) => (
+                <li key={issue.id}>
+                  #{issue.issue_number} — current: {issue.status}
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-stone-400">
+              {preview.willCompleteSeries
+                ? 'Series completion effect: this will complete the series and remove it from the active Queue.'
+                : 'Series completion effect: series will remain active.'}
+            </p>
+            <p className="text-xs text-stone-400">
+              Dependent frontier: {preview.dependentFrontier.length > 0 ? preview.dependentFrontier.join(', ') : 'no direct dependent issues detected in this series.'}
+            </p>
+            <p className="text-xs text-stone-500">
+              Read states explained: marked read = read without rating; read &amp; rated = read with rating; still unread = not read.
+            </p>
+          </div>
+        )}
+
+        {lastOperation && (
+          <div className="rounded-lg border border-green-600/30 bg-green-600/10 p-3 space-y-2" data-testid="bulk-read-review">
+            <p className="text-sm font-bold text-stone-200">Bulk read applied</p>
+            <p className="text-xs text-stone-400">
+              Operation #{lastOperation.id} recorded {lastOperation.items.length} issue changes. You can review or undo this exact operation.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => void handleUndo()}
+                disabled={isUndoing}
+                className="py-2 px-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50"
+              >
+                {isUndoing ? 'Undoing...' : 'Undo'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {error && (
           <div className="p-3 bg-red-800/20 border border-red-800/50 rounded-lg">
             <p className="text-sm text-red-400 text-center mb-2">{error}</p>
@@ -438,20 +483,33 @@ export default function IssueCorrectionDialog({
         <div className="flex gap-3">
           <button
             type="button"
-            onClick={onClose}
-            disabled={isLoading}
+            onClick={() => {
+              if (preview) { setPreview(null); return }
+              onClose()
+            }}
+            disabled={isLoading || isUndoing}
             className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm font-black uppercase tracking-wider transition-all disabled:opacity-50"
           >
-            Cancel
+            {preview ? 'Back' : 'Cancel'}
           </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={isLoading}
-            className="flex-1 py-3 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-600/50 rounded-xl text-sm font-black uppercase tracking-wider transition-all disabled:opacity-50"
-          >
-            {isLoading ? 'Updating...' : 'Update'}
-          </button>
+          {!lastOperation ? (
+            <button
+              type="button"
+              onClick={() => void handleSubmit()}
+              disabled={isLoading}
+              className="flex-1 py-3 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-600/50 rounded-xl text-sm font-black uppercase tracking-wider transition-all disabled:opacity-50"
+            >
+              {isLoading ? 'Working...' : preview ? 'Confirm bulk read' : 'Review changes'}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-3 bg-amber-600/20 hover:bg-amber-600/30 border border-amber-600/50 rounded-xl text-sm font-black uppercase tracking-wider transition-all"
+            >
+              Done
+            </button>
+          )}
         </div>
       </div>
     </Modal>
