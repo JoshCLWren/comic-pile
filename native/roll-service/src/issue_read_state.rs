@@ -493,11 +493,11 @@ async fn bulk_mark(
     user: AuthenticatedUser,
     requested: &[i64],
     mark_read: bool,
-) -> Result<StatusCode, ApiError> {
-    let (target_status, refused_status, event_type) = if mark_read {
-        ("read", "read", "issue_read")
+) -> Result<IssueReadOperationResponse, ApiError> {
+    let (target_status, refused_status, event_type, operation_type) = if mark_read {
+        ("read", "read", "issue_read", "bulk_mark_read")
     } else {
-        ("unread", "unread", "issue_unread")
+        ("unread", "unread", "issue_unread", "bulk_mark_unread")
     };
     let mut conn = db::checkout(state).await?;
     let tx = begin(&mut conn).await?;
@@ -554,6 +554,45 @@ async fn bulk_mark(
         }
         issues.push(issue);
     }
+
+    // Record the exact bulk operation before mutating state so undo can write
+    // compensating events without reverting unrelated later changes (#4655).
+    let op_row = tx
+        .query_one(
+            "INSERT INTO issue_read_operations (user_id, operation_type)
+             VALUES ($1, $2)
+             RETURNING id, to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')",
+            &[&user.id(), &operation_type],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let operation_id: i64 = op_row.get(0);
+    let operation_created_at: String = op_row.get(1);
+
+    let op_item_issue_ids: Vec<i32> = issues.iter().map(|issue| issue.id).collect();
+    let op_item_thread_ids: Vec<i32> = issues.iter().map(|issue| issue.thread_id).collect();
+    let op_item_numbers: Vec<String> = issues.iter().map(|issue| issue.issue_number.clone()).collect();
+    let op_item_statuses: Vec<String> = issues.iter().map(|issue| issue.status.clone()).collect();
+    let op_item_read_ats: Vec<Option<chrono::DateTime<chrono::Utc>>> =
+        issues.iter().map(|issue| issue.read_at).collect();
+    let op_ids: Vec<i64> = vec![operation_id; issues.len()];
+    tx.execute(
+        "INSERT INTO issue_read_operation_items
+            (operation_id, issue_id, thread_id, issue_number, previous_status, previous_read_at)
+         SELECT t.operation_id, t.issue_id, t.thread_id, t.issue_number, t.previous_status, t.previous_read_at
+         FROM unnest($1::int8[], $2::int[], $3::int[], $4::text[], $5::text[], $6::timestamptz[])
+              AS t(operation_id, issue_id, thread_id, issue_number, previous_status, previous_read_at)",
+        &[
+            &op_ids,
+            &op_item_issue_ids,
+            &op_item_thread_ids,
+            &op_item_numbers,
+            &op_item_statuses,
+            &op_item_read_ats,
+        ],
+    )
+    .await
+    .map_err(db::query_error)?;
 
     tx.execute(
         "UPDATE issues SET status = $2::text,
@@ -705,8 +744,25 @@ async fn bulk_mark(
         .map_err(db::query_error)?;
     }
     issue_service::refresh_blocked_threads(&tx, user.id()).await?;
+
+    let items = issues
+        .iter()
+        .map(|issue| IssueReadOperationItem {
+            issue_id: issue.id,
+            thread_id: issue.thread_id,
+            issue_number: issue.issue_number.clone(),
+            previous_status: issue.status.clone(),
+        })
+        .collect();
+
     tx.commit().await.map_err(db::query_error)?;
-    Ok(StatusCode::NO_CONTENT)
+    Ok(IssueReadOperationResponse {
+        id: operation_id,
+        operation_type: operation_type.to_string(),
+        created_at: operation_created_at,
+        undone_at: None,
+        items,
+    })
 }
 
 async fn move_issue(
