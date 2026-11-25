@@ -90,14 +90,17 @@ that would strand a prerequisite.
 
 Direct manual Read/Rate is allowed for any exact owned Issue, including blocked,
 excluded, later, or inactive Issues. `PATCH /api/v2/issues/{issue_id}` with
-`source: "direct"` (or omitted) does not step the die or reposition the Queue.
-Only a completion with `source: "roll_offer"` applies Roll rating effects.
+`source: "direct"` (or omitted) does not step the die or apply Roll queue
+advancement. A direct unread can reactivate a completed Thread and assign it a
+queue position; that is separate from Roll advancement. Only a completion with
+`source: "roll_offer"` applies Roll rating effects.
 
 Roll-offer rating is bound to the exact Issue on the originating event. It
-revalidates ownership, unread state, the current frontier, and session filters
-before marking that Issue read. A changed or unidentified pending offer requires
-cancellation and a new roll; an issue-number string never infers read history.
-Undo captures the actual Issue pre-state, preserving unread exclusions and the
+revalidates ownership, unread state, and pending-offer identity, but eligibility
+never gates completion: a changed frontier, queue, or blocked state does not veto
+rating the exact offered Issue. An otherwise no-op repeat is rejected, and an
+issue-number string never substitutes for an unidentified pending offer. Undo
+captures the actual Issue pre-state, preserving unread exclusions and the
 original stored counter/pointer on restoration.
 
 ## Reader projection and explanations
@@ -144,6 +147,20 @@ with a plain `detail` message. The frontend builder still expects the establishe
 structured HTTP `422` `reading_list_cycle` payload with a cycle path. This is an
 unresolved runtime/frontend contract defect: repair it in the owning product work
 rather than presenting either response as the intended final contract.
+
+## Recorded product/runtime discrepancies
+
+These implementation gaps do not redefine the expected product contract:
+
+- A one-candidate pool still creates a random offer and shows **Begin**, while
+  manual QA requires **Read Now** without a die roll.
+- Completing a Roll rating returns to the idle die view instead of automatically
+  rolling the next comic as the manual-QA contract requires.
+- The current native service still creates six-hour server sessions and stores
+  pending selection in PostgreSQL, while [#4405](https://github.com/JoshCLWren/comic-pile/issues/4405)
+  establishes sessionless Roll with browser-owned pending state. Treat the server
+  implementation as unresolved compatibility behavior, not the intended final
+  boundary.
 
 ## Validation
 

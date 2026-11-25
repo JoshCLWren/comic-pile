@@ -12,14 +12,14 @@
 
 If Comic Pile helps you pick your next read, star the repo ⭐
 
-Comic Pile is an open-source, dice-driven comic-reading tracker for turning a comic backlog into an actual reading habit. It manages the reading queue, tracks sessions and ratings, and makes "what should I read next?" a roll instead of another round of sorting the pile.
+Comic Pile is an open-source, dice-driven comic-reading tracker for turning a comic backlog into an actual reading habit. It manages the reading queue, tracks reading history and ratings, and makes "what should I read next?" a roll instead of another round of sorting the pile.
 
 [Live app](https://comic-pile.vercel.app) · [Deployment and Neon](docs/DEPLOYMENT.md) · [Contributing](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [MIT License](LICENSE)
 
 ## What Comic Pile does
 
 - Uses dice-driven selection to rotate through a comic reading queue.
-- Tracks reading sessions, issue progress, and ratings.
+- Tracks reading history, issue progress, and ratings.
 - Provides a React/Vite frontend backed by a native Rust API.
 - Stores application state in PostgreSQL and can be run from source with your own database.
 - Uses Vercel and Neon for the maintained production deployment.

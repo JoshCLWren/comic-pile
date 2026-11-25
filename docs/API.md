@@ -115,15 +115,20 @@ audit evidence, not execution authority. See
 [READING_LIST_RUNTIME.md](READING_LIST_RUNTIME.md) for modes, overlap decisions,
 exclusions, and the recorded setting-off discrepancy.
 
-Roll is sessionless at the product boundary. `POST /api/v2/reading-sessions`
-initializes durable history when needed. `GET /api/v2/roll/bootstrap` is read-only
-and returns `404 No active session` until that initialization exists. The Roll
-pool takes the top-`die` eligible window first, then removes this browser's
-temporary snoozes, with no backfill from deeper ranks.
+The product target is sessionless Roll with browser-owned pending state
+([#4405](https://github.com/JoshCLWren/comic-pile/issues/4405)). Current native
+compatibility behavior still initializes six-hour server sessions and stores
+pending selection in PostgreSQL. `POST /api/v2/reading-sessions` performs that
+initialization; `GET /api/v2/roll/bootstrap` is read-only and returns
+`404 No active session` until it exists. This server-session boundary is a
+recorded discrepancy, not the intended final contract. The Roll pool takes the
+top-`die` eligible window first, then removes this browser's temporary snoozes,
+with no backfill from deeper ranks.
 
 Direct manual Read/Rate uses `PATCH /api/v2/issues/{issue_id}` with
 `source: "direct"` (or omitted). It is allowed for any exact owned issue and does
-not step the die or reposition the queue. Only a completion with
+not step the die or apply Roll queue advancement. A direct unread can reactivate
+a completed Thread and assign a queue position. Only a completion with
 `source: "roll_offer"` applies Roll rating effects.
 
 ## Errors and ownership
@@ -182,6 +187,6 @@ These are known discrepancies, not supported API guidance:
 - `frontend/src/services/api-sessions.ts` still calls the retired v1 session
   list/get paths. The v2 details/snapshots calls are current; the list/get caller
   drift requires a focused repair.
-- The checked-in generated `vercel.json` can retain the retired
-  `api/native_issue.rs` build until bot-owned regeneration lands. <!-- docs-path-check: ignore --> The production
-  workflow strips it before deployment; do not hand-edit generated route outputs.
+- Earlier documentation referred to a separate `api/native_issue.rs` ingress.
+  Current `main` builds only `api/native_roll.rs`; bot-owned route outputs are
+  regenerated from the route fragments. Do not hand-edit generated route outputs.

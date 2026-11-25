@@ -267,8 +267,10 @@ actions) is documented in [`REACT_INTERACTION_POLICY.md`](REACT_INTERACTION_POLI
   logout across tabs via a `BroadcastChannel`, and gates routes with
   `ProtectedRoute` / `PublicRoute`.
 - **Client-side (non-server) state** stays in dedicated providers:
-  `ToastProvider`, `NavCollapseProvider`, `BugReportRestoreProvider`,
-  `PositionMenuProvider`. Dice selection and similar UI state is local.
+  `ToastProvider`, `NavCollapseProvider`, `BugReportRestoreProvider`, and
+  `PositionMenuProvider`. Transient dice animation is local; the current pending
+  Roll selection comes from the server bootstrap, which is a recorded #4405
+  compatibility discrepancy rather than the sessionless/browser-owned target.
 - **Session data is server state**: reading-history lists/details/snapshots use
   React Query through `useSessions`, `useSessionDetails`, and
   `useSessionSnapshots`; the current Roll session/pending projection comes from

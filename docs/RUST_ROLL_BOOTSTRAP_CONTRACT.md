@@ -95,6 +95,12 @@ issue read state, event count, full undo snapshot content, and live thread state
 
 ## Current request flow and side effects
 
+> **Compatibility discrepancy:** [#4405](https://github.com/JoshCLWren/comic-pile/issues/4405)
+> establishes sessionless Roll with browser-owned pending state. The native
+> service still creates six-hour server sessions and stores pending selection in
+> PostgreSQL. The flow below documents current implementation, not approval of
+> that server-session boundary as the final product contract.
+
 1. `get_current_user` verifies the signed access JWT, expiry, string subject/jti,
    access-token type, revocation, and credential epoch before reading history.
    Reading-history sessions are not login credentials.
