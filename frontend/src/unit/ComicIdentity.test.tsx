@@ -1675,4 +1675,67 @@ describe('ComicIdentity creator status (issue #4149)', () => {
 
     unmount()
   })
+
+  it('replaces A creator credits with B after a remap refetch and stops polling', async () => {
+    const intelligence = (overrides: Partial<ComicVineIssueIntelligence> = {}) => ({
+      comicvine_issue_id: '1',
+      comicvine_url: null,
+      series_name: 'Test Series',
+      series_id: 1,
+      issue_number: '1',
+      name: 'Test Issue',
+      description: null,
+      image_url: null,
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [],
+      metadata_status: 'complete',
+      refresh_retry_after_seconds: null,
+      ...overrides,
+    })
+
+    const a = intelligence({
+      comicvine_issue_id: 'A',
+      metadata_status: 'refresh_pending',
+      refresh_retry_after_seconds: null,
+      creators: [],
+    })
+    const b = intelligence({
+      comicvine_issue_id: 'B',
+      metadata_status: 'complete',
+      creators: [{ name: 'Writer B', roles: ['penciler'] }],
+    })
+
+    vi.useFakeTimers()
+    getIntelligence.mockResolvedValueOnce(a).mockResolvedValue(b)
+
+    renderWithToast(<ComicIdentity issueId={1} />)
+    await waitForLoaded()
+
+    expect(getIntelligence).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('creator-status-fetching')).toBeInTheDocument()
+
+    // A remap invalidates the intelligence query; the bounded poller refetches
+    // and now returns the remapped intelligence B.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS)
+    })
+    await flushQueryNotification()
+    expect(getIntelligence).toHaveBeenCalledTimes(2)
+
+    // B's credits replace A's pending state; the fetching message is gone.
+    expect(screen.getByText('Writer B')).toBeInTheDocument()
+    expect(screen.queryByTestId('creator-status-fetching')).not.toBeInTheDocument()
+    expect(screen.queryByText('Writer A')).not.toBeInTheDocument()
+
+    // Once complete, the bounded poller is disarmed: a late A response cannot
+    // resurrect stale content through this component's polling.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS * 2)
+    })
+    expect(getIntelligence).toHaveBeenCalledTimes(2)
+
+    vi.useRealTimers()
+  })
 })
