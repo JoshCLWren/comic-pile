@@ -504,6 +504,40 @@ describe('QueueThreadCard', () => {
     expect(img).toHaveAttribute('loading', 'eager')
   })
 
+  it('drops the previous series image while a recycled Queue row loads its next cover (#5692)', () => {
+    const first = createMockThread({
+      title: 'First Series',
+      series_cover_image_url: 'https://comicvine.example/covers/first.jpg',
+    })
+    const second = createMockThread({
+      id: 2,
+      title: 'Second Series',
+      series_cover_image_url: 'https://comicvine.example/covers/second.jpg',
+    })
+    const { props, rerender } = renderCard(first)
+    const firstImage = within(screen.getByTestId('queue-thread-series-cover'))
+      .getByRole('img', { name: 'Cover for First Series' })
+    fireEvent.load(firstImage)
+    expect(firstImage).toHaveClass('opacity-100')
+
+    rerender(
+      <MemoryRouter>
+        <QueueThreadCard {...props} thread={second} />
+      </MemoryRouter>,
+    )
+
+    const cover = screen.getByTestId('queue-thread-series-cover')
+    const secondImage = within(cover).getByRole('img', { name: 'Cover for Second Series' })
+    expect(secondImage).toHaveAttribute('src', 'https://comicvine.example/covers/second.jpg')
+    expect(secondImage).toHaveClass('opacity-0')
+    expect(within(cover).getByRole('status')).toBeVisible()
+    expect(screen.queryByRole('img', { name: 'Cover for First Series' })).not.toBeInTheDocument()
+
+    fireEvent.load(secondImage)
+    expect(secondImage).toHaveClass('opacity-100')
+    expect(within(cover).queryByRole('status')).not.toBeInTheDocument()
+  })
+
   it('shows the existing No cover placeholder when no confirmed series cover exists', () => {
     renderCard(createMockThread({ title: 'Bare Series', series_cover_image_url: null }))
     const placeholder = screen.getByTestId('queue-thread-series-cover-placeholder')
