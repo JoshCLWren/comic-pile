@@ -856,26 +856,11 @@ pub async fn repair(
         let deleted = delete_owned(&tx, user.id(), &action).await?;
         if deleted == 0 {
             tx.rollback().await.map_err(db::query_error)?;
-            if request.confirm {
-                let fresh = option_inputs::load_option_diagnostics(&state, user).await?;
-                let after = option_inputs::validated_contained(fresh)?;
-                let status_after = if after.graph_problem().is_some() {
-                    "cycle"
-                } else {
-                    "ok"
-                };
-                return Ok(Json(ReadingGraphRepairResponse {
-                    applied: false,
-                    status_before: status_before.to_string(),
-                    status_after: status_after.to_string(),
-                    removed: "Constraint already removed".to_string(),
-                    graph: project(after.inputs(), &after, None),
-                }));
-            }
             return Err(crate::ApiError::NotFound(
                 "Constraint not found".to_string(),
             ));
         }
+        record_repair_receipt(&tx, user.id(), &action).await?;
         tx.commit().await.map_err(db::query_error)?;
         tracing::info!(
             user_id = user.id(),
