@@ -174,4 +174,43 @@ describe('CustomCBLBuilder Julix 466-entry regression', () => {
     await user.keyboard('{Enter}')
     expect(screen.getByText(/Next added issue will be inserted before position \d+/)).toBeInTheDocument()
   })
+
+  it('moves an entry before/after another issue position and supports insert-after', async () => {
+    const user = userEvent.setup()
+    renderBuilder()
+    await user.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    await user.selectOptions(await screen.findByLabelText('Custom CBL'), '2')
+    await screen.findAllByTestId('reading-list-entry')
+
+    const firstEntry = screen.getAllByTestId('reading-list-entry')[0]
+    await user.click(within(firstEntry).getByRole('button', { name: /Show settings for/ }))
+    await user.click(within(firstEntry).getByRole('button', { name: 'Insert after' }))
+    expect(screen.getByText(/Next added issue will be inserted after position 1/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Cancel insert point' }))
+    expect(screen.queryByText(/Next added issue will be inserted after position 1/)).not.toBeInTheDocument()
+
+    // Move entry 1 to after issue position 3
+    await user.click(within(firstEntry).getByRole('button', { name: /Show settings for/ }))
+    const relativeInput = within(firstEntry).getByLabelText(/Move .* relative to issue position/)
+    fireEvent.change(relativeInput, { target: { value: '3' } })
+    await user.click(within(firstEntry).getByRole('button', { name: 'Move after issue' }))
+
+    await waitFor(() => {
+      const titles = screen.getAllByTestId('reading-list-entry-title').map((el) => el.textContent)
+      expect(titles[2]).toContain('#1')
+    })
+
+    // Move that entry back before issue position 1
+    const movedEntry = screen.getAllByTestId('reading-list-entry').find((el) => within(el).getByTestId('reading-list-entry-title').textContent?.includes('#1'))
+    if (!movedEntry) throw new Error('moved entry not found')
+    await user.click(within(movedEntry).getByRole('button', { name: /Show settings for/ }))
+    const relativeInput2 = within(movedEntry).getByLabelText(/Move .* relative to issue position/)
+    fireEvent.change(relativeInput2, { target: { value: '1' } })
+    await user.click(within(movedEntry).getByRole('button', { name: 'Move before issue' }))
+
+    await waitFor(() => {
+      const titles = screen.getAllByTestId('reading-list-entry-title').map((el) => el.textContent)
+      expect(titles[0]).toContain('#1')
+    })
+  })
 })
