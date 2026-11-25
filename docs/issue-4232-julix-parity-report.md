@@ -34,14 +34,21 @@
 ## Acceptance criteria status
 
 ### 1. Complete 466-entry parity/difference report against latest Julix Story tab
-**Status: Partially satisfied in-repo; live verification required.**  
-This document records the issue's verified 2026-10-27 findings and the required report shape. A complete 466-row story-to-physical-issue parity report requires access to the latest Julix Story tab and production/custom-CBL data. The report must include: source version, every source row, story, mapped physical issue, single list position, dedupe reason for anthology rows, and diff classification.
+**Status: Story tab fetched in sandbox; full 466-row physical-issue parity still requires production CBL export and external identity verification.**  
+Fetched source: Julix "Individual Story Order" / Story tab CSV export from sheet `1g_6LwKE4T73xoIKnCj0X3d_b1aDRnzdLNun8gDqXOPs`, gid `1872575412` (fetched 2026-11-25 in sandbox). The Story tab is story-level; Comic Pile list is physical-issue-level with anthology earliest-occurrence dedupe.
 
-**Required live steps:**
-- Export/fetch latest Julix Story tab (record sheet version/timestamp).
+**Story-tab observations relevant to #4232:**
+- `B.P.R.D., Casualties, 8, Being Human, Abe Sapien: The Drowning and Other Stories, , 1981` appears in Part III. Production frontier is physical issue B.P.R.D.: Casualties #1 (issue 117305, pos 83) — consistent with a single-issue physical entry.
+- Winter Special stories appear at multiple story locations: `The Last Witch of Fairfield` (Part II, featured in Hellboy Winter Special 2017, 1979), `God Rest Ye Merry` (Part V, 1961, in Visitor TPB), `The Great Blizzard` (Part V, also featured in Hellboy Winter Special 2017, 1891), `The Empty Chair` (Part V, featured in Hellboy Winter Special 2018, 1930), `Mood Swings` (Part VIII, featured in Hellboy Winter Special 2016, 1975). The physical Winter Special issues are anthologies; earliest-occurrence-of-any-contained-story determines single placement. Issue finding: do **not** reorder 2018/2017 solely on publication years.
+- `Hellboy and the B.P.R.D., The Yule Cat, 20, The Ghost Ships of Labrador and Others, , 1990` appears in Part VIII. Issue reports Yule Cat at pos 445 as a Winter Special physical issue — confirm whether this is the same physical issue/anthology mapping and earliest-occurrence placement.
+- `Young Hellboy, Thrilling Sky Adventures, 82, , , 1947` appears in Part VIII as a story/collection row. Issue reports missing unread canonical issue `Young Hellboy: Thrilling Sky Adventures #4` (issue 1120533, Thread 19008); #1-#3 at positions 462-464. Story-tab row does not provide physical issue #4 granularity; source-level verification required before append.
+- `The Foundry, 40, , , 1889` appears in "Part ?: Ongoing stories (To be placed...)". Issue reports missing unread canonical issue `The Foundry #2` (issue 1117775, Thread 19009); #1 at pos 465. Requires source-level verification and explicit placement decision.
+
+**Still required for complete 466-row report:**
 - Export production custom CBL #2 entries for user 1 with issue/thread metadata.
 - Produce row-by-row mapping: `source_row -> story -> physical_issue_id -> thread_id -> list_position`.
 - Mark each row: `match`, `moved`, `missing_in_list`, `missing_in_source`, `anthology_deduped`, `intentional_exclusion`, `repaired`.
+- Record source version/timestamp and any Story-tab changes since 2026-10-27 finding.
 
 ### 2. Verify Winter Specials, Casualties, omnibus/anthology covers, missing tail issues
 **Status: Encoded as production-shaped fixtures; external format verification required.**  
