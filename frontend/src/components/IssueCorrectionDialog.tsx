@@ -6,6 +6,7 @@ import { issuesApi } from '../services/api-issues'
 import type { IssueListParams, IssueReadOperationResponse } from '../services/api-issues'
 import { issueDependenciesApi } from '../services/api-dependencies'
 import type { Issue, IssueListResponse } from '../types'
+import type { IssueReadOperationResponse, IssueReadOperationUndoResponse } from '../services/api-issues'
 
 export interface IssueCorrectionIssuesApi {
   list: (threadId: number, params?: IssueListParams) => Promise<IssueListResponse>
@@ -16,8 +17,8 @@ export interface IssueCorrectionIssuesApi {
   ) => Promise<IssueListResponse>
   markRead: (issueId: number) => Promise<void>
   markUnread: (issueId: number) => Promise<void>
-  bulkMarkRead: (issueIds: number[]) => Promise<unknown>
-  bulkMarkUnread: (issueIds: number[]) => Promise<unknown>
+  bulkMarkRead: (issueIds: number[]) => Promise<IssueReadOperationResponse | void>
+  bulkMarkUnread: (issueIds: number[]) => Promise<IssueReadOperationResponse | void>
   move: (issueId: number, afterIssueId: number | null) => Promise<void>
 }
 
