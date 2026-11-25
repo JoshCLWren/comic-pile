@@ -956,12 +956,26 @@ async fn identity_state(
     user: i32,
     issue_id: i32,
 ) -> Result<IssueIdentityResponse, ApiError> {
-    let (thread_id, thread_title) = owned_issue(tx, user, issue_id).await?;
+    let owned = tx
+        .query_opt(
+            "SELECT t.id, t.title, i.issue_number, i.overall_issue_number, i.identity_version \
+             FROM issues i JOIN threads t ON t.id = i.thread_id \
+             WHERE i.id = $1 AND t.user_id = $2",
+            &[&issue_id, &user],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| not_found(format!("Issue {issue_id} not found")))?;
+    let thread_id: i32 = owned.get(0);
+    let thread_title: String = owned.get(1);
+    let issue_number: String = owned.get(2);
+    let overall_issue_number: Option<String> = owned.get(3);
+    let identity_version: i64 = owned.get(4);
     let rows = tx
         .query(
             &format!(
                 "SELECT e.id, e.provider, e.external_id, m.status, m.confidence, \
-                        m.evidence_source, {} \
+                        m.evidence_source, {}, e.metadata_json->>'issue_number' \
                  FROM issue_external_identity_mappings m \
                  JOIN external_identities e ON e.id = m.external_identity_id \
                  WHERE m.issue_id = $1 \
