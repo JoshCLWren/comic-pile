@@ -574,7 +574,9 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         setPreviewState({
           range,
           response,
-          selectedStrategy: response.default_outcome.can_commit ? 'safe_default' : (response.numeric_resort_outcome?.can_commit ? 'numeric_resort' : 'safe_default'),
+          selectedStrategy: response.default_outcome.can_commit
+            ? 'safe_default'
+            : (response.numeric_resort_outcome?.can_commit ? 'numeric_resort' : 'safe_default'),
         })
       } catch (err: unknown) {
         console.error('[IssueToggleList] Error previewing issues:', err)
@@ -595,6 +597,21 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     } finally {
       setIsAdding(false)
     }
+  }
+
+  function handleConfirmPreview() {
+    if (!previewState) return
+    const outcome = previewState.selectedStrategy === 'numeric_resort'
+      ? previewState.response.numeric_resort_outcome
+      : previewState.response.default_outcome
+    if (!outcome?.can_commit) return
+    enqueueIssueMutation({
+      type: 'create',
+      issueRange: previewState.range,
+      strategy: previewState.selectedStrategy,
+    })
+    setAddRange('')
+    setPreviewState(null)
   }
 
   const handleDragStart = (issueId: number) => (event: DragEvent<HTMLButtonElement>) => {
@@ -1064,6 +1081,122 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
                   Save a Reading Plan or use the Dependency Builder from the Queue to create and manage prerequisites.
                 </p>
               )}
+            </div>
+          </div>
+        </Modal>
+      )}
+      {previewState && (
+        <Modal
+          isOpen
+          title="Preview issue changes"
+          onClose={() => setPreviewState(null)}
+          data-testid="edit-series-preview-modal"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-[var(--theme-text-muted)]">
+              Adding <span className="font-bold text-[var(--theme-text-primary)]">{previewState.range}</span> to {previewState.response.thread_title}.
+              Existing relative issue order is preserved by default.
+            </p>
+
+            <div className="space-y-2">
+              <div className={`rounded-xl border p-3 ${previewState.selectedStrategy === 'safe_default' ? 'border-[var(--theme-primary-action)]' : 'border-white/10'}`}>
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="preview-strategy"
+                    checked={previewState.selectedStrategy === 'safe_default'}
+                    onChange={() => setPreviewState({ ...previewState, selectedStrategy: 'safe_default' })}
+                    disabled={!previewState.response.default_outcome.can_commit}
+                  />
+                  <div className="text-sm">
+                    <div className="font-bold">Safe default</div>
+                    <div className="text-xs text-stone-400">
+                      {previewState.response.default_outcome.preserves_existing_relative_order
+                        ? 'Preserves existing relative issue order.'
+                        : 'May change existing relative issue order.'}
+                    </div>
+                    {!previewState.response.default_outcome.can_commit && (
+                      <div className="text-xs text-[var(--theme-danger)] mt-1" role="alert">
+                        {previewState.response.default_outcome.conflict_message ?? 'This change would create a reading-graph cycle.'}
+                      </div>
+                    )}
+                  </div>
+                </label>
+              </div>
+
+              {previewState.response.numeric_resort_outcome && (
+                <div className={`rounded-xl border p-3 ${previewState.selectedStrategy === 'numeric_resort' ? 'border-[var(--theme-primary-action)]' : 'border-white/10'}`}>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="preview-strategy"
+                      checked={previewState.selectedStrategy === 'numeric_resort'}
+                      onChange={() => setPreviewState({ ...previewState, selectedStrategy: 'numeric_resort' })}
+                      disabled={!previewState.response.numeric_resort_outcome.can_commit}
+                    />
+                    <div className="text-sm">
+                      <div className="font-bold">Numeric resort (explicit)</div>
+                      <div className="text-xs text-stone-400">
+                        Re-seats ordinary numeric issues in numeric order. Review before saving.
+                      </div>
+                      {!previewState.response.numeric_resort_outcome.can_commit && (
+                        <div className="text-xs text-[var(--theme-danger)] mt-1" role="alert" data-testid="numeric-resort-cycle">
+                          {previewState.response.numeric_resort_outcome.conflict_message ?? 'This change would create a reading-graph cycle.'}
+                        </div>
+                      )}
+                      {previewState.response.numeric_resort_outcome.graph.cycles.length > 0 && (
+                        <div className="text-xs text-stone-400 mt-1">
+                          {previewState.response.numeric_resort_outcome.graph.cycles.map((cycle, idx) => (
+                            <div key={idx}>{cycle.edges.map((e) => `${e.source.series_title} #${e.source.issue_number}`).join(' -> ')}</div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </label>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <div className="font-bold text-stone-400 mb-1">Before</div>
+                <div className="max-h-40 overflow-auto rounded-lg border border-white/10 p-2 space-y-0.5">
+                  {(previewState.selectedStrategy === 'numeric_resort' ? previewState.response.numeric_resort_outcome?.before : previewState.response.default_outcome.before)?.map((item) => (
+                    <div key={`${item.issue_id}-${item.issue_number}`}>#{item.issue_number}</div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="font-bold text-stone-400 mb-1">After</div>
+                <div className="max-h-40 overflow-auto rounded-lg border border-white/10 p-2 space-y-0.5">
+                  {(previewState.selectedStrategy === 'numeric_resort' ? previewState.response.numeric_resort_outcome?.after : previewState.response.default_outcome.after)?.map((item, idx) => (
+                    <div key={`${item.issue_id ?? 'new'}-${item.issue_number}-${idx}`} className={item.is_new ? 'text-[var(--theme-primary-action)] font-bold' : ''}>
+                      #{item.issue_number}{item.is_new ? ' (new)' : ''}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setPreviewState(null)}
+                className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmPreview}
+                disabled={!(previewState.selectedStrategy === 'numeric_resort'
+                  ? previewState.response.numeric_resort_outcome?.can_commit
+                  : previewState.response.default_outcome.can_commit)}
+                className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-xs font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60 transition-colors"
+                data-testid="confirm-preview-add"
+              >
+                Add issues
+              </button>
             </div>
           </div>
         </Modal>
