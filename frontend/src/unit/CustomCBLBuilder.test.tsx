@@ -180,7 +180,6 @@ describe('CustomCBLBuilder', () => {
     )
     expect(screen.queryByLabelText('Global CBL source candidates')).not.toBeInTheDocument()
   })
-
   it('explains a Create cycle with named comics and an owned prerequisite editor link', async () => {
     mocks.create.mockRejectedValueOnce({
       isAxiosError: true,
@@ -233,7 +232,6 @@ describe('CustomCBLBuilder', () => {
       },
     ])
   })
-
   it('navigates 65 strict-list issues in pages, jumps and moves an issue without discarding the others', async () => {
     const entries = Array.from({ length: 65 }, (_, index) => ({
       ...existingList.entries[0],
@@ -283,7 +281,6 @@ describe('CustomCBLBuilder', () => {
     expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(1)
     expect(screen.getByText('Hellboy and the B.P.R.D.: The Long Night #49')).toBeInTheDocument()
   })
-
   it('goes to the correct previous page after removing the final issue on the last page', async () => {
     const entries = Array.from({ length: 61 }, (_, index) => ({
       ...existingList.entries[0],
@@ -316,7 +313,6 @@ describe('CustomCBLBuilder', () => {
     expect(screen.getByText('Mobile Reading Series #1')).toBeInTheDocument()
     expect(screen.queryByText('Mobile Reading Series #31')).not.toBeInTheDocument()
   })
-
   it('labels same-named series with their series ID only when results are ambiguous', async () => {
     const user = userEvent.setup()
     mocks.searchIssues.mockResolvedValue([
@@ -335,7 +331,6 @@ describe('CustomCBLBuilder', () => {
     expect(screen.getByRole('button', { name: /^Starman #1\s*Add$/ })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByRole('button', { name: /Mutant X #1\s*Series ID 9101/ }).querySelector('[data-testid="comic-issue-cover"] img')).toHaveAttribute('src', 'https://example.test/mutant-x.jpg'))
   })
-
   it('navigates issue results with arrows and adds only the focused canonical issue with Enter', async () => {
     const user = userEvent.setup()
     mocks.searchIssues.mockResolvedValue([
@@ -372,7 +367,6 @@ describe('CustomCBLBuilder', () => {
     expect(ordered).not.toHaveTextContent('Fantastic Four #2')
     expect(first).not.toBeInTheDocument()
   })
-
   it('hides results from the previous query while a different search is being typed', async () => {
     const user = userEvent.setup()
     renderBuilder()
@@ -388,7 +382,6 @@ describe('CustomCBLBuilder', () => {
     await user.keyboard('{ArrowDown}')
     expect(input).toHaveFocus()
   })
-
   it('edits a custom CBL using real issues, saves exact order, and applies it to the Reading Plan', async () => {
     const saved = {
       ...existingList,
@@ -465,7 +458,6 @@ describe('CustomCBLBuilder', () => {
     await waitFor(() => expect(mocks.apply).toHaveBeenCalledWith(9, 18))
     await waitFor(() => expect(onApplied).toHaveBeenCalledTimes(1))
   })
-
   it('creates an empty custom CBL and exposes it for editing', async () => {
     const created = {
       id: 10,
@@ -493,7 +485,6 @@ describe('CustomCBLBuilder', () => {
     })
     expect(await screen.findByText('This custom CBL is empty. Search for issues above to build it.')).toBeInTheDocument()
   })
-
   it('reorders, removes, saves, exports, and deletes an existing custom CBL', async () => {
     const onlyAllStar = {
       ...existingList,
@@ -573,7 +564,6 @@ describe('CustomCBLBuilder', () => {
 
     anchorClick.mockRestore()
   })
-
   it('keeps the delete confirmation open with a visible error when deletion fails', async () => {
     mocks.delete.mockRejectedValue(new Error('Deletion unavailable'))
     renderBuilder()
@@ -595,7 +585,6 @@ describe('CustomCBLBuilder', () => {
     const reopened = screen.getByRole('dialog', { name: 'Delete custom CBL' })
     expect(within(reopened).queryByRole('alert')).not.toBeInTheDocument()
   })
-
   it('flags a custom CBL checkpoint and includes it on save', async () => {
     mocks.update.mockResolvedValue({
       ...existingList,
@@ -627,7 +616,6 @@ describe('CustomCBLBuilder', () => {
       })
     })
   })
-
   it('saves strict mode with positional gates and list-local skips', async () => {
     mocks.update.mockResolvedValue({
       ...existingList,
@@ -666,7 +654,6 @@ describe('CustomCBLBuilder', () => {
       })
     })
   })
-
   it('requires explicit confirmation before persisting changed waits', async () => {
     const predecessorChange = {
       issue_id: 30001,
@@ -728,7 +715,6 @@ describe('CustomCBLBuilder', () => {
       })
     })
   })
-
   it('leaves persisted content untouched when a predecessor confirmation is cancelled', async () => {
     mocks.update.mockRejectedValueOnce({
       isAxiosError: true,
@@ -763,15 +749,11 @@ describe('CustomCBLBuilder', () => {
 
     const confirmDialog = await screen.findByRole('dialog', { name: 'Confirm waiting changes' })
     fireEvent.click(within(confirmDialog).getByRole('button', { name: 'Cancel' }))
-
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: 'Confirm waiting changes' })).not.toBeInTheDocument()
-    })
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Confirm waiting changes' })).not.toBeInTheDocument())
     expect(mocks.update).toHaveBeenCalledTimes(1)
     // The unsaved edit remains in the editor; nothing was persisted.
     expect(screen.getByLabelText('Wait behavior for All-Star Comics #1')).toHaveValue('after_previous')
   })
-
   it('shows actionable feedback when a save would create a reading cycle', async () => {
     mocks.update.mockRejectedValueOnce({
       isAxiosError: true,
@@ -825,7 +807,6 @@ describe('CustomCBLBuilder', () => {
     // The conflicting Issue is not a member of this list; the server names it.
     expect(alert).not.toHaveTextContent('Issue #99001')
   })
-
   it('preserves unsaved gate and skip edits when the selected list refreshes', async () => {
     const { client } = renderBuilder()
     fireEvent.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
@@ -847,7 +828,6 @@ describe('CustomCBLBuilder', () => {
     expect(screen.getByLabelText('Skip Starman #55 in this list')).toBeChecked()
     expect(screen.getByRole('button', { name: 'Save custom CBL' })).toBeEnabled()
   })
-
   it('clears a stale cycle error when switching to another custom CBL', async () => {
     const otherList = {
       id: 10,
@@ -938,7 +918,6 @@ describe('CustomCBLBuilder', () => {
       expect(screen.queryByText(/create a reading cycle/)).not.toBeInTheDocument()
     })
   })
-
   it('surfaces strict-mode coverage warnings returned by a successful save', async () => {
     mocks.update.mockResolvedValue({
       ...existingList,
@@ -958,7 +937,6 @@ describe('CustomCBLBuilder', () => {
       screen.getByText('Strict list omits 2 unread Issues from Golden Path Series: #2, #3'),
     ).toBeInTheDocument()
   })
-
   it('replaces only the selected Reading List from a global CBL and undoes list membership only', async () => {
     const user = userEvent.setup()
     cblMocks.discover.mockResolvedValue([
@@ -1136,7 +1114,6 @@ describe('CustomCBLBuilder', () => {
     )
     expect(await screen.findByRole('status')).toHaveTextContent('Read history and ratings were not changed')
   })
-
   it('rejects a replacement review whose Reading List changed before confirmation', async () => {
     const user = userEvent.setup()
     cblMocks.discover.mockResolvedValue([
@@ -1209,7 +1186,6 @@ describe('CustomCBLBuilder', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('changed after you reviewed it')
     expect(mocks.update).not.toHaveBeenCalled()
   })
-
   it('asks for changed-wait confirmation before persisting a replacement', async () => {
     const user = userEvent.setup()
     cblMocks.discover.mockResolvedValue([globalSource])
@@ -1307,7 +1283,6 @@ describe('CustomCBLBuilder', () => {
     })
     expect(await screen.findByRole('status')).toHaveTextContent('Replaced this Reading List')
   })
-
   it('clears Undo after another save and rejects a stale Undo snapshot', async () => {
     const user = userEvent.setup()
     cblMocks.discover.mockResolvedValue([globalSource])
@@ -1361,7 +1336,6 @@ describe('CustomCBLBuilder', () => {
       expect(screen.getByRole('button', { name: 'Undo last save' })).toBeInTheDocument()
     })
   })
-
   it('refuses a stale Undo snapshot without writing the old membership', async () => {
     const user = userEvent.setup()
     cblMocks.discover.mockResolvedValue([globalSource])
@@ -1409,7 +1383,6 @@ describe('CustomCBLBuilder', () => {
       expect(screen.queryByRole('button', { name: 'Undo last save' })).not.toBeInTheDocument()
     })
   })
-
   it('restores original checkpoint targets in the Undo payload', async () => {
     const user = userEvent.setup()
     const checkpointList = {
@@ -1478,7 +1451,6 @@ describe('CustomCBLBuilder', () => {
       }))
     })
   })
-
   it('leaves collection-excluded source rows unchecked unless they were already saved', async () => {
     const user = userEvent.setup()
     cblMocks.discover.mockResolvedValue([globalSource])
@@ -1541,7 +1513,6 @@ describe('CustomCBLBuilder', () => {
     expect(screen.queryByTestId('default-30001')).not.toBeInTheDocument()
     expect(screen.queryByTestId('after-30002')).not.toBeInTheDocument()
   })
-
   it('shows a source search failure with a retry action instead of an empty result', async () => {
     const user = userEvent.setup()
     cblMocks.discover
@@ -1559,7 +1530,6 @@ describe('CustomCBLBuilder', () => {
     await user.click(screen.getByRole('button', { name: 'Retry source search' }))
     expect(await screen.findByRole('button', { name: /Global Starman CBL/ })).toBeInTheDocument()
   })
-
   it('shows a preview failure with a retry action instead of a silent source', async () => {
     const user = userEvent.setup()
     cblMocks.discover.mockResolvedValue([globalSource])
@@ -1595,7 +1565,6 @@ describe('CustomCBLBuilder', () => {
     await user.click(screen.getByRole('button', { name: 'Retry preview' }))
     expect(await screen.findByTestId('cbl-replace-review')).toBeInTheDocument()
   })
-
   it('shows export failures and revokes a created object URL', async () => {
     mocks.exportXml.mockResolvedValue('<ReadingList />')
     const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {
@@ -1642,7 +1611,6 @@ describe('CustomCBLBuilder', () => {
     }))
     expect(screen.queryByRole('button', { name: 'Undo last save' })).not.toBeInTheDocument()
   })
-
   it('cancels an Undo confirmation without discarding its retryable snapshot', async () => {
     const replaced = { ...existingList, updated_at: '2026-09-14T03:10:00Z' }
     mocks.update.mockResolvedValueOnce(replaced).mockRejectedValueOnce(waitingConfirmationError)
@@ -1657,7 +1625,6 @@ describe('CustomCBLBuilder', () => {
     expect(mocks.update).toHaveBeenCalledTimes(2)
     expect(screen.getByRole('button', { name: 'Undo last save' })).toBeEnabled()
   })
-
   it('retains Undo after a transient write failure so the reader can retry', async () => {
     const replaced = { ...existingList, updated_at: '2026-09-14T03:10:00Z' }
     mocks.update.mockResolvedValueOnce(replaced).mockRejectedValueOnce(new Error('Connection lost'))
@@ -1672,7 +1639,6 @@ describe('CustomCBLBuilder', () => {
     await screen.findByText(/Restored the previous list membership/)
     expect(mocks.update).toHaveBeenCalledTimes(3)
   })
-
   it('cancels replacement waiting changes without sending a second write', async () => {
     mocks.update.mockRejectedValueOnce(waitingConfirmationError)
     await openReplacementReview()
@@ -1683,7 +1649,6 @@ describe('CustomCBLBuilder', () => {
     expect(mocks.update).toHaveBeenCalledTimes(1)
     expect(screen.getByTestId('confirm-replace')).toBeEnabled()
   })
-
   it('shows a replacement write failure and lets the reader dismiss the review', async () => {
     mocks.update.mockRejectedValueOnce(new Error('Replacement unavailable'))
     await openReplacementReview()
@@ -1693,7 +1658,6 @@ describe('CustomCBLBuilder', () => {
     expect(screen.queryByTestId('cbl-replace-review')).not.toBeInTheDocument()
     expect(mocks.update).toHaveBeenCalledTimes(1)
   })
-
   it('deduplicates repeated source occurrences and can reload the selected source', async () => {
     mocks.update.mockResolvedValue(existingList)
     await openReplacementReview(true)
@@ -1703,7 +1667,6 @@ describe('CustomCBLBuilder', () => {
     await screen.findByText(/Replaced this Reading List/)
     expect(mocks.update).toHaveBeenCalledWith(9, expect.objectContaining({ issue_ids: [26360, 30001] }))
   })
-
   it('reports an unstructured creation failure and keeps the draft name for retry', async () => {
     mocks.create.mockRejectedValue({ unavailable: true })
     renderBuilder()
@@ -1713,7 +1676,6 @@ describe('CustomCBLBuilder', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Custom CBL operation failed.')
     expect(screen.getByLabelText('New custom CBL name')).toHaveValue('Retry me')
   })
-
   it('keeps a list editable after apply and delete requests fail', async () => {
     mocks.apply.mockRejectedValue(new Error('Apply unavailable'))
     mocks.delete.mockRejectedValue(new Error('Delete unavailable'))
@@ -1733,7 +1695,6 @@ describe('CustomCBLBuilder', () => {
     expect(screen.getByLabelText('Custom CBL')).toHaveValue('9')
     expect(screen.getByRole('list', { name: 'Custom CBL ordered issues' })).toHaveTextContent('Starman #55')
   })
-
   it('accepts older lists without optional mode, description, or gate fields', async () => {
     mocks.get.mockResolvedValue({ ...existingList, mode: undefined, description: null, entries: existingList.entries.map(
       (entry) => ({ ...entry, gate: undefined }),
