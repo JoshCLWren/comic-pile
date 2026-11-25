@@ -2307,6 +2307,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/issue-read-operations/{operation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for fetching a bulk issue-read operation. */
+        get: operations["issue_read_operation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/issue-read-operations/{operation_id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for undoing a bulk issue-read operation. */
+        post: operations["issue_read_operation_undo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/issues/cards": {
         parameters: {
             query?: never;
@@ -5999,39 +6033,27 @@ export interface components {
         };
         /** @description One issue affected by a bulk read/unread operation. */
         IssueReadOperationItem: {
-            /**
-             * Format: int32
-             * @description Owned issue identifier.
-             */
+            /** Format: int32 */
             issue_id: number;
-            /** Exact issue number within the run. */
             issue_number: string;
-            /** Stored read state (``read`` or ``unread``). */
             previous_status: string;
-            /**
-             * Format: int32
-             * @description Owning thread identifier.
-             */
+            /** Format: int32 */
             thread_id: number;
         };
         /** @description Reviewable, reversible record of a bulk read/unread operation (#4655). */
         IssueReadOperationResponse: {
-            /**
-             * Format: int64
-             * @description Owned operation identifier.
-             */
-            id: number;
-            operation_type: string;
             created_at: string;
+            /** Format: int64 */
+            id: number;
             items: components["schemas"]["IssueReadOperationItem"][];
-            /** UTC timestamp when the operation was undone, if undone. */
+            operation_type: string;
             undone_at?: string | null;
         };
         /** @description Result of undoing a bulk read/unread operation (#4655). */
         IssueReadOperationUndoResponse: {
             operation: components["schemas"]["IssueReadOperationResponse"];
-            undone_issue_ids: number[];
             skipped_issue_ids: number[];
+            undone_issue_ids: number[];
         };
         IssueReadRateRequest: {
             /** @description Client-generated retry key. Same key/payload replays the same receipt. */
@@ -15234,6 +15256,115 @@ export interface operations {
                 content?: never;
             };
             /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_read_operation_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned bulk issue-read operation */
+                operation_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bulk issue-read operation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueReadOperationResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Operation not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_read_operation_undo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned bulk issue-read operation */
+                operation_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operation undone with compensating events; concurrently changed issues are skipped */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueReadOperationUndoResponse"];
+                };
+            };
+            /** @description Operation already undone */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Operation not found */
             404: {
                 headers: {
                     [name: string]: unknown;
