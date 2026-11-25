@@ -1220,6 +1220,28 @@ export default function CustomCBLBuilder({
                   <p role="alert" className="text-sm text-[var(--theme-danger)]">{replaceError}</p>
                 )}
               </div>
+              {semanticPreview && semanticPreview.totalChanged > 0 && (
+                <div className="rounded-xl border border-[var(--theme-border)] p-3" aria-live="polite">
+                  <p className="text-xs font-bold uppercase tracking-wider text-[var(--theme-text-muted)]">Pending change preview</p>
+                  <p className="mt-1 text-xs text-[var(--theme-text-muted)]">
+                    First unread before save: {semanticPreview.oldFirstUnread ?? 'None'}. After save: {semanticPreview.newFirstUnread ?? 'None'}.
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--theme-text-muted)]">Cross-list cycle: validated on save.</p>
+                  <ul className="mt-2 space-y-2 text-xs text-[var(--theme-text-primary)]">
+                    {semanticPreview.changed.map((change) => (
+                      <li key={change.issueId} className="rounded-lg border border-[var(--theme-border)] p-2">
+                        <p className="font-semibold">{change.label} {change.isNew ? '(inserted)' : change.moved ? '(moved)' : '(updated)'}</p>
+                        <p>Position: {change.oldPosition ? `#${change.oldPosition}` : 'new'} → #{change.newPosition}</p>
+                        <p>Former immediate predecessor: {change.oldPrev ?? 'None'}. New immediate predecessor: {change.newPrev ?? 'None'}.</p>
+                        <p>Wait impact: {change.oldWait.length > 0 ? change.oldWait.join(', ') : 'None'} → {change.newWait.length > 0 ? change.newWait.join(', ') : 'None'}.</p>
+                      </li>
+                    ))}
+                  </ul>
+                  {semanticPreview.totalChanged > semanticPreview.changed.length && (
+                    <p className="mt-2 text-xs text-[var(--theme-text-muted)]">Showing first {semanticPreview.changed.length} of {semanticPreview.totalChanged} changed entries.</p>
+                  )}
+                </div>
+              )}
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => saveMutation.mutate({ confirmed: null, undo: persisted ? buildWritePayload(persisted.name, persisted.description ?? '', persisted.mode ?? DEFAULT_MODE, persisted.entries, null, checkpointTargetsFor(persisted.entries)) : null })} disabled={!dirty || !name.trim() || disabled || isPending} className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50">{saveMutation.isPending ? 'Saving…' : 'Save custom CBL'}</button>
                 <button type="button" onClick={() => { saveMutation.reset(); setMessage(null); setLoadedListId(null); }} disabled={!dirty || disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] disabled:opacity-50">Cancel</button>
