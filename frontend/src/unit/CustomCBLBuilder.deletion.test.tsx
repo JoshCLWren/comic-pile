@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from './testingLibrary'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CustomCBLBuilder from '../components/CustomCBLBuilder'
 import { issueCardsApi } from '../services/issueCardsApi'
 import { existingList } from './fixtures/customCblFixture'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
@@ -17,7 +18,7 @@ const mocks = vi.hoisted(() => ({
   exportXml: vi.fn(),
 }))
 
-vi.mock('../services/api-custom-cbl', async () => {
+await injectModuleDoubles(await import('../services/api-custom-cbl'), async () => {
   const actual = await vi.importActual<typeof import('../services/api-custom-cbl')>(
     '../services/api-custom-cbl',
   )
@@ -26,7 +27,7 @@ vi.mock('../services/api-custom-cbl', async () => {
 
 const cblMocks = vi.hoisted(() => ({ discover: vi.fn(), preview: vi.fn() }))
 
-vi.mock('../services/api-cbl-sources', async () => {
+await injectModuleDoubles(await import('../services/api-cbl-sources'), async () => {
   const actual = await vi.importActual<typeof import('../services/api-cbl-sources')>(
     '../services/api-cbl-sources',
   )
