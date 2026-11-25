@@ -1513,7 +1513,19 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
         ("rejected".to_owned(), Some("wrong volume".to_owned()))
     );
 
-    // Refresh reports the confirmed id.
+    // Manual refresh recovers an already-confirmed identity without remapping:
+    // a failed job becomes immediately due with a fresh bounded attempt budget.
+    conn.execute(
+        "UPDATE comicvine_metadata_refresh_requests r \
+         SET state = 'failed', attempts = 3, next_attempt_at = now() + interval '1 day', \
+             lease_expires_at = now() + interval '1 day', last_error = 'provider_unavailable', \
+             completed_at = now() \
+         FROM external_identities e \
+         WHERE e.id = r.external_identity_id AND e.external_id = '2222'",
+        &[],
+    )
+    .await
+    .unwrap();
     let (status, body) = send(
         &state,
         call(
@@ -1530,6 +1542,56 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
         body,
         json!({"issue_id": i, "refreshed": true, "comicvine_issue_id": "2222"})
     );
+    let recovered = conn
+        .query_one(
+            "SELECT r.state, r.attempts, r.last_error, r.lease_expires_at, \
+                    r.completed_at, r.next_attempt_at <= now() \
+             FROM comicvine_metadata_refresh_requests r \
+             JOIN external_identities e ON e.id = r.external_identity_id \
+             WHERE e.external_id = '2222'",
+            &[],
+        )
+        .await
+        .unwrap();
+    assert_eq!(recovered.get::<_, String>(0), "pending");
+    assert_eq!(recovered.get::<_, i32>(1), 0);
+    assert_eq!(recovered.get::<_, Option<String>>(2), None);
+    assert!(recovered.get::<_, Option<chrono::DateTime<chrono::Utc>>>(3).is_none());
+    assert!(recovered.get::<_, Option<chrono::DateTime<chrono::Utc>>>(4).is_none());
+    assert!(recovered.get::<_, bool>(5));
+
+    // The same recovery inserts durable work if an old identity has no row.
+    conn.execute(
+        "DELETE FROM comicvine_metadata_refresh_requests r \
+         USING external_identities e \
+         WHERE e.id = r.external_identity_id AND e.external_id = '2222'",
+        &[],
+    )
+    .await
+    .unwrap();
+    let (status, _) = send(
+        &state,
+        call(
+            "POST",
+            &format!("{base}/metadata:refresh"),
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let reinserted: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM comicvine_metadata_refresh_requests r \
+             JOIN external_identities e ON e.id = r.external_identity_id \
+             WHERE e.external_id = '2222' AND r.state = 'pending' AND r.attempts = 0",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(reinserted, 1);
 
     // Remove: mapping becomes unresolved with evidence and confidence cleared.
     let (status, body) = send(
