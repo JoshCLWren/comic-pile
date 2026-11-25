@@ -92,7 +92,7 @@ export function DirectReadIssuePanel({
   // decide whether the action card must retain a local/No Cover placeholder
   // when provider details are absent or fail; React Query deduplicates the read.
   const intelligence = useComicVineIssueIntelligence(issue?.id)
-  const showLocalCover = !intelligence.isLoading && intelligence.metadata == null
+  const showLocalCover = intelligence.isError || (!intelligence.isLoading && intelligence.metadata == null)
   const wrongThread = issue != null && issue.thread_id !== threadId
   // A previously read issue's rating is only available in the authoritative
   // card projection. Opening Edit rating before that fetch resolves would
