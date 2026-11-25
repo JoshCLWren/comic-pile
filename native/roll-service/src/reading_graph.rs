@@ -1096,7 +1096,7 @@ mod tests {
 
         let Json(response) = reading_graph(State(state.clone()), AuthenticatedUser::for_test(9101))
             .await
-            .unwrap_or_else(|e| panic!("reading graph for reader A: {e:?}"));
+            .expect("reading graph for reader A");
         assert_eq!(response.status, "ok");
         let audit = response.frontier_audit.as_ref().expect("audit present");
         assert_eq!(audit.frontiers_examined, 2);

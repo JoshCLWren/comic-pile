@@ -372,10 +372,14 @@ async fn load_transaction(
         .await
         .map_err(db::query_error)?;
     let encoded: String = row.try_get(0).map_err(db::query_error)?;
-    let snapshot: SnapshotRows = serde_json::from_str(&encoded).map_err(|error| {
-        tracing::error!(%error, "Invalid Option E snapshot response");
-        ApiError::Internal("Invalid reading snapshot".to_string())
-    })?;
+    let snapshot: SnapshotRows = match serde_json::from_str(&encoded) {
+        Ok(v) => v,
+        Err(error) => {
+            eprintln!("SNAPSHOT PARSE ERROR: {error}");
+            eprintln!("ENCODED: {encoded}");
+            return Err(ApiError::Internal("Invalid reading snapshot".to_string()));
+        }
+    };
     assemble_snapshot(snapshot)
 }
 
@@ -391,10 +395,14 @@ async fn load_frontier_diagnostics_transaction(
         .await
         .map_err(db::query_error)?;
     let encoded: String = row.try_get(0).map_err(db::query_error)?;
-    let snapshot: SnapshotRows = serde_json::from_str(&encoded).map_err(|error| {
-        tracing::error!(%error, "Invalid Option E snapshot response");
-        ApiError::Internal("Invalid reading snapshot".to_string())
-    })?;
+    let snapshot: SnapshotRows = match serde_json::from_str(&encoded) {
+        Ok(v) => v,
+        Err(error) => {
+            eprintln!("SNAPSHOT PARSE ERROR: {error}");
+            eprintln!("ENCODED: {encoded}");
+            return Err(ApiError::Internal("Invalid reading snapshot".to_string()));
+        }
+    };
     let inputs = assemble_snapshot(snapshot)?;
     let legacy_encoded: String = row.try_get(1).map_err(db::query_error)?;
     let legacy_dependencies: Vec<LegacyDependencyRow> = serde_json::from_str(&legacy_encoded)
