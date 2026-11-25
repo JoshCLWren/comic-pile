@@ -1,8 +1,15 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReaderContextResponse } from '../services/api-reader-context'
+import { useIssueCards } from '../hooks/useIssueCards'
 import { SeriesPanel } from '../pages/RollPage/components/SeriesPanel'
 import { CrossoverAnalytics } from '../pages/RollPage/components/CrossoverAnalytics'
+
+vi.mock('../hooks/useIssueCards', () => ({
+  useIssueCards: vi.fn(() => ({ data: [], isPending: false, isError: false })),
+  indexIssueCards: (cards: Array<{ issue_id: number }>) =>
+    new Map(cards.map((card) => [card.issue_id, card])),
+}))
 
 const unavailableSeries = {
   identity_source: 'unavailable' as const,
@@ -32,6 +39,10 @@ const thanosSeries = {
 }
 
 describe('SeriesPanel', () => {
+  beforeEach(() => {
+    vi.mocked(useIssueCards).mockReturnValue({ data: [], isPending: false, isError: false } as never)
+  })
+
   it('renders unavailable state with honest message', () => {
     render(<SeriesPanel series={unavailableSeries} />)
     expect(screen.getByText('Canonical series history unavailable')).toBeInTheDocument()
@@ -116,6 +127,41 @@ describe('SeriesPanel', () => {
     render(<SeriesPanel series={unavailableSeries} />)
     const section = screen.getByRole('region', { name: /Series history/i })
     expect(section).toBeInTheDocument()
+  })
+
+  it('renders shared covers for previous and recent issues when card data exists', () => {
+    vi.mocked(useIssueCards).mockReturnValue({
+      data: [
+        {
+          issue_id: 23425,
+          thread_id: 1,
+          thread_title: 'Thanos',
+          issue_number: '9',
+          status: 'read',
+          rating: 3.5,
+          cover_image_url: 'https://cdn.example/thanos-9.jpg',
+          comicvine_issue_id: 1,
+        },
+        {
+          issue_id: 23426,
+          thread_id: 1,
+          thread_title: 'Thanos',
+          issue_number: '10',
+          status: 'read',
+          rating: 4,
+          cover_image_url: 'https://cdn.example/thanos-10.jpg',
+          comicvine_issue_id: 2,
+        },
+      ],
+      isPending: false,
+      isError: false,
+    } as never)
+
+    render(<SeriesPanel series={thanosSeries} />)
+
+    expect(useIssueCards).toHaveBeenCalledWith([23425, 23426, 23427], { enabled: true })
+    expect(screen.getByAltText('Cover for Thanos #9')).toHaveAttribute('src', 'https://cdn.example/thanos-9.jpg')
+    expect(screen.getByAltText('Cover for Thanos #10')).toHaveAttribute('src', 'https://cdn.example/thanos-10.jpg')
   })
 })
 
