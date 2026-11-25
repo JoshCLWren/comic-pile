@@ -433,9 +433,11 @@ export default function CustomCBLBuilder({
 
   const matchedEntries = useMemo(() => {
     const query = entrySearch.trim().toLocaleLowerCase()
+    const queryPosition = Number(entrySearch.trim())
     return entries.flatMap((entry, index) => {
       const label = `${entry.series_name} #${entry.issue_number}`
-      return !query || label.toLocaleLowerCase().includes(query) ? [{ entry, index }] : []
+      const positionMatch = Number.isSafeInteger(queryPosition) && queryPosition === index + 1
+      return !query || positionMatch || label.toLocaleLowerCase().includes(query) ? [{ entry, index }] : []
     })
   }, [entries, entrySearch])
   const pageCount = Math.max(1, Math.ceil(matchedEntries.length / ENTRY_PAGE_SIZE))
@@ -862,6 +864,15 @@ export default function CustomCBLBuilder({
               </form>
 
               <p id="custom-cbl-search-help" className="text-xs text-[var(--theme-text-muted)]">Find issues, then use the arrow keys to choose a result and Enter to add it. Escape returns to search.</p>
+              {insertAt && entries[insertAt.index] && (
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--theme-continuity-accent)]/50 px-3 py-2 text-xs text-[var(--theme-text-primary)]">
+                  <span>
+                    Next added issue will be inserted {insertAt.position} position {insertAt.index + 1}
+                    {' '}({entries[insertAt.index]?.series_name} #{entries[insertAt.index]?.issue_number}).
+                  </span>
+                  <button type="button" onClick={() => setInsertAt(null)} className="min-h-9 rounded-lg border border-[var(--theme-border)] px-2 font-semibold">Cancel insert point</button>
+                </div>
+              )}
 
               {searchResults.length > 0 && (
                 <div ref={issueSearchResults} className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-[var(--theme-border)] p-2" aria-label="Custom CBL issue search results">
@@ -955,6 +966,8 @@ export default function CustomCBLBuilder({
                     nameOf={nameFor}
                     expanded={expandedEntryOptions === entry.issue_id}
                     moveDestination={moveDestinations[entry.issue_id] ?? ''}
+                    moveTarget={moveTargets[entry.issue_id] ?? ''}
+                    insertActive={insertAt?.index === index ? insertAt.position : null}
                     disabled={disabled || isPending}
                     onCheckpoint={() => toggleCheckpoint(entry.issue_id)}
                     onMoveEarlier={() => moveIssue(index, -1)}
@@ -965,6 +978,11 @@ export default function CustomCBLBuilder({
                     onSkip={() => toggleSkipped(entry.issue_id)}
                     onDestinationChange={(value) => setMoveDestinations((current) => ({ ...current, [entry.issue_id]: value }))}
                     onMoveToPosition={() => moveIssueToPosition(index, entry.issue_id)}
+                    onMoveTargetChange={(value) => setMoveTargets((current) => ({ ...current, [entry.issue_id]: value }))}
+                    onMoveBeforeIssue={() => moveIssueRelativeToIssue(index, entry.issue_id, 'before')}
+                    onMoveAfterIssue={() => moveIssueRelativeToIssue(index, entry.issue_id, 'after')}
+                    onInsertBefore={() => { setInsertAt({ index, position: 'before' }); issueSearchInput.current?.focus() }}
+                    onInsertAfter={() => { setInsertAt({ index, position: 'after' }); issueSearchInput.current?.focus() }}
                   />
                 ))}
               </ol>
