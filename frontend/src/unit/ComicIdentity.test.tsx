@@ -998,6 +998,7 @@ describe('ComicIdentity creator status (issue #4149)', () => {
   // repairs return refresh_retry_after_seconds: null; only deferred/failed carry
   // a declared delay. Tests for active repairs must use those responses.
   const FALLBACK_REFRESH_MS = 10_000 // METADATA_REFRESH_FALLBACK_SECONDS * 1000 (component constant)
+  const MAX_REFRESH_POLLS = 30 // METADATA_REFRESH_MAX_POLLS (component constant)
 
   function flushInitialLoad() {
     return act(async () => {
