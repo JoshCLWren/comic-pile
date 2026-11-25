@@ -153,6 +153,7 @@ struct OwnedIssue {
     issue_number: String,
     status: String,
     position: i32,
+    read_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 async fn owned_issue(
@@ -162,7 +163,7 @@ async fn owned_issue(
 ) -> Result<OwnedIssue, ApiError> {
     let row = tx
         .query_opt(
-            "SELECT i.id, i.thread_id, i.issue_number, i.status, i.position
+            "SELECT i.id, i.thread_id, i.issue_number, i.status, i.position, i.read_at
              FROM issues i JOIN threads t ON t.id = i.thread_id
              WHERE i.id = $1 AND t.user_id = $2",
             &[&issue_id, &user_id],
@@ -176,6 +177,7 @@ async fn owned_issue(
         issue_number: row.get(2),
         status: row.get(3),
         position: row.get(4),
+        read_at: row.get(5),
     })
 }
 
@@ -515,7 +517,7 @@ async fn bulk_mark(
         .collect();
     let rows = tx
         .query(
-            "SELECT i.id, i.thread_id, i.issue_number, i.status, i.position
+            "SELECT i.id, i.thread_id, i.issue_number, i.status, i.position, i.read_at
              FROM issues i JOIN threads t ON t.id = i.thread_id
              WHERE t.user_id = $1 AND i.id = ANY($2::int[])",
             &[&user.id(), &distinct_ids],
@@ -530,6 +532,7 @@ async fn bulk_mark(
             issue_number: row.get(2),
             status: row.get(3),
             position: row.get(4),
+            read_at: row.get(5),
         };
         by_id.insert(issue.id, issue);
     }
