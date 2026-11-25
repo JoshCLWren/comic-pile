@@ -478,15 +478,22 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                     </p>
                   );
                 case 'refresh_pending':
-                  return (
-                    <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-fetching">
-                      Creator credits queued for fetch…
-                    </p>
-                  );
                 case 'refresh_running':
+                  if (isRefreshPollingExhausted) {
+                    return (
+                      <div className="space-y-1">
+                        <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-delayed">
+                          Creator credits are still waiting for ComicVine. Retry refresh or check again later.
+                        </p>
+                        {retryRefreshButton}
+                      </div>
+                    )
+                  }
                   return (
                     <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-fetching">
-                      Creator credits being fetched…
+                      {status === 'refresh_pending'
+                        ? 'Creator credits queued for fetch…'
+                        : 'Creator credits being fetched…'}
                     </p>
                   );
                 case 'refresh_deferred':
