@@ -1581,6 +1581,38 @@ mod tests {
         assert!(fake.calls().is_empty());
     }
 
+    #[test]
+    fn failure_transition_records_bounded_truthful_states() {
+        assert_eq!(
+            failure_transition(&ProviderFailure::Unavailable, 1),
+            ("deferred", 60, "provider_unavailable")
+        );
+        assert_eq!(
+            failure_transition(&ProviderFailure::Unavailable, 3),
+            ("failed", 21600, "provider_unavailable")
+        );
+        assert_eq!(
+            failure_transition(&ProviderFailure::Timeout, 2),
+            ("deferred", 300, "provider_timeout")
+        );
+        assert_eq!(
+            failure_transition(&ProviderFailure::InvalidPayload, 3),
+            ("failed", 21600, "invalid_provider_payload")
+        );
+        assert_eq!(
+            failure_transition(&ProviderFailure::RateLimited(120), 1),
+            ("deferred", 120, "rate_limit")
+        );
+        assert_eq!(
+            failure_transition(&ProviderFailure::RateLimited(30), 1),
+            ("deferred", 60, "rate_limit")
+        );
+        assert_eq!(
+            failure_transition(&ProviderFailure::RateLimited(10), 3),
+            ("failed", 21600, "rate_limit")
+        );
+    }
+
     /// #4516 legacy oracle: `_provider_timestamp` returned a naive datetime
     /// for ComicVine's `YYYY-MM-DD HH:MM:SS` revision. The retired Python
     /// identity upsert then evaluated

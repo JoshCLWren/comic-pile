@@ -20,7 +20,7 @@ function renderWithToast(ui: ReactElement) {
 
 vi.mock('../services/api-comicvine', async () => {
   const actual = await vi.importActual<typeof import('../services/api-comicvine')>('../services/api-comicvine')
-  return { ...actual, comicVineApi: { getIssueIntelligence: vi.fn(), importIssue: vi.fn() } }
+  return { ...actual, comicVineApi: { getIssueIntelligence: vi.fn(), importIssue: vi.fn(), refreshMetadata: vi.fn() } }
 })
 
 vi.mock('../services/api-reading-orders', () => ({
@@ -31,6 +31,7 @@ vi.mock('../services/api-reading-orders', () => ({
 
 const getIntelligence = vi.mocked(comicVineApi.getIssueIntelligence)
 const importIssue = vi.mocked(comicVineApi.importIssue)
+const refreshMetadata = vi.mocked(comicVineApi.refreshMetadata)
 
 function waitForLoaded() {
   return waitFor(() => expect(screen.queryByLabelText('Loading comic details')).not.toBeInTheDocument())
@@ -40,6 +41,7 @@ describe('ComicIdentity', () => {
   beforeEach(() => {
     getIntelligence.mockReset()
     importIssue.mockReset()
+    refreshMetadata.mockReset()
   })
 
   it('reports truncated story arcs and links the arc on ComicVine', async () => {
@@ -963,6 +965,7 @@ describe('ComicIdentity creator status (issue #4149)', () => {
   beforeEach(() => {
     getIntelligence.mockReset()
     importIssue.mockReset()
+    refreshMetadata.mockReset()
   })
 
   function renderIdentity(issueId = 1) {
