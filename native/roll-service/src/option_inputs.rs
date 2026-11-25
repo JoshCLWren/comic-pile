@@ -134,7 +134,7 @@ pub(crate) const SNAPSHOT_CTES: &str = r#"owned_threads AS MATERIALIZED (
 ),
 owned_issues AS MATERIALIZED (
     SELECT i.id, i.thread_id, i.position, i.status, i.issue_number,
-           i.catalog_issue_id
+           i.catalog_issue_id, i.merged_into_issue_id
     FROM issues i JOIN owned_threads t ON t.id = i.thread_id
     WHERE i.merged_into_issue_id IS NULL
 ),
