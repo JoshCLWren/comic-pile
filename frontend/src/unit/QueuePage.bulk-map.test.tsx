@@ -449,6 +449,7 @@ describe('QueuePage bulk mapping wiring', () => {
       ],
       isPending: false,
       isError: true,
+      isFetchNextPageError: true,
       isLoadingMore: false,
       nextPageToken: 'page-2',
       loadMore: vi.fn().mockResolvedValue(undefined),

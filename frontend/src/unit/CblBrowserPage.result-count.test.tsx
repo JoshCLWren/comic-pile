@@ -4,10 +4,12 @@ import { describe, expect, it } from 'vitest'
 import {
   browsePage,
   mockBrowse,
+  queryClient,
   renderPage,
   searchPage,
   source,
 } from './CblBrowserPage.fixture'
+import { queryKeys } from '../query/queryKeys'
 
 const secondSource = { ...source, id: 8, name: 'Second Universe' }
 const countLine = () => screen.getByTestId('cbl-result-count')

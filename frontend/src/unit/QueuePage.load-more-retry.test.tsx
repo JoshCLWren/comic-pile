@@ -158,6 +158,7 @@ it('offers a retry affordance when the next-page fetch fails', async () => {
     ],
     isPending: false,
     isError: true,
+    isFetchNextPageError: true,
     refetch: vi.fn(),
     nextPageToken: 'page-2',
     loadMore,
