@@ -137,6 +137,26 @@ describe('IssueCorrectionDialog', () => {
     expect(onSuccess).toHaveBeenCalledOnce()
   })
 
+  it('rejects a confirmation when the reviewed issue set changed since preview', async () => {
+    const reviewed = [issue({ id: 1, issue_number: '1' }), issue({ id: 2, issue_number: '2', status: 'read' })]
+    const changed = [issue({ id: 1, issue_number: '1', status: 'read' }), issue({ id: 2, issue_number: '2', status: 'read' })]
+    list
+      .mockResolvedValueOnce(listResponse(reviewed))
+      .mockResolvedValueOnce(listResponse(reviewed))
+      .mockResolvedValueOnce(listResponse(changed))
+
+    renderDialog()
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, '2')
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+    await screen.findByTestId('bulk-read-preview')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
+
+    expect(await screen.findByText(/issues changed since review/i)).toBeInTheDocument()
+    expect(bulkMarkRead).not.toHaveBeenCalled()
+  })
+
   it('retries failed loads and reports update failures', async () => {
     list.mockRejectedValue(new Error('load failed'))
     const { onClose } = renderDialog({ currentIssueNumber: null })
@@ -157,6 +177,8 @@ describe('IssueCorrectionDialog', () => {
     await userEvent.type(input, '2')
     await userEvent.selectOptions(screen.getByLabelText(/place new issue/i), 'start')
     await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+    await screen.findByTestId('bulk-read-preview')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
     await waitFor(() => expect(screen.getByText(/failed to update issue/i)).toBeInTheDocument())
     expect(onSuccess).not.toHaveBeenCalled()
   })

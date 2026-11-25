@@ -149,7 +149,7 @@ export default function IssueCorrectionDialog({
         const id = Number(stored)
         if (!Number.isFinite(id)) return
         try {
-          const op = await issuesService.getReadOperation!(id)
+          const op = await getOperation(id)
           if (!op.undone_at) setLastOperation(op)
           else {
             try { window.localStorage.removeItem(`issueReadOperation:${threadId}`) } catch { /* ignore */ }
@@ -162,7 +162,10 @@ export default function IssueCorrectionDialog({
     }
   }, [isOpen, currentIssueNumber, fetchIssues, threadId, issuesService])
 
-  const applyCorrection = useCallback(async () => {
+  // The reviewed IDs are passed explicitly: `preview` is not a stable dependency
+  // of this callback, so reading it from the closure would silently skip the
+  // staleness check after the preview is set (#4655 review R3).
+  const applyCorrection = useCallback(async (reviewedIds?: number[]) => {
     const targetNumber = selectedIssueNumber.trim()
     if (!targetNumber) {
       setError('Please enter an issue identifier')
@@ -173,7 +176,6 @@ export default function IssueCorrectionDialog({
     setError(null)
 
     try {
-      const reviewedIds = preview?.affectedIds
       let targetIssue = allIssues.find((issue) => issue.issue_number === targetNumber)
       if (!targetIssue) {
         const insertAfterIssueId =
@@ -221,8 +223,8 @@ export default function IssueCorrectionDialog({
 
       setLastOperation(operation)
       if (operation) {
-        const svc = issuesService as IssueCorrectionIssuesApi & { getReadOperation?: (id: number) => Promise<IssueReadOperationResponse> }
-        if (svc.getReadOperation) {
+        const persist = issuesService.getReadOperation
+        if (persist) {
           try { window.localStorage.setItem(`issueReadOperation:${threadId}`, String(operation.id)) } catch { /* ignore */ }
         }
       }
@@ -295,24 +297,21 @@ export default function IssueCorrectionDialog({
             return unreadBeforeTarget.some((u) => u.id === issue.id)
           })
 
-      if (unreadBeforeTarget.length === 0) {
-        // No bulk read preview needed; apply directly.
-        await applyCorrection()
-        return
-      }
-
+      // Always present the review step, even when no issue is about to be bulk
+      // read: creating or moving the target is itself a correction the reader
+      // must be able to cancel after seeing the projected completion effects.
       setPreview({ targetIssueNumber: targetNumber, affected: unreadBeforeTarget, affectedIds: unreadBeforeTarget.map((i) => i.id), willCompleteSeries, dependentFrontier })
     } catch {
       setError('Failed to prepare issue correction preview. Please try again.')
     } finally {
       setIsLoading(false)
     }
-  }, [selectedIssueNumber, allIssues, threadId, loadAllIssues, depsService, applyCorrection])
+  }, [selectedIssueNumber, allIssues, threadId, loadAllIssues, depsService])
 
 
   const handleSubmit = useCallback(async () => {
     if (preview) {
-      await applyCorrection()
+      await applyCorrection(preview.affectedIds)
       return
     }
     await buildPreview()
@@ -324,11 +323,10 @@ export default function IssueCorrectionDialog({
     setIsUndoing(true)
     setError(null)
     try {
-      // SAFETY: issuesService is injectable; widen only to probe optional undoReadOperation.
-      const svc = issuesService as IssueCorrectionIssuesApi & { undoReadOperation?: (id: number) => Promise<IssueReadOperationUndoResponse> }
+      const undoOperation = issuesService.undoReadOperation
       let undoResponse: IssueReadOperationUndoResponse | null = null
-      if (svc.undoReadOperation) {
-        undoResponse = await svc.undoReadOperation(lastOperation.id)
+      if (undoOperation) {
+        undoResponse = await undoOperation(lastOperation.id)
       } else {
         undoResponse = await issuesApi.undoReadOperation(lastOperation.id)
       }
