@@ -210,7 +210,7 @@ describe('Thread detail request budget', () => {
     expect(calls).toHaveLength(callCount)
   })
 
-  it('canonical available: five reads, no legacy blocking probe', async () => {
+  it('canonical available: six reads, no legacy blocking probe', async () => {
     const { calls, client } = createRequestRecorder(makeHandler('available'))
     setDefaultHttpClient(client)
 
