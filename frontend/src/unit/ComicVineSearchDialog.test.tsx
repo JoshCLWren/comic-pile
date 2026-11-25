@@ -222,6 +222,62 @@ describe('ComicVineSearchDialog mode branching', () => {
     expect(confirmIdentitySpy).toHaveBeenCalledTimes(1)
   })
 
+  it('sends the refreshed version on the retried write after a 409 (#4652)', async () => {
+    const conflict = {
+      isAxiosError: true,
+      response: {
+        status: 409,
+        data: { detail: 'Issue identity changed; reload version 8 and retry' },
+      },
+      message: 'Request failed',
+    }
+    confirmIdentitySpy.mockRejectedValueOnce(conflict)
+
+    function ConflictHarness() {
+      // Mirrors the hook caller: onConflictRetry refetches identity and rerenders
+      // the dialog with the authoritative version before the reader retries.
+      const [version, setVersion] = useState(7)
+      return (
+        <ComicVineSearchDialog
+          {...defaultProps({
+            overallIssueNumber: '100',
+            expectedVersion: version,
+            onConflictRetry: () => {
+              setVersion(8)
+              return Promise.resolve()
+            },
+          })}
+        />
+      )
+    }
+
+    render(<ConflictHarness />)
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Stormwatch'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm Identity' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Identity' }))
+
+    await waitFor(() => expect(confirmIdentitySpy).toHaveBeenCalledWith(43, 36956, {
+      overallIssueNumber: '100',
+      expectedVersion: 7,
+    }))
+    await waitFor(() => expect(screen.getByText(/reload version 8 and retry/)).toBeInTheDocument())
+
+    fireEvent.click(screen.getByTestId('comicvine-retry'))
+    await waitFor(() => expect(screen.queryByText(/reload version 8 and retry/)).toBeNull())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Identity' }))
+    await waitFor(() => expect(confirmIdentitySpy).toHaveBeenCalledTimes(2))
+    // The retried write carries the refreshed version, not the rejected one.
+    expect(confirmIdentitySpy).toHaveBeenNthCalledWith(2, 43, 36956, {
+      overallIssueNumber: '100',
+      expectedVersion: 8,
+    })
+  })
+
   it('renders same-title series results as distinguishable options', async () => {
     searchSeriesSpy.mockResolvedValue({
       query: 'Ultimate Spider-Man',
