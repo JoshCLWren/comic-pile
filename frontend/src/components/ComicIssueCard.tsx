@@ -12,6 +12,61 @@ import { DIRECT_RATING_DEFAULT } from './comicIssueRatingScale'
 /** Responsive presentation variants of one underlying card implementation. */
 export type ComicIssueCardVariant = 'compact' | 'standard' | 'featured'
 
+/** Props for the source-scoped cover artwork state. */
+interface ComicIssueCoverArtworkProps {
+  coverImageUrl: string | null
+  threadTitle: string
+  issueNumber: string
+  eager: boolean
+  imageClassName: string
+  altText?: string
+  onImageLoad?: (img: HTMLImageElement) => void
+  placeholderTestId: string
+  children?: ReactNode
+}
+
+function ComicIssueCoverArtwork({
+  coverImageUrl,
+  threadTitle,
+  issueNumber,
+  eager,
+  imageClassName,
+  altText,
+  onImageLoad,
+  placeholderTestId,
+  children,
+}: ComicIssueCoverArtworkProps) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null)
+  const hasCover = coverImageUrl != null && coverImageUrl !== '' && failedUrl !== coverImageUrl
+  const issueLabel = issueNumber ? `${threadTitle} #${issueNumber}` : threadTitle
+
+  return (
+    <>
+      {hasCover ? (
+        <ImageWithLoading
+          src={coverImageUrl}
+          alt={altText ?? `Cover for ${issueLabel}`}
+          loading={eager ? 'eager' : 'lazy'}
+          className={imageClassName}
+          onLoad={onImageLoad}
+          onError={() => setFailedUrl(coverImageUrl)}
+        />
+      ) : (
+        <div
+          className="flex h-full w-full flex-col items-center justify-center gap-1 p-1 text-center"
+          data-testid={placeholderTestId}
+          aria-label={`No cover for ${issueLabel}`}
+        >
+          <span className="text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-dim)]">
+            No cover
+          </span>
+        </div>
+      )}
+      {hasCover && children}
+    </>
+  )
+}
+
 /**
  * The provider CDN image at CSS display dimensions. The `src` is always the
  * exact URL string from the card projection — ComicPile performs no image
@@ -47,9 +102,6 @@ export function ComicIssueCover({
   onImageLoad?: (img: HTMLImageElement) => void
   children?: ReactNode
 }) {
-  const [failedUrl, setFailedUrl] = useState<string | null>(null)
-  const hasCover = coverImageUrl != null && coverImageUrl !== '' && failedUrl !== coverImageUrl
-  const issueLabel = issueNumber ? `${threadTitle} #${issueNumber}` : threadTitle
   const sizeClass =
     variant === 'featured'
       ? 'w-36 sm:w-44'
@@ -57,6 +109,7 @@ export function ComicIssueCover({
         ? 'w-12'
         : 'w-16 sm:w-20'
   const eager = variant === 'featured'
+  const artworkKey = JSON.stringify([coverImageUrl, threadTitle, issueNumber])
 
   return (
     <div
@@ -64,27 +117,19 @@ export function ComicIssueCover({
       style={frameStyle ?? { aspectRatio: '2 / 3' }}
       data-testid={testId}
     >
-      {hasCover ? (
-        <ImageWithLoading
-          src={coverImageUrl}
-          alt={altText ?? `Cover for ${issueLabel}`}
-          loading={eager ? 'eager' : 'lazy'}
-          className={imageClassName}
-          onLoad={onImageLoad}
-          onError={() => setFailedUrl(coverImageUrl)}
-        />
-      ) : (
-        <div
-          className="flex h-full w-full flex-col items-center justify-center gap-1 p-1 text-center"
-          data-testid={placeholderTestId}
-          aria-label={`No cover for ${issueLabel}`}
-        >
-          <span className="text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-dim)]">
-            No cover
-          </span>
-        </div>
-      )}
-      {hasCover && children}
+      <ComicIssueCoverArtwork
+        key={artworkKey}
+        coverImageUrl={coverImageUrl}
+        threadTitle={threadTitle}
+        issueNumber={issueNumber}
+        eager={eager}
+        imageClassName={imageClassName}
+        altText={altText}
+        onImageLoad={onImageLoad}
+        placeholderTestId={placeholderTestId}
+      >
+        {children}
+      </ComicIssueCoverArtwork>
     </div>
   )
 }
