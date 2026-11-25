@@ -168,7 +168,7 @@ export function ThreadPool({
               Go to Queue
             </button>
           </div>
-        ) : displayPool.length === 0 && (!hasSnoozes || emptyPoolReason === 'no_series') ? (
+        ) : displayPool.length === 0 && !hasSnoozes ? (
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🎲</div>
             <div>
@@ -192,8 +192,11 @@ export function ThreadPool({
           </div>
         ) : displayPool.length === 0 && hasSnoozes ? (
           // Only snooze-backed emptiness reaches here: authoritative blockers
-          // (all_blocked / all_out_of_pool / all_completed / no_series) resolve in
-          // the branches above and never promise that a reset clears them.
+          // (all_blocked / all_out_of_pool / all_completed) resolve in
+          // the branches above and never promise that a reset clears them. A
+          // browser-only snooze can still make the pool empty even when
+          // bootstrap reports no snoozes, so it reconciles the cookie state
+          // with the server reason here.
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🔒</div>
             <div>
