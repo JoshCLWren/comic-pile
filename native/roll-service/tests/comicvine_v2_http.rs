@@ -1196,6 +1196,308 @@ async fn identity_state_reads_seeded_mappings_like_python() {
     );
 }
 
+async fn stable_physical_state(
+    conn: &Conn,
+    thread_id: i32,
+    list_id: i32,
+) -> (String, String, String) {
+    let issues = conn
+        .query_one(
+            "SELECT COALESCE(jsonb_agg(jsonb_build_object( \
+                    'id', id, 'number', issue_number, 'status', status, 'position', position, \
+                    'read_at', to_char(read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') \
+                 ) ORDER BY position, id), '[]'::jsonb)::text \
+             FROM issues WHERE thread_id = $1",
+            &[&thread_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let list = conn
+        .query_one(
+            "SELECT COALESCE(jsonb_agg(jsonb_build_object( \
+                    'id', id, 'issue_id', issue_id, 'position', position \
+                 ) ORDER BY position, id), '[]'::jsonb)::text \
+             FROM custom_cbl_entries WHERE list_id = $1",
+            &[&list_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let history = conn
+        .query_one(
+            "SELECT COALESCE(jsonb_agg(jsonb_build_object( \
+                    'id', id, 'type', type, 'issue_id', issue_id, 'number', issue_number, \
+                    'rating', rating, 'context', context \
+                 ) ORDER BY id), '[]'::jsonb)::text \
+             FROM events WHERE thread_id = $1",
+            &[&thread_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    (issues, list, history)
+}
+
+/// Real-Postgres regression for the Nov 5 Return of the Master identity
+/// failure. Historical PKs are provenance only; every owned row is allocated
+/// by this disposable database. The authored #1-#5 labels stay at Julix
+/// positions 135-139 while provider numbering switches to #100-#102.
+#[tokio::test]
+async fn return_master_alias_mapping_preserves_physical_rows_and_rejects_unsafe_edits() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-alias-incident").await;
+    set_key(false);
+    let conn = state.pool.get().await.unwrap();
+    let thread_id = thread(
+        &conn,
+        user_id,
+        &format!(
+            "Return of the Master (source thread {})",
+            incident_fixtures::RETURN_MASTER_THREAD_SOURCE_ID
+        ),
+    )
+    .await;
+    let mut issue_ids = Vec::with_capacity(incident_fixtures::RETURN_MASTER_ORIGINAL_IDS.len());
+    for (index, _source_id) in incident_fixtures::RETURN_MASTER_ORIGINAL_IDS.iter().enumerate() {
+        issue_ids.push(issue(&conn, thread_id, &(index + 1).to_string(), 135 + index as i32).await);
+    }
+    conn.execute(
+        "UPDATE threads SET total_issues = 5, issues_remaining = 2, status = 'active', \
+         next_unread_issue_id = $2 WHERE id = $1",
+        &[&thread_id, &issue_ids[3]],
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        "UPDATE issues SET status = 'read', read_at = '2026-11-05T05:02:02.019Z' \
+         WHERE id = ANY($1)",
+        &[&issue_ids[..3]],
+    )
+    .await
+    .unwrap();
+    let source_issue_id = incident_fixtures::RETURN_MASTER_ORIGINAL_IDS[2];
+    conn.execute(
+        "INSERT INTO events (type, user_id, thread_id, issue_id, issue_number, rating, issues_read, context) \
+         VALUES ('rate', $1, $2, $3, '3', 4.0, 1, $4::jsonb)",
+        &[
+            &user_id,
+            &thread_id,
+            &issue_ids[2],
+            &json!({"source_issue_id": source_issue_id}),
+        ],
+    )
+    .await
+    .unwrap();
+    let list_id: i32 = conn
+        .query_one(
+            "INSERT INTO custom_cbl_lists (user_id, name, mode, created_at, updated_at) \
+             VALUES ($1, 'Julix source list', 'strict', NOW(), NOW()) RETURNING id",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    for (index, issue_id) in issue_ids.iter().enumerate() {
+        conn.execute(
+            "INSERT INTO custom_cbl_entries (list_id, issue_id, position, created_at) \
+             VALUES ($1, $2, $3, NOW())",
+            &[&list_id, issue_id, &(135 + index as i32)],
+        )
+        .await
+        .unwrap();
+    }
+    for (provider_id, provider_number) in [(364132, "100"), (9000101, "101"), (9000102, "102")] {
+        conn.execute(
+            "INSERT INTO external_identities \
+                 (provider, entity_type, external_id, external_url, metadata_json, created_at, updated_at) \
+             VALUES ('comicvine', 'issue', $1, $2, $3::jsonb, NOW(), NOW()) \
+             ON CONFLICT ON CONSTRAINT uq_external_identity_provider_entity \
+             DO UPDATE SET metadata_json = EXCLUDED.metadata_json",
+            &[
+                &provider_id.to_string(),
+                &format!("https://comicvine.gamespot.com/issue/4000-{provider_id}/"),
+                &json!({
+                    "issue_number": provider_number,
+                    "image": {"medium_url": format!("https://comicvine.example/{provider_number}.jpg")}
+                }),
+            ],
+        )
+        .await
+        .unwrap();
+    }
+    let before = stable_physical_state(&conn, thread_id, list_id).await;
+    let original_three = issue_ids[2];
+    let base = format!("/api/v2/comicvine/issues/{original_three}");
+    let confirm = json!({
+        "comicvine_issue_id": incident_fixtures::RETURN_MASTER_COMICVINE_100_ISSUE_ID,
+        "overall_issue_number": "100",
+        "expected_version": 1
+    });
+    let (status, body) = send(
+        &state,
+        call("POST", &format!("{base}/identity:confirm"), &token, &csrf, Some(confirm.clone())),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["issue_number"], "3");
+    assert_eq!(body["overall_issue_number"], "100");
+    assert_eq!(body["provider_issue_number"], "100");
+    assert_eq!(body["identity_version"], 2);
+    assert_eq!(before, stable_physical_state(&conn, thread_id, list_id).await);
+
+    // An exact retry is idempotent even though its observed version is now old.
+    let (status, body) = send(
+        &state,
+        call("POST", &format!("{base}/identity:confirm"), &token, &csrf, Some(confirm)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["identity_version"], 2);
+
+    // A different intent from that stale version is rejected before any write.
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            &format!("{base}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 364132, "overall_issue_number": "99", "expected_version": 1})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body:?}");
+    assert!(body["detail"].as_str().unwrap().contains("reload version 2"));
+    assert_eq!(before, stable_physical_state(&conn, thread_id, list_id).await);
+
+    // One provider issue cannot silently become two owned physical issues.
+    let duplicate = issue_ids[1];
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{duplicate}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 364132, "overall_issue_number": "100", "expected_version": 1})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body:?}");
+    assert_eq!(body["detail"]["code"], "duplicate_physical_issue");
+    assert_eq!(body["detail"]["existing_issue_id"], original_three);
+
+    // Story #4 maps to synthetic provider #101, then receives its overall alias
+    // without rewriting the confirmed mapping's provenance.
+    let fourth = issue_ids[3];
+    let fourth_base = format!("/api/v2/comicvine/issues/{fourth}");
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            &format!("{fourth_base}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 9000101, "expected_version": 1})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["identity_version"], 2);
+    let mapping_before_row = conn
+        .query_one(
+            "SELECT m.status, m.evidence_source, extract(epoch FROM m.updated_at)::bigint \
+             FROM issue_external_identity_mappings m \
+             JOIN external_identities e ON e.id = m.external_identity_id \
+             WHERE m.issue_id = $1 AND e.external_id = '9000101'",
+            &[&fourth],
+        )
+        .await
+        .unwrap();
+    let mapping_before = (
+        mapping_before_row.get::<_, String>(0),
+        mapping_before_row.get::<_, String>(1),
+        mapping_before_row.get::<_, i64>(2),
+    );
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            &format!("{fourth_base}/identity:replace"),
+            &token,
+            &csrf,
+            Some(json!({
+                "comicvine_issue_id": 9000101,
+                "overall_issue_number": "101",
+                "expected_version": 2,
+                "reason": "add overall alias only"
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["overall_issue_number"], "101");
+    assert_eq!(body["identity_version"], 3);
+    let mapping_after_row = conn
+        .query_one(
+            "SELECT m.status, m.evidence_source, extract(epoch FROM m.updated_at)::bigint \
+             FROM issue_external_identity_mappings m \
+             JOIN external_identities e ON e.id = m.external_identity_id \
+             WHERE m.issue_id = $1 AND e.external_id = '9000101'",
+            &[&fourth],
+        )
+        .await
+        .unwrap();
+    let mapping_after = (
+        mapping_after_row.get::<_, String>(0),
+        mapping_after_row.get::<_, String>(1),
+        mapping_after_row.get::<_, i64>(2),
+    );
+    assert_eq!(mapping_before, mapping_after);
+
+    let fifth = issue_ids[4];
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{fifth}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 9000102, "overall_issue_number": "102", "expected_version": 1})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["identity_version"], 2);
+    assert_eq!(before, stable_physical_state(&conn, thread_id, list_id).await);
+
+    let (status, cards) = send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/issues/cards",
+            &token,
+            &csrf,
+            Some(json!({"issue_ids": issue_ids})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{cards:?}");
+    let cards = cards["items"].as_array().unwrap();
+    assert_eq!(cards.len(), 5);
+    for (index, card) in cards.iter().enumerate() {
+        assert_eq!(card["issue_id"], issue_ids[index]);
+        assert_eq!(card["issue_number"], (index + 1).to_string());
+        assert_eq!(card["overall_issue_number"], if index >= 2 { json!((98 + index).to_string()) } else { Value::Null });
+        assert_eq!(card["identity_version"], if index == 3 { 3 } else if index >= 2 { 2 } else { 1 });
+    }
+    assert_eq!(cards[2]["provider_issue_number"], "100");
+    assert_eq!(cards[3]["provider_issue_number"], "101");
+    assert_eq!(cards[4]["provider_issue_number"], "102");
+    assert_eq!(cards[3]["cover_image_url"], "https://comicvine.example/101.jpg");
+    assert_eq!(cards[4]["cover_image_url"], "https://comicvine.example/102.jpg");
+}
+
 #[tokio::test]
 async fn corrections_list_reads_active_rows_oldest_first() {
     let (state, token, csrf, user_id, _guard) = setup_user("cvv2-corrections-read").await;
