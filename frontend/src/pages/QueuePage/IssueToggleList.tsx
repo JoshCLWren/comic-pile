@@ -11,7 +11,7 @@ import {
 import type { DragEvent } from 'react'
 import type { Issue, IssueDependenciesResponse, IssueListResponse } from '../../types'
 import { issuesApi } from '../../services/api-issues'
-import type { IssueListParams } from '../../services/api-issues'
+import type { IssueListParams, IssuePreviewItem } from '../../services/api-issues'
 import { issueDependenciesApi } from '../../services/api-dependencies'
 import type { ThreadIssueDependenciesResponse } from '../../services/api-dependencies'
 import { getApiErrorDetail } from '../../utils/apiError'
@@ -34,6 +34,66 @@ import {
   getPendingCreates,
 } from './issueUtils'
 import type { IssueMutation, QueuedIssueMutation } from './types'
+
+/**
+ * One exact before/after row in an issue-edit preview (#4654). The series
+ * title distinguishes two series that share an issue number, and the labels
+ * expose the affected lists, constraints, read/rating/mapping history and
+ * Queue/Roll frontiers instead of showing a bare number.
+ */
+function PreviewIssueRow({ item }: { item: IssuePreviewItem }) {
+  const labels: Array<{ text: string; tone?: 'warning' | 'accent' }> = []
+  if (item.read_status) {
+    labels.push({ text: item.read_status === 'read' ? 'Read' : 'Unread' })
+  }
+  for (const name of item.source_lists ?? []) {
+    labels.push({ text: `List: ${name}` })
+  }
+  if (item.constraint_count && item.constraint_count > 0) {
+    labels.push({
+      text: `${item.constraint_count} constraint${item.constraint_count === 1 ? '' : 's'}`,
+    })
+  }
+  if (item.is_queue_frontier) labels.push({ text: 'Queue frontier', tone: 'accent' })
+  if (item.is_roll_frontier) labels.push({ text: 'Roll frontier', tone: 'accent' })
+  if (item.has_read_history) labels.push({ text: 'Read history' })
+  if (item.has_rating) labels.push({ text: 'Rated' })
+  if (item.is_mapped) labels.push({ text: 'Mapped' })
+  if (item.potential_duplicate) {
+    labels.push({ text: 'Possible duplicate', tone: 'warning' })
+  }
+
+  return (
+    <div className="rounded-lg border border-white/10 px-2 py-1.5 space-y-1">
+      <div className="text-xs text-[var(--theme-text-primary)]">
+        <span className="font-bold">{item.series_title || 'Series'}</span>
+        {' #'}
+        {item.issue_number}
+        {item.is_new && (
+          <span className="ml-1 font-bold text-[var(--theme-primary-action)]">(new)</span>
+        )}
+      </div>
+      {labels.length > 0 && (
+        <div className="flex flex-wrap gap-1 text-[11px] text-[var(--theme-text-muted)]">
+          {labels.map((label) => (
+            <span
+              key={label.text}
+              className={`rounded-lg border border-white/10 px-1.5 py-0.5 ${
+                label.tone === 'warning'
+                  ? 'text-[var(--theme-warning)]'
+                  : label.tone === 'accent'
+                    ? 'text-[var(--theme-continuity-accent)]'
+                    : ''
+              }`}
+            >
+              {label.text}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 /** The issue-API surface IssueToggleList consumes, injectable for tests. */
 export interface IssueToggleListApi {
@@ -1185,8 +1245,8 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
               <div>
                 <div className="font-bold text-stone-400 mb-1">Before</div>
                 <div className="max-h-40 overflow-auto rounded-lg border border-white/10 p-2 space-y-0.5">
-                  {(previewState.selectedStrategy === 'numeric_resort' ? previewState.response.numeric_resort_outcome?.before : previewState.response.default_outcome.before)?.map((item) => (
-                    <div key={`${item.issue_id}-${item.issue_number}`}>#{item.issue_number}</div>
+                  {(previewState.selectedStrategy === 'numeric_resort' ? previewState.response.numeric_resort_outcome?.before : previewState.response.default_outcome.before)?.map((item, idx) => (
+                    <PreviewIssueRow key={`${item.issue_id ?? 'new'}-${item.issue_number}-${idx}`} item={item} />
                   ))}
                 </div>
               </div>
@@ -1194,9 +1254,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
                 <div className="font-bold text-stone-400 mb-1">After</div>
                 <div className="max-h-40 overflow-auto rounded-lg border border-white/10 p-2 space-y-0.5">
                   {(previewState.selectedStrategy === 'numeric_resort' ? previewState.response.numeric_resort_outcome?.after : previewState.response.default_outcome.after)?.map((item, idx) => (
-                    <div key={`${item.issue_id ?? 'new'}-${item.issue_number}-${idx}`} className={item.is_new ? 'text-[var(--theme-primary-action)] font-bold' : ''}>
-                      #{item.issue_number}{item.is_new ? ' (new)' : ''}
-                    </div>
+                    <PreviewIssueRow key={`${item.issue_id ?? 'new'}-${item.issue_number}-${idx}`} item={item} />
                   ))}
                 </div>
               </div>
