@@ -3,11 +3,10 @@ import { comicVineApi } from '../services/api-comicvine'
 import type { ComicVineIssueCandidate, IssueIdentityResponse } from '../services/api-comicvine'
 import { queryClient } from '../query/queryClient'
 import {
-  applyComicVineCorrectionOptimistically,
   clearComicVineIssueIntelligence,
+  clearComicVineIssueIntelligenceMany,
   invalidateAfterIssueMappingChange,
   invalidateComicVineIssueIdentity,
-  invalidateComicVineIssueIntelligenceMany,
 } from '../query/cacheEffects'
 
 /**
@@ -165,10 +164,7 @@ export function useComicIssueMapping({
     async (selected?: ComicVineIssueCandidate | null) => {
       removalIdentityRef.current = null
       if (issueId) {
-        if (selected && selected.image_url !== undefined) {
-          applyComicVineCorrectionOptimistically(queryClient, issueId, selected.image_url)
-        }
-        await invalidateComicVineIssueIntelligenceMany(queryClient, [issueId])
+        await clearComicVineIssueIntelligenceMany(queryClient, [issueId])
         await invalidateComicVineIssueIdentity(queryClient, issueId)
       }
       await fetchIdentity()
@@ -184,7 +180,7 @@ export function useComicIssueMapping({
         removalIdentityRef.current = null
       }
       if (confirmedIssueIds.length > 0) {
-        await invalidateComicVineIssueIntelligenceMany(queryClient, confirmedIssueIds)
+        await clearComicVineIssueIntelligenceMany(queryClient, confirmedIssueIds)
         await Promise.all(
           confirmedIssueIds.map((confirmedId) =>
             invalidateComicVineIssueIdentity(queryClient, confirmedId),
