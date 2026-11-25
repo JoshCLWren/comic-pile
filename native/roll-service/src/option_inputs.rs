@@ -386,16 +386,10 @@ async fn load_frontier_diagnostics_transaction(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,
 ) -> Result<OptionDiagnostics, ApiError> {
-    let row = match tx
+    let row = tx
         .query_one(frontier_diagnostics_statement(), &[&user.id()])
         .await
-    {
-        Ok(r) => r,
-        Err(e) => {
-            eprintln!("QUERY ERROR: {e}");
-            return Err(db::query_error(e));
-        }
-    };
+        .map_err(db::query_error)?;
     let encoded: String = row.try_get(0).map_err(db::query_error)?;
     let snapshot: SnapshotRows = serde_json::from_str(&encoded).map_err(|error| {
         tracing::error!(%error, "Invalid Option E snapshot response");
