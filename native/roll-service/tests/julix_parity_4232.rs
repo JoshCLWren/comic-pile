@@ -331,30 +331,15 @@ async fn julix_4232_frontier_anthology_and_casualties_advance() {
     assert_eq!(by_id(yule_cat)["availability"], "read");
 
     // (c) Reading Casualties exposes the correctly ordered next entry.
-    let (status, roll) = send(
-        &state,
-        post_req(
-            "/api/v2/roll",
-            &token,
-            &csrf,
-            Some(json!({"idempotency_key": "4232-casualties-roll"})),
-        ),
-    )
-    .await;
-    // Accept 200/201; some environments return 200.
-    assert!(
-        status == StatusCode::OK || status == StatusCode::CREATED,
-        "roll failed: {status} {roll:?}"
-    );
-
     let (status, rate) = send(
         &state,
-        post_req(
-            "/api/v2/rate",
+        authed(
+            "PATCH",
+            &format!("/api/v2/issues/{casualties}"),
             &token,
             &csrf,
             Some(json!({
-                "issue_id": casualties,
+                "status": "read",
                 "rating": 4.0,
                 "idempotency_key": "4232-casualties-rate"
             })),
@@ -393,4 +378,171 @@ async fn julix_4232_frontier_anthology_and_casualties_advance() {
     };
     assert_eq!(after_by_id(casualties)["availability"], "read");
     assert_eq!(after_by_id(after_casualties)["availability"], "available");
+}
+/// #4232 (d): omitted in-Thread issues are classified as intentional or repaired.
+///
+/// Production finding (2026-10-27):
+/// - Young Hellboy: Thrilling Sky Adventures #4 (issue 1120533, Thread 19008)
+///   missing from Julix list; #1-#3 are positions 462-464.
+/// - The Foundry #2 (issue 1117775, Thread 19009) missing; #1 is position 465.
+///
+/// Policy: do not blind auto-append. Classify each omission with evidence.
+/// This fixture models both outcomes:
+/// - Thrilling Sky Adventures #4: INTENTIONAL omission (source-level
+///   verification required; not present in Julix Story tab at that position).
+///   The list remains valid and the omitted issue does not become an
+///   unexpected roll candidate through the strict list.
+/// - The Foundry #2: REPAIRED by adding it at the correct next position after
+///   #1 once source evidence confirms placement. The repaired entry participates
+///   in strict ordering and becomes eligible only at its correct frontier.
+#[tokio::test]
+async fn julix_4232_omitted_in_thread_issues_classified_intentional_or_repaired() {
+    let (state, token, csrf, user_id, _guard) = setup_user_with("t4232-omit", true).await;
+    let conn = state.pool.get().await.unwrap();
+    conn.execute(
+        "INSERT INTO sessions (user_id, started_at, start_die) VALUES ($1, NOW(), 6)",
+        &[&user_id],
+    )
+    .await
+    .unwrap();
+
+    // Thrilling Sky Adventures: #1-#3 in list, #4 omitted (intentional).
+    let thrilling_thread = thread(&conn, user_id, "Young Hellboy: Thrilling Sky Adventures").await;
+    let thrilling_1 = issue(&conn, thrilling_thread, "1", 1, "read").await;
+    let thrilling_2 = issue(&conn, thrilling_thread, "2", 2, "read").await;
+    let thrilling_3 = issue(&conn, thrilling_thread, "3", 3, "read").await;
+    let thrilling_4_omitted = issue(&conn, thrilling_thread, "4", 4, "unread").await; // prod 1120533
+
+    // The Foundry: #1 in list, #2 missing but repaired in this fixture.
+    let foundry_thread = thread(&conn, user_id, "The Foundry").await;
+    let foundry_1 = issue(&conn, foundry_thread, "1", 1, "read").await;
+    let foundry_2_repaired = issue(&conn, foundry_thread, "2", 2, "unread").await; // prod 1117775
+
+    // A frontier issue after the repaired tail so we can observe ordering.
+    let tail_thread = thread(&conn, user_id, "Tail Frontier").await;
+    let tail_issue = issue(&conn, tail_thread, "1", 1, "unread").await;
+
+    for (tid, remaining, next, status) in [
+        (thrilling_thread, 1i32, Some(thrilling_4_omitted), "active"),
+        (foundry_thread, 1, Some(foundry_2_repaired), "active"),
+        (tail_thread, 1, Some(tail_issue), "active"),
+    ] {
+        conn.execute(
+            "UPDATE threads SET queue_position=1, issues_remaining=$2, next_unread_issue_id=$3, \
+             status=$4, is_blocked=false WHERE id=$1",
+            &[&tid, &remaining, &next, &status],
+        )
+        .await
+        .unwrap();
+    }
+
+    let list_id: i32 = conn
+        .query_one(
+            "INSERT INTO custom_cbl_lists (user_id, name, mode, created_at, updated_at) \
+             VALUES ($1, 'Mignolaverse — Julix Comics (Unread)', 'strict', NOW(), NOW()) \
+             RETURNING id",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+
+    // Intentional omission: thrilling #4 is NOT in the list. Positions mirror
+    // the issue: #1-#3 at 462-464, Foundry #1 at 465, Foundry #2 repaired at 466,
+    // tail at 467.
+    let entries: Vec<(i32, i32)> = vec![
+        (thrilling_1, 462),
+        (thrilling_2, 463),
+        (thrilling_3, 464),
+        // thrilling_4_omitted intentionally absent - classified as intentional
+        (foundry_1, 465),
+        (foundry_2_repaired, 466), // repaired: added at correct next position
+        (tail_issue, 467),
+    ];
+    for (issue_id, position) in &entries {
+        conn.execute(
+            "INSERT INTO custom_cbl_entries (list_id, issue_id, position, created_at) \
+             VALUES ($1, $2, $3, NOW())",
+            &[&list_id, issue_id, position],
+        )
+        .await
+        .unwrap();
+    }
+
+    // Classification assertions:
+    // - intentional omission: not in list entries
+    let entry_ids: BTreeSet<i32> = entries.iter().map(|(id, _)| *id).collect();
+    assert!(
+        !entry_ids.contains(&thrilling_4_omitted),
+        "Thrilling Sky Adventures #4 must remain classified as intentional omission absent source evidence"
+    );
+    // - repaired: present in list at correct position
+    assert!(
+        entry_ids.contains(&foundry_2_repaired),
+        "Foundry #2 must be present when classified as repaired with source evidence"
+    );
+
+    // Strict frontier is Foundry #2 (first unread in-list entry), not the
+    // intentionally omitted Thrilling #4 and not the later tail.
+    let (status, eligible) = send(
+        &state,
+        get("/api/v2/roll/eligible-issue-ids", &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{eligible:?}");
+    assert_eq!(
+        eligible["issue_ids"],
+        json!([foundry_2_repaired]),
+        "repaired Foundry #2 should be the strict frontier; omitted Thrilling #4 must not be offered through this list"
+    );
+
+    let (status, reader) = send(
+        &state,
+        get(&format!("/api/v2/reading-lists/{list_id}/reader"), &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{reader:?}");
+    let reader_entries = reader["entries"].as_array().unwrap();
+    let seen: BTreeSet<i64> = reader_entries.iter().filter_map(|e| e["issue_id"].as_i64()).collect();
+    assert_eq!(seen.len(), reader_entries.len());
+    let by_id = |id: i32| {
+        reader_entries
+            .iter()
+            .find(|e| e["issue_id"] == json!(id))
+            .unwrap()
+    };
+    assert_eq!(by_id(foundry_2_repaired)["availability"], "available");
+    assert_eq!(by_id(tail_issue)["availability"], "later");
+    assert!(
+        reader_entries
+            .iter()
+            .all(|e| e["issue_id"] != json!(thrilling_4_omitted)),
+        "intentionally omitted issue must not appear in the strict list reader"
+    );
+
+    // Reading repaired Foundry #2 advances to tail frontier.
+    let (status, rate) = send(
+        &state,
+        authed(
+            "PATCH",
+            &format!("/api/v2/issues/{foundry_2_repaired}"),
+            &token,
+            &csrf,
+            Some(json!({
+                "status": "read",
+                "rating": 4.0,
+                "idempotency_key": "4232-foundry2-rate"
+            })),
+        ),
+    )
+    .await;
+    assert!(status == StatusCode::OK || status == StatusCode::CREATED, "{status} {rate:?}");
+
+    let (status, eligible_after) = send(
+        &state,
+        get("/api/v2/roll/eligible-issue-ids", &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{eligible_after:?}");
+    assert_eq!(eligible_after["issue_ids"], json!([tail_issue]));
 }
