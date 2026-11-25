@@ -1,5 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useCallback, useState } from 'react'
 import { useRollNudge } from './useRollNudge'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
@@ -11,8 +10,6 @@ import { useRollPendingSync } from './useRollPendingSync'
 import { useToast } from '../../contexts/useToast'
 import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../../query/cacheEffects'
 import { queryClient } from '../../query/queryClient'
-import { issuesApi } from '../../services/api-issues'
-import { getApiErrorDetail } from '../../utils/apiError'
 import { PositionMenuProvider } from '../../contexts/PositionMenuProvider'
 import type { ThreadListItem, ThreadCreatePayload, ThreadUpdatePayload } from '../../types'
 import CompletedThreadsSection from './CompletedThreadsSection'
@@ -28,6 +25,7 @@ import ShuffleQueueDialog from './ShuffleQueueDialog'
 import QueueBulkMapSeriesDialog from '../../components/QueueBulkMapSeriesDialog'
 import { useQueueBulkMapping } from './useQueueBulkMapping'
 import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
+import { useQueueCompletedSeriesSearch } from './useQueueCompletedSeriesSearch'
 import { useQueueListLoading } from './useQueueListLoading'
 import { useQueueRestore } from './useQueueRestore'
 import { useQueueThreadActions } from './useQueueThreadActions'
@@ -74,7 +72,6 @@ export default function QueuePage() {
   const { threads: excludedThreads } = useExcludedThreads(true)
   const { handleRestore, handleRestoreGroup, restoreError, isRestoring } = useQueueRestore()
 
-  const navigate = useNavigate()
   const { activeThreads, filteredThreads } = useQueueFilters(
     threads,
     sortBy,
@@ -85,47 +82,13 @@ export default function QueuePage() {
   // "still fetching" apart from a settled zero-match (#3912).
   const queueListLoading = useQueueListLoading()
 
-  const normalizedSearch = searchQuery.trim().toLowerCase()
-  const completedMatches = useMemo(
-    () =>
-      isSearching
-        ? (completed.threads ?? [])
-            .filter((t) => t.title.toLowerCase().includes(normalizedSearch))
-            .map((t) => ({ id: t.id, title: t.title, status: 'completed' as const }))
-        : [],
-    [completed.threads, isSearching, normalizedSearch],
-  )
-  const excludedMatches = useMemo(
-    () =>
-      isSearching
-        ? (excludedThreads ?? [])
-            .filter((t) => t.title.toLowerCase().includes(normalizedSearch))
-            .map((t) => ({ id: t.id, title: t.title, status: 'excluded' as const }))
-        : [],
-    [excludedThreads, isSearching, normalizedSearch],
-  )
-
-  const handleRestoreCompletedSeries = useCallback(async (threadId: number) => {
-    try {
-      const allIssues: number[] = []
-      let pageToken: string | undefined
-      do {
-        const page = await issuesApi.list(threadId, { status: 'read', page_size: 100, page_token: pageToken })
-        allIssues.push(...page.issues.map((i) => i.id))
-        pageToken = page.next_page_token ?? undefined
-      } while (pageToken)
-      if (allIssues.length === 0) {
-        showToast('No read issues to restore', 'info')
-        return
-      }
-      await issuesApi.bulkMarkUnread(allIssues)
-      await invalidateAfterQueueMutation(queryClient)
-      await invalidateAfterIssueEdit(queryClient, threadId)
-      showToast('Restored series issues to unread', 'success')
-    } catch (e) {
-      showToast(`Failed to restore unread: ${getApiErrorDetail(e)}`, 'error')
-    }
-  }, [showToast])
+  const {
+    completedMatches,
+    excludedMatches,
+    handleRestoreCompletedSeries,
+    handleOpenCompletedSeries,
+    handleOpenExcludedSeries,
+  } = useQueueCompletedSeriesSearch(completed.threads, excludedThreads, isSearching, searchQuery)
 
   const actions = useQueueThreadActions({})
 
@@ -256,9 +219,9 @@ export default function QueuePage() {
           onAddSeries={modals.showCreateModal}
           completedMatches={completedMatches}
           excludedMatches={excludedMatches}
-          onOpenCompletedSeries={(id) => navigate(`/thread/${id}`)}
+          onOpenCompletedSeries={handleOpenCompletedSeries}
           onRestoreCompletedSeries={(id) => { void handleRestoreCompletedSeries(id) }}
-          onOpenExcludedSeries={(id) => navigate(`/thread/${id}`)}
+          onOpenExcludedSeries={handleOpenExcludedSeries}
         />
 
         <CompletedThreadsSection
