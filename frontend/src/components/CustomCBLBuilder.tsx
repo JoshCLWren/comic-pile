@@ -8,7 +8,7 @@ import { queryKeys } from '../query/queryKeys'
 import Modal from './Modal'
 import { requestSemanticScroll } from '../scroll/scrollCoordinator'
 import {
-  customCBLApi, type CustomCBLEntry, type CustomCBLIssueSearchResult, type CustomCBLWrite,
+  customCBLApi, type CustomCBL, type CustomCBLEntry, type CustomCBLIssueSearchResult, type CustomCBLWrite,
   type ReadingListEntryIntent, type ReadingListGate, type ReadingListMode, type ReadingListPredecessorChange,
 } from '../services/api-custom-cbl'
 import type { ContinuityPlan } from '../services/api-continuity-plans'
@@ -89,6 +89,7 @@ export default function CustomCBLBuilder({
   const [open, setOpen] = useState(initialListId !== undefined)
   const [selectedId, setSelectedId] = useState<number | null>(initialListId ?? null)
   const [loadedListId, setLoadedListId] = useState<number | null>(null)
+  const [draftBaseline, setDraftBaseline] = useState<CustomCBL | null>(null)
   const [newName, setNewName] = useState('')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -164,6 +165,7 @@ export default function CustomCBLBuilder({
     // run this effect triggers via setLoadedListId); reseeding then would discard
     // in-progress mode/gate/skip edits before the reader saves them.
     if (list.id === loadedListId) return
+    setDraftBaseline(list)
     setName(list.name)
     setDescription(list.description ?? '')
     setMode(list.mode ?? DEFAULT_MODE)
@@ -206,6 +208,9 @@ export default function CustomCBLBuilder({
     },
     onSuccess: async (saved, variables) => {
       await applyUpdatedCustomCBL(queryClient, saved)
+      setDraftBaseline(saved)
+      setName(saved.name)
+      setDescription(saved.description ?? '')
       setEntries(normalizePositions(saved.entries))
       setMode(saved.mode ?? DEFAULT_MODE)
       if (variables.undo) {
@@ -299,6 +304,9 @@ export default function CustomCBLBuilder({
     },
     onSuccess: async ({ saved, undo, sourceLabel }) => {
       await applyUpdatedCustomCBL(queryClient, saved)
+      setDraftBaseline(saved)
+      setName(saved.name)
+      setDescription(saved.description ?? '')
       setEntries(normalizePositions(saved.entries))
       setMode(saved.mode ?? DEFAULT_MODE)
       setUndoPayload(undo)
@@ -350,6 +358,9 @@ export default function CustomCBLBuilder({
     },
     onSuccess: async (saved) => {
       await applyUpdatedCustomCBL(queryClient, saved)
+      setDraftBaseline(saved)
+      setName(saved.name)
+      setDescription(saved.description ?? '')
       setEntries(normalizePositions(saved.entries))
       setMode(saved.mode ?? DEFAULT_MODE)
       setUndoPayload(null)
@@ -384,7 +395,9 @@ export default function CustomCBLBuilder({
     return () => onPendingChange?.(false)
   }, [isPending, onPendingChange])
 
-  const persisted = detailQuery.data
+  // The draft and its concurrency token must describe the same revision. A
+  // background refetch can update the cache without reseeding the draft.
+  const persisted = draftBaseline?.id === selectedId ? draftBaseline : null
   const dirty = useMemo(() => {
     if (!persisted) return false
     return (
@@ -1276,7 +1289,7 @@ export default function CustomCBLBuilder({
             <div role="alert" className="space-y-2 rounded-xl border border-[var(--theme-warning)]/60 p-3">
               <p className="text-sm text-[var(--theme-warning)]">{staleWriteError}</p>
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => { saveMutation.reset(); setLoadedListId(null); void detailQuery.refetch() }} className="min-h-10 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)]">Refresh latest list</button>
+                <button type="button" onClick={() => { void detailQuery.refetch().then((result) => { if (result.isSuccess) { saveMutation.reset(); setLoadedListId(null) } }) }} className="min-h-10 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)]">Refresh latest list</button>
                 <p className="self-center text-xs text-[var(--theme-text-muted)]">Refreshing loads the latest saved list. Copy any edits you need before refreshing.</p>
               </div>
             </div>
