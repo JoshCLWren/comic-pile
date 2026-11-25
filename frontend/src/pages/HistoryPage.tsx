@@ -114,6 +114,8 @@ export default function HistoryPage() {
     isRetrying,
     refetch,
   } = useActivity()
+  const [restoringThreadId, setRestoringThreadId] = useState<number | null>(null)
+  const [restoreMessage, setRestoreMessage] = useState<string | null>(null)
   // One bounded batch projection for the visible page of exact owned issues;
   // never one request per rendered row.
   const visibleIssueIds = useMemo(
@@ -122,6 +124,32 @@ export default function HistoryPage() {
   )
   const cardsQuery = useIssueCards(visibleIssueIds)
   const cardsByIssue = useMemo(() => indexIssueCards(cardsQuery.data), [cardsQuery.data])
+
+  const handleRestoreUnread = useCallback(async (threadId: number) => {
+    setRestoringThreadId(threadId)
+    setRestoreMessage(null)
+    try {
+      const ids: number[] = []
+      let pageToken: string | undefined
+      do {
+        const page = await issuesApi.list(threadId, { status: 'read', page_size: 100, page_token: pageToken })
+        ids.push(...page.issues.map((i) => i.id))
+        pageToken = page.next_page_token ?? undefined
+      } while (pageToken)
+      if (ids.length === 0) {
+        setRestoreMessage('No read issues to restore.')
+        return
+      }
+      await issuesApi.bulkMarkUnread(ids)
+      await invalidateAfterQueueMutation(queryClient)
+      await invalidateAfterIssueEdit(queryClient, threadId)
+      setRestoreMessage('Restored read issues to unread.')
+    } catch {
+      setRestoreMessage('Failed to restore unread issues.')
+    } finally {
+      setRestoringThreadId(null)
+    }
+  }, [])
 
   if (isPending) {
     // A timed-out first page stays pending through the shared retry policy
@@ -173,6 +201,7 @@ export default function HistoryPage() {
         <div>
           <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow uppercase leading-none">History</h1>
           <p className="mt-2 text-base font-semibold text-stone-500">Your reading activity</p>
+          {restoreMessage && <p className="mt-2 text-sm text-stone-400">{restoreMessage}</p>}
         </div>
       </header>
 
@@ -217,6 +246,24 @@ export default function HistoryPage() {
                       card={cardsByIssue.get(item.issue_id) ?? null}
                       hideTitle
                     />
+                  </div>
+                )}
+                {item.thread_id != null && (
+                  <div className="flex gap-3 pt-1">
+                    <Link
+                      to={`/thread/${item.thread_id}`}
+                      className="text-[10px] font-bold uppercase tracking-widest text-stone-500 hover:text-stone-300 underline"
+                    >
+                      Open series
+                    </Link>
+                    <button
+                      type="button"
+                      className="text-[10px] font-bold uppercase tracking-widest text-stone-500 hover:text-stone-300 underline disabled:opacity-50"
+                      disabled={restoringThreadId === item.thread_id}
+                      onClick={() => void handleRestoreUnread(item.thread_id!)}
+                    >
+                      {restoringThreadId === item.thread_id ? 'Restoring…' : 'Restore unread'}
+                    </button>
                   </div>
                 )}
               </div>
