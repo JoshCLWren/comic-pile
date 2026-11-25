@@ -21,7 +21,10 @@ import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../hooks/useQueu
 import { useRate } from '../hooks'
 import { useResetDice } from '../hooks/useRoll'
 import { threadsApi } from '../services/api-threads'
-import { readRollSnoozes, writeRollSnoozes } from '../services/api-roll'
+import { createRollApi, readRollSnoozes, writeRollSnoozes } from '../services/api-roll'
+import { queryClient } from '../query/queryClient'
+import { queryKeys } from '../query/queryKeys'
+import { createHttpClientStub } from './httpClientStub'
 import { cast } from '../utils/cast'
 
 const navigateSpy = vi.fn()
@@ -430,22 +433,55 @@ it('shows a retry action when bootstrap loading fails', async () => {
   expect(refetch).toHaveBeenCalled()
 })
 
-it('recovers from browser snoozes and a non-d6 die through the visible zero-choice Reset Dice action', async () => {
-  const resetMutate = vi.fn().mockImplementation(async () => {
-    writeRollSnoozes([])
-    return { die: 6, replayed: false }
+it('recovers the real reset flow from browser-only snoozes without reading, rating or rewriting history', async () => {
+  let currentDie = 20
+  const rollClient = createHttpClientStub()
+  rollClient.post.mockImplementation(async (path: string) => {
+    if (path === '/v2/roll/reset') {
+      currentDie = 6
+      return { die: 6, replayed: false }
+    }
+    return {}
   })
-  resetMutate.mockName('resetMutate')
-  vi.mocked(useResetDice).mockReturnValue({
-    mutate: resetMutate,
-    isPending: false,
-    isError: false,
-  } as unknown as ReturnType<typeof useResetDice>)
-
+  const resetApi = createRollApi(rollClient)
+  globalThis.sessionStorage?.removeItem('comicpile:roll:pending-reset')
   writeRollSnoozes([1])
-  mockedUseRollDieState.mockReturnValue({ data: { die: 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null } })
-  mockedUseRollEligibleIssueIds.mockReturnValue({ data: { die: 20, issue_ids: [], thread_ids: [], pool_reason: 'ready' } })
-  mockedUseRollIssueCards.mockReturnValue({ data: { items: [] } })
+
+  // The scoped resources read the same cookie as the offer, so clearing it on
+  // a confirmed reset must restore the hidden face on the next scoped refresh.
+  const resourcesApi = {
+    dieState: vi.fn(async () => ({
+      die: currentDie,
+      ladder: [2, 4, 6, 8, 10, 12, 20],
+      default_die: 6,
+      last_roll: null,
+    })),
+    eligibleIssueIds: vi.fn(async (_snoozed: readonly number[]) => ({
+      die: currentDie,
+      issue_ids: readRollSnoozes().length === 0 ? [101] : [],
+      thread_ids: readRollSnoozes().length === 0 ? [1] : [],
+      pool_reason: 'ready',
+    })),
+    issueCards: vi.fn(async () => ({ items: [] })),
+  }
+  const realRollHooks = await vi.importActual<typeof import('../hooks/useRoll')>('../hooks/useRoll')
+  const realResources = await vi.importActual<typeof import('../hooks/useRollResources')>(
+    '../hooks/useRollResources',
+  )
+  vi.mocked(useResetDice).mockImplementation(() => realRollHooks.useResetDice(resetApi))
+  mockedUseRollDieState.mockImplementation(() => realResources.useRollDieState(resourcesApi))
+  mockedUseRollEligibleIssueIds.mockImplementation((snoozed?: readonly number[]) =>
+    realResources.useRollEligibleIssueIds(snoozed, resourcesApi),
+  )
+  mockedUseRollIssueCards.mockImplementation((ids: readonly number[]) =>
+    realResources.useRollIssueCards(ids, resourcesApi),
+  )
+
+  const rollMutate = vi.fn()
+  const rateMutate = vi.fn()
+  const bootstrapRefetch = vi.fn().mockResolvedValue(bootstrap)
+  vi.mocked(useRoll).mockReturnValue(cast<ReturnType<typeof useRoll>>({ mutate: rollMutate, isPending: false }))
+  vi.mocked(useRate).mockReturnValue(cast<ReturnType<typeof useRate>>({ mutate: rateMutate, isPending: false }))
   mockedUseRollBootstrap.mockReturnValue({
     data: {
       ...bootstrap,
@@ -454,7 +490,7 @@ it('recovers from browser snoozes and a non-d6 die through the visible zero-choi
       snoozed_threads: [],
       snoozed_count: 0,
     },
-    refetch: vi.fn().mockResolvedValue(bootstrap),
+    refetch: bootstrapRefetch,
     isPending: false,
     isError: false,
     error: null,
@@ -462,11 +498,27 @@ it('recovers from browser snoozes and a non-d6 die through the visible zero-choi
 
   renderRollPage()
 
+  expect(mockedUseRollEligibleIssueIds).toHaveBeenCalledWith([1])
   expect(screen.getByText('Every series is snoozed')).toBeInTheDocument()
   const resetButton = screen.getByTestId('reset-dice-zero-choice')
   expect(resetButton).not.toBeDisabled()
+
   fireEvent.click(resetButton)
 
-  expect(resetMutate).toHaveBeenCalledTimes(1)
+  await waitFor(() => {
+    expect(rollClient.post).toHaveBeenCalledWith(
+      '/v2/roll/reset',
+      expect.objectContaining({ idempotency_key: expect.stringMatching(/^roll-[0-9a-f]{32}$/) }),
+    )
+  })
+  expect(rollClient.post).toHaveBeenCalledTimes(1)
   expect(readRollSnoozes()).toEqual([])
+  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+  expect(screen.getByRole('button', { name: /current die d6/i })).toBeInTheDocument()
+  expect(resourcesApi.eligibleIssueIds).toHaveBeenCalled()
+
+  expect(rollMutate).not.toHaveBeenCalled()
+  expect(rateMutate).not.toHaveBeenCalled()
+  expect(bootstrapRefetch).not.toHaveBeenCalled()
+  expect(threadsApi.setPending).not.toHaveBeenCalled()
 })
