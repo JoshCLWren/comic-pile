@@ -191,15 +191,37 @@ export function ThreadPool({
                 Every series is snoozed
               </p>
               <p className="text-xs text-stone-500 mt-1">
-                Reset Dice or visit your queue to choose what to read next.
+                Add Comics or Reset Dice when resetting would restore candidates.
               </p>
             </div>
-            <button
-              onClick={() => navigate('/queue')}
-              className="w-full h-11 min-h-[44px] bg-[var(--theme-comic-accent)]/10 hover:bg-[var(--theme-comic-accent)]/20 border border-[var(--theme-comic-accent)]/20 rounded-xl text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] transition-colors"
-            >
-              Go to Queue
-            </button>
+            {resetDiceError && (
+              <p className="text-xs text-red-400" role="alert">{resetDiceError}</p>
+            )}
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => navigate('/queue', { state: { openCreate: true } })}
+                className="w-full h-11 min-h-[44px] bg-[var(--theme-comic-accent)]/10 hover:bg-[var(--theme-comic-accent)]/20 border border-[var(--theme-comic-accent)]/20 rounded-xl text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] transition-colors"
+              >
+                Add Comics
+              </button>
+              {onResetDice && (
+                <button
+                  type="button"
+                  onClick={() => void onResetDice()}
+                  disabled={resetDicePending}
+                  data-testid="reset-dice-zero-choice"
+                  className="w-full h-11 min-h-[44px] bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-xs font-black uppercase tracking-widest text-stone-300 hover:bg-white/10 transition-colors disabled:opacity-60"
+                >
+                  {resetDicePending ? 'Resetting…' : 'Reset Dice'}
+                </button>
+              )}
+              <button
+                onClick={() => navigate('/queue')}
+                className="w-full h-11 min-h-[44px] bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-xs font-black uppercase tracking-widest text-stone-400 hover:bg-white/10 transition-colors"
+              >
+                Go to Queue
+              </button>
+            </div>
           </div>
         ) : (
           displayPool.map((thread, index) => {
