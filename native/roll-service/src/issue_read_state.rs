@@ -940,7 +940,7 @@ fn operation_not_found(operation_id: i64) -> ApiError {
 fn parse_operation_id(raw: Result<Path<String>, PathRejection>) -> Result<i64, ApiError> {
     let Path(raw) = raw.map_err(|_| validation_failed())?;
     let value = parse_int_text(&raw).ok_or_else(validation_failed)?;
-    i64::try_from(value).map_err(|_| operation_not_found(value))
+    Ok(value)
 }
 
 async fn load_operation(
