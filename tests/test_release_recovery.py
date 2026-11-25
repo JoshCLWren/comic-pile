@@ -321,3 +321,25 @@ def test_release_writer_documents_the_bounded_automatic_delay() -> None:
     assert "three-hour" in document
     assert "manual refresh" in document
     assert "durable internal outcome" in document
+
+
+def test_attempt_hint_fail_open_for_garbage_and_oversized_files(tmp_path: Path) -> None:
+    """A corrupt or oversized cache never blocks discovery or selection."""
+    sources = [source(number) for number in range(1, 4)]
+    rows: list[tuple[int | None, str | None]] = []
+    now = 1_000
+
+    garbage = tmp_path / "garbage.json"
+    garbage.write_bytes(b"{not valid json" + b"x" * 10)
+    assert recovery._load_attempts(garbage, now) == {}
+    assert recovery.select_missing_sources(
+        sources, rows, attempts=recovery._load_attempts(garbage, now)
+    ) == sources
+
+    oversized = tmp_path / "oversized.json"
+    oversized.write_text("{" + '"a"' + ":" + "1" * 200000 + "}", encoding="utf-8")
+    assert oversized.stat().st_size > 131072
+    assert recovery._load_attempts(oversized, now) == {}
+    assert recovery.select_missing_sources(
+        sources, rows, attempts=recovery._load_attempts(oversized, now)
+    ) == sources
