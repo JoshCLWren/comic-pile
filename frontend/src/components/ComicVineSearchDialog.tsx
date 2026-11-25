@@ -200,6 +200,9 @@ export default function ComicVineSearchDialog({
       setSearchPhase('idle')
       setIssuesPhase('idle')
       setError(null)
+      setConfirmConflict(false)
+      setReloadedIdentity(null)
+      setIsReloadingConflict(false)
       setSiblingScope(null)
     }
   }, [isOpen, threadTitle])
@@ -563,11 +566,9 @@ export default function ComicVineSearchDialog({
   const confirmSeriesName = directIssue?.series_name ?? selectedSeries?.name ?? threadTitle
   const confirmIssue = directIssue ?? selectedIssue
 
-  const showRetry =
-    error !== null
-    && (confirmConflict
-      || (step === 'search' && searchPhase === 'error')
-      || (step === 'select-issue' && issuesPhase === 'error'))
+  const showRetry = confirmConflict || (error !== null
+    && ((step === 'search' && searchPhase === 'error')
+      || (step === 'select-issue' && issuesPhase === 'error')))
 
   const dialogTitle =
     step === 'search'
@@ -586,9 +587,9 @@ export default function ComicVineSearchDialog({
       size="large"
     >
       <div className="space-y-4">
-        {error && (
+        {(error || confirmConflict) && (
           <div className="p-3 rounded-lg bg-rose-900/30 border border-rose-700/40 text-sm text-rose-300 space-y-2" role="alert">
-            <p>{error}</p>
+            <p>{error || 'Reload the current identity before confirming again.'}</p>
             {showRetry && (
               <button
                 type="button"

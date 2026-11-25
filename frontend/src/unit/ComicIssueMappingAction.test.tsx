@@ -316,6 +316,22 @@ describe('ComicIssueMappingAction', () => {
     )
   })
 
+  it('captures the observed version for both ordinary mapping modes (#4652)', async () => {
+    for (const mode of ['confirm', 'replace'] as const) {
+      const { result, rerender, unmount } = renderHook(
+        ({ identity }) => useComicIssueMapping({
+          issueId: 77, threadTitle: 'Synthetic arc', issueNumber: '3', initialIdentity: identity,
+        }),
+        { initialProps: { identity: { ...UNMAPPED, identity_version: 7 } } },
+      )
+      act(() => result.current.openMappingDialog(mode))
+      rerender({ identity: { ...UNMAPPED, identity_version: 8 } })
+      await waitFor(() => expect(result.current.identity?.identity_version).toBe(8))
+      expect(result.current.mappingEdit?.expectedVersion).toBe(7)
+      unmount()
+    }
+  })
+
   it('rebases a stale edit version on conflict refetch but keeps the alias intent (#4652)', async () => {
     const staleIdentity: IssueIdentityResponse = { ...UNMAPPED, identity_version: 7 }
     const freshIdentity: IssueIdentityResponse = { ...UNMAPPED, identity_version: 8 }
