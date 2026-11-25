@@ -48,6 +48,15 @@ describe('useQueueCompletedSearch', () => {
     expect(result.current.excludedMatches).toEqual([])
   })
 
+  it('treats missing shelf data as an empty match set', () => {
+    mocks.completedThreads = undefined
+    mocks.excludedThreads = undefined
+    const { result } = renderHook(() => useQueueCompletedSearch('anything'))
+
+    expect(result.current.completedMatches).toEqual([])
+    expect(result.current.excludedMatches).toEqual([])
+  })
+
   it('filters completed and excluded series case-insensitively and opens each', async () => {
     mocks.completedThreads = [
       { id: 5, title: 'Daredevil' },

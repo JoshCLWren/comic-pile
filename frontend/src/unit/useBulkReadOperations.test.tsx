@@ -208,4 +208,30 @@ describe('useBulkReadOperations', () => {
     expect(window.localStorage.getItem(bulkReadReceiptKey(42, 15))).toBe('1')
     keySpy.mockRestore()
   })
+
+  it('returns no receipt for a series with no recorded operations', () => {
+    expect(findBulkReadReceipt(999)).toBeNull()
+  })
+
+  it('hydrates a legacy and a keyed receipt for the same operation only once', async () => {
+    window.localStorage.setItem(`${BULK_READ_OPERATION_KEY_PREFIX}42`, '7')
+    writeBulkReadReceipt(42, 7)
+    const api = fakeApi()
+    const { result } = renderHook(() => useBulkReadOperations(api))
+
+    await waitFor(() => expect(result.current.operations).toHaveLength(1))
+    expect(api.getReadOperation).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears both receipt forms once the same operation is authoritatively undone', async () => {
+    window.localStorage.setItem(`${BULK_READ_OPERATION_KEY_PREFIX}42`, '7')
+    writeBulkReadReceipt(42, 7)
+    const api = fakeApi()
+    api.getReadOperation.mockResolvedValueOnce({ ...operation(7), undone_at: '2026-01-03T00:00:00Z' })
+    const { result } = renderHook(() => useBulkReadOperations(api))
+
+    await waitFor(() => expect(result.current.operations).toHaveLength(0))
+    expect(window.localStorage.getItem(`${BULK_READ_OPERATION_KEY_PREFIX}42`)).toBeNull()
+    expect(window.localStorage.getItem(bulkReadReceiptKey(42, 7))).toBeNull()
+  })
 })

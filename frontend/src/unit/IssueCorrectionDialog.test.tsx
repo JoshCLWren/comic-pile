@@ -403,30 +403,76 @@ describe('IssueCorrectionDialog', () => {
     list.mockResolvedValue(listResponse([
       issue({ id: 1, issue_number: '1', status: 'read' }),
       issue({ id: 2, issue_number: '2', status: 'unread' }),
+      issue({ id: 3, issue_number: '3', status: 'unread' }),
     ]))
     const cardsApi = {
-      fetchCards: vi.fn().mockResolvedValue([{ issue_id: 2, rating: 4.5 }]),
+      fetchCards: vi.fn().mockResolvedValue([
+        { issue_id: 2, rating: 4.5 },
+        { issue_id: 3, rating: null },
+      ]),
     }
     const dependenciesApi = {
       listForThread: vi.fn().mockResolvedValue({
-        issues: [{ issue_id: 4, issue_number: '4', dependencies: [{ source_issue_id: 2 }] }],
+        issues: [
+          { issue_id: 4, issue_number: '4', dependencies: [{ source_issue_id: 2 }] },
+          { issue_id: 5 },
+        ],
       }),
     }
 
-    // The target (#3) is created but deliberately left unread, so the series
+    // The target (#6) is created but deliberately left unread, so the series
     // cannot be reported as completed even though every older issue is read.
     renderDialog({ cardsApi, dependenciesApi })
     const input = await screen.findByLabelText(/what issue are you currently on/i)
     await userEvent.clear(input)
-    await userEvent.type(input, '3')
+    await userEvent.type(input, '6')
     await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
 
     const preview = await screen.findByTestId('bulk-read-preview')
-    expect(preview).toHaveTextContent('Marking 1 issue as read before #3.')
+    expect(preview).toHaveTextContent('Marking 2 issues as read before #6.')
     expect(preview).toHaveTextContent('rated 4.5')
-    expect(preview).toHaveTextContent('Dependent frontier: #4')
+    expect(preview).toHaveTextContent('no rating')
+    expect(preview).toHaveTextContent('Dependent frontier: #4, #5')
     expect(preview).toHaveTextContent('Series completion effect: series will remain active.')
     expect(preview).toHaveTextContent('Read states explained')
+  })
+
+  it('keeps a best-effort preview when dependency data is absent', async () => {
+    list.mockResolvedValue(listResponse([issue({ id: 2, issue_number: '2' })]))
+    const dependenciesApi = { listForThread: vi.fn().mockResolvedValue({}) }
+    renderDialog({ dependenciesApi })
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, '2')
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+
+    expect(await screen.findByTestId('bulk-read-preview')).toHaveTextContent(
+      'no direct dependent issues detected in this series.',
+    )
+  })
+
+  it('returns from the preview to the form before any write', async () => {
+    list.mockResolvedValue(listResponse([issue({ id: 1, issue_number: '1' })]))
+    renderDialog()
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, '1')
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+    await screen.findByTestId('bulk-read-preview')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(screen.queryByTestId('bulk-read-preview')).not.toBeInTheDocument()
+    expect(bulkMarkRead).not.toHaveBeenCalled()
+  })
+
+  it('keeps the undo receipt when a discovery read fails with a retryable error', async () => {
+    writeBulkReadReceipt(42, 78)
+    const getReadOperation = vi.fn().mockRejectedValue({ response: { status: 503 } })
+    list.mockResolvedValue(listResponse([issue({ id: 2, issue_number: '2' })]))
+    renderDialog({ issuesApi: { ...issuesApi, getReadOperation } })
+
+    expect(await screen.findByText(/its undo receipt was kept for retry/i)).toBeInTheDocument()
+    expect(window.localStorage.getItem(bulkReadReceiptKey(42, 78))).toBe('1')
   })
 
   it('undoes the exact persisted operation and reports partial skips', async () => {
