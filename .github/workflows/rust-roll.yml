@@ -1,35 +1,8 @@
 name: Native Rust Roll
 
+# Invoked by CI so the required CI Summary cannot ignore this suite.
 on:
-  pull_request:
-    paths:
-      - 'native/roll-service/**'
-      - 'native/migrate/**'
-      - 'build.rs'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'build.sh'
-      - 'check-rust-workspace-lock.mjs'
-      - 'rust-toolchain.toml'
-      - 'api/native_roll.rs'
-      - '.vercelignore'
-      - '.github/workflows/rust-roll.yml'
-      - 'tests/fixtures/roll-v2/auth-matrix.json'
-  push:
-    branches: [main]
-    paths:
-      - 'native/roll-service/**'
-      - 'native/migrate/**'
-      - 'build.rs'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'build.sh'
-      - 'check-rust-workspace-lock.mjs'
-      - 'rust-toolchain.toml'
-      - 'api/native_roll.rs'
-      - '.vercelignore'
-      - '.github/workflows/rust-roll.yml'
-      - 'tests/fixtures/roll-v2/auth-matrix.json'
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -68,6 +41,9 @@ jobs:
         working-directory: native/roll-service
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
       - name: Reject any database-test skip setting
         run: |
           if [[ -n "${RUST_ROLL_ALLOW_DB_SKIP+x}" ]]; then
