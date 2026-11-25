@@ -7495,6 +7495,11 @@ export interface components {
             entry_intents?: {
                 [key: string]: components["schemas"]["ReadingListEntryIntent"];
             } | null;
+            /**
+             * @description Optimistic concurrency token. When present on update, the write is
+             *     rejected if the list changed since the client last read it.
+             */
+            expected_updated_at?: string | null;
             issue_ids: number[];
             mode?: string | null;
             name: string;
