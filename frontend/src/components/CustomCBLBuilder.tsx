@@ -217,9 +217,11 @@ export default function CustomCBLBuilder({
       if (variables.undo) {
         setUndoPayload(variables.undo)
         setUndoBaseline(saved.updated_at)
+        writeReadingListUndo(saved.user_id, saved.id, { payload: variables.undo, baseline: saved.updated_at })
       } else {
         setUndoPayload(null)
         setUndoBaseline(null)
+        writeReadingListUndo(saved.user_id, saved.id, null)
       }
       setMessage('Custom CBL saved.')
     },
