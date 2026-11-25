@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-25T19:20:20+00:00",
+  "generated_at": "2026-11-25T19:24:41+00:00",
   "models": [
     {
       "health": {
@@ -23771,7 +23771,7 @@
   },
   "counts_generated_at": "2026-11-25T18:36:53.410989+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-25T19:20:21Z",
+    "generated_at": "2026-11-25T19:24:42Z",
     "sources": {
       "nvidia": [
         "google/diffusiongemma-26b-a4b-it",
@@ -23883,8 +23883,8 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-25T19:20:21.331507+00:00",
-    "days_elapsed": 24.806,
+    "checked_at": "2026-11-25T19:24:42.723932+00:00",
+    "days_elapsed": 24.809,
     "days_in_month": 30.0,
     "days_left": 5.19,
     "in_use": true,
@@ -23902,31 +23902,31 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 17084924,
-        "organization": 17084924,
+        "database": 17323234,
+        "organization": 17323234,
         "owner_target": 50000000,
-        "projected_database": 20662248,
-        "projected_organization": 20662248,
-        "projected_share": 0.0413,
-        "share_used": 0.0342
+        "projected_database": 20947923,
+        "projected_organization": 20947923,
+        "projected_share": 0.0419,
+        "share_used": 0.0346
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 132110,
-        "organization": 132110,
+        "database": 132136,
+        "organization": 132136,
         "owner_target": 1000000,
-        "projected_database": 159772,
-        "projected_organization": 159772,
+        "projected_database": 159784,
+        "projected_organization": 159784,
         "projected_share": 0.016,
         "share_used": 0.0132
       },
       "storage_bytes": {
         "allowance": 5000000000,
-        "database": 18817024,
-        "organization": 18817024,
+        "database": 18821120,
+        "organization": 18821120,
         "owner_target": 250000000,
-        "projected_database": 18817024,
-        "projected_organization": 18817024,
+        "projected_database": 18821120,
+        "projected_organization": 18821120,
         "projected_share": 0.0038,
         "share_used": 0.0038
       }
@@ -23940,7 +23940,7 @@
     "status": "ok"
   },
   "schema": {
-    "checked_at": "2026-11-25T19:20:23+00:00",
+    "checked_at": "2026-11-25T19:24:46+00:00",
     "code_version": 6,
     "last_upgrade": {
       "at": "2026-11-25T18:11:07+00:00",
@@ -24118,7 +24118,7 @@
     "stored_version": 6
   },
   "crashes": {
-    "generated_at": "2026-11-25T19:20:24Z",
+    "generated_at": "2026-11-25T19:24:46Z",
     "groups": [
       {
         "count": 1,
@@ -24161,48 +24161,9 @@
     ]
   },
   "gh_usage": {
-    "generated_at": "2026-11-25T19:20:24Z",
+    "generated_at": "2026-11-25T19:24:48Z",
     "jobs": {
       "dispatch": [
-        {
-          "at": 1795632810,
-          "buckets": {
-            "reader": 681,
-            "workflow": 8
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 3512,
-            "reset": 1795633869
-          },
-          "cache_hits": 0,
-          "github": 689,
-          "label": "dispatch pr:5768",
-          "paginated": 78,
-          "top": [
-            [
-              "api GET repos/R/issues/N",
-              145
-            ],
-            [
-              "api GET repos/R/issues",
-              132
-            ],
-            [
-              "api GET repos/R/pulls/N",
-              110
-            ],
-            [
-              "gh pr checks",
-              107
-            ],
-            [
-              "api GET repos/R/commits/SHA/check-runs",
-              107
-            ]
-          ],
-          "writes": 1
-        },
         {
           "at": 1795633043,
           "buckets": {
@@ -24631,6 +24592,45 @@
             ]
           ],
           "writes": 0
+        },
+        {
+          "at": 1795634610,
+          "buckets": {
+            "reader": 360,
+            "workflow": 8
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 4788,
+            "reset": 1795637479
+          },
+          "cache_hits": 102,
+          "github": 368,
+          "label": "dispatch pr:5745",
+          "paginated": 77,
+          "top": [
+            [
+              "api GET repos/R/issues/N",
+              143
+            ],
+            [
+              "api GET repos/R/issues",
+              132
+            ],
+            [
+              "gh pr checks",
+              106
+            ],
+            [
+              "api GET repos/R/issues/N/comments paginate",
+              74
+            ],
+            [
+              "api GET repos/R/pulls/N",
+              3
+            ]
+          ],
+          "writes": 1
         }
       ],
       "merge": [
