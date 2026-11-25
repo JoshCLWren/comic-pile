@@ -1,37 +1,28 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from './testingLibrary'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CustomCBLBuilder from '../components/CustomCBLBuilder'
+import { customCBLApi } from '../services/api-custom-cbl'
+import { cblSourcesApi } from '../services/api-cbl-sources'
 import { issueCardsApi } from '../services/issueCardsApi'
 import { existingList } from './fixtures/customCblFixture'
 
-const mocks = vi.hoisted(() => ({
-  list: vi.fn(),
-  get: vi.fn(),
-  create: vi.fn(),
-  update: vi.fn(),
-  delete: vi.fn(),
-  searchIssues: vi.fn(),
-  apply: vi.fn(),
-  exportXml: vi.fn(),
-}))
+const mocks = {
+  list: vi.spyOn(customCBLApi, 'list'),
+  get: vi.spyOn(customCBLApi, 'get'),
+  create: vi.spyOn(customCBLApi, 'create'),
+  update: vi.spyOn(customCBLApi, 'update'),
+  delete: vi.spyOn(customCBLApi, 'delete'),
+  searchIssues: vi.spyOn(customCBLApi, 'searchIssues'),
+  apply: vi.spyOn(customCBLApi, 'apply'),
+  exportXml: vi.spyOn(customCBLApi, 'exportXml'),
+}
 
-vi.mock('../services/api-custom-cbl', async () => {
-  const actual = await vi.importActual<typeof import('../services/api-custom-cbl')>(
-    '../services/api-custom-cbl',
-  )
-  return { ...actual, customCBLApi: mocks }
-})
-
-const cblMocks = vi.hoisted(() => ({ discover: vi.fn(), preview: vi.fn() }))
-
-vi.mock('../services/api-cbl-sources', async () => {
-  const actual = await vi.importActual<typeof import('../services/api-cbl-sources')>(
-    '../services/api-cbl-sources',
-  )
-  return { ...actual, cblSourcesApi: cblMocks }
-})
+const cblMocks = {
+  discover: vi.spyOn(cblSourcesApi, 'discover'),
+  preview: vi.spyOn(cblSourcesApi, 'preview'),
+}
 
 function renderCanonicalBuilder() {
   const client = new QueryClient({

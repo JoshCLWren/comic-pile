@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from './testingLibrary'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DirectReadIssuePanel } from '../components/DirectReadIssuePanel'
@@ -8,10 +8,11 @@ import { comicVineApi, type ComicVineIssueIntelligence } from '../services/api-c
 import { issueCardsApi, type IssueCard } from '../services/issueCardsApi'
 import { tagsApi, type EffectiveTagsResponse, type Tag } from '../services/api-tags'
 import type { Issue } from '../types'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
 // The action card has its own suite; this suite proves the reading surface
 // renders the post-roll provider detail and tags for the exact selected issue.
-vi.mock('../components/ComicIssueCard', async (importOriginal) => {
+await injectModuleDoubles(await import('../components/ComicIssueCard'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../components/ComicIssueCard')>()
   return {
     // Only the action card is replaced: the provider cover the post-roll pillar

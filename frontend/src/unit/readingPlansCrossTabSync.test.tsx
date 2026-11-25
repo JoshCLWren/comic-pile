@@ -1,7 +1,7 @@
-import { act, render, renderHook, screen, waitFor } from '@testing-library/react'
+import { act, render, renderHook, screen, waitFor } from './testingLibrary'
 import { QueryClient } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi, type MockInstance } from 'vitest'
 import { useDeleteReadingPlan, useSaveReadingPlan } from '../hooks/useReadingPlans'
 import ContinuityPlansIndexPage from '../pages/ContinuityPlansIndexPage'
 import { applyCommittedReadingPlan } from '../query/cacheEffects'
@@ -11,24 +11,9 @@ import { continuityPlansApi } from '../services/api-continuity-plans'
 import { cast } from '../utils/cast'
 import { isObject } from '../utils/runtimeChecks'
 
-vi.mock('../services/api-continuity-plans', async () => {
-  const actual = await vi.importActual<typeof import('../services/api-continuity-plans')>(
-    '../services/api-continuity-plans',
-  )
-  return {
-    ...actual,
-    continuityPlansApi: {
-      ...actual.continuityPlansApi,
-      list: vi.fn(),
-      update: vi.fn(),
-      delete: vi.fn(),
-    },
-  }
-})
-
-const mockList = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.list)
-const mockUpdate = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.update)
-const mockDelete = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.delete)
+let mockList: MockInstance<typeof continuityPlansApi.list>
+let mockUpdate: MockInstance<typeof continuityPlansApi.update>
+let mockDelete: MockInstance<typeof continuityPlansApi.delete>
 
 const plan = {
   id: 1,
@@ -101,6 +86,9 @@ function renderPlansIndex() {
 }
 
 beforeEach(() => {
+  mockList = vi.spyOn(continuityPlansApi, 'list')
+  mockUpdate = vi.spyOn(continuityPlansApi, 'update')
+  mockDelete = vi.spyOn(continuityPlansApi, 'delete')
   vi.clearAllMocks()
   FakeBroadcastChannel.reset()
   vi.stubGlobal('BroadcastChannel', FakeBroadcastChannel)
