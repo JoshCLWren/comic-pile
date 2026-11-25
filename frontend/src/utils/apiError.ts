@@ -77,7 +77,7 @@ export function getApiErrorDetail(error: unknown): string {
   }
   if (isNonNullObject(error) && hasProperty(error, 'response')) {
     // SAFETY: isNonNullObject and hasProperty(response) above guarantee reading response.data.detail is safe.
-    return (error as ApiLikeError).response?.data?.detail ?? 'Unknown error'
+    return errorDetail((error as ApiLikeError).response?.data?.detail) ?? 'Unknown error'
   }
   if (error instanceof Error) {
     if (isGenericNetworkError(error.message)) {
