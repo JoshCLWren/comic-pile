@@ -291,6 +291,7 @@ export default function CustomCBLBuilder({
         issue_ids: selectedIssueIds,
         entry_intents: entryIntents,
         checkpoint_issue_ids: checkpointIssueIds,
+        expected_updated_at: current.updated_at,
       }
       if (confirmed) payload.confirmed_predecessor_changes = confirmed
       const saved = await customCBLApi.update(selectedId, payload)
@@ -343,7 +344,7 @@ export default function CustomCBLBuilder({
       }
       // Restoring a snapshot can re-change stored waits (for example, undoing a
       // confirmed strict reorder), so the same confirmation contract applies.
-      const body: CustomCBLWrite = { ...payload }
+      const body: CustomCBLWrite = { ...payload, expected_updated_at: current.updated_at }
       if (confirmed) body.confirmed_predecessor_changes = confirmed
       return customCBLApi.update(selectedId, body)
     },

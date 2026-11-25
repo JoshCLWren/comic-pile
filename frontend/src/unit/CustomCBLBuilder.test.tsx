@@ -761,8 +761,8 @@ describe('CustomCBLBuilder', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Save custom CBL' }))
 
-    await screen.findByRole('dialog', { name: 'Confirm waiting changes' })
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    const confirmDialog = await screen.findByRole('dialog', { name: 'Confirm waiting changes' })
+    fireEvent.click(within(confirmDialog).getByRole('button', { name: 'Cancel' }))
 
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: 'Confirm waiting changes' })).not.toBeInTheDocument()
@@ -1653,9 +1653,9 @@ describe('CustomCBLBuilder', () => {
     await screen.findByText(/Replaced this Reading List/)
     mocks.get.mockResolvedValue(replaced)
     fireEvent.click(screen.getByRole('button', { name: 'Undo last save' }))
-    await screen.findByRole('dialog', { name: 'Confirm undo waiting changes' })
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    const undoDialog = await screen.findByRole('dialog', { name: 'Confirm undo waiting changes' })
+    fireEvent.click(within(undoDialog).getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog', { name: 'Confirm undo waiting changes' })).not.toBeInTheDocument()
     expect(mocks.update).toHaveBeenCalledTimes(2)
     expect(screen.getByRole('button', { name: 'Undo last save' })).toBeEnabled()
   })
