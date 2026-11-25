@@ -302,8 +302,7 @@ export default function IssueCorrectionDialog({
       setPreview(null)
       onSuccess()
       if (!operation) onClose()
-    } catch (err) {
-      console.error('APPLY ERROR', err)
+    } catch (_err) {
       setError('Failed to update issue. Please try again.')
     } finally {
       setIsLoading(false)

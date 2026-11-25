@@ -218,7 +218,7 @@ describe('IssueCorrectionDialog', () => {
 
   it('inserts a numeric issue at the beginning and handles missing API results', async () => {
     const existing = [issue({ id: 1, issue_number: '1', status: 'read' })]
-    list.mockResolvedValueOnce(listResponse(existing)).mockResolvedValueOnce(listResponse(existing))
+    list.mockResolvedValue(listResponse(existing))
     create.mockResolvedValueOnce(listResponse([]))
     const { onSuccess } = renderDialog()
     const input = await screen.findByLabelText(/what issue are you currently on/i)
