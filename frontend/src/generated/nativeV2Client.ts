@@ -563,6 +563,22 @@ export interface IssueOrderRequest {
 
 export type IssueOrderResponse = void
 
+export interface IssueReadOperationGetRequest {
+  path: {
+    operation_id: number
+  }
+}
+
+export type IssueReadOperationGetResponse = components['schemas']['IssueReadOperationResponse']
+
+export interface IssueReadOperationUndoRequest {
+  path: {
+    operation_id: number
+  }
+}
+
+export type IssueReadOperationUndoResponse = components['schemas']['IssueReadOperationUndoResponse']
+
 export interface IssueReadRateRequest {
   path: {
     issue_id: number
@@ -576,13 +592,13 @@ export interface IssueReadStateBulkMarkReadRequest {
   body: components['schemas']['IssueBulkRequest']
 }
 
-export type IssueReadStateBulkMarkReadResponse = void
+export type IssueReadStateBulkMarkReadResponse = components['schemas']['IssueReadOperationResponse']
 
 export interface IssueReadStateBulkMarkUnreadRequest {
   body: components['schemas']['IssueBulkRequest']
 }
 
-export type IssueReadStateBulkMarkUnreadResponse = void
+export type IssueReadStateBulkMarkUnreadResponse = components['schemas']['IssueReadOperationResponse']
 
 export interface IssueReadStateMarkReadRequest {
   path: {
@@ -1253,6 +1269,8 @@ export interface NativeV2Client {
   issueCards(args: IssueCardsRequest): Promise<IssueCardsResponse>
   issueIntelligenceDocs(args: IssueIntelligenceDocsRequest): Promise<IssueIntelligenceDocsResponse>
   issueOrder(args: IssueOrderRequest): Promise<IssueOrderResponse>
+  issueReadOperationGet(args: IssueReadOperationGetRequest): Promise<IssueReadOperationGetResponse>
+  issueReadOperationUndo(args: IssueReadOperationUndoRequest): Promise<IssueReadOperationUndoResponse>
   issueReadRate(args: IssueReadRateRequest): Promise<IssueReadRateResponse>
   issueReadStateBulkMarkRead(args: IssueReadStateBulkMarkReadRequest): Promise<IssueReadStateBulkMarkReadResponse>
   issueReadStateBulkMarkUnread(args: IssueReadStateBulkMarkUnreadRequest): Promise<IssueReadStateBulkMarkUnreadResponse>
@@ -1720,6 +1738,14 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/issue-order`,
         args.body,
       )
+    },
+    issueReadOperationGet(args: IssueReadOperationGetRequest) {
+      return client.get<IssueReadOperationGetResponse>(
+        `/v2/issue-read-operations/${encodeURIComponent(String(args.path.operation_id))}`,
+      )
+    },
+    issueReadOperationUndo(args: IssueReadOperationUndoRequest) {
+      return client.post<IssueReadOperationUndoResponse>(`/v2/issue-read-operations/${encodeURIComponent(String(args.path.operation_id))}/undo`)
     },
     issueReadRate(args: IssueReadRateRequest) {
       return client.patch<IssueReadRateResponse, IssueReadRateRequest['body']>(
