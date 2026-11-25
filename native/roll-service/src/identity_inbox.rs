@@ -1399,6 +1399,18 @@ mod tests {
         assert_eq!(why_stopped("candidate", &with_reason, 0), "ambiguous title");
     }
 
+    #[test]
+    fn next_steps_are_actionable_for_non_match_states() {
+        let empty = serde_json::json!({});
+        let steps = next_steps_for("unresolved", &empty, 0);
+        assert!(!steps.is_empty());
+        assert!(steps.iter().any(|s| s.to_lowercase().contains("different")));
+        assert!(steps.iter().any(|s| s.to_lowercase().contains("url")));
+        assert!(steps.iter().any(|s| s.to_lowercase().contains("manual")));
+        let candidate_steps = next_steps_for("candidate", &empty, 2);
+        assert!(!candidate_steps.is_empty());
+    }
+
     #[tokio::test]
     async fn list_empty_returns_ok() {
         let Some(state) = test_support::test_state(2).await else {
