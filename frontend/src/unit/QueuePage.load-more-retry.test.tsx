@@ -55,8 +55,10 @@ await injectModuleDoubles(await import('../hooks/useSnooze'), () => ({ useSnooze
 await injectModuleDoubles(await import('../hooks/useQueueBlockingInfo'), () => ({ useQueueBlockingInfo: vi.fn(() => ({})) }))
 await injectModuleDoubles(await import('../contexts/useBugReportRestore'), () => ({ useBugReportRestore: vi.fn() }))
 
-await injectModuleDoubles(await import('../services/api'), () => ({
+await injectModuleDoubles(await import('../services/api-threads'), () => ({
   threadsApi: { setPending: vi.fn() },
+}))
+await injectModuleDoubles(await import('../services/api-dependencies'), () => ({
   dependenciesApi: {
     listBlockedThreadIds: vi.fn().mockResolvedValue([]),
     getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),

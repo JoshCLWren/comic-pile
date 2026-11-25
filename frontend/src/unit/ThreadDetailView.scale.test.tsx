@@ -27,7 +27,7 @@ await injectModuleDoubles(await import('../hooks/useThread'), async () => {
 await injectModuleDoubles(await import('../services/api-threads'), () => ({
   threadsApi: { get: vi.fn() },
 }))
-await injectModuleDoubles(await import('../services/api'), () => ({
+await injectModuleDoubles(await import('../services/api-dependencies'), () => ({
   dependenciesApi: {
     getIssueDependencies: vi.fn().mockResolvedValue({ incoming: [], outgoing: [] }),
     getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),

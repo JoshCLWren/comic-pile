@@ -17,8 +17,8 @@ type ModuleDoubleFactory<ModuleExports extends object> = (
  *
  * Unlike hoisted module replacement, this preserves every unmentioned export and
  * uses spies for function exports, so tests can inspect and reset the injected
- * boundary with the normal Vitest mock API. Object-valued service namespaces are
- * replaced directly because they are dependency containers rather than calls.
+ * boundary with the normal Vitest mock API. Object-valued service namespaces keep
+ * their real identity contract while the named dependency methods are replaced.
  */
 export async function injectModuleDoubles<ModuleExports extends object>(
   moduleExports: ModuleExports,
@@ -43,6 +43,13 @@ export async function injectModuleDoubles<ModuleExports extends object>(
           throw new Error(`Cannot invent "${exportName}.${memberName}" on a module export`)
         }
       }
+      Object.defineProperty(moduleExports, exportName, {
+        configurable: true,
+        enumerable: true,
+        writable: true,
+        value: { ...descriptor.value, ...replacement },
+      })
+      continue
     }
 
     if (isFunction(descriptor?.value) && isFunction(replacement)) {

@@ -70,7 +70,6 @@ await injectModuleDoubles(await import('../contexts/useBugReportRestore'), () =>
     clearRestoreAction: vi.fn(),
   }),
 }))
-await injectModuleDoubles(await import('../hooks/useSession'), () => ({ useSession: () => sessionHook.value ?? ({ data: sessionData, refetch: spies.refetch }) }))
 await injectModuleDoubles(await import('../hooks/useRollBootstrap'), () => ({ useRollBootstrap: () => bootstrapHook.value ?? ({ data: bootstrapData, refetch: spies.refetch, isPending: false, isError: false, error: null }) }))
 await injectModuleDoubles(await import('../hooks/useRollResources'), () => ({
   useRollDieState: () => dieStateHook.value ?? ({ data: undefined, isError: false }),
