@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-25T13:30:33+00:00",
+  "generated_at": "2026-11-25T13:46:46+00:00",
   "models": [
     {
       "health": {
@@ -23575,7 +23575,7 @@
   },
   "counts_generated_at": "2026-11-25T13:08:51.212462+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-25T13:30:35Z",
+    "generated_at": "2026-11-25T13:46:48Z",
     "sources": {
       "nvidia": [
         "google/diffusiongemma-26b-a4b-it",
@@ -23587,7 +23587,8 @@
         "z-ai/glm-5.3"
       ],
       "opencode-free": [
-        "hungerg-free"
+        "hungerg-free",
+        "iceman-contributor-free"
       ],
       "openrouter-free": [
         "nvidia/nemotron-3-ultra-550b-a55b:free",
@@ -23687,10 +23688,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-25T13:30:35.425381+00:00",
-    "days_elapsed": 24.563,
+    "checked_at": "2026-11-25T13:46:48.428701+00:00",
+    "days_elapsed": 24.574,
     "days_in_month": 30.0,
-    "days_left": 5.44,
+    "days_left": 5.43,
     "in_use": true,
     "label": "",
     "metrics": {
@@ -23706,31 +23707,31 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 11350761,
-        "organization": 11350761,
+        "database": 11545906,
+        "organization": 11545906,
         "owner_target": 50000000,
-        "projected_database": 13863243,
-        "projected_organization": 13863243,
-        "projected_share": 0.0277,
-        "share_used": 0.0227
+        "projected_database": 14095271,
+        "projected_organization": 14095271,
+        "projected_share": 0.0282,
+        "share_used": 0.0231
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 124608,
-        "organization": 124608,
+        "database": 125099,
+        "organization": 125099,
         "owner_target": 1000000,
-        "projected_database": 152190,
-        "projected_organization": 152190,
-        "projected_share": 0.0152,
+        "projected_database": 152721,
+        "projected_organization": 152721,
+        "projected_share": 0.0153,
         "share_used": 0.0125
       },
       "storage_bytes": {
         "allowance": 5000000000,
-        "database": 18223104,
-        "organization": 18223104,
+        "database": 18239488,
+        "organization": 18239488,
         "owner_target": 250000000,
-        "projected_database": 18223104,
-        "projected_organization": 18223104,
+        "projected_database": 18239488,
+        "projected_organization": 18239488,
         "projected_share": 0.0036,
         "share_used": 0.0036
       }
