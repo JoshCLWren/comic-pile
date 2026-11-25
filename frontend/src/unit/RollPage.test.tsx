@@ -431,7 +431,6 @@ it('shows a retry action when bootstrap loading fails', async () => {
 })
 
 it('recovers from browser snoozes and a non-d6 die through the visible zero-choice Reset Dice action', async () => {
-  const user = (await import('@testing-library/user-event')).default.setup()
   const resetMutate = vi.fn().mockImplementation(async () => {
     writeRollSnoozes([])
     return { die: 6, replayed: false }
@@ -440,7 +439,8 @@ it('recovers from browser snoozes and a non-d6 die through the visible zero-choi
   vi.mocked(useResetDice).mockReturnValue({
     mutate: resetMutate,
     isPending: false,
-  } as ReturnType<typeof useResetDice>)
+    isError: false,
+  } as unknown as ReturnType<typeof useResetDice>)
 
   writeRollSnoozes([1])
   mockedUseRollDieState.mockReturnValue({ data: { die: 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null } })

@@ -171,7 +171,6 @@ export default function RollPage() {
     setResetDiceError('')
     try {
       await resetDiceMutation.mutate()
-      console.log('MUTATE DONE')
       state.setIsRolling(false)
       state.setIsRatingView(false)
       state.setRolledResult(null)
