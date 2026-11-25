@@ -134,7 +134,7 @@ pub fn embedded_versions() -> Vec<i32> {
     runner()
         .get_migrations()
         .iter()
-        .map(|migration| migration.version)
+        .map(|migration| migration.version())
         .collect()
 }
 
