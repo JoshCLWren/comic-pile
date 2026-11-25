@@ -11,6 +11,8 @@ import { useRollPendingSync } from './useRollPendingSync'
 import { useToast } from '../../contexts/useToast'
 import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../../query/cacheEffects'
 import { queryClient } from '../../query/queryClient'
+import { issuesApi } from '../../services/api-issues'
+import { getApiErrorDetail } from '../../utils/apiError'
 import { PositionMenuProvider } from '../../contexts/PositionMenuProvider'
 import type { ThreadListItem, ThreadCreatePayload, ThreadUpdatePayload } from '../../types'
 import CompletedThreadsSection from './CompletedThreadsSection'
@@ -102,6 +104,28 @@ export default function QueuePage() {
         : [],
     [excludedThreads, isSearching, normalizedSearch],
   )
+
+  const handleRestoreCompletedSeries = useCallback(async (threadId: number) => {
+    try {
+      const allIssues: number[] = []
+      let pageToken: string | undefined
+      do {
+        const page = await issuesApi.list(threadId, { status: 'read', page_size: 100, page_token: pageToken })
+        allIssues.push(...page.issues.map((i) => i.id))
+        pageToken = page.next_page_token ?? undefined
+      } while (pageToken)
+      if (allIssues.length === 0) {
+        showToast('No read issues to restore', 'info')
+        return
+      }
+      await issuesApi.bulkMarkUnread(allIssues)
+      await invalidateAfterQueueMutation(queryClient)
+      await invalidateAfterIssueEdit(queryClient, threadId)
+      showToast('Restored series issues to unread', 'success')
+    } catch (e) {
+      showToast(`Failed to restore unread: ${getApiErrorDetail(e)}`, 'error')
+    }
+  }, [showToast])
 
   const actions = useQueueThreadActions({})
 
@@ -230,6 +254,11 @@ export default function QueuePage() {
           hasNextPage={!!nextPageToken}
           isLoading={queueListLoading}
           onAddSeries={modals.showCreateModal}
+          completedMatches={completedMatches}
+          excludedMatches={excludedMatches}
+          onOpenCompletedSeries={(id) => navigate(`/thread/${id}`)}
+          onRestoreCompletedSeries={(id) => { void handleRestoreCompletedSeries(id) }}
+          onOpenExcludedSeries={(id) => navigate(`/thread/${id}`)}
         />
 
         <CompletedThreadsSection

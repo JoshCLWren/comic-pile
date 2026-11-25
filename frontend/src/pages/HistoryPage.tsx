@@ -1,10 +1,13 @@
 import { Link } from 'react-router-dom'
-import { useMemo } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import { useActivity } from '../hooks/useActivity'
 import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 import CompactIssueCardTrigger from '../components/CompactIssueCardTrigger'
 import type { ActivityItem } from '../services/api-activity'
 import { formatDate, formatTime } from '../utils/dateFormat'
+import { issuesApi } from '../services/api-issues'
+import { queryClient } from '../query/queryClient'
+import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../query/cacheEffects'
 
 /**
  * Shared recovery action for the bounded-loading and load-failure states.
