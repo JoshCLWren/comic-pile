@@ -28,7 +28,7 @@ test('standalone saved Reading Lists can be reopened by stable ID across session
     await page.getByRole('button', { name: `${title} #1`, exact: false }).click()
   }
   await page.getByRole('button', { name: 'Save custom CBL' }).click()
-  await expect(page.getByRole('status')).toContainText('Custom CBL saved.')
+  await expect(page.locator('section[aria-labelledby="custom-cbl-heading"]').getByRole('status')).toContainText('Custom CBL saved.')
   const ordered = page.getByRole('list', { name: 'Custom CBL ordered issues' })
   await expect(ordered.getByTestId('reading-list-entry')).toHaveCount(2)
   await expect(ordered.getByTestId('reading-list-entry').nth(0)).toContainText(series[0])
@@ -42,9 +42,12 @@ test('standalone saved Reading Lists can be reopened by stable ID across session
   const secondId = Number(page.url().split('/').pop())
   expect(secondId).not.toBe(firstId)
   await expect(page.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue(name)
+  await page.getByLabel('Search issues for custom CBL').fill(series[1])
+  await page.getByRole('button', { name: 'Find issues' }).click()
+  await page.getByRole('button', { name: `${series[1]} #1`, exact: false }).click()
   await page.getByRole('radio', { name: /^Strict/ }).check()
   await page.getByRole('button', { name: 'Save custom CBL' }).click()
-  await expect(page.getByRole('status')).toContainText('Custom CBL saved.')
+  await expect(page.locator('section[aria-labelledby="custom-cbl-heading"]').getByRole('status')).toContainText('Custom CBL saved.')
 
   await page.goto('/queue')
   await page.goto('/continuity-plans')
@@ -75,7 +78,7 @@ test('standalone saved Reading Lists can be reopened by stable ID across session
     await expect(restored.getByTestId('reading-list-entry').nth(1)).toContainText(series[1])
     await freshPage.getByRole('textbox', { name: 'Description', exact: true }).fill('Updated after signing in again')
     await freshPage.getByRole('button', { name: 'Save custom CBL' }).click()
-    await expect(freshPage.getByRole('status')).toContainText('Custom CBL saved.')
+    await expect(freshPage.locator('section[aria-labelledby="custom-cbl-heading"]').getByRole('status')).toContainText('Custom CBL saved.')
     await freshPage.reload()
     await expect(freshPage.getByRole('textbox', { name: 'Description', exact: true })).toHaveValue('Updated after signing in again')
   } finally {
