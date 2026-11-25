@@ -490,3 +490,177 @@ fn suggest_canonical_and_duplicates(evidence: &[DuplicateIssueEvidence]) -> (Opt
     let dups = scored.iter().skip(1).map(|s| s.0).collect();
     (canonical, dups)
 }
+
+fn compute_preview_token(
+    user_id: i32,
+    canonical_issue_id: i32,
+    duplicate_issue_ids: &[i32],
+    canonical: &DuplicateIssueEvidence,
+    duplicates: &[DuplicateIssueEvidence],
+) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(user_id.to_le_bytes());
+    hasher.update(canonical_issue_id.to_le_bytes());
+    for id in duplicate_issue_ids {
+        hasher.update(id.to_le_bytes());
+    }
+    // capture state: statuses, read_ats, event counts, mapping ids
+    hasher.update(canonical.status.as_bytes());
+    if let Some(ra) = &canonical.read_at {
+        hasher.update(ra.as_bytes());
+    }
+    hasher.update((canonical.rating_events.len() as i32).to_le_bytes());
+    hasher.update((canonical.read_events.len() as i32).to_le_bytes());
+    if let Some(cv) = &canonical.comicvine_issue_id {
+        hasher.update(cv.as_bytes());
+    }
+    for d in duplicates {
+        hasher.update(d.status.as_bytes());
+        if let Some(ra) = &d.read_at {
+            hasher.update(ra.as_bytes());
+        }
+        hasher.update((d.rating_events.len() as i32).to_le_bytes());
+        hasher.update((d.read_events.len() as i32).to_le_bytes());
+        if let Some(cv) = &d.comicvine_issue_id {
+            hasher.update(cv.as_bytes());
+        }
+        hasher.update((d.list_memberships.len() as i32).to_le_bytes());
+    }
+    let digest = hasher.finalize();
+    format!("{:x}", digest)
+}
+
+fn build_preview_actions(
+    canonical: &DuplicateIssueEvidence,
+    duplicates: &[DuplicateIssueEvidence],
+    _decisions: &HashMap<String, String>,
+) -> (Vec<ReconcilePreviewAction>, Vec<String>, bool) {
+    let mut actions = Vec::new();
+    let mut warnings = Vec::new();
+    let mut can_apply = true;
+
+    for dup in duplicates {
+        // Check for ambiguity - different comicvine volumes with no clear relationship
+        if let (Some(c_cv), Some(d_cv)) = (&canonical.comicvine_volume_id, &dup.comicvine_volume_id) {
+            if c_cv != d_cv {
+                // Different volumes - could be story/overall relationship, warn but allow with decision
+                actions.push(ReconcilePreviewAction {
+                    kind: "cross_volume_merge".to_string(),
+                    description: format!(
+                        "Issue {} (CV vol {d_cv}) and canonical {} (CV vol {c_cv}) are in different Comic Vine volumes; verify they represent the same physical comic.",
+                        dup.issue_id, canonical.issue_id
+                    ),
+                    safe: false,
+                    requires_decision: true,
+                    decision_key: Some(format!("cross_volume:{}", dup.issue_id)),
+                });
+            }
+        }
+
+        if let Some(cv) = &dup.comicvine_issue_id {
+            actions.push(ReconcilePreviewAction {
+                kind: "move_comicvine_mapping".to_string(),
+                description: format!(
+                    "Move Comic Vine issue {cv} mapping from duplicate {} to canonical {}",
+                    dup.issue_id, canonical.issue_id
+                ),
+                safe: true,
+                requires_decision: false,
+                decision_key: None,
+            });
+        }
+
+        if !dup.rating_events.is_empty() {
+            actions.push(ReconcilePreviewAction {
+                kind: "move_rating_events".to_string(),
+                description: format!(
+                    "Move {} rating event(s) from duplicate {} to canonical {} (preserving timestamps)",
+                    dup.rating_events.len(), dup.issue_id, canonical.issue_id
+                ),
+                safe: true,
+                requires_decision: false,
+                decision_key: None,
+            });
+        }
+
+        if !dup.read_events.is_empty() {
+            let synthetic = dup.is_synthetic_placeholder_read;
+            if synthetic {
+                warnings.push(format!(
+                    "Duplicate {} has read events with read_at before created_at; these are invalid synthetic placeholders and will not be treated as actual reading completion.",
+                    dup.issue_id
+                ));
+                actions.push(ReconcilePreviewAction {
+                    kind: "suppress_synthetic_read_events".to_string(),
+                    description: format!(
+                        "Suppress {} synthetic placeholder read event(s) on duplicate {} (invalid timestamp order); canonical reading history is preserved.",
+                        dup.read_events.len(), dup.issue_id
+                    ),
+                    safe: true,
+                    requires_decision: false,
+                    decision_key: None,
+                });
+            } else {
+                actions.push(ReconcilePreviewAction {
+                    kind: "move_read_events".to_string(),
+                    description: format!(
+                        "Move {} read event(s) from duplicate {} to canonical {}",
+                        dup.read_events.len(), dup.issue_id, canonical.issue_id
+                    ),
+                    safe: true,
+                    requires_decision: false,
+                    decision_key: None,
+                });
+            }
+        }
+
+        if !dup.list_memberships.is_empty() {
+            actions.push(ReconcilePreviewAction {
+                kind: "move_list_memberships".to_string(),
+                description: format!(
+                    "Move {} list membership(s) from duplicate {} to canonical {} (preserving exact positions/IDs where possible)",
+                    dup.list_memberships.len(), dup.issue_id, canonical.issue_id
+                ),
+                safe: true,
+                requires_decision: false,
+                decision_key: None,
+            });
+        }
+
+        actions.push(ReconcilePreviewAction {
+            kind: "suppress_duplicate".to_string(),
+            description: format!(
+                "Mark duplicate {} as merged into canonical {} (no destructive delete; excluded from Roll/Queue)",
+                dup.issue_id, canonical.issue_id
+            ),
+            safe: true,
+            requires_decision: false,
+            decision_key: None,
+        });
+    }
+
+    // If canonical has no CV mapping but a duplicate does, that's fine - we move it.
+    // Warn if canonical already read and duplicate also has real (non-synthetic) read - potential double-count
+    for dup in duplicates {
+        if canonical.status == "read" && dup.status == "read" && !dup.is_synthetic_placeholder_read {
+            warnings.push(format!(
+                "Both canonical {} and duplicate {} are read with non-synthetic timestamps; reconciliation will preserve the canonical's actual read state and move real events without double-counting.",
+                canonical.issue_id, dup.issue_id
+            ));
+        }
+    }
+
+    // check for unresolved decisions
+    for action in &actions {
+        if action.requires_decision {
+            if let Some(key) = &action.decision_key {
+                if !_decisions.contains_key(key) {
+                    can_apply = false;
+                }
+            }
+        }
+    }
+
+    (actions, warnings, can_apply)
+}
