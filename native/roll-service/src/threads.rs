@@ -1187,7 +1187,7 @@ cover_frontiers AS (
     SELECT key::int AS thread_id,
            CASE WHEN jsonb_typeof(value) = 'number'
                 THEN (value #>> '{}')::int END AS issue_id
-    FROM jsonb_each($9::jsonb)
+    FROM jsonb_each($9::text::jsonb)
 ),
 ranked AS (
     SELECT t.id,
@@ -1458,11 +1458,7 @@ async fn query_page(
     let connection = db::checkout(state).await?;
     PAGE_STATEMENTS_ISSUED.fetch_add(1, Ordering::Relaxed);
     let row = db::query_one_optional(state, connection, &sql, &bindings)
-        .await
-        .map_err(|error| {
-            eprintln!("thread page query failed: {error:?}; sql={sql}");
-            error
-        })?
+        .await?
         .ok_or_else(|| ApiError::Internal("Internal Server Error".to_string()))?;
     let payload: String = row.try_get(0).map_err(db::query_error)?;
     let payload: PagePayload = serde_json::from_str(&payload).map_err(|e| {

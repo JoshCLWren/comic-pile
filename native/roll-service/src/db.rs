@@ -219,7 +219,6 @@ pub(crate) fn failure_status(sqlstate: Option<&str>, transport: bool) -> StatusC
 /// failure without exposing reader data. The public body keeps its generic
 /// redacted contract.
 pub(crate) fn query_error_for(operation: &'static str, error: tokio_postgres::Error) -> ApiError {
-    eprintln!("debug query error: {error:?}");
     let sqlstate = error.as_db_error().map(|e| e.code().code());
     let transport = is_transport_failure(&error);
     match failure_status(sqlstate, transport) {
