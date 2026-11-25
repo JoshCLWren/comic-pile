@@ -1100,11 +1100,8 @@ describe('RollPage parent handlers', () => {
     renderRollPage()
     enterPendingRollRating()
     await waitFor(() => expect(screen.getByRole('button', { name: 'cancel rating' })).toBeInTheDocument())
-<<<<<<< HEAD
     // Native dismiss retires the pending offer before the bootstrap refresh;
     // mirror that transition so pending-session hydration cannot reopen rating.
-=======
->>>>>>> main
     spies.dismissPending.mockImplementationOnce(async () => {
       bootstrapData.pending_thread_id = null
       bootstrapData.active_thread = null
