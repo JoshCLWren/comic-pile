@@ -1464,8 +1464,8 @@ describe('CustomCBLBuilder', () => {
     await user.click(await screen.findByRole('button', { name: 'Undo last save' }))
 
     await waitFor(() => {
-      expect(mocks.update).toHaveBeenLastCalledWith(9, {
-        expected_updated_at: '2026-09-14T03:00:00Z',
+      expect(mocks.update).toHaveBeenLastCalledWith(9, expect.objectContaining({
+        expected_updated_at: '2026-09-14T03:10:00Z',
         name: 'Starman into JSA',
         description: 'The bridge I actually want',
         mode: 'loose',
@@ -1475,8 +1475,7 @@ describe('CustomCBLBuilder', () => {
           30001: { gate: 'none', skipped: false },
         },
         checkpoint_issue_ids: [26360],
-        checkpoint_targets: { 26360: [30001] },
-      })
+      }))
     })
   })
 

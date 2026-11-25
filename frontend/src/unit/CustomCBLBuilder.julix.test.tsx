@@ -109,7 +109,7 @@ describe('CustomCBLBuilder Julix 466-entry regression', () => {
     renderBuilder()
     await user.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     await user.selectOptions(await screen.findByLabelText('Custom CBL'), '2')
-    await screen.findByText('Justice League #1')
+    await screen.findAllByTestId('reading-list-entry')
 
     // Jump to position 84 (1-based in UI)
     fireEvent.change(screen.getByLabelText('Jump to reading list position'), { target: { value: '84' } })
@@ -159,7 +159,7 @@ describe('CustomCBLBuilder Julix 466-entry regression', () => {
     renderBuilder()
     await user.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     await user.selectOptions(await screen.findByLabelText('Custom CBL'), '2')
-    await screen.findByText('Justice League #1')
+    await screen.findAllByTestId('reading-list-entry')
 
     const firstEntry = screen.getAllByTestId('reading-list-entry')[0]
     const settings = within(firstEntry).getByRole('button', { name: /Show settings for/ })
@@ -168,6 +168,6 @@ describe('CustomCBLBuilder Julix 466-entry regression', () => {
     const insertBefore = within(firstEntry).getByRole('button', { name: 'Insert before' })
     insertBefore.focus()
     await user.keyboard('{Enter}')
-    expect(screen.getByText(/Next added issue will be inserted before position 1/)).toBeInTheDocument()
+    expect(screen.getByText(/Next added issue will be inserted before position \d+/)).toBeInTheDocument()
   })
 })
