@@ -414,8 +414,9 @@ describe('IssueCorrectionDialog', () => {
     const dependenciesApi = {
       listForThread: vi.fn().mockResolvedValue({
         issues: [
-          { issue_id: 4, issue_number: '4', dependencies: [{ source_issue_id: 2 }] },
-          { issue_id: 5 },
+          // The real endpoint returns incoming edges, not a `dependencies` array.
+          { issue_id: 4, incoming: [{ source_issue_id: 2 }] },
+          { issue_id: 5, incoming: [] },
         ],
       }),
     }

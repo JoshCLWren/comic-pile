@@ -31,7 +31,16 @@ export interface IssueCorrectionIssuesApi {
 }
 
 export interface IssueCorrectionDependenciesApi {
-  listForThread: (threadId: number) => Promise<{ issues?: Array<{ issue_id: number; issue_number?: string; dependencies?: Array<{ source_issue_id?: number }> }> }>
+  // Real `/v1/threads/{thread_id}/issue-dependencies` wire shape: each issue
+  // carries `incoming`/`outgoing` edges, not a flat `dependencies` array.
+  listForThread: (threadId: number) => Promise<{
+    issues?: Array<{
+      issue_id: number
+      issue_number?: string
+      incoming?: Array<{ source_issue_id?: number }>
+      outgoing?: Array<{ source_issue_id?: number }>
+    }>
+  }>
 }
 
 export interface IssueCorrectionCardsApi {
@@ -352,7 +361,14 @@ export default function IssueCorrectionDialog({
         const affectedIds = new Set(unreadBeforeTarget.map((i) => i.id))
         const frontier = new Set<string>()
         for (const issueDep of deps.issues ?? []) {
-          const hasAffectedSource = (issueDep.dependencies ?? []).some((d: { source_issue_id?: number }) => affectedIds.has(d.source_issue_id ?? -1))
+          // `incoming` holds edges whose TARGET is this issue. When their source
+          // is one of the issues about to be read, this issue is the newly
+          // unblocked dependent frontier (#4655 R4). The production endpoint
+          // never sends a `dependencies` field, so reading that would silently
+          // drop every real dependency.
+          const hasAffectedSource = (issueDep.incoming ?? []).some(
+            (edge) => affectedIds.has(edge.source_issue_id ?? -1),
+          )
           if (hasAffectedSource) frontier.add(`#${issueDep.issue_number ?? issueDep.issue_id}`)
         }
         dependentFrontier = Array.from(frontier)
