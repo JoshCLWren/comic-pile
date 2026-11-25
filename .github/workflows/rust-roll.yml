@@ -132,7 +132,7 @@ jobs:
           test ! -e "$bundle/native/migrate/migrations"
           (
             cd "$bundle"
-            COMICPILE_BUILD_SHA="$GITHUB_SHA" \
+            COMICPILE_BUILD_SHA="$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)" \
             COMICPILE_EXPECTED_LOCK_SHA256="$COMICPILE_EXPECTED_LOCK_SHA256" \
             CARGO_TARGET_DIR="$GITHUB_WORKSPACE/native/roll-service/target" \
               cargo build --release --locked --bin native_roll
