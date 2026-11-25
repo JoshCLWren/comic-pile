@@ -1553,6 +1553,25 @@ async fn bulk_read_operation_can_be_undone_without_reverting_unrelated_changes()
     .await
     .unwrap();
 
+    // A dependent series may enter the queue only while issue #5 stays read.
+    // Queue position 0 keeps it out of the active queue ordering assertions.
+    let (dependent_thread, dependent_issues) = series(
+        &conn,
+        user_id,
+        "Dependent of Return of the Master",
+        0,
+        "active",
+        &[("1", "unread")],
+    )
+    .await;
+    dependency(&conn, issues[4], dependent_issues[0], None).await;
+    conn.execute(
+        "UPDATE threads SET is_blocked = TRUE WHERE id = $1",
+        &[&dependent_thread],
+    )
+    .await
+    .unwrap();
+
     let (status, body) = send(
         &state,
         post(
@@ -1570,6 +1589,8 @@ async fn bulk_read_operation_can_be_undone_without_reverting_unrelated_changes()
         thread_row(&conn, thread_id).await,
         row("completed", 1, None, 0, 5, "completed")
     );
+    // With #5 read, the dependent series is eligible for the queue.
+    assert!(!thread_row(&conn, dependent_thread).await.blocked);
 
     // Undo the exact bulk operation.
     let (status, undo_body) = send(
@@ -1607,6 +1628,8 @@ async fn bulk_read_operation_can_be_undone_without_reverting_unrelated_changes()
         issue_state(&conn, issues[4]).await,
         ("unread".into(), false)
     );
+    // #5 is unread again after undo, so the dependent series is blocked.
+    assert!(thread_row(&conn, dependent_thread).await.blocked);
 
     // Audit preserved plus compensating correction events.
     let history = events(&conn, user_id).await;
