@@ -207,7 +207,9 @@ export default function QueuePage() {
 
         <QueueList
           activeThreads={activeThreads}
-          filteredThreads={isSearching && queueLoader.isPlaceholderData ? [] : filteredThreads}
+          filteredThreads={
+            (isSearching && queueLoader.isPlaceholderData) || isListError ? [] : filteredThreads
+          }
           activeCount={authoritativeActiveCount}
           reorderError={actions.reorderError}
           renderItem={renderThreadCard}
@@ -215,6 +217,8 @@ export default function QueuePage() {
           sentinelRef={sentinelRef}
           hasNextPage={!!nextPageToken}
           isLoading={queueListLoading}
+          isError={isListError}
+          onRetry={() => void queueLoader.refetch()}
           onAddSeries={modals.showCreateModal}
         />
 
