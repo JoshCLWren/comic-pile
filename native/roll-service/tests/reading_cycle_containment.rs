@@ -1993,4 +1993,18 @@ async fn reading_graph_repair_confirm_is_idempotent_after_success() {
         list_count, 0,
         "repair must not re-create or duplicate the deleted list"
     );
+    let receipt_count: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM events
+             WHERE user_id=$1 AND type='reading_graph_repair'
+               AND context::jsonb @> $2::text::jsonb",
+            &[
+                &owner,
+                &json!({"action": "delete_list", "list_id": list}).to_string(),
+            ],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(receipt_count, 1, "retry must not write another receipt");
 }
