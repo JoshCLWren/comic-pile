@@ -705,6 +705,78 @@ async fn seed_pair(
     (canonical, duplicate, identity_id)
 }
 
+/// A pair with distinct provider numbers so three pairs never cross-match in
+/// the story/overall detection rule. Returns `(canonical, duplicate)`.
+#[allow(clippy::too_many_arguments)]
+async fn seed_named_pair(
+    ctx: &Ctx,
+    cv_id: &str,
+    cv_issue_number: &str,
+    story_arc_number: &str,
+    canonical_number: &str,
+    canonical_created: &str,
+    duplicate_created: &str,
+) -> (i32, i32) {
+    let conn = ctx.state.pool.get().await.unwrap();
+    let canonical_thread: i32 = conn
+        .query_one(
+            "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status, created_at) \
+             VALUES ($1, 'Story ' || $2, 'comic', 1, 1, 'active', NOW()) RETURNING id",
+            &[&ctx.user_id, &story_arc_number],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let duplicate_thread: i32 = conn
+        .query_one(
+            "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status, created_at) \
+             VALUES ($1, 'Overall ' || $2, 'comic', 1, 2, 'active', NOW()) RETURNING id",
+            &[&ctx.user_id, &cv_issue_number],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let canonical: i32 = conn
+        .query_one(
+            "INSERT INTO issues (thread_id, issue_number, position, status, created_at) \
+             VALUES ($1, $2, 0, 'unread', $3::text::timestamptz) RETURNING id",
+            &[&canonical_thread, &canonical_number, &canonical_created],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let duplicate: i32 = conn
+        .query_one(
+            "INSERT INTO issues (thread_id, issue_number, position, status, created_at) \
+             VALUES ($1, $2, 0, 'unread', $3::text::timestamptz) RETURNING id",
+            &[&duplicate_thread, &cv_issue_number, &duplicate_created],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let metadata = format!(
+        "{{\"volume_id\":4050,\"issue_number\":\"{cv_issue_number}\",\"story_arc_number\":\"{story_arc_number}\"}}"
+    );
+    let identity_id: i32 = conn
+        .query_one(
+            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
+             VALUES ('comicvine', 'issue', $1, $2::json, NOW(), NOW()) RETURNING id",
+            &[&cv_id, &metadata],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    conn.execute(
+        "INSERT INTO issue_external_identity_mappings \
+         (issue_id, external_identity_id, status, evidence_source, evidence_json, created_at, updated_at) \
+         VALUES ($1, $2, 'confirmed', 'test', '{}'::json, NOW(), NOW())",
+        &[&duplicate, &identity_id],
+    )
+    .await
+    .unwrap();
+    (canonical, duplicate)
+}
+
 async fn preview_pair(ctx: &Ctx, canonical: i32, duplicate: i32) -> (StatusCode, Value) {
     send(
         &ctx.state,
@@ -1048,4 +1120,158 @@ async fn apply_serializes_with_the_shared_queue_lock_before_row_locks() {
         .unwrap()
         .get(0);
     assert_eq!(merged, Some(canonical));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn three_alias_pairs_leave_one_rollable_identity_and_full_history() {
+    let ctx = setup("dupr-three-pairs").await;
+    // Pair 1: genuine provider evidence (rating) on the duplicate plus an
+    // artificial suppression timestamp; the original has later real history.
+    let (c1, d1) = seed_named_pair(
+        &ctx,
+        "777100",
+        "101",
+        "3",
+        "3",
+        "2026-01-01T00:00:00Z",
+        "2026-11-05T05:11:33Z",
+    )
+    .await;
+    // Pairs 2 and 3: artificial read timestamps on the duplicate and later
+    // legitimate reads/ratings on the originals.
+    let (c2, d2) = seed_named_pair(
+        &ctx,
+        "777200",
+        "102",
+        "4",
+        "4",
+        "2026-01-01T00:00:00Z",
+        "2026-11-05T05:11:33Z",
+    )
+    .await;
+    let (c3, d3) = seed_named_pair(
+        &ctx,
+        "777300",
+        "103",
+        "5",
+        "5",
+        "2026-01-01T00:00:00Z",
+        "2026-11-05T05:11:33Z",
+    )
+    .await;
+
+    let conn = ctx.state.pool.get().await.unwrap();
+    for (canonical, duplicate, number) in [(c1, d1, "101"), (c2, d2, "102"), (c3, d3, "103")] {
+        // Artificial suppression timestamp on the alias, before its creation.
+        conn.execute(
+            "INSERT INTO events (type, timestamp, user_id, issue_id, issue_number) \
+             VALUES ('issue_read', '2026-11-05T05:02:02Z', $1, $2, $3)",
+            &[&ctx.user_id, &duplicate, &number],
+        )
+        .await
+        .unwrap();
+        // Later authentic read/rating history on the original.
+        conn.execute(
+            "INSERT INTO events (type, timestamp, user_id, issue_id, issue_number) \
+             VALUES ('issue_read', '2026-11-06T05:02:02Z', $1, $2, $3)",
+            &[&ctx.user_id, &canonical, &number],
+        )
+        .await
+        .unwrap();
+        conn.execute(
+            "INSERT INTO events (type, timestamp, user_id, issue_id, rating) \
+             VALUES ('rate', '2026-11-06T05:02:02Z', $1, $2, 4.5)",
+            &[&ctx.user_id, &canonical],
+        )
+        .await
+        .unwrap();
+    }
+    // Pair 1's duplicate carries genuine rating evidence that must move.
+    let genuine_rating: i32 = conn
+        .query_one(
+            "INSERT INTO events (type, timestamp, user_id, issue_id, rating) \
+             VALUES ('rate', '2026-11-06T06:00:00Z', $1, $2, 4.0) RETURNING id",
+            &[&ctx.user_id, &d1],
+        )
+        .await
+        .unwrap()
+        .get(0);
+
+    let (status, detected) = send(
+        &ctx.state,
+        authed(
+            "GET",
+            "/api/v2/issue-duplicate-reconciliation/detect",
+            &ctx.token,
+            &ctx.csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{detected:?}");
+    assert_eq!(
+        detected["groups"].as_array().unwrap().len(),
+        3,
+        "{detected:?}"
+    );
+
+    for (canonical, duplicate) in [(c1, d1), (c2, d2), (c3, d3)] {
+        let (status, preview) = preview_pair(&ctx, canonical, duplicate).await;
+        assert_eq!(status, StatusCode::OK, "{preview:?}");
+        assert_eq!(preview["can_apply"], true, "{preview:?}");
+        let token = preview["preview_token"].as_str().unwrap().to_owned();
+        let (status, applied) = send(
+            &ctx.state,
+            authed(
+                "POST",
+                "/api/v2/issue-duplicate-reconciliation/apply",
+                &ctx.token,
+                &ctx.csrf,
+                Some(json!({
+                    "canonical_issue_id": canonical,
+                    "duplicate_issue_ids": [duplicate],
+                    "preview_token": token,
+                })),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{applied:?}");
+    }
+
+    let rating_owner: i32 = conn
+        .query_one("SELECT issue_id FROM events WHERE id = $1", &[&genuine_rating])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(rating_owner, c1, "genuine rating moved, never erased");
+
+    let reconciliation_rows: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM issue_duplicate_reconciliations WHERE user_id = $1 AND undone_at IS NULL",
+            &[&ctx.user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(reconciliation_rows, 3, "every alias pair keeps its audit row");
+
+    let (status, eligible) = send(
+        &ctx.state,
+        authed(
+            "GET",
+            "/api/v2/roll/eligible-issue-ids",
+            &ctx.token,
+            &ctx.csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{eligible:?}");
+    let ids = eligible["issue_ids"].as_array().unwrap();
+    for canonical in [c1, c2, c3] {
+        assert!(ids.contains(&json!(canonical)), "{eligible:?}");
+    }
+    for duplicate in [d1, d2, d3] {
+        assert!(!ids.contains(&json!(duplicate)), "{eligible:?}");
+    }
 }
