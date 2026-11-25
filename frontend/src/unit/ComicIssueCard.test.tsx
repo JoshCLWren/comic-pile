@@ -11,7 +11,15 @@ vi.mock('../components/ComicIssueMappingAction', () => ({
     issueId, initialIdentity, fetchEnabled, isOwned, compact, onAddToLibrary, onMapped,
   }: {
     issueId: number | null
-    initialIdentity?: { thread_title: string; has_unresolved: boolean; comicvine_issue_id: string | null }
+    initialIdentity?: {
+      thread_title: string
+      has_unresolved: boolean
+      comicvine_issue_id: string | null
+      overall_issue_number?: string | null
+      provider_issue_number?: string | null
+      identity_version?: number
+      issue_number?: string
+    }
     fetchEnabled: boolean
     isOwned: boolean
     compact: boolean
@@ -25,6 +33,10 @@ vi.mock('../components/ComicIssueMappingAction', () => ({
       data-mapping={initialIdentity?.has_unresolved ? 'review' : initialIdentity ? 'known' : 'missing'}
       data-title={initialIdentity?.thread_title ?? 'missing'}
       data-provider={initialIdentity?.comicvine_issue_id ?? 'none'}
+      data-alias={initialIdentity?.overall_issue_number ?? 'none'}
+      data-volume={initialIdentity?.provider_issue_number ?? 'none'}
+      data-version={initialIdentity?.identity_version ?? 'none'}
+      data-authored={initialIdentity?.issue_number ?? 'none'}
       data-fetch={String(fetchEnabled)}
       data-owned={String(isOwned)}
       data-compact={String(compact)}
@@ -540,5 +552,87 @@ describe('shared comic mapping integration', () => {
     expect(add).toHaveBeenCalledOnce()
     expect(screen.queryByRole('button', { name: 'Read now' })).not.toBeInTheDocument()
     expect(patch).not.toHaveBeenCalled()
+  })
+})
+
+describe('shared numbering labels on every surface (#4652)', () => {
+  it('renders the authored and overall labels on a shared card before any mapping is confirmed', () => {
+    render(
+      <ComicIssueCard
+        issueId={75}
+        card={{
+          ...card,
+          thread_title: 'Return of the Master',
+          issue_number: '4',
+          overall_issue_number: '101',
+          has_confirmed_identity: false,
+          mapping_state: 'unmapped',
+        }}
+        threadTitle="Return of the Master"
+        issueNumber="4"
+        status="unread"
+        showMapping={false}
+      />,
+      { wrapper },
+    )
+    // The authored story-local number remains the canonical title.
+    expect(screen.getByRole('article', { name: 'Issue Return of the Master #4' })).toBeVisible()
+    // The alternate overall label is visible without a confirmed provider mapping.
+    expect(screen.getByTestId('comic-overall-alias').textContent).toBe('OVERALL #101')
+    expect(screen.queryByTestId('comic-provider-issue-number')).toBeNull()
+  })
+
+  it('renders the provider volume number and exact provider id once confirmed', () => {
+    render(
+      <ComicIssueCard
+        issueId={75}
+        card={{
+          ...card,
+          thread_title: 'Return of the Master',
+          issue_number: '4',
+          overall_issue_number: '101',
+          provider_issue_number: '101',
+          comicvine_issue_id: '370314',
+          has_confirmed_identity: true,
+          mapping_state: 'confirmed',
+        }}
+        threadTitle="Return of the Master"
+        issueNumber="4"
+        status="read"
+        showMapping={false}
+      />,
+      { wrapper },
+    )
+    expect(screen.getByTestId('comic-provider-issue-number').textContent).toBe('VOLUME #101')
+    expect(screen.getByTestId('comic-overall-alias').textContent).toBe('OVERALL #101')
+    expect(document.body.textContent).toContain('COMICVINE #370314')
+  })
+
+  it('projects alias, provider number, authored number and version into the shared mapping action', () => {
+    render(
+      <ComicIssueCard
+        issueId={75}
+        card={{
+          ...card,
+          thread_title: 'Return of the Master',
+          issue_number: '4',
+          overall_issue_number: '101',
+          provider_issue_number: '101',
+          identity_version: 7,
+          comicvine_issue_id: '370314',
+          has_confirmed_identity: true,
+          mapping_state: 'confirmed',
+        }}
+        threadTitle="Return of the Master"
+        issueNumber="4"
+        status="read"
+      />,
+      { wrapper },
+    )
+    const mapping = screen.getByTestId('mapping-action')
+    expect(mapping).toHaveAttribute('data-alias', '101')
+    expect(mapping).toHaveAttribute('data-volume', '101')
+    expect(mapping).toHaveAttribute('data-version', '7')
+    expect(mapping).toHaveAttribute('data-authored', '4')
   })
 })
