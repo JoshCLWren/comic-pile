@@ -207,6 +207,11 @@ export function ThreadPool({
                 {resetDicePending ? 'Resetting…' : 'Reset Dice'}
               </button>
             ) : null}
+            {resetDiceError ? (
+              <p className="text-xs font-bold text-[var(--theme-error)]" role="alert">
+                {resetDiceError}
+              </p>
+            ) : null}
             <button
               onClick={() => navigate('/queue')}
               className="w-full h-11 min-h-[44px] bg-transparent hover:bg-white/5 border border-[var(--theme-border)] rounded-xl text-xs font-black uppercase tracking-widest text-stone-300 transition-colors"
