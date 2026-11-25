@@ -427,6 +427,9 @@ export default function ReadingPlanAddMaterial({
                 <span className="font-medium text-[var(--theme-warning)]">Unresolved</span> – needs identity resolution first
               </p>
 
+              <p className="text-xs text-[var(--theme-text-dim)]">
+                Selected issues are added to this Reading Plan without creating or changing crossover event labels or their memberships.
+              </p>
               <button
                 type="button"
                 onClick={commit}

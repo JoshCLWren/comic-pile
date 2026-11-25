@@ -6,12 +6,16 @@
 //! mounted router against the canonical disposable PostgreSQL schema. Requires
 //! `RUST_ROLL_TEST_DATABASE_URL` and hard-fails without it.
 
+mod incident_fixtures;
+use incident_fixtures as fixture;
+
 use axum::{
     body::{to_bytes, Body},
     http::{header, Request, StatusCode},
 };
 use comicpile_roll_service::{config::Config, router, test_support, AppState};
 use serde_json::{json, Value};
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc,
@@ -174,6 +178,14 @@ async fn issue(conn: &Conn, thread_id: i32, number: &str, position: i32, status:
     .await
     .unwrap()
     .get(0)
+}
+
+async fn issue_run(conn: &Conn, thread_id: i32, numbers: &[&str], status: &str) -> Vec<i32> {
+    let mut ids = Vec::with_capacity(numbers.len());
+    for (index, number) in numbers.iter().enumerate() {
+        ids.push(issue(conn, thread_id, number, index as i32 + 1, status).await);
+    }
+    ids
 }
 
 async fn frontier(conn: &Conn, thread_id: i32, issue_id: i32) {
@@ -345,6 +357,62 @@ async fn blocking_info_reports_canonical_unread_blockers_with_isolation() {
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body:?}");
+}
+
+#[tokio::test]
+async fn blocking_info_contains_option_e_cycles_and_preserves_healthy_threads() {
+    let (state, token, csrf, user_id, _guard) = setup_user_with("tord-cycle", true).await;
+    let conn = state.pool.get().await.unwrap();
+    let a = thread(&conn, user_id, "Series A").await;
+    let b = thread(&conn, user_id, "Series B").await;
+    let healthy = thread(&conn, user_id, "Healthy Series").await;
+    let a1 = issue(&conn, a, "1", 1, "unread").await;
+    let a2 = issue(&conn, a, "2", 2, "unread").await;
+    let b1 = issue(&conn, b, "1", 1, "unread").await;
+    let healthy1 = issue(&conn, healthy, "1", 1, "unread").await;
+    frontier(&conn, a, a1).await;
+    frontier(&conn, b, b1).await;
+    frontier(&conn, healthy, healthy1).await;
+    // A#2 -> B#1 -> A#1 closes a loop with the required A#1 -> A#2 order.
+    dependency(&conn, a2, b1, None).await;
+    dependency(&conn, b1, a1, None).await;
+
+    let (status, body) = send(
+        &state,
+        post(
+            &format!("/api/v1/threads/{a}:getBlockingInfo"),
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["is_blocked"], true, "{body:?}");
+    assert_eq!(
+        body["blocking_reasons"],
+        json!([
+            "Reading constraint cycle: waiting on Series A #1",
+            "Reading constraint cycle: waiting on Series A #2"
+        ]),
+        "{body:?}"
+    );
+
+    let (status, body) = send(
+        &state,
+        post(
+            &format!("/api/v1/threads/{healthy}:getBlockingInfo"),
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        body,
+        json!({"is_blocked": false, "blocking_reasons": [], "blocking_dependencies": []})
+    );
 }
 
 #[tokio::test]
@@ -858,16 +926,405 @@ async fn thread_detail_blocked_order_matches_queue_list_under_option_e() {
     assert_eq!(list_position(eligible_high), 2, "{list_body:?}");
     assert_eq!(list_position(no_unread), 3, "{list_body:?}");
 
-    for (id, expected) in [(eligible_low, 1i64), (eligible_high, 2), (no_unread, 3)] {
+    for (id, expected_position, expected_blocked) in [
+        (eligible_low, 1i64, false),
+        (eligible_high, 2, false),
+        (no_unread, 3, true),
+    ] {
         let (status, body) =
             send(&state, get(&format!("/api/v1/threads/{id}"), &token, &csrf)).await;
         assert_eq!(status, StatusCode::OK, "{body:?}");
         assert_eq!(
             body["queue_position"].as_i64().unwrap(),
-            expected,
+            expected_position,
             "{body:?}"
         );
+        assert_eq!(body["is_blocked"], json!(expected_blocked), "{body:?}");
     }
+}
+
+#[tokio::test]
+async fn julix_strict_order_is_shared_by_roll_queue_reader_and_explanations() {
+    // Production regression #3735. Allocate fresh primary keys while retaining
+    // the source identities and exact Julix positions 22..=54. In particular,
+    // Wild Hunt #1-8 are already read and King of Fear has only that satisfied
+    // explicit prerequisite; the temporary Black Goddess -> King production
+    // mitigation is deliberately NOT reproduced here.
+    let (state, token, csrf, user_id, _guard) = setup_user_with("tord-julix", true).await;
+    let conn = state.pool.get().await.unwrap();
+    conn.execute(
+        "INSERT INTO sessions (user_id, started_at, start_die) VALUES ($1, NOW(), 6)",
+        &[&user_id],
+    )
+    .await
+    .unwrap();
+
+    let dead_thread = thread(&conn, user_id, "B.P.R.D.: The Dead Remembered").await;
+    let killing_thread = thread(&conn, user_id, "B.P.R.D.: Killing Ground").await;
+    let dark_horse_thread = thread(&conn, user_id, "MySpace Dark Horse Presents").await;
+    let witchfinder_thread = thread(&conn, user_id, "Witchfinder: In the Service of Angels").await;
+    let warning_thread = thread(&conn, user_id, "B.P.R.D.: The Warning").await;
+    let goddess_thread = thread(&conn, user_id, "B.P.R.D.: The Black Goddess").await;
+    let wild_hunt_thread = thread(&conn, user_id, "Hellboy: The Wild Hunt").await;
+    let king_thread = thread(&conn, user_id, "B.P.R.D.: King of Fear").await;
+
+    let dead_1 = issue(&conn, dead_thread, "1", 1, "read").await;
+    let dead_2 = issue(&conn, dead_thread, "2", 2, "unread").await;
+    let dead_3 = issue(&conn, dead_thread, "3", 3, "unread").await;
+    let killing = issue_run(&conn, killing_thread, &["1", "2", "3", "4", "5"], "unread").await;
+    let dark_horse = issue(&conn, dark_horse_thread, "16", 1, "unread").await;
+    let witchfinder = issue_run(
+        &conn,
+        witchfinder_thread,
+        &["1", "2", "3", "4", "5"],
+        "unread",
+    )
+    .await;
+    let warning = issue_run(&conn, warning_thread, &["1", "2", "3", "4", "5"], "unread").await;
+    let goddess = issue_run(&conn, goddess_thread, &["1", "2", "3", "4", "5"], "unread").await;
+    let wild_hunt = issue_run(
+        &conn,
+        wild_hunt_thread,
+        &["1", "2", "3", "4", "5", "6", "7", "8"],
+        "read",
+    )
+    .await;
+    let king = issue_run(&conn, king_thread, &["1", "2", "3", "4", "5"], "unread").await;
+
+    let generated_by_source = BTreeMap::from([
+        (fixture::JULIX_DEAD_REMEMBERED_2_SOURCE_ID, dead_2),
+        (fixture::JULIX_BLACK_GODDESS_5_SOURCE_ID, goddess[4]),
+        (fixture::JULIX_WILD_HUNT_8_SOURCE_ID, wild_hunt[7]),
+        (fixture::JULIX_KING_OF_FEAR_1_SOURCE_ID, king[0]),
+    ]);
+    let source_threads = BTreeMap::from([
+        (fixture::JULIX_DEAD_REMEMBERED_THREAD_SOURCE_ID, dead_thread),
+        (fixture::JULIX_KING_OF_FEAR_THREAD_SOURCE_ID, king_thread),
+    ]);
+
+    for (thread_id, stored_position, remaining, next_issue, status) in [
+        (dead_thread, 1, 2, Some(dead_2), "active"),
+        (killing_thread, 25, 5, Some(killing[0]), "active"),
+        (dark_horse_thread, 30, 1, Some(dark_horse), "active"),
+        (witchfinder_thread, 31, 5, Some(witchfinder[0]), "active"),
+        (warning_thread, 36, 5, Some(warning[0]), "active"),
+        (goddess_thread, 41, 5, Some(goddess[0]), "active"),
+        (wild_hunt_thread, 0, 0, None, "completed"),
+        (king_thread, 320, 5, Some(king[0]), "active"),
+    ] {
+        // Every stored flag starts unblocked, including the stale later
+        // frontiers, so these requests cannot pass by trusting Thread.is_blocked.
+        conn.execute(
+            "UPDATE threads SET queue_position=$2, issues_remaining=$3, \
+             next_unread_issue_id=$4, status=$5, is_blocked=false WHERE id=$1",
+            &[
+                &thread_id,
+                &stored_position,
+                &remaining,
+                &next_issue,
+                &status,
+            ],
+        )
+        .await
+        .unwrap();
+    }
+
+    // The read Wild Hunt #8 prerequisite was the false eligibility signal in
+    // production. It remains satisfied and must not suppress strict-list gates.
+    dependency(
+        &conn,
+        wild_hunt[7],
+        king[0],
+        Some("continuity-rule:1715697"),
+    )
+    .await;
+
+    let list_id: i32 = conn
+        .query_one(
+            "INSERT INTO custom_cbl_lists (user_id, name, mode, created_at, updated_at) \
+             VALUES ($1, 'Mignolaverse — Julix Comics (Unread)', 'strict', NOW(), NOW()) \
+             RETURNING id",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let mut list_entries = vec![
+        (dead_1, 22),
+        (dead_2, fixture::JULIX_FIRST_UNREAD_POSITION),
+        (dead_3, 24),
+    ];
+    list_entries.extend(killing.iter().copied().zip(25..30));
+    list_entries.push((dark_horse, 30));
+    list_entries.extend(witchfinder.iter().copied().zip(31..36));
+    list_entries.extend(warning.iter().copied().zip(36..41));
+    list_entries.extend(goddess.iter().copied().zip(41..46));
+    list_entries.extend(wild_hunt.iter().copied().zip(46..54));
+    list_entries.push((king[0], fixture::JULIX_KING_OF_FEAR_POSITION));
+    assert_eq!(list_entries.len(), 33);
+    for (offset, (issue_id, position)) in list_entries.iter().enumerate() {
+        assert_eq!(*position, offset as i32 + 22);
+        conn.execute(
+            "INSERT INTO custom_cbl_entries (list_id, issue_id, position, created_at) \
+             VALUES ($1, $2, $3, NOW())",
+            &[&list_id, issue_id, position],
+        )
+        .await
+        .unwrap();
+    }
+
+    let thread_ids = vec![
+        dead_thread,
+        killing_thread,
+        dark_horse_thread,
+        witchfinder_thread,
+        warning_thread,
+        goddess_thread,
+        wild_hunt_thread,
+        king_thread,
+    ];
+    let issue_states_before: Vec<(i32, String)> = conn
+        .query(
+            "SELECT id, status FROM issues WHERE thread_id=ANY($1::int[]) ORDER BY id",
+            &[&thread_ids],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| (row.get(0), row.get(1)))
+        .collect();
+    let list_positions_before: Vec<(i32, i32)> = conn
+        .query(
+            "SELECT issue_id, position FROM custom_cbl_entries \
+             WHERE list_id=$1 ORDER BY position, id",
+            &[&list_id],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| (row.get(0), row.get(1)))
+        .collect();
+
+    // Both native Roll reads expose only The Dead Remembered #2. A top-die
+    // bound, stored queue position, or cached blocked flag cannot resurrect King.
+    let (status, eligible) = send(
+        &state,
+        get("/api/v2/roll/eligible-issue-ids", &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{eligible:?}");
+    assert_eq!(eligible["issue_ids"], json!([dead_2]));
+    assert_eq!(eligible["thread_ids"], json!([dead_thread]));
+    assert_eq!(eligible["pool_reason"], "ready");
+
+    let (status, bootstrap) = send(&state, get("/api/v2/roll/bootstrap", &token, &csrf)).await;
+    assert_eq!(status, StatusCode::OK, "{bootstrap:?}");
+    assert_eq!(bootstrap["rollable"].as_array().unwrap().len(), 1);
+    assert_eq!(bootstrap["rollable"][0]["thread"]["id"], json!(dead_thread));
+    assert_eq!(bootstrap["rollable"][0]["issue"]["id"], json!(dead_2));
+    assert_eq!(
+        bootstrap["rollable"][0]["issue"]["id"].as_i64(),
+        generated_by_source
+            .get(&fixture::JULIX_DEAD_REMEMBERED_2_SOURCE_ID)
+            .map(|id| i64::from(*id))
+    );
+
+    // Queue and Thread Detail derive the same blocked state despite every
+    // stored flag being false. The correct frontier is the only readable row.
+    let (status, queue) = send(&state, get("/api/v2/threads?page_size=100", &token, &csrf)).await;
+    assert_eq!(status, StatusCode::OK, "{queue:?}");
+    let queue_rows = queue["threads"].as_array().unwrap();
+    assert_eq!(queue_rows.len(), 7, "{queue:?}");
+    let readable: Vec<_> = queue_rows
+        .iter()
+        .filter(|row| row["is_blocked"] == json!(false))
+        .collect();
+    assert_eq!(readable.len(), 1, "{queue:?}");
+    assert_eq!(readable[0]["id"], json!(dead_thread));
+    assert_eq!(readable[0]["queue_position"], 1);
+    assert_eq!(readable[0]["next_unread_issue_number"], "2");
+    for blocked_thread in [
+        killing_thread,
+        dark_horse_thread,
+        witchfinder_thread,
+        warning_thread,
+        goddess_thread,
+        king_thread,
+    ] {
+        let row = queue_rows
+            .iter()
+            .find(|row| row["id"] == json!(blocked_thread))
+            .unwrap();
+        assert_eq!(row["is_blocked"], true, "{row:?}");
+    }
+
+    let (status, king_detail) = send(
+        &state,
+        get(&format!("/api/v1/threads/{king_thread}"), &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{king_detail:?}");
+    assert_eq!(king_detail["is_blocked"], true);
+    assert_eq!(king_detail["next_unread_issue_id"], json!(king[0]));
+    assert_eq!(king_detail["next_unread_issue_number"], "1");
+
+    // Explanations name every earlier unread list entry, not just the adjacent
+    // read Wild Hunt node. The read prerequisite emits no blocker at all.
+    let (status, king_info) = send(
+        &state,
+        post(
+            &format!("/api/v1/threads/{king_thread}:getBlockingInfo"),
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{king_info:?}");
+    assert_eq!(king_info["is_blocked"], true);
+    let mut read_issues = BTreeSet::from([dead_1]);
+    read_issues.extend(wild_hunt.iter().copied());
+    let expected_king_blockers: BTreeSet<i32> = list_entries
+        .iter()
+        .filter(|(issue_id, position)| {
+            *position >= fixture::JULIX_FIRST_UNREAD_POSITION
+                && *position < fixture::JULIX_KING_OF_FEAR_POSITION
+                && !read_issues.contains(issue_id)
+        })
+        .map(|(issue_id, _)| *issue_id)
+        .collect();
+    let explained_king_blockers: BTreeSet<i32> = king_info["blocking_dependencies"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|dependency| dependency["issue_id"].as_i64().unwrap() as i32)
+        .collect();
+    assert_eq!(explained_king_blockers, expected_king_blockers);
+    assert!(explained_king_blockers.contains(&dead_2));
+    assert!(!explained_king_blockers.contains(&wild_hunt[7]));
+    let king_reasons = king_info["blocking_reasons"].as_array().unwrap();
+    assert!(!king_reasons.is_empty());
+    assert!(king_reasons.iter().all(|reason| {
+        reason
+            .as_str()
+            .unwrap()
+            .starts_with("Strict order in Mignolaverse — Julix Comics (Unread)")
+    }));
+    assert!(king_reasons.iter().any(|reason| {
+        reason
+            .as_str()
+            .unwrap()
+            .contains("B.P.R.D.: The Dead Remembered #2")
+    }));
+
+    let (status, dead_info) = send(
+        &state,
+        post(
+            &format!("/api/v1/threads/{dead_thread}:getBlockingInfo"),
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{dead_info:?}");
+    assert_eq!(dead_info["is_blocked"], false);
+    assert_eq!(dead_info["blocking_dependencies"], json!([]));
+
+    // The Reading List reader shares both availability and the exact blocker
+    // projection. Killing Ground and Black Goddess stay blocked; Wild Hunt
+    // remains read and later issues in an already represented Thread stay later.
+    let (status, reader) = send(
+        &state,
+        get(
+            &format!("/api/v2/reading-lists/{list_id}/reader"),
+            &token,
+            &csrf,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{reader:?}");
+    assert_eq!(reader["execution_mode"], "option_e");
+    let reader_entries = reader["entries"].as_array().unwrap();
+    assert_eq!(reader_entries.len(), 33);
+    let reader_entry = |issue_id: i32| {
+        reader_entries
+            .iter()
+            .find(|entry| entry["issue_id"] == json!(issue_id))
+            .unwrap()
+    };
+    assert_eq!(reader_entry(dead_1)["availability"], "read");
+    assert_eq!(reader_entry(dead_2)["availability"], "available");
+    assert_eq!(reader_entry(dead_3)["availability"], "later");
+    assert_eq!(reader_entry(killing[0])["availability"], "blocked");
+    assert_eq!(reader_entry(goddess[0])["availability"], "blocked");
+    assert_eq!(reader_entry(goddess[4])["availability"], "later");
+    assert_eq!(reader_entry(wild_hunt[7])["availability"], "read");
+    let king_reader = reader_entry(king[0]);
+    assert_eq!(king_reader["availability"], "blocked");
+    assert_eq!(king_reader["explanation"]["is_blocked"], true);
+    assert_eq!(
+        king_reader["explanation"]["blocking_reasons"],
+        king_info["blocking_reasons"]
+    );
+    assert_eq!(
+        king_reader["explanation"]["blocking_dependencies"],
+        king_info["blocking_dependencies"]
+    );
+    let available: Vec<i64> = reader_entries
+        .iter()
+        .filter(|entry| entry["availability"] == "available")
+        .map(|entry| entry["issue_id"].as_i64().unwrap())
+        .collect();
+    assert_eq!(available, vec![i64::from(dead_2)]);
+
+    // With one eligible face the actual write path must select that face. It
+    // cannot select King of Fear, and Roll must not mutate reading/list state.
+    let (status, offer) = send(
+        &state,
+        post(
+            "/api/v2/roll/offer",
+            &token,
+            &csrf,
+            Some(json!({
+                "idempotency_key": "julix-3735-offer-001",
+                "snoozed_thread_ids": []
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{offer:?}");
+    assert_eq!(offer["thread_id"], json!(dead_thread));
+    assert_eq!(offer["issue_id"], json!(dead_2));
+    assert_ne!(offer["thread_id"], json!(king_thread));
+    assert_eq!(
+        source_threads[&fixture::JULIX_DEAD_REMEMBERED_THREAD_SOURCE_ID],
+        offer["thread_id"].as_i64().unwrap() as i32
+    );
+
+    let issue_states_after: Vec<(i32, String)> = conn
+        .query(
+            "SELECT id, status FROM issues WHERE thread_id=ANY($1::int[]) ORDER BY id",
+            &[&thread_ids],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| (row.get(0), row.get(1)))
+        .collect();
+    let list_positions_after: Vec<(i32, i32)> = conn
+        .query(
+            "SELECT issue_id, position FROM custom_cbl_entries \
+             WHERE list_id=$1 ORDER BY position, id",
+            &[&list_id],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| (row.get(0), row.get(1)))
+        .collect();
+    assert_eq!(issue_states_after, issue_states_before);
+    assert_eq!(list_positions_after, list_positions_before);
 }
 
 #[tokio::test]
@@ -1215,6 +1672,137 @@ async fn rollable_threads(conn: &Conn, user_id: i32, count: usize) -> Vec<i32> {
     let mut ordered = ids;
     ordered.sort_unstable();
     ordered
+}
+
+#[tokio::test]
+async fn bootstrap_displays_browser_snoozes_and_matches_the_scoped_pool() {
+    let (state, token, csrf, user_id, _guard) = setup_user_with("roll-cookie", true).await;
+    let (_, _, other_user) = register_extra_user(&state, "roll-cookie-other").await;
+    let (ids, foreign) = {
+        let conn = state.pool.get().await.unwrap();
+        let ids = rollable_threads(&conn, user_id, 22).await;
+        let foreign = thread(&conn, other_user, "Other reader's series").await;
+        conn.execute(
+            "INSERT INTO sessions (user_id, started_at, start_die, snoozed_thread_ids)
+             VALUES ($1, NOW(), 6, $2::text::json)",
+            &[&user_id, &json!([ids[0]]).to_string()],
+        )
+        .await
+        .unwrap();
+        (ids, foreign)
+    };
+    let snoozed = vec![ids[1], ids[3], ids[7], ids[14]];
+    let mut cookie_ids = snoozed.clone();
+    cookie_ids.push(foreign);
+    let query_ids = cookie_ids
+        .iter()
+        .map(i32::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
+    let cookie = format!(
+        "csrf_token={csrf}; comicpile_roll_snoozes={}",
+        json!(cookie_ids)
+    );
+
+    for (die, count) in [(6, 4), (8, 5), (20, 16)] {
+        let (status, body) = send(
+            &state,
+            post(
+                "/api/v2/roll/dice-command",
+                &token,
+                &csrf,
+                Some(json!({
+                    "kind": "manual_select",
+                    "die": die,
+                    "idempotency_key": format!("roll-cookie-die-{die}")
+                })),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body:?}");
+
+        let mut request = get("/api/v2/roll/bootstrap", &token, &csrf);
+        request
+            .headers_mut()
+            .insert(header::COOKIE, cookie.parse().unwrap());
+        let (status, bootstrap) = send(&state, request).await;
+        assert_eq!(status, StatusCode::OK, "{bootstrap:?}");
+        assert_eq!(bootstrap["snoozed_count"], json!(4));
+        assert_eq!(bootstrap["snoozed_thread_ids"], json!(snoozed));
+        let displayed_snoozes: Vec<_> = bootstrap["snoozed_threads"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| row["id"].as_i64().unwrap() as i32)
+            .collect();
+        assert_eq!(displayed_snoozes, snoozed);
+
+        let visible: Vec<_> = bootstrap["rollable"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| row["thread"]["id"].as_i64().unwrap() as i32)
+            .collect();
+        let expected: Vec<_> = ids
+            .iter()
+            .take(die as usize)
+            .filter(|id| !snoozed.contains(id))
+            .copied()
+            .collect();
+        assert_eq!(visible.len(), count);
+        assert_eq!(visible, expected);
+        assert!(visible.contains(&ids[0]), "legacy session snooze leaked");
+
+        let (status, scoped) = send(
+            &state,
+            get(
+                &format!("/api/v2/roll/eligible-issue-ids?snoozed={query_ids}"),
+                &token,
+                &csrf,
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{scoped:?}");
+        assert_eq!(scoped["thread_ids"], json!(visible));
+    }
+
+    let (status, offer) = send(
+        &state,
+        post(
+            "/api/v2/roll/offer",
+            &token,
+            &csrf,
+            Some(json!({
+                "idempotency_key": "roll-cookie-offer-001",
+                "snoozed_thread_ids": snoozed
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{offer:?}");
+    let selected = offer["thread_id"].as_i64().unwrap() as i32;
+    assert!(ids[..20].contains(&selected));
+    assert!(!snoozed.contains(&selected));
+
+    let (status, reset) = send(
+        &state,
+        post(
+            "/api/v2/roll/reset",
+            &token,
+            &csrf,
+            Some(json!({"idempotency_key": "roll-cookie-reset-001"})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{reset:?}");
+    assert_eq!(reset["die"], json!(6));
+    // The browser clears its cookie after the successful reset response.
+    let (status, cleared) = send(&state, get("/api/v2/roll/bootstrap", &token, &csrf)).await;
+    assert_eq!(status, StatusCode::OK, "{cleared:?}");
+    assert_eq!(cleared["snoozed_count"], json!(0));
+    assert_eq!(cleared["snoozed_thread_ids"], json!([]));
+    assert_eq!(cleared["rollable"].as_array().unwrap().len(), 6);
+    assert!(cleared["pending_thread_id"].is_null());
 }
 
 async fn offer_value(

@@ -86,6 +86,9 @@ vi.mock('../components/Modal', () => ({
   default: ({ isOpen, title, children, onClose }: { isOpen: boolean; title: string; children: React.ReactNode; onClose: () => void }) =>
     isOpen ? <section><h2>{title}</h2><button type="button" onClick={onClose}>close modal</button>{children}</section> : null,
 }))
+vi.mock('../components/DirectReadIssuePanel', () => ({
+  DirectReadIssuePanel: ({ threadTitle }: { threadTitle: string }) => <div>Direct issue card for {threadTitle}</div>,
+}))
 vi.mock('../components/MigrationDialog', () => ({ default: () => null }))
 vi.mock('../components/SimpleMigrationDialog', () => ({ default: () => null }))
 vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: () => <div>pool</div> }))
@@ -133,12 +136,13 @@ describe('RollPage bootstrap modal coverage', () => {
     expect(screen.getByRole('option', { name: /Watchmen \(Comic\)/ })).toBeInTheDocument()
 
     await user.click(screen.getByRole('option', { name: 'Saga (Comic)' }))
-    await user.click(screen.getByRole('button', { name: 'Pick this series' }))
-    await waitFor(() => expect(spies.override).toHaveBeenCalledWith({ thread_id: 1 }))
+    await user.click(screen.getByRole('button', { name: 'Open issue card' }))
+    expect(spies.override).not.toHaveBeenCalled()
+    expect(screen.getByText('Direct issue card for Saga')).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Pick manually' })).not.toBeInTheDocument())
   })
 
-  it('renders pending override and manual-die states and closes the die modal after a successful choice', async () => {
+  it('opens the manual picker without a pending-offer mutation and retains die selection', async () => {
     state.overridePending = true
     state.manualDie = 6
     const user = userEvent.setup()
@@ -149,7 +153,7 @@ describe('RollPage bootstrap modal coverage', () => {
     )
 
     await user.click(screen.getByRole('button', { name: 'Pick manually' }))
-    expect(screen.getByRole('button', { name: 'Selecting...' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Open issue card' })).toBeDisabled()
     await user.click(screen.getByRole('button', { name: 'close modal' }))
     expect(screen.queryByRole('heading', { name: 'Pick manually' })).not.toBeInTheDocument()
 

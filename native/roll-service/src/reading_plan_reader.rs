@@ -145,6 +145,66 @@ fn parse_meta(raw: &str) -> Value {
     serde_json::from_str(raw).unwrap_or(Value::Null)
 }
 
+/// Normalize an issue number for display when CBL source data stored a raw label
+/// (e.g. "Alpha flight annual 1") instead of a parsed issue number. Strips an
+/// embedded series title prefix and normalizes annual/special tokens so the
+/// reader shows "Annual 1" rather than echoing the raw label.
+pub(crate) fn normalize_issue_number_display(raw: &str, series_title: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return trimmed.to_string();
+    }
+
+    let raw_tokens: Vec<&str> = trimmed.split_whitespace().collect();
+    let series_tokens: Vec<&str> = series_title.split_whitespace().collect();
+    let mut candidate = trimmed.to_string();
+    if !series_tokens.is_empty() && raw_tokens.len() >= series_tokens.len() {
+        let prefix_matches = raw_tokens[..series_tokens.len()]
+            .iter()
+            .zip(series_tokens.iter())
+            .all(|(raw_token, series_token)| {
+                raw_token.to_lowercase() == series_token.to_lowercase()
+            });
+        if prefix_matches {
+            candidate = raw_tokens[series_tokens.len()..].join(" ");
+        }
+    }
+
+    if candidate.trim().is_empty() {
+        return trimmed.to_string();
+    }
+
+    // Normalize "annual 1", "annual #1", "special 1" etc. to title case.
+    let collapsed = candidate.split_whitespace().collect::<Vec<_>>().join(" ");
+    let lower = collapsed.to_lowercase();
+    for prefix in ["annual", "special", "one-shot", "one shot"] {
+        if lower == prefix {
+            return capitalize_first(&collapsed);
+        }
+        let rest = lower.strip_prefix(prefix).unwrap_or("");
+        if !rest.is_empty() {
+            let rest_trimmed = rest.trim_start_matches([' ', '#', '-', ':']).trim();
+            if !rest_trimmed.is_empty()
+                && rest_trimmed
+                    .chars()
+                    .all(|c| c.is_ascii_digit() || c == '.' || c.is_ascii_alphabetic())
+            {
+                return format!("{} {}", capitalize_first(prefix), rest_trimmed);
+            }
+        }
+    }
+
+    collapsed
+}
+
+fn capitalize_first(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
+    }
+}
+
 /// GET /api/v2/continuity-plans/{plan_id}/reader
 pub async fn read(
     State(state): State<Arc<AppState>>,
@@ -260,14 +320,16 @@ pub async fn read(
             .map(|row| {
                 let occurrence: String = row.get(0);
                 let status: String = row.get(6);
+                let thread_title: String = row.get(8);
+                let raw_issue_number: String = row.get(5);
                 PlanReaderIssue {
                     occurrence_id: occurrence.clone(),
                     issue_id: row.get(1),
                     lane_id: row.get(2),
                     display_position: row.get(3),
-                    issue_number: row.get(5),
+                    issue_number: normalize_issue_number_display(&raw_issue_number, &thread_title),
                     thread_id: row.get(7),
-                    thread_title: row.get(8),
+                    thread_title,
                     status: status.clone(),
                     is_checkpoint: row.get(4),
                     availability: if status == "read" { "read" } else { "later" }.to_string(),
@@ -365,7 +427,10 @@ pub async fn read(
                             issue_id,
                             thread_id: dep.thread_id,
                             thread_title: dep.thread_title.clone(),
-                            issue_number: dep.issue_number.clone(),
+                            issue_number: normalize_issue_number_display(
+                                &dep.issue_number,
+                                &dep.thread_title,
+                            ),
                             explanation: dep.label.clone(),
                         })
                     })
@@ -376,7 +441,7 @@ pub async fn read(
             issue_id: entry.issue_id,
             lane_id: "reading-list".to_string(),
             display_position: entry.position,
-            issue_number: entry.issue_number,
+            issue_number: normalize_issue_number_display(&entry.issue_number, &entry.series_name),
             thread_id: entry.thread_id,
             thread_title: entry.series_name,
             status: entry.status,
@@ -544,3 +609,33 @@ pub async fn read(
 )]
 #[allow(dead_code)]
 pub fn read_documentation() {}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_issue_number_display;
+
+    #[test]
+    fn normalizes_raw_cbl_annual_label_embedded_as_issue_number() {
+        assert_eq!(
+            normalize_issue_number_display("Alpha flight annual 1", "Alpha Flight"),
+            "Annual 1"
+        );
+    }
+
+    #[test]
+    fn preserves_ordinary_issue_numbers() {
+        assert_eq!(normalize_issue_number_display("1", "Alpha Flight"), "1");
+        assert_eq!(
+            normalize_issue_number_display("Annual 2", "Alpha Flight Annual"),
+            "Annual 2"
+        );
+    }
+
+    #[test]
+    fn strips_series_prefix_from_embedded_label() {
+        assert_eq!(
+            normalize_issue_number_display("Alpha Flight Annual 1", "Alpha Flight Annual"),
+            "1"
+        );
+    }
+}
