@@ -89,7 +89,8 @@ export function buildWritePayload(
     checkpoint_issue_ids: checkpointIds,
   }
   if (confirmed) payload.confirmed_predecessor_changes = confirmed
-  if (checkpointTargets) payload.checkpoint_targets = checkpointTargets
+  const targets = checkpointTargets ?? checkpointTargetsFor(entries)
+  if (targets) payload.checkpoint_targets = targets
   if (expectedUpdatedAt) payload.expected_updated_at = expectedUpdatedAt
   return payload
 }

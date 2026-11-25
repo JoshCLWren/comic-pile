@@ -1690,7 +1690,7 @@ describe('CustomCBLBuilder', () => {
     await openReplacementReview()
     fireEvent.click(screen.getByTestId('confirm-replace'))
     expect(await screen.findByRole('alert')).toHaveTextContent('Replacement unavailable')
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    fireEvent.click(screen.getByTestId('cancel-replace'))
     expect(screen.queryByTestId('cbl-replace-review')).not.toBeInTheDocument()
     expect(mocks.update).toHaveBeenCalledTimes(1)
   })

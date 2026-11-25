@@ -338,9 +338,9 @@ export default function CustomCBLBuilder({
       confirmed: ReadingListPredecessorChange[] | null
     }) => {
       if (!selectedId) throw new Error('Choose a custom CBL first.')
-      if (undoBaseline !== null) {
-        const current = await customCBLApi.get(selectedId)
-        if (current.updated_at !== undoBaseline) throw new StaleReadingListUndoError()
+      const current = await customCBLApi.get(selectedId)
+      if (undoBaseline !== null && current.updated_at !== undoBaseline) {
+        throw new StaleReadingListUndoError()
       }
       // Restoring a snapshot can re-change stored waits (for example, undoing a
       // confirmed strict reorder), so the same confirmation contract applies.
