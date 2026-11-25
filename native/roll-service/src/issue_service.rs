@@ -48,9 +48,7 @@ pub(crate) fn display_issue_number(authored: &str, alias: Option<&str>) -> Strin
     }
 }
 
-fn deserialize_optional_alias<'de, D>(
-    deserializer: D,
-) -> Result<Option<Option<String>>, D::Error>
+fn deserialize_optional_alias<'de, D>(deserializer: D) -> Result<Option<Option<String>>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -200,7 +198,8 @@ pub(crate) fn validate(request: &IssueReadRateRequest) -> Result<(), ApiError> {
             return Err(invalid("Issue number alias must be 50 characters or fewer"));
         }
     }
-    if request.status.is_none() && request.rating.is_none() && request.issue_number_alias.is_none() {
+    if request.status.is_none() && request.rating.is_none() && request.issue_number_alias.is_none()
+    {
         return Err(invalid("Provide status, rating, or issue_number_alias"));
     }
     Ok(())

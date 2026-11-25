@@ -142,7 +142,10 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
     let db = Scratch::create().await;
     let mut client = db.client().await;
     let report = run(&mut client).await.unwrap();
-    assert_eq!((report.applied, report.adopted), (vec![1, 2, 3, 4, 5], vec![]));
+    assert_eq!(
+        (report.applied, report.adopted),
+        (vec![1, 2, 3, 4, 5], vec![])
+    );
 
     let stamp: String = client
         .query_one("SELECT version_num FROM public.alembic_version", &[])
@@ -217,7 +220,10 @@ async fn alembic_database_at_head_is_adopted_without_rerunning() {
         .unwrap();
 
     let report = run(&mut client).await.unwrap();
-    assert_eq!((report.applied, report.adopted), (vec![3, 4, 5], vec![1, 2]));
+    assert_eq!(
+        (report.applied, report.adopted),
+        (vec![3, 4, 5], vec![1, 2])
+    );
 
     let recorded: bool = client
         .query_one(
@@ -288,7 +294,10 @@ async fn release_list_backfill_preserves_subscriptions_and_requires_unambiguous_
         .unwrap();
 
     let report = run(&mut client).await.unwrap();
-    assert_eq!((report.applied, report.adopted), (vec![3, 4, 5], vec![1, 2]));
+    assert_eq!(
+        (report.applied, report.adopted),
+        (vec![3, 4, 5], vec![1, 2])
+    );
 
     let rows = client
         .query(
@@ -325,7 +334,10 @@ async fn alembic_database_at_baseline_head_adopts_baseline_and_runs_pending() {
     alembic_managed_at_baseline(&client).await;
 
     let report = run(&mut client).await.unwrap();
-    assert_eq!((report.applied, report.adopted), (vec![2, 3, 4, 5], vec![1]));
+    assert_eq!(
+        (report.applied, report.adopted),
+        (vec![2, 3, 4, 5], vec![1])
+    );
 
     let queue_groups: bool = client
         .query_one(
@@ -482,7 +494,10 @@ async fn alembic_baseline_with_stale_deferred_checks_is_repaired_before_stamp() 
         .unwrap();
 
     let report = run(&mut client).await.unwrap();
-    assert_eq!((report.applied, report.adopted), (vec![2, 3, 4, 5], vec![1]));
+    assert_eq!(
+        (report.applied, report.adopted),
+        (vec![2, 3, 4, 5], vec![1])
+    );
 
     let stamp: String = client
         .query_one("SELECT version_num FROM public.alembic_version", &[])
