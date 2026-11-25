@@ -6,6 +6,7 @@ import { issuesApi } from '../services/api-issues'
 import type { IssueListParams, IssueReadOperationResponse, IssueReadOperationUndoResponse } from '../services/api-issues'
 import { issueCardsApi } from '../services/issueCardsApi'
 import { issueDependenciesApi } from '../services/api-dependencies'
+import { getApiErrorStatus } from '../utils/apiError'
 import {
   clearBulkReadReceipt,
   findBulkReadReceipt,
@@ -227,9 +228,13 @@ export default function IssueCorrectionDialog({
         try {
           const op = await getOperation(receipt.operationId)
           if (!op.undone_at) setLastOperation(op)
-          else window.localStorage.removeItem(receipt.key)
-        } catch {
-          window.localStorage.removeItem(receipt.key)
+          else clearBulkReadReceipt(threadId, receipt.operationId)
+        } catch (error: unknown) {
+          // A failed read does not prove the operation is unavailable to its owner.
+          // Keep the receipt for recovery from Queue/History after reconnecting.
+          if (getApiErrorStatus(error) !== 404) {
+            setError('Could not load the previous bulk read. Its Undo receipt was kept for retry.')
+          }
         }
       }
       void discover()
