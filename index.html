@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
+<!-- legacy shell reload target: </head> -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#131a23">
@@ -120,14 +121,14 @@
    <div class="panel-body"><div class="page-controls"><input id="pr-number" type="number" min="1" step="1" placeholder="PR number" aria-label="Pull request number"><button class="button small" data-pr-inspect="checks">Checks</button><button class="button small" id="main-checks">Checks on main</button><button class="button small" data-pr-inspect="review">Review gate</button><button class="button small" data-pr-inspect="conflicts">Conflicts</button><button class="button small" id="pr-select">Select for launch</button><button class="button small danger" id="pr-sync">Sync with main</button><button class="button small danger" id="pr-close">Close PR</button><button class="button small danger" id="pr-allow-self-review">Allow self-review</button></div><div id="pr-inspector" class="hint">Choose a PR and an inspection. Sync uses Rotisserie's existing claim protection.</div></div>
   </section>
   <section class="panel spaced"><div class="panel-header"><div><h2>Item tracker</h2><p class="section-desc">Follow one issue or PR, read its label claim runs and history, or claim it with <code>factory:claimed</code>.</p></div></div>
-   <div class="panel-body"><div class="page-controls"><select id="item-kind" aria-label="Item kind"><option value="issue">Issue</option><option value="pr">Pull request</option></select><input id="item-number" type="number" min="1" step="1" placeholder="Number" aria-label="Issue or PR number"><button class="button small" data-item-read="follow">Follow</button><button class="button small" data-item-read="runs">Claim runs</button><button class="button small" data-item-read="history">History</button><button class="button small" data-item-read="estimate">Estimate</button><button class="button small" id="item-estimate-neon">Exact estimate (store)</button><button class="button small" id="item-claim">Claim</button><button class="button small danger" id="item-finish">Finish claim</button></div><div id="item-content" class="hint">Claim and Finish claim change the label and return. The label claim controller answers on the item. Estimate counts attempts from GitHub markers; Exact estimate starts a GitHub run that reads store history, then shows the result here.</div></div>
+   <div class="panel-body"><div class="page-controls"><select id="item-kind" aria-label="Item kind"><option value="issue">Issue</option><option value="pr">Pull request</option></select><input id="item-number" type="number" min="1" step="1" placeholder="Number" aria-label="Issue or PR number"><button class="button small" data-item-read="follow">Follow</button><button class="button small" data-item-read="runs">Claim runs</button><button class="button small" data-item-read="history">History</button><button class="button small" data-item-read="estimate">Estimate</button><button class="button small" id="item-estimate-neon">Exact estimate (store)</button><button class="button small" id="item-claim">Claim</button><button class="button small danger" id="item-finish">Finish claim</button><input id="item-agent" placeholder="Agent, e.g. claude" aria-label="Outside agent name"><button class="button small" id="item-assign">Assign to agent</button><button class="button small" id="item-assigned">Agent holds</button></div><div id="item-content" class="hint">Claim and Finish claim change the label and return. The label claim controller answers on the item. Estimate counts attempts from GitHub markers; Exact estimate starts a GitHub run that reads store history, then shows the result here.</div></div>
   </section></section>
  <section class="view" id="workers"><div class="panel"><div class="panel-header"><div><h2>Workers and claims</h2><p class="section-desc">A request, an assignment, and actual model activity are different stages.</p></div><button class="button small" id="workers-refresh">Refresh workers</button></div><div class="panel-body"><div id="workers-content" class="empty">Loading workers…</div></div></div><section class="panel spaced"><div class="panel-header"><h2>Lease ledger</h2></div><div class="panel-body"><div class="page-controls"><button class="button small" id="leases-refresh">Refresh leases</button><button class="button small danger" id="release-expired">Release expired only</button></div><div id="leases-content"></div></div></section></section>
  <section class="view" id="outcomes"><div class="panel"><div class="panel-header"><div><h2>Run results</h2><p class="section-desc">What workers attempted and whether the requested work was delivered.</p></div><button class="button small" id="outcomes-refresh">Refresh results</button><button class="button small" id="failures-read">Failed runs</button></div><div class="panel-body" id="outcomes-content"></div></div><section class="panel spaced"><div class="panel-header"><h2>Reliability</h2><div class="page-controls"><select id="stats-window"><option value="7d">7 days</option><option value="24h">24 hours</option></select></div></div><div class="panel-body" id="stats-content"></div></section></section>
  <section class="view" id="models"><div class="panel"><div class="panel-header"><div><h2>Available models</h2><p class="section-desc">Actual model IDs discovered from each provider. Listed does not guarantee quota.</p></div><button class="button small" id="models-refresh">Refresh models</button></div><div class="panel-body"><div class="page-controls"><select id="catalog-provider" aria-label="Filter by provider"><option value="">Loading providers…</option></select><input id="model-search" type="search" placeholder="Find a model…" aria-label="Search models"></div><div id="catalog-summary" class="hint"></div><div id="model-catalog" class="model-list spaced"><div class="empty">Select a provider to see its models.</div></div></div></div>
   <section class="panel spaced"><div class="panel-header"><div><h2>Provider switches</h2><p class="section-desc">The next dispatcher tick skips a provider or model that is off. Running work continues.</p></div></div><div class="panel-body" id="provider-switches"><div class="empty">Loading providers…</div></div></section></section>
  <section class="view" id="settings"><div class="panel"><div class="panel-header"><div><h2>Factory settings</h2><p class="section-desc">Values come from repository variables and factory defaults; updates take effect on the next run.</p></div></div><div class="panel-body" id="settings-content"></div></div></section>
- <section class="view" id="health"><div class="panel"><div class="panel-header"><div><h2>Diagnostics</h2><p class="section-desc">Scheduler freshness, product CI, provider failures and main health.</p></div><button class="button small" id="doctor-refresh">Run checks</button></div><div class="panel-body"><div class="page-controls"><button class="button" id="doctor-fix">Apply safe doctor repairs</button><button class="button" id="limits-read">GitHub API limits</button><button class="button" id="backoffs-read">Backoffs</button><button class="button" id="db-usage-read">Database usage</button><button class="button danger" id="backoffs-reset">Reset quota backoffs</button><button class="button" id="store-selftest">Test factory store</button><button class="button" id="store-export">Back up factory store</button><button class="button" id="store-migrate-dry">Migrate store (dry run)</button><button class="button danger" id="store-migrate">Migrate store</button><select id="store-mode" aria-label="Store run kind"><option value="selftest">Self-test run</option><option value="export">Backup run</option><option value="migrate">Migration run</option></select><input id="store-run" inputmode="numeric" placeholder="Store run ID" aria-label="Store run ID"><button class="button" id="store-read">Read store run</button><button class="button" id="schema-read">Store schema</button><button class="button danger" id="schema-apply">Apply store schema</button></div><div id="limits-content"></div><div id="health-content"></div></div></div>
+ <section class="view" id="health"><div class="panel"><div class="panel-header"><div><h2>Diagnostics</h2><p class="section-desc">Scheduler freshness, product CI, provider failures and main health.</p></div><button class="button small" id="doctor-refresh">Run checks</button></div><div class="panel-body"><div class="page-controls"><button class="button" id="doctor-fix">Apply safe doctor repairs</button><button class="button" id="limits-read">GitHub API limits</button><button class="button" id="backoffs-read">Backoffs</button><button class="button" id="db-usage-read">Database usage</button><button class="button danger" id="backoffs-reset">Reset quota backoffs</button><input id="health-model" placeholder="Exact model ID" aria-label="Model to reset"><input id="health-source" placeholder="Source (optional)" aria-label="Provider source"><button class="button danger" id="health-reset">Reset one model</button><input id="outcome-run" inputmode="numeric" placeholder="Worker run ID" aria-label="Worker run ID"><button class="button" id="outcome-read">Run outcome</button><button class="button" id="store-selftest">Test factory store</button><button class="button" id="store-export">Back up factory store</button><button class="button" id="store-migrate-dry">Migrate store (dry run)</button><button class="button danger" id="store-migrate">Migrate store</button><select id="store-mode" aria-label="Store run kind"><option value="selftest">Self-test run</option><option value="export">Backup run</option><option value="migrate">Migration run</option></select><input id="store-run" inputmode="numeric" placeholder="Store run ID" aria-label="Store run ID"><button class="button" id="store-read">Read store run</button><button class="button" id="schema-read">Store schema</button><button class="button danger" id="schema-apply">Apply store schema</button></div><div id="limits-content"></div><div id="health-content"></div></div></div>
   <section class="panel spaced"><div class="panel-header"><div><h2>Label doctor</h2><p class="section-desc">Audits claim and lifecycle labels in a GitHub Actions run. A dry run changes nothing.</p></div></div><div class="panel-body"><div class="page-controls"><button class="button" id="labels-dry-run">Start dry run</button><button class="button danger" id="labels-repair">Start repair</button></div><p class="hint">Each button starts a GitHub run and returns. Open the run link to read its report.</p></div></section></section>
  <div class="footer">Rotisserie Control Room · GitHub Pages · Published snapshot for public views · Live views and operator actions run in GitHub Actions after sign-in</div>
 </main></div>
@@ -137,7 +138,7 @@ const TOKEN=null, REPO="JoshCLWren/comic-pile";
 <script>
 "use strict";
 (function () {
-const CONTRACT = {"public_reads": ["db-usage", "doctor", "outcomes", "report", "stats", "status"], "live_reads": ["backoffs", "checks", "conflicts", "estimate", "failures", "follow", "heal", "history", "incident", "leases", "limits", "models", "providers", "recap", "review", "runs", "schema", "settings", "store", "turning", "unstick", "why"], "write_operations": ["allow_self_review", "backoffs_reset", "cancel", "claim", "close", "doctor_fix", "estimate_neon", "finish", "incident_start", "incident_stop", "labels", "model_switch", "prioritize", "provider_switch", "release_expired", "run", "schema_apply", "settings", "store_export", "store_migrate", "store_selftest", "sync", "unstick"], "max_batch": 8};
+const CONTRACT = {"public_reads": ["db-usage", "doctor", "outcomes", "report", "stats", "status"], "live_reads": ["assigned", "backoffs", "checks", "conflicts", "estimate", "failures", "follow", "heal", "history", "incident", "leases", "limits", "models", "outcome", "providers", "recap", "review", "runs", "schema", "settings", "store", "turning", "unstick", "watch", "why"], "write_operations": ["allow_self_review", "assign", "backoffs_reset", "cancel", "claim", "close", "doctor_fix", "estimate_neon", "finish", "health_reset", "incident_start", "incident_stop", "labels", "model_switch", "prioritize", "provider_switch", "release_expired", "run", "schema_apply", "settings", "store_export", "store_migrate", "store_selftest", "sync", "unstick"], "max_batch": 8};
 /* Public reads: sanitized snapshots from the factory-status-live branch.
  * These work without sign-in. They are observations, never live evaluations.
  */
@@ -322,12 +323,16 @@ const SIGNED_OUT_HINT = "Read-only visitor. Sign in to use live views and operat
 let session = null;
 let identity = null;
 const signedOutListeners = [];
+const signedInListeners = [];
 
 function signedIn() {
   return Boolean(session);
 }
 function onSignedOut(listener) {
   signedOutListeners.push(listener);
+}
+function onSignedIn(listener) {
+  signedInListeners.push(listener);
 }
 function setIdentity(text) {
   const status = document.getElementById("github-identity");
@@ -373,6 +378,7 @@ async function validateSession() {
     document.body.classList.add("hosted-signed-in");
     document.getElementById("github-connect").textContent = "Sign out";
     setIdentity("Signed in with GitHub as " + identity + ". Admin access verified.");
+    for (const listener of signedInListeners) listener();
   } catch (error) {
     disconnect();
     setIdentity(error.message || "GitHub sign-in expired.");
@@ -572,9 +578,11 @@ async function checkModel(body) {
     throw Error("Model " + body.model + " is not in the live model list for " + body.provider +
       ". Choose a listed model or Automatic selection.");
   }
-  if (model.offered === false || model.disabled) {
-    throw Error("Model " + body.model + " is " + (model.disabled ? "turned off" : "unavailable") +
-      " for " + body.provider + ". Choose another model or Automatic selection.");
+  const why = model.excluded ? "excluded by the worker right now (" + model.excluded + ")"
+    : model.disabled ? "turned off" : model.offered === false ? "unavailable" : "";
+  if (why) {
+    throw Error("Model " + body.model + " is " + why + " for " + body.provider +
+      ". Choose another model or Automatic selection.");
   }
 }
 
@@ -590,6 +598,16 @@ async function liveWrite(body) {
     return {exit_code: 0, result: "accepted by GitHub. This sign-in service does not report " +
       "the operator run's outcome yet, so check the repository's Actions page"};
   }
+  rememberWrite({run_id: accepted.run_id, run_url: accepted.run_url,
+    request_id: requestId, operation: body.operation});
+  try {
+    return await finishWrite(accepted, requestId);
+  } finally {
+    rememberWrite(null);
+  }
+}
+
+async function finishWrite(accepted, requestId) {
   const label = "Operator run";
   const run = await waitForRun(accepted, label, WRITE_WAIT_MS);
   const envelope = trustedEnvelope(run, requestId, label);
@@ -601,6 +619,52 @@ async function liveWrite(body) {
       ". GitHub operator run " + run.run_url + " " + (run.conclusion || "failed") + ".");
   }
   return {...result, exit_code: 0, operator: {run_url: run.run_url, conclusion: run.conclusion}};
+}
+
+/* A reload must not lose an operator run: the page keeps the pending run for this
+ * tab and, after the session is verified, reports how that run ended. */
+const PENDING_KEY = "rotisserie-operator-pending";
+function rememberWrite(entry) {
+  try {
+    if (entry) sessionStorage.setItem(PENDING_KEY, JSON.stringify(entry));
+    else sessionStorage.removeItem(PENDING_KEY);
+  } catch (_) { /* optional */ }
+}
+function pendingWrite() {
+  try {
+    const entry = JSON.parse(sessionStorage.getItem(PENDING_KEY) || "null");
+    return entry && /^[0-9]{1,20}$/.test(String(entry.run_id)) ? entry : null;
+  } catch (_) {
+    return null;
+  }
+}
+function showOutcome(text, failed) {
+  const box = document.getElementById("message");
+  if (!box) return;
+  box.className = "message visible" + (failed ? " error" : "");
+  box.textContent = text;
+}
+function outcomeText(operation, result) {
+  const run = result.operator || {};
+  const parts = ["Operator run for " + operation + " ended: " + (run.conclusion || "completed") + "."];
+  if (result.scheduler_url) parts.push("Scheduler run: " + result.scheduler_url + ".");
+  else parts.push("Rotisserie reports: " + (result.result || "completed") + ".");
+  if (run.run_url) parts.push(run.run_url);
+  return parts.join(" ");
+}
+async function resumeWrite() {
+  const entry = pendingWrite();
+  if (!entry || !signedIn()) return;
+  try {
+    const result = await finishWrite(entry, entry.request_id);
+    showOutcome(outcomeText(entry.operation, result), false);
+  } catch (error) {
+    showOutcome(error.message, true);
+  } finally {
+    rememberWrite(null);
+    const status = document.getElementById("operation-status");
+    if (status) status.textContent = "";
+  }
 }
 
 /* Hosted adapter for the canonical Rotisserie web_ui.html.
@@ -653,6 +717,13 @@ onSignedOut(() => {
 // The page keys stored reads by this viewer. While a session is still being checked the
 // viewer is unknown (""), and the page stores nothing, so live results never land as public.
 window.hostedViewer = () => (signedIn() ? identity || "" : "public");
+onSignedIn(() => void resumeWrite());
+// Signed-out visitors see the published snapshot. Refresh it in place, never by
+// reloading the page: a reload drops a signed-in tab's live reads and operator runs.
+setInterval(() => {
+  const button = document.getElementById("refresh");
+  if (!signedIn() && !document.hidden && button && !button.disabled) button.click();
+}, SNAPSHOT_MS);
 document.getElementById("github-connect").addEventListener("click", connect);
 bootstrapSession();
 
@@ -704,11 +775,13 @@ async function get(name,params={}){
  return {...d,_at:dataTime(d)};
 }
 const SWITCHED=["providers","models","why","doctor"],AFFECTS={settings:["settings","why"],prioritize:["why","settings"],provider_switch:SWITCHED,model_switch:SWITCHED,backoffs_reset:SWITCHED,incident_start:["incident","why","status"],incident_stop:["incident","why","status"],estimate_neon:[],store_selftest:[],store_export:[]};
+function decisionText(d){const s=d.scheduler||{},a=d.assignment||s.assignment;if(a)return "Scheduler decision: "+(a.kind==="pr"?"PR":"issue")+" #"+a.number+" assigned to worker "+a.worker+" ("+a.provider+", "+(a.model==="auto"?"model chosen at start":a.model)+").";return "Scheduler decision: "+({deferred:"no work assigned",busy:"#"+s.busy_number+" is already being worked on",failed:"the scheduler failed"}[s.status]||"unknown")+(s.reason?". "+s.reason:"")+(d.error?". "+d.error:"")+"."}
+async function followDecision(run){const box=document.createElement("div");box.className="hint";box.id="scheduler-decision";box.textContent="Waiting for the scheduler's decision…";el("message").append(box);try{box.textContent=decisionText(await get("watch",{run:String(run)}))}catch(err){box.textContent="Could not read the scheduler's decision: "+err.message}}
 async function act(body,source,resumed){
  if(state.mutating)return;
  state.mutating=true;state.lastJob=null;
  const button=source&&source.tagName==="BUTTON"?source:null;
- const operation=({claim:"Requesting claim",finish:"Finishing claim",labels:"Starting label doctor",incident_start:"Starting incident",incident_stop:"Ending incident",provider_switch:"Switching provider",model_switch:"Switching model",run:"Submitting worker request",unstick:"Unblocking work",cancel:"Stopping worker",sync:"Synchronizing PR",doctor_fix:"Applying safe repairs",release_expired:"Releasing expired leases",settings:"Saving setting",close:"Closing pull request",allow_self_review:"Allowing self-review",backoffs_reset:"Resetting quota backoffs",store_migrate:"Starting store migration",schema_apply:"Applying the store schema",prioritize:"Setting priority"})[body.operation]||"Applying change";
+ const operation=({claim:"Requesting claim",finish:"Finishing claim",labels:"Starting label doctor",incident_start:"Starting incident",incident_stop:"Ending incident",provider_switch:"Switching provider",model_switch:"Switching model",run:"Submitting worker request",unstick:"Unblocking work",cancel:"Stopping worker",sync:"Synchronizing PR",doctor_fix:"Applying safe repairs",release_expired:"Releasing expired leases",settings:"Saving setting",close:"Closing pull request",allow_self_review:"Allowing self-review",backoffs_reset:"Resetting quota backoffs",assign:"Assigning to agent",health_reset:"Resetting one model",store_migrate:"Starting store migration",schema_apply:"Applying the store schema",prioritize:"Setting priority"})[body.operation]||"Applying change";
  if(button){button.disabled=true;button.classList.add("is-loading");}
  el("operation-status").textContent=operation+"…";
  el("message").className="message";
@@ -723,6 +796,7 @@ async function act(body,source,resumed){
   else if(data.scheduler_url){
    message.className="message visible";
    message.innerHTML="Request submitted. Worker start is not yet confirmed. "+link(data.scheduler_url,"Track GitHub run");
+   if(data.scheduler_run_id)void followDecision(data.scheduler_run_id);
   }else if(data.bridge&&data.bridge.url){
    message.className="message visible";
    message.innerHTML="Label doctor "+h(body.mode||"dry-run")+" started. "+link(data.bridge.url,"Open the GitHub run");
@@ -851,6 +925,8 @@ async function fetchModels(provider){
  }).catch(err=>{modelCache.delete(provider);throw err}));
  return modelCache.get(provider);
 }
+const refusal=m=>!m?"":m.excluded?"is excluded by the worker right now ("+m.excluded+")":m.disabled?"is turned off"+(m.disabled_reason?" ("+m.disabled_reason+")":""):m.offered===false?"is not offered by the provider now":"";
+function refusedModel(data){const p=state.picker,m=data.model!=="auto"&&p&&p.provider===data.provider&&p.models.find(x=>x.model===data.model),why=m&&refusal(m);return why?"Model "+data.model+" "+why+". Choose another model or Automatic selection.":""}
 async function loadModelOptions(){
  const provider=el("provider").value;
  const seq=++modelRequestSeq;
@@ -861,8 +937,9 @@ async function loadModelOptions(){
  try{
   const models=await fetchModels(provider);
   if(seq!==modelRequestSeq||el("provider").value!==provider)return;
-  const selectable=models.filter(m=>m.offered!==false);
-  el("model").innerHTML='<option value="auto">Automatic selection (recommended)</option>'+models.map(m=>'<option value="'+h(m.model)+'"'+(m.offered===false?" disabled":"")+'>'+h(m.model)+(m.historical?" (history only)":m.offered===false?" (unavailable)":m.offered!==true?" (unverified)":"")+'</option>').join("");
+  state.picker={provider,models};
+  const selectable=models.filter(m=>!refusal(m));
+  el("model").innerHTML='<option value="auto">Automatic selection (recommended)</option>'+models.map(m=>'<option value="'+h(m.model)+'"'+(refusal(m)?" disabled":"")+'>'+h(m.model)+(m.historical?" (history only)":m.excluded?" (excluded now)":m.disabled?" (turned off)":m.offered===false?" (unavailable)":m.offered!==true?" (unverified)":"")+'</option>').join("");
   if(selectable.some(m=>m.model===old))el("model").value=old;
  }catch(err){
   if(seq!==modelRequestSeq)return;
@@ -878,7 +955,7 @@ function renderCatalog(){
  const filtered=list.filter(m=>m.model.toLowerCase().includes(q));
  const displayed=filtered.slice(0,40);
  el("catalog-summary").textContent=filtered.length+" model"+(filtered.length===1?"":"s")+" found · "+(displayed.length<filtered.length?"showing first 40 · ":"")+"Model listing does not guarantee quota.";
- el("model-catalog").innerHTML=displayed.map(m=>'<div class="mini"><div class="item-head"><div class="item-title">'+h(m.model)+'</div>'+badge(m.offered===false?"Unavailable":m.offered===true?"Listed":"Unverified",m.offered===true?"good":m.offered===false?"bad":"")+'</div><div class="meta">'+h(m.track_record||"No recorded deliveries")+'</div><div class="meta">Switch: '+h(switchText(m.disabled,m.disabled_reason))+'</div><div class="item-actions"><button class="button small" data-use-model="'+h(m.model)+'"'+(m.offered===false?" disabled":"")+'>Select model</button>'+switchButton(m.disabled,provider,m.model)+'</div></div>').join("")||empty("No models match this provider or search.");
+ el("model-catalog").innerHTML=displayed.map(m=>'<div class="mini"><div class="item-head"><div class="item-title">'+h(m.model)+'</div>'+badge(m.excluded?"Excluded now":m.offered===false?"Unavailable":m.offered===true?"Listed":"Unverified",m.offered===true&&!m.excluded?"good":m.offered===false||m.excluded?"bad":"")+'</div><div class="meta">'+h(m.track_record||"No recorded deliveries")+(m.excluded?" · The worker refuses it: "+h(m.excluded):"")+'</div><div class="meta">Switch: '+h(switchText(m.disabled,m.disabled_reason))+'</div><div class="item-actions"><button class="button small" data-use-model="'+h(m.model)+'"'+(refusal(m)?" disabled":"")+'>Select model</button>'+switchButton(m.disabled,provider,m.model)+'</div></div>').join("")||empty("No models match this provider or search.");
 }
 async function loadCatalog(){
  const provider=el("catalog-provider").value;
@@ -961,7 +1038,7 @@ const switchAttrs=(provider,model)=>' data-provider="'+h(provider)+'"'+(model?' 
 const switchButton=(off,provider,model)=>off?'<button class="button small"'+switchAttrs(provider,model)+' data-switch-on="1">Turn on</button>':'<button class="button small danger"'+switchAttrs(provider,model)+' data-switch-off="1">Turn off</button>';
 function switchBody(b,enabled,reason){const body={operation:b.dataset.model?"model_switch":"provider_switch",provider:b.dataset.provider,enabled,reason};if(b.dataset.model)body.model=b.dataset.model;return body}
 function renderSwitches(){el("provider-switches").innerHTML=state.providers.length?'<div class="table-wrap"><table class="table"><thead><tr><th>Provider</th><th>Setup</th><th>Switch</th><th>Working</th><th>Action</th></tr></thead><tbody>'+state.providers.map(p=>'<tr><td>'+h(p.provider)+'<small>'+h(p.name)+'</small></td><td>'+h(p.setup)+'</td><td>'+badge(switchText(p.disabled,p.disabled_reason),p.disabled?"bad":"good")+'</td><td>'+h(p.working_now??"")+'</td><td>'+switchButton(p.disabled,p.provider)+'</td></tr>').join("")+'</tbody></table></div>':empty("No providers found.")}
-async function loadLeases(){try{const d=await get("leases");el("leases-content").innerHTML=sourceNote(d)+'<div class="hint" style="margin-bottom:12px">Source: '+h(d.source||"unavailable")+' · '+h(d.note||"")+'</div>'+(d.rows||[]).map(x=>'<div class="item"><div class="item-head"><div><div class="item-title">'+h(x.target)+' · '+h(x.holder)+'</div><div class="meta">Expires '+h(x.expires_at||"not recorded")+'</div></div>'+badge(x.active?"Active":"Expired",x.active?"good":"")+'</div></div>').join("")||empty("No lease rows found.")}catch(err){el("leases-content").innerHTML=empty(err.message)}}
+async function loadLeases(){try{const d=ok(await get("leases"));el("leases-content").innerHTML=sourceNote(d)+'<div class="hint" style="margin-bottom:12px">Source: '+h(d.source==="neon"?"factory store":d.source==="labels"?"owner labels (the factory store was not read)":"unavailable")+(d.note?' · '+h(d.note):"")+(d.bridge&&d.bridge.url?' · '+link(d.bridge.url,"store read run"):"")+'</div>'+(d.rows||[]).map(x=>'<div class="item"><div class="item-head"><div><div class="item-title">'+h(x.target)+' · '+h(x.holder)+'</div><div class="meta">Expires '+h(x.expires_at?fmtDate(x.expires_at):"not recorded")+(x.owner_run?' · '+h(x.owner_run):"")+'</div></div>'+badge(x.active?"Active":"Expired",x.active?"good":"")+'</div></div>').join("")||empty("No lease rows found.")}catch(err){el("leases-content").innerHTML=empty(err.message)}}
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const secs=v=>{const s=Math.round(Number(v)||0);return s<60?s+" s":Math.floor(s/60)+" min "+String(s%60).padStart(2,"0")+" s"};
 function remember(job,kind){try{sessionStorage.setItem(JOB_KEY,JSON.stringify({job,kind}))}catch{}}
@@ -1084,7 +1161,7 @@ document.body.addEventListener("click",e=>{const b=e.target.closest("button");if
  if(b.dataset.useModel){const selected=b.dataset.useModel;el("provider").value=el("catalog-provider").value;go("overview");loadModelOptions().then(()=>{if([...el("model").options].some(o=>o.value===selected&&!o.disabled))el("model").value=selected;preview()});}
  if(b.dataset.saveSetting){const x=document.querySelector('[data-setting-name="'+b.dataset.saveSetting+'"]');if(x)act({operation:"settings",name:b.dataset.saveSetting,value:x.value},b)}
 });
-el("launcher").addEventListener("submit",e=>{e.preventDefault();if(state.mutating||el("model").disabled)return;const kind=el("work-kind").value;const number=el("target-number").value;if(kind!=="next"&&(!/^[1-9][0-9]*$/.test(number))){notice("Enter a valid issue or PR number.",true);return}const data={operation:"run",provider:el("provider").value,model:el("model").value||"auto",target:kind==="next"?"":target(),action:kind==="pr"?el("action").value:"advance",force:el("force").checked,exact:el("exact").checked&&!!el("model").value&&el("model").value!=="auto",take_over:el("take-over").checked};if(el("slot").value)data.slot=Number(el("slot").value);act(data,el("launch"))});
+el("launcher").addEventListener("submit",e=>{e.preventDefault();if(state.mutating||el("model").disabled)return;const kind=el("work-kind").value;const number=el("target-number").value;if(kind!=="next"&&(!/^[1-9][0-9]*$/.test(number))){notice("Enter a valid issue or PR number.",true);return}const data={operation:"run",provider:el("provider").value,model:el("model").value||"auto",target:kind==="next"?"":target(),action:kind==="pr"?el("action").value:"advance",force:el("force").checked,exact:el("exact").checked&&!!el("model").value&&el("model").value!=="auto",take_over:el("take-over").checked};if(el("slot").value)data.slot=Number(el("slot").value);const refused=refusedModel(data);if(refused){notice(refused,true);return}act(data,el("launch"))});
 ["provider","model","work-kind","target-number","action","slot","force","exact","take-over"].forEach(id=>el(id).addEventListener("change",()=>{preview();if(id==="provider")loadModelOptions()}));
 el("model").addEventListener("input",preview);el("target-number").addEventListener("input",preview);
 const fresh=fn=>()=>{forceFresh=true;try{return fn()}finally{forceFresh=false}};
@@ -1114,6 +1191,10 @@ el("incident-start").onclick=()=>{const number=el("incident-number").value;if(!/
 el("item-claim").onclick=()=>itemWrite("claim","Claim");
 el("item-estimate-neon").onclick=estimateNeon;
 el("item-finish").onclick=()=>itemWrite("finish","End your claim on");
+el("item-assign").onclick=()=>{const t=itemTarget(),agent=el("item-agent").value.trim();if(!t||!agent){notice("Enter an item number and an agent name.",true);return}if(window.confirm("Claim "+t+" as you and hand it to agent:"+agent+" with the task for its current stage?"))act({operation:"assign",target:t,agent},el("item-assign"))};
+el("item-assigned").onclick=async()=>{el("item-content").innerHTML=empty("Reading agent holds…");try{const d=ok(await get("assigned"));el("item-content").innerHTML=sourceNote(d)+((d.assigned||[]).map(x=>'<div class="item"><div class="item-title">'+h(x.target)+' · agent:'+h(x.agent)+' · '+h(x.held_for)+'</div><div class="meta">'+h(x.title)+'</div></div>').join("")||empty("No item is held by an outside agent."))}catch(err){el("item-content").innerHTML=empty(err.message)}};
+el("health-reset").onclick=()=>{const model=el("health-model").value.trim(),source=el("health-source").value.trim();if(!model){notice("Enter the exact model ID.",true);return}if(window.confirm("Clear only "+model+"'s health and backoff rows"+(source?" from "+source:"")+"?"))act({operation:"health_reset",model,...(source?{source}:{})},el("health-reset"))};
+el("outcome-read").onclick=async()=>{const run=el("outcome-run").value.trim();if(!/^[1-9][0-9]*$/.test(run)){notice("Enter the worker run ID.",true);return}el("limits-content").innerHTML=empty("Reading what run "+run+" did…");try{const d=ok(await get("outcome",{run}));el("limits-content").innerHTML=sourceNote(d)+raw(d)}catch(err){el("limits-content").innerHTML=empty(err.message)}};
 el("labels-dry-run").onclick=()=>act({operation:"labels",mode:"dry-run"},el("labels-dry-run"));
 el("labels-repair").onclick=()=>{if(window.confirm("Start a label repair run? It changes labels on the repository."))act({operation:"labels",mode:"repair"},el("labels-repair"))};
 el("unstick").onclick=()=>act({operation:"unstick"},el("unstick"));
