@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CustomCBLBuilder from '../components/CustomCBLBuilder'
 import { issueCardsApi } from '../services/issueCardsApi'
+import { injectModuleDoubles } from './injectModuleDoubles'
 import { existingList } from './fixtures/customCblFixture'
 
 const mocks = vi.hoisted(() => ({

@@ -9,11 +9,7 @@ import { issueCardsApi, type IssueCard } from '../services/issueCardsApi'
 import type { IssueListResponse } from '../types'
 import { injectModuleDoubles } from './injectModuleDoubles'
 
-<<<<<<< HEAD
 await injectModuleDoubles(await import('../pages/RollPage/components/ComicIdentity'), () => ({
-=======
-vi.mock('../pages/RollPage/components/ComicIdentity', () => ({
->>>>>>> origin/main
   ComicIdentity: ({ issueId }: { issueId: number | null | undefined }) => (
     <div data-testid="direct-read-comic-identity">{issueId}</div>
   ),
