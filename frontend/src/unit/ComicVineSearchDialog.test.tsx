@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 
 const { confirmIdentitySpy, replaceIdentitySpy, searchSeriesSpy, getSeriesIssuesSpy, resolveIdentitySpy } = vi.hoisted(() => ({
   // SAFETY: mock payload supplies only the fields this test asserts

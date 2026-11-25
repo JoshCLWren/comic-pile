@@ -315,4 +315,35 @@ describe('ComicIssueMappingAction', () => {
       'Could not remove the ComicVine mapping.',
     )
   })
+
+  it('rebases a stale edit version on conflict refetch but keeps the alias intent (#4652)', async () => {
+    const staleIdentity: IssueIdentityResponse = { ...UNMAPPED, identity_version: 7 }
+    const freshIdentity: IssueIdentityResponse = { ...UNMAPPED, identity_version: 8 }
+    getIssueIdentitySpy.mockResolvedValueOnce(freshIdentity)
+
+    const { result } = renderHook(() =>
+      useComicIssueMapping({
+        issueId: 77,
+        threadTitle: 'Hellboy in Hell',
+        issueNumber: '1',
+        initialIdentity: staleIdentity,
+      }),
+    )
+
+    act(() => {
+      result.current.openMappingDialog('confirm', {
+        overallIssueNumber: '100',
+        expectedVersion: 7,
+      })
+    })
+    expect(result.current.mappingEdit).toEqual({ overallIssueNumber: '100', expectedVersion: 7 })
+
+    // onConflictRetry from the dialog is this same fetchIdentity. The reload
+    // must drop the rejected version while preserving the authored alias.
+    await act(async () => { await result.current.fetchIdentity() })
+
+    expect(result.current.identity?.identity_version).toBe(8)
+    expect(result.current.mappingEdit).toEqual({ overallIssueNumber: '100' })
+    expect(result.current.mappingEdit?.expectedVersion).toBeUndefined()
+  })
 })

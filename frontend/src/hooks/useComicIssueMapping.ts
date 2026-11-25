@@ -130,6 +130,17 @@ export function useComicIssueMapping({
       const state = await comicVineApi.getIssueIdentity(issueId)
       setIdentityState(state)
       setIdentityError(false)
+      // #4652: a completed GET is authoritative. A version captured when the
+      // dialog opened is stale after a 409, so rebase the edit to keep only the
+      // authored alias intent. Both dialog callers then fall back to the fresh
+      // identity_version for their retried write instead of replaying the
+      // rejected version forever.
+      setMappingEdit((previous) => {
+        if (previous == null || previous.expectedVersion === undefined) return previous
+        const rebased: IssueIdentityEdit = { ...previous }
+        delete rebased.expectedVersion
+        return Object.keys(rebased).length > 0 ? rebased : null
+      })
       // A completed GET is authoritative, including a concurrent remap. The
       // removal guard only bridges failed or still-pending reconciliation.
       if (removalIdentityRef.current?.issueId === issueId) {
