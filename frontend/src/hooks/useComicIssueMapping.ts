@@ -161,7 +161,7 @@ export function useComicIssueMapping({
   }, [initialIdentity, fetchEnabled, fetchIdentity, issueId])
 
   const handleIdentityConfirmed = useCallback(
-    async (selected?: ComicVineIssueCandidate | null) => {
+    async (_selected?: ComicVineIssueCandidate | null) => {
       removalIdentityRef.current = null
       if (issueId) {
         // Clear stale A-identity creators/cover before refetching B so a late
