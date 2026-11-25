@@ -60,8 +60,12 @@ pub struct IssueCard {
     pub thread_id: i32,
     /// Display series/run title.
     pub thread_title: String,
-    /// Exact issue number within the run.
+    /// Authored story-local issue number within the run.
     pub issue_number: String,
+    /// Alternate overall-series number for the same physical issue.
+    pub overall_issue_number: Option<String>,
+    /// Optimistic version for atomic numbering/provider-identity edits.
+    pub identity_version: i64,
     /// Stored read state (``read`` or ``unread``).
     pub status: String,
     /// UTC read timestamp, when read.
