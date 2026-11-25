@@ -866,13 +866,7 @@ async fn suppressed_alias_is_absent_from_roll_candidates() {
 
     let (status, bootstrap) = send(
         &ctx.state,
-        authed(
-            "GET",
-            "/api/v2/roll/bootstrap",
-            &ctx.token,
-            &ctx.csrf,
-            None,
-        ),
+        authed("GET", "/api/v2/roll/bootstrap", &ctx.token, &ctx.csrf, None),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{bootstrap:?}");
@@ -931,7 +925,10 @@ async fn mixed_read_events_preview_and_apply_agree_per_event() {
         .iter()
         .map(|a| a["kind"].as_str().unwrap())
         .collect();
-    assert!(kinds.contains(&"suppress_synthetic_read_events"), "{kinds:?}");
+    assert!(
+        kinds.contains(&"suppress_synthetic_read_events"),
+        "{kinds:?}"
+    );
     assert!(kinds.contains(&"move_read_events"), "{kinds:?}");
     let synthetic_evidence = preview["duplicates"][0]["read_events"]
         .as_array()
