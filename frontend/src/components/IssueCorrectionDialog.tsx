@@ -343,7 +343,7 @@ export default function IssueCorrectionDialog({
     } finally {
       setIsUndoing(false)
     }
-  }, [lastOperation, issuesService, onSuccess, onClose])
+  }, [lastOperation, issuesService, onSuccess, onClose, threadId])
 
   const adjustIssue = useCallback((delta: number) => {
     const currentValue = selectedIssueNumber
