@@ -3,7 +3,8 @@ import type { KeyboardEvent } from 'react'
 import Modal from './Modal'
 import CompactIssueCardTrigger from './CompactIssueCardTrigger'
 import { issuesApi } from '../services/api-issues'
-import type { IssueListParams } from '../services/api-issues'
+import type { IssueListParams, IssueReadOperationResponse } from '../services/api-issues'
+import { issueDependenciesApi } from '../services/api-dependencies'
 import type { Issue, IssueListResponse } from '../types'
 
 export interface IssueCorrectionIssuesApi {
@@ -54,6 +55,14 @@ export default function IssueCorrectionDialog({
   const [allIssues, setAllIssues] = useState<Issue[]>([])
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
   const [insertPosition, setInsertPosition] = useState<string>('end')
+  const [preview, setPreview] = useState<{
+    targetIssueNumber: string
+    affected: Issue[]
+    willCompleteSeries: boolean
+    dependentFrontier: string[]
+  } | null>(null)
+  const [lastOperation, setLastOperation] = useState<IssueReadOperationResponse | null>(null)
+  const [isUndoing, setIsUndoing] = useState(false)
 
   const hasNumericSelection = /^\d+$/.test(selectedIssueNumber.trim())
   // Only one exact owned canonical ID is safe. Repeated issue-number aliases
@@ -117,6 +126,9 @@ export default function IssueCorrectionDialog({
     if (isOpen) {
       setSelectedIssueNumber(currentIssueNumber ?? '')
       setInsertPosition('end')
+      setPreview(null)
+      setLastOperation(null)
+      setError(null)
       fetchIssues()
     }
   }, [isOpen, currentIssueNumber, fetchIssues])
