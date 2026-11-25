@@ -16,6 +16,10 @@ interface QueueListProps {
   sentinelRef: React.Ref<HTMLDivElement>
   hasNextPage: boolean
   isLoading?: boolean
+  /** True when the initial or replacement list request failed. */
+  isError?: boolean
+  /** Retry the failed initial or replacement list request. */
+  onRetry?: () => void
   /**
    * Opens the existing series-create flow. The Queue page wires this to the
    * create modal; direct list consumers (tests, regression harnesses) may
