@@ -119,7 +119,7 @@ export function createIssuesApi(client: HttpClient) {
     create: async (
       threadId: number,
       issueRange: string,
-      options?: { insert_after_issue_id?: number | null }
+      options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort' }
     ): Promise<IssueListResponse> => {
       const payload: CreateIssuesPayload = {
         issue_range: issueRange,
@@ -133,8 +133,23 @@ export function createIssuesApi(client: HttpClient) {
           payload.insert_after_issue_id = options.insert_after_issue_id
         }
       }
+      if (options?.strategy) payload.strategy = options.strategy
 
       return client.post(`/v2/threads/${threadId}/issues`, payload)
+    },
+
+    previewCreate: async (
+      threadId: number,
+      issueRange: string,
+      options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort' }
+    ): Promise<IssueEditPreviewResponse> => {
+      const payload: CreateIssuesPayload = { issue_range: issueRange }
+      if (options && 'insert_after_issue_id' in options) {
+        if (options.insert_after_issue_id === null) payload.append_to_end = true
+        else payload.insert_after_issue_id = options.insert_after_issue_id
+      }
+      if (options?.strategy) payload.strategy = options.strategy
+      return client.post(`/v2/threads/${threadId}/issues/preview`, payload)
     },
 
     /**
