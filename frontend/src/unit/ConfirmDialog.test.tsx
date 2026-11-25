@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 import { render, screen } from './testingLibrary'
-=======
-import { fireEvent, render, screen } from '@testing-library/react'
->>>>>>> main
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import ConfirmDialog from '../components/ConfirmDialog'
