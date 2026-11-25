@@ -515,6 +515,7 @@ fn compute_preview_token(
     duplicate_issue_ids: &[i32],
     canonical: &DuplicateIssueEvidence,
     duplicates: &[DuplicateIssueEvidence],
+    decisions: &HashMap<String, String>,
 ) -> String {
     use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
@@ -545,20 +546,52 @@ fn compute_preview_token(
         }
         hasher.update((d.list_memberships.len() as i32).to_le_bytes());
     }
+    // Decisions are part of the reviewed contract: changing link vs keep-distinct
+    // invalidates the token so an apply cannot silently reuse a stale preview.
+    let mut decision_keys: Vec<(&String, &String)> = decisions.iter().collect();
+    decision_keys.sort_by(|a, b| a.0.cmp(b.0));
+    for (key, value) in decision_keys {
+        hasher.update(key.as_bytes());
+        hasher.update(value.as_bytes());
+    }
     let digest = hasher.finalize();
     digest.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// Whether an explicitly reviewed duplicate must remain distinct instead of
+/// being merged into the canonical issue.
+fn is_kept_distinct(
+    dup: &DuplicateIssueEvidence,
+    decisions: &HashMap<String, String>,
+) -> bool {
+    decisions
+        .get(&format!("cross_volume:{}", dup.issue_id))
+        .is_some_and(|choice| choice == "keep_distinct")
 }
 
 fn build_preview_actions(
     canonical: &DuplicateIssueEvidence,
     duplicates: &[DuplicateIssueEvidence],
-    _decisions: &HashMap<String, String>,
+    decisions: &HashMap<String, String>,
 ) -> (Vec<ReconcilePreviewAction>, Vec<String>, bool) {
     let mut actions = Vec::new();
     let mut warnings = Vec::new();
     let mut can_apply = true;
 
     for dup in duplicates {
+        if is_kept_distinct(dup, decisions) {
+            actions.push(ReconcilePreviewAction {
+                kind: "keep_distinct".to_string(),
+                description: format!(
+                    "Keep issue {} distinct: no mapping, event, membership or status change will be applied to it.",
+                    dup.issue_id
+                ),
+                safe: true,
+                requires_decision: false,
+                decision_key: None,
+            });
+            continue;
+        }
         // Check for ambiguity - different comicvine volumes with no clear relationship
         if let (Some(c_cv), Some(d_cv)) = (&canonical.comicvine_volume_id, &dup.comicvine_volume_id)
         {
@@ -664,6 +697,9 @@ fn build_preview_actions(
     // If canonical has no CV mapping but a duplicate does, that's fine - we move it.
     // Warn if canonical already read and duplicate also has real (non-synthetic) read - potential double-count
     for dup in duplicates {
+        if is_kept_distinct(dup, decisions) {
+            continue;
+        }
         if canonical.status == "read" && dup.status == "read" && !dup.is_synthetic_placeholder_read
         {
             warnings.push(format!(
