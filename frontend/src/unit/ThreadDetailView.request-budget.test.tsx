@@ -7,10 +7,11 @@
  * the id; it now reads in parallel. The closed tag editor must not add the
  * usable-tag catalog request.
  *
+ * The owner-scoped graph health read is shared with the other reading surfaces.
  * Two deployment shapes are asserted because the legacy blocking fallback only
  * runs when the canonical evaluator reports `unavailable`:
- * - canonical available: 6 reads before, 5 after (catalog removed)
- * - Option-E off (`unavailable`): 7 reads before, 6 after (catalog removed)
+ * - canonical available: 7 reads before, 6 after (catalog removed)
+ * - Option-E off (`unavailable`): 8 reads before, 7 after (catalog removed)
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom'
