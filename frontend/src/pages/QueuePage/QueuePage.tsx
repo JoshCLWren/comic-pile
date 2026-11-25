@@ -1,4 +1,5 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useRollNudge } from './useRollNudge'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
@@ -71,6 +72,7 @@ export default function QueuePage() {
   const { threads: excludedThreads } = useExcludedThreads(true)
   const { handleRestore, handleRestoreGroup, restoreError, isRestoring } = useQueueRestore()
 
+  const navigate = useNavigate()
   const { activeThreads, filteredThreads } = useQueueFilters(
     threads,
     sortBy,
@@ -80,6 +82,26 @@ export default function QueuePage() {
   // True while the Queue list is still fetching; the list uses it to tell
   // "still fetching" apart from a settled zero-match (#3912).
   const queueListLoading = useQueueListLoading()
+
+  const normalizedSearch = searchQuery.trim().toLowerCase()
+  const completedMatches = useMemo(
+    () =>
+      isSearching
+        ? (completed.threads ?? [])
+            .filter((t) => t.title.toLowerCase().includes(normalizedSearch))
+            .map((t) => ({ id: t.id, title: t.title, status: 'completed' as const }))
+        : [],
+    [completed.threads, isSearching, normalizedSearch],
+  )
+  const excludedMatches = useMemo(
+    () =>
+      isSearching
+        ? (excludedThreads ?? [])
+            .filter((t) => t.title.toLowerCase().includes(normalizedSearch))
+            .map((t) => ({ id: t.id, title: t.title, status: 'excluded' as const }))
+        : [],
+    [excludedThreads, isSearching, normalizedSearch],
+  )
 
   const actions = useQueueThreadActions({})
 
