@@ -10,25 +10,24 @@ import { queryClient } from '../query/queryClient'
 import { continuityPlansApi } from '../services/api-continuity-plans'
 import { cast } from '../utils/cast'
 import { isObject } from '../utils/runtimeChecks'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../services/api-continuity-plans', async () => {
-  const actual = await vi.importActual<typeof import('../services/api-continuity-plans')>(
-    '../services/api-continuity-plans',
-  )
+const mockList = vi.fn()
+const mockUpdate = vi.fn()
+const mockDelete = vi.fn()
+
+await injectModuleDoubles(await import('../services/api-continuity-plans'), async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/api-continuity-plans')>()
   return {
     ...actual,
     continuityPlansApi: {
       ...actual.continuityPlansApi,
-      list: vi.fn(),
-      update: vi.fn(),
-      delete: vi.fn(),
+      list: mockList,
+      update: mockUpdate,
+      delete: mockDelete,
     },
   }
 })
-
-const mockList = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.list)
-const mockUpdate = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.update)
-const mockDelete = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.delete)
 
 const plan = {
   id: 1,
