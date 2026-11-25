@@ -2939,14 +2939,11 @@ mod tests {
         // Three consecutive provider outages: the first two defer with backoff,
         // the third (attempt >= 3) fails permanently.
         for _ in 0..3 {
-            state
-                .recording_fake()
-                .expect("recording provider")
-                .push_ok(
-                    StatusCode::SERVICE_UNAVAILABLE,
-                    HeaderMap::new(),
-                    Bytes::new(),
-                );
+            state.recording_fake().expect("recording provider").push_ok(
+                StatusCode::SERVICE_UNAVAILABLE,
+                HeaderMap::new(),
+                Bytes::new(),
+            );
         }
 
         let first = drain_for_test(&state).await;
