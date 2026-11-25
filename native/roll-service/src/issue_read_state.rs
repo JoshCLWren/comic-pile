@@ -930,6 +930,331 @@ pub struct IssueReadOperationUndoResponse {
     pub skipped_issue_ids: Vec<i32>,
 }
 
+fn operation_not_found(operation_id: i64) -> ApiError {
+    ApiError::NotFound(format!("Issue read operation {operation_id} not found"))
+}
+
+fn parse_operation_id(raw: Result<Path<String>, PathRejection>) -> Result<i64, ApiError> {
+    let Path(raw) = raw.map_err(|_| validation_failed())?;
+    let value = parse_int_text(&raw).ok_or_else(validation_failed)?;
+    i64::try_from(value).map_err(|_| operation_not_found(value))
+}
+
+async fn load_operation(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    operation_id: i64,
+) -> Result<IssueReadOperationResponse, ApiError> {
+    let op = tx
+        .query_opt(
+            "SELECT id, operation_type,
+                    to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
+                    to_char(undone_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')
+             FROM issue_read_operations
+             WHERE id = $1 AND user_id = $2",
+            &[&operation_id, &user_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| operation_not_found(operation_id))?;
+    let items_rows = tx
+        .query(
+            "SELECT issue_id, thread_id, issue_number, previous_status
+             FROM issue_read_operation_items
+             WHERE operation_id = $1
+             ORDER BY id ASC",
+            &[&operation_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let items = items_rows
+        .iter()
+        .map(|row| IssueReadOperationItem {
+            issue_id: row.get(0),
+            thread_id: row.get(1),
+            issue_number: row.get(2),
+            previous_status: row.get(3),
+        })
+        .collect();
+    Ok(IssueReadOperationResponse {
+        id: op.get(0),
+        operation_type: op.get(1),
+        created_at: op.get(2),
+        undone_at: op.get(3),
+        items,
+    })
+}
+
+/// `GET /api/v2/issue-read-operations/{operation_id}` — fetch one bulk operation.
+pub async fn get_issue_read_operation(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    raw_id: Result<Path<String>, PathRejection>,
+) -> Result<Json<IssueReadOperationResponse>, ApiError> {
+    let operation_id = parse_operation_id(raw_id)?;
+    let mut conn = db::checkout(&state).await?;
+    let tx = begin(&mut conn).await?;
+    let op = load_operation(&tx, user.id(), operation_id).await?;
+    tx.commit().await.map_err(db::query_error)?;
+    Ok(Json(op))
+}
+
+/// `POST /api/v2/issue-read-operations/{operation_id}/undo` — undo a bulk operation.
+///
+/// Writes compensating issue_read/issue_unread events and never deletes evidence.
+/// Issues changed concurrently after the operation are skipped so unrelated
+/// later actions are preserved (#4655).
+pub async fn undo_issue_read_operation(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    raw_id: Result<Path<String>, PathRejection>,
+) -> Result<Json<IssueReadOperationUndoResponse>, ApiError> {
+    let operation_id = parse_operation_id(raw_id)?;
+    let mut conn = db::checkout(&state).await?;
+    let tx = begin(&mut conn).await?;
+    issue_mutation::lock_reader(&tx, user.id()).await?;
+
+    let op = tx
+        .query_opt(
+            "SELECT id, operation_type,
+                    to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
+                    to_char(undone_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')
+             FROM issue_read_operations
+             WHERE id = $1 AND user_id = $2
+             FOR UPDATE",
+            &[&operation_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| operation_not_found(operation_id))?;
+
+    let op_type: String = op.get(1);
+    let undone_at: Option<String> = op.get(3);
+    if undone_at.is_some() {
+        return Err(ApiError::BadRequest(format!(
+            "Issue read operation {operation_id} has already been undone"
+        )));
+    }
+
+    let item_rows = tx
+        .query(
+            "SELECT item.issue_id, item.thread_id, item.issue_number, item.previous_status,
+                    i.status, i.position
+             FROM issue_read_operation_items item
+             JOIN issues i ON i.id = item.issue_id
+             JOIN threads t ON t.id = item.thread_id
+             WHERE item.operation_id = $1 AND t.user_id = $2
+             ORDER BY item.id ASC
+             FOR UPDATE OF i",
+            &[&operation_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+    let applied_status = match op_type.as_str() {
+        "bulk_mark_read" => "read",
+        "bulk_mark_unread" => "unread",
+        _ => {
+            return Err(ApiError::with_status(
+                StatusCode::CONFLICT,
+                "Unknown issue read operation type".to_string(),
+            ))
+        }
+    };
+
+    let mut undo_issue_ids: Vec<i32> = Vec::new();
+    let mut skipped_issue_ids: Vec<i32> = Vec::new();
+    let mut undo_thread_ids: Vec<i32> = Vec::new();
+    let mut undo_issue_numbers: Vec<String> = Vec::new();
+    let mut undo_previous_statuses: Vec<String> = Vec::new();
+
+    for row in &item_rows {
+        let issue_id: i32 = row.get(0);
+        let thread_id: i32 = row.get(1);
+        let issue_number: String = row.get(2);
+        let previous_status: String = row.get(3);
+        let current_status: String = row.get(4);
+        if current_status == applied_status {
+            undo_issue_ids.push(issue_id);
+            undo_thread_ids.push(thread_id);
+            undo_issue_numbers.push(issue_number);
+            undo_previous_statuses.push(previous_status);
+        } else {
+            skipped_issue_ids.push(issue_id);
+        }
+    }
+
+    if !undo_issue_ids.is_empty() {
+        // Restore each issue to its previous status. For read->unread undo, clear read_at.
+        // For unread->read undo, we cannot restore the original read_at from the operation
+        // record beyond previous_status; use NOW() only when restoring to read.
+        let statuses: Vec<String> = undo_previous_statuses.clone();
+        tx.execute(
+            "UPDATE issues AS i SET
+                 status = u.status,
+                 read_at = CASE
+                     WHEN u.status = 'read' THEN COALESCE(i.read_at, NOW())
+                     ELSE NULL
+                 END
+             FROM unnest($1::int[], $2::text[]) AS u(issue_id, status)
+             WHERE i.id = u.issue_id",
+            &[&undo_issue_ids, &statuses],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+        let affected_thread_ids: Vec<i32> = undo_thread_ids
+            .iter()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        tx.query(
+            "SELECT id FROM threads WHERE id = ANY($1::int[]) AND user_id = $2 ORDER BY id FOR UPDATE",
+            &[&affected_thread_ids, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+        let tracked = tx
+            .query(
+                "UPDATE threads t SET
+                     total_issues = s.total,
+                     issues_remaining = s.unread,
+                     next_unread_issue_id = s.next_id,
+                     reading_progress = CASE WHEN s.unread = 0 THEN 'completed'
+                                             WHEN s.unread = s.total THEN 'not_started'
+                                             ELSE 'in_progress' END,
+                     is_blocked = CASE WHEN s.unread = 0 THEN FALSE ELSE t.is_blocked END
+                 FROM (
+                     SELECT i.thread_id,
+                            count(*)::int AS total,
+                            (count(*) FILTER (WHERE i.status = 'unread'))::int AS unread,
+                            (
+                                SELECT i2.id FROM issues i2
+                                WHERE i2.thread_id = i.thread_id AND i2.status = 'unread'
+                                ORDER BY i2.position, i2.id LIMIT 1
+                            ) AS next_id
+                     FROM issues i
+                     WHERE i.thread_id = ANY($1::int[])
+                     GROUP BY i.thread_id
+                 ) s
+                 WHERE t.id = s.thread_id
+                 RETURNING t.id, t.status, t.next_unread_issue_id IS NULL AS no_unread, t.status = 'completed' AS was_completed",
+                &[&affected_thread_ids],
+            )
+            .await
+            .map_err(db::query_error)?;
+
+        let mut complete_ids: Vec<i32> = Vec::new();
+        let mut reactivate_ids: Vec<i32> = Vec::new();
+        for row in &tracked {
+            let id: i32 = row.get(0);
+            let status: String = row.get(1);
+            let no_unread: bool = row.get(2);
+            let was_completed: bool = row.get(3);
+            if no_unread {
+                complete_ids.push(id);
+            } else if was_completed || status == "completed" {
+                reactivate_ids.push(id);
+            }
+        }
+        let mut queue_changed = false;
+        if !complete_ids.is_empty() {
+            let written = tx
+                .execute(
+                    "UPDATE threads SET status = 'completed', queue_position_is_manual = FALSE
+                     WHERE id = ANY($1::int[]) AND status <> 'excluded'",
+                    &[&complete_ids],
+                )
+                .await
+                .map_err(db::query_error)?;
+            if written > 0 {
+                queue_changed = true;
+            }
+        }
+        if !reactivate_ids.is_empty() {
+            let written = tx
+                .execute(
+                    "UPDATE threads SET status = 'active'
+                     WHERE id = ANY($1::int[]) AND status <> 'excluded'",
+                    &[&reactivate_ids],
+                )
+                .await
+                .map_err(db::query_error)?;
+            if written > 0 {
+                tx.execute(
+                    "UPDATE threads t SET queue_position = base.max_pos + ranked.seq
+                     FROM (
+                         SELECT id, row_number() OVER (ORDER BY id)::int AS seq
+                         FROM threads
+                         WHERE id = ANY($1::int[]) AND status = 'active' AND queue_position < 1
+                     ) ranked,
+                     (
+                         SELECT COALESCE(MAX(queue_position), 0) AS max_pos
+                         FROM threads
+                         WHERE user_id = $2 AND status = 'active' AND queue_position >= 1
+                     ) base
+                     WHERE t.id = ranked.id",
+                    &[&reactivate_ids, &user.id()],
+                )
+                .await
+                .map_err(db::query_error)?;
+                queue_changed = true;
+            }
+        }
+        if queue_changed {
+            renormalize_queue_positions(&tx, user.id()).await?;
+        }
+
+        // Compensating events: reversing a read is issue_unread, reversing an unread is issue_read.
+        let compensating_types: Vec<&str> = undo_previous_statuses
+            .iter()
+            .map(|status| if status == "read" { "issue_read" } else { "issue_unread" })
+            .collect();
+        let user_ids: Vec<i32> = vec![user.id(); undo_issue_ids.len()];
+        tx.execute(
+            "INSERT INTO events (type, timestamp, user_id, thread_id, issue_id, issue_number)
+             SELECT t.event_type, NOW(), t.user_id, t.thread_id, t.issue_id, t.issue_number
+             FROM unnest($1::text[], $2::int[], $3::int[], $4::int[], $5::text[])
+                  AS t(event_type, user_id, thread_id, issue_id, issue_number)",
+            &[
+                &compensating_types,
+                &user_ids,
+                &undo_thread_ids,
+                &undo_issue_ids,
+                &undo_issue_numbers,
+            ],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
+
+    let undone_at_row = tx
+        .query_one(
+            "UPDATE issue_read_operations
+             SET undone_at = NOW()
+             WHERE id = $1
+             RETURNING to_char(undone_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')",
+            &[&operation_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let undone_at_value: String = undone_at_row.get(0);
+
+    issue_service::refresh_blocked_threads(&tx, user.id()).await?;
+
+    let mut operation = load_operation(&tx, user.id(), operation_id).await?;
+    operation.undone_at = Some(undone_at_value);
+
+    tx.commit().await.map_err(db::query_error)?;
+    Ok(Json(IssueReadOperationUndoResponse {
+        operation,
+        undone_issue_ids: undo_issue_ids,
+        skipped_issue_ids,
+    }))
+}
+
 /// Documentation-only operation for creating an issue read marker.
 #[utoipa::path(
     post,

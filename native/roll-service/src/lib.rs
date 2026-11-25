@@ -841,6 +841,14 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(issue_read_state::remove_read_markers),
         )
         .route(
+            "/api/v2/issue-read-operations/{operation_id}",
+            get(issue_read_state::get_issue_read_operation),
+        )
+        .route(
+            "/api/v2/issue-read-operations/{operation_id}/undo",
+            post(issue_read_state::undo_issue_read_operation),
+        )
+        .route(
             "/api/v2/issues/{issue_id}/reader-context",
             get(reader_context::get_issue_reader_context),
         )
