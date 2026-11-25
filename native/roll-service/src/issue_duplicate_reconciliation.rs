@@ -847,6 +847,9 @@ pub async fn apply_reconciliation(
     let mut moved_mapping_ids: Vec<i32> = Vec::new();
     let mut moved_list_entry_ids: Vec<i32> = Vec::new();
     let mut suppressed_duplicate_issue_ids: Vec<i32> = Vec::new();
+    let mut moved_event_origins: Vec<serde_json::Value> = Vec::new();
+    let mut moved_mapping_origins: Vec<serde_json::Value> = Vec::new();
+    let mut moved_list_entry_origins: Vec<serde_json::Value> = Vec::new();
 
     // Check if canonical already has a comicvine mapping
     let canonical_has_cv = canonical.comicvine_issue_id.is_some();
@@ -893,6 +896,7 @@ pub async fn apply_reconciliation(
             .await
             .map_err(db_err)?;
             moved_mapping_ids.push(mapping_id);
+            moved_mapping_origins.push(json!({"mapping_id": mapping_id, "original_issue_id": dup.issue_id}));
             let _ = status;
         }
 
@@ -913,6 +917,7 @@ pub async fn apply_reconciliation(
             .await
             .map_err(db_err)?;
             moved_event_ids.push(eid);
+            moved_event_origins.push(json!({"event_id": eid, "original_issue_id": dup.issue_id}));
         }
 
         // Handle read events
@@ -943,6 +948,7 @@ pub async fn apply_reconciliation(
             .await
             .map_err(db_err)?;
             moved_event_ids.push(eid);
+            moved_event_origins.push(json!({"event_id": eid, "original_issue_id": dup.issue_id}));
         }
 
         // Move list memberships
