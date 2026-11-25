@@ -128,6 +128,76 @@ describe('IssueCorrectionDialog', () => {
     expect(onSuccess).toHaveBeenCalledOnce()
   })
 
+  it('offers Add overall alias / Map instead before creating a second physical issue (#4652)', async () => {
+    const issues = [
+      issue({ id: 1, issue_number: '3', status: 'read' }),
+      issue({ id: 2, issue_number: '4' }),
+    ]
+    list.mockResolvedValue(listResponse(issues))
+    const onOverallAliasIntent = vi.fn()
+    const { onClose } = renderDialog({ currentIssueNumber: '3', onOverallAliasIntent })
+
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, '100')
+    await userEvent.click(screen.getByRole('button', { name: 'Update' }))
+
+    // Nothing was written while the reader decides how to interpret #100.
+    const choice = await screen.findByTestId('overall-alias-choice')
+    expect(choice).toHaveTextContent('Is #100 an overall number for this same comic?')
+    expect(create).not.toHaveBeenCalled()
+    expect(onOverallAliasIntent).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByTestId('overall-alias-map-instead'))
+    expect(onOverallAliasIntent).toHaveBeenCalledWith('100')
+    expect(onClose).toHaveBeenCalledOnce()
+    expect(create).not.toHaveBeenCalled()
+  })
+
+  it('only creates a separate issue when the reader explicitly reviews the structural change (#4652)', async () => {
+    const initialIssues = [
+      issue({ id: 1, issue_number: '3', status: 'read' }),
+      issue({ id: 2, issue_number: '4' }),
+    ]
+    const createdIssue = issue({ id: 3, issue_number: '100' })
+    const updatedIssues = [...initialIssues, createdIssue]
+    list
+      .mockResolvedValueOnce(listResponse(initialIssues))
+      .mockResolvedValueOnce(listResponse(updatedIssues))
+    create.mockResolvedValueOnce(listResponse([createdIssue]))
+
+    renderDialog({ currentIssueNumber: '3', onOverallAliasIntent: vi.fn() })
+
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, '100')
+    await userEvent.click(screen.getByRole('button', { name: 'Update' }))
+    await screen.findByTestId('overall-alias-choice')
+    await userEvent.click(screen.getByTestId('overall-alias-create-separate'))
+
+    await waitFor(() => expect(create).toHaveBeenCalledWith(42, '100', {
+      insert_after_issue_id: null,
+    }))
+  })
+
+  it('cancels the alias interception without writing when the reader goes back (#4652)', async () => {
+    const issues = [issue({ id: 1, issue_number: '3' })]
+    list.mockResolvedValue(listResponse(issues))
+    const onOverallAliasIntent = vi.fn()
+    renderDialog({ currentIssueNumber: '3', onOverallAliasIntent })
+
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, '100')
+    await userEvent.click(screen.getByRole('button', { name: 'Update' }))
+    await screen.findByTestId('overall-alias-choice')
+    await userEvent.click(screen.getByTestId('overall-alias-choice-back'))
+
+    expect(screen.queryByTestId('overall-alias-choice')).toBeNull()
+    expect(onOverallAliasIntent).not.toHaveBeenCalled()
+    expect(create).not.toHaveBeenCalled()
+  })
+
   it('retries failed loads and reports update failures', async () => {
     list.mockRejectedValue(new Error('load failed'))
     const { onClose } = renderDialog({ currentIssueNumber: null })

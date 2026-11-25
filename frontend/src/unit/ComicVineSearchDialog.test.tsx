@@ -174,6 +174,54 @@ describe('ComicVineSearchDialog mode branching', () => {
     expect(confirmIdentitySpy).not.toHaveBeenCalled()
   })
 
+  it('submits the overall alias and expected version with the identity edit (#4652)', async () => {
+    render(<ComicVineSearchDialog {...defaultProps({
+      overallIssueNumber: '100',
+      expectedVersion: 7,
+    })} />)
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Stormwatch'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm Identity' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Identity' }))
+
+    await waitFor(() => expect(confirmIdentitySpy).toHaveBeenCalledWith(43, 36956, {
+      overallIssueNumber: '100',
+      expectedVersion: 7,
+    }))
+  })
+
+  it('offers a reload-then-retry path for a stale 409 refusal (#4652)', async () => {
+    const conflict = {
+      isAxiosError: true,
+      response: {
+        status: 409,
+        data: { detail: 'Issue identity changed; reload version 8 and retry' },
+      },
+      message: 'Request failed',
+    }
+    confirmIdentitySpy.mockRejectedValueOnce(conflict)
+    const onConflictRetry = vi.fn().mockResolvedValue(undefined)
+    render(<ComicVineSearchDialog {...defaultProps({ expectedVersion: 7, onConflictRetry })} />)
+
+    const input = screen.getByPlaceholderText('Search series title or paste a ComicVine URL')
+    fireEvent.change(input, { target: { value: 'Stormwatch' } })
+    await waitFor(() => expect(screen.getByText('Stormwatch')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Stormwatch'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm Identity' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Identity' }))
+
+    await waitFor(() => expect(screen.getByText(/reload version 8 and retry/)).toBeInTheDocument())
+    expect(screen.getByTestId('comicvine-retry')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('comicvine-retry'))
+    await waitFor(() => expect(onConflictRetry).toHaveBeenCalledOnce())
+    expect(screen.queryByText(/reload version 8 and retry/)).toBeNull()
+    // The conflict was definitive: no second write happened before the reload.
+    expect(confirmIdentitySpy).toHaveBeenCalledTimes(1)
+  })
+
   it('renders same-title series results as distinguishable options', async () => {
     searchSeriesSpy.mockResolvedValue({
       query: 'Ultimate Spider-Man',
