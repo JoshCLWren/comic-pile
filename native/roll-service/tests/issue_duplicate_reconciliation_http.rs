@@ -486,6 +486,10 @@ async fn detect_preview_apply_and_undo_preserve_real_history() {
     .await;
     assert_eq!(status, StatusCode::OK, "{retried:?}");
     assert_eq!(retried["merged_issue_ids"], json!([duplicate]));
+    assert_eq!(
+        retried["undo_snapshot_id"], applied["undo_snapshot_id"],
+        "an idempotent retry must keep the Undo affordance available"
+    );
 
     // --- Undo restores explicit alias state, mapping and event ownership.
     let undo_id = applied["undo_snapshot_id"].as_i64().unwrap() as i32;
