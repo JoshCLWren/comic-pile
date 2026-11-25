@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-25T06:57:59+00:00",
+  "generated_at": "2026-11-25T07:15:06+00:00",
   "models": [
     {
       "health": {
@@ -23254,7 +23254,7 @@
   },
   "counts_generated_at": "2026-11-25T06:25:23.741248+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-25T06:58:00Z",
+    "generated_at": "2026-11-25T07:15:09Z",
     "sources": {
       "kilo-auto": [
         "kilo-auto/free"
@@ -23317,10 +23317,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-25T06:58:00.531683+00:00",
-    "days_elapsed": 24.29,
+    "checked_at": "2026-11-25T07:15:09.293115+00:00",
+    "days_elapsed": 24.302,
     "days_in_month": 30.0,
-    "days_left": 5.71,
+    "days_left": 5.7,
     "in_use": true,
     "label": "",
     "metrics": {
@@ -23336,31 +23336,31 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 6041216,
-        "organization": 6041216,
+        "database": 6173889,
+        "organization": 6173889,
         "owner_target": 50000000,
-        "projected_database": 7461362,
-        "projected_organization": 7461362,
-        "projected_share": 0.0149,
-        "share_used": 0.0121
+        "projected_database": 7621458,
+        "projected_organization": 7621458,
+        "projected_share": 0.0152,
+        "share_used": 0.0123
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 113685,
-        "organization": 113685,
+        "database": 113867,
+        "organization": 113867,
         "owner_target": 1000000,
-        "projected_database": 140410,
-        "projected_organization": 140410,
-        "projected_share": 0.014,
+        "projected_database": 140565,
+        "projected_organization": 140565,
+        "projected_share": 0.0141,
         "share_used": 0.0114
       },
       "storage_bytes": {
         "allowance": 5000000000,
-        "database": 17584128,
-        "organization": 17584128,
+        "database": 17588224,
+        "organization": 17588224,
         "owner_target": 250000000,
-        "projected_database": 17584128,
-        "projected_organization": 17584128,
+        "projected_database": 17588224,
+        "projected_organization": 17588224,
         "projected_share": 0.0035,
         "share_used": 0.0035
       }
