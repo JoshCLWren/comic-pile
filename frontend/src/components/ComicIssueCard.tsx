@@ -138,6 +138,7 @@ export function ComicIssueCover({
 export function ComicIssueIdentity({
   threadTitle,
   issueNumber,
+  issueNumberAlias,
   status,
   rating,
   variant = 'standard',
@@ -147,6 +148,7 @@ export function ComicIssueIdentity({
 }: {
   threadTitle: string
   issueNumber: string
+  issueNumberAlias?: string | null
   status: 'read' | 'unread'
   rating: number | null
   variant?: ComicIssueCardVariant
@@ -157,10 +159,17 @@ export function ComicIssueIdentity({
 }) {
   const titleClass = variant === 'featured' ? 'text-xl' : 'text-sm'
   const Title = heading ? 'h2' : 'p'
+  const alias = issueNumberAlias?.trim() || null
+  const showAlias = alias != null && alias.toLowerCase() !== issueNumber.trim().toLowerCase()
   return (
     <div className="min-w-0">
       <Title data-testid={headingTestId} className={`break-words ${heading ? 'font-black' : 'font-bold'} leading-snug text-[var(--theme-text-primary)] ${titleClass}`}>
         {threadTitle} <span className="text-[var(--theme-comic-accent)]">#{issueNumber}</span>
+        {showAlias && (
+          <span className="ml-1 text-[0.8em] font-normal text-[var(--theme-text-muted)]" title={`Alternate number: ${alias}`}>
+            (alt #{alias})
+          </span>
+        )}
       </Title>
       {showStatus && <p className="mt-1 text-xs text-[var(--theme-text-muted)]">
         {status === 'read' ? (
@@ -250,6 +259,8 @@ export interface ComicIssueCardProps {
   /** Fallbacks from the owning list/thread payload while the batch loads. */
   threadTitle: string
   issueNumber: string
+  /** Alternate overall/story number for the same physical comic (#4652). */
+  issueNumberAlias?: string | null
   status: 'read' | 'unread'
   rating?: number | null
   variant?: ComicIssueCardVariant
@@ -305,6 +316,7 @@ export function ComicIssueCard({
   card,
   threadTitle,
   issueNumber,
+  issueNumberAlias,
   status,
   rating,
   variant = 'standard',

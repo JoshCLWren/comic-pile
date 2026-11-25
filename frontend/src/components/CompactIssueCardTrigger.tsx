@@ -98,7 +98,16 @@ export default function CompactIssueCardTrigger({
           variant="compact"
         />
         <span className="min-w-0">
-          {!hideTitle && <span className="block break-words text-xs font-semibold">{title} #{number}</span>}
+          {!hideTitle && (
+            <span className="block break-words text-xs font-semibold">
+              {title} #{authoredNumber}
+              {aliasNumber && aliasNumber.toLowerCase() !== authoredNumber.trim().toLowerCase() && (
+                <span className="ml-1 font-normal text-[var(--theme-text-muted)]" title={`Alternate number: ${aliasNumber}`}>
+                  (alt #{aliasNumber})
+                </span>
+              )}
+            </span>
+          )}
           <span className="block text-[11px] text-[var(--theme-text-muted)]">
             {isRead ? 'Read' : 'Unread'}
             {(resolved?.rating ?? rating) != null ? ` · Rated ${resolved?.rating ?? rating}` : ''}
