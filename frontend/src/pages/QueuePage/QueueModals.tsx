@@ -318,8 +318,8 @@ export function QueueModals({
 
   useEffect(() => {
     if (openModal !== 'edit') setHasPendingIssueEdits(false)
-    if (openModal !== discardPrompt) setDiscardPrompt(null)
-  }, [openModal, discardPrompt])
+    setDiscardPrompt((current) => (current !== null && openModal !== current ? null : current))
+  }, [openModal])
 
   useEffect(() => {
     if (openModal !== 'create') setLastReadInput('')
