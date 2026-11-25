@@ -33,6 +33,12 @@ interface IssueCorrectionDialogProps {
    * reconciled Roll/bootstrap caches, so callers can skip a duplicate fetch.
    */
   onSuccess: (options?: { alreadyRefreshed?: boolean }) => void
+  /**
+   * Preferred alternative to creating a second physical issue (#4652). When a
+   * typed number has no owned row, the caller can add it as an overall alias on
+   * the current comic and map that one comic to the provider issue instead.
+   */
+  onOverallAliasIntent?: (issueNumber: string) => void
   /** Injectable issue-tracking API; defaults to the production issues service. */
   issuesApi?: IssueCorrectionIssuesApi
 }
@@ -45,9 +51,11 @@ export default function IssueCorrectionDialog({
   threadTitle,
   onClose,
   onSuccess,
+  onOverallAliasIntent,
   issuesApi: issuesService = issuesApi,
 }: IssueCorrectionDialogProps) {
   const [selectedIssueNumber, setSelectedIssueNumber] = useState<string>('')
+  const [pendingAliasNumber, setPendingAliasNumber] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingIssues, setIsLoadingIssues] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -121,19 +129,20 @@ export default function IssueCorrectionDialog({
     }
   }, [isOpen, currentIssueNumber, fetchIssues])
 
-  const handleSubmit = useCallback(async () => {
-    const targetNumber = selectedIssueNumber.trim()
-    if (!targetNumber) {
-      setError('Please enter an issue identifier')
-      return
-    }
-
+  /**
+   * Apply the correction against an owned issue. Creating a new row is a
+   * structural change and only proceeds when the reader explicitly chooses it
+   * (or when no alias intent is available, for callers without mapping UI).
+   */
+  const applyCorrection = useCallback(async (
+    targetNumber: string,
+    options: { allowCreate?: boolean } = {},
+  ) => {
     setIsLoading(true)
     setError(null)
-
     try {
       let targetIssue = allIssues.find((issue) => issue.issue_number === targetNumber)
-      if (!targetIssue) {
+      if (!targetIssue && options.allowCreate) {
         const insertAfterIssueId =
           insertPosition !== 'start' && insertPosition !== 'end' ? Number(insertPosition) : null
         const createdIssues = await issuesService.create(threadId, targetNumber, {
@@ -148,6 +157,9 @@ export default function IssueCorrectionDialog({
         if (insertPosition === 'start') {
           await issuesService.move(targetIssue.id, null)
         }
+      }
+      if (!targetIssue) {
+        throw new Error('No matching owned issue')
       }
 
       const orderedIssues = await loadAllIssues()
@@ -174,7 +186,26 @@ export default function IssueCorrectionDialog({
     } finally {
       setIsLoading(false)
     }
-  }, [selectedIssueNumber, allIssues, insertPosition, threadId, loadAllIssues, issuesService, onSuccess, onClose])
+  }, [allIssues, insertPosition, threadId, loadAllIssues, issuesService, onSuccess, onClose])
+
+  const handleSubmit = useCallback(async () => {
+    const targetNumber = selectedIssueNumber.trim()
+    if (!targetNumber) {
+      setError('Please enter an issue identifier')
+      return
+    }
+    setError(null)
+
+    // #4652: an attempted renumber to a number that is not an owned row is the
+    // incident shape. Offer the alias/mapping interpretation first rather than
+    // silently creating a second physical issue before the reader reads #3-5.
+    const isExistingOwned = allIssues.some((issue) => issue.issue_number === targetNumber)
+    if (!isExistingOwned && onOverallAliasIntent) {
+      setPendingAliasNumber(targetNumber)
+      return
+    }
+    await applyCorrection(targetNumber, { allowCreate: !isExistingOwned })
+  }, [selectedIssueNumber, allIssues, onOverallAliasIntent, applyCorrection])
 
   const adjustIssue = useCallback((delta: number) => {
     const currentValue = selectedIssueNumber
@@ -312,6 +343,51 @@ export default function IssueCorrectionDialog({
                 </select>
               </div>
             )}
+          </div>
+        )}
+
+        {pendingAliasNumber && onOverallAliasIntent && (
+          <div
+            className="p-4 rounded-xl border border-[var(--theme-comic-accent)]/40 bg-[var(--theme-bg-hover)] space-y-3"
+            data-testid="overall-alias-choice"
+          >
+            <p className="text-sm font-bold text-[var(--theme-text-primary)]">
+              Is #{pendingAliasNumber} an overall number for this same comic?
+            </p>
+            <p className="text-xs text-[var(--theme-text-muted)]">
+              An authored story number and an overall-series number can name one physical
+              comic. Adding the overall alias and mapping this comic avoids creating a
+              second owned issue with its own history and placement.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                data-testid="overall-alias-map-instead"
+                onClick={() => {
+                  onOverallAliasIntent(pendingAliasNumber)
+                  onClose()
+                }}
+                className="inline-flex min-h-11 items-center rounded-xl bg-[var(--theme-primary-action)] px-4 text-sm font-black text-[var(--theme-primary-action-text)]"
+              >
+                Add overall alias / Map instead
+              </button>
+              <button
+                type="button"
+                data-testid="overall-alias-create-separate"
+                onClick={() => void applyCorrection(pendingAliasNumber, { allowCreate: true })}
+                className="inline-flex min-h-11 items-center rounded-lg border border-[var(--theme-danger)] px-4 text-sm font-bold text-[var(--theme-danger)]"
+              >
+                Create a separate issue instead
+              </button>
+              <button
+                type="button"
+                data-testid="overall-alias-choice-back"
+                onClick={() => setPendingAliasNumber(null)}
+                className="inline-flex min-h-11 items-center rounded-lg border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-muted)]"
+              >
+                Back
+              </button>
+            </div>
           </div>
         )}
 
