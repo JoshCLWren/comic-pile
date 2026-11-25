@@ -62,7 +62,13 @@ pub(crate) async fn load_core_transaction(
     }
     // A suppressed duplicate is an alias of its canonical issue, never a
     // second rollable identity (see ROLLABLE_ISSUE_PREDICATE).
-    let rows = tx.query("SELECT i.id, i.thread_id, i.position, i.status, i.issue_number FROM issues i JOIN threads t ON t.id = i.thread_id WHERE t.user_id = $1 AND i.merged_into_issue_id IS NULL ORDER BY i.thread_id, i.position, i.id", &[&user_id]).await?;
+    let issue_sql = format!(
+        "SELECT i.id, i.thread_id, i.position, i.status, i.issue_number \
+         FROM issues i JOIN threads t ON t.id = i.thread_id \
+         WHERE t.user_id = $1 AND i.{ROLLABLE_ISSUE_PREDICATE} \
+         ORDER BY i.thread_id, i.position, i.id"
+    );
+    let rows = tx.query(&issue_sql, &[&user_id]).await?;
     let mut issues = Vec::with_capacity(rows.len());
     for row in rows {
         issues.push(ReadingIssue {

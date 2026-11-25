@@ -304,7 +304,14 @@ export default function DuplicateReconciliationPage() {
 
           {preview && (
             <div className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-4">
-              <h3 className="mb-2 text-sm font-bold uppercase tracking-wider text-[var(--theme-text-dim)]">Preview</h3>
+              <div className="mb-2 flex flex-wrap items-center gap-3">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--theme-text-dim)]">Preview</h3>
+                {selectedGroup && (
+                  <span className="text-xs text-[var(--theme-text-muted)]">
+                    {selectedGroup.confidence} confidence · {selectedGroup.reason}
+                  </span>
+                )}
+              </div>
               {preview.warnings.length > 0 && (
                 <div className="mb-3 space-y-1">
                   {preview.warnings.map((w, i) => (
@@ -344,7 +351,11 @@ export default function DuplicateReconciliationPage() {
                         <button
                           type="button"
                           aria-pressed={decisions[key] !== 'keep_distinct'}
-                          className="rounded-lg border border-[var(--theme-primary-action)] px-3 py-1.5 text-xs text-[var(--theme-text-primary)] aria-pressed:bg-[var(--theme-primary-action)]/15 disabled:opacity-50"
+                          className={`rounded-lg border border-[var(--theme-primary-action)] px-3 py-1.5 text-xs text-[var(--theme-text-primary)] disabled:opacity-50 ${
+                            decisions[key] !== 'keep_distinct'
+                              ? 'bg-[var(--theme-primary-action)]/15'
+                              : ''
+                          }`}
                           disabled={previewMutation.isPending}
                           onClick={() => chooseDecision(key, 'merge')}
                         >
@@ -353,7 +364,9 @@ export default function DuplicateReconciliationPage() {
                         <button
                           type="button"
                           aria-pressed={decisions[key] === 'keep_distinct'}
-                          className="rounded-lg border border-[var(--theme-border)] px-3 py-1.5 text-xs text-[var(--theme-text-primary)] aria-pressed:bg-[var(--theme-bg-hover)] disabled:opacity-50"
+                          className={`rounded-lg border border-[var(--theme-border)] px-3 py-1.5 text-xs text-[var(--theme-text-primary)] disabled:opacity-50 ${
+                            decisions[key] === 'keep_distinct' ? 'bg-[var(--theme-bg-hover)]' : ''
+                          }`}
                           disabled={previewMutation.isPending}
                           onClick={() => chooseDecision(key, 'keep_distinct')}
                         >
@@ -381,7 +394,11 @@ export default function DuplicateReconciliationPage() {
                 <button
                   type="button"
                   className="rounded-lg border border-[var(--theme-border)] px-4 py-2 text-sm text-[var(--theme-text-primary)]"
-                  onClick={() => setPreview(null)}
+                  onClick={() => {
+                    setPreview(null)
+                    setDecisions({})
+                    setDecisionKeys([])
+                  }}
                 >
                   Cancel
                 </button>
