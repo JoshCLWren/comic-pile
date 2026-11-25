@@ -183,9 +183,6 @@ export function useComicIssueMapping({
         removalIdentityRef.current = null
       }
       if (confirmedIssueIds.length > 0) {
-        // Cancel and drop every confirmed identity's cached provider details
-        // before refetching, so a late response for the previous mapping cannot
-        // restore stale credits or cover (#5695).
         await clearComicVineIssueIntelligenceMany(queryClient, confirmedIssueIds)
         await Promise.all(
           confirmedIssueIds.map((confirmedId) =>

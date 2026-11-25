@@ -634,19 +634,6 @@ export async function invalidateComicVineIssueIntelligence(
 }
 
 /**
- * Cancel and clear identity-bound provider details for every confirmed issue
- * before refetching committed ComicVine confirmations/replacements. Keeping a
- * previous identity's cache visible during the refetch would show the wrong
- * creators (and other metadata) for an unchanged canonical Issue id (#5695).
- */
-export async function clearComicVineIssueIntelligenceMany(
-  client: QueryClient,
-  issueIds: readonly number[],
-): Promise<void> {
-  await Promise.all(issueIds.map((issueId) => clearComicVineIssueIntelligence(client, issueId)))
-}
-
-/**
  * Drop provider details for an issue whose mapping was removed, then refetch.
  * Clearing first prevents stale cover/creator data from surviving a failed
  * post-removal refresh.
@@ -662,6 +649,19 @@ export async function clearComicVineIssueIntelligence(
   await client.cancelQueries(filter)
   client.setQueryData(filter.queryKey, null)
   await client.invalidateQueries(filter)
+}
+
+/**
+ * Drop identity-bound provider details before refetching committed ComicVine
+ * confirmations/replacements. Keeping the previous identity's cache visible
+ * during the refetch would show the wrong creators (and other metadata) for an
+ * unchanged canonical Issue id.
+ */
+export async function clearComicVineIssueIntelligenceMany(
+  client: QueryClient,
+  issueIds: readonly number[],
+): Promise<void> {
+  await Promise.all(issueIds.map((issueId) => clearComicVineIssueIntelligence(client, issueId)))
 }
 
 /**
@@ -1146,35 +1146,6 @@ async function invalidateReadingEligibility(
     refetchRollBootstrap = true,
     resetQueue = false,
   } = options
-  // An initial request with no cached data is not restarted by invalidateQueries.
-  // It may have started before the committed read and return stale blockers or
-  // progress. Cancel those requests before refetching the same projections.
-  const refreshPrefixes = [
-    queryKeys.thread.all,
-    queryKeys.issueCards.all,
-    queryKeys.queue.all,
-    queryKeys.completed.pages(),
-    queryKeys.roll.eligibleIssueIdsAll(),
-    queryKeys.roll.issueCardsAll(),
-    queryKeys.roll.dieState(),
-    queryKeys.roll.lastRead(),
-    ...(refetchRollBootstrap ? [queryKeys.roll.bootstrap()] : []),
-    queryKeys.dependencies.all,
-    queryKeys.readerContext.all,
-    queryKeys.readingPlans.all,
-    includeAuthoringLists ? queryKeys.customCBLs.all : queryKeys.customCBLs.readers(),
-    queryKeys.session.all,
-    queryKeys.activity.all,
-  ]
-  await client.cancelQueries({
-    predicate: (query) =>
-      query.isActive() &&
-      query.state.data === undefined &&
-      query.state.fetchStatus === 'fetching' &&
-      refreshPrefixes.some((prefix) =>
-        prefix.every((part, index) => query.queryKey[index] === part),
-      ),
-  })
   await Promise.all([
     client.invalidateQueries({ queryKey: queryKeys.thread.all }),
     // Legacy read/unread and direct v2 writes change the shared card status too.
@@ -1265,8 +1236,8 @@ export async function applyIssueCardMutation(
       ...cached,
       issues_remaining: progress.issues_remaining,
       status: progress.status as Thread['status'],
-      last_rating: progress.last_rating !== undefined ? progress.last_rating : cached.last_rating ?? null,
-      reading_progress: progress.reading_progress !== undefined ? progress.reading_progress : cached.reading_progress ?? null,
+      last_rating: progress.last_rating ?? cached.last_rating ?? null,
+      reading_progress: progress.reading_progress ?? cached.reading_progress ?? null,
       next_unread_issue_id: progress.next_unread_issue_id ?? null,
     }
   }

@@ -62,7 +62,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
   const { metadata, isLoading, isError, error, refetch } = useComicVineIssueIntelligence(issueId)
   const storyArcCards = useIssueCards(metadata?.story_arcs.flatMap((arc) => arc.related_issues.flatMap((related) => related.comicpile_matches.map((match) => match.issue_id))) ?? [], { enabled: !isLoading })
   const cardsByIssue = indexIssueCards(storyArcCards.data)
-  const [coverRatios, setCoverRatios] = useState<Record<string, number>>({})
+  const [coverRatio, setCoverRatio] = useState<number | null>(null)
   const [showAllCreators, setShowAllCreators] = useState(false)
   const [showAllStoryArcs, setShowAllStoryArcs] = useState(false)
   const [showAllRelatedIssues, setShowAllRelatedIssues] = useState<Record<number, boolean>>({})
@@ -76,6 +76,10 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
   const creatorsDetailsRef = useRef<HTMLDetailsElement>(null)
   const storyArcsDetailsRef = useRef<HTMLDetailsElement>(null)
   const { isDesktop } = useResponsive()
+
+  useEffect(() => {
+    setCoverRatio(null)
+  }, [metadata?.image_url, isLoading])
 
   useEffect(() => {
     setSummaryExpanded(false)
@@ -174,8 +178,6 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
     </button>
   )
 
-  const imageUrl = metadata?.image_url ?? null
-  const coverRatio = imageUrl ? coverRatios[imageUrl] ?? null : null
   const coverAspectRatio = coverRatio ?? COVER_RATIO_FALLBACK
   const coverWidthCapVh = COVER_HEIGHT_CAP_VH * coverAspectRatio
   const coverStyle: CSSProperties = {
@@ -302,13 +304,8 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
           placeholderTestId="cover-placeholder"
           onImageLoad={(img) => {
             const { naturalWidth, naturalHeight } = img
-            const currentImageUrl = metadata?.image_url
-            if (naturalWidth > 0 && naturalHeight > 0 && currentImageUrl) {
-              const nextRatio = naturalWidth / naturalHeight
-              setCoverRatios((previous) => {
-                if (previous[currentImageUrl] === nextRatio) return previous
-                return { ...previous, [currentImageUrl]: nextRatio }
-              })
+            if (naturalWidth > 0 && naturalHeight > 0) {
+              setCoverRatio(naturalWidth / naturalHeight)
             }
           }}
         >
