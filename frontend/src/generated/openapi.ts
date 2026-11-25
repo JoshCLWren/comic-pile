@@ -27,6 +27,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/__docs__/issue-duplicate-reconciliation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/metrics": {
         parameters: {
             query?: never;
@@ -2267,6 +2283,70 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["skip_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/issue-duplicate-reconciliation/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["issue_duplicate_reconciliation_apply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/issue-duplicate-reconciliation/detect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["issue_duplicate_reconciliation_detect"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/issue-duplicate-reconciliation/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["issue_duplicate_reconciliation_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/issue-duplicate-reconciliation/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["issue_duplicate_reconciliation_undo"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5579,6 +5659,64 @@ export interface components {
             event_id: number;
             replayed: boolean;
         };
+        DuplicateCandidateGroup: {
+            confidence: string;
+            evidence: components["schemas"]["DuplicateIssueEvidence"][];
+            group_key: string;
+            reason: string;
+            /** Format: int32 */
+            suggested_canonical_issue_id?: number | null;
+            suggested_duplicate_issue_ids: number[];
+        };
+        DuplicateDetectionResponse: {
+            groups: components["schemas"]["DuplicateCandidateGroup"][];
+        };
+        DuplicateIssueEvidence: {
+            comicvine_issue_id?: string | null;
+            comicvine_issue_number?: string | null;
+            comicvine_story_number?: string | null;
+            /** Format: int32 */
+            comicvine_volume_id?: number | null;
+            created_at: string;
+            is_synthetic_placeholder_read: boolean;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            list_memberships: components["schemas"]["DuplicateListMembership"][];
+            /** Format: int32 */
+            merged_into_issue_id?: number | null;
+            rating_events: components["schemas"]["DuplicateRatingEvent"][];
+            read_at?: string | null;
+            read_events: components["schemas"]["DuplicateReadEvent"][];
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
+        DuplicateListMembership: {
+            /** Format: int32 */
+            entry_id: number;
+            /** Format: int32 */
+            list_id: number;
+            list_name: string;
+            /** Format: int32 */
+            position: number;
+        };
+        DuplicateRatingEvent: {
+            /** Format: int32 */
+            event_id: number;
+            /** Format: double */
+            rating: number;
+            timestamp: string;
+        };
+        DuplicateReadEvent: {
+            /** Format: int32 */
+            event_id: number;
+            /** @description Per-event synthetic flag: true when the read timestamp predates its issue's creation. */
+            is_synthetic: boolean;
+            issue_number?: string | null;
+            timestamp: string;
+        };
         /** @enum {string} */
         EditorKind: "reading_list" | "prerequisite" | "issue";
         EffectiveTag: {
@@ -7769,6 +7907,64 @@ export interface components {
             /** Format: int32 */
             session_id: number;
         };
+        ReconcileApplyRequest: {
+            /** Format: int32 */
+            canonical_issue_id: number;
+            decisions?: {
+                [key: string]: string;
+            };
+            duplicate_issue_ids: number[];
+            preview_token: string;
+        };
+        ReconcileApplyResponse: {
+            /** Format: int32 */
+            canonical_issue_id: number;
+            merged_issue_ids: number[];
+            moved_event_ids: number[];
+            moved_list_entry_ids: number[];
+            moved_mapping_ids: number[];
+            suppressed_duplicate_issue_ids: number[];
+            /** Format: int32 */
+            undo_snapshot_id?: number | null;
+            warnings: string[];
+        };
+        ReconcilePreviewAction: {
+            decision_key?: string | null;
+            description: string;
+            kind: string;
+            requires_decision: boolean;
+            safe: boolean;
+        };
+        ReconcilePreviewRequest: {
+            /** Format: int32 */
+            canonical_issue_id: number;
+            /** @description Explicit choices for ambiguous actions: "merge" (default) or "keep_distinct" */
+            decisions?: {
+                [key: string]: string;
+            };
+            duplicate_issue_ids: number[];
+        };
+        ReconcilePreviewResponse: {
+            actions: components["schemas"]["ReconcilePreviewAction"][];
+            can_apply: boolean;
+            canonical: components["schemas"]["DuplicateIssueEvidence"];
+            /** Format: int32 */
+            canonical_issue_id: number;
+            duplicate_issue_ids: number[];
+            duplicates: components["schemas"]["DuplicateIssueEvidence"][];
+            preview_token: string;
+            warnings: string[];
+        };
+        ReconcileUndoRequest: {
+            /** Format: int32 */
+            reconciliation_id: number;
+        };
+        ReconcileUndoResponse: {
+            /** Format: int32 */
+            reconciliation_id: number;
+            undone: boolean;
+            warnings: string[];
+        };
         RecoveryCandidate: {
             added_steps: components["schemas"]["RecoveryStep"][];
             /** Format: int32 */
@@ -9161,6 +9357,23 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
+            };
+        };
+    };
+    documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -15117,6 +15330,168 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["IdentityInboxActionResponse"];
                 };
+            };
+        };
+    };
+    issue_duplicate_reconciliation_apply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconcileApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Apply reconciliation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconcileApplyResponse"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_duplicate_reconciliation_detect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Detected duplicate groups */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateDetectionResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_duplicate_reconciliation_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconcilePreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Preview reconciliation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconcilePreviewResponse"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_duplicate_reconciliation_undo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconcileUndoRequest"];
+            };
+        };
+        responses: {
+            /** @description Undo reconciliation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconcileUndoResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -723,7 +723,7 @@ async fn thread_response(
                 t.notes, t.is_test, t.is_blocked, {created}, t.total_issues, t.reading_progress, \
                 t.next_unread_issue_id, t.manual_creator_credits::text, \
                 (SELECT i.issue_number FROM issues i WHERE i.id = t.next_unread_issue_id), \
-                (SELECT count(*) FROM issues i WHERE i.thread_id = t.id AND i.status = 'unread') \
+                (SELECT count(*) FROM issues i WHERE i.thread_id = t.id AND i.status = 'unread' AND i.merged_into_issue_id IS NULL) \
          FROM threads t WHERE t.id = $1 AND t.user_id = $2",
         last_activity = iso("t.last_activity_at"),
         created = iso("t.created_at"),

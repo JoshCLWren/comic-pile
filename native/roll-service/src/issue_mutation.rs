@@ -212,15 +212,19 @@ async fn recreate_tracking_state(
 ) -> Result<(), ApiError> {
     tx.execute(
         "UPDATE threads t SET
-             total_issues = (SELECT count(*)::int FROM issues i WHERE i.thread_id=t.id),
+             total_issues = (SELECT count(*)::int FROM issues i
+                             WHERE i.thread_id=t.id AND i.merged_into_issue_id IS NULL),
              issues_remaining = (SELECT count(*)::int FROM issues i
-                                 WHERE i.thread_id=t.id AND i.status <> 'read'),
+                                 WHERE i.thread_id=t.id AND i.status <> 'read'
+                                   AND i.merged_into_issue_id IS NULL),
              next_unread_issue_id = (SELECT i.id FROM issues i
                                      WHERE i.thread_id=t.id AND i.status <> 'read'
+                                       AND i.merged_into_issue_id IS NULL
                                      ORDER BY i.position, i.id LIMIT 1),
              status = CASE
                  WHEN EXISTS (SELECT 1 FROM issues i
-                              WHERE i.thread_id=t.id AND i.status <> 'read')
+                              WHERE i.thread_id=t.id AND i.status <> 'read'
+                                AND i.merged_into_issue_id IS NULL)
                  THEN 'active' ELSE 'completed' END
          WHERE t.id=$1 AND t.user_id=$2",
         &[&thread_id, &user_id],
@@ -433,7 +437,7 @@ pub async fn create_issues(
     .map_err(db::query_error)?;
     let total: i32 = tx
         .query_one(
-            "SELECT count(*)::int FROM issues WHERE thread_id=$1",
+            "SELECT count(*)::int FROM issues WHERE thread_id=$1 AND merged_into_issue_id IS NULL",
             &[&thread_id],
         )
         .await

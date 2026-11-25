@@ -370,11 +370,21 @@ export default function IdentityInboxPage() {
 
   return (
     <section aria-label="Identity reconciliation inbox" className="pt-4 pb-12 w-full">
-      <h1 className="text-2xl font-bold mb-2 text-[var(--theme-text-primary)]">Identity Inbox</h1>
-      <p className="text-sm text-[var(--theme-text-muted)] mb-6">
-        Resolve unmatched or ambiguous external comic identities. Confirm the correct match,
-        reject wrong candidates, or defer for later.
-      </p>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold mb-2 text-[var(--theme-text-primary)]">Identity Inbox</h1>
+          <p className="text-sm text-[var(--theme-text-muted)]">
+            Resolve unmatched or ambiguous external comic identities. Confirm the correct match,
+            reject wrong candidates, or defer for later.
+          </p>
+        </div>
+        <Link
+          to="/duplicate-reconciliation"
+          className="rounded-lg border border-[var(--theme-border)] px-3 py-2 text-sm text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-panel)]"
+        >
+          Resolve duplicates
+        </Link>
+      </div>
 
       {actionErrorMessage && (
         <div className="p-3 mb-4 bg-[var(--theme-danger)]/10 border border-[var(--theme-danger)]/30 rounded-lg text-sm text-[var(--theme-danger)]">

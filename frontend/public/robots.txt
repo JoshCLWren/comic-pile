@@ -38,6 +38,7 @@ Disallow: /cbl-sources
 Disallow: /whats-new
 Disallow: /glossary
 Disallow: /identity-inbox
+Disallow: /duplicate-reconciliation
 Disallow: /api/
 Disallow: /debug/
 
