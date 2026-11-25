@@ -322,6 +322,27 @@ pub(crate) async fn provider_response(
     }
 }
 
+/// Normalize one configured credential value. ComicVine keys are alphanumeric
+/// and [`provider_exchange`] refuses anything else before it builds a URL, so a
+/// value pasted into a deployment dashboard with a trailing newline (or
+/// surrounding spaces) must be trimmed where it is read instead of being
+/// reported as a provider outage. An absent or all-whitespace value is "not
+/// configured", matching the Python client's empty-key check.
+fn normalize_provider_api_key(raw: &str) -> Option<String> {
+    let key = raw.trim();
+    (!key.is_empty()).then(|| key.to_owned())
+}
+
+/// The single `COMICVINE_API_KEY` read. Every provider path (repair worker,
+/// catalog roster, inline hydration, search, plan sync) goes through this so
+/// they agree on one normalization and on what "configured" means. The
+/// returned value is never logged.
+pub(crate) fn provider_api_key() -> Option<String> {
+    std::env::var("COMICVINE_API_KEY")
+        .ok()
+        .and_then(|raw| normalize_provider_api_key(&raw))
+}
+
 pub(crate) async fn provider_exchange(
     outbound: &Arc<dyn OutboundHttp>,
     resource: &str,
@@ -330,7 +351,16 @@ pub(crate) async fn provider_exchange(
 ) -> Result<Exchange, ProviderFailure> {
     // Callers construct only trusted resource names and numeric query values.
     // Fail closed on unexpected credential syntax rather than sending an unescaped secret.
-    if api_key.is_empty() || !api_key.bytes().all(|c| c.is_ascii_alphanumeric()) {
+    // Normalizing here as well as at the read boundary makes the invariant hold
+    // for every caller, including future ones: whitespace can never turn into
+    // `Unavailable` without a provider round trip (#5695).
+    let Some(api_key) = normalize_provider_api_key(api_key) else {
+        tracing::debug!("comicvine provider credential is not configured");
+        return Err(ProviderFailure::Unavailable);
+    };
+    if !api_key.bytes().all(|c| c.is_ascii_alphanumeric()) {
+        // Never log the value, any fragment of it, or the credential-bearing URL.
+        tracing::warn!("comicvine provider credential contains non-alphanumeric bytes");
         return Err(ProviderFailure::Unavailable);
     }
     // Python `_provider_url`: only collection endpoints use a trailing slash.
@@ -474,10 +504,7 @@ pub(crate) async fn catalog_volume_roster(
         .ok()
         .filter(|v| *v > 0)
         .ok_or_else(unavailable)?;
-    let api_key = std::env::var("COMICVINE_API_KEY")
-        .ok()
-        .filter(|v| !v.is_empty())
-        .ok_or_else(unavailable)?;
+    let api_key = provider_api_key().ok_or_else(unavailable)?;
     let volume = provider_response(outbound, &format!("volume/4050-{volume_id}"), "", &api_key)
         .await
         .map_err(|_| unavailable())?;
@@ -835,7 +862,7 @@ pub(crate) async fn hydrate_catalog_commit(
     committed_issue_ids: &[i32],
     budget: Duration,
 ) {
-    let Ok(api_key) = std::env::var("COMICVINE_API_KEY") else {
+    let Some(api_key) = provider_api_key() else {
         return;
     };
     hydrate_catalog_commit_with_key(state, user_id, committed_issue_ids, budget, &api_key).await;
@@ -1141,8 +1168,8 @@ async fn drain_authorized(
     expected: Option<&str>,
 ) -> Result<Json<DrainReport>, ApiError> {
     authorize(headers, expected)?;
-    let key = std::env::var("COMICVINE_API_KEY").ok();
-    let key = key.as_deref().filter(|v| !v.is_empty());
+    let key = provider_api_key();
+    let key = key.as_deref();
     let mut report = DrainReport {
         provider_configured: key.is_some(),
         ..Default::default()
@@ -1489,6 +1516,101 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert("authorization", "Bearer test-secret".parse().unwrap());
         headers
+    }
+
+    /// #5695: `provider_exchange` refuses non-alphanumeric credential bytes
+    /// before any round trip, so an untrimmed read used to surface a pasted
+    /// dashboard value with a trailing newline as a provider outage in tens of
+    /// milliseconds. Normalization must make a padded key indistinguishable
+    /// from a clean one, and an all-whitespace value "not configured".
+    #[test]
+    fn provider_api_key_normalizes_surrounding_whitespace() {
+        assert_eq!(
+            normalize_provider_api_key("c0ffee1234"),
+            Some("c0ffee1234".to_owned())
+        );
+        assert_eq!(
+            normalize_provider_api_key("  c0ffee1234\n"),
+            Some("c0ffee1234".to_owned())
+        );
+        assert_eq!(
+            normalize_provider_api_key("\tc0ffee1234 \r\n"),
+            Some("c0ffee1234".to_owned())
+        );
+        assert_eq!(normalize_provider_api_key(""), None);
+        assert_eq!(normalize_provider_api_key(" \n\t\r"), None);
+    }
+
+    /// #5695: the transport must enforce the same normalization as the read
+    /// boundary, even when a future caller supplies a padded key directly.
+    /// Blank and malformed credentials must fail before any outbound request.
+    #[tokio::test]
+    async fn provider_exchange_normalizes_key_before_request() {
+        let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
+        fake.push_ok(
+            StatusCode::OK,
+            HeaderMap::new(),
+            Bytes::from_static(br#"{"status_code":1,"results":{}}"#),
+        );
+        let outbound: Arc<dyn crate::outbound::OutboundHttp> = fake.clone();
+
+        let exchange = provider_exchange(&outbound, "issue/4000-1", "", " \tTESTKEY123\n")
+            .await
+            .expect("padded credential must reach the provider");
+        assert!(matches!(exchange, Exchange::Payload(_)));
+
+        let calls = fake.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].host, HOST);
+        assert_eq!(
+            calls[0].path,
+            "/api/issue/4000-1?api_key=TESTKEY123&format=json"
+        );
+
+        fake.clear();
+        let error = provider_exchange(&outbound, "issue/4000-1", "", " \n\t")
+            .await
+            .expect_err("blank credential must be unconfigured");
+        assert!(matches!(error, ProviderFailure::Unavailable));
+        assert!(fake.calls().is_empty());
+
+        let error = provider_exchange(&outbound, "issue/4000-1", "", "TEST KEY123")
+            .await
+            .expect_err("internal whitespace must remain malformed");
+        assert!(matches!(error, ProviderFailure::Unavailable));
+        assert!(fake.calls().is_empty());
+    }
+
+    #[test]
+    fn failure_transition_records_bounded_truthful_states() {
+        assert_eq!(
+            failure_transition(&ProviderFailure::Unavailable, 1),
+            ("deferred", 60, "provider_unavailable")
+        );
+        assert_eq!(
+            failure_transition(&ProviderFailure::Unavailable, 3),
+            ("failed", 21600, "provider_unavailable")
+        );
+        assert_eq!(
+            failure_transition(&ProviderFailure::Timeout, 2),
+            ("deferred", 300, "provider_timeout")
+        );
+        assert_eq!(
+            failure_transition(&ProviderFailure::InvalidPayload, 3),
+            ("failed", 21600, "invalid_provider_payload")
+        );
+        assert_eq!(
+            failure_transition(&ProviderFailure::RateLimited(120), 1),
+            ("deferred", 120, "rate_limit")
+        );
+        assert_eq!(
+            failure_transition(&ProviderFailure::RateLimited(30), 1),
+            ("deferred", 60, "rate_limit")
+        );
+        assert_eq!(
+            failure_transition(&ProviderFailure::RateLimited(10), 3),
+            ("failed", 21600, "rate_limit")
+        );
     }
 
     /// #4516 legacy oracle: `_provider_timestamp` returned a naive datetime
@@ -1908,6 +2030,87 @@ mod tests {
             .expect("read refresh state")
             .get(0);
         assert_eq!(request_state, "completed");
+        drop(Object::take(connection));
+    }
+
+    #[tokio::test]
+    async fn deferred_provider_failure_retries_then_completes() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_identity(&state).await;
+        seed_request(&state, identity_id, "pending", 0, "0 seconds", None).await;
+
+        // First attempt: provider unavailable -> deferred with bounded backoff.
+        let job = claim(&state).await.expect("claim").expect("due job");
+        let outcome = process(&state, &job, Some("TESTKEY123"))
+            .await
+            .expect("process deferred");
+        assert_eq!(outcome, "deferred");
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let (state_after, attempts, last_error): (String, i32, Option<String>) = connection
+            .query_one(
+                "SELECT state, attempts, last_error \
+                 FROM comicvine_metadata_refresh_requests \
+                 WHERE external_identity_id=$1",
+                &[&identity_id],
+            )
+            .await
+            .map(|row| (row.get(0), row.get(1), row.get(2)))
+            .expect("read deferred request");
+        assert_eq!(state_after, "deferred");
+        assert_eq!(attempts, 1);
+        assert_eq!(last_error.as_deref(), Some("provider_unavailable"));
+
+        // Make the row due now, then succeed on retry.
+        connection
+            .execute(
+                "UPDATE comicvine_metadata_refresh_requests \
+                 SET next_attempt_at = now() - interval '1 second', updated_at = now() \
+                 WHERE external_identity_id=$1",
+                &[&identity_id],
+            )
+            .await
+            .expect("make deferred due");
+        drop(Object::take(connection));
+
+        queue_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
+        let job = claim(&state)
+            .await
+            .expect("claim retry")
+            .expect("due retry job");
+        let outcome = process(&state, &job, Some("TESTKEY123"))
+            .await
+            .expect("process completed");
+        assert_eq!(outcome, "completed");
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let (final_state, final_attempts): (String, i32) = connection
+            .query_one(
+                "SELECT state, attempts FROM comicvine_metadata_refresh_requests \
+                 WHERE external_identity_id=$1",
+                &[&identity_id],
+            )
+            .await
+            .map(|row| (row.get(0), row.get(1)))
+            .expect("read completed request");
+        assert_eq!(final_state, "completed");
+        assert_eq!(final_attempts, 2);
+        let metadata: Value = serde_json::from_str(
+            connection
+                .query_one(
+                    "SELECT metadata_json::text FROM external_identities WHERE id=$1",
+                    &[&identity_id],
+                )
+                .await
+                .expect("read metadata")
+                .get::<_, String>(0)
+                .as_str(),
+        )
+        .expect("metadata json");
+        assert_eq!(metadata["creator_credits"][0]["name"], "Writer");
         drop(Object::take(connection));
     }
 

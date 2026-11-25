@@ -662,11 +662,9 @@ fn encode_query(value: &str) -> String {
     encoded
 }
 
+/// Delegates to the one credential boundary in [`crate::comicvine_repair`].
 fn provider_key() -> Option<String> {
-    std::env::var("COMICVINE_API_KEY")
-        .ok()
-        .map(|key| key.trim().to_owned())
-        .filter(|key| !key.is_empty())
+    crate::comicvine_repair::provider_api_key()
 }
 
 // ---------------------------------------------------------------------------
@@ -1463,7 +1461,7 @@ async fn hydrate_confirmed_identity_if_configured(
     issue_id: i32,
     started: Instant,
 ) {
-    let Ok(api_key) = std::env::var("COMICVINE_API_KEY") else {
+    let Some(api_key) = crate::comicvine_repair::provider_api_key() else {
         return;
     };
     hydrate_confirmed_identity_inline(
@@ -1647,8 +1645,9 @@ pub async fn revert_correction(
 }
 
 /// `POST /api/v2/comicvine/issues/{issue_id}/metadata:refresh` (Python
-/// `request_provider_refresh`): reports the confirmed ComicVine id; nothing
-/// is written.
+/// `request_provider_refresh`): reports the confirmed ComicVine id and
+/// durably re-enqueues provider refresh when a confirmed identity exists so an
+/// already-confirmed issue can recover without remapping (#5695).
 pub async fn refresh_metadata(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1657,22 +1656,55 @@ pub async fn refresh_metadata(
     let issue_id = path_int(issue_id)?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
-    owned_issue(&tx, user.id(), issue_id).await?;
-    let comicvine_issue_id: Option<String> = tx
+    crate::queue::lock_queue(&tx, user.id()).await?;
+    lock_owned_issue(&tx, user.id(), issue_id).await?;
+    let identity_row = tx
         .query_opt(
-            "SELECT e.external_id \
+            "SELECT e.id, e.external_id \
              FROM external_identities e \
              JOIN issue_external_identity_mappings m ON m.external_identity_id = e.id \
-             JOIN issues i ON i.id = m.issue_id \
-             JOIN threads t ON t.id = i.thread_id \
-             WHERE i.id = $1 AND t.user_id = $2 AND m.status = 'confirmed' \
-               AND e.provider = 'comicvine' \
+             WHERE m.issue_id = $1 AND m.status = 'confirmed' \
+               AND e.provider = 'comicvine' AND e.entity_type = 'issue' \
              LIMIT 1",
-            &[&issue_id, &user.id()],
+            &[&issue_id],
         )
         .await
-        .map_err(db::query_error)?
-        .map(|row| row.get(0));
+        .map_err(db::query_error)?;
+    let (identity_id, comicvine_issue_id): (Option<i32>, Option<String>) = identity_row
+        .map(|row| (Some(row.get::<_, i32>(0)), Some(row.get::<_, String>(1))))
+        .unwrap_or((None, None));
+
+    if let Some(identity_id) = identity_id {
+        // Manual recovery: reopen any non-actively-leased repair row so a stuck
+        // pending/deferred/failed/completed/no_credits identity can be retried
+        // without remapping (#5695). Running rows with a live lease are left to
+        // the worker that owns them. Persistence failures fail the request: a
+        // successful HTTP response must never claim recovery was scheduled when
+        // no durable work was written.
+        tx.execute(
+            "UPDATE comicvine_metadata_refresh_requests \
+             SET state = 'pending', attempts = 0, next_attempt_at = now(), \
+                 lease_expires_at = NULL, last_error = NULL, completed_at = NULL, \
+                 updated_at = now() \
+             WHERE external_identity_id = $1 \
+               AND NOT (state = 'running' AND lease_expires_at > now())",
+            &[&identity_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+        // Ensure a row exists when none was present. The update above covers
+        // existing rows; this insert covers the missing-row case.
+        tx.execute(
+            "INSERT INTO comicvine_metadata_refresh_requests \
+                (external_identity_id, state, attempts, next_attempt_at, \
+                 lease_expires_at, last_error, completed_at, created_at, updated_at) \
+             VALUES ($1, 'pending', 0, now(), NULL, NULL, NULL, now(), now()) \
+             ON CONFLICT ON CONSTRAINT uq_comicvine_metadata_refresh_identity DO NOTHING",
+            &[&identity_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
     tx.commit().await.map_err(db::query_error)?;
     Ok(Json(MetadataRefreshResponse {
         issue_id,

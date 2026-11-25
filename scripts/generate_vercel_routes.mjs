@@ -13,6 +13,27 @@ const RUST = '/api/native_roll.rs';
 const NATIVE = new Set([RUST]);
 const FALLBACK = '/api(?:/.*)?';
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+
+// CSP for the Vercel-served static HTML shell and per-page HTML routes.
+// vercel.json is a bot-owned generated artifact and cannot be edited in an
+// ordinary PR, so the browser-facing CSP is owned here and applied to every
+// static route that declares a Content-Security-Policy header during
+// generation. Script execution has no dynamic-eval requirement: the Vite build
+// emits static module scripts only. Style inline is kept separate because
+// Tailwind/Vite inject runtime CSS; it is not a script execution exception.
+export const STATIC_CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://fonts.googleapis.com; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; frame-src 'none';";
+
+/** Apply the canonical CSP to every static HTML route carrying one. */
+export function applyStaticCsp(config) {
+  return {
+    ...config,
+    routes: config.routes.map(route =>
+      route.headers && Object.hasOwn(route.headers, 'Content-Security-Policy')
+        ? {...route, headers: {...route.headers, 'Content-Security-Policy': STATIC_CSP}}
+        : route,
+    ),
+  };
+}
 const PARAM = /\{([^{}]+)\}/g;
 const INVENTORY_EXCLUDED_OPERATIONS = new Set([
   'GET /api/v1/cron/release-sync',
@@ -156,7 +177,10 @@ export function generateVercel(config, operations, fragments = null) {
       });
     const rest = config.routes.filter(route => !native.includes(route) && route.dest !== PYTHON
       && !(route.src === FALLBACK && NATIVE.has(route.dest)));
-    return {...config, routes: [...native, ...exceptions, {src: FALLBACK, dest: RUST}, ...rest]};
+    return applyStaticCsp({
+      ...config,
+      routes: [...native, ...exceptions, {src: FALLBACK, dest: RUST}, ...rest],
+    });
   }
   // Fragment-derived generation: fragments own their paths' dest/src.
   const fragmentRoutes = fragmentVercelRoutes(fragments, config.routes);
@@ -197,13 +221,13 @@ export function generateVercel(config, operations, fragments = null) {
     {src: FALLBACK, dest: RUST},
     ...rest,
   ];
-  return {
+  return applyStaticCsp({
     ...config,
     routes: slimNativeRollRoutes(
       fullRoutes,
       new Set(fragmentNatives),
     ),
-  };
+  });
 }
 export function loadFragmentFiles(directory = 'docs/api/route-fragments') {
   return readdirSync(directory)

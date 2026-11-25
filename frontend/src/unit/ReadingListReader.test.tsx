@@ -13,7 +13,10 @@ import { queryKeys } from '../query/queryKeys'
 
 vi.mock('../services/api-custom-cbl', () => ({ customCBLApi: { getReader: vi.fn() } }))
 vi.mock('../services/api-issues', () => ({ issuesApi: { markRead: vi.fn(), markUnread: vi.fn() } }))
-vi.mock('../services/api-tags', () => ({ tagsApi: { threadIssuesEffective: vi.fn().mockResolvedValue({ issues: [] }) } }))
+vi.mock('../services/api-tags', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/api-tags')>()
+  return { ...actual, tagsApi: { threadIssuesEffective: vi.fn().mockResolvedValue({ issues: [] }) } }
+})
 
 const view: ReaderView = {
   list_id: 2, name: 'Julix', mode: 'strict', execution_mode: 'option_e', entries: [
@@ -99,7 +102,7 @@ it('leaves the issue unread after a failed write and offers a retry', async () =
   mount()
   await openFirstEditor()
   await userEvent.click(firstCard().getByRole('button', { name: 'Mark read & save' }))
-  expect(await screen.findByRole('alert')).toHaveTextContent('offline')
+  expect(await firstCard().findByRole('alert')).toHaveTextContent('offline')
   expect(firstCard().getByRole('button', { name: 'Mark read & save' })).toBeEnabled()
   expect(customCBLApi.getReader).toHaveBeenCalledTimes(1)
 })

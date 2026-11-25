@@ -179,7 +179,7 @@ describe('CblBrowserPage catalog', () => {
     const addButton = screen.getByRole('button', { name: 'Add this reading order' })
     expect(addButton).toBeDisabled()
     expect(addButton).toHaveAttribute('aria-disabled', 'true')
-    expect(screen.getByRole('status')).toHaveTextContent('Reconciling source…')
+    expect(screen.getByText('Reconciling source…')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Customize' })).toBeDisabled()
 
     await act(async () => {
@@ -301,7 +301,7 @@ describe('CblBrowserPage catalog', () => {
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: /DC/ })).not.toBeInTheDocument()
     })
-    expect(screen.getByRole('status')).toHaveTextContent('Loading matching source lists…')
+    expect(screen.getByText('Loading matching source lists…')).toBeInTheDocument()
     // The banner names the query once; the loading line does not repeat it.
     expect(screen.getAllByText(/Searching every shared CBL for “Batman”/)).toHaveLength(1)
     expect(screen.queryByTestId('cbl-browse-results')).not.toBeInTheDocument()

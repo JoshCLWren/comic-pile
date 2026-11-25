@@ -1894,3 +1894,117 @@ async fn dependency_lifecycle_validation_and_owner_scoped_delete() {
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
 }
+
+#[tokio::test]
+async fn reading_graph_repair_confirm_is_idempotent_after_success() {
+    let Some((state, _db)) = database().await else {
+        return;
+    };
+    let (token, csrf, owner) = register(&state, "repair-idempotent").await;
+    let auth = (token.as_str(), csrf.as_str());
+    let (other_token, other_csrf, _other) = register(&state, "repair-idempotent-other").await;
+    let other_auth = (other_token.as_str(), other_csrf.as_str());
+
+    let (_thread, ids) =
+        seed_thread(&state, owner, "B.P.R.D.: Hell on Earth", 1, &["130", "142"]).await;
+    let list = seed_list(&state, owner, "Julix", "strict", &[ids["142"], ids["130"]]).await;
+    let (_unrelated, unrelated_ids) = seed_thread(
+        &state,
+        owner,
+        fixture::UNRELATED_FIXTURE_THREAD,
+        2,
+        &[fixture::UNRELATED_FIXTURE_ISSUE_NO],
+    )
+    .await;
+
+    let (status, graph) = send(&state, auth, "GET", "/api/v2/reading-graph", None).await;
+    assert_eq!(status, StatusCode::OK, "{graph}");
+    assert_eq!(graph["status"], "cycle");
+
+    let repair = json!({
+        "action": "delete_list",
+        "list_id": list,
+        "confirm": true
+    });
+    let (status, applied) = send(
+        &state,
+        auth,
+        "POST",
+        "/api/v2/reading-graph/repairs",
+        Some(repair.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{applied}");
+    assert_eq!(applied["applied"], true);
+    assert_eq!(applied["status_after"], "ok");
+
+    // Retrying the same confirm after the constraint was already removed must be
+    // safe and idempotent: no 500, no corruption, graph remains healthy.
+    let (status, retried) = send(
+        &state,
+        auth,
+        "POST",
+        "/api/v2/reading-graph/repairs",
+        Some(repair),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{retried}");
+    assert_eq!(retried["status_after"], "ok");
+    assert_eq!(retried["applied"], false);
+    assert_eq!(retried["removed"], "Constraint already removed");
+
+    // The original receipt is owner-scoped: it must not make the same absent
+    // identifier look successfully repaired to another reader.
+    let (status, foreign_retry) = send(
+        &state,
+        other_auth,
+        "POST",
+        "/api/v2/reading-graph/repairs",
+        Some(json!({"action": "delete_list", "list_id": list, "confirm": true})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{foreign_retry}");
+
+    let (status, graph_after) = send(&state, auth, "GET", "/api/v2/reading-graph", None).await;
+    assert_eq!(status, StatusCode::OK, "{graph_after}");
+    assert_eq!(graph_after["status"], "ok");
+
+    let (status, eligible) =
+        send(&state, auth, "GET", "/api/v2/roll/eligible-issue-ids", None).await;
+    assert_eq!(status, StatusCode::OK, "{eligible}");
+    let eligible_ids: Vec<i32> = eligible["issue_ids"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|value| value.as_i64().unwrap() as i32)
+        .collect();
+    assert!(eligible_ids.contains(&unrelated_ids["1"]));
+
+    let conn = state.pool.get().await.unwrap();
+    let list_count: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM custom_cbl_lists WHERE id=$1",
+            &[&list],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        list_count, 0,
+        "repair must not re-create or duplicate the deleted list"
+    );
+    let receipt_count: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM events
+             WHERE user_id=$1 AND type='reading_graph_repair'
+               AND context::jsonb @> $2::text::jsonb",
+            &[
+                &owner,
+                &json!({"action": "delete_list", "list_id": list}).to_string(),
+            ],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(receipt_count, 1, "retry must not write another receipt");
+}

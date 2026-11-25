@@ -20,7 +20,7 @@ function renderWithToast(ui: ReactElement) {
 
 vi.mock('../services/api-comicvine', async () => {
   const actual = await vi.importActual<typeof import('../services/api-comicvine')>('../services/api-comicvine')
-  return { ...actual, comicVineApi: { getIssueIntelligence: vi.fn(), importIssue: vi.fn() } }
+  return { ...actual, comicVineApi: { getIssueIntelligence: vi.fn(), importIssue: vi.fn(), refreshMetadata: vi.fn() } }
 })
 
 vi.mock('../services/api-reading-orders', () => ({
@@ -31,6 +31,7 @@ vi.mock('../services/api-reading-orders', () => ({
 
 const getIntelligence = vi.mocked(comicVineApi.getIssueIntelligence)
 const importIssue = vi.mocked(comicVineApi.importIssue)
+const refreshMetadata = vi.mocked(comicVineApi.refreshMetadata)
 
 function waitForLoaded() {
   return waitFor(() => expect(screen.queryByLabelText('Loading comic details')).not.toBeInTheDocument())
@@ -40,6 +41,7 @@ describe('ComicIdentity', () => {
   beforeEach(() => {
     getIntelligence.mockReset()
     importIssue.mockReset()
+    refreshMetadata.mockReset()
   })
 
   it('reports truncated story arcs and links the arc on ComicVine', async () => {
@@ -459,12 +461,22 @@ describe('ComicIdentity', () => {
     await waitFor(() => expect(container).toBeEmptyDOMElement())
   })
 
-  it('fails closed when metadata loading fails', async () => {
-    getIntelligence.mockRejectedValue(new Error('metadata unavailable'))
+  it('shows a retryable error when metadata loading fails and recovers', async () => {
+    const metadataError = Object.assign(new Error('metadata unavailable'), {
+      response: { status: 400 },
+    })
+    getIntelligence
+      .mockRejectedValueOnce(metadataError)
+      .mockResolvedValueOnce(null)
     const { container } = renderWithToast(<ComicIdentity issueId={3} />)
-    await waitFor(() => expect(getIntelligence).toHaveBeenCalledWith(3))
-    await waitFor(() => expect(screen.queryByLabelText('Loading comic details')).not.toBeInTheDocument())
-    expect(container).toBeEmptyDOMElement()
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not load comic details: metadata unavailable',
+    )
+    expect(screen.queryByLabelText('Loading comic details')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry comic details' }))
+    await waitFor(() => expect(getIntelligence).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(container).toBeEmptyDOMElement())
   })
 
   it('ignores a response that arrives after the component unmounts', async () => {
@@ -953,6 +965,7 @@ describe('ComicIdentity creator status (issue #4149)', () => {
   beforeEach(() => {
     getIntelligence.mockReset()
     importIssue.mockReset()
+    refreshMetadata.mockReset()
   })
 
   function renderIdentity(issueId = 1) {
@@ -985,6 +998,7 @@ describe('ComicIdentity creator status (issue #4149)', () => {
   // repairs return refresh_retry_after_seconds: null; only deferred/failed carry
   // a declared delay. Tests for active repairs must use those responses.
   const FALLBACK_REFRESH_MS = 10_000 // METADATA_REFRESH_FALLBACK_SECONDS * 1000 (component constant)
+  const MAX_REFRESH_POLLS = 30 // METADATA_REFRESH_MAX_POLLS (component constant)
 
   function flushInitialLoad() {
     return act(async () => {
@@ -1157,6 +1171,57 @@ describe('ComicIdentity creator status (issue #4149)', () => {
 
     expect(screen.getByTestId('creator-status-failed')).toBeInTheDocument()
     expect(screen.getByTestId('creator-status-failed')).toHaveTextContent('Refresh failed')
+  })
+
+  it('offers manual refresh recovery for failed creator metadata (#5695)', async () => {
+    getIntelligence
+      .mockResolvedValueOnce(
+        intelligenceResponse({
+          comicvine_issue_id: '601',
+          metadata_status: 'refresh_failed',
+          refresh_retry_after_seconds: null,
+        }),
+      )
+      .mockResolvedValueOnce(
+        intelligenceResponse({
+          comicvine_issue_id: '601',
+          metadata_status: 'complete',
+          creators: [{ name: 'Recovered Writer', roles: ['writer'] }],
+        }),
+      )
+    // SAFETY: the mocked route returns exactly the three response fields consumed by this test.
+    refreshMetadata.mockResolvedValue({ issue_id: 1, refreshed: true, comicvine_issue_id: '601' } as never)
+
+    renderIdentity()
+    await waitForLoaded()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry refresh' }))
+
+    await waitFor(() => expect(refreshMetadata).toHaveBeenCalledWith(1))
+    await waitFor(() => expect(screen.getByText('Recovered Writer')).toBeInTheDocument())
+  })
+
+  it('reports a failed manual recovery request and leaves retry available (#5695)', async () => {
+    getIntelligence.mockResolvedValue(
+      intelligenceResponse({
+        comicvine_issue_id: '602',
+        metadata_status: 'refresh_failed',
+        refresh_retry_after_seconds: null,
+      }),
+    )
+    refreshMetadata.mockRejectedValue(new Error('network unavailable'))
+
+    renderIdentity()
+    await waitForLoaded()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry refresh' }))
+
+    await waitFor(() => expect(refreshMetadata).toHaveBeenCalledWith(1))
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not request a creator refresh. Try again.',
+    )
+    expect(screen.getByTestId('creator-status-failed')).toHaveTextContent('Refresh failed')
+    expect(screen.getByRole('button', { name: 'Retry refresh' })).toBeEnabled()
   })
 
   it('shows "ComicVine currently has no creator credits" when metadata_status is deep_fetched_no_credits', async () => {
@@ -1604,6 +1669,38 @@ describe('ComicIdentity creator status (issue #4149)', () => {
 
     expect(screen.queryByTestId('creator-status-fetching')).not.toBeInTheDocument()
     expect(screen.getByText('Finally Writer')).toBeInTheDocument()
+
+    unmount()
+  })
+
+  it('stops an unchanged active repair at the poll budget and offers manual recovery (#5695)', async () => {
+    const pending = intelligenceResponse({
+      comicvine_issue_id: '2050',
+      metadata_status: 'refresh_pending',
+      refresh_retry_after_seconds: null,
+    })
+    getIntelligence.mockResolvedValue(pending)
+
+    vi.useFakeTimers()
+    const { unmount } = renderIdentity()
+    await flushInitialLoad()
+    expect(getIntelligence).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS * (MAX_REFRESH_POLLS + 1))
+    })
+    await flushQueryNotification()
+
+    expect(getIntelligence).toHaveBeenCalledTimes(MAX_REFRESH_POLLS + 1)
+    expect(screen.getByTestId('creator-status-delayed')).toHaveTextContent(
+      'Creator credits are still waiting for ComicVine. Retry refresh or check again later.',
+    )
+    expect(screen.getByRole('button', { name: 'Retry refresh' })).toBeEnabled()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS * 3)
+    })
+    expect(getIntelligence).toHaveBeenCalledTimes(MAX_REFRESH_POLLS + 1)
 
     unmount()
   })
