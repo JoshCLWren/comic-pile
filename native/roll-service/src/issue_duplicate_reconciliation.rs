@@ -866,7 +866,7 @@ pub async fn apply_reconciliation(
         tx.commit().await.map_err(db_err)?;
         return Ok(Json(ReconcileApplyResponse {
             canonical_issue_id: row.get(1),
-            merged_issue_ids: row.get(2),
+            merged_issue_ids: details.get("merged_issue_ids").and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_else(|| row.get(2)),
             moved_event_ids: details
                 .get("moved_event_ids")
                 .and_then(|v| serde_json::from_value(v.clone()).ok())
@@ -964,6 +964,7 @@ pub async fn apply_reconciliation(
     let mut moved_mapping_ids: Vec<i32> = Vec::new();
     let mut moved_list_entry_ids: Vec<i32> = Vec::new();
     let mut suppressed_duplicate_issue_ids: Vec<i32> = Vec::new();
+    let mut merged_issue_ids: Vec<i32> = Vec::new();
     let mut moved_event_origins: Vec<serde_json::Value> = Vec::new();
     let mut moved_mapping_origins: Vec<serde_json::Value> = Vec::new();
     let mut moved_list_entry_origins: Vec<serde_json::Value> = Vec::new();
@@ -971,8 +972,21 @@ pub async fn apply_reconciliation(
     for dup in &duplicates {
         if dup.merged_into_issue_id == Some(req.canonical_issue_id) {
             suppressed_duplicate_issue_ids.push(dup.issue_id);
+            merged_issue_ids.push(dup.issue_id);
             continue;
         }
+        // Honor explicit "keep_distinct" decisions: leave that issue unmerged.
+        let keep_distinct = req.decisions.iter().any(|(k, v)| {
+            k.ends_with(&format!(":{}", dup.issue_id)) && v == "keep_distinct"
+        });
+        if keep_distinct {
+            warnings.push(format!(
+                "Issue {} kept distinct per decision; not merged into canonical {}.",
+                dup.issue_id, req.canonical_issue_id
+            ));
+            continue;
+        }
+
         // Move comicvine mappings: reassign issue_external_identity_mappings from dup to canonical
         let mapping_rows = tx
             .query(
@@ -1111,6 +1125,7 @@ pub async fn apply_reconciliation(
         .await
         .map_err(db_err)?;
         suppressed_duplicate_issue_ids.push(dup.issue_id);
+        merged_issue_ids.push(dup.issue_id);
     }
 
     // Reconcile canonical read state: preserve latest legitimate state.
@@ -1211,6 +1226,7 @@ pub async fn apply_reconciliation(
         "moved_mapping_origins": moved_mapping_origins,
         "moved_list_entry_origins": moved_list_entry_origins,
         "suppressed_duplicate_issue_ids": suppressed_duplicate_issue_ids,
+        "merged_issue_ids": merged_issue_ids,
         "undo_snapshot_id": null,
         "warnings": warnings,
     });
@@ -1233,7 +1249,7 @@ pub async fn apply_reconciliation(
 
     Ok(Json(ReconcileApplyResponse {
         canonical_issue_id: req.canonical_issue_id,
-        merged_issue_ids: req.duplicate_issue_ids.clone(),
+        merged_issue_ids: merged_issue_ids.clone(),
         moved_event_ids,
         moved_mapping_ids,
         moved_list_entry_ids,
