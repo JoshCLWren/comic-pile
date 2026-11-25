@@ -366,6 +366,7 @@ export default function CustomCBLBuilder({
       setMode(saved.mode ?? DEFAULT_MODE)
       setUndoPayload(null)
       setUndoBaseline(null)
+      writeReadingListUndo(saved.user_id, saved.id, null)
       setUndoConfirmation(null)
       setReplaceError(null)
       setMessage('Restored the previous list membership and order. Read history and ratings were not changed.')
