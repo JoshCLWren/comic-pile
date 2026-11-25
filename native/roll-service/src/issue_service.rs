@@ -78,6 +78,8 @@ pub struct IssueCard {
     pub mapping_state: String,
     /// Confirmed provider issue identifier, never a provisional candidate.
     pub comicvine_issue_id: Option<String>,
+    /// Actual issue number inside the confirmed provider volume.
+    pub provider_issue_number: Option<String>,
     /// Exact provider-supplied CDN URL. Null when unmapped; never image bytes.
     pub cover_image_url: Option<String>,
 }
