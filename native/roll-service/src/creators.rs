@@ -461,6 +461,7 @@ async fn load_full_inputs(state: &AppState, user_id: i32) -> Result<SummaryInput
          JOIN issues i ON i.id = ev.issue_id
          JOIN threads t ON t.id = i.thread_id
          WHERE t.user_id = $1 AND ev.type = 'rate' AND ev.issue_id IS NOT NULL AND ev.rating IS NOT NULL
+           AND ev.context->>'undone_by_snapshot_id' IS NULL
          ORDER BY ev.issue_id, ev.timestamp DESC, ev.id DESC",
         &[&user_id],
     ).await.map_err(query_error)?;
