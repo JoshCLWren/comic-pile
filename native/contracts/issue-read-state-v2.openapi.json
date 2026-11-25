@@ -1,3 +1,6 @@
+   Compiling comicpile-roll-service v0.1.0 (/home/runner/work/comic-pile/comic-pile/native/roll-service)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 39.86s
+     Running `target/debug/examples/issue_read_state_openapi`
 {
   "openapi": "3.1.0",
   "info": {
@@ -27,8 +30,15 @@
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "Every issue marked unread atomically"
+          "200": {
+            "description": "Every issue marked unread atomically; returns a reviewable undo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueReadOperationResponse"
+                }
+              }
+            }
           },
           "400": {
             "description": "An issue is already marked as unread"
@@ -71,8 +81,15 @@
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "Every issue marked read atomically"
+          "200": {
+            "description": "Every issue marked read atomically; returns a reviewable undo operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueReadOperationResponse"
+                }
+              }
+            }
           },
           "400": {
             "description": "An issue is already marked as read"
@@ -82,6 +99,109 @@
           },
           "404": {
             "description": "Issue not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/issue-read-operations/{operation_id}": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for fetching a bulk issue-read operation.",
+        "operationId": "issue_read_operation_get",
+        "parameters": [
+          {
+            "name": "operation_id",
+            "in": "path",
+            "description": "Owned bulk issue-read operation",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bulk issue-read operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueReadOperationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Operation not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/issue-read-operations/{operation_id}/undo": {
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for undoing a bulk issue-read operation.",
+        "operationId": "issue_read_operation_undo",
+        "parameters": [
+          {
+            "name": "operation_id",
+            "in": "path",
+            "description": "Owned bulk issue-read operation",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation undone with compensating events; concurrently changed issues are skipped",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueReadOperationUndoResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Operation already undone"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Operation not found"
           },
           "422": {
             "description": "Request validation failed"
@@ -326,6 +446,94 @@
             "format": "int32",
             "description": "Move after this issue. `null` moves the issue to position 1.",
             "minimum": 1
+          }
+        }
+      },
+      "IssueReadOperationItem": {
+        "type": "object",
+        "description": "One issue affected by a bulk read/unread operation.",
+        "required": [
+          "issue_id",
+          "thread_id",
+          "issue_number",
+          "previous_status"
+        ],
+        "properties": {
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "previous_status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "IssueReadOperationResponse": {
+        "type": "object",
+        "description": "Reviewable, reversible record of a bulk read/unread operation (#4655).",
+        "required": [
+          "id",
+          "operation_type",
+          "created_at",
+          "items"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueReadOperationItem"
+            }
+          },
+          "operation_type": {
+            "type": "string"
+          },
+          "undone_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "IssueReadOperationUndoResponse": {
+        "type": "object",
+        "description": "Result of undoing a bulk read/unread operation (#4655).",
+        "required": [
+          "operation",
+          "undone_issue_ids",
+          "skipped_issue_ids"
+        ],
+        "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/IssueReadOperationResponse"
+          },
+          "skipped_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "undone_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
           }
         }
       },
