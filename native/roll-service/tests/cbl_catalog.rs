@@ -208,6 +208,46 @@ async fn browse_missing_folder_404_and_literal_like_search() {
 }
 
 #[tokio::test]
+async fn browse_reports_filtered_and_whole_catalog_totals() {
+    let (state, token, _guard) = setup().await;
+
+    let (status, root) = get(&state, &token, "/api/v1/issue-identity/cbl-sources/browse").await;
+    assert_eq!(status, StatusCode::OK, "{root}");
+    assert_eq!(root["total"], 1);
+    assert_eq!(root["catalog_total"], 8);
+
+    let (status, filtered) = get(
+        &state,
+        &token,
+        "/api/v1/issue-identity/cbl-sources/browse?q=Mister%20Miracle&page_size=1",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{filtered}");
+    assert_eq!(filtered["total"], 2);
+    assert_eq!(filtered["catalog_total"], 8);
+    assert_eq!(filtered["items"].as_array().unwrap().len(), 1);
+
+    let (_, zero) = get(
+        &state,
+        &token,
+        "/api/v1/issue-identity/cbl-sources/browse?q=Archived",
+    )
+    .await;
+    assert_eq!(zero["total"], 0);
+    assert_eq!(zero["catalog_total"], 8);
+    assert_eq!(zero["items"], json!([]));
+
+    let (_, folder) = get(
+        &state,
+        &token,
+        "/api/v1/issue-identity/cbl-sources/browse?folder=Special",
+    )
+    .await;
+    assert_eq!(folder["total"], 2);
+    assert_eq!(folder["catalog_total"], 8);
+}
+
+#[tokio::test]
 async fn browse_invalid_pagination_returns_fastapi_422_envelope() {
     let (state, token, _guard) = setup().await;
 

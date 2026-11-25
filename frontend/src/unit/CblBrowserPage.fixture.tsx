@@ -147,6 +147,7 @@ export function browsePage(overrides: Partial<CBLCatalogBrowsePage> = {}): CBLCa
     page: 1,
     page_size: 50,
     total: 0,
+    catalog_total: overrides.total ?? 0,
     total_pages: 0,
     has_next: false,
     has_previous: false,

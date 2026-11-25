@@ -1,4 +1,5 @@
 import { EligibilityExplanation } from '../components/EligibilityExplanation'
+import { ReadingGraphProblemCard } from '../components/ReadingGraphProblemCard'
 import { useThreadBlockingInfo } from '../hooks/useDependencies'
 import { useReadingBoundaries } from '../hooks/useReadingBoundaries'
 import { ReadingBoundaryExplanation } from '../components/ReadingBoundaryExplanation'
@@ -527,6 +528,10 @@ export default function ThreadDetailView() {
           Edit
         </button>
       </header>
+
+      <div className="px-2">
+        <ReadingGraphProblemCard />
+      </div>
 
       <div className="space-y-4 md:space-y-6">
         <section className="surface-panel rounded-xl p-3 md:p-4" aria-label="Next issue availability">

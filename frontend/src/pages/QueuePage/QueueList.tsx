@@ -14,6 +14,8 @@ interface QueueSearchMatch {
 interface QueueListProps {
   activeThreads: ThreadListItem[]
   filteredThreads: ThreadListItem[]
+  /** Whole-queue active total, including rows outside the loaded result pages. */
+  activeCount?: number
   reorderError: string | null
   renderItem: (thread: ThreadListItem, index: number) => ReactNode
   isSearching: boolean
@@ -48,6 +50,7 @@ interface QueueListProps {
 export function QueueList({
   activeThreads,
   filteredThreads,
+  activeCount = activeThreads.length,
   reorderError,
   renderItem,
   isSearching,
@@ -62,9 +65,10 @@ export function QueueList({
   onRestoreCompletedSeries,
   onOpenExcludedSeries,
 }: QueueListProps) {
-  // If we're searching and have no results, but there are active threads in the queue
-  // and the current search is still loading, show a loading state instead of "No match".
-  if (isSearching && filteredThreads.length === 0 && activeThreads.length > 0 && isLoading) {
+  // The current filtered page can be empty while its replacement request is
+  // still loading. Use the whole-queue total, not the loaded row count, to
+  // distinguish that pending state from a settled empty Queue (#3912/#3614).
+  if (isSearching && filteredThreads.length === 0 && activeCount > 0 && isLoading) {
     return (
       <div
         role="status"
