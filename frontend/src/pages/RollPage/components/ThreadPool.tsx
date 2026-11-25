@@ -53,6 +53,7 @@ export function ThreadPool({
   issueCards,
   onResetDice,
   resetDicePending = false,
+  resetDiceError = '',
 }: ThreadPoolProps) {
   const navigate = useNavigate()
   const wasRatingView = useRef(isRatingView)
