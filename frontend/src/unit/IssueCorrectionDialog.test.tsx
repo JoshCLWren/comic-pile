@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import IssueCorrectionDialog, {
   type IssueCorrectionIssuesApi,
 } from '../components/IssueCorrectionDialog'
+import { bulkReadReceiptKey, writeBulkReadReceipt } from '../hooks/useBulkReadOperations'
 import type { Issue, IssueListResponse } from '../types'
 
 // Injectable fakes passed through the real component props — no module mocking of the API.
@@ -66,6 +67,7 @@ const renderDialog = (props: Partial<Parameters<typeof IssueCorrectionDialog>[0]
 describe('IssueCorrectionDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    window.localStorage.clear()
     markRead.mockResolvedValue(undefined)
     markUnread.mockResolvedValue(undefined)
     bulkMarkRead.mockResolvedValue({ id: 1, operation_type: 'bulk_mark_read', created_at: '', items: [] })
@@ -395,6 +397,69 @@ describe('IssueCorrectionDialog', () => {
     // create request; the reviewed affected set is what gets written (#4655 F2).
     await waitFor(() => expect(create).toHaveBeenCalledWith(42, 'Annual 1', { insert_after_issue_id: null }))
     await waitFor(() => expect(bulkMarkRead).toHaveBeenCalledWith([1, 2]))
+  })
+
+  it('previews ratings, the dependent frontier and the projected final state', async () => {
+    list.mockResolvedValue(listResponse([
+      issue({ id: 1, issue_number: '1', status: 'read' }),
+      issue({ id: 2, issue_number: '2', status: 'unread' }),
+    ]))
+    const cardsApi = {
+      fetchCards: vi.fn().mockResolvedValue([{ issue_id: 2, rating: 4.5 }]),
+    }
+    const dependenciesApi = {
+      listForThread: vi.fn().mockResolvedValue({
+        issues: [{ issue_id: 4, issue_number: '4', dependencies: [{ source_issue_id: 2 }] }],
+      }),
+    }
+
+    // The target (#3) is created but deliberately left unread, so the series
+    // cannot be reported as completed even though every older issue is read.
+    renderDialog({ cardsApi, dependenciesApi })
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, '3')
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+
+    const preview = await screen.findByTestId('bulk-read-preview')
+    expect(preview).toHaveTextContent('Marking 1 issue as read before #3.')
+    expect(preview).toHaveTextContent('rated 4.5')
+    expect(preview).toHaveTextContent('Dependent frontier: #4')
+    expect(preview).toHaveTextContent('Series completion effect: series will remain active.')
+    expect(preview).toHaveTextContent('Read states explained')
+  })
+
+  it('undoes the exact persisted operation and reports partial skips', async () => {
+    writeBulkReadReceipt(42, 77)
+    const getReadOperation = vi.fn().mockResolvedValue({
+      id: 77,
+      operation_type: 'bulk_mark_read',
+      created_at: '2026-01-02T03:04:05Z',
+      items: [{ issue_id: 2, thread_id: 42, issue_number: '2', previous_status: 'unread' }],
+    })
+    const undoReadOperation = vi.fn().mockResolvedValue({ skipped_issue_ids: [99] })
+    list.mockResolvedValue(listResponse([issue({ id: 2, issue_number: '2' })]))
+    const { onClose } = renderDialog({
+      issuesApi: { ...issuesApi, getReadOperation, undoReadOperation },
+    })
+
+    expect(await screen.findByTestId('bulk-read-review')).toHaveTextContent('Operation #77 recorded 1 issue changes')
+    await userEvent.click(screen.getByRole('button', { name: 'Undo' }))
+
+    await waitFor(() => expect(undoReadOperation).toHaveBeenCalledWith(77))
+    expect(await screen.findByText(/undo skipped 1 issue\(s\) changed later/i)).toBeInTheDocument()
+    expect(window.localStorage.getItem(bulkReadReceiptKey(42, 77))).toBeNull()
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('uses the bounded fallback maximum when the series total is unknown', async () => {
+    list.mockResolvedValue(listResponse([issue({ id: 1, issue_number: '1' })]))
+    renderDialog({ currentIssueNumber: null, totalIssues: null })
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, '999')
+    await userEvent.click(screen.getByRole('button', { name: 'Increase issue number' }))
+    expect(input).toHaveValue('999')
   })
 
 })
