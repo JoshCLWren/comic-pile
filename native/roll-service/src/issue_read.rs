@@ -591,6 +591,8 @@ mod tests {
                 id: 7,
                 thread_id: 3,
                 issue_number: "Annual 1".into(),
+                issue_number_alias: None,
+                display_issue_number: "Annual 1".into(),
                 position: 2,
                 status: "unread".into(),
                 read_at: None,
