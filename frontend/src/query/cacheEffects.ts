@@ -11,6 +11,7 @@ import type { IssueCard, IssueReadRateResponse } from '../services/issueCardsApi
 import { queryKeys } from './queryKeys'
 import { isObject } from '../utils/runtimeChecks'
 import { isTransientQueryFailure } from './outageRetryBudget'
+import { notifyReadingPlansChanged } from './crossTabDataSync'
 
 /**
  * Centralized cache effects for all React Query mutations in ComicPile.
@@ -540,6 +541,24 @@ export async function invalidateReadingPlans(client: QueryClient): Promise<void>
 }
 
 /**
+ * Refresh the plan surfaces after another tab committed a plan create,
+ * update, or delete (#5686).
+ *
+ * Scoped to the plan queries this tab left stale: the writing tab already ran
+ * the full eligibility refresh in its own mutation path, and a reader who is
+ * only looking at the plans list must not pay Queue/Roll/session refetches for
+ * a write it did not make.
+ */
+export async function invalidateReadingPlansAfterCrossTabChange(
+  client: QueryClient,
+): Promise<void> {
+  // Invalidation alone can reuse a data-less initial request that started before
+  // the remote commit. Cancel it first so every notice causes a fresh request.
+  await client.cancelQueries({ queryKey: queryKeys.readingPlans.all })
+  await client.invalidateQueries({ queryKey: queryKeys.readingPlans.all })
+}
+
+/**
  * Refresh every surface a release-source follow or toggle rewrites.
  *
  * Both the create (follow) and enable/disable mutations invalidate the same
@@ -576,6 +595,9 @@ export async function applyCommittedReadingPlan(
   plan: ContinuityPlan,
 ): Promise<void> {
   client.setQueryData(queryKeys.readingPlans.detail(plan.id), plan)
+  // Other open tabs hold their own plan-list cache. Publish before awaiting
+  // local refetches so a slow request cannot delay their reconciliation.
+  notifyReadingPlansChanged()
   await client.invalidateQueries({
     queryKey: queryKeys.readingPlans.list(),
     exact: true,
@@ -609,6 +631,19 @@ export async function invalidateComicVineIssueIntelligence(
     queryKey: queryKeys.comicVine.issueIntelligence(issueId),
     exact: true,
   })
+}
+
+/**
+ * Drop provider details for an issue whose mapping was removed, then refetch.
+ * Clearing first prevents stale cover/creator data from surviving a failed
+ * post-removal refresh.
+ */
+export async function clearComicVineIssueIntelligence(
+  client: QueryClient,
+  issueId: number,
+): Promise<void> {
+  client.setQueryData(queryKeys.comicVine.issueIntelligence(issueId), null)
+  await invalidateComicVineIssueIntelligence(client, issueId)
 }
 
 /**

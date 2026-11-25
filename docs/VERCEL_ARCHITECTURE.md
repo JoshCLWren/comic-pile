@@ -13,8 +13,7 @@ routes are served without starting an API runtime.
 
 In `vercel.json`, explicit native routes, including
 `GET /api/v2/health`, `POST /api/v2/auth/login`, and supported Rust Roll,
-issue, queue, and reading resources, route to `api/native_roll.rs` or
-`api/native_issue.rs`. Remaining transitional `/api/*` requests still fall
+issue, queue, and reading resources, route to the single `api/native_roll.rs` function. Remaining transitional `/api/*` requests still fall
 through to `api/index.py` until their own cutover steps ship. A URL's v1/v2 <!-- docs-path-check: ignore -->
 segment does not by itself prove the executing language.
 
