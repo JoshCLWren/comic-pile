@@ -850,7 +850,7 @@ pub async fn apply_reconciliation(
     let existing = tx
         .query_opt(
             r#"
-            SELECT canonical_issue_id, duplicate_issue_ids, details
+            SELECT id, canonical_issue_id, duplicate_issue_ids, details
             FROM issue_duplicate_reconciliations
             WHERE user_id = $1 AND preview_token = $2 AND undone_at IS NULL
             ORDER BY applied_at DESC
@@ -861,11 +861,12 @@ pub async fn apply_reconciliation(
         .await
         .map_err(db_err)?;
     if let Some(row) = existing {
-        let details: serde_json::Value = row.get(2);
+        let recon_id: i64 = row.get(0);
+        let details: serde_json::Value = row.get(3);
         tx.commit().await.map_err(db_err)?;
         return Ok(Json(ReconcileApplyResponse {
-            canonical_issue_id: row.get(0),
-            merged_issue_ids: row.get(1),
+            canonical_issue_id: row.get(1),
+            merged_issue_ids: row.get(2),
             moved_event_ids: details
                 .get("moved_event_ids")
                 .and_then(|v| serde_json::from_value(v.clone()).ok())
@@ -882,10 +883,7 @@ pub async fn apply_reconciliation(
                 .get("suppressed_duplicate_issue_ids")
                 .and_then(|v| serde_json::from_value(v.clone()).ok())
                 .unwrap_or_default(),
-            undo_snapshot_id: details
-                .get("undo_snapshot_id")
-                .and_then(|v| v.as_i64())
-                .map(|v| v as i32),
+            undo_snapshot_id: Some(recon_id as i32),
             warnings: details
                 .get("warnings")
                 .and_then(|v| serde_json::from_value(v.clone()).ok())
