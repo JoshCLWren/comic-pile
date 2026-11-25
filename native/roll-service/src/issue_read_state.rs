@@ -1574,3 +1574,4 @@ mod tests {
         assert_eq!(expected.trim_end(), generated.trim_end());
     }
 }
+
