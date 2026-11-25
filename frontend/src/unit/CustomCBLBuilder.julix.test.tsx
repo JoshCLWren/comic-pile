@@ -4,8 +4,12 @@ import { MemoryRouter } from 'react-router-dom'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CustomCBLBuilder from '../components/CustomCBLBuilder'
+import { ReadingBoundaryExplanation } from '../components/ReadingBoundaryExplanation'
 import { queryKeys } from '../query/queryKeys'
 import { issueCardsApi } from '../services/issueCardsApi'
+import type { BoundaryIssue, ReadingBoundaryExplanation as Explanation } from '../services/api-reading-boundaries'
+import { computeEntryRequirements } from '../utils/readingListAuthoring'
+import { getReadingListProgressIndex } from '../utils/readingListProgress'
 
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
@@ -71,6 +75,47 @@ function renderBuilder() {
     </QueryClientProvider>,
   )
   return { client }
+}
+
+/**
+ * #4233 A9 integration seam: apply the same two edits the UI makes to the
+ * synthetic 466-entry list — insert an unread issue at position 84, then move
+ * the original tail to position 83 — and keep read-status identity intact.
+ */
+function edit4233Entries() {
+  const inserted = {
+    id: -999001,
+    position: 83,
+    issue_id: 999001,
+    thread_id: 7777,
+    series_name: 'JLA Classified',
+    issue_number: '1',
+    status: 'unread',
+    is_checkpoint: false,
+    gate: 'none' as const,
+    skipped: false,
+  }
+  const afterInsert = [...julixList.entries]
+  afterInsert.splice(83, 0, inserted)
+  const afterMove = [...afterInsert]
+  const [tail] = afterMove.splice(466, 1)
+  afterMove.splice(82, 0, tail!)
+  return {
+    inserted,
+    tail: tail!,
+    afterInsert,
+    afterMove: afterMove.map((entry, position) => ({ ...entry, position })),
+  }
+}
+
+/**
+ * The strict Roll/Queue frontier is the first unread, unskipped entry. The
+ * editor's "Current position"/"Go to next unread" surfaces and the Queue's
+ * strict-order blocker both surface this same entry to the reader.
+ */
+function frontierOf(entries: typeof julixList.entries) {
+  const index = getReadingListProgressIndex(entries)
+  return { index, position: index + 1, entry: entries[index]! }
 }
 
 describe('CustomCBLBuilder Julix 466-entry regression', () => {
