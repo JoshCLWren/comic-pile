@@ -64,11 +64,7 @@ await injectModuleDoubles(await import('../services/api-taste'), () => ({
   },
 }))
 await injectModuleDoubles(await import('../services/api-threads'), () => ({ threadsApi: { list: spies.list, setPending: vi.fn() } }))
-await injectModuleDoubles(await import('../services/api'), () => ({
-  threadsApi: {
-    list: spies.list,
-    setPending: vi.fn(),
-  },
+await injectModuleDoubles(await import('../services/api-dependencies'), () => ({
   dependenciesApi: {
     getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),
     getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),

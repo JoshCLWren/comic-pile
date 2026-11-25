@@ -32,7 +32,25 @@ export async function injectModuleDoubles<ModuleExports extends object>(
   const doubles = await factory(importOriginal)
   for (const [exportName, replacement] of Object.entries(doubles)) {
     const descriptor = Object.getOwnPropertyDescriptor(moduleExports, exportName)
-    if (descriptor?.value === replacement) continue
+    if (!descriptor || !descriptor.configurable) {
+      throw new Error(`Cannot inject missing or non-configurable module export "${exportName}"`)
+    }
+    if (descriptor.value === replacement) continue
+
+    if (isPlainObject(descriptor.value) && isPlainObject(replacement)) {
+      for (const memberName of Object.keys(replacement)) {
+        if (!(memberName in descriptor.value)) {
+          throw new Error(`Cannot invent "${exportName}.${memberName}" on a module export`)
+        }
+      }
+      Object.defineProperty(moduleExports, exportName, {
+        configurable: true,
+        enumerable: true,
+        writable: true,
+        value: { ...descriptor.value, ...replacement },
+      })
+      continue
+    }
 
     if (isFunction(descriptor?.value) && isFunction(replacement)) {
       // SAFETY: both property values were just checked as functions. Vitest's

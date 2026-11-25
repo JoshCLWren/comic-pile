@@ -66,11 +66,10 @@ let threadsValue: typeof threadData | undefined = threadData
 
 await injectModuleDoubles(await import('../contexts/useBugReportRestore'), () => ({
   useBugReportRestore: () => ({
-    setRestoreAction: vi.fn((restore: () => void) => restore()),
+    setRestoreAction: vi.fn(),
     clearRestoreAction: vi.fn(),
   }),
 }))
-await injectModuleDoubles(await import('../hooks/useSession'), () => ({ useSession: () => sessionHook.value ?? ({ data: sessionData, refetch: spies.refetch }) }))
 await injectModuleDoubles(await import('../hooks/useRollBootstrap'), () => ({ useRollBootstrap: () => bootstrapHook.value ?? ({ data: bootstrapData, refetch: spies.refetch, isPending: false, isError: false, error: null }) }))
 await injectModuleDoubles(await import('../hooks/useRollResources'), () => ({
   useRollDieState: () => dieStateHook.value ?? ({ data: undefined, isError: false }),
