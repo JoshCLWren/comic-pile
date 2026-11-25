@@ -252,7 +252,7 @@ export default function IssueCorrectionDialog({
     } finally {
       setIsLoading(false)
     }
-  }, [selectedIssueNumber, allIssues, threadId, loadAllIssues, depsService])
+  }, [selectedIssueNumber, allIssues, threadId, loadAllIssues, depsService, applyCorrection])
 
 
   const handleSubmit = useCallback(async () => {
