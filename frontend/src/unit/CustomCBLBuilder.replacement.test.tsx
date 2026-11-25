@@ -1,12 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CustomCBLBuilder from '../components/CustomCBLBuilder'
 import { issueCardsApi } from '../services/issueCardsApi'
 import { existingList } from './fixtures/customCblFixture'
-import { queryKeys } from '../query/queryKeys'
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   get: vi.fn(),
@@ -919,5 +918,4 @@ describe('CustomCBLBuilder replacement flows', () => {
       },
     }))
   })
-})
 })
