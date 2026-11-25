@@ -19,8 +19,6 @@ await injectModuleDoubles(await import('../hooks/useComicVineIssueIntelligence')
   useComicVineIssueIntelligence: () => ({
     metadata: { image_url: 'https://comicvine.gamespot.com/a/hellboy9.jpg' },
     isLoading: false,
-    isError: false,
-    error: null,
     refetch: vi.fn(),
   }),
 }))
