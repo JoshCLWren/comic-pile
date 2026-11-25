@@ -5,8 +5,8 @@ import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../../qu
 import { queryClient } from '../../query/queryClient'
 import { issuesApi } from '../../services/api-issues'
 import { getApiErrorDetail } from '../../utils/apiError'
-import { useCompletedThreads } from './useCompletedThreads'
-import { useExcludedThreads } from './useExcludedThreads'
+import { useCompletedThreads } from '../../hooks/useCompletedThreads'
+import { useExcludedThreads } from '../../hooks/useQueue'
 
 export interface CompletedSeriesMatch {
   id: number
