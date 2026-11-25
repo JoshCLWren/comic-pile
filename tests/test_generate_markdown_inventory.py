@@ -49,11 +49,17 @@ def test_docs_hub_contracts_are_kept_with_code() -> None:
     """Docs named by the authoritative hub must not be moved to the Wiki."""
     paths = (
         "docs/API.md",
+        "docs/CBL_SERIES_NAMING.md",
+        "docs/COMICVINE_RUNTIME_FALLBACK.md",
         "docs/DATABASE_SAVE_LOAD.md",
+        "docs/FRONTEND_VISUAL_GRAMMAR.md",
         "docs/GIT_HOOKS.md",
         "docs/ISSUE_EXECUTION_PROTOCOL.md",
+        "docs/READING_LIST_EXECUTION_ADR.md",
         "docs/REACT_ARCHITECTURE.md",
+        "docs/VERCEL_ARCHITECTURE.md",
         "docs/WIKI_HANDOFF.md",
+        "docs/images/README.md",
         "docs/prod-clone-workflow.md",
     )
 
@@ -103,6 +109,16 @@ def test_explicit_historical_marker_overrides_active_default() -> None:
     assert action == "historical — preserve"
     assert "provenance" in overlap
     assert "Git history" in replacement
+
+
+def test_historical_title_or_point_in_time_status_is_classified() -> None:
+    """Explicit historical titles/statuses do not depend on one exact marker spelling."""
+    for text in (
+        "# Historical acceptance checklist\n\n> **Status: point-in-time acceptance record.**\n",
+        "# Historical SQL-budget registry\n",
+    ):
+        _, action, _ = _content_disposition("docs/EXAMPLE.md", text, "keep")
+        assert action == "historical — preserve"
 
 
 def test_marker_mentioned_in_code_is_not_historical() -> None:
