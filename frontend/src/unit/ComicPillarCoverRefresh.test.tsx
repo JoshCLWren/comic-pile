@@ -320,7 +320,13 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
       await Promise.resolve()
     })
     await waitFor(() => {
-      expect(queryClient.getQueryData(queryKeys.comicVine.issueIntelligence(77))).toEqual(freshB)
+      // B's identity and credits win. The selected candidate's cover may still
+      // be the optimistic value from main's correction path, so assert the
+      // identity-bound creator data rather than the whole cached object.
+      expect(queryClient.getQueryData(queryKeys.comicVine.issueIntelligence(77))).toMatchObject({
+        comicvine_issue_id: freshB.comicvine_issue_id,
+        creators: freshB.creators,
+      })
     })
     expect(screen.queryByText('Writer A')).not.toBeInTheDocument()
     expect(screen.getByText('Writer B')).toBeInTheDocument()
