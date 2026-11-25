@@ -54,7 +54,7 @@ const julixList = {
   issue_count: 466,
   created_at: '2026-11-20T00:00:00Z',
   updated_at: '2026-11-20T00:00:00Z',
-  entries: julixShapeEntries(),
+  entries: julixEntries(),
 }
 
 function renderBuilder() {
