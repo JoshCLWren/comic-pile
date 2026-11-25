@@ -664,3 +664,64 @@ fn build_preview_actions(
 
     (actions, warnings, can_apply)
 }
+
+pub async fn detect_duplicates(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+) -> Result<Json<DuplicateDetectionResponse>, ApiError> {
+    let mut conn = db::checkout(&state).await?;
+    let tx = conn
+        .build_transaction()
+        .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
+        .start()
+        .await
+        .map_err(db_err)?;
+    let groups = detect_duplicates_for_user(&tx, user.id()).await?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(DuplicateDetectionResponse { groups }))
+}
+
+pub async fn preview_reconciliation(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(req): Json<ReconcilePreviewRequest>,
+) -> Result<Json<ReconcilePreviewResponse>, ApiError> {
+    if req.duplicate_issue_ids.is_empty() {
+        return Err(bad_request("duplicate_issue_ids must not be empty"));
+    }
+    if req.duplicate_issue_ids.len() > MAX_GROUP_ISSUES {
+        return Err(bad_request("too many duplicate issues"));
+    }
+    if req.duplicate_issue_ids.contains(&req.canonical_issue_id) {
+        return Err(bad_request("canonical_issue_id must not be in duplicate_issue_ids"));
+    }
+
+    let mut conn = db::checkout(&state).await?;
+    let tx = conn
+        .build_transaction()
+        .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
+        .start()
+        .await
+        .map_err(db_err)?;
+
+    let canonical = load_issue_evidence(&tx, user.id(), req.canonical_issue_id).await?;
+    let mut duplicates = Vec::new();
+    for id in &req.duplicate_issue_ids {
+        duplicates.push(load_issue_evidence(&tx, user.id(), *id).await?);
+    }
+
+    let (actions, warnings, can_apply) = build_preview_actions(&canonical, &duplicates, &req.decisions);
+    let preview_token = compute_preview_token(user.id(), req.canonical_issue_id, &req.duplicate_issue_ids, &canonical, &duplicates);
+
+    tx.commit().await.map_err(db_err)?;
+    Ok(Json(ReconcilePreviewResponse {
+        canonical_issue_id: req.canonical_issue_id,
+        duplicate_issue_ids: req.duplicate_issue_ids,
+        canonical,
+        duplicates,
+        actions,
+        warnings,
+        can_apply,
+        preview_token,
+    }))
+}
