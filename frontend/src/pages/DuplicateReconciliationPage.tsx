@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { issueDuplicateReconciliationApi } from '../services/api-issue-duplicate-reconciliation'
 import { queryKeys } from '../query/queryKeys'
-import { queryClient } from '../query/queryClient'
+import { invalidateAfterDuplicateReconciliation } from '../query/cacheEffects'
 import type {
   DuplicateCandidateGroup,
   DuplicateIssueEvidence,

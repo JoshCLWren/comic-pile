@@ -899,6 +899,18 @@ export async function invalidateIdentityInbox(
   await client.invalidateQueries({ queryKey: queryKeys.identityInbox.all })
 }
 
+/**
+ * Invalidate duplicate-reconciliation detections after an apply or undo so the
+ * detection list refetches against the canonical/alias state that just changed.
+ */
+export async function invalidateAfterDuplicateReconciliation(
+  client: QueryClient,
+): Promise<void> {
+  await client.invalidateQueries({
+    queryKey: queryKeys.issueDuplicateReconciliation.all,
+  })
+}
+
 export type IssueCacheRollback = () => void
 
 /**
