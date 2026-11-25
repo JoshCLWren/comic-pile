@@ -13,7 +13,7 @@ The user wants to delegate a task to another model via opencode. $ARGUMENTS cont
 2. **Never use ScheduleWakeup.** Not for CI polling, not for "checking back later," not for anything.
 3. **Never take over a failed handoff.** If opencode exits non-zero or the agent didn't finish: write a second handoff to a different model and launch that. If two handoffs both fail, report the failure to the user and stop. Do not start doing the work yourself.
 4. **Never perform the delegated work directly.** If you find yourself writing code, running tests, or editing files to complete the task — stop. That is the agent's job.
-5. **CI / PR monitoring always goes to a free model.** If the task involves watching CI, polling GitHub, or waiting for CodeRabbit: the handoff prompt must tell the agent to do that work. You do not watch CI yourself.
+5. **Delegate monitoring only when the user requested delegation.** If the task involves watching CI, polling GitHub, or waiting for CodeRabbit, the handoff prompt must assign that work to the selected configured model. Do not watch it yourself or require a static free/cheap model.
 
 ## Step 1 — Pick a model
 
@@ -71,7 +71,7 @@ The prompt must be self-contained. Include:
 
 Show output as it streams. When done:
 - If `_done.md` exists: print its contents and stop.
-- If `_done.md` does not exist and exit code is non-zero: write a second handoff to the next cheapest model and launch it (one retry only).
+- If `_done.md` does not exist and exit code is non-zero: write a second handoff to the next eligible configured model under the active provider policy and launch it (one retry only). Do not silently substitute paid or unconfigured capacity.
 - If both attempts fail: tell the user what failed and stop.
 
 ## Model discovery
