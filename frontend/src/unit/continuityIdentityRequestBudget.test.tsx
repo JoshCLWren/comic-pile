@@ -254,6 +254,7 @@ function renderRoute(entry: string, { withBadge = false, strict = false } = {}) 
         <Route path="/continuity-plans/events" element={<CrossoversPage />} />
         <Route path="/continuity-plans/:id" element={<ReadingPlanDetailPage />} />
         <Route path="/continuity-plans/:id/edit" element={<ReadingPlanEditRoute legacyEditor={<ContinuityPlannerPage />} />} />
+        <Route path="/reading-lists" element={<ReadingListEditorPage />} />
         <Route path="/reading-lists/:id" element={<ReadingListEditorPage />} />
         <Route path="/identity-inbox" element={<IdentityInboxPage />} />
       </Routes>
@@ -381,6 +382,15 @@ describe('/continuity-plans/:id/edit', () => {
     renderRoute('/continuity-plans/7/edit')
     await settle(5)
     expectExact([PLAN_READER, PLAN_DETAIL, THREADS_PAGE, DEPENDENCY_GROUPS, PLAN_TAGS])
+  })
+})
+
+describe('/reading-lists', () => {
+  it('loads the owned list index without fetching an arbitrary list', async () => {
+    renderRoute('/reading-lists')
+    await screen.findByRole('heading', { name: 'Reading Lists', exact: true })
+    await settle(1)
+    expectExact([CUSTOM_LISTS])
   })
 })
 
