@@ -1201,6 +1201,29 @@ describe('ComicIdentity creator status (issue #4149)', () => {
     await waitFor(() => expect(screen.getByText('Recovered Writer')).toBeInTheDocument())
   })
 
+  it('reports a failed manual recovery request and leaves retry available (#5695)', async () => {
+    getIntelligence.mockResolvedValue(
+      intelligenceResponse({
+        comicvine_issue_id: '602',
+        metadata_status: 'refresh_failed',
+        refresh_retry_after_seconds: null,
+      }),
+    )
+    refreshMetadata.mockRejectedValue(new Error('network unavailable'))
+
+    renderIdentity()
+    await waitForLoaded()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry refresh' }))
+
+    await waitFor(() => expect(refreshMetadata).toHaveBeenCalledWith(1))
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not request a creator refresh. Try again.',
+    )
+    expect(screen.getByTestId('creator-status-failed')).toHaveTextContent('Refresh failed')
+    expect(screen.getByRole('button', { name: 'Retry refresh' })).toBeEnabled()
+  })
+
   it('shows "ComicVine currently has no creator credits" when metadata_status is deep_fetched_no_credits', async () => {
     getIntelligence.mockResolvedValue({
       comicvine_issue_id: '700',
