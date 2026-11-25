@@ -240,7 +240,7 @@ async fn detect_preview_apply_and_undo_preserve_real_history() {
     // Real read event on the canonical, synthetic placeholder on the duplicate.
     conn.execute(
         "INSERT INTO events (type, timestamp, user_id, issue_id, issue_number) \
-         VALUES ('issue_read', NOW() - interval '1 hour', $1, $2, '3')",
+         VALUES ('issue_read', '2026-11-05T05:47:59Z', $1, $2, '3')",
         &[&ctx.user_id, &canonical],
     )
     .await
@@ -248,7 +248,7 @@ async fn detect_preview_apply_and_undo_preserve_real_history() {
     let synthetic_read_event: i32 = conn
         .query_one(
             "INSERT INTO events (type, timestamp, user_id, issue_id, issue_number) \
-             VALUES ('issue_read', NOW() - interval '1 hour', $1, $2, '100') RETURNING id",
+             VALUES ('issue_read', '2026-11-05T05:02:02Z', $1, $2, '100') RETURNING id",
             &[&ctx.user_id, &duplicate],
         )
         .await
