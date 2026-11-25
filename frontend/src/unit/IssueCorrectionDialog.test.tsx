@@ -154,7 +154,7 @@ describe('IssueCorrectionDialog', () => {
     await userEvent.clear(input)
     await userEvent.type(input, '2')
     await userEvent.selectOptions(screen.getByLabelText(/place new issue/i), 'start')
-    await userEvent.click(screen.getByRole('button', { name: 'Update' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
     await waitFor(() => expect(screen.getByText(/failed to update issue/i)).toBeInTheDocument())
     expect(onSuccess).not.toHaveBeenCalled()
   })
@@ -174,7 +174,9 @@ describe('IssueCorrectionDialog', () => {
     await userEvent.clear(input)
     await userEvent.type(input, '2')
     await userEvent.selectOptions(screen.getByLabelText(/place new issue/i), 'start')
-    await userEvent.click(screen.getByRole('button', { name: 'Update' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+    await screen.findByTestId('bulk-read-preview')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
 
     await waitFor(() => expect(move).toHaveBeenCalledWith(2, null))
     expect(screen.getByText(/failed to update issue/i)).toBeInTheDocument()
@@ -185,7 +187,7 @@ describe('IssueCorrectionDialog', () => {
     renderDialog({ currentIssueNumber: null, totalIssues: 1 })
     const input = await screen.findByLabelText(/what issue are you currently on/i)
     await userEvent.clear(input)
-    await userEvent.click(screen.getByRole('button', { name: 'Update' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
     expect(screen.getByText(/please enter an issue identifier/i)).toBeInTheDocument()
 
     await userEvent.type(input, '1')
@@ -217,7 +219,9 @@ describe('IssueCorrectionDialog', () => {
     const input = await screen.findByLabelText(/what issue are you currently on/i)
     await userEvent.clear(input)
     await userEvent.type(input, 'Missing')
-    await userEvent.click(screen.getByRole('button', { name: 'Update' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+    await screen.findByTestId('bulk-read-preview')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
     await waitFor(() => expect(screen.getByText(/failed to update issue/i)).toBeInTheDocument())
     fireEvent.click(screen.getByText('Fix Issue Number'))
     expect(onClose).not.toHaveBeenCalled()
@@ -231,7 +235,7 @@ describe('IssueCorrectionDialog', () => {
     await screen.findByLabelText(/what issue are you currently on/i)
     expect(screen.queryByTestId('issue-card-trigger-10')).not.toBeInTheDocument()
     expect(screen.queryByTestId('issue-card-trigger-11')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Update' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Review changes' })).toBeEnabled()
   })
 
   it('keeps an exact issue direct read independent of the correction form and refreshes on commit', async () => {
