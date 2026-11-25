@@ -623,6 +623,23 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.issueCards.all })
   })
 
+  it('cancels stale issue intelligence before clearing and refetching the exact owned issue (#5695)', async () => {
+    const { client, cancelQueries, setQueryData, invalidateQueries } = createSpiedClient()
+    const filter = { queryKey: queryKeys.comicVine.issueIntelligence(77), exact: true }
+
+    await clearComicVineIssueIntelligence(client, 77)
+
+    expect(cancelQueries).toHaveBeenCalledWith(filter)
+    expect(setQueryData).toHaveBeenCalledWith(filter.queryKey, null)
+    expect(invalidateQueries).toHaveBeenCalledWith(filter)
+    expect(cancelQueries.mock.invocationCallOrder[0]).toBeLessThan(
+      setQueryData.mock.invocationCallOrder[0],
+    )
+    expect(setQueryData.mock.invocationCallOrder[0]).toBeLessThan(
+      invalidateQueries.mock.invocationCallOrder[0],
+    )
+  })
+
   it('refreshes undo surfaces and reconciles open views while leaving session detail to its caller', async () => {
     const { client, invalidateQueries, resetQueries, setQueryData } = createSpiedClient()
 
