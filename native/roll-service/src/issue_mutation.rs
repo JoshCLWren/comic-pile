@@ -23,6 +23,23 @@ use tokio_postgres::Transaction;
 const QUEUE_LOCK_NAMESPACE: i32 = 699001;
 const MAX_ISSUES_PER_REQUEST: i64 = 1000;
 
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum IssuePlacementStrategy {
+    /// Preserve existing relative issue order. Non-monotonic numeric series
+    /// append new numbers instead of silently re-sorting persisted issues.
+    SafeDefault,
+    /// Explicitly re-seat all ordinary numeric issues in numeric order.
+    /// This is a deliberate action and must be previewed before commit.
+    NumericResort,
+}
+
+impl Default for IssuePlacementStrategy {
+    fn default() -> Self {
+        Self::SafeDefault
+    }
+}
+
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateIssuesRequest {
@@ -33,6 +50,9 @@ pub struct CreateIssuesRequest {
     /// Explicit "At the end" choice. Distinct from an omitted anchor.
     #[serde(default)]
     pub append_to_end: bool,
+    /// Placement strategy. Defaults to safe_default.
+    #[serde(default)]
+    pub strategy: IssuePlacementStrategy,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
