@@ -1302,3 +1302,67 @@ pub async fn undo_reconciliation(
         warnings,
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn evidence(issue_id: i32, status: &str, read_at: Option<&str>, created_at: &str) -> DuplicateIssueEvidence {
+        DuplicateIssueEvidence {
+            issue_id,
+            thread_id: 1,
+            thread_title: "Test".to_string(),
+            issue_number: issue_id.to_string(),
+            status: status.to_string(),
+            read_at: read_at.map(str::to_string),
+            created_at: created_at.to_string(),
+            merged_into_issue_id: None,
+            comicvine_issue_id: None,
+            comicvine_volume_id: None,
+            comicvine_issue_number: None,
+            comicvine_story_number: None,
+            rating_events: vec![],
+            read_events: vec![],
+            list_memberships: vec![],
+            is_synthetic_placeholder_read: read_at
+                .and_then(|r| chrono::DateTime::parse_from_rfc3339(r).ok())
+                .zip(chrono::DateTime::parse_from_rfc3339(created_at).ok())
+                .map(|(r, c)| r.with_timezone(&chrono::Utc) < c.with_timezone(&chrono::Utc))
+                .unwrap_or(false),
+        }
+    }
+
+    #[test]
+    fn synthetic_placeholder_read_is_detected() {
+        let e = evidence(1, "read", Some("2026-11-05T05:02:02Z"), "2026-11-05T05:11:33Z");
+        assert!(e.is_synthetic_placeholder_read);
+    }
+
+    #[test]
+    fn real_read_is_not_synthetic() {
+        let e = evidence(1, "read", Some("2026-11-05T05:47:59Z"), "2026-11-05T05:11:33Z");
+        assert!(!e.is_synthetic_placeholder_read);
+    }
+
+    #[test]
+    fn preview_warns_on_synthetic_read_events() {
+        let canonical = evidence(10, "read", Some("2026-11-05T06:03:08Z"), "2026-01-01T00:00:00Z");
+        let mut dup = evidence(20, "read", Some("2026-11-05T05:02:02Z"), "2026-11-05T05:11:33Z");
+        dup.read_events.push(DuplicateReadEvent { event_id: 1, timestamp: "2026-11-05T05:02:02Z".to_string(), issue_number: Some("101".to_string()) });
+        let (actions, warnings, can_apply) = build_preview_actions(&canonical, &[dup], &HashMap::new());
+        assert!(can_apply);
+        assert!(warnings.iter().any(|w| w.contains("synthetic placeholder")));
+        assert!(actions.iter().any(|a| a.kind == "suppress_synthetic_read_events"));
+    }
+
+    #[test]
+    fn preview_token_changes_with_state() {
+        let canonical = evidence(10, "unread", None, "2026-01-01T00:00:00Z");
+        let dup = evidence(20, "unread", None, "2026-01-02T00:00:00Z");
+        let t1 = compute_preview_token(1, 10, &[20], &canonical, &[dup.clone()]);
+        let mut dup2 = dup;
+        dup2.status = "read".to_string();
+        let t2 = compute_preview_token(1, 10, &[20], &canonical, &[dup2]);
+        assert_ne!(t1, t2);
+    }
+}
