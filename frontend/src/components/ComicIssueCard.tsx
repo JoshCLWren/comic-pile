@@ -31,6 +31,12 @@ export function ComicIssueCover({
   placeholderTestId = 'comic-issue-cover-placeholder',
   onImageLoad,
   children,
+  /** Override the browser's lazy/eager hint. Queue uses eager loading because its
+   *  rows are positioned by CSS transform in a virtualized list, so a lazy image
+   *  whose document position never reaches the lazy-load threshold never fetches
+   *  its cover (#5692). Roll and other surfaces keep the variant-derived default.
+   */
+  loading?: 'eager' | 'lazy',
 }: {
   coverImageUrl: string | null
   threadTitle: string
@@ -45,6 +51,8 @@ export function ComicIssueCover({
   testId?: string
   placeholderTestId?: string
   onImageLoad?: (img: HTMLImageElement) => void
+  /** Override the browser's lazy/eager hint (see the prop doc above). */
+  loading?: 'eager' | 'lazy'
   children?: ReactNode
 }) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null)
@@ -68,7 +76,7 @@ export function ComicIssueCover({
         <ImageWithLoading
           src={coverImageUrl}
           alt={altText ?? `Cover for ${issueLabel}`}
-          loading={eager ? 'eager' : 'lazy'}
+          loading={loading ?? (eager ? 'eager' : 'lazy')}
           className={imageClassName}
           onLoad={onImageLoad}
           onError={() => setFailedUrl(coverImageUrl)}
