@@ -453,7 +453,7 @@ export function ComicIssueCard({
             value={aliasEditor.draft}
             onChange={(event) => setAliasEditor({ draft: event.target.value })}
             disabled={actions.isPending}
-            className="min-h-11 w-full rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg)] px-3 py-2 text-sm text-[var(--theme-text-primary)]"
+            className="min-h-11 w-full rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-2 text-sm text-[var(--theme-text-primary)]"
             placeholder="e.g. 100"
           />
           <div className="flex flex-wrap items-center gap-2">
