@@ -1634,7 +1634,7 @@ async fn bulk_read_operation_can_be_undone_without_reverting_unrelated_changes()
 async fn bulk_read_undo_skips_issues_changed_after_operation() {
     let (state, token, csrf, user_id, _guard) = setup_user("irs-4655c").await;
     let conn = state.pool.get().await.unwrap();
-    let (thread_id, issues) = series(
+    let (_thread_id, issues) = series(
         &conn,
         user_id,
         "Concurrent",
