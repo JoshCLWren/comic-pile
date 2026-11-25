@@ -701,6 +701,19 @@ struct IssueFacts {
     is_mapped: bool,
 }
 
+/// Inputs shared by both preview outcomes, grouped so the projection helper
+/// stays within clippy's argument limit without suppressing the lint.
+#[derive(Debug, Clone, Copy)]
+struct PreviewOutcomeInput<'a> {
+    thread_id: i32,
+    thread_title: &'a str,
+    existing: &'a [(i32, String, i32)],
+    new_numbers: &'a [String],
+    request: &'a PreviewIssuesRequest,
+    strategy: IssuePlacementStrategy,
+    facts: &'a BTreeMap<i32, IssueFacts>,
+}
+
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct PreviewIssueItem {
     pub issue_id: Option<i32>,
@@ -969,14 +982,17 @@ fn planned_merge(
 async fn preview_outcome(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,
-    thread_id: i32,
-    thread_title: &str,
-    existing: &[(i32, String, i32)],
-    new_numbers: &[String],
-    request: &PreviewIssuesRequest,
-    strategy: IssuePlacementStrategy,
-    facts: &BTreeMap<i32, IssueFacts>,
+    input: PreviewOutcomeInput<'_>,
 ) -> Result<IssueEditPreviewOutcome, ApiError> {
+    let PreviewOutcomeInput {
+        thread_id,
+        thread_title,
+        existing,
+        new_numbers,
+        request,
+        strategy,
+        facts,
+    } = input;
     let (merged, preserves) = planned_merge(existing, new_numbers, request, strategy)?;
 
     let savepoint = format!(
@@ -1124,31 +1140,26 @@ pub async fn preview_issue_create(
         ));
     }
 
-    let default_outcome = preview_outcome(
-        &tx,
-        user,
+    let outcome_input = PreviewOutcomeInput {
         thread_id,
-        &thread_title,
-        &existing,
-        &new_numbers,
-        &request,
-        IssuePlacementStrategy::SafeDefault,
-        &facts,
-    )
-    .await?;
+        thread_title: &thread_title,
+        existing: &existing,
+        new_numbers: &new_numbers,
+        request: &request,
+        strategy: IssuePlacementStrategy::SafeDefault,
+        facts: &facts,
+    };
+    let default_outcome = preview_outcome(&tx, user, outcome_input).await?;
 
     let numeric_resort_outcome =
         if request.insert_after_issue_id.is_none() && !request.append_to_end {
             let resort = preview_outcome(
                 &tx,
                 user,
-                thread_id,
-                &thread_title,
-                &existing,
-                &new_numbers,
-                &request,
-                IssuePlacementStrategy::NumericResort,
-                &facts,
+                PreviewOutcomeInput {
+                    strategy: IssuePlacementStrategy::NumericResort,
+                    ..outcome_input
+                },
             )
             .await?;
             if resort.preserves_existing_relative_order
