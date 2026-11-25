@@ -1183,6 +1183,12 @@ WITH auth AS (
 me AS (
     SELECT COALESCE($6::int, (SELECT user_id FROM auth WHERE NOT revoked AND password_epoch <= $3)) AS user_id
 ),
+cover_frontiers AS (
+    SELECT key::int AS thread_id,
+           CASE WHEN jsonb_typeof(value) = 'number'
+                THEN (value #>> '{}')::int END AS issue_id
+    FROM jsonb_each($9::jsonb)
+),
 ranked AS (
     SELECT t.id,
            row_number() OVER (ORDER BY {blocked}, t.queue_position, t.id)::int AS display_position
@@ -1191,7 +1197,10 @@ ranked AS (
     WHERE t.status = 'active'
 ),
 page AS (
-    SELECT t.id, t.next_unread_issue_id, t.title, t.format, t.queue_position, t.status,
+    SELECT t.id,
+           CASE WHEN $7 THEN cf.issue_id ELSE t.next_unread_issue_id END
+               AS next_unread_issue_id,
+           t.title, t.format, t.queue_position, t.status,
            t.last_activity_at, t.is_blocked, t.total_issues, t.notes, t.created_at,
            t.manual_creator_credits,
            r.display_position,
@@ -1204,6 +1213,7 @@ page AS (
     FROM threads t
     JOIN me ON t.user_id = me.user_id
     JOIN ranked r ON r.id = t.id
+    LEFT JOIN cover_frontiers cf ON cf.thread_id = t.id AND $7
     WHERE t.status = 'active'
       AND ($4 = '' OR t.title ILIKE '%' || $4 || '%')
       {cursor}
@@ -1421,6 +1431,25 @@ async fn query_page(
         Param::OptionalInt(preauthenticated),
         Param::Bool(option_e),
         Param::IntArray(candidates),
+        Param::Text(
+            Value::Object(
+                projection
+                    .map(|projection| {
+                        projection
+                            .cover_frontiers
+                            .iter()
+                            .map(|(thread_id, issue_id)| {
+                                (
+                                    thread_id.to_string(),
+                                    issue_id.map_or(Value::Null, Value::from),
+                                )
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+            )
+            .to_string(),
+        ),
     ];
     params.extend(cursor_bindings);
     let bindings: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> =
