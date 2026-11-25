@@ -142,7 +142,7 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
     let db = Scratch::create().await;
     let mut client = db.client().await;
     let report = run(&mut client).await.unwrap();
-    assert_eq!((report.applied, report.adopted), (vec![1, 2, 3], vec![]));
+    assert_eq!((report.applied, report.adopted), (vec![1, 2, 3, 4], vec![]));
 
     let stamp: String = client
         .query_one("SELECT version_num FROM public.alembic_version", &[])
@@ -156,7 +156,7 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
         .await
         .unwrap()
         .get(0);
-    assert_eq!(recorded, 3);
+    assert_eq!(recorded, 4);
 
     let threads: bool = client
         .query_one("SELECT to_regclass('public.threads') IS NOT NULL", &[])
@@ -193,6 +193,39 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
         "V3 must add custom_cbl_list_id to reading_plan_release_sources"
     );
 
+    let overall_col: bool = client
+        .query_one(
+            "SELECT EXISTS (\
+               SELECT 1 FROM information_schema.columns \
+               WHERE table_schema = 'public' \
+                 AND table_name = 'issues' \
+                 AND column_name = 'overall_issue_number'\
+             )",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert!(overall_col, "V4 must add overall_issue_number to issues");
+
+    let identity_version_col: bool = client
+        .query_one(
+            "SELECT EXISTS (\
+               SELECT 1 FROM information_schema.columns \
+               WHERE table_schema = 'public' \
+                 AND table_name = 'issues' \
+                 AND column_name = 'identity_version'\
+             )",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert!(
+        identity_version_col,
+        "V4 must add identity_version to issues"
+    );
+
     let again = run(&mut client).await.unwrap();
     assert_eq!((again.applied, again.adopted), (vec![], vec![]));
     drop(client);
@@ -217,7 +250,7 @@ async fn alembic_database_at_head_is_adopted_without_rerunning() {
         .unwrap();
 
     let report = run(&mut client).await.unwrap();
-    assert_eq!((report.applied, report.adopted), (vec![3], vec![1, 2]));
+    assert_eq!((report.applied, report.adopted), (vec![3, 4], vec![1, 2]));
 
     let recorded: bool = client
         .query_one(
@@ -288,7 +321,7 @@ async fn release_list_backfill_preserves_subscriptions_and_requires_unambiguous_
         .unwrap();
 
     let report = run(&mut client).await.unwrap();
-    assert_eq!((report.applied, report.adopted), (vec![3], vec![1, 2]));
+    assert_eq!((report.applied, report.adopted), (vec![3, 4], vec![1, 2]));
 
     let rows = client
         .query(
