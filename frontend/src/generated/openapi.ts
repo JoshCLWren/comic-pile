@@ -6379,6 +6379,44 @@ export interface components {
             id: number;
             name: string;
         };
+        NativeIdentityInboxActionResponse: {
+            message: string;
+            success: boolean;
+            updated_item?: components["schemas"]["NativeIdentityInboxItem"] | null;
+        };
+        NativeIdentityInboxItem: {
+            candidates: components["schemas"]["IdentityInboxCandidate"][];
+            /** Format: double */
+            created_at?: number | null;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            mapping_id: number;
+            /**
+             * @description Actionable next steps for the reviewer when the match is unresolved,
+             *     ambiguous, or missing. Empty when no guidance is needed.
+             */
+            next_steps?: string[];
+            provider?: string | null;
+            source_entry_summary: string;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+            /** Format: double */
+            updated_at?: number | null;
+            why_stopped: string;
+        };
+        NativeIdentityInboxResponse: {
+            items: components["schemas"]["NativeIdentityInboxItem"][];
+            /** Format: int64 */
+            limit: number;
+            /** Format: int64 */
+            offset: number;
+            /** Format: int64 */
+            total: number;
+        };
         /** @description Stored creator credits for one issue (Python `IssueCreatorsEntry`). */
         NativeIssueCreatorsEntry: {
             creators: components["schemas"]["CreatorCredit"][];
@@ -15178,7 +15216,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IdentityInboxResponse"];
+                    "application/json": components["schemas"]["NativeIdentityInboxResponse"];
                 };
             };
         };
@@ -15228,7 +15266,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IdentityInboxResponse"];
+                    "application/json": components["schemas"]["NativeIdentityInboxResponse"];
                 };
             };
         };
@@ -15255,7 +15293,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
+                    "application/json": components["schemas"]["NativeIdentityInboxActionResponse"];
                 };
             };
         };
@@ -15278,7 +15316,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
+                    "application/json": components["schemas"]["NativeIdentityInboxActionResponse"];
                 };
             };
         };
@@ -15305,7 +15343,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
+                    "application/json": components["schemas"]["NativeIdentityInboxActionResponse"];
                 };
             };
         };
@@ -15328,7 +15366,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
+                    "application/json": components["schemas"]["NativeIdentityInboxActionResponse"];
                 };
             };
         };
