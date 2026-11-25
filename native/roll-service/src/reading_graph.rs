@@ -813,30 +813,31 @@ pub async fn repair(
     let action = request.action()?;
     if !repair_target_exists(&inputs, &action) {
         if request.confirm {
-            // Idempotent retry: the constraint is already gone. Report the
-            // persisted graph state so clients can safely retry after a lost
-            // response without treating success as a 404.
-            let fresh = option_inputs::load_option_diagnostics(&state, user).await?;
-            let after = option_inputs::validated_contained(fresh)?;
-            let status_after = if after.graph_problem().is_some() {
-                "cycle"
-            } else {
-                "ok"
+            // A retry is distinguishable from a missing or foreign constraint
+            // only by this owner's durable receipt, committed atomically with
+            // the original repair. Never turn every absent target into success.
+            let replayed = match transaction.as_ref() {
+                Some(tx) => repair_receipt_exists(tx, user.id(), &action).await?,
+                None => false,
             };
-            tracing::info!(
-                user_id = user.id(),
-                action = request.action.as_str(),
-                status_before = status_before,
-                status_after = status_after,
-                "reading_graph repair retry: constraint already absent"
-            );
-            return Ok(Json(ReadingGraphRepairResponse {
-                applied: false,
-                status_before: status_before.to_string(),
-                status_after: status_after.to_string(),
-                removed: "Constraint already removed".to_string(),
-                graph: project(after.inputs(), &after, None),
-            }));
+            if replayed {
+                if let Some(tx) = transaction {
+                    tx.commit().await.map_err(db::query_error)?;
+                }
+                tracing::info!(
+                    user_id = user.id(),
+                    action = request.action.as_str(),
+                    status_before = status_before,
+                    "reading_graph repair retry: original receipt found"
+                );
+                return Ok(Json(ReadingGraphRepairResponse {
+                    applied: false,
+                    status_before: status_before.to_string(),
+                    status_after: status_before.to_string(),
+                    removed: "Constraint already removed".to_string(),
+                    graph: project(&inputs, &validated, None),
+                }));
+            }
         }
         return Err(crate::ApiError::NotFound(
             "Constraint not found".to_string(),
