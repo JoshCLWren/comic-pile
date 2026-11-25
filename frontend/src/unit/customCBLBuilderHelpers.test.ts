@@ -20,6 +20,34 @@ describe('customCBLBuilderHelpers', () => {
     expect(sameEntries(current, legacy)).toBe(true)
   })
 
+  it('restores Undo only for the same owner, list, and saved version', () => {
+    const snapshot = {
+      baseline: '2026-11-20T00:05:00Z',
+      payload: { name: 'Julix', description: null, mode: 'strict' as const, issue_ids: [2, 1] },
+    }
+    writeReadingListUndo(1, 2, snapshot)
+    expect(restoreReadingListUndo(1, 2, snapshot.baseline)).toEqual(snapshot)
+    expect(restoreReadingListUndo(2, 2, snapshot.baseline)).toBeNull()
+    expect(restoreReadingListUndo(1, 3, snapshot.baseline)).toBeNull()
+    expect(restoreReadingListUndo(1, 2, '2026-11-20T00:06:00Z')).toBeNull()
+    expect(restoreReadingListUndo(1, 2, snapshot.baseline)).toBeNull()
+  })
+
+  it('clears Undo and ignores malformed session data', () => {
+    const snapshot = {
+      baseline: 'v2',
+      payload: { name: 'List', description: null, mode: 'loose' as const, issue_ids: [1] },
+    }
+    writeReadingListUndo(1, 9, snapshot)
+    writeReadingListUndo(1, 9, null)
+    expect(restoreReadingListUndo(1, 9, 'v2')).toBeNull()
+
+    for (const stored of ['{', 'null', '{}', '{"baseline":"v2","payload":{"issue_ids":"bad"}}']) {
+      window.sessionStorage.setItem('comic-pile:reading-list-undo:1:9', stored)
+      expect(restoreReadingListUndo(1, 9, 'v2')).toBeNull()
+    }
+  })
+
   it('messageFor prefers decoded detail message', () => {
     const error = { isAxiosError: true, response: { data: { detail: { message: 'Stale write' } } } }
     expect(messageFor(error, 'fallback')).toBe('Stale write')
