@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-25T09:57:28+00:00",
+  "generated_at": "2026-11-25T10:15:22+00:00",
   "models": [
     {
       "health": {
@@ -23277,7 +23277,7 @@
   },
   "counts_generated_at": "2026-11-25T09:41:46.325595+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-25T09:57:29Z",
+    "generated_at": "2026-11-25T10:15:23Z",
     "sources": {
       "kilo-auto": [
         "kilo-auto/free",
@@ -23313,7 +23313,6 @@
       ],
       "opencode-free": [
         "hungerg-free",
-        "iceman-contributor-free",
         "beam-free",
         "hy4-flash-free"
       ],
@@ -23346,10 +23345,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-25T09:57:29.987960+00:00",
-    "days_elapsed": 24.415,
+    "checked_at": "2026-11-25T10:15:23.285077+00:00",
+    "days_elapsed": 24.427,
     "days_in_month": 30.0,
-    "days_left": 5.59,
+    "days_left": 5.57,
     "in_use": true,
     "label": "",
     "metrics": {
@@ -23365,23 +23364,23 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 8143725,
-        "organization": 8143725,
+        "database": 8208142,
+        "organization": 8208142,
         "owner_target": 50000000,
-        "projected_database": 10006625,
-        "projected_organization": 10006625,
-        "projected_share": 0.02,
-        "share_used": 0.0163
+        "projected_database": 10080823,
+        "projected_organization": 10080823,
+        "projected_share": 0.0202,
+        "share_used": 0.0164
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 117365,
-        "organization": 117365,
+        "database": 117577,
+        "organization": 117577,
         "owner_target": 1000000,
-        "projected_database": 144213,
-        "projected_organization": 144213,
+        "projected_database": 144402,
+        "projected_organization": 144402,
         "projected_share": 0.0144,
-        "share_used": 0.0117
+        "share_used": 0.0118
       },
       "storage_bytes": {
         "allowance": 5000000000,
