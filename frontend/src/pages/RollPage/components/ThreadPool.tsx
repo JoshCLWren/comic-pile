@@ -30,6 +30,7 @@ interface ThreadPoolProps {
   issueCards?: IssueCardsResponse | null
   onResetDice?: () => void | Promise<boolean>
   resetDicePending?: boolean
+  resetDiceError?: string
 }
 
 export function ThreadPool({
@@ -52,6 +53,7 @@ export function ThreadPool({
   issueCards,
   onResetDice,
   resetDicePending = false,
+  resetDiceError = '',
 }: ThreadPoolProps) {
   const navigate = useNavigate()
   const wasRatingView = useRef(isRatingView)
@@ -204,6 +206,11 @@ export function ThreadPool({
               >
                 {resetDicePending ? 'Resetting…' : 'Reset Dice'}
               </button>
+            ) : null}
+            {resetDiceError ? (
+              <p className="text-xs font-bold text-[var(--theme-danger)]" role="alert">
+                {resetDiceError}
+              </p>
             ) : null}
             <button
               onClick={() => navigate('/queue')}
