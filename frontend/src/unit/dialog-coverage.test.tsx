@@ -67,6 +67,8 @@ describe('bug report and issue correction dialogs', () => {
     render(<IssueCorrectionDialog isOpen threadId={2} currentIssueNumber="1" totalIssues={3} threadTitle="Saga" onClose={onClose} onSuccess={onSuccess} />)
     await waitFor(() => expect(screen.getByRole('textbox', { name: /What issue/ })).toHaveValue('1'))
     await user.click(screen.getByRole('button', { name: 'Review changes' }))
+    await screen.findByTestId('bulk-read-preview')
+    await user.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
     await waitFor(() => expect(onSuccess).toHaveBeenCalled())
   })
 
@@ -78,6 +80,8 @@ describe('bug report and issue correction dialogs', () => {
     await waitFor(() => expect(screen.getByText(/What issue/)).toBeInTheDocument())
     const input = screen.getByRole('textbox', { name: /What issue/ })
     await user.clear(input); await user.type(input, '5'); fireEvent.keyDown(input, { key: 'Enter' })
+    await screen.findByTestId('bulk-read-preview')
+    await user.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
     await waitFor(() => expect(issues.create).toHaveBeenCalled())
     await user.click(screen.getByRole('button', { name: 'Close modal' }))
     expect(onClose).toHaveBeenCalled()
