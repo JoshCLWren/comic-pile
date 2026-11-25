@@ -314,3 +314,179 @@ async fn load_issue_evidence(
         is_synthetic_placeholder_read,
     })
 }
+
+async fn detect_duplicates_for_user(
+    tx: &Transaction<'_>,
+    user_id: i32,
+) -> Result<Vec<DuplicateCandidateGroup>, ApiError> {
+    let mut groups: Vec<DuplicateCandidateGroup> = Vec::new();
+    let mut seen_groups: BTreeSet<String> = BTreeSet::new();
+
+    // 1) Exact provider identity: same comicvine issue external_id mapped to multiple issues
+    let dup_cv_rows = tx
+        .query(
+            r#"
+            SELECT ei.external_id, array_agg(DISTINCT m.issue_id ORDER BY m.issue_id) AS issue_ids
+            FROM issue_external_identity_mappings m
+            JOIN external_identities ei ON ei.id = m.external_identity_id
+            JOIN issues i ON i.id = m.issue_id
+            JOIN threads t ON t.id = i.thread_id
+            WHERE ei.provider = 'comicvine' AND ei.entity_type = 'issue'
+              AND m.status IN ('confirmed', 'candidate')
+              AND t.user_id = $1
+            GROUP BY ei.external_id
+            HAVING count(DISTINCT m.issue_id) > 1
+            ORDER BY ei.external_id
+            LIMIT $2
+            "#,
+            &[&user_id, &(MAX_CANDIDATE_GROUPS as i64)],
+        )
+        .await
+        .map_err(db_err)?;
+
+    for row in dup_cv_rows {
+        let cv_id: String = row.get(0);
+        let issue_ids: Vec<i32> = row.get(1);
+        let group_key = format!("cv-issue:{cv_id}");
+        if !seen_groups.insert(group_key.clone()) {
+            continue;
+        }
+        let mut evidence = Vec::new();
+        for iid in &issue_ids {
+            evidence.push(load_issue_evidence(tx, user_id, *iid).await?);
+        }
+        let (canonical, dups) = suggest_canonical_and_duplicates(&evidence);
+        groups.push(DuplicateCandidateGroup {
+            group_key,
+            confidence: "high".to_string(),
+            reason: format!("Multiple owned issues map to the same Comic Vine issue {cv_id}"),
+            suggested_canonical_issue_id: canonical,
+            suggested_duplicate_issue_ids: dups,
+            evidence,
+        });
+    }
+
+    // 2) Story/overall-number relationship: CV-mapped issue has issue_number that
+    // matches another unmapped issue in a different thread (same user), or a
+    // CV issue number matches while story numbering differs. We look for cases
+    // where a comicvine issue mapping's metadata issue_number matches an owned
+    // issue's issue_number in a different thread AND the mapped issue is in a
+    // different thread - indicating same physical comic represented twice.
+    let story_rows = tx
+        .query(
+            r#"
+            SELECT DISTINCT ON (i1.id, i2.id)
+                   i1.id AS mapped_issue_id, i2.id AS other_issue_id,
+                   ei.external_id AS cv_issue_id,
+                   ei.metadata_json->>'issue_number' AS cv_issue_number
+            FROM issue_external_identity_mappings m
+            JOIN external_identities ei ON ei.id = m.external_identity_id
+                AND ei.provider = 'comicvine' AND ei.entity_type = 'issue'
+            JOIN issues i1 ON i1.id = m.issue_id
+            JOIN threads t1 ON t1.id = i1.thread_id
+            JOIN threads t2 ON t2.user_id = t1.user_id AND t2.id <> t1.id
+            JOIN issues i2 ON i2.thread_id = t2.id
+            WHERE t1.user_id = $1
+              AND m.status IN ('confirmed', 'candidate')
+              AND i2.id <> i1.id
+              AND (
+                  -- other issue has same number as CV issue number (overall-number alias)
+                  (ei.metadata_json->>'issue_number' IS NOT NULL
+                   AND ei.metadata_json->>'issue_number' <> ''
+                   AND i2.issue_number = ei.metadata_json->>'issue_number')
+                  OR
+                  -- other issue has same number as mapped issue's issue number
+                  i2.issue_number = i1.issue_number
+              )
+              -- avoid flagging clearly different comics: require same CV volume family or
+              -- explicit story/overall signal. We use: same comicvine volume id in metadata
+              -- OR the CV issue's story_arc_number matches the other issue's number.
+              AND (
+                  (ei.metadata_json->>'volume_id' IS NOT NULL
+                   AND EXISTS (
+                       SELECT 1 FROM issue_external_identity_mappings m2
+                       JOIN external_identities ei2 ON ei2.id = m2.external_identity_id
+                       WHERE m2.issue_id = i2.id AND ei2.provider = 'comicvine'
+                         AND ei2.entity_type = 'issue'
+                         AND ei2.metadata_json->>'volume_id' = ei.metadata_json->>'volume_id'
+                   ))
+                  OR
+                  (ei.metadata_json->>'story_arc_number' IS NOT NULL
+                   AND ei.metadata_json->>'story_arc_number' = i2.issue_number)
+                  OR
+                  (ei.metadata_json->>'issue_number' IS NOT NULL
+                   AND i1.issue_number <> i2.issue_number
+                   AND ei.metadata_json->>'issue_number' = i2.issue_number)
+              )
+            ORDER BY i1.id, i2.id
+            LIMIT $2
+            "#,
+            &[&user_id, &(MAX_CANDIDATE_GROUPS as i64)],
+        )
+        .await
+        .map_err(db_err)?;
+
+    for row in story_rows {
+        let mapped_id: i32 = row.get(0);
+        let other_id: i32 = row.get(1);
+        let cv_id: String = row.get(2);
+        let mut pair = vec![mapped_id, other_id];
+        pair.sort();
+        let group_key = format!("story-overall:{}:{}", pair[0], pair[1]);
+        if !seen_groups.insert(group_key.clone()) {
+            continue;
+        }
+        // Skip if both already in a same-CV group
+        let mut evidence = Vec::new();
+        for iid in &pair {
+            evidence.push(load_issue_evidence(tx, user_id, *iid).await?);
+        }
+        let (canonical, dups) = suggest_canonical_and_duplicates(&evidence);
+        groups.push(DuplicateCandidateGroup {
+            group_key,
+            confidence: "medium".to_string(),
+            reason: format!(
+                "Issues share a story/overall-number relationship via Comic Vine issue {cv_id}"
+            ),
+            suggested_canonical_issue_id: canonical,
+            suggested_duplicate_issue_ids: dups,
+            evidence,
+        });
+    }
+
+    Ok(groups)
+}
+
+fn suggest_canonical_and_duplicates(evidence: &[DuplicateIssueEvidence]) -> (Option<i32>, Vec<i32>) {
+    if evidence.is_empty() {
+        return (None, vec![]);
+    }
+    // Heuristic: prefer issue that has list memberships, or is in "arc" thread (not synthetic overall),
+    // or has non-placeholder read history, or was created earlier. Prefer the one with Comic Vine mapping
+    // as canonical target if it's the "original" (has list memberships).
+    let mut scored: Vec<(i32, i32)> = evidence
+        .iter()
+        .map(|e| {
+            let mut score = 0i32;
+            if !e.list_memberships.is_empty() {
+                score += 100;
+            }
+            if e.is_synthetic_placeholder_read {
+                score -= 50;
+            }
+            if !e.rating_events.is_empty() {
+                score += 10;
+            }
+            if e.comicvine_issue_id.is_some() {
+                score += 5;
+            }
+            // Prefer lower id as tiebreaker (older)
+            score -= (e.issue_id % 1000).min(999);
+            (e.issue_id, score)
+        })
+        .collect();
+    scored.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    let canonical = scored.first().map(|s| s.0);
+    let dups = scored.iter().skip(1).map(|s| s.0).collect();
+    (canonical, dups)
+}
