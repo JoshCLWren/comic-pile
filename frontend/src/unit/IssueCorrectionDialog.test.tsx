@@ -183,18 +183,20 @@ describe('IssueCorrectionDialog', () => {
     expect(onSuccess).not.toHaveBeenCalled()
   })
 
-  it('moves a newly created issue to the beginning and marks prior unread issues read', async () => {
+  it('moves a newly created issue to the beginning without bulk-reading later issues', async () => {
+    // The projected insertion order is authoritative for both preview and
+    // confirmation (#4655 review R3): inserting at the start leaves no issue
+    // before the target, so there is nothing to bulk read.
     const existing = [issue({ id: 1, issue_number: '1', status: 'unread' })]
     const created = issue({ id: 2, issue_number: '2', status: 'unread' })
     let listCalls = 0
     list.mockImplementation(async () => {
       listCalls += 1
-      return listResponse(listCalls === 1 ? existing : [existing[0]!, created])
+      return listResponse(listCalls === 1 ? existing : [created, existing[0]!])
     })
     create.mockResolvedValueOnce(listResponse([created]))
-    bulkMarkRead.mockRejectedValueOnce(new Error('bulk read failed'))
 
-    renderDialog()
+    const { onSuccess } = renderDialog()
     const input = await screen.findByLabelText(/what issue are you currently on/i)
     await userEvent.clear(input)
     await userEvent.type(input, '2')
@@ -204,7 +206,8 @@ describe('IssueCorrectionDialog', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
 
     await waitFor(() => expect(move).toHaveBeenCalledWith(2, null))
-    expect(screen.getByText(/failed to update issue/i)).toBeInTheDocument()
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce())
+    expect(bulkMarkRead).not.toHaveBeenCalled()
   })
 
   it('supports the numeric stepper boundaries and rejects blank submissions', async () => {
