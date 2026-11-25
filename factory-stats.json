@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-24T23:52:43.159944+00:00",
+  "generated_at": "2026-11-25T00:09:42+00:00",
   "models": [
     {
       "health": {
@@ -22799,7 +22799,7 @@
   },
   "counts_generated_at": "2026-11-24T23:52:43.159944+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-24T23:52:44Z",
+    "generated_at": "2026-11-25T00:09:43Z",
     "sources": {
       "kilo-auto": [
         "kilo-auto/efficient"
@@ -22829,7 +22829,6 @@
         "nvidia/nemotron-3.5-bolt-e4b"
       ],
       "opencode-free": [
-        "iceman-contributor-free",
         "beam-free",
         "hy4-flash-free"
       ],
@@ -22844,10 +22843,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-24T23:52:44.520007+00:00",
-    "days_elapsed": 23.995,
+    "checked_at": "2026-11-25T00:09:43.366778+00:00",
+    "days_elapsed": 24.007,
     "days_in_month": 30.0,
-    "days_left": 6.01,
+    "days_left": 5.99,
     "in_use": true,
     "label": "",
     "metrics": {
@@ -22863,23 +22862,23 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 1158162,
-        "organization": 1158162,
+        "database": 1288894,
+        "organization": 1288894,
         "owner_target": 50000000,
-        "projected_database": 1448004,
-        "projected_organization": 1448004,
-        "projected_share": 0.0029,
-        "share_used": 0.0023
+        "projected_database": 1610648,
+        "projected_organization": 1610648,
+        "projected_share": 0.0032,
+        "share_used": 0.0026
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 103380,
-        "organization": 103380,
+        "database": 103589,
+        "organization": 103589,
         "owner_target": 1000000,
-        "projected_database": 129252,
-        "projected_organization": 129252,
+        "projected_database": 129448,
+        "projected_organization": 129448,
         "projected_share": 0.0129,
-        "share_used": 0.0103
+        "share_used": 0.0104
       },
       "storage_bytes": {
         "allowance": 5000000000,
