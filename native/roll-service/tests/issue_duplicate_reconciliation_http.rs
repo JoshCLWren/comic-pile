@@ -276,7 +276,13 @@ async fn detect_preview_apply_and_undo_preserve_real_history() {
     // --- Detect: exact provider identity, with full evidence and uncertainty.
     let (status, detected) = send(
         &ctx.state,
-        authed("GET", "/api/v2/issue-duplicate-reconciliation/detect", &ctx.token, &ctx.csrf, None),
+        authed(
+            "GET",
+            "/api/v2/issue-duplicate-reconciliation/detect",
+            &ctx.token,
+            &ctx.csrf,
+            None,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{detected:?}");
@@ -363,15 +369,24 @@ async fn detect_preview_apply_and_undo_preserve_real_history() {
     .await;
     assert_eq!(status, StatusCode::OK, "{applied:?}");
     assert_eq!(applied["merged_issue_ids"], json!([duplicate]));
-    assert_eq!(applied["suppressed_duplicate_issue_ids"], json!([duplicate]));
+    assert_eq!(
+        applied["suppressed_duplicate_issue_ids"],
+        json!([duplicate])
+    );
     assert!(applied["moved_mapping_ids"].as_array().unwrap().len() >= 1);
     let moved_events = applied["moved_event_ids"].as_array().unwrap();
     assert!(moved_events.contains(&json!(duplicate_rating_event)));
     assert!(!moved_events.contains(&json!(synthetic_read_event)));
-    assert!(applied["moved_list_entry_ids"].as_array().unwrap().is_empty());
+    assert!(applied["moved_list_entry_ids"]
+        .as_array()
+        .unwrap()
+        .is_empty());
 
     let merged_into: Option<i32> = conn
-        .query_one("SELECT merged_into_issue_id FROM issues WHERE id = $1", &[&duplicate])
+        .query_one(
+            "SELECT merged_into_issue_id FROM issues WHERE id = $1",
+            &[&duplicate],
+        )
         .await
         .unwrap()
         .get(0);
@@ -388,19 +403,31 @@ async fn detect_preview_apply_and_undo_preserve_real_history() {
     assert_eq!(mapping_owner, canonical);
 
     let rating_owner: i32 = conn
-        .query_one("SELECT issue_id FROM events WHERE id = $1", &[&duplicate_rating_event])
+        .query_one(
+            "SELECT issue_id FROM events WHERE id = $1",
+            &[&duplicate_rating_event],
+        )
         .await
         .unwrap()
         .get(0);
     assert_eq!(rating_owner, canonical);
     let synthetic_owner: i32 = conn
-        .query_one("SELECT issue_id FROM events WHERE id = $1", &[&synthetic_read_event])
+        .query_one(
+            "SELECT issue_id FROM events WHERE id = $1",
+            &[&synthetic_read_event],
+        )
         .await
         .unwrap()
         .get(0);
-    assert_eq!(synthetic_owner, duplicate, "synthetic read is retained as provenance");
+    assert_eq!(
+        synthetic_owner, duplicate,
+        "synthetic read is retained as provenance"
+    );
     let canonical_rating_owner: i32 = conn
-        .query_one("SELECT issue_id FROM events WHERE id = $1", &[&canonical_rating_event])
+        .query_one(
+            "SELECT issue_id FROM events WHERE id = $1",
+            &[&canonical_rating_event],
+        )
         .await
         .unwrap()
         .get(0);
@@ -417,7 +444,10 @@ async fn detect_preview_apply_and_undo_preserve_real_history() {
         .unwrap()
         .get(0);
     assert_eq!(canonical_status, "read");
-    assert_eq!(read_at_after, canonical_read_at, "real read timestamp preserved");
+    assert_eq!(
+        read_at_after, canonical_read_at,
+        "real read timestamp preserved"
+    );
 
     // --- Idempotent retry with the same preview token returns the prior result.
     let (status, retried) = send(
@@ -451,7 +481,10 @@ async fn detect_preview_apply_and_undo_preserve_real_history() {
     assert_eq!(undone["undone"], true);
 
     let merged_after_undo: Option<i32> = conn
-        .query_one("SELECT merged_into_issue_id FROM issues WHERE id = $1", &[&duplicate])
+        .query_one(
+            "SELECT merged_into_issue_id FROM issues WHERE id = $1",
+            &[&duplicate],
+        )
         .await
         .unwrap()
         .get(0);
@@ -466,7 +499,10 @@ async fn detect_preview_apply_and_undo_preserve_real_history() {
         .get(0);
     assert_eq!(mapping_after_undo, duplicate);
     let rating_after_undo: i32 = conn
-        .query_one("SELECT issue_id FROM events WHERE id = $1", &[&duplicate_rating_event])
+        .query_one(
+            "SELECT issue_id FROM events WHERE id = $1",
+            &[&duplicate_rating_event],
+        )
         .await
         .unwrap()
         .get(0);
@@ -480,7 +516,10 @@ async fn detect_preview_apply_and_undo_preserve_real_history() {
 
     // The list entry was already on the canonical and was never moved or erased.
     let entry_owner: i32 = conn
-        .query_one("SELECT issue_id FROM custom_cbl_entries WHERE id = $1", &[&membership_entry])
+        .query_one(
+            "SELECT issue_id FROM custom_cbl_entries WHERE id = $1",
+            &[&membership_entry],
+        )
         .await
         .unwrap()
         .get(0);
@@ -491,7 +530,8 @@ async fn detect_preview_apply_and_undo_preserve_real_history() {
 async fn stale_preview_token_and_cross_owner_issue_are_rejected() {
     let ctx = setup("duprguard").await;
     let other_username = format!("other-{}", unique_suffix());
-    let (_other_token, _other_csrf, other_user_id) = register_user(&ctx.state, &other_username).await;
+    let (_other_token, _other_csrf, other_user_id) =
+        register_user(&ctx.state, &other_username).await;
     let conn = ctx.state.pool.get().await.unwrap();
     let own_thread: i32 = conn
         .query_one(
