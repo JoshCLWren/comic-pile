@@ -197,6 +197,9 @@ fn card_from_row(row: &tokio_postgres::Row) -> IssueCard {
         mapping_state,
         comicvine_issue_id: if confirmed { row.get(8) } else { None },
         cover_image_url: if confirmed { row.get(9) } else { None },
+        overall_issue_number: row.get(10),
+        identity_version: row.get(11),
+        provider_issue_number: if confirmed { row.get(12) } else { None },
     }
 }
 
