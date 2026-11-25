@@ -2912,10 +2912,7 @@ mod tests {
             fresh_request.get::<_, bool>(2),
             "fresh metadata must settle, never stay pending"
         );
-        let calls = state
-            .recording_fake()
-            .expect("recording provider")
-            .calls();
+        let calls = state.recording_fake().expect("recording provider").calls();
         assert!(
             calls.iter().all(|call| !call.path.contains("4000-30002")),
             "fresh metadata must settle from cache without a provider call"
@@ -2943,6 +2940,87 @@ mod tests {
             .expect("preserved issues")
             .get(0);
         assert_eq!(unread, 2);
+    }
+
+    /// #5695: a full-shaped 12-key payload with no deep-fetch stamp is stale
+    /// under the canonical predicate. The orphan scan must not hide it behind a
+    /// raw-payload shape prefilter when no refresh ledger row exists.
+    #[tokio::test]
+    async fn drain_reconciles_full_shaped_identity_without_deep_fetch_ledger() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("seed connection");
+        let user_id: i32 = connection
+            .query_one(
+                "INSERT INTO users (username) VALUES ('full-shape-owner') RETURNING id",
+                &[],
+            )
+            .await
+            .expect("seed user")
+            .get(0);
+        let thread_id: i32 = connection
+            .query_one(
+                "INSERT INTO threads \
+                 (title, format, issues_remaining, total_issues, queue_position, status, \
+                  user_id, last_rating, reading_progress) \
+                 VALUES ('Full shape repair', 'Comic', 1, 1, 9, 'active', $1, 4.5, \
+                         'in_progress') RETURNING id",
+                &[&user_id],
+            )
+            .await
+            .expect("seed thread")
+            .get(0);
+        let mut metadata =
+            normalized_metadata(&deep_provider_result(30003, "2026-11-01 17:33:53"), 30003)
+                .expect("full-shaped metadata")
+                .0;
+        metadata
+            .as_object_mut()
+            .expect("metadata object")
+            .remove("deep_metadata_refreshed_at");
+        assert!(has_complete_provider_payload(&metadata));
+        assert!(needs_provider_fetch(&metadata, chrono::Utc::now()));
+        let identity = seed_confirmed_identity_for_thread(
+            &connection,
+            thread_id,
+            "3",
+            "4000-30003",
+            &metadata,
+        )
+        .await;
+        drop(Object::take(connection));
+        queue_deep_provider_result(&state, 30003, "2026-11-01 17:33:53");
+
+        let report = drain_for_test(&state).await;
+        assert_eq!(
+            report.claimed, 1,
+            "full-shaped stale orphan must be selected"
+        );
+        assert_eq!(report.completed, 1);
+        assert_eq!(report.deferred, 0);
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let row = connection
+            .query_one(
+                "SELECT r.state, r.attempts, e.metadata_json::text \
+                 FROM comicvine_metadata_refresh_requests r \
+                 JOIN external_identities e ON e.id = r.external_identity_id \
+                 WHERE r.external_identity_id = $1",
+                &[&identity],
+            )
+            .await
+            .expect("reconciled full-shaped request");
+        assert_eq!(row.get::<_, String>(0), "completed");
+        assert_eq!(row.get::<_, i32>(1), 1);
+        let persisted: Value =
+            serde_json::from_str(row.get(2)).expect("persisted full-shaped metadata");
+        assert_eq!(persisted["creator_credits"][0]["name"], "Writer");
+        assert!(persisted["deep_metadata_refreshed_at"].is_string());
+        let calls = state.recording_fake().expect("recording provider").calls();
+        assert_eq!(calls.len(), 1, "one bounded singular provider fetch");
+        assert!(calls[0].path.contains("issue/4000-30003"));
     }
 
     /// #5592: worker fetches a singular issue and persists creator credits.
