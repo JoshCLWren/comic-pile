@@ -28,6 +28,19 @@ fn versions_after(after: i32) -> Vec<i32> {
         .collect()
 }
 
+#[test]
+fn embedded_migration_versions_are_unique_and_ordered() {
+    let versions = embedded_versions();
+    let mut unique = versions.clone();
+    unique.sort_unstable();
+    assert_eq!(versions, unique, "embedded migrations must be in version order");
+    unique.dedup();
+    assert_eq!(
+        versions, unique,
+        "two migrations sharing a version fail at apply time on the PR merge ref"
+    );
+}
+
 /// P0 guard (2026-11-18 production wipe): this harness creates and drops
 /// databases, so the server must be local. It connects to a server-level
 /// database (for example `/postgres`) and only ever drops `migrate_test_*`
