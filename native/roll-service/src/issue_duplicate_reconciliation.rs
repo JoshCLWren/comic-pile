@@ -137,8 +137,8 @@ fn bad_request(msg: &str) -> ApiError {
     ApiError::BadRequest(msg.to_string())
 }
 
-fn conflict(msg: &str) -> ApiError {
-    ApiError::Conflict(msg.to_string())
+fn conflict(msg: impl Into<String>) -> ApiError {
+    ApiError::Conflict(msg.into())
 }
 
 fn internal(msg: &str) -> ApiError {
