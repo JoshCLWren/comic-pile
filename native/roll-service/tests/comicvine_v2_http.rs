@@ -23,6 +23,8 @@ use std::sync::{
 };
 use tower::ServiceExt;
 
+mod incident_fixtures;
+
 static NEXT_TEST_CLIENT: AtomicUsize = AtomicUsize::new(1);
 
 /// `(state, bearer token, csrf token, user id, reset guard)`.
