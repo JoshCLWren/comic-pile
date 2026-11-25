@@ -481,3 +481,104 @@ async fn concurrent_sibling_previews_do_not_corrupt_thread_state() {
     assert_eq!(second.status(), StatusCode::OK);
     assert_eq!(issue_order(&state, thread_id).await, before);
 }
+
+#[tokio::test]
+async fn preview_surfaces_alias_offer_for_mapped_existing_issue() {
+    let (state, token, csrf, user_id, _guard) = setup_user("alias-4654").await;
+    let thread_id = seed_thread(&state, user_id, "Alias Series").await;
+    let issue_id = seed_issue(&state, thread_id, "5", 1).await;
+    // Mark the existing issue as mapped so identity evidence supports alias/mapping.
+    state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .execute(
+            "UPDATE issues SET catalog_issue_id = 9001 WHERE id = $1",
+            &[&issue_id],
+        )
+        .await
+        .unwrap();
+
+    let preview_resp = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/threads/{thread_id}/issues/preview"),
+            &token,
+            &csrf,
+            json!({"issue_range":"5,6"}),
+        ))
+        .await
+        .unwrap();
+    let status = preview_resp.status();
+    let bytes = to_bytes(preview_resp.into_body(), 256 * 1024)
+        .await
+        .unwrap();
+    let body: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let offers = body["alias_offers"].as_array().expect("alias_offers array");
+    assert_eq!(offers.len(), 1, "{body}");
+    assert_eq!(offers[0]["requested_issue_number"], "5");
+    assert_eq!(offers[0]["existing_issue_id"], issue_id);
+    assert_eq!(offers[0]["is_mapped"], true);
+
+    // Unaccepted mapped-existing issue blocks commit.
+    assert_eq!(body["default_outcome"]["can_commit"], false);
+    let msg = body["default_outcome"]["conflict_message"]
+        .as_str()
+        .unwrap_or("");
+    assert!(msg.contains("#5"), "{msg}");
+
+    // Reader explicitly accepts the alias/mapping choice; preview becomes committable.
+    let accepted_resp = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/threads/{thread_id}/issues/preview"),
+            &token,
+            &csrf,
+            json!({"issue_range":"5,6", "accepted_alias_issue_numbers":["5"]}),
+        ))
+        .await
+        .unwrap();
+    let accepted_status = accepted_resp.status();
+    let accepted_bytes = to_bytes(accepted_resp.into_body(), 256 * 1024)
+        .await
+        .unwrap();
+    let accepted: Value = serde_json::from_slice(&accepted_bytes).unwrap_or(Value::Null);
+    assert_eq!(accepted_status, StatusCode::OK, "{accepted}");
+    assert_eq!(
+        accepted["default_outcome"]["can_commit"], true,
+        "{accepted}"
+    );
+
+    // Create rejects unaccepted mapped-existing alias.
+    let reject_resp = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/threads/{thread_id}/issues"),
+            &token,
+            &csrf,
+            json!({"issue_range":"5,6"}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(reject_resp.status(), StatusCode::BAD_REQUEST);
+
+    // Create succeeds when alias is explicitly accepted.
+    let create_resp = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/threads/{thread_id}/issues"),
+            &token,
+            &csrf,
+            json!({"issue_range":"5,6", "accepted_alias_issue_numbers":["5"]}),
+        ))
+        .await
+        .unwrap();
+    let create_status = create_resp.status();
+    let create_bytes = to_bytes(create_resp.into_body(), 256 * 1024).await.unwrap();
+    let create_body: Value = serde_json::from_slice(&create_bytes).unwrap_or(Value::Null);
+    assert_eq!(create_status, StatusCode::CREATED, "{create_body}");
+    assert_eq!(issue_order(&state, thread_id).await, vec!["5", "6"]);
+}
