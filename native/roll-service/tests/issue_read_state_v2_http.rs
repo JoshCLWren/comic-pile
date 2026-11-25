@@ -777,7 +777,10 @@ async fn bulk_mark_read_is_atomic_and_records_one_event_per_entry() {
         ),
     )
     .await;
-    assert_eq!(status, StatusCode::NO_CONTENT, "{body:?}");
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["operation_type"], "bulk_mark_read");
+    assert!(body["id"].as_i64().unwrap() > 0);
+    assert_eq!(body["items"].as_array().unwrap().len(), 5);
     assert_eq!(
         thread_row(&conn, alpha).await,
         row("active", 1, Some(a[1]), 1, 2, "in_progress")
