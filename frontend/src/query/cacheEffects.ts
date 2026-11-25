@@ -642,8 +642,9 @@ export async function clearComicVineIssueIntelligence(
   client: QueryClient,
   issueId: number,
 ): Promise<void> {
-  client.setQueryData(queryKeys.comicVine.issueIntelligence(issueId), null)
-  await invalidateComicVineIssueIntelligence(client, issueId)
+  // Remove cached data so active observers fall back to loading instead of
+  // rendering stale creators from a previous identity (#5695).
+  client.removeQueries({ queryKey: queryKeys.comicVine.issueIntelligence(issueId), exact: true })
 }
 
 /**
