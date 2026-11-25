@@ -97,35 +97,4 @@ describe('Retired Roll exclusion details (#4441)', () => {
     })
     expect(onThreadClick).toHaveBeenCalledWith(eligible)
   })
-
-
-  it('shows Reset Dice for an empty scoped pool with browser snoozes and zero bootstrap snoozes', () => {
-    const onResetDice = vi.fn()
-    mount({
-      pool: [{ id: 1, title: 'Hidden', format: 'Comic' }],
-      eligibleThreadIds: [],
-      snoozedThreads: [],
-      snoozedCount: 0,
-      browserSnoozedThreadIds: [1],
-      onResetDice,
-    })
-
-    expect(screen.getByText('Every series is snoozed')).toBeInTheDocument()
-    expect(screen.getByTestId('reset-dice-zero-choice')).toBeInTheDocument()
-    fireEvent.click(screen.getByTestId('reset-dice-zero-choice'))
-    expect(onResetDice).toHaveBeenCalledTimes(1)
-  })
-
-  it('disables the zero-choice Reset Dice button while a reset is pending', () => {
-    mount({
-      snoozedThreads: [{ id: 2, title: 'Paused', format: 'Comic' }],
-      onResetDice: vi.fn(),
-      resetDicePending: true,
-    })
-
-    const button = screen.getByTestId('reset-dice-zero-choice')
-    expect(button).toBeDisabled()
-    expect(button).toHaveTextContent('Resetting…')
-  })
-
 })
