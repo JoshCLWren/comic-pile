@@ -285,11 +285,7 @@ export default function CblBrowserPage() {
     gcTime: 15 * 60 * 1000, // 15 minutes
   })
   const browsePage = browseQuery.data ?? null
-<<<<<<< HEAD
-  const browseStale = isStaleBrowsePosition(browsePage, browseQuery.isFetching, folder, submittedQuery)
-=======
   const browseStale = isStaleBrowsePosition(browsePage, browseQuery.isFetching, folder, submittedQuery, page)
->>>>>>> origin/main
 
   // The server clamps an out-of-range page to the last valid page (#5381).
   // Adopt the returned page in the URL so Previous/Next step from the page
