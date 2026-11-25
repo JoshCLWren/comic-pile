@@ -10,10 +10,9 @@ personal collection, or real cover art was photographed. The committed PNG is
 
 ## Current capture boundary
 
-The old `make setup` / `make seed-dev` demo-data workflow and
-`scripts/seed_dev_db.py` were retired with the Python application. The current
-native service runs on `:8010`, not `:8000`, and a clean checkout has no seed
-command. Do not follow the historical capture instructions below as current
+The former demo-seed workflow (`make seed-dev` and its Python seed script) was
+retired with the Python application. The current native service runs on `:8010`,
+not `:8000`, and a clean checkout has no seed command. Do not follow the historical capture instructions below as current
 setup guidance.
 
 `frontend/scripts/capture-readme-roll-hero.mjs` remains as a local helper, but its
