@@ -11,6 +11,8 @@ import ImageWithLoading from './ImageWithLoading'
 import SiblingSeriesMappingOffer from './SiblingSeriesMappingOffer'
 import { LatestRequestGuard, type LoadPhase, type RequestTicket } from '../utils/latestRequest'
 import { formatIssueCount } from '../utils/formatIssueCount'
+import { getApiErrorDetail, getApiErrorStatus } from '../utils/apiError'
+import type { IssueIdentityEdit } from '../services/api-comicvine'
 
 interface ComicVineSearchDialogProps {
   isOpen: boolean
@@ -18,6 +20,12 @@ interface ComicVineSearchDialogProps {
   threadTitle: string
   issueNumber: string | null
   mode?: 'confirm' | 'replace'
+  /** Overall-series alias to commit atomically with this provider identity (#4652). */
+  overallIssueNumber?: string | null
+  /** Identity version observed by the editor; the server rejects a stale replay. */
+  expectedVersion?: number | null
+  /** Refetch current identity after a stale/conflict refusal before retrying. */
+  onConflictRetry?: () => Promise<void> | void
   onClose: () => void
   onConfirmed: (selected?: ComicVineIssueCandidate | null) => void
   onSiblingsMapped?: (confirmedIssueIds: number[]) => void
@@ -122,6 +130,9 @@ export default function ComicVineSearchDialog({
   threadTitle,
   issueNumber,
   mode = 'confirm',
+  overallIssueNumber,
+  expectedVersion,
+  onConflictRetry,
   onClose,
   onConfirmed,
   onSiblingsMapped,
@@ -138,6 +149,7 @@ export default function ComicVineSearchDialog({
   const [issuesPhase, setIssuesPhase] = useState<LoadPhase>('idle')
   const [isConfirming, setIsConfirming] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmConflict, setConfirmConflict] = useState(false)
   const [siblingScope, setSiblingScope] = useState<SiblingScope | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -451,11 +463,24 @@ export default function ComicVineSearchDialog({
     if (!issueId || !targetIssue) return
     setIsConfirming(true)
     setError(null)
+    setConfirmConflict(false)
+    // #4652: the alias and the optimistic version travel with the provider
+    // identity in one atomic write, so a stale editor cannot silently adopt a
+    // different comic's mapping or overwrite another reader's alias.
+    const edit: IssueIdentityEdit = {}
+    if (overallIssueNumber != null) edit.overallIssueNumber = overallIssueNumber
+    if (expectedVersion != null) edit.expectedVersion = expectedVersion
+    const hasEdit = Object.keys(edit).length > 0
     try {
       if (mode === 'replace') {
-        await comicVineApi.replaceIdentity(issueId, targetIssue.comicvine_issue_id)
+        await comicVineApi.replaceIdentity(
+          issueId,
+          targetIssue.comicvine_issue_id,
+          undefined,
+          hasEdit ? edit : undefined,
+        )
       } else {
-        await comicVineApi.confirmIdentity(issueId, targetIssue.comicvine_issue_id)
+        await comicVineApi.confirmIdentity(issueId, targetIssue.comicvine_issue_id, hasEdit ? edit : undefined)
       }
       onConfirmed(targetIssue)
       // Issue #3159: confirming one issue's volume licenses sibling scope, so the
@@ -472,22 +497,36 @@ export default function ComicVineSearchDialog({
       } else {
         onClose()
       }
-    } catch {
-      setError('Failed to confirm identity. Please try again.')
+    } catch (confirmError) {
+      const detail = getApiErrorDetail(confirmError)
+      if (getApiErrorStatus(confirmError) === 409) {
+        setConfirmConflict(true)
+        setError(detail || 'This comic changed since you opened it. Reload it before retrying.')
+      } else {
+        setError(detail || 'Failed to confirm identity. Please try again.')
+      }
     } finally {
       setIsConfirming(false)
     }
-  }, [issueId, directIssue, selectedIssue, mode, onConfirmed, onClose, selectedSeries, threadTitle])
+  }, [issueId, directIssue, selectedIssue, mode, overallIssueNumber, expectedVersion, onConfirmed, onClose, selectedSeries, threadTitle])
 
-  const handleRetry = useCallback(() => {
+  const handleRetry = useCallback(async () => {
+    if (confirmConflict) {
+      // A 409 is definitive: reload the current version before the reader can
+      // retry. The caller owns the identity GET, so it supplies the refresh.
+      await onConflictRetry?.()
+      setError(null)
+      setConfirmConflict(false)
+      return
+    }
     if (step === 'select-issue' && selectedSeries) {
-      void handleSelectSeries(selectedSeries)
+      await handleSelectSeries(selectedSeries)
       return
     }
     if (query.trim()) {
-      void handleSearch(query)
+      await handleSearch(query)
     }
-  }, [step, selectedSeries, query, handleSelectSeries, handleSearch])
+  }, [confirmConflict, onConflictRetry, step, selectedSeries, query, handleSelectSeries, handleSearch])
 
   const handleDismissSiblings = useCallback(() => {
     setSiblingScope(null)
@@ -509,7 +548,8 @@ export default function ComicVineSearchDialog({
 
   const showRetry =
     error !== null
-    && ((step === 'search' && searchPhase === 'error')
+    && (confirmConflict
+      || (step === 'search' && searchPhase === 'error')
       || (step === 'select-issue' && issuesPhase === 'error'))
 
   const dialogTitle =
