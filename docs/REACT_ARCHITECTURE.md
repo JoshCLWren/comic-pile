@@ -200,7 +200,7 @@ entire library across all screens. The guard test
   at most one fetch per likely-next chunk plus one Queue first-page data warm-up,
   publicly cancellable, errors swallowed).
 
-Current URL patterns (React Router preserves these):
+Selected current URL patterns (React Router preserves these; `App.tsx` is authoritative):
 
 | URL | Page | Notes |
 |-----|------|-------|
@@ -263,17 +263,23 @@ actions) is documented in [`REACT_INTERACTION_POLICY.md`](REACT_INTERACTION_POLI
 ## Auth and Client-side State
 
 - **Auth** lives in `AuthProvider` (in `frontend/src/App.tsx`): bootstraps the
-  session against `/v1/auth/me`, renews it with the refresh cookie, synchronizes
+  session against `/v2/auth/me`, renews it with the refresh cookie, synchronizes
   logout across tabs via a `BroadcastChannel`, and gates routes with
   `ProtectedRoute` / `PublicRoute`.
 - **Client-side (non-server) state** stays in dedicated providers:
-  `ToastProvider`, `NavCollapseProvider`, `BugReportRestoreProvider`,
-  `PositionMenuProvider`. Dice selection and similar UI state is local.
-- **Session data is server state**: the authoritative current session comes from
-  React Query via `useSession` / `queryKeys.session.*` and the roll bootstrap.
-  The old `SessionContext` global session mirror and the Map-based
-  `CacheContext` were deleted in #2573 — there is exactly one server-state cache
-  (TanStack Query) and one session source (the roll bootstrap).
+  `ToastProvider`, `NavCollapseProvider`, `BugReportRestoreProvider`, and
+  `PositionMenuProvider`. Transient dice animation is local; the current pending
+  Roll selection comes from the server bootstrap, which is a recorded #4405
+  compatibility discrepancy rather than the sessionless/browser-owned target.
+- **Session data is server state**: reading-history lists/details/snapshots use
+  React Query through `useSessions`, `useSessionDetails`, and
+  `useSessionSnapshots`; the current Roll session/pending projection comes from
+  the roll bootstrap. The old `SessionContext` global session mirror and the
+  Map-based `CacheContext` were deleted in #2573 — there is exactly one
+  server-state cache (TanStack Query). The session list/get methods in
+  `frontend/src/services/api-sessions.ts` still target retired v1 paths; the
+  details/snapshots methods use current v2 resources. See the recorded
+  reconciliation gap in [`API.md`](API.md#recorded-reconciliation-gaps).
 
 ## API Service Layer
 
@@ -294,7 +300,7 @@ actions) is documented in [`REACT_INTERACTION_POLICY.md`](REACT_INTERACTION_POLI
 1. A screen mounts and a `useQuery`/`useInfiniteQuery` wrapper (from
    `frontend/src/hooks/`) reads through a `queryKeys.*` key.
 2. The query calls a service function in `frontend/src/services/`, which hits a
-   FastAPI endpoint under `/api/v1/*` (or a tested legacy alias).
+   native Rust endpoint under `/api/v2/*` (or a retained v1 alias).
 3. Responses are cached in the shared `QueryClient`; components re-render from
    the single cache.
 4. User actions call `useMutation`; `onSuccess` runs a `cacheEffects.ts` helper
@@ -306,11 +312,12 @@ actions) is documented in [`REACT_INTERACTION_POLICY.md`](REACT_INTERACTION_POLI
 ### Development Mode
 
 ```bash
-pnpm run dev       # or: make dev (starts backend on :8000 and frontend :5173)
+cd frontend && pnpm run dev  # or: make dev (native Rust API on :8010, frontend on :5173)
 ```
 
-Vite serves `http://localhost:5173` with HMR and proxies `/api` to the FastAPI
-backend (`http://localhost:8000`, override with `VITE_API_URL`).
+Vite serves `http://localhost:5173` with HMR and proxies `/api` to the native
+Rust service (`http://localhost:8010`, override with `VITE_NATIVE_API_URL`),
+resolving each request against the ingress rules derived from `vercel.json`.
 
 ### Production Build
 
@@ -321,22 +328,18 @@ pnpm run build     # in frontend/
 Vite builds to `../static/react/` with SRI hashes and module splitting
 (`index-*.js`, `assets/index-*.css`, separate `three` and `vendor` chunks).
 
-### FastAPI Integration
+### Static Hosting
 
-FastAPI serves the built SPA whenever `serve_frontend` is enabled (`app/main.py`): <!-- docs-path-check: ignore -->
+There is no application server serving the SPA. Vercel publishes
+`static/react/` as static output:
 
-- The React app is served at the root `/` from `static/react/index.html` (with
-  no-store headers); `/react` and `/react/` redirect to `/`.
-- Hashed build assets under `static/react/assets` are mounted at `/assets` with
-  immutable cache headers (public, one-year max-age) via
-  `CacheControlledStaticFiles`.
-- `/static` mounts the static directory, and production startup asserts the
-  frontend assets exist before serving.
+- `/` and client-side routes return `static/react/index.html` through the SPA
+  fallback; HTML is revalidated so a new deployment is visible promptly.
+- Fingerprinted assets under `static/react/assets` are cached independently.
+- The root HTML response carries `X-ComicPile-Frontend: vercel-static`.
 
-**Access React App**: `http://localhost:8000/` — API at `http://localhost:8000/api/*`
-uses the same backend. Vercel serves the same static build + FastAPI function for
-production (see [`ARCHITECTURE.md`](ARCHITECTURE.md) and
-[`VERCEL_ARCHITECTURE.md`](VERCEL_ARCHITECTURE.md)).
+Locally, Vite serves the same app with HMR on `:5173`. See
+[`VERCEL_ARCHITECTURE.md`](VERCEL_ARCHITECTURE.md) for the production ingress.
 
 ## Styling Approach
 
@@ -370,17 +373,22 @@ disposed on unmount. Geometry and texture rebuild on `sides` / `color` /
 - **Unit tests**: Vitest suites colocated under `frontend/src/unit/` (React
   Testing Library + `msw` for API mocking), plus guard tests that enforce
   architectural invariants (single cache, scroll ownership, bounded thread
-  queries). Run with `cd frontend && pnpm test`.
+  queries). Run focused files with
+  `cd frontend && pnpm exec vitest run <changed-behavior-test-files>`; the full
+  suite and coverage run in CI unless explicitly requested.
 - **Style audit**: `pnpm run test:style-audit` / `audit:style` guard the visual
   grammar; `docs/FRONTEND_VISUAL_GRAMMAR.md` is the canonical contract.
-- **E2E tests**: TypeScript Playwright specs under `frontend/src/test/`. They
-  run against the production build in `static/react/`, so **build first**
-  (`pnpm run build` and then `pnpm run test:e2e`, or `make verify-e2e`).
-  Chromium is the maintained required Playwright target.
+- **E2E tests**: TypeScript Playwright specs under `frontend/src/test/`. Build
+  first, then run a focused Chromium spec against the running same-origin server:
+  `cd frontend && pnpm run build && BASE_URL=http://localhost:5173 pnpm exec playwright test <spec> --project=chromium`.
+  After `make docker-test-up`, use `BASE_URL=http://localhost:8000` with the same
+  focused command. Chromium is the maintained required target; full suites run
+  in CI unless explicitly requested.
 - **Type contract tests**: compile-time Vitest tests keep the alias-bound
   `frontend/src/types.ts` exports identical to the generated OpenAPI schemas.
-- **Backend tests**: existing pytest suites cover the API endpoints that the
-  frontend consumes (see [`API.md`](API.md)).
+- **Backend tests**: Rust integration tests in `native/roll-service` cover the
+  API endpoints the frontend consumes; the generated-contract check keeps
+  transport types aligned (see [`API.md`](API.md)).
 
 ## Key Decisions & Rationale
 

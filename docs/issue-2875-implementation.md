@@ -1,5 +1,10 @@
 # Issue #2875 implementation status
 
+> **Status: historical Python implementation record.** The delivery service paths
+> below are retired; current cross-repository boundaries are in
+> [AUTONOMOUS_FACTORY_POLICY.md](AUTONOMOUS_FACTORY_POLICY.md).
+<!-- docs-path-check: historical -->
+
 Coordination issue: "Use the existing Factory to implement the first Latticery extraction slice."
 
 ## What this branch adds (ComicPile side)

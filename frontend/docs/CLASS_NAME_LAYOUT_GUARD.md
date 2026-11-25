@@ -134,9 +134,10 @@ unit suite fails if the predicate regresses.
 cd frontend && pnpm run lint
 ```
 
-`pnpm run lint` runs in the `Frontend Lint + Typecheck` CI job, and `pnpm test`
-runs the detector coverage in the `Frontend Unit Tests (vitest)` job, so both
-halves of the rule are gated by CI.
+`pnpm run lint` runs in the `Frontend Lint + Typecheck` CI job, and
+`pnpm run test:coverage` runs the detector coverage in the `Frontend Unit Tests
+(vitest)` job. Locally, use `pnpm exec vitest run src/unit/class-name-layout-guard.test.ts`
+for the focused check; full coverage runs in CI unless explicitly requested.
 
 ### Legacy exemption list
 

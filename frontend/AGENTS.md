@@ -17,7 +17,6 @@ Do not introduce a new visual value or treatment merely for local convenience wh
 
 **Not allowed:** Ad-hoc `fixed inset-0` / `role="dialog"` / `aria-modal` overlays outside the approved components above. New dialogs must go through `Modal`; new menus must go through `OverlayPortal` `layer="menu"`.
 
-**Known debt (allowlisted until migration):** `MigrationDialog`, `SimpleMigrationDialog`, `ContinuityPlansIndexPage`, `Navigation` "More" menu — these will be migrated in a follow-up ticket.
 
 ## Focused checks for shared boundaries
 

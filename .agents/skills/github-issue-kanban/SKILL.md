@@ -9,13 +9,7 @@ Use GitHub Issues as the only backlog and status source of truth. Do not maintai
 
 ## Select work
 
-From the repository root, run:
-
-```bash
-make next-task
-```
-
-Use the issue selected by that command unless the user explicitly names another issue. The selector prefers open issues with `ralph-status:pending`, highest `ralph-priority:*`, and no unresolved issue dependencies. Epics, blocked issues, issues already in progress/review, duplicates, and issues with unresolved dependencies are not selected.
+Inspect the open issue queue, live claims, dependencies, and existing PR completion work with the GitHub CLI/API. Apply the selection priority in `docs/AUTONOMOUS_FACTORY_POLICY.md`; this checkout has no `make next-task` or `make start-task` target. Use the issue explicitly assigned by the user or selected by that policy. Epics, PRDs, manual-only issues, blocked work, live-owned work, and unresolved dependencies are not ordinary autonomous candidates.
 
 Then read the selected issue body, the files it names, `AGENTS.md`, and
 `docs/ISSUE_EXECUTION_PROTOCOL.md`. For factory work, also read
@@ -64,11 +58,11 @@ local review, then release it. Never invent a controller approval. Read only
 ACP checkpoints/model-selection metadata and final reports/verdicts, not logs.
 Preserve CI, independence, ownership, merge and production authorization gates.
 
-For any Python change, local verification must include the exact CI pair
-`ruff check .` **and** `ty check --error-on-warning` against the whole repo
-(`bash scripts/check-python-ci-lint.sh`). Path-filtered ruff or ty is not a valid CI substitute.
-Ruff-only or pytest-only is not enough: CI fails the required
-type-check job on ty warnings, including `redundant-cast`.
+For any Python tooling change, local verification must include the exact CI pair
+`ruff check .` **and** `ty check --error-on-warning` against the whole repo, plus
+`bash scripts/lint.sh` and the focused tooling tests. Path-filtered ruff or ty is
+not a valid CI substitute. Ruff-only or pytest-only is not enough: CI fails the
+required type-check job on ty warnings, including `redundant-cast`.
 Do not recast a value after `isinstance` has already narrowed it.
 
 ## Keep status synchronized
@@ -83,16 +77,17 @@ Use these labels:
 | Cannot proceed | `ralph-status:blocked` |
 | Completed | `ralph-status:done` |
 
-When blocked, leave the issue open, replace the active label with `ralph-status:blocked`, and comment with the exact blocker and required decision. Do not silently move to another issue.
+When blocked, leave the issue open, atomically reconcile the complete truthful label set with `ralph-status:blocked` and the appropriate factory state/owner, and comment with the exact blocker and required decision. Preserve a resume packet, release active ownership when appropriate, and return to selection for the next executable item under the autonomous policy; do not leave an active lease stranded.
 
 When implementation is complete, run all required checks locally. Then move to review:
 
 ```bash
-gh issue edit ISSUE --remove-label "ralph-status:in-progress" --add-label "ralph-status:in-review"
+gh api --method PUT repos/JoshCLWren/comic-pile/issues/ISSUE/labels \
+  --input /path/to/complete-truthful-review-label-set.json
 gh issue comment ISSUE --body-file /path/to/verification-comment.md
 ```
 
-The verification comment must include changed files, acceptance criteria evidence, commands and results, and follow-up issue numbers.
+Build the replacement label set from the issue's current unrelated labels plus the complete target Ralph status, factory stage, and owner. Never transition labels with sequential remove/add calls. The verification comment must include changed files, acceptance-criteria evidence, commands and results, and only owner-authorized follow-up issue numbers.
 
 After the PR merges and acceptance criteria and issue closure are verified:
 
@@ -125,4 +120,4 @@ Put `Part of #NUMBER` and `Depends on #NUMBER` in issue bodies. Add `epic`, `ral
 - Do not close an issue without a verification comment.
 - Do not skip tests or use CI as a debugger.
 - Do not push Python changes after only path-filtered `ruff` or pytest. Run `ruff check .` and `ty check --error-on-warning`; ty warnings fail CI. Path-filtered ruff or ty is not a valid CI substitute.
-- If the issue is too large for one run, split it into linked GitHub tasks/subtasks before coding.
+- If the issue is too large for one run, preserve the remaining scope in the existing issue or PR handoff. Do not split it or create linked tasks/subtasks without explicit owner authorization for that exact creation.

@@ -1,5 +1,9 @@
 # Request fan-out trace for #4276
 
+> **Status: historical point-in-time trace.** Counts and Python paths below are not
+> the current request contract; use current browser/network-budget tests.
+<!-- docs-path-check: historical -->
+
 Scope: frontend/transport fan-out for Queue, Roll, and the Read/Rate → next Roll
 loop. Traced against the actual TanStack callers in `frontend/src` and the Rust
 ingress in `api/native_roll.rs` / `native/roll-service/src`.

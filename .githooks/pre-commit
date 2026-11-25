@@ -56,8 +56,7 @@ if [ -n "$BACKUP_STAGED" ]; then
     exit 1
 fi
 
-# Shared lint. Python ruff/ty always use the full-repo CI commands, even
-# when only some files are staged. Path-filtered ruff or ty is not a valid
-# CI substitute.
+# Shared staged lint. The Python push gate remains the separate whole-repo
+# `ruff check .` and `ty check --error-on-warning` pair; lint.sh does not run them.
 bash scripts/lint.sh --staged
 

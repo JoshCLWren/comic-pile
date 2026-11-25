@@ -1,5 +1,9 @@
 # August 2026 ComicPile performance benchmark findings
 
+> **Status: historical Python/FastAPI benchmark.** Current native performance and
+> pool guidance is in [OPERATIONAL_HEALTH.md](OPERATIONAL_HEALTH.md).
+<!-- docs-path-check: historical -->
+
 ## Purpose
 
 Record the controlled measurements that led to the current Vercel + Neon optimization work so future performance changes have a concrete baseline.

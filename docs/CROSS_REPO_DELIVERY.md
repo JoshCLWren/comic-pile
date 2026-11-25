@@ -1,5 +1,11 @@
 # Cross-repository factory delivery
 
+> **Status: historical application-delivery design.** The deleted Python settings
+> and delivery service are not current runtime authority. Current cross-repository
+> work is bounded by the database allowlist and Rotisserie credential/ownership
+> policy; see [AUTONOMOUS_FACTORY_POLICY.md](AUTONOMOUS_FACTORY_POLICY.md).
+<!-- docs-path-check: historical -->
+
 ComicPile's autonomous factory can deliver selected work to a small, allowlisted set of target repositories. The coordination/source repository is always `JoshCLWren/comic-pile`; the delivery/target repository is an allowlisted destination. The bootstrap target is `JoshCLWren/Latticery`.
 
 ## Allowlisted targets

@@ -1,200 +1,64 @@
 # Rate Limiting
 
-This document describes the rate limiting implementation for the Comic Pile API.
+Comic Pile protects authentication and outbound-provider paths. There is no
+global SlowAPI/FastAPI middleware; the retired Python application was removed
+in the Rust cutover, and the limits below live in the native Rust service.
 
-## Overview
+## Authentication endpoints
 
-Rate limiting is implemented using [slowapi](https://github.com/laurentS/slowapi), a rate limiting extension for FastAPI based on Flask-Limiter. It prevents API abuse and ensures fair resource usage.
+`native/roll-service/src/auth/handlers.rs` keeps a process-local limiter for
+authentication requests:
 
-## Configuration
+- Keys are endpoint-scoped client IPs, or token digests for refresh requests —
+  never usernames, passwords, or raw secrets.
+- The limiter map is bounded (`MAX_RATE_LIMIT_KEYS`, 4096 entries) and evicts
+  keys with no attempt inside a one-hour retention window, so rotating
+  attacker-controlled keys cannot grow memory without bound.
+- Refresh is limited per token digest (20 attempts per 60-second window).
+- Exceeding a limit returns `429 Too Many Requests`; if pressure eviction has to
+  clear the map, the database-backed lockout remains authoritative.
 
-Rate limiting is configured in `app/middleware/rate_limit.py` and uses IP-based tracking by default. <!-- docs-path-check: ignore -->
+## Login lockout
 
-```python
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+Failed logins are also recorded in PostgreSQL (`failed_login_attempts`) and
+checked per username and per client IP under advisory locks. This durable
+lockout — not the in-process limiter — is the authoritative control and survives
+process restarts. A successful login clears the applicable username failure
+state. A password reset rotates credentials and advances the credential epoch,
+but does not clear `failed_login_attempts`; the existing lockout window still
+applies.
 
-limiter = Limiter(key_func=get_remote_address)
-```
+## Outbound GitHub issue filing
 
-## Rate Limits by Endpoint
+Bug-report submissions share a rate limit on creating GitHub issues. When the
+budget is exhausted the API returns `429` with a `Retry-After` interval and a
+reset time in the response detail; it does not queue or silently drop the
+report.
 
-### Thread API
+## ComicVine provider limits
 
-| Endpoint | Limit | Description |
-|----------|-------|-------------|
-| `POST /threads/` | 30/minute | Create new thread |
-| `GET /threads/{thread_id}` | 200/minute | Get thread details |
-| `PUT /threads/{thread_id}` | 30/minute | Update thread |
-| `DELETE /threads/{thread_id}` | 10/minute | Delete thread |
+ComicVine repair defines its own provider backoff
+(`native/roll-service/src/comicvine_repair.rs`):
 
-### Roll API
+- HTTP 420/429 responses are treated as provider rate limiting.
+- The work item becomes `deferred` with a bounded `retry_after` (local backoff,
+  capped at one hour).
+- After repeated failures (three attempts) the item is marked `failed` with a
+  six-hour retry window instead of retrying indefinitely.
 
-| Endpoint | Limit | Description |
-|----------|-------|-------------|
-| `POST /roll/` | 30/minute | Roll dice (prevents spam) |
-| `POST /roll/html` | 30/minute | Roll dice with HTML response |
+## Client guidance
 
-### Rate API
-
-| Endpoint | Limit | Description |
-|----------|-------|-------------|
-| `POST /rate/` | 60/minute | Rate a comic |
-
-### Queue API
-
-| Endpoint | Limit | Description |
-|----------|-------|-------------|
-| `PUT /queue/threads/{thread_id}/position/` | 30/minute | Move thread to position |
-| `PATCH /api/v2/queue-entries/{thread_id}` | Not governed by slowapi (native Rust) | Set position (`1` for front); replaces legacy front PUT |
-| `PUT /queue/threads/{thread_id}/back/` | 30/minute | Move thread to back |
-
-### Session API
-
-| Endpoint | Limit | Description |
-|----------|-------|-------------|
-| `POST /sessions/` | 30/minute | Create new session |
-
-## Response Headers
-
-When rate limiting is active, the following headers are included in API responses:
-
-- `X-RateLimit-Limit`: The rate limit ceiling for the request
-- `X-RateLimit-Remaining`: The number of requests remaining in the current rate limit window
-- `X-RateLimit-Reset`: The UTC Unix timestamp when the rate limit window resets
-
-Example:
-
-```http
-HTTP/1.1 200 OK
-X-RateLimit-Limit: 100
-X-RateLimit-Remaining: 99
-X-RateLimit-Reset: 1704100800
-```
-
-## Rate Limit Exceeded Response
-
-When a rate limit is exceeded, the API returns a `429 Too Many Requests` status code:
-
-```json
-{
-  "detail": "Rate limit exceeded: 100 per 1 minute"
-}
-```
-
-## Implementation Details
-
-### Applying Rate Limits
-
-Rate limits are applied using the `@limiter.limit()` decorator on endpoint functions:
-
-```python
-from fastapi import Request
-from app.middleware import limiter
-
-@router.get("/threads/completed/threads", response_model=QueueThreadListResponse)
-@limiter.limit("100/minute")
-def list_completed_threads(request: Request, db: Session = Depends(get_db)) -> QueueThreadListResponse:
-    """List the reader's finished series."""
-    # ...
-```
-
-**Important**: When using the rate limiter decorator, the endpoint function must accept a `request: Request` parameter as the first argument (after `self` for class-based views).
-
-### Rate Limit Syntax
-
-Rate limits are specified using the format `"N/period"` where:
-- `N` is the number of requests
-- `period` is one of: `second`, `minute`, `hour`, `day`, `month`, `year`
-
-Examples:
-- `"100/minute"` - 100 requests per minute
-- `"1000/hour"` - 1000 requests per hour
-- `"10000/day"` - 10000 requests per day
-
-### Rate Limit Storage
-
-Rate limits are stored in-memory using the default slowapi storage backend. This means:
-- Rate limits are per-server instance
-- Rate limits reset on server restart
-- For distributed deployments, consider using Redis or another distributed storage backend
+- Honor `429` and `Retry-After`; do not hot-loop on refresh or login.
+- Do not retry a failed login immediately; wait for the lockout window.
+- Batch reads and use cursor pagination (`page_size`, `page_token`) instead of
+  polling full collections.
 
 ## Testing
 
-Rate limiting tests are in `tests/test_rate_limit.py` and verify: <!-- docs-path-check: ignore -->
-- Rate limits are enforced correctly
-- 429 responses are returned when limits are exceeded
-- Rate limit headers are present
-- Rate limits reset after the time window expires
-- Rate limits are applied per IP address
-
-Run tests with:
-
-```bash
-pytest tests/test_rate_limit.py -v
-```
-
-## Bypassing Rate Limits
-
-Rate limits can be bypassed in development mode by setting the environment variable:
-
-```bash
-export RATE_LIMIT_ENABLED=false
-```
-
-This is useful for:
-- Local development
-- Load testing
-- Automated testing at scale
-
-## Best Practices
-
-### For API Consumers
-
-1. **Respect rate limit headers**: Check `X-RateLimit-Remaining` and pause before hitting the limit
-2. **Implement exponential backoff**: If you receive a 429 response, wait and retry with increasing delays
-3. **Use webhooks where available**: Instead of polling, use webhooks for real-time updates
-4. **Cache responses**: Cache GET responses to reduce unnecessary API calls
-
-### For API Developers
-
-1. **Choose appropriate limits**: Balance between preventing abuse and allowing legitimate use
-2. **Document limits clearly**: Include rate limit information in API documentation
-3. **Monitor usage**: Track rate limit violations to identify abuse patterns
-4. **Provide guidance**: Include helpful error messages with suggestions for rate-limited clients
-
-## Troubleshooting
-
-### Common Issues
-
-**Issue**: Receiving 429 responses for legitimate traffic
-
-**Solutions**:
-- Increase the rate limit for that endpoint
-- Implement caching for frequently accessed data
-- Use batch operations instead of individual requests
-
-**Issue**: Rate limits not working as expected
-
-**Solutions**:
-- Verify the `@limiter.limit()` decorator is applied correctly
-- Check that `request: Request` parameter is present in the endpoint function
-- Ensure the limiter is registered in `app/main.py` <!-- docs-path-check: ignore -->
-
-**Issue**: Rate limits causing issues in tests
-
-**Solutions**:
-- Use `RATE_LIMIT_ENABLED=false` environment variable
-- Mock the rate limiter in tests
-- Use separate test endpoints without rate limits
-
-## Future Enhancements
-
-Potential improvements to the rate limiting system:
-
-1. **Redis-backed storage**: For distributed rate limiting across multiple server instances
-2. **API key-based limits**: Different limits for authenticated vs anonymous users
-3. **Burst allowances**: Allow short bursts beyond the base rate limit
-4. **Per-endpoint customization**: Fine-tuned limits based on endpoint complexity
-5. **Rate limit dashboard**: Monitor rate limit usage across all endpoints
-6. **Dynamic limits**: Adjust limits based on system load or user tier
+- Rust auth tests cover limiter behavior and the 429 path:
+  `cargo test -p comicpile-roll-service auth`.
+- Browser suites run with `TEST_ENVIRONMENT=true` so fixtures can register users
+  at test speed. `ENABLE_RATE_LIMITING_IN_TESTS=true` opts back in when a test
+  specifically exercises throttling.
+- Do not weaken or bypass a limit to make a test pass; fix the test setup
+  instead.

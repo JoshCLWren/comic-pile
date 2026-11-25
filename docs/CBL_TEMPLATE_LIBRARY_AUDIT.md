@@ -1,9 +1,13 @@
 # CBL Template Library Audit
 
 **Audit date:** 2026-09-17
-**Status:** Complete — measured
+**Status:** Complete — measured; historical record
 **Supersedes:** The 2026-09-17 inferred revision of this document
 **Based on architecture:** `docs/READING_GRAPH_ADR.md`
+**Superseded by:** [Reading List runtime](READING_LIST_RUNTIME.md) and the
+[Reading List ADR](READING_LIST_EXECUTION_ADR.md). The measurements and API paths
+below describe the 2026-09-17 Reading Plan/CBL state, not the current `/api/v2`
+Reading List runtime; do not follow them as current instructions.
 
 ## Goal
 

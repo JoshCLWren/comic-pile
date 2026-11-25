@@ -1,145 +1,185 @@
-# Guarded Reading List execution
+# Reading List runtime
 
-Option E's runtime adapter is separate from its production activation. Deploying
-this code leaves legacy execution active. Issue #3673 supplies the adapter;
-#3675 supplies the reviewed conversion plan, and #3676 owns production conversion
-and activation after fresh owner approval. The accepted
-[Reading List ADR](READING_LIST_EXECUTION_ADR.md) remains authoritative.
+Reading Lists are the canonical owner-scoped record of reading order and live Roll
+eligibility. They are implemented in native Rust and served under `/api/v2`; there
+is no Python Reading List or custom-CBL runtime.
 
-## Activation boundary
+## Where the runtime lives
 
-`ReadingExecutionSettings` reads these process environment variables:
+- `native/roll-service/src/reading_list.rs` owns list read/create/update/delete and
+  the `GET /api/v2/reading-lists/{list_id}/reader` projection.
+- `native/roll-service/src/custom_cbl.rs` owns the remaining authoring operations
+  on `/api/v2/reading-lists`: issue search, export, Reading Plan applications,
+  overlap decisions, and adoption commits.
+- `native/roll-service/src/reading_constraints.rs` validates the complete graph.
+- `native/roll-service/src/reading_eligibility.rs` derives availability from that
+  validated snapshot.
+- `native/roll-service/src/option_inputs.rs` loads the owner-scoped inputs the
+  evaluator consumes.
 
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `OPTION_E_ENABLED` | `false` | Explicit runtime switch. |
-| `OPTION_E_APPROVED_PREVIEW` | empty | Reference to the actual fresh owner-approved production preview/receipt. |
+Authoring runs the shared graph validator inside the write transaction before
+commit. Only deliberately reader-authored Issue-to-Issue requirements
+(`origin=reader`) have execution authority. Converted, generated, and unclassified
+historical rows remain audit data and are excluded from both loading and cycle
+validation, so an inert legacy cycle cannot veto a canonical Reading List write.
 
-An enabled configuration without a production preview reference fails validation.
-The activation switch is **app-wide**, and each request still evaluates only the
-signed-in reader's owned lists, natural Issue positions, exclusions and explicit
-reader-authored prerequisites. An operator-provided approval reference is an audit
-marker, not independently verified authorization. Do not enable production until
-fresh read-only acceptance covers all reader cohorts, not merely one owner/list.
+## One eligibility answer
 
-Local API and Chromium tests use isolated PostgreSQL databases and an explicitly
-non-production fixture reference. Those fixtures are not production approval.
+`reading_eligibility::evaluate` derives the first unread, non-collection-excluded
+Issue in each active Thread by natural position and ID. The snapshot validates the
+complete authoritative constraint set before exposing candidates. A persisted
+reader-authored cycle is contained to its affected Threads: healthy Threads keep
+their frontiers, while cyclic Threads report a `reading_cycle` blocker with the
+exact Issues needed for repair.
 
-## One decision before weighting
+The canonical surfaces consume this authority; per-surface activation is
+described below. The Roll pool first takes the top-`die` eligible window, then
+removes this browser's temporary snoozes. It never backfills from below the die,
+so the effective pool can only shrink. Collection exclusions use stable
+Issue/Thread identities and normalized volume IDs, including ComicVine numeric and
+`4050-` spellings; titles never infer identity.
 
-`get_execution_eligibility` returns `None` in legacy mode without loading the
-Reading List graph. In enabled mode it loads one owner-scoped detached result
-and shares it through the request-owned async session and transaction. A later
-transaction does not reuse the old result. Relevant flushed Issue, Thread,
-list, prerequisite, exclusion or identity writes invalidate it; session/event
-bookkeeping alone does not cause another graph load.
+## Owner-approved rollout setting
 
-The snapshot validates the complete constraints before exposing candidates.
-Unresolved references, stranded prerequisites and cycles fail closed. It derives
-the first unread, non-collection-excluded Issue by position and ID, includes
-inactive prerequisite sources, and retains concrete blocker IDs/provenance.
-Explicit `origin=reader` requirements remain effective regardless of note text.
-The Dependency Builder's `POST /api/v1/dependencies/` path persists new
-reader-authored edges with `origin=reader`, the reviewed reader-intent
-classification `A`, and an explicit provenance record, so authoring, thread
-details, Queue, and Roll use the same prerequisite and name the authoring
-surface instead of an unknown classification. This does not reclassify existing
-rows.
-Unclassified historical rows and `origin=converted` generated/plan-compiled
-edges are inactive audit data; they cannot override today's canonical Reading
-Lists. The Rust owner-scoped loader and the shared cycle validator both exclude
-them before cycle evaluation, so an unrelated legacy cycle cannot veto a canonical
-Reading List write. A genuinely intended independent historical restriction must
-be explicitly authorized as a reader-owned prerequisite. No provenance classification
-is required to ignore outdated generated restrictions.
+Evaluated eligibility is a rollout setting, not a per-request feature flag and not
+an API-version marker. `native/roll-service/src/option_e_setting.rs` parses it once
+at startup into `AppState::option_e`:
 
-Roll/skip, manual selection, both bootstrap versions, stale picks, safe queue
-repositioning and Queue pagination consume that result. Durable snooze evidence
-is filtered by live candidates, not cached blocked flags. Pending-roll recovery
-uses the same blockers and natural-series frontiers; a recovery link is readable
-only when the current pool and session filters also allow it. Snooze/skip exclusions
-are applied before the die cap. SQL selects eligible Thread IDs before identity
-joins, so multiple identity mappings cannot consume another Thread's slot.
-Offered Issue IDs, numbers and unread counts come from the derived frontier,
-without rewriting compatibility pointers or cached `is_blocked` fields.
+| Variable | Effect |
+| --- | --- |
+| `OPTION_E_ENABLED` | Must be truthy (`1`, `true`, `yes`, `on`, `t`, `y`). |
+| `OPTION_E_APPROVED_PREVIEW` | Must be non-blank; records the owner approval reference. |
 
-Queue's position ordering, continuation boundary and response flags use the
-same eligibility authority. Position cursors record the execution mode; an
-activation change rejects an old-mode cursor rather than silently reinterpreting
-its blocked grouping. Empty eligible sets remain valid SQL sort expressions.
-Collection exclusions use stable Issue/Thread identities and normalized volume
-IDs, including ComicVine numeric and `4050-` spellings; titles never infer identity.
+The approval reference is an audit marker, not independently verified
+authorization. Handlers must not read the environment directly; tests inject the
+resolved value.
+
+Current behavior is not uniform across every surface:
+
+- The Reading List reader endpoint always evaluates the canonical graph and
+  reports `execution_mode: "option_e"`, even when the rollout setting is off.
+- Queue, Thread list/detail, ordering, and lifecycle projections use the setting to
+  choose canonical or legacy stored `threads.is_blocked` authority.
+- `POST /api/v2/reading-boundaries` returns `evaluator: "unavailable"`, no next
+  Issue, and no blockers when the setting is off.
+- Roll offer and bootstrap always load and evaluate canonical inputs, even when
+  the setting is off. The setting changes some active-thread projections but does
+  not restore a stored-flag Roll fallback. This is a recorded runtime discrepancy,
+  not the intended setting-off contract.
+
+Reading List execution is current canonical behavior. The rollout setting controls
+only the per-surface compatibility projections listed above; this document does
+not establish the live deployed value. Changing that value remains an operator
+decision requiring fresh owner-approved read-only acceptance across reader cohorts,
+not merely a deployment.
+
+## Prerequisites and exclusions
+
+Only explicit reader-authored prerequisites participate in canonical execution.
+A genuinely intended historical restriction must be explicitly re-authored as a
+reader-owned prerequisite; documentation must not infer authorship from an absent
+generated marker.
+
+A list-local skip is metadata only; the Issue remains available to other lists,
+its Thread, and Roll. A collection exclusion removes an Issue from every List and
+from Roll eligibility and survives Thread removal. Exclusion writes validate the
+resulting complete authoritative graph under the reader lock and roll back a write
+that would strand a prerequisite.
 
 ## Reader writes and undo
 
-Enabled-mode rating is bound to the exact Issue on the originating roll event.
-It revalidates ownership, unread state, the current derived frontier and session
-filters before marking that Issue read. A changed or unidentified pending offer
-requires cancellation and a new roll; an issue-number string never migrates or
-infers read history in this mode. Normal explicit ratings update only the rated
-Issue and its Thread's compatibility projections. Undo captures the actual Issue
-pre-state even when the original Thread tracking metadata is absent, preserving
-both unread exclusions and the original stored counter/pointer on restoration.
+Direct manual Read/Rate is allowed for any exact owned Issue, including blocked,
+excluded, later, or inactive Issues. `PATCH /api/v2/issues/{issue_id}` with
+`source: "direct"` (or omitted) does not step the die or apply Roll queue
+advancement. A direct unread can reactivate a completed Thread and assign it a
+queue position; that is separate from Roll advancement. Only a completion with
+`source: "roll_offer"` applies Roll rating effects.
 
-Exclusion creation and deletion validate the resulting complete graph under the
-reader lock before commit. A stranded prerequisite, unresolved reference or
-cycle rejects and rolls back the write instead of poisoning future runtime reads.
+Roll-offer rating is bound to the exact Issue on the originating event. It
+revalidates ownership, unread state, and pending-offer identity, but eligibility
+never gates completion: a changed frontier, queue, or blocked state does not veto
+rating the exact offered Issue. An otherwise no-op repeat is rejected, and an
+issue-number string never substitutes for an unidentified pending offer. Undo
+captures the actual Issue pre-state, preserving unread exclusions and the
+original stored counter/pointer on restoration.
 
-## Validation and rollback
+## Reader projection and explanations
 
-`tests/test_option_e_runtime.py` exercises real PostgreSQL and API paths for <!-- docs-path-check: ignore -->
-strict/loose behavior, stale flags/pointers, exclusions, session filters,
-prerequisite provenance, snapshot sharing/invalidation, app-wide activation with reader isolation,
-empty Queues, cursor mode boundaries, identity fan-out, durable snooze/recovery,
-exclusion-write rejection, exact-offer rating and undo. The pure evaluator
-and existing Roll/Queue regressions cover the underlying reading scenarios.
+`GET /api/v2/reading-lists/{list_id}/reader` returns the current authored
+membership and marks each entry `read`, `excluded`, `later`, `available`, `blocked`,
+or `inactive`. Ownership is checked before loading eligibility, and the reader
+never repairs pointers or mutates progress.
 
-Turning the execution switch off returns those readers to legacy selection;
-deploying this adapter performs no data conversion, edge compilation, historical
-cleanup, read-state change or migration. Ordinary reader commands still persist
-their explicitly requested ratings and reads. Data rollback and receipt validation belong to
-the separately approved conversion/activation procedure. Runtime deployment is
-not evidence that production parity or the ADR's trust milestone has passed.
+Blocked entries carry an explanation naming every active gate and required unread
+Issues:
 
-## Reader explanations
+- `strict_order`, `hold`, and `after_previous` name the enforcing List.
+- `prerequisite` identifies a reader-authored requirement.
+- `reading_cycle` reports a contained constraint cycle instead of failing the
+  whole page.
+- An empty frontier reports `No available unread issue` when there is nothing to
+  link.
 
-Thread connection panels show only explicit reader prerequisites in enabled mode;
-untyped and converted legacy edges remain stored audit data and are not labeled
-as current blockers. Disabling the switch restores the legacy connection view.
+Converted prerequisites are not loaded, so a `Converted prerequisite` explanation
+is not reachable in the canonical reader projection.
 
-The single and batched `getBlockingInfo` endpoints and Thread detail now project
-that same guarded result. Every named list restriction and prerequisite is kept;
-`blocking_dependencies[].issue_id` supplies an exact link to the required issue.
-Roll's waiting summaries also include the canonical `blocking_reasons`, including
-empty-frontier explanations that have no prerequisite Issue to link.
+## Reading boundaries and plans
 
-`GET /api/v1/custom-cbls/{list_id}/reader` returns the complete current authored
-membership, rather than the historical Reading Plan copy. Each entry distinguishes
-read, available, blocked, later in natural series order, collection-excluded and
-inactive states. List-local skips remain explicit metadata and do not hide global
-availability. With execution disabled, unread entries are labeled `legacy`; opening
-the reader never activates stored strict modes or gates. Ownership is checked
-before loading eligibility. These reads do not repair pointers or mutate progress.
+`POST /api/v2/reading-boundaries` is the canonical bounded batch operation. With
+the rollout setting effective it projects the current evaluator result, including
+next Issue, live blockers, and editor targets. With the setting off it returns the
+legacy-compatible unavailable projection described above.
 
-`GET /api/v2/reading-boundaries/{thread_id}` and `POST /api/v2/reading-boundaries`
-are the canonical UI endpoints. They project the current Option E result for one
-owned series or a bounded batch, including the next Issue, live blockers, and
-current editor targets. **V2 has no `historical` response field, and never runs
-the legacy dependency query.** Only `origin=reader` prerequisites are loaded
-by the canonical eligibility evaluator.
+`GET /api/v2/reading-boundaries/{thread_id}` and the v1 reading-boundary operations
+are retired. Their historical associations remain in storage but are not exposed
+by a current HTTP operation or loaded by the canonical UI.
 
-The original `/api/v1/reading-boundaries` endpoints have been retired with the
-Python API (Part of #5431). They existed only for clients expecting the historic
-`historical` field; their optional historical lookup was constrained to the
-requested owned series rather than the entire collection. The v2 endpoints above
-are the only reading-boundary HTTP operations now. Historical associations stay
-in storage but are no longer exposed by an HTTP operation or loaded by the
-canonical UI.
+The transitional Reading Plan reader uses the same eligibility authority for the
+Issues a plan represents while retaining historical membership until that surface
+is separately retired. A linked Reading List remains the authority for effective
+availability; the plan's saved `ordering_mode` is display intent, not an
+eligibility override.
 
-The custom CBL editor's **Read this list** control opens this current-list reader.
-Available issues can be marked read directly, and read issues can be marked unread.
-These explicit writes use the existing Issue APIs; all affected reader, Roll, Queue
-and explanation caches refresh because one global read can release another series.
-Issue tags reuse the Thread's direct/inherited tag display and source navigation.
-The transitional Reading Plan reader uses the same authority for its represented
-issues, while retaining its historical membership until separately approved retirement.
+## Recorded authoring contract discrepancy
+
+Core Reading List POST/PUT currently map a reader-authored cycle to HTTP `409`
+with a plain `detail` message. The frontend builder still expects the established
+structured HTTP `422` `reading_list_cycle` payload with a cycle path. This is an
+unresolved runtime/frontend contract defect: repair it in the owning product work
+rather than presenting either response as the intended final contract.
+
+## Recorded product/runtime discrepancies
+
+These implementation gaps do not redefine the expected product contract:
+
+- A one-candidate pool still creates a random offer and shows **Begin**, while
+  manual QA requires **Read Now** without a die roll.
+- Completing a Roll rating returns to the idle die view instead of automatically
+  rolling the next comic as the manual-QA contract requires.
+- The current native service still creates six-hour server sessions and stores
+  pending selection in PostgreSQL, while [#4405](https://github.com/JoshCLWren/comic-pile/issues/4405)
+  establishes sessionless Roll with browser-owned pending state. Treat the server
+  implementation as unresolved compatibility behavior, not the intended final
+  boundary.
+
+## Validation
+
+Database-backed Rust tests cover the runtime and fail with setup instructions when
+`RUST_ROLL_TEST_DATABASE_URL` is unset:
+
+- `native/roll-service/tests/reading_cycle_containment.rs` covers cycles,
+  converted-edge containment, and the reader projection.
+- `native/roll-service/tests/thread_ordering_v1_http.rs` covers ordering, reader
+  entries, and blocker explanations.
+- `native/roll-service/tests/reading_boundary_concurrency.rs` covers boundary
+  capability and the setting-off path.
+- `native/roll-service/tests/continuity_plans_v1_http.rs` and
+  `native/roll-service/tests/thread_issues_v1_http.rs` cover plan and manual-pick
+  behavior.
+- Unit tests in `native/roll-service/src/roll_pool.rs`,
+  `native/roll-service/src/queue.rs`, and
+  `native/roll-service/src/reading_constraints.rs` cover no-backfill snoozes,
+  activation combinations, frontier derivation, and concurrency.
+
+Every native route module also requires a DB-backed HTTP test, enforced by
+`node scripts/check_native_route_db_tests.mjs`.

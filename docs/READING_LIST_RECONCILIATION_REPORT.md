@@ -1,5 +1,10 @@
 # Read-only Custom CBL and Reading Plan reconciliation
 
+> **Status: historical Python report harness.** The commands/fixtures below are no
+> longer tracked. Use [Reading List runtime](READING_LIST_RUNTIME.md) and the
+> native reading-graph/frontier-audit resources for current evidence.
+<!-- docs-path-check: historical -->
+
 Option E issue #3660 supplies a census, not a conversion decision. Run from the
 repository root with an explicit PostgreSQL asyncpg URL and owner ID:
 

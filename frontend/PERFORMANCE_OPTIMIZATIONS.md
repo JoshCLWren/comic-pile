@@ -1,5 +1,10 @@
 # Frontend Performance Optimizations - Implementation Summary
 
+> **Status: historical implementation summary.** Treat the measurements and file
+> paths as point-in-time evidence; current architecture is in
+> [REACT_ARCHITECTURE.md](../docs/REACT_ARCHITECTURE.md).
+<!-- docs-path-check: historical -->
+
 ## Overview
 This document summarizes the performance optimizations implemented for the creator, crossover, and cbl-sources views to reduce unnecessary HTTP calls and improve caching efficiency.
 

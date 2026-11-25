@@ -1,5 +1,11 @@
 # Read-only Reading List eligibility comparison
 
+> **Status: historical Python report harness.** The cited exporter/tests no longer
+> exist. Current read-only runtime evidence is available from the native reading
+> graph/frontier audit; see [API.md](API.md) and
+> [Reading List runtime](READING_LIST_RUNTIME.md).
+<!-- docs-path-check: historical -->
+
 Option E's shadow report compares the existing stored frontier/cache with derived
 frontiers and hypothetical eligibility from current authored Reading List modes,
 gates, skips, explicit requirements and resolved collection exclusions. It does

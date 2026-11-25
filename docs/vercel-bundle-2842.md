@@ -1,5 +1,9 @@
 # Issue #2842 — Vercel Python bundle reduction evidence
 
+> **Status: historical Python deployment evidence.** Production now uses static
+> Vite plus native Rust; see [VERCEL_ARCHITECTURE.md](VERCEL_ARCHITECTURE.md).
+<!-- docs-path-check: historical -->
+
 ## Mechanism verified
 - `.vercelignore` is the supported exclusion mechanism for the existing `builds` (`@vercel/python`) deployment configuration. `vercel.json` `functions.excludeFiles` is not compatible with `builds` and is not used.
 - Validated `vercel.json` remains unchanged from `main` (no `functions` block) and parses as JSON.

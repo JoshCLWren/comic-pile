@@ -1,5 +1,11 @@
 # Durable custom CBL checkpoint targets
 
+> **Status: superseded for canonical execution.** Reading List authoring stores
+> checkpoint metadata but does not compile adjacency into dependency edges. Use
+> [Reading List authoring](api/READING_LIST_AUTHORING.md) and the
+> [Reading List ADR](READING_LIST_EXECUTION_ADR.md).
+<!-- docs-path-check: historical -->
+
 Custom CBL membership is intended display order. A checkpoint carries specific
 source and target issue IDs. List adjacency never becomes an implicit additional
 prerequisite. This extends the existing CBL and plan compiler; Roll still consumes
