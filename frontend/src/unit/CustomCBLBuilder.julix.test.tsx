@@ -27,7 +27,7 @@ vi.mock('../services/api-cbl-sources', async () => {
   return { ...actual, cblSourcesApi: { discover: vi.fn(), preview: vi.fn() } }
 })
 
-function julixShapeEntries(count = 466) {
+function buildJulixEntries(count = 466) {
   return Array.from({ length: count }, (_, index) => {
     const issueNumber = String(index + 1)
     return {
@@ -54,7 +54,7 @@ const julixList = {
   issue_count: 466,
   created_at: '2026-11-20T00:00:00Z',
   updated_at: '2026-11-20T00:00:00Z',
-  entries: julixShapeEntries(),
+  entries: buildJulixEntries(),
 }
 
 function renderBuilder() {
@@ -117,7 +117,9 @@ describe('CustomCBLBuilder Julix 466-entry regression', () => {
 
     const entry84 = screen.getAllByTestId('reading-list-entry').find((el) => within(el).getByTestId('reading-list-entry-title').textContent?.includes('#84'))
     expect(entry84).toBeTruthy()
+    // SAFETY: entry84 asserted truthy above; Testing Library returns HTMLElement.
     await user.click(within(entry84 as HTMLElement).getByRole('button', { name: /Show settings for/ }))
+    // SAFETY: entry84 asserted truthy above; Testing Library returns HTMLElement.
     await user.click(within(entry84 as HTMLElement).getByRole('button', { name: 'Insert before' }))
 
     await user.type(screen.getByLabelText('Search issues for custom CBL'), 'JLA Classified')
@@ -129,9 +131,12 @@ describe('CustomCBLBuilder Julix 466-entry regression', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Go to position' }))
     const tailEntry = screen.getAllByTestId('reading-list-entry').find((el) => within(el).getByTestId('reading-list-entry-title').textContent?.includes('#466'))
     expect(tailEntry).toBeTruthy()
+    // SAFETY: tailEntry asserted truthy above; Testing Library returns HTMLElement.
     await user.click(within(tailEntry as HTMLElement).getByRole('button', { name: /Show settings for/ }))
+    // SAFETY: tailEntry asserted truthy above; Testing Library returns HTMLElement.
     const moveInput = within(tailEntry as HTMLElement).getByLabelText(/Move .* to position/)
     fireEvent.change(moveInput, { target: { value: '83' } })
+    // SAFETY: tailEntry asserted truthy above; Testing Library returns HTMLElement.
     await user.click(within(tailEntry as HTMLElement).getByRole('button', { name: 'Move here' }))
 
     await user.click(screen.getByRole('button', { name: 'Save custom CBL' }))
