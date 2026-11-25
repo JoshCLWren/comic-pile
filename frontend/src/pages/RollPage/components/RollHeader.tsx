@@ -125,6 +125,18 @@ export function RollHeader({
     </div>
   )
 
+  const resetDiceButton = (
+    <button
+      type="button"
+      onClick={onOpenDieModal}
+      disabled={setDiePending}
+      aria-haspopup="dialog"
+      className="min-h-11 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[var(--theme-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+    >
+      Reset Dice
+    </button>
+  )
+
   return (
     <header
       className={`shrink-0 z-10 py-3 md:py-4 ${isRatingView ? 'px-3 md:px-4' : 'px-2 md:px-3'}`}
