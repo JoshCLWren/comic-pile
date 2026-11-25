@@ -464,6 +464,16 @@ pub(crate) fn natural_issue_order(existing: &[String], incoming: &[String]) -> O
         .collect();
 
     if existing_keyed.len() == existing.len() {
+        // A non-monotonic numeric run can be deliberate reader-authored order
+        // (for example the B.P.R.D. Julix order). Never turn an insertion into
+        // an implicit full-series resort: callers fall back to their safe
+        // append/accepted-anchor path instead.
+        if existing_keyed
+            .windows(2)
+            .any(|pair| pair[0].0 >= pair[1].0)
+        {
+            return None;
+        }
         let mut merged: Vec<((usize, &str), &String)> = existing_keyed;
         merged.extend(new_keyed);
         merged.sort_by(|left, right| left.0.cmp(&right.0));
