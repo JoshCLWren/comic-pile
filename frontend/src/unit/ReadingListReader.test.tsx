@@ -17,6 +17,15 @@ vi.mock('../services/api-tags', () => ({
   DEFAULT_TAG_COLOR_NAME: 'red',
   tagsApi: { threadIssuesEffective: vi.fn().mockResolvedValue({ issues: [] }) },
 }))
+vi.mock('../hooks/useComicVineIssueIntelligence', () => ({
+  useComicVineIssueIntelligence: () => ({
+    metadata: null,
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: async () => {},
+  }),
+}))
 
 const view: ReaderView = {
   list_id: 2, name: 'Julix', mode: 'strict', execution_mode: 'option_e', entries: [

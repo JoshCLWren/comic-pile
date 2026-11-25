@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CompactIssueCardTrigger from '../components/CompactIssueCardTrigger'
@@ -131,7 +131,7 @@ describe('compact shared issue entry across dense lists', () => {
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('Metadata temporarily unavailable')
     expect(screen.getByRole('button', { name: 'Read now' })).toBeEnabled()
-    await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await userEvent.click(within(alert).getByRole('button', { name: 'Retry' }))
     expect((await screen.findAllByRole('img', { name: 'Cover for Hellboy #9' }))[0]).toHaveAttribute('src', card.cover_image_url)
   })
 
