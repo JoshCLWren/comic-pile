@@ -1476,6 +1476,8 @@ mod tests {
                      id integer PRIMARY KEY,
                      thread_id integer NOT NULL,
                      issue_number varchar NOT NULL,
+                     overall_issue_number varchar(50),
+                     identity_version bigint NOT NULL DEFAULT 1,
                      position integer NOT NULL,
                      status varchar NOT NULL,
                      read_at timestamptz,
@@ -2570,9 +2572,12 @@ mod issue_ingress_tests {
                      id integer PRIMARY KEY,
                      thread_id integer NOT NULL,
                      issue_number text NOT NULL,
+                     overall_issue_number varchar(50),
+                     identity_version bigint NOT NULL DEFAULT 1,
                      status text NOT NULL,
                      position integer NOT NULL,
                      read_at timestamptz,
+                     created_at timestamptz NOT NULL DEFAULT now(),
                      catalog_issue_id bigint
                  );
                  CREATE TABLE {schema}.snapshots (
