@@ -827,6 +827,7 @@ pub async fn preview_reconciliation(
         &req.duplicate_issue_ids,
         &canonical,
         &duplicates,
+        &req.decisions,
     );
 
     tx.commit().await.map_err(db_err)?;
@@ -976,24 +977,36 @@ pub async fn apply_reconciliation(
         }
         duplicates.push(dup);
     }
-    let (_actions, mut warnings, can_apply) =
-        build_preview_actions(&canonical, &duplicates, &req.decisions);
-    warnings.extend(pre_warnings);
-    if !can_apply {
-        return Err(conflict(
-            "Preview has unresolved decisions; resolve them before applying",
-        ));
-    }
+    // The token is computed from the full reviewed selection so a changed
+    // keep-distinct decision cannot reuse an earlier apply.
     let expected_token = compute_preview_token(
         user.id(),
         req.canonical_issue_id,
         &req.duplicate_issue_ids,
         &canonical,
         &duplicates,
+        &req.decisions,
     );
     if expected_token != req.preview_token {
         return Err(conflict(
             "Stale preview token; refresh preview before applying",
+        ));
+    }
+
+    // An explicit keep-distinct choice excludes that alias from every write.
+    duplicates.retain(|dup| !is_kept_distinct(dup, &req.decisions));
+    if duplicates.is_empty() {
+        return Err(bad_request(
+            "No aliases remain for reconciliation after keep-distinct decisions",
+        ));
+    }
+    let merged_issue_ids: Vec<i32> = duplicates.iter().map(|dup| dup.issue_id).collect();
+    let (_actions, mut warnings, can_apply) =
+        build_preview_actions(&canonical, &duplicates, &req.decisions);
+    warnings.extend(pre_warnings);
+    if !can_apply {
+        return Err(conflict(
+            "Preview has unresolved decisions; resolve them before applying",
         ));
     }
 
@@ -1278,7 +1291,7 @@ pub async fn apply_reconciliation(
 
     Ok(Json(ReconcileApplyResponse {
         canonical_issue_id: req.canonical_issue_id,
-        merged_issue_ids: req.duplicate_issue_ids.clone(),
+        merged_issue_ids,
         moved_event_ids,
         moved_mapping_ids,
         moved_list_entry_ids,
