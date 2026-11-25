@@ -1,9 +1,9 @@
-utc: 2026-11-25T17:20:39Z
-uptime: 2250.38s load: 0.12 0.20 0.33
+utc: 2026-11-25T17:20:55Z
+uptime: 2266.93s load: 0.16 0.20 0.33
 processes: 181
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15983        1101        6791          88        8523       14881
+Mem:           15983        1099        6792          88        8523       14883
 Swap:           3071           0        3071
 --- disk
 Filesystem      Size  Used Avail Use% Mounted on
@@ -26,6 +26,7 @@ Filesystem      Size  Used Avail Use% Mounted on
 18204 systemd-journal
 17024 systemd
 --- top cpu (name only)
+ 100 ps
  2.5 provjobd3801151
  0.7 Runner.Worker
  0.2 hv_kvp_daemon
@@ -33,6 +34,5 @@ Filesystem      Size  Used Avail Use% Mounted on
  0.1 Runner.Listener
  0.0 ExtHandler
  0.0 containerd
- 0.0 kworker/u16:0-events_power_efficient
 --- kernel oom/kill
 --- shutdown/session signals
