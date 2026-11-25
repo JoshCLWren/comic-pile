@@ -1541,6 +1541,46 @@ mod tests {
         assert_eq!(normalize_provider_api_key(" \n\t\r"), None);
     }
 
+    /// #5695: the transport must enforce the same normalization as the read
+    /// boundary, even when a future caller supplies a padded key directly.
+    /// Blank and malformed credentials must fail before any outbound request.
+    #[tokio::test]
+    async fn provider_exchange_normalizes_key_before_request() {
+        let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
+        fake.push_ok(
+            StatusCode::OK,
+            HeaderMap::new(),
+            Bytes::from_static(br#"{"status_code":1,"results":{}}"#),
+        );
+        let outbound: Arc<dyn crate::outbound::OutboundHttp> = fake.clone();
+
+        let exchange = provider_exchange(&outbound, "issue/4000-1", "", " \tTESTKEY123\n")
+            .await
+            .expect("padded credential must reach the provider");
+        assert!(matches!(exchange, Exchange::Payload(_)));
+
+        let calls = fake.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].host, HOST);
+        assert_eq!(
+            calls[0].path,
+            "/api/issue/4000-1?api_key=TESTKEY123&format=json"
+        );
+
+        fake.clear();
+        let error = provider_exchange(&outbound, "issue/4000-1", "", " \n\t")
+            .await
+            .expect_err("blank credential must be unconfigured");
+        assert!(matches!(error, ProviderFailure::Unavailable));
+        assert!(fake.calls().is_empty());
+
+        let error = provider_exchange(&outbound, "issue/4000-1", "", "TEST KEY123")
+            .await
+            .expect_err("internal whitespace must remain malformed");
+        assert!(matches!(error, ProviderFailure::Unavailable));
+        assert!(fake.calls().is_empty());
+    }
+
     /// #4516 legacy oracle: `_provider_timestamp` returned a naive datetime
     /// for ComicVine's `YYYY-MM-DD HH:MM:SS` revision. The retired Python
     /// identity upsert then evaluated
