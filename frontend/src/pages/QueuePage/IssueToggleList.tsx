@@ -70,6 +70,48 @@ export interface IssueToggleListHandle {
   hasPendingMutations: () => boolean
 }
 
+/**
+ * One Before/After preview row. Shows the specific series, source-list
+ * memberships, read/identity/rating effects, the affected Queue/Roll frontier
+ * and duplicate risk — not a bare issue number (#4654).
+ */
+function PreviewIssueRow({ item }: { item: IssuePreviewItem }) {
+  return (
+    <div
+      className="rounded-md border border-white/10 p-2 space-y-1"
+      data-testid="preview-issue-row"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span className={`font-bold ${item.is_new ? 'text-[var(--theme-primary-action)]' : 'text-[var(--theme-text-primary)]'}`}>
+          {item.series_title} #{item.issue_number}{item.is_new ? ' (new)' : ''}
+        </span>
+        <span className="shrink-0 text-stone-500">pos {item.position}</span>
+      </div>
+      <div className="text-stone-300">{item.effect}</div>
+      {item.source_lists.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {item.source_lists.map((listName) => (
+            <span key={listName} className="rounded bg-white/10 px-1.5 py-0.5" data-testid="preview-source-list">
+              List: {listName}
+            </span>
+          ))}
+        </div>
+      )}
+      {(item.is_read || item.has_rating || item.is_mapped || item.is_duplicate || item.frontier_label) && (
+        <div className="flex flex-wrap gap-1 text-stone-400">
+          {item.is_read && <span data-testid="preview-read">Read</span>}
+          {item.has_rating && <span data-testid="preview-rating">Rated</span>}
+          {item.is_mapped && <span data-testid="preview-mapped">Identity mapped</span>}
+          {item.frontier_label && <span data-testid="preview-frontier">{item.frontier_label}</span>}
+          {item.is_duplicate && (
+            <span className="text-[var(--theme-danger)]" data-testid="preview-duplicate">Possible physical duplicate</span>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   threadId: number
   onOpenDependencies?: () => void
@@ -123,6 +165,8 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     selectedStrategy: 'safe_default' | 'numeric_resort'
   } | null>(null)
   const [isPreviewing, setIsPreviewing] = useState(false)
+  /** Preview fetch failure, surfaced in a retryable modal (#4654). */
+  const [previewError, setPreviewError] = useState<string | null>(null)
   const baseIssuesRef = useRef<Issue[]>([])
   const pendingMutationsRef = useRef<IssueMutation[]>([])
   const isProcessingMutationsRef = useRef(false)
@@ -572,6 +616,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       return
     }
     setAddError(null)
+    setPreviewError(null)
     if (deferred) {
       setIsPreviewing(true)
       try {
@@ -583,7 +628,9 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         })
       } catch (err: unknown) {
         console.error('[IssueToggleList] Error previewing issues:', err)
-        setAddError(getApiErrorDetail(err))
+        const detail = getApiErrorDetail(err)
+        setAddError(detail)
+        setPreviewError(detail)
       } finally {
         setIsPreviewing(false)
       }
@@ -1088,6 +1135,41 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
           </div>
         </Modal>
       )}
+      {previewError && (
+        <Modal
+          isOpen
+          title="Preview unavailable"
+          onClose={() => setPreviewError(null)}
+          data-testid="edit-series-preview-error-modal"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-[var(--theme-text-muted)]" role="alert">
+              Could not preview <span className="font-bold">{addRange.trim()}</span>: {previewError}
+            </p>
+            <p className="text-xs text-stone-400">
+              Nothing was changed. You can retry the preview or cancel.
+            </p>
+            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+              <button
+                type="button"
+                onClick={() => { setPreviewError(null); setAddError(null) }}
+                className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAddError(null); void handleAddIssues() }}
+                disabled={isPreviewing || !addRange.trim()}
+                className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-xs font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60 transition-colors"
+                data-testid="retry-preview-add"
+              >
+                Retry preview
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
       {previewState && (
         <Modal
           isOpen
@@ -1181,22 +1263,20 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2" data-testid="preview-before-after">
               <div>
                 <div className="font-bold text-stone-400 mb-1">Before</div>
-                <div className="max-h-40 overflow-auto rounded-lg border border-white/10 p-2 space-y-0.5">
-                  {(previewState.selectedStrategy === 'numeric_resort' ? previewState.response.numeric_resort_outcome?.before : previewState.response.default_outcome.before)?.map((item) => (
-                    <div key={`${item.issue_id}-${item.issue_number}`}>#{item.issue_number}</div>
+                <div className="max-h-40 overflow-auto rounded-lg border border-white/10 p-2 space-y-1">
+                  {(previewState.selectedStrategy === 'numeric_resort' ? previewState.response.numeric_resort_outcome?.before : previewState.response.default_outcome.before)?.map((item, idx) => (
+                    <PreviewIssueRow key={`${item.issue_id}-${item.issue_number}-${idx}`} item={item} />
                   ))}
                 </div>
               </div>
               <div>
                 <div className="font-bold text-stone-400 mb-1">After</div>
-                <div className="max-h-40 overflow-auto rounded-lg border border-white/10 p-2 space-y-0.5">
+                <div className="max-h-40 overflow-auto rounded-lg border border-white/10 p-2 space-y-1">
                   {(previewState.selectedStrategy === 'numeric_resort' ? previewState.response.numeric_resort_outcome?.after : previewState.response.default_outcome.after)?.map((item, idx) => (
-                    <div key={`${item.issue_id ?? 'new'}-${item.issue_number}-${idx}`} className={item.is_new ? 'text-[var(--theme-primary-action)] font-bold' : ''}>
-                      #{item.issue_number}{item.is_new ? ' (new)' : ''}
-                    </div>
+                    <PreviewIssueRow key={`${item.issue_id ?? 'new'}-${item.issue_number}-${idx}`} item={item} />
                   ))}
                 </div>
               </div>
