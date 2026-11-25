@@ -3,11 +3,18 @@ import {
   issuesApi as defaultIssuesApi,
   type IssueReadOperationResponse,
 } from '../services/api-issues'
+import { getApiErrorStatus } from '../utils/apiError'
 import { queryClient } from '../query/queryClient'
 import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../query/cacheEffects'
 
 /** localStorage key prefix written by IssueCorrectionDialog after a bulk read. */
 export const BULK_READ_OPERATION_KEY_PREFIX = 'issueReadOperation:'
+const RECEIPTS_CHANGED_EVENT = 'comicpile:bulk-read-receipts-changed'
+
+function notifyReceiptsChanged(): void {
+  // A native storage event is sent to other tabs, not the writing tab.
+  window.dispatchEvent(new Event(RECEIPTS_CHANGED_EVENT))
+}
 
 export interface PersistedBulkReadOperation {
   threadId: number
@@ -30,6 +37,7 @@ export function bulkReadReceiptKey(threadId: number, operationId: number): strin
 
 export function writeBulkReadReceipt(threadId: number, operationId: number): void {
   window.localStorage.setItem(bulkReadReceiptKey(threadId, operationId), '1')
+  notifyReceiptsChanged()
 }
 
 function parseReceipt(key: string, value: string | null): BulkReadReceipt | null {
@@ -81,6 +89,7 @@ export function clearBulkReadReceipt(threadId: number, operationId: number): voi
   if (window.localStorage.getItem(legacyKey) === String(operationId)) {
     window.localStorage.removeItem(legacyKey)
   }
+  notifyReceiptsChanged()
 }
 
 /** Named contract for the discovery hook so exported callers keep inference. */
@@ -106,31 +115,67 @@ export function useBulkReadOperations(
 ): BulkReadOperationsResult {
   const [operations, setOperations] = useState<PersistedBulkReadOperation[]>([])
   const [message, setMessage] = useState<string | null>(null)
+  const [discoveryMessage, setDiscoveryMessage] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
+    let discoveryVersion = 0
     const discover = async () => {
+      const version = ++discoveryVersion
+      const isCurrent = () => active && version === discoveryVersion
       const found: PersistedBulkReadOperation[] = []
-      for (const receipt of allReceipts()) {
+      const seen = new Set<number>()
+      let incomplete = false
+      let receipts: BulkReadReceipt[]
+      try {
+        receipts = allReceipts()
+      } catch {
+        if (isCurrent()) {
+          setDiscoveryMessage('Undo receipts could not be read. Reload to retry.')
+        }
+        return
+      }
+      for (const receipt of receipts) {
+        if (seen.has(receipt.operationId)) continue
         try {
           const operation = await issuesApi.getReadOperation(receipt.operationId)
+          if (!isCurrent()) return
           if (operation.undone_at) {
+            // Only a successful authoritative read can prove Undo is no longer
+            // available. Clear legacy duplicates as well.
             window.localStorage.removeItem(receipt.key)
-          } else {
-            found.push({ threadId: receipt.threadId, operation })
+            continue
           }
-        } catch {
-          window.localStorage.removeItem(receipt.key)
+          seen.add(receipt.operationId)
+          found.push({ threadId: receipt.threadId, operation })
+        } catch (error: unknown) {
+          if (!isCurrent()) return
+          // A timeout, 5xx, expired login, or owner-scoped 404 is not proof
+          // that the operation is gone. Keep the receipt so the owner can
+          // recover it after reconnection or signing back into their account.
+          if (getApiErrorStatus(error) !== 404) incomplete = true
         }
       }
-      if (active) setOperations(found)
+      if (isCurrent()) {
+        setOperations(found)
+        setDiscoveryMessage(incomplete
+          ? 'Some bulk reads could not be loaded. Undo receipts were kept; reconnect or reload to retry.'
+          : null)
+      }
     }
     void discover()
-    const onStorage = () => { void discover() }
+    const refresh = () => { void discover() }
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === null || event.key.startsWith(BULK_READ_OPERATION_KEY_PREFIX)) refresh()
+    }
     window.addEventListener('storage', onStorage)
+    window.addEventListener(RECEIPTS_CHANGED_EVENT, refresh)
+    window.addEventListener('online', refresh)
     return () => {
       active = false
       window.removeEventListener('storage', onStorage)
+      window.removeEventListener(RECEIPTS_CHANGED_EVENT, refresh)
+      window.removeEventListener('online', refresh)
     }
   }, [issuesApi])
 
@@ -152,5 +197,5 @@ export function useBulkReadOperations(
     }
   }, [issuesApi])
 
-  return { operations, message, undo }
+  return { operations, message: message ?? discoveryMessage, undo }
 }
