@@ -48,6 +48,11 @@ pub struct CreateIssuesRequest {
     /// Placement strategy. Defaults to safe_default.
     #[serde(default)]
     pub strategy: IssuePlacementStrategy,
+    /// Requested numbers that already exist as mapped issues and were
+    /// explicitly accepted by the reader as alias/mapping alternatives.
+    /// The server rejects unaccepted mapped-existing numbers (#4654 A5).
+    #[serde(default)]
+    pub accepted_alias_issue_numbers: Vec<String>,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -690,6 +695,10 @@ pub struct PreviewIssuesRequest {
     /// Requested placement strategy. Defaults to safe_default.
     #[serde(default)]
     pub strategy: IssuePlacementStrategy,
+    /// Requested numbers that already exist as mapped issues and were
+    /// explicitly accepted by the reader as alias/mapping alternatives.
+    #[serde(default)]
+    pub accepted_alias_issue_numbers: Vec<String>,
 }
 
 /// Per-issue human-readable context carried in the preview payload so the
@@ -859,6 +868,74 @@ pub struct IssueEditPreviewResponse {
     /// server never silently creates a duplicate (#4654 A5).
     #[serde(default)]
     pub alias_offers: Vec<IssueEditAliasOffer>,
+}
+
+#[derive(Debug, Clone)]
+struct ExistingIssueMapping {
+    id: i32,
+    issue_number: String,
+    is_mapped: bool,
+}
+
+async fn mapped_existing_for_requested(
+    tx: &Transaction<'_>,
+    thread_id: i32,
+    requested: &[String],
+) -> Result<Vec<ExistingIssueMapping>, ApiError> {
+    if requested.is_empty() {
+        return Ok(vec![]);
+    }
+    let rows = tx
+        .query(
+            "SELECT i.id,
+                    i.issue_number,
+                    (i.catalog_issue_id IS NOT NULL OR EXISTS (
+                        SELECT 1 FROM issue_external_identity_mappings m
+                        WHERE m.issue_id = i.id AND m.status = 'confirmed'
+                    )) AS is_mapped
+             FROM issues i
+             WHERE i.thread_id = $1 AND i.issue_number = ANY($2::text[])",
+            &[&thread_id, &requested],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(rows
+        .iter()
+        .map(|row| ExistingIssueMapping {
+            id: row.get(0),
+            issue_number: row.get(1),
+            is_mapped: row.get(2),
+        })
+        .collect())
+}
+
+fn build_alias_offers(
+    series_title: &str,
+    mapped_existing: &[ExistingIssueMapping],
+    accepted: &BTreeSet<String>,
+) -> (Vec<IssueEditAliasOffer>, Vec<String>) {
+    let mut offers = Vec::new();
+    let mut unaccepted = Vec::new();
+    for existing in mapped_existing {
+        if !existing.is_mapped {
+            continue;
+        }
+        if !accepted.contains(&existing.issue_number) {
+            unaccepted.push(existing.issue_number.clone());
+        }
+        offers.push(IssueEditAliasOffer {
+            requested_issue_number: existing.issue_number.clone(),
+            existing_issue_id: existing.id,
+            existing_issue_number: existing.issue_number.clone(),
+            series_title: series_title.to_string(),
+            is_mapped: true,
+            reason: format!(
+                "Issue #{} already exists in this series with identity mapping evidence; choose an alias/mapping instead of creating a duplicate.",
+                existing.issue_number
+            ),
+        });
+    }
+    (offers, unaccepted)
 }
 
 fn build_after_items(
