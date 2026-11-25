@@ -1186,11 +1186,38 @@ async fn upsert_issue_identity(
 /// re-confirmed (`confidence 1.0`, no rejection reason).
 async fn link_with_source(
     tx: &Transaction<'_>,
+    user_id: i32,
     issue_id: i32,
     comicvine_issue_id: i32,
     evidence_source: &str,
 ) -> Result<i32, ApiError> {
     let identity_id = upsert_issue_identity(tx, comicvine_issue_id).await?;
+    let duplicate = tx
+        .query_opt(
+            "SELECT m.issue_id FROM issue_external_identity_mappings m \
+             JOIN issues i ON i.id = m.issue_id JOIN threads t ON t.id = i.thread_id \
+             WHERE m.external_identity_id = $1 AND m.issue_id <> $2 \
+               AND m.status = 'confirmed' AND t.user_id = $3 LIMIT 1",
+            &[&identity_id, &issue_id, &user_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    if let Some(row) = duplicate {
+        let existing_issue_id: i32 = row.get(0);
+        let message = format!(
+            "ComicVine issue {comicvine_issue_id} already exists as issue {existing_issue_id}"
+        );
+        return Err(ApiError::StructuredDetail {
+            status: StatusCode::CONFLICT,
+            message: message.clone(),
+            detail: serde_json::json!({
+                "code": "duplicate_physical_issue",
+                "comicvine_issue_id": comicvine_issue_id,
+                "existing_issue_id": existing_issue_id,
+                "message": message,
+            }),
+        });
+    }
     let conflicting = tx
         .query_opt(
             "SELECT m.id FROM issue_external_identity_mappings m \
