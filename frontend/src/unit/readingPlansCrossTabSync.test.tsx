@@ -10,11 +10,10 @@ import { queryClient } from '../query/queryClient'
 import { continuityPlansApi } from '../services/api-continuity-plans'
 import { cast } from '../utils/cast'
 import { isObject } from '../utils/runtimeChecks'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-vi.mock('../services/api-continuity-plans', async () => {
-  const actual = await vi.importActual<typeof import('../services/api-continuity-plans')>(
-    '../services/api-continuity-plans',
-  )
+await injectModuleDoubles(await import('../services/api-continuity-plans'), async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/api-continuity-plans')>()
   return {
     ...actual,
     continuityPlansApi: {

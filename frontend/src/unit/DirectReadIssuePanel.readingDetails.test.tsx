@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DirectReadIssuePanel } from '../components/DirectReadIssuePanel'
+import { injectModuleDoubles } from './injectModuleDoubles'
 import { issuesApi } from '../services/api-issues'
 import { comicVineApi, type ComicVineIssueIntelligence } from '../services/api-comicvine'
 import { issueCardsApi, type IssueCard } from '../services/issueCardsApi'
@@ -11,7 +12,7 @@ import type { Issue } from '../types'
 
 // The action card has its own suite; this suite proves the reading surface
 // renders the post-roll provider detail and tags for the exact selected issue.
-vi.mock('../components/ComicIssueCard', async (importOriginal) => {
+await injectModuleDoubles(await import('../components/ComicIssueCard'), async (importOriginal) => {
   const actual = await importOriginal<typeof import('../components/ComicIssueCard')>()
   return {
     // Only the action card is replaced: the provider cover the post-roll pillar

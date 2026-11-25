@@ -5,8 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CustomCBLBuilder from '../components/CustomCBLBuilder'
 import { issueCardsApi } from '../services/issueCardsApi'
 import { existingList } from './fixtures/customCblFixture'
+import { injectModuleDoubles } from './injectModuleDoubles'
 
-const mocks = vi.hoisted(() => ({
+const mocks = {
   list: vi.fn(),
   get: vi.fn(),
   create: vi.fn(),
@@ -15,21 +16,17 @@ const mocks = vi.hoisted(() => ({
   searchIssues: vi.fn(),
   apply: vi.fn(),
   exportXml: vi.fn(),
-}))
+}
 
-vi.mock('../services/api-custom-cbl', async () => {
-  const actual = await vi.importActual<typeof import('../services/api-custom-cbl')>(
-    '../services/api-custom-cbl',
-  )
+await injectModuleDoubles(await import('../services/api-custom-cbl'), async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/api-custom-cbl')>()
   return { ...actual, customCBLApi: mocks }
 })
 
-const cblMocks = vi.hoisted(() => ({ discover: vi.fn(), preview: vi.fn() }))
+const cblMocks = { discover: vi.fn(), preview: vi.fn() }
 
-vi.mock('../services/api-cbl-sources', async () => {
-  const actual = await vi.importActual<typeof import('../services/api-cbl-sources')>(
-    '../services/api-cbl-sources',
-  )
+await injectModuleDoubles(await import('../services/api-cbl-sources'), async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/api-cbl-sources')>()
   return { ...actual, cblSourcesApi: cblMocks }
 })
 
