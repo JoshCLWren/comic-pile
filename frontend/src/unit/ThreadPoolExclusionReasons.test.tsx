@@ -66,6 +66,18 @@ describe('Retired Roll exclusion details (#4441)', () => {
     expect(screen.queryByText('Completed Vol. 2')).not.toBeInTheDocument()
   })
 
+  it('offers a working Reset Dice action in snoozed-only zero-choice state', () => {
+    const onResetDice = vi.fn()
+    mount({
+      snoozedThreads: [{ id: 2, title: 'Paused', format: 'Comic' }],
+      onResetDice,
+    })
+
+    expect(screen.getByText('Every series is snoozed')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Dice' }))
+    expect(onResetDice).toHaveBeenCalledTimes(1)
+  })
+
   it('retains keyboard access to eligible issue selection', () => {
     const onThreadClick = vi.fn()
     mount({ pool: [eligible], onThreadClick })

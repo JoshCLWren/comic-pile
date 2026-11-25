@@ -1805,6 +1805,86 @@ async fn bootstrap_displays_browser_snoozes_and_matches_the_scoped_pool() {
     assert!(cleared["pending_thread_id"].is_null());
 }
 
+#[tokio::test]
+async fn bootstrap_cookie_snoozes_survive_session_turnover_and_no_snooze_case() {
+    let (state, token, csrf, user_id, _guard) = setup_user_with("roll-turnover", true).await;
+    let (_, _, other_user) = register_extra_user(&state, "roll-turnover-other").await;
+    let (ids, foreign) = {
+        let conn = state.pool.get().await.unwrap();
+        let ids = rollable_threads(&conn, user_id, 8).await;
+        let foreign = thread(&conn, other_user, "Other reader's turnover series").await;
+        (ids, foreign)
+    };
+
+    // No snoozes: bootstrap should expose the full bounded pool.
+    let (status, clear) = send(&state, get("/api/v2/roll/bootstrap", &token, &csrf)).await;
+    assert_eq!(status, StatusCode::OK, "{clear:?}");
+    assert_eq!(clear["snoozed_count"], json!(0));
+    assert_eq!(clear["snoozed_thread_ids"], json!([]));
+    assert_eq!(clear["rollable"].as_array().unwrap().len(), 6);
+
+    // Simulate session turnover: close current session rows and create a fresh session
+    // with stale session snoozes that must not be projected as browser snoozes.
+    {
+        let conn = state.pool.get().await.unwrap();
+        conn.execute(
+            "UPDATE sessions SET ended_at = NOW() WHERE user_id = $1 AND ended_at IS NULL",
+            &[&user_id],
+        )
+        .await
+        .unwrap();
+        conn.execute(
+            "INSERT INTO sessions (user_id, started_at, start_die, snoozed_thread_ids)
+             VALUES ($1, NOW(), 6, $2::text::json)",
+            &[&user_id, &json!([ids[0]]).to_string()],
+        )
+        .await
+        .unwrap();
+    }
+
+    let cookie_ids = vec![ids[1], ids[2], foreign];
+    let cookie = format!(
+        "csrf_token={csrf}; comicpile_roll_snoozes={}",
+        json!(cookie_ids)
+    );
+    let mut request = get("/api/v2/roll/bootstrap", &token, &csrf);
+    request
+        .headers_mut()
+        .insert(header::COOKIE, cookie.parse().unwrap());
+    let (status, bootstrap) = send(&state, request).await;
+    assert_eq!(status, StatusCode::OK, "{bootstrap:?}");
+
+    // Cookie-only snoozes survive turnover; stale session-only and cross-owner IDs do not.
+    assert_eq!(bootstrap["snoozed_count"], json!(2));
+    assert_eq!(bootstrap["snoozed_thread_ids"], json!([ids[1], ids[2]]));
+    let visible: Vec<_> = bootstrap["rollable"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| row["thread"]["id"].as_i64().unwrap() as i32)
+        .collect();
+    assert!(visible.contains(&ids[0]), "stale session snooze leaked after turnover");
+    assert!(!visible.contains(&ids[1]));
+    assert!(!visible.contains(&ids[2]));
+
+    let (status, offer) = send(
+        &state,
+        post(
+            "/api/v2/roll/offer",
+            &token,
+            &csrf,
+            Some(json!({
+                "idempotency_key": "roll-turnover-offer-001",
+                "snoozed_thread_ids": [ids[1], ids[2]]
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{offer:?}");
+    let selected = offer["thread_id"].as_i64().unwrap() as i32;
+    assert!(visible.contains(&selected), "offer not in displayed pool");
+}
+
 async fn offer_value(
     state: &Arc<AppState>,
     token: &str,
