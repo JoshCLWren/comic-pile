@@ -291,4 +291,156 @@ describe('CustomCBLBuilder Julix 466-entry regression', () => {
       expect(screen.getAllByTestId('reading-list-entry').length).toBeGreaterThan(0)
     })
   })
+
+  // #4233 A9: the same 466-entry insert/move/save/reopen/Undo scenario must
+  // move the strict Roll/Queue frontier (first unread, unskipped entry) while
+  // ratings and read history stay byte-for-byte unchanged.
+  it('moves the strict Roll/Queue frontier through insert 84, move tail to 83, save/reopen/Undo without changing ratings or reads', async () => {
+    const user = userEvent.setup()
+    const { tail, inserted, afterMove } = edit4233Entries()
+    const saved = {
+      ...julixList,
+      updated_at: '2026-11-20T00:05:00Z',
+      issue_count: 467,
+      entries: afterMove,
+    }
+    mocks.update.mockResolvedValueOnce(saved).mockResolvedValueOnce(julixList)
+
+    renderBuilder()
+    await user.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    await user.selectOptions(await screen.findByLabelText('Custom CBL'), '2')
+    await screen.findAllByTestId('reading-list-entry')
+
+    // Strict frontier before the edit: #121 is the first unread entry.
+    expect(frontierOf(julixList.entries)).toMatchObject({
+      position: 121,
+      entry: { issue_id: 50000 + 120, status: 'unread' },
+    })
+    expect(screen.getByText(/Current position: next unread is #121 · Justice League #121 \(unread\)\./)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Go to next unread · #121' })).toBeVisible()
+
+    // Insert the unread search result at position 84: it becomes the frontier.
+    fireEvent.change(screen.getByLabelText('Jump to reading list position'), { target: { value: '84' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Go to position' }))
+    const entry84 = screen.getAllByTestId('reading-list-entry').find((el) => within(el).getByTestId('reading-list-entry-title').textContent?.includes('#84'))
+    if (!entry84) throw new Error('Expected Julix entry #84 after jumping')
+    await user.click(within(entry84).getByRole('button', { name: /Show settings for/ }))
+    await user.click(within(entry84).getByRole('button', { name: 'Insert before' }))
+    await user.type(screen.getByLabelText('Search issues for custom CBL'), 'JLA Classified')
+    await user.click(screen.getByRole('button', { name: 'Find issues' }))
+    await user.click(await screen.findByRole('button', { name: /JLA Classified #1/ }))
+
+    expect(frontierOf([...julixList.entries.slice(0, 83), inserted, ...julixList.entries.slice(83)])).toMatchObject({
+      position: 84,
+      entry: { issue_id: 999001, status: 'unread' },
+    })
+    expect(screen.getByText(/Current position: next unread is #84 · JLA Classified #1 \(unread\)\./)).toBeInTheDocument()
+    expect(screen.getByText(/First unread before save: Justice League #121\. After save: JLA Classified #1\./)).toBeInTheDocument()
+
+    // Move the original tail to position 83: the tail is now the frontier.
+    fireEvent.change(screen.getByLabelText('Jump to reading list position'), { target: { value: '467' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Go to position' }))
+    const tailEntry = screen.getAllByTestId('reading-list-entry').find((el) => within(el).getByTestId('reading-list-entry-title').textContent?.includes('#466'))
+    if (!tailEntry) throw new Error('Expected original tail entry #466 after insertion')
+    await user.click(within(tailEntry).getByRole('button', { name: /Show settings for/ }))
+    const moveInput = within(tailEntry).getByLabelText(/Move .* to position/)
+    fireEvent.change(moveInput, { target: { value: '83' } })
+    await user.click(within(tailEntry).getByRole('button', { name: 'Move here' }))
+
+    expect(frontierOf(afterMove)).toMatchObject({ position: 83, entry: { issue_id: tail.issue_id, status: 'unread' } })
+    expect(screen.getByText(/Current position: next unread is #83 · Justice League #466 \(unread\)\./)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Go to next unread · #83' })).toBeVisible()
+    expect(screen.getByText(/First unread before save: Justice League #121\. After save: Justice League #466\./)).toBeInTheDocument()
+    const statusById = new Map(julixList.entries.map((entry) => [entry.issue_id, entry.status]))
+    const strictWaits = computeEntryRequirements('strict', afterMove)
+    const lastUnread = [...afterMove].reverse().find((entry) => entry.status === 'unread' && !entry.skipped)!
+    const unreadWaits = (strictWaits.get(lastUnread.issue_id) ?? []).filter((id) => statusById.get(id) === 'unread')
+    expect(unreadWaits[0]).toBe(tail.issue_id)
+
+    await user.click(screen.getByRole('button', { name: 'Save custom CBL' }))
+    await waitFor(() => expect(mocks.update).toHaveBeenCalled())
+    const payload = mocks.update.mock.calls[0][1]
+    expect(payload.issue_ids).toHaveLength(467)
+    expect(payload.issue_ids[82]).toBe(tail.issue_id)
+    expect(payload.issue_ids[84]).toBe(inserted.issue_id)
+    expect(payload.expected_updated_at).toBe(julixList.updated_at)
+    // The write carries ordering/gates/concurrency only: no rating or read-status mutation.
+    expect(payload).not.toHaveProperty('status')
+    expect(payload).not.toHaveProperty('rating')
+    expect(JSON.stringify(payload)).not.toMatch(/"rating"|"last_rating"|"status"/)
+    // Reopened list: the frontier is still the moved tail and every persisted
+    // read status/issue ID is unchanged (the one new entry is the insertion).
+    const expectedOrder = [
+      ...julixList.entries.slice(0, 82),
+      tail,
+      julixList.entries[82]!,
+      inserted,
+      ...julixList.entries.slice(83, 465),
+    ]
+    expect(expectedOrder).toHaveLength(467)
+    expect(saved.entries.map((entry) => ({ issue_id: entry.issue_id, status: entry.status }))).toEqual(
+      expectedOrder.map((entry) => ({ issue_id: entry.issue_id, status: entry.status })),
+    )
+
+    mocks.get.mockResolvedValue(saved)
+    await user.selectOptions(screen.getByLabelText('Custom CBL'), '2')
+    await screen.findByText('JLA Classified #1')
+    expect(screen.getByRole('button', { name: 'Go to next unread · #83' })).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Undo last save' }))
+    await waitFor(() => expect(mocks.update).toHaveBeenCalledTimes(2))
+    const undoPayload = mocks.update.mock.calls[1][1]
+    expect(undoPayload.issue_ids).toHaveLength(466)
+    expect(undoPayload.issue_ids[0]).toBe(50000)
+    expect(undoPayload.issue_ids[120]).toBe(50000 + 120)
+    expect(undoPayload).not.toHaveProperty('rating')
+    expect(await screen.findByText(/Current position: next unread is #121 · Justice League #121 \(unread\)\./)).toBeInTheDocument()
+  })
+
+  // #4233 A9: the same saved frontier must drive the Queue's canonical strict
+  // reading-boundary surface, whose editor link sends the reader to the list.
+  it('shows the moved tail as the Queue strict-order frontier without changing read status', async () => {
+    const { tail, afterMove } = edit4233Entries()
+    const statusById = new Map(julixList.entries.map((entry) => [entry.issue_id, entry.status]))
+    const frontier = frontierOf(afterMove)
+    expect(frontier.entry.issue_id).toBe(tail.issue_id)
+    const laterUnread = [...afterMove].reverse().find((entry) => entry.status === 'unread' && !entry.skipped)!
+    const unreadWaits = (computeEntryRequirements('strict', afterMove).get(laterUnread.issue_id) ?? [])
+      .filter((id) => statusById.get(id) === 'unread')
+    expect(unreadWaits[0]).toBe(frontier.entry.issue_id)
+    for (const entry of afterMove) {
+      if (entry.issue_id === 999001) continue
+      expect(entry.status).toBe(statusById.get(entry.issue_id))
+      expect('rating' in entry).toBe(false)
+    }
+
+    const waitingOn: BoundaryIssue = {
+      issue_id: frontier.entry.issue_id,
+      thread_id: frontier.entry.thread_id,
+      thread_title: frontier.entry.series_name,
+      issue_number: frontier.entry.issue_number,
+      label: `${frontier.entry.series_name} #${frontier.entry.issue_number}`,
+      volume_label: null,
+      reading_lists: [],
+    }
+    const explanation: Explanation = {
+      thread_id: laterUnread.thread_id,
+      state: 'blocked',
+      summary: `${laterUnread.series_name} #${laterUnread.issue_number} waits on strict order.`,
+      blockers: [{
+        kind: 'strict_order',
+        origin: 'reading_list',
+        reason: `Strict order in ${julixList.name}: read ${waitingOn.label} first`,
+        waiting_on: [waitingOn],
+        editor: { kind: 'reading_list', list_id: julixList.id, label: julixList.name },
+      }],
+    }
+    render(<MemoryRouter><ReadingBoundaryExplanation compact explanation={explanation} /></MemoryRouter>)
+
+    expect(screen.getByRole('link', {
+      name: `Open ${waitingOn.label.replace(/#/, ' issue #')}`,
+    })).toHaveAttribute('href', `/thread/${waitingOn.thread_id}?issue=${waitingOn.issue_id}#issue-${waitingOn.issue_id}`)
+    expect(screen.getByRole('link', { name: `Edit ${julixList.name}` })).toHaveAttribute('href', `/reading-lists/${julixList.id}`)
+    expect(screen.queryByText(/rating/i)).not.toBeInTheDocument()
+  })
 })
