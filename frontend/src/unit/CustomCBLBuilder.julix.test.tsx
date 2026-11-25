@@ -27,7 +27,7 @@ vi.mock('../services/api-cbl-sources', async () => {
   return { ...actual, cblSourcesApi: { discover: vi.fn(), preview: vi.fn() } }
 })
 
-function julixShapeEntries(count = 466) {
+function julixEntries(count = 466) {
   return Array.from({ length: count }, (_, index) => {
     const issueNumber = String(index + 1)
     return {
