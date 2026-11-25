@@ -504,14 +504,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                           ? `Refresh deferred — retry in ${retryAfter}s`
                           : 'Refresh deferred'}
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => void handleRetryRefresh()}
-                        disabled={isRetryingRefresh}
-                        className="inline-flex min-h-6 items-center text-[10px] font-bold text-amber-500 hover:text-amber-400 disabled:opacity-50 focus:ring-2 focus:ring-amber-500 rounded"
-                      >
-                        {isRetryingRefresh ? 'Retrying…' : 'Retry refresh'}
-                      </button>
+                      {retryRefreshButton}
                     </div>
                   );
                 case 'refresh_failed':
@@ -520,14 +513,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                       <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-failed">
                         Refresh failed
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => void handleRetryRefresh()}
-                        disabled={isRetryingRefresh}
-                        className="inline-flex min-h-6 items-center text-[10px] font-bold text-amber-500 hover:text-amber-400 disabled:opacity-50 focus:ring-2 focus:ring-amber-500 rounded"
-                      >
-                        {isRetryingRefresh ? 'Retrying…' : 'Retry refresh'}
-                      </button>
+                      {retryRefreshButton}
                     </div>
                   );
                 case 'deep_fetched_no_credits':
