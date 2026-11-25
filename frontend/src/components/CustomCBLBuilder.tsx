@@ -179,6 +179,8 @@ export default function CustomCBLBuilder({
     setJumpPosition('')
     setExpandedEntryOptions(null)
     setMoveDestinations({})
+    setMoveTargets({})
+    setInsertAt(null)
     setLoadedListId(list.id)
     setMessage(null)
     setExportError(null)
@@ -400,6 +402,47 @@ export default function CustomCBLBuilder({
   const nameFor = (issueId: number): string => entryNames.get(issueId) ?? `Issue #${issueId}`
 
   const requirements = useMemo(() => computeEntryRequirements(mode, entries), [mode, entries])
+  const persistedRequirements = useMemo(
+    () => (persisted ? computeEntryRequirements(persisted.mode ?? DEFAULT_MODE, persisted.entries) : new Map<number, number[]>()),
+    [persisted],
+  )
+  const semanticPreview = useMemo(() => {
+    if (!persisted || !dirty) return null
+    const oldEntries = persisted.entries
+    const oldIndexById = new Map(oldEntries.map((entry, index) => [entry.issue_id, index]))
+    const newIndexById = new Map(entries.map((entry, index) => [entry.issue_id, index]))
+    const oldFirstUnread = oldEntries.find((entry) => !entry.skipped && entry.status === 'unread')
+    const newFirstUnread = entries.find((entry) => !entry.skipped && entry.status === 'unread')
+    const changed = entries.flatMap((entry, index) => {
+      const oldIndex = oldIndexById.get(entry.issue_id)
+      const oldEntry = oldIndex !== undefined ? oldEntries[oldIndex] : undefined
+      const isNew = !oldEntry
+      const moved = oldIndex !== undefined && oldIndex !== index
+      const waitChanged = JSON.stringify(requirements.get(entry.issue_id) ?? []) !== JSON.stringify(persistedRequirements.get(entry.issue_id) ?? [])
+      const gateChanged = oldEntry ? (oldEntry.gate ?? DEFAULT_GATE) !== entry.gate || Boolean(oldEntry.skipped) !== entry.skipped : false
+      if (!isNew && !moved && !waitChanged && !gateChanged) return []
+      const oldPrev = oldIndex !== undefined && oldIndex > 0 ? oldEntries[oldIndex - 1] : null
+      const newPrev = index > 0 ? entries[index - 1] : null
+      return [{
+        issueId: entry.issue_id,
+        label: `${entry.series_name} #${entry.issue_number}`,
+        isNew,
+        moved,
+        oldPosition: oldIndex !== undefined ? oldIndex + 1 : null,
+        newPosition: index + 1,
+        oldPrev: oldPrev ? `${oldPrev.series_name} #${oldPrev.issue_number}` : null,
+        newPrev: newPrev ? `${newPrev.series_name} #${newPrev.issue_number}` : null,
+        oldWait: (persistedRequirements.get(entry.issue_id) ?? []).map((id) => nameFor(id)),
+        newWait: (requirements.get(entry.issue_id) ?? []).map((id) => nameFor(id)),
+      }]
+    })
+    return {
+      changed: changed.slice(0, 20),
+      totalChanged: changed.length,
+      oldFirstUnread: oldFirstUnread ? `${oldFirstUnread.series_name} #${oldFirstUnread.issue_number}` : null,
+      newFirstUnread: newFirstUnread ? `${newFirstUnread.series_name} #${newFirstUnread.issue_number}` : null,
+    }
+  }, [dirty, entries, nameFor, persisted, persistedRequirements, requirements])
 
   const saveErrorDetail = useMemo(
     () => (saveMutation.error ? decodeCustomCBLError(saveMutation.error) : null),
@@ -1179,6 +1222,7 @@ export default function CustomCBLBuilder({
               </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => saveMutation.mutate({ confirmed: null, undo: persisted ? buildWritePayload(persisted.name, persisted.description ?? '', persisted.mode ?? DEFAULT_MODE, persisted.entries, null, checkpointTargetsFor(persisted.entries)) : null })} disabled={!dirty || !name.trim() || disabled || isPending} className="min-h-11 rounded-xl bg-[var(--theme-continuity-accent)] px-4 text-sm font-black text-black disabled:opacity-50">{saveMutation.isPending ? 'Saving…' : 'Save custom CBL'}</button>
+                <button type="button" onClick={() => { saveMutation.reset(); setMessage(null); setLoadedListId(null); }} disabled={!dirty || disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] disabled:opacity-50">Cancel</button>
                 {planId && (<button type="button" onClick={() => applyMutation.mutate()} disabled={dirty || entries.length === 0 || disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-continuity-accent)] px-4 text-sm font-black text-[var(--theme-continuity-accent)] disabled:opacity-50">{applyMutation.isPending ? 'Applying…' : 'Apply to this Reading Plan'}</button>)}
                 <button type="button" onClick={() => void exportList()} disabled={dirty || entries.length === 0 || disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] disabled:opacity-50">Export .cbl</button>
                 <button type="button" onClick={() => { deleteMutation.reset(); deleteReturnFocusRef.current = null; setConfirmDeleteOpen(true) }} disabled={disabled || isPending} className="min-h-11 rounded-xl border border-[var(--theme-danger)] px-4 text-sm font-bold text-[var(--theme-danger)] disabled:opacity-50">Delete</button>
