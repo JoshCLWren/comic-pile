@@ -192,6 +192,8 @@ describe('ComicIssueMappingAction', () => {
 
   it('removes the mapping through the accessible confirm dialog and refetches', async () => {
     const onMapped = vi.fn().mockResolvedValue(undefined)
+    const setQueryData = vi.spyOn(queryClient, 'setQueryData')
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
     render(
       <ComicIssueMappingAction
         issueId={77}
