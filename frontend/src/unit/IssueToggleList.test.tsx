@@ -1136,8 +1136,8 @@ describe('IssueToggleList deferred mode (#3267)', () => {
     // The queue stops at the failed create; the create after it stays queued
     // so the reader can retry it.
     expect(mockedIssuesApi.create).toHaveBeenCalledTimes(2)
-    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(1, 99, '7')
-    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(2, 99, 'Annual 2')
+    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(1, 99, '7', { strategy: 'safe_default' })
+    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(2, 99, 'Annual 2', { strategy: 'safe_default' })
     // Error should be surfaced for the failed one
     expect(screen.getByText('Issue number already exists')).toBeInTheDocument()
     expect(ref.current?.hasPendingMutations()).toBe(true)
