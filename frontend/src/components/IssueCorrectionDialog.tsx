@@ -20,6 +20,7 @@ export interface IssueCorrectionIssuesApi {
   bulkMarkUnread: (issueIds: number[]) => Promise<IssueReadOperationResponse>
   move: (issueId: number, afterIssueId: number | null) => Promise<void>
   getReadOperation?: (operationId: number) => Promise<IssueReadOperationResponse>
+  undoReadOperation?: (operationId: number) => Promise<IssueReadOperationUndoResponse>
 }
 
 export interface IssueCorrectionDependenciesApi {
@@ -140,15 +141,15 @@ export default function IssueCorrectionDialog({
       fetchIssues()
       // Discover a persisted bulk operation so Undo survives reload/cross-tab.
       const discover = async () => {
-        const svc = issuesService as IssueCorrectionIssuesApi & { getReadOperation?: (id: number) => Promise<IssueReadOperationResponse> }
-        if (!svc.getReadOperation) return
+        const getOperation = issuesService.getReadOperation
+        if (!getOperation) return
         let stored: string | null = null
         try { stored = window.localStorage.getItem(`issueReadOperation:${threadId}`) } catch { stored = null }
         if (!stored) return
         const id = Number(stored)
         if (!Number.isFinite(id)) return
         try {
-          const op = await svc.getReadOperation(id)
+          const op = await issuesService.getReadOperation!(id)
           if (!op.undone_at) setLastOperation(op)
           else {
             try { window.localStorage.removeItem(`issueReadOperation:${threadId}`) } catch { /* ignore */ }
