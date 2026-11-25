@@ -1662,6 +1662,19 @@ async fn bulk_read_operation_can_be_undone_without_reverting_unrelated_changes()
         thread_row(&conn, thread_id).await,
         row("active", 1, Some(issues[4]), 1, 5, "in_progress")
     );
+    // #4 alone does not unblock the dependent: #5 must be read.
+    assert!(thread_row(&conn, dependent_thread).await.blocked);
+    let (status, _) = send(
+        &state,
+        mark(
+            &format!("/api/v2/issues/{}/read-markers", issues[4]),
+            &token,
+            &csrf,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert!(!thread_row(&conn, dependent_thread).await.blocked);
 }
 
 #[tokio::test]
