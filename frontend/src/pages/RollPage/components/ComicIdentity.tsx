@@ -154,15 +154,29 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
   const handleRetryRefresh = useCallback(async () => {
     if (!issueId || isRetryingRefresh) return
     setIsRetryingRefresh(true)
+    setRefreshRecoveryError(null)
+    refreshPollCountRef.current = 0
+    setIsRefreshPollingExhausted(false)
     try {
       await comicVineApi.refreshMetadata(issueId)
     } catch {
-      // Refetch below will surface the current truthful backend state.
+      setRefreshRecoveryError('Could not request a creator refresh. Try again.')
     } finally {
-      setIsRetryingRefresh(false)
       await refetch()
+      setIsRetryingRefresh(false)
     }
   }, [issueId, isRetryingRefresh, refetch])
+
+  const retryRefreshButton = (
+    <button
+      type="button"
+      onClick={() => void handleRetryRefresh()}
+      disabled={isRetryingRefresh}
+      className="inline-flex min-h-6 items-center text-[10px] font-bold text-amber-500 hover:text-amber-400 disabled:opacity-50 focus:ring-2 focus:ring-amber-500 rounded"
+    >
+      {isRetryingRefresh ? 'Retrying…' : 'Retry refresh'}
+    </button>
+  )
 
   const coverAspectRatio = coverRatio ?? COVER_RATIO_FALLBACK
   const coverWidthCapVh = COVER_HEIGHT_CAP_VH * coverAspectRatio
