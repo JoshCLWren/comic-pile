@@ -19,6 +19,7 @@ export interface IssueCorrectionIssuesApi {
   bulkMarkRead: (issueIds: number[]) => Promise<IssueReadOperationResponse>
   bulkMarkUnread: (issueIds: number[]) => Promise<IssueReadOperationResponse>
   move: (issueId: number, afterIssueId: number | null) => Promise<void>
+  getReadOperation?: (operationId: number) => Promise<IssueReadOperationResponse>
 }
 
 export interface IssueCorrectionDependenciesApi {
@@ -64,6 +65,7 @@ export default function IssueCorrectionDialog({
   const [preview, setPreview] = useState<{
     targetIssueNumber: string
     affected: Issue[]
+    affectedIds: number[]
     willCompleteSeries: boolean
     dependentFrontier: string[]
   } | null>(null)
@@ -136,8 +138,28 @@ export default function IssueCorrectionDialog({
       setLastOperation(null)
       setError(null)
       fetchIssues()
+      // Discover a persisted bulk operation so Undo survives reload/cross-tab.
+      const discover = async () => {
+        const svc = issuesService as IssueCorrectionIssuesApi & { getReadOperation?: (id: number) => Promise<IssueReadOperationResponse> }
+        if (!svc.getReadOperation) return
+        let stored: string | null = null
+        try { stored = window.localStorage.getItem(`issueReadOperation:${threadId}`) } catch { stored = null }
+        if (!stored) return
+        const id = Number(stored)
+        if (!Number.isFinite(id)) return
+        try {
+          const op = await svc.getReadOperation(id)
+          if (!op.undone_at) setLastOperation(op)
+          else {
+            try { window.localStorage.removeItem(`issueReadOperation:${threadId}`) } catch { /* ignore */ }
+          }
+        } catch {
+          try { window.localStorage.removeItem(`issueReadOperation:${threadId}`) } catch { /* ignore */ }
+        }
+      }
+      void discover()
     }
-  }, [isOpen, currentIssueNumber, fetchIssues])
+  }, [isOpen, currentIssueNumber, fetchIssues, threadId, issuesService])
 
   const applyCorrection = useCallback(async () => {
     const targetNumber = selectedIssueNumber.trim()
@@ -150,6 +172,7 @@ export default function IssueCorrectionDialog({
     setError(null)
 
     try {
+      const reviewedIds = preview?.affectedIds
       let targetIssue = allIssues.find((issue) => issue.issue_number === targetNumber)
       if (!targetIssue) {
         const insertAfterIssueId =
@@ -169,7 +192,7 @@ export default function IssueCorrectionDialog({
       }
 
       const orderedIssues = await loadAllIssues()
-      const targetIndex = orderedIssues.findIndex((issue) => issue.issue_number === targetNumber)
+      const targetIndex = orderedIssues.findIndex((issue) => issue.id === targetIssue.id)
 
       if (targetIndex === -1) {
         throw new Error('Issue not found after update')
@@ -177,6 +200,13 @@ export default function IssueCorrectionDialog({
 
       const issuesBeforeTarget = orderedIssues.slice(0, targetIndex)
       const unreadBeforeTarget = issuesBeforeTarget.filter((issue) => issue.status !== 'read')
+
+      // Bind confirmation to the exact reviewed set; reject stale changes.
+      if (reviewedIds && reviewedIds.join(',') !== unreadBeforeTarget.map((i) => i.id).join(',')) {
+        setError('Issues changed since review. Please review changes again.')
+        return
+      }
+
       let operation: IssueReadOperationResponse | null = null
       if (unreadBeforeTarget.length > 0) {
         const result = await issuesService.bulkMarkRead(unreadBeforeTarget.map((issue) => issue.id))
@@ -189,6 +219,12 @@ export default function IssueCorrectionDialog({
       }
 
       setLastOperation(operation)
+      if (operation) {
+        const svc = issuesService as IssueCorrectionIssuesApi & { getReadOperation?: (id: number) => Promise<IssueReadOperationResponse> }
+        if (svc.getReadOperation) {
+          try { window.localStorage.setItem(`issueReadOperation:${threadId}`, String(operation.id)) } catch { /* ignore */ }
+        }
+      }
       setPreview(null)
       onSuccess()
       if (!operation) onClose()
@@ -212,15 +248,27 @@ export default function IssueCorrectionDialog({
     try {
       let targetIssue = allIssues.find((issue) => issue.issue_number === targetNumber)
       let orderedIssues = await loadAllIssues()
+      let projectedIssues = orderedIssues
       if (!targetIssue) {
-        // New issue will be created; preview based on current ordering plus target insertion at end/start/after.
-        // For simplicity, treat as no existing affected issues before creation except by position.
         // SAFETY: partial issue placeholder used only for preview; id is sentinel -1.
         targetIssue = { id: -1, issue_number: targetNumber, status: 'unread' } as Issue
+        projectedIssues = [...orderedIssues]
+        if (insertPosition === 'start') {
+          projectedIssues.unshift(targetIssue)
+        } else if (insertPosition === 'end' || insertPosition === '') {
+          projectedIssues.push(targetIssue)
+        } else {
+          const anchorIndex = projectedIssues.findIndex((issue) => issue.id === Number(insertPosition))
+          if (anchorIndex >= 0) {
+            projectedIssues.splice(anchorIndex + 1, 0, targetIssue)
+          } else {
+            projectedIssues.push(targetIssue)
+          }
+        }
       }
-      const targetIndex = orderedIssues.findIndex((issue) => issue.issue_number === targetNumber)
-      const effectiveIndex = targetIndex === -1 ? orderedIssues.length : targetIndex
-      const issuesBeforeTarget = orderedIssues.slice(0, effectiveIndex)
+      const targetIndex = projectedIssues.findIndex((issue) => issue.id === targetIssue!.id)
+      const effectiveIndex = targetIndex === -1 ? projectedIssues.length : targetIndex
+      const issuesBeforeTarget = projectedIssues.slice(0, effectiveIndex)
       const unreadBeforeTarget = issuesBeforeTarget.filter((issue) => issue.status !== 'read')
 
       let dependentFrontier: string[] = []
@@ -237,8 +285,14 @@ export default function IssueCorrectionDialog({
         // best-effort preview
       }
 
-      const willCompleteSeries = orderedIssues.length > 0
-        && orderedIssues.every((issue) => issue.issue_number === targetNumber || issue.status === 'read' || unreadBeforeTarget.some((u) => u.id === issue.id))
+      const willCompleteSeries = projectedIssues.length > 0
+        && projectedIssues.every((issue) => {
+            // The target is explicitly left unread (or marked unread) by applyCorrection,
+            // so it keeps the series active regardless of the other issues.
+            if (issue.id === targetIssue!.id) return false
+            if (issue.status === 'read') return true
+            return unreadBeforeTarget.some((u) => u.id === issue.id)
+          })
 
       if (unreadBeforeTarget.length === 0) {
         // No bulk read preview needed; apply directly.
@@ -246,7 +300,7 @@ export default function IssueCorrectionDialog({
         return
       }
 
-      setPreview({ targetIssueNumber: targetNumber, affected: unreadBeforeTarget, willCompleteSeries, dependentFrontier })
+      setPreview({ targetIssueNumber: targetNumber, affected: unreadBeforeTarget, affectedIds: unreadBeforeTarget.map((i) => i.id), willCompleteSeries, dependentFrontier })
     } catch {
       setError('Failed to prepare issue correction preview. Please try again.')
     } finally {
