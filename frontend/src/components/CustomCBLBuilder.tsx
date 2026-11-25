@@ -314,6 +314,7 @@ export default function CustomCBLBuilder({
       setMode(saved.mode ?? DEFAULT_MODE)
       setUndoPayload(undo)
       setUndoBaseline(saved.updated_at)
+      writeReadingListUndo(saved.user_id, saved.id, { payload: undo, baseline: saved.updated_at })
       setReplaceConfirmation(null)
       setReplaceOpen(false)
       setCblSource(null)
