@@ -88,6 +88,18 @@ function makeHandler(state: BoundaryState): Responder {
     if (call.url === '/v2/reading-boundaries') {
       return boundaryBatch(state, requestedThreadIds(call))
     }
+    if (call.url === '/v2/reading-graph') {
+      return {
+        status: 'ok',
+        cycles: [],
+        cyclic_issue_ids: [],
+        affected_lists: [],
+        affected_threads: [],
+        repairs: [],
+        unresolved_reference_count: 0,
+        frontier_audit: null,
+      }
+    }
     if (call.url === '/v1/threads/42') return THREADS[42]
     if (call.url === '/v1/threads/43') return THREADS[43]
     if (call.url === '/v1/threads/42/connected' || call.url === '/v1/threads/43/connected') {
