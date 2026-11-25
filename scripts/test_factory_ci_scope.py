@@ -118,6 +118,17 @@ class RequiredRustGateTests(unittest.TestCase):
         self.assertIn("workflow_call:", rust)
         self.assertIn("github.event.pull_request.head.sha || github.sha", rust)
         self.assertIn("cargo test --workspace --locked --all-targets", rust)
+        # Criterion 5 of #5678: the obsolete Python parity oracle removed by
+        # #5641 must not be restored, or this suite would mask a real Rust
+        # regression behind a stale cross-language comparison.
+        parity_oracle = (
+            Path(__file__).resolve().parents[1]
+            / "native/roll-service/parity/test_http_roll_resources.py"
+        )
+        self.assertFalse(
+            parity_oracle.exists(),
+            "obsolete Python parity oracle must not be restored (#5641)",
+        )
 
     def test_actual_summary_fails_closed_on_missing_or_red_rust(self) -> None:
         """The real summary script fails closed for red, cancelled, skipped or missing Rust."""
