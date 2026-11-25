@@ -158,10 +158,8 @@ describe('History exact-issue actions (#4445)', () => {
     await userEvent.click(trigger)
     const card = screen.getByTestId('comic-issue-card')
     expect(card).toHaveAttribute('aria-label', 'Issue Saga #4')
-    expect(within(card).getByRole('img', { name: 'Cover for Saga #4' })).toHaveAttribute(
-      'src',
-      sagaCard.cover_image_url,
-    )
+    // The provider cover (ComicIdentity) is shown instead of the local cover when available.
+    expect(screen.getByTestId('direct-read-comic-identity')).toHaveTextContent('1121330')
     // The common direct action is present and never routes through Roll.
     expect(within(card).getByRole('button', { name: 'Edit rating' })).toBeEnabled()
     expect(within(card).getByRole('button', { name: 'Mark unread' })).toBeEnabled()
