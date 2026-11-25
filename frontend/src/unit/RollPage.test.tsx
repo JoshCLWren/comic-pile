@@ -461,7 +461,7 @@ it('recovers the real reset flow from browser-only snoozes without reading, rati
       die: currentDie,
       issue_ids: readRollSnoozes().length === 0 ? [101] : [],
       thread_ids: readRollSnoozes().length === 0 ? [1] : [],
-      pool_reason: 'ready',
+      pool_reason: 'ready' as const,
     })),
     issueCards: vi.fn(async () => ({ items: [] })),
   }
