@@ -1508,9 +1508,9 @@ fn cursor_clause(sort: &str, cursor: Option<&QueueCursor>) -> (String, Vec<Param
             let position: i32 = cursor.values[1].parse().unwrap_or(0);
             let id: i32 = cursor.values[2].parse().unwrap_or(0);
             (
-                "AND (NOT $9::boolean OR (CASE WHEN $10::boolean \
-                 THEN ({blocked}) AND (t.queue_position, t.id) > ($11::int, $12::int) \
-                 ELSE (((NOT ({blocked})) AND (t.queue_position, t.id) > ($11::int, $12::int)) \
+                "AND (NOT $10::boolean OR (CASE WHEN $11::boolean \
+                 THEN ({blocked}) AND (t.queue_position, t.id) > ($12::int, $13::int) \
+                 ELSE (((NOT ({blocked})) AND (t.queue_position, t.id) > ($12::int, $13::int)) \
                  OR ({blocked})) END))"
                     .to_string(),
                 vec![
@@ -1525,7 +1525,7 @@ fn cursor_clause(sort: &str, cursor: Option<&QueueCursor>) -> (String, Vec<Param
             let title = cursor.values[0].clone();
             let id: i32 = cursor.values[1].parse().unwrap_or(0);
             (
-                "AND (NOT $9::boolean OR (t.title, t.id) > ($10::text, $11::int))".to_string(),
+                "AND (NOT $10::boolean OR (t.title, t.id) > ($11::text, $12::int))".to_string(),
                 vec![Param::Bool(true), Param::Text(title), Param::Int(id)],
             )
         }
@@ -1533,8 +1533,8 @@ fn cursor_clause(sort: &str, cursor: Option<&QueueCursor>) -> (String, Vec<Param
             let created = cursor.values[0].clone();
             let id: i32 = cursor.values[1].parse().unwrap_or(0);
             (
-                "AND (NOT $9::boolean OR t.created_at < ($10::text)::timestamptz \
-                 OR (t.created_at = ($10::text)::timestamptz AND t.id < $11::int))"
+                "AND (NOT $10::boolean OR t.created_at < ($11::text)::timestamptz \
+                 OR (t.created_at = ($11::text)::timestamptz AND t.id < $12::int))"
                     .to_string(),
                 vec![Param::Bool(true), Param::Text(created), Param::Int(id)],
             )
