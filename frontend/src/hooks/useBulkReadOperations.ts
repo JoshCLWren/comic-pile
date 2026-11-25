@@ -142,8 +142,13 @@ export function useBulkReadOperations(
           if (!isCurrent()) return
           if (operation.undone_at) {
             // Only a successful authoritative read can prove Undo is no longer
-            // available. Clear legacy duplicates as well.
-            window.localStorage.removeItem(receipt.key)
+            // available. Clear legacy duplicates as well so a second receipt
+            // for the same operation cannot surface a stale Undo entry.
+            for (const duplicate of receipts) {
+              if (duplicate.operationId === receipt.operationId) {
+                window.localStorage.removeItem(duplicate.key)
+              }
+            }
             continue
           }
           seen.add(receipt.operationId)
