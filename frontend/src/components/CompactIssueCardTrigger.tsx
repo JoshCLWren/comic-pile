@@ -55,7 +55,6 @@ function ExpandedIssueCard({
         rating={rating}
         variant={expandedVariant}
         onMutated={onMutated}
-        showReadingDetails
       />
     </div>
   )
