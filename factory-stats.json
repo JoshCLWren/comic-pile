@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-25T15:25:58+00:00",
+  "generated_at": "2026-11-25T15:42:34+00:00",
   "models": [
     {
       "health": {
@@ -23719,7 +23719,7 @@
   },
   "counts_generated_at": "2026-11-25T15:10:13.199481+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-25T15:25:59Z",
+    "generated_at": "2026-11-25T15:42:35Z",
     "sources": {
       "nvidia": [
         "google/diffusiongemma-26b-a4b-it",
@@ -23832,10 +23832,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-25T15:25:59.170291+00:00",
-    "days_elapsed": 24.643,
+    "checked_at": "2026-11-25T15:42:35.286650+00:00",
+    "days_elapsed": 24.655,
     "days_in_month": 30.0,
-    "days_left": 5.36,
+    "days_left": 5.35,
     "in_use": true,
     "label": "",
     "metrics": {
@@ -23851,31 +23851,31 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 13103130,
-        "organization": 13103130,
+        "database": 13414534,
+        "organization": 13414534,
         "owner_target": 50000000,
-        "projected_database": 15951544,
-        "projected_organization": 15951544,
-        "projected_share": 0.0319,
-        "share_used": 0.0262
+        "projected_database": 16322694,
+        "projected_organization": 16322694,
+        "projected_share": 0.0326,
+        "share_used": 0.0268
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 127591,
-        "organization": 127591,
+        "database": 127658,
+        "organization": 127658,
         "owner_target": 1000000,
-        "projected_database": 155327,
-        "projected_organization": 155327,
+        "projected_database": 155333,
+        "projected_organization": 155333,
         "projected_share": 0.0155,
         "share_used": 0.0128
       },
       "storage_bytes": {
         "allowance": 5000000000,
-        "database": 18378752,
-        "organization": 18378752,
+        "database": 18391040,
+        "organization": 18391040,
         "owner_target": 250000000,
-        "projected_database": 18378752,
-        "projected_organization": 18378752,
+        "projected_database": 18391040,
+        "projected_organization": 18391040,
         "projected_share": 0.0037,
         "share_used": 0.0037
       }
@@ -23887,5 +23887,142 @@
     "reset_hour_verified": false,
     "resets_at": "2026-12-01T00:00:00+00:00",
     "status": "ok"
+  },
+  "schema": {
+    "checked_at": "2026-11-25T15:42:38+00:00",
+    "code_version": 2,
+    "last_upgrade": {
+      "at": "2026-11-25T15:38:03+00:00",
+      "created": [
+        "_schema_upgrade"
+      ],
+      "error": null,
+      "result": "ok",
+      "run_id": "45647332870",
+      "source": "runtime",
+      "version": 2,
+      "workflow": "Fixed Model Factory Entry"
+    },
+    "missing": [],
+    "objects": [
+      {
+        "kind": "table",
+        "name": "_schema_version",
+        "present": true
+      },
+      {
+        "kind": "table",
+        "name": "_schema_upgrade",
+        "present": true
+      },
+      {
+        "kind": "table",
+        "name": "factory_lease",
+        "present": true
+      },
+      {
+        "kind": "index",
+        "name": "idx_factory_lease_claim",
+        "present": true
+      },
+      {
+        "kind": "index",
+        "name": "idx_factory_lease_repo_kind",
+        "present": true
+      },
+      {
+        "kind": "table",
+        "name": "factory_provider_reservation",
+        "present": true
+      },
+      {
+        "kind": "index",
+        "name": "idx_factory_provider_reservation_active",
+        "present": true
+      },
+      {
+        "kind": "table",
+        "name": "factory_provider_budget",
+        "present": true
+      },
+      {
+        "kind": "table",
+        "name": "factory_backoff",
+        "present": true
+      },
+      {
+        "kind": "index",
+        "name": "idx_factory_backoff_repo_kind",
+        "present": true
+      },
+      {
+        "kind": "table",
+        "name": "factory_repo_state",
+        "present": true
+      },
+      {
+        "kind": "table",
+        "name": "factory_model_health",
+        "present": true
+      },
+      {
+        "kind": "index",
+        "name": "idx_factory_model_health_blocking",
+        "present": true
+      },
+      {
+        "kind": "table",
+        "name": "factory_pr_stage_retry",
+        "present": true
+      },
+      {
+        "kind": "table",
+        "name": "factory_worker_metrics",
+        "present": true
+      },
+      {
+        "kind": "table",
+        "name": "factory_runtime_event_keys",
+        "present": true
+      },
+      {
+        "kind": "table",
+        "name": "factory_state_events",
+        "present": true
+      },
+      {
+        "kind": "index",
+        "name": "idx_factory_events_type_time",
+        "present": true
+      },
+      {
+        "kind": "index",
+        "name": "idx_factory_events_run",
+        "present": true
+      },
+      {
+        "kind": "index",
+        "name": "idx_factory_events_model",
+        "present": true
+      },
+      {
+        "kind": "index",
+        "name": "idx_factory_events_worker",
+        "present": true
+      },
+      {
+        "kind": "index",
+        "name": "idx_factory_events_assigned",
+        "present": true
+      },
+      {
+        "kind": "table",
+        "name": "factory_model_attempt_daily",
+        "present": true
+      }
+    ],
+    "reasons": [],
+    "status": "ok",
+    "stored_version": 2
   }
 }
