@@ -84,6 +84,7 @@ async function installQueueRoutes(
   });
 
   await page.route('**/v2/reading-boundaries', async (route) => {
+    // SAFETY: the mocked endpoint receives JSON; thread_ids is validated before use.
     const payload = route.request().postDataJSON() as { thread_ids?: number[] };
     const ids = Array.isArray(payload.thread_ids) ? payload.thread_ids : [];
     const threads = Object.fromEntries(ids.map((id) => [id, id === BLOCKED_THREAD_ID
