@@ -652,3 +652,277 @@ async fn issue_patch_can_set_and_clear_alias() {
     assert!(body["issue"]["issue_number_alias"].is_null());
     assert_eq!(body["issue"]["display_issue_number"], "3");
 }
+
+/// A7 synthetic fixture: a five-part series whose *provider* numbers are
+/// 1, 2, 100, 101, 102 while the reader's authored labels and reading order
+/// stay 1..5. An adjacent arc lives in a different provider volume and carries
+/// only a candidate mapping, so no provider identity may be invented for it.
+#[tokio::test]
+async fn a7_five_part_series_keeps_authored_identity_and_exact_provider_links() {
+    let (state, token, csrf, owner_id, _guard) = setup_user("a7-five-part").await;
+    let conn = state.pool.get().await.unwrap();
+
+    let series_id: i32 = conn
+        .query_one(
+            "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status, created_at, total_issues, reading_progress)
+             VALUES ($1, 'Saga', 'Comic', 5, 1, 'active', NOW(), 5, 'in_progress') RETURNING id",
+            &[&owner_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+
+    let authored = ["1", "2", "3", "4", "5"];
+    let provider_numbers = ["1", "2", "100", "101", "102"];
+    let mut requested_ids = Vec::new();
+    for (index, (number, provider)) in authored.iter().zip(provider_numbers.iter()).enumerate() {
+        let position = (index + 1) as i32;
+        let read = index < 2;
+        let issue_id: i32 = conn
+            .query_one(
+                "INSERT INTO issues (thread_id, issue_number, issue_number_alias, position, status, read_at, created_at)
+                 VALUES ($1, $2, $3, $4, CASE WHEN $5 THEN 'read' ELSE 'unread' END,
+                         CASE WHEN $5 THEN NOW() ELSE NULL END, NOW()) RETURNING id",
+                &[&series_id, number, provider, &position, &read],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        let identity_id: i32 = conn
+            .query_one(
+                "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                 VALUES ('comicvine', 'issue', $1, $2, NOW(), NOW()) RETURNING id",
+                &[
+                    &format!("4050-{provider}"),
+                    &json!({
+                        "issue_number": provider,
+                        "image_url": format!("https://example.test/{provider}.jpg"),
+                    }),
+                ],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        conn.execute(
+            "INSERT INTO issue_external_identity_mappings
+                (issue_id, external_identity_id, status, confidence, evidence_json, created_at, updated_at)
+             VALUES ($1, $2, 'confirmed', 1.0, '{}'::json, NOW(), NOW())",
+            &[&issue_id, &identity_id],
+        )
+        .await
+        .unwrap();
+        requested_ids.push(issue_id);
+    }
+
+    // Adjacent arc: a different provider volume (4051 vs 4050) with only a
+    // candidate identity. It must stay unmapped and must not gain a cover.
+    let arc_id: i32 = conn
+        .query_one(
+            "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status, created_at, total_issues, reading_progress)
+             VALUES ($1, 'Adjacent arc', 'Comic', 2, 2, 'active', NOW(), 2, 'in_progress') RETURNING id",
+            &[&owner_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    for (position, number) in ["1", "2"].iter().enumerate() {
+        let position = (position + 1) as i32;
+        let issue_id: i32 = conn
+            .query_one(
+                "INSERT INTO issues (thread_id, issue_number, position, status, created_at)
+                 VALUES ($1, $2, $3, 'unread', NOW()) RETURNING id",
+                &[&arc_id, number, &position],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        let identity_id: i32 = conn
+            .query_one(
+                "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                 VALUES ('comicvine', 'issue', $1, $2, NOW(), NOW()) RETURNING id",
+                &[
+                    &format!("4051-{number}"),
+                    &json!({"issue_number": number, "image_url": "https://example.test/arc.jpg"}),
+                ],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        conn.execute(
+            "INSERT INTO issue_external_identity_mappings
+                (issue_id, external_identity_id, status, confidence, evidence_json, created_at, updated_at)
+             VALUES ($1, $2, 'candidate', 0.4, '{}'::json, NOW(), NOW())",
+            &[&issue_id, &identity_id],
+        )
+        .await
+        .unwrap();
+        requested_ids.push(issue_id);
+    }
+
+    let (status, body) = send(
+        &state,
+        authed(
+            "POST",
+            "/api/v2/issues/cards",
+            &token,
+            &csrf,
+            Some(json!({ "issue_ids": requested_ids })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let items = body["items"].as_array().expect("items");
+    assert_eq!(items.len(), 7, "one card per physical issue, no extra rows");
+    for (index, (number, provider)) in authored.iter().zip(provider_numbers.iter()).enumerate() {
+        let card = items
+            .iter()
+            .find(|item| item["issue_id"] == requested_ids[index])
+            .unwrap_or_else(|| panic!("missing authored issue {number}: {body:?}"));
+        assert_eq!(card["issue_number"], *number, "authored label is immutable");
+        assert_eq!(card["issue_number_alias"], *provider);
+        assert_eq!(card["display_issue_number"], format!("{number} ({provider})"));
+        assert_eq!(card["comicvine_issue_id"], format!("4050-{provider}"));
+        assert_eq!(card["provider_issue_number"], *provider);
+        assert_eq!(
+            card["cover_image_url"],
+            format!("https://example.test/{provider}.jpg")
+        );
+        if index < 2 {
+            assert_eq!(card["status"], "read", "read history is preserved");
+            assert!(card["read_at"].is_string(), "read timestamp is preserved");
+        } else {
+            assert_eq!(card["status"], "unread");
+            assert!(card["read_at"].is_null());
+        }
+    }
+    for index in 5..7 {
+        let card = items
+            .iter()
+            .find(|item| item["issue_id"] == requested_ids[index])
+            .unwrap_or_else(|| panic!("missing adjacent issue: {body:?}"));
+        assert!(card["comicvine_issue_id"].is_null(), "candidate is not identity");
+        assert!(card["provider_issue_number"].is_null(), "no fabricated number");
+        assert!(card["cover_image_url"].is_null(), "no fabricated cover");
+    }
+
+    let owned_issues: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM issues WHERE thread_id = ANY($1::int[])",
+            &[&vec![series_id, arc_id]],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(owned_issues, 7, "mapping never creates rollable rows");
+    let positions: Vec<i32> = conn
+        .query(
+            "SELECT position FROM issues WHERE thread_id=$1 ORDER BY position",
+            &[&series_id],
+        )
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| row.get(0))
+        .collect();
+    assert_eq!(positions, vec![1, 2, 3, 4, 5], "authored order is preserved");
+}
+
+/// An alias-only edit is a real write, replays its idempotency key, and never
+/// renumbers, reorders, or adds an event to the owned issue.
+#[tokio::test]
+async fn a7_alias_edit_replays_safely_without_extra_rows_or_history() {
+    let (state, token, csrf, owner_id, _guard) = setup_user("a7-alias-edit").await;
+    let conn = state.pool.get().await.unwrap();
+    let thread_id: i32 = conn
+        .query_one(
+            "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status, created_at, total_issues, reading_progress)
+             VALUES ($1, 'Saga', 'Comic', 2, 1, 'active', NOW(), 2, 'in_progress') RETURNING id",
+            &[&owner_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let issue_id: i32 = conn
+        .query_one(
+            "INSERT INTO issues (thread_id, issue_number, position, status, created_at)
+             VALUES ($1, '3', 1, 'unread', NOW()) RETURNING id",
+            &[&thread_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+
+    let set = json!({
+        "idempotency_key": "a7-alias-set-0001",
+        "source": "direct",
+        "issue_number_alias": "100"
+    });
+    for expected_replay in [false, true] {
+        let (status, body) = send(
+            &state,
+            authed(
+                "PATCH",
+                &format!("/api/v2/issues/{issue_id}"),
+                &token,
+                &csrf,
+                Some(set.clone()),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body:?}");
+        assert_eq!(body["replayed"], expected_replay);
+        assert_eq!(body["issue"]["issue_number"], "3");
+        assert_eq!(body["issue"]["issue_number_alias"], "100");
+    }
+
+    let (status, body) = send(
+        &state,
+        authed(
+            "PATCH",
+            &format!("/api/v2/issues/{issue_id}"),
+            &token,
+            &csrf,
+            Some(json!({
+                "idempotency_key": "a7-alias-clear-0001",
+                "source": "direct",
+                "issue_number_alias": null
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert!(body["issue"]["issue_number_alias"].is_null());
+
+    let (number, position, status, alias): (String, i32, String, Option<String>) = conn
+        .query_one(
+            "SELECT issue_number, position, status, issue_number_alias FROM issues WHERE id=$1",
+            &[&issue_id],
+        )
+        .await
+        .unwrap();
+    // `query_one` returns one row; re-read typed columns individually for clarity.
+    let row = conn
+        .query_one(
+            "SELECT issue_number, position, status, issue_number_alias FROM issues WHERE id=$1",
+            &[&issue_id],
+        )
+        .await
+        .unwrap();
+    assert_eq!(row.get::<_, &str>(0), "3");
+    assert_eq!(row.get::<_, i32>(1), 1);
+    assert_eq!(row.get::<_, &str>(2), "unread");
+    assert!(row.get::<_, Option<&str>>(3).is_none());
+    drop((number, position, status, alias));
+    let row_count: i64 = conn
+        .query_one("SELECT count(*) FROM issues", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(row_count, 1, "alias edit never creates another issue");
+    let events: i64 = conn
+        .query_one("SELECT count(*) FROM events WHERE issue_id=$1", &[&issue_id])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(events, 0, "alias-only edit is not a read/rating event");
+}
