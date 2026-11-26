@@ -24,6 +24,7 @@ import DeleteIssueDialog from './DeleteIssueDialog'
 import { AliasOfferList, PostCreateUndoBar, PreviewIssueRow } from './IssueEditPreviewParts'
 import { IssueStructurePreviewModal } from './IssueStructurePreviewModal'
 import { useIssueStructurePreview } from './useIssueStructurePreview'
+import type { StructuralEdit } from './useIssueStructurePreview'
 import type { IssueToggleListApi, IssueToggleListDependenciesApi, IssueToggleListHandle } from './IssueToggleList.api'
 export type { IssueToggleListApi, IssueToggleListDependenciesApi, IssueToggleListHandle } from './IssueToggleList.api'
 import CompactIssueCardTrigger from '../../components/CompactIssueCardTrigger'
@@ -40,6 +41,22 @@ import {
   getPendingCreates,
 } from './issueUtils'
 import type { IssueMutation, QueuedIssueMutation } from './types'
+
+/**
+ * A reversible edit captured while a deferred Edit Series draft is saved.
+ * Creates reuse the #4026/#4027 snapshot; reorder records the exact pre-edit
+ * ID order and reverses it with the same ownership-checked issue-order write.
+ * Actions are applied newest-first so a create + reorder batch unwinds cleanly.
+ */
+type UndoAction =
+  | { kind: 'snapshot'; sessionId: number; snapshotId: number }
+  | { kind: 'reorder'; issueIds: number[] }
+
+type DraftReorder = {
+  nextIssues: Issue[]
+  announcement?: string
+  focusTarget?: { issueId: number; direction: 'up' | 'down' }
+}
 
 export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   threadId: number
