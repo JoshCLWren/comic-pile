@@ -2484,8 +2484,8 @@ mod tests {
     }
 }
 
-/// Issue ingress regressions, migrated from the retired `api/native_issue.rs`
-/// entrypoint. They exercise the same consolidated `app()` Vercel serves.
+/// Issue ingress regressions, migrated from the retired Issue entrypoint.
+/// They exercise the same consolidated `app()` Vercel serves.
 #[cfg(test)]
 mod issue_ingress_tests {
     use super::{app, TEST_ROLL_STATE};

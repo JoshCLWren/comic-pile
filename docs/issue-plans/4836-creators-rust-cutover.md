@@ -125,7 +125,7 @@ node scripts/generate_route_burndown.mjs --check
 
 ## Acceptance Criteria (Done when - all must hold)
 
-- [ ] Move **every browser-called /api/v1/* and /api/* operation above to native Rust same-path**: same HTTP method and exact path (including both the /api/* and /api/v1/* twins where the family has them) served by the native binary (/api/native_roll.rs or /api/native_issue.rs via vercel.json). Front-end URLs stay unchanged. Never redirect /api/v1/* to /api/v2/* as a shortcut.
+- [ ] Move **every browser-called /api/v1/* and /api/* operation above to native Rust same-path**: same HTTP method and exact path (including both the /api/* and /api/v1/* twins where the family has them) served by the native binary (`/api/native_roll.rs` via `vercel.json`). Front-end URLs stay unchanged. Never redirect /api/v1/* to /api/v2/* as a shortcut.
 - [ ] Preserve the wire contract: generated native OpenAPI response matches the Python response (status codes, types, required/optional fields, colon-action suffixes, trailing-slash behavior, error shapes), plus auth/ownership checks, SQL/bind/transaction semantics, and SQL budgets (no N+1, no per-row fan-out regressions).
 - [ ] Update docs/api/v2-route-inventory.json (runtime + native contract) and regenerate any burndown/AGENTS.md table via scripts/generate_route_burndown.mjs in the cutover PR.
 - [ ] **Prove an authenticated production request ran in Rust**: show a real authenticated production request for every operation above executing in the Rust binary (runtime evidence from deployed ingress/logs, not just health/401/READY or deployed code). Each METHOD path must have production evidence or an explicit, reviewer-approved reason why one representative proves its siblings.

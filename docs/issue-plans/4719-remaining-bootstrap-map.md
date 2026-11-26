@@ -33,7 +33,7 @@ contract version, not an implementation-language claim.
 | `GET /api/v2/roll/bootstrap` | `api/native_roll.rs` (`vercel.json`) | Route configuration only; authenticated production Rust execution proof still required before #4299 closes | `frontend/src/services/rollBootstrapApi.ts` (`rollBootstrapApi.get`), `frontend/src/services/protectedRollMutationApi.ts` (`protectedRollMutationApi.bootstrap`) |
 | `GET /api/v2/roll/die-state` | `api/native_roll.rs` (`vercel.json`) | Route configuration only | `frontend/src/services/rollResourcesApi.ts` via `useRollDieState` → `RollHeader dieState` |
 | `GET /api/v2/roll/eligible-issue-ids` | `api/native_roll.rs` (`vercel.json`) | Route configuration only | `rollResourcesApi` via `useRollEligibleIssueIds` → `ThreadPool eligibleThreadIds` |
-| `POST /api/v2/issues/cards` | `api/native_issue.rs` (`vercel.json`) | Route configuration only | `rollResourcesApi` via `useRollIssueCards` → `ThreadPool issueCards` |
+| `POST /api/v2/issues/cards` | `api/native_roll.rs` (`vercel.json`) | Route configuration only | `rollResourcesApi` via `useRollIssueCards` → `ThreadPool issueCards` |
 
 On `main`, Roll cold load is 1 bootstrap `GET` plus the 3 scoped reads.
 `useRollBootstrap` (`frontend/src/hooks/useRollBootstrap.ts`) owns the
