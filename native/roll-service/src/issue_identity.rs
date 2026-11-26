@@ -2969,6 +2969,36 @@ async fn do_cbl_adoption_commit(
                 .map(|s| s.to_string())
         })
         .unwrap_or_else(|| "default".to_string());
+    // Capture the issues this plan previously adopted from this CBL source
+    // before the merge rewrites nodes_json. A later commit that excludes one of
+    // them must drop its canonical Reading List entry (#5523). Deriving the set
+    // from source provenance keeps entries added manually or from other sources
+    // untouched.
+    let previous_source_issue_ids: Vec<i32> = nodes_json
+        .as_array()
+        .map(|nodes| {
+            nodes
+                .iter()
+                .filter(|node| {
+                    node.get("node_type").and_then(|value| value.as_str()) == Some("issue")
+                        && node
+                            .get("source_paths")
+                            .and_then(|value| value.as_array())
+                            .map(|paths| {
+                                paths
+                                    .iter()
+                                    .any(|path| path.as_str() == Some(source_path.as_str()))
+                            })
+                            .unwrap_or(false)
+                })
+                .filter_map(|node| {
+                    node.get("ref_id")
+                        .and_then(|value| value.as_i64())
+                        .map(|id| id as i32)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     let merge_ctx = MergeAdoptionCtx {
         user_id,
         planned: &planned,
@@ -3088,19 +3118,9 @@ async fn do_cbl_adoption_commit(
     // Reconcile this source's list entries to the newly committed adopted set
     // inside the same transaction. An issue included by an earlier commit but
     // excluded now must not survive in the list or its reader/Queue projections.
-    // Scope removal to issues resolved from this CBL source so entries adopted
-    // from another source into the same list are not disturbed.
-    let source_issue_ids: Vec<i32> = planned
-        .iter()
-        .filter_map(|entry| {
-            entry
-                .get("resolved_issue_id")
-                .and_then(|value| value.as_i64())
-                .map(|id| id as i32)
-        })
-        .collect();
-    eprintln!("DEBUG5523 source_issue_ids={source_issue_ids:?} adopted={adopted_issue_ids:?} list={canonical_list_id} user={user_id} planned={:?}", planned.iter().map(|e| (e.get("cbl_position"), e.get("resolved_issue_id"), e.get("resolution_status"), e.get("adoption_decision"))).collect::<Vec<_>>());
-    if !source_issue_ids.is_empty() {
+    // Removal is scoped to issues that carry this source's provenance on the
+    // plan, so manually added entries or entries from other sources remain.
+    if !previous_source_issue_ids.is_empty() {
         tx.run_execute(
             "DELETE FROM custom_cbl_entries e
              USING custom_cbl_lists l
@@ -3111,7 +3131,7 @@ async fn do_cbl_adoption_commit(
             &[
                 &user_id,
                 &canonical_list_id,
-                &source_issue_ids,
+                &previous_source_issue_ids,
                 &adopted_issue_ids,
             ],
         )
