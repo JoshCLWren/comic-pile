@@ -1,5 +1,3 @@
-import { isString } from '../utils/runtimeChecks'
-
 export type QueueSort = 'position' | 'alphabetical' | 'created'
 
 export interface QueuePageKeyOptions {
