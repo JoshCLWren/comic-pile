@@ -1,40 +1,39 @@
-utc: 2026-11-26T08:53:16Z
-uptime: 460.72s load: 1.49 0.88 0.40
+utc: 2026-11-26T08:53:32Z
+uptime: 477.44s load: 1.46 0.90 0.42
 processes: 180
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15983        2586        8615          51        5176       13396
+Mem:           15983        3994        7083          51        5301       11988
 Swap:           3071           0        3071
 --- disk
 Filesystem      Size  Used Avail Use% Mounted on
 /dev/root       145G   61G   84G  43% /
 /dev/root       145G   61G   84G  43% /
 --- top rss (KiB, name only)
-1408624 rustc
-385780 opencode.exe
+2561820 rustc
+385884 opencode.exe
 158032 Runner.Worker
-143832 provjobd2783799
-111392 Runner.Listener
-90528 opencode
+144048 provjobd2783799
+115488 Runner.Listener
+90500 opencode
 81500 dockerd
 67136 cargo
 55784 php-fpm8.5
 45568 containerd
-44000 ExtHandler
+44044 ExtHandler
 36972 Daemon
 33952 opencode-pty
 29848 networkd-dispat
 21400 php-fpm8.5
 --- top cpu (name only)
- 100 rustc
+ 113 rustc
  4.6 opencode.exe
  1.6 Runner.Worker
- 1.5 provjobd2783799
- 1.0 cargo
- 0.6 systemd
+ 1.6 provjobd2783799
+ 0.5 systemd
+ 0.4 cargo
  0.2 Runner.Listener
  0.2 hv_kvp_daemon
 --- kernel oom/kill
 --- shutdown/session signals
-2026-11-26T08:45:48+00:00 runnervm0hi8g python3[1275]: 2026-11-26T08:45:48.019778Z INFO MonitorHandler ExtHandler KernelSoftLockup: Boot ID changed (saved=5bb7bdae-77f0-4a56-bfdb-5bdb68c01274, current=046a73bb-bc53-4417-a7ed-c981068d2b31). Resetting timestamp watermark due to reboot.
 2026-11-26T08:45:49+00:00 runnervm0hi8g hosted-compute-agent[1975]: {"level":"INFO","ts":1795682749.1688933,"logger":"hosted-compute-agent","msg":"Reading metadata to detect shutdown tag..."}
