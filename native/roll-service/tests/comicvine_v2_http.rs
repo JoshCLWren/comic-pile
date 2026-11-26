@@ -17,6 +17,7 @@ use comicpile_roll_service::outbound::{
 };
 use comicpile_roll_service::{config::Config, router, test_support, AppState};
 use serde_json::{json, Value};
+use std::any::Any;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc,
@@ -184,6 +185,75 @@ fn set_key(present: bool) {
         std::env::set_var("COMICVINE_API_KEY", "TESTKEY123");
     } else {
         std::env::remove_var("COMICVINE_API_KEY");
+    }
+}
+
+/// Provider fake that pauses its first request on a oneshot so a test can
+/// remap A -> B while hydration's provider call is genuinely in flight. Later
+/// calls return immediately, so a remap with no provider key makes no call.
+struct GatedOutbound {
+    started_tx: std::sync::Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+    release_rx: std::sync::Mutex<Option<tokio::sync::oneshot::Receiver<()>>>,
+    payload: String,
+    calls: std::sync::Mutex<Vec<String>>,
+}
+
+impl GatedOutbound {
+    fn new(
+        payload: Value,
+        started_tx: tokio::sync::oneshot::Sender<()>,
+        release_rx: tokio::sync::oneshot::Receiver<()>,
+    ) -> Self {
+        Self {
+            started_tx: std::sync::Mutex::new(Some(started_tx)),
+            release_rx: std::sync::Mutex::new(Some(release_rx)),
+            payload: payload.to_string(),
+            calls: std::sync::Mutex::new(Vec::new()),
+        }
+    }
+
+    fn call_paths(&self) -> Vec<String> {
+        self.calls
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+    }
+}
+
+impl OutboundHttp for GatedOutbound {
+    fn send(&self, _host: &str, request: OutboundRequest) -> OutboundFuture {
+        self.calls
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .push(request.path.clone());
+        let payload = self.payload.clone();
+        let started = self
+            .started_tx
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take();
+        let release = self
+            .release_rx
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take();
+        Box::pin(async move {
+            if let Some(tx) = started {
+                let _ = tx.send(());
+            }
+            if let Some(rx) = release {
+                let _ = rx.await;
+            }
+            Ok(OutboundResponse {
+                status: http::StatusCode::OK,
+                headers: http::HeaderMap::new(),
+                body: Body::from(Bytes::from(payload)),
+            })
+        })
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
