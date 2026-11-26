@@ -134,10 +134,12 @@ export function ComicIssueCover({
   )
 }
 
-/** Canonical identity line: series, exact issue number, read/rating state. */
+/** Canonical identity line: series, authored/alternate numbers, read/rating state. */
 export function ComicIssueIdentity({
   threadTitle,
   issueNumber,
+  issueNumberAlias,
+  providerIssueNumber,
   status,
   rating,
   variant = 'standard',
@@ -147,6 +149,8 @@ export function ComicIssueIdentity({
 }: {
   threadTitle: string
   issueNumber: string
+  issueNumberAlias?: string | null
+  providerIssueNumber?: string | null
   status: 'read' | 'unread'
   rating: number | null
   variant?: ComicIssueCardVariant
@@ -157,11 +161,26 @@ export function ComicIssueIdentity({
 }) {
   const titleClass = variant === 'featured' ? 'text-xl' : 'text-sm'
   const Title = heading ? 'h2' : 'p'
+  const alias = issueNumberAlias?.trim()
+  const providerNumber = providerIssueNumber?.trim()
+  const showAlias = alias && alias.toLowerCase() !== issueNumber.trim().toLowerCase()
+  const showProvider = providerNumber && providerNumber.toLowerCase() !== issueNumber.trim().toLowerCase() && (!showAlias || providerNumber.toLowerCase() !== alias!.toLowerCase())
   return (
     <div className="min-w-0">
       <Title data-testid={headingTestId} className={`break-words ${heading ? 'font-black' : 'font-bold'} leading-snug text-[var(--theme-text-primary)] ${titleClass}`}>
-        {threadTitle} <span className="text-[var(--theme-comic-accent)]">#{issueNumber}</span>
+        {threadTitle}{' '}
+        <span className="text-[var(--theme-comic-accent)]">#{issueNumber}</span>
+        {showAlias && (
+          <span className="ml-1 text-[var(--theme-text-muted)]" data-testid="comic-issue-alias-number">
+            ({alias})
+          </span>
+        )}
       </Title>
+      {showProvider && (
+        <p className="mt-0.5 text-[11px] text-[var(--theme-text-dim)]" data-testid="comic-issue-provider-number">
+          Provider #{providerNumber}
+        </p>
+      )}
       {showStatus && <p className="mt-1 text-xs text-[var(--theme-text-muted)]">
         {status === 'read' ? (
           <>
