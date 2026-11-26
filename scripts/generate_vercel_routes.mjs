@@ -200,7 +200,7 @@ export function generateVercel(config, fragments) {
   // The deployed manifest must keep the single-function invariant (#5733):
   // one Rust compilation target and no retired API destination.
   return assertSingleNativeIngress(withCanonicalBuilds(applyStaticCsp({
-    ...config,
+    ...inputConfig,
     crons: nextCrons,
     routes: slimNativeRollRoutes(fullRoutes, new Set(fragmentRoutes)),
   })));
