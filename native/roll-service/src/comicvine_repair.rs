@@ -103,6 +103,11 @@ pub struct DrainReport {
     /// The sparse cron fallback still runs; newly enqueued work should wake
     /// the workflow via repository_dispatch (#4748).
     queue_empty: bool,
+    /// Confirmed identities discovered missing/stale refresh rows and enqueued
+    /// during this drain pass (#5695 orphan recovery). Bounded so the drain
+    /// keeps its primary claim/process budget.
+    #[serde(default)]
+    reconciled: u32,
 }
 
 #[derive(Debug)]
