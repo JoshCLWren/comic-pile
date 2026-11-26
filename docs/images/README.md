@@ -47,6 +47,13 @@ the verified repository assets.
 **Owner action still required.** This is a repository-admin setting, so a factory
 worker cannot apply it. The repository owner must upload `social-preview.png`
 under **Settings → General → Social preview**, then verify that GitHub renders
-it at 1280×640. Enabling **Discussions** under **Settings → General → Features**
-is a separate owner action that also remains unverified. Do not change repository
-topics or the description as part of this work.
+it at 1280×640. Do not change repository topics or the description as part of
+this work.
+
+**Live state observed 2026-11-26 (read-only).** The repository API reported
+`has_discussions: true`, so Discussions appears enabled. The repository page's
+`og:image` still resolved to a 1920×1080 *Creator Comparison* capture signed in
+as "Josh", with personal-library counts and unread-issue lists. That image
+neither has the approved 1280×640 dimensions nor satisfies the demo-data-only
+rule, so the upload and GitHub display verification remain owner actions. The
+repository description and topics were not modified by this work.
