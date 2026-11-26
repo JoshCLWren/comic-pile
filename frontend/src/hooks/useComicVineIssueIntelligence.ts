@@ -23,10 +23,9 @@ export function useComicVineIssueIntelligence(
     enabled,
   })
 
-  // Expose an awaitable refetch and its latest value: callers that re-arm a
-  // bounded timer need to know when the request settled and whether repair
-  // reached a terminal state. Otherwise a slow response overlaps with the next
-  // scheduled refetch and React Query cancels it.
+  // Expose an awaitable refetch and its latest value so the exact-issue
+  // hydration contract can render persisted credits only after the scoped
+  // re-read settles. There is no polling timer to re-arm (#5841).
   const refetch = useCallback(async () => {
     const result = await queryRefetch()
     return result.data ?? null

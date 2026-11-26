@@ -678,6 +678,25 @@ export async function clearComicVineIssueIntelligenceMany(
 }
 
 /**
+ * Reconcile the projections an exact ComicVine hydration rewrites: batched
+ * issue cards (confirmed cover) and the per-thread creator-credit columns.
+ *
+ * The scoped `comicVine.issueIntelligence(issueId)` read is refetched directly
+ * by the hydration owner, so it is deliberately absent here; invalidating it
+ * again would send a second GET for the same just-hydrated issue. This helper
+ * runs only for a deliberate exact-issue open or explicit Retry, never from a
+ * list/queue/series row, so it cannot fan out provider requests.
+ */
+export async function invalidateComicVineHydrationProjections(
+  client: QueryClient,
+): Promise<void> {
+  await Promise.all([
+    invalidateIssueCards(client),
+    client.invalidateQueries({ queryKey: queryKeys.thread.all }),
+  ])
+}
+
+/**
  * Invalidate the `comicVine.issueIdentity(issueId)` cache bucket after an
  * identity confirm/replace/remove so every card for the same canonical Issue
  * re-reads the new mapping state without a full-page refresh.
