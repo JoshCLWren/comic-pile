@@ -1226,6 +1226,20 @@ describe('ComicIdentity deep-metadata hydration (issue #5841)', () => {
     expect(retry).toBeEnabled()
   })
 
+  it('honors a provider Retry-After carried by the canonical intelligence read', async () => {
+    getIntelligence.mockResolvedValue(intelligenceResponse({
+      metadata_status: 'refresh_deferred',
+      refresh_retry_after_seconds: 60,
+    }))
+
+    renderIdentity()
+    await waitForLoaded()
+
+    expect(screen.getByTestId('creator-status-rate-limited')).toHaveTextContent('Retry in 60s')
+    expect(screen.getByRole('button', { name: 'Retry creator credits' })).toBeDisabled()
+    expect(refreshMetadata).not.toHaveBeenCalled()
+  })
+
   it('disables duplicate concurrent Retry clicks while a request is in flight', async () => {
     let resolveRefresh: ((value: MetadataRefreshResponse) => void) | undefined
     getIntelligence.mockResolvedValue(intelligenceResponse({ metadata_status: 'refresh_failed' }))

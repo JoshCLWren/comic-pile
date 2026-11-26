@@ -208,6 +208,17 @@ export function useComicVineMetadataHydration({
     return () => clearTimeout(timeoutId)
   }, [cooldownUntil])
 
+  // A provider-declared delay can also arrive on the canonical read (for
+  // example a legacy deferred state). Honor it before offering another click.
+  useEffect(() => {
+    if (isLoading || metadata == null) return
+    if (statusFromMetadata(metadata) !== 'rate-limited') return
+    const seconds = metadata.refresh_retry_after_seconds
+    if (typeof seconds !== 'number' || seconds <= 0) return
+    if (cooldownUntil > Date.now()) return
+    setCooldownUntil(Date.now() + seconds * 1000)
+  }, [cooldownUntil, isLoading, metadata])
+
   const retry = useCallback(async () => {
     if (issueId == null) return
     const key = identityKeyFor(issueId, metadataRef.current)
