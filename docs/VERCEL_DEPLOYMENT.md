@@ -142,16 +142,6 @@ per-owner ownership rules still apply.
 
 ### ComicVine metadata hydration (retired background repair)
 
-<<<<<<< HEAD
-ComicVine issue hydration is no longer a scheduled job. The Vercel cron entry,
-the retired ComicVine metadata-repair GitHub Actions workflow (schedule,
-repository dispatch and manual run), the maintenance drain/backfill endpoints
-and the repair-dispatch token are removed. `CRON_SECRET` is still required only
-by the unrelated release-sync cron above. Hydration happens inside the exact
-issue map/remap request or the explicit authenticated `metadata:refresh` (Retry)
-request; an incomplete confirmed identity reports `needs_hydration` and remains
-recoverable without remapping. No polling or automatic retry loop remains.
-=======
 ComicVine issue hydration is no longer a scheduled job. The ComicVine
 metadata-repair GitHub Actions workflow (schedule, repository dispatch and
 manual run), the maintenance drain/backfill endpoints and the repair-dispatch
@@ -163,7 +153,6 @@ only by the unrelated release-sync cron above. Hydration happens inside the
 exact issue map/remap request or the explicit authenticated `metadata:refresh`
 (Retry) request; an incomplete confirmed identity reports `needs_hydration` and
 remains recoverable without remapping. No polling or automatic retry loop remains.
->>>>>>> origin/main
 
 ### Concurrency and retry behavior
 
