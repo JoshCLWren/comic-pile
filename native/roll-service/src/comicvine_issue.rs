@@ -201,6 +201,9 @@ struct Mapped {
     external_id: String,
     external_url: Option<String>,
     metadata: Value,
+    /// Derived from metadata freshness only. No ledger row is read or written
+    /// by this path: hydration is request-driven (explicit Retry), never queued.
+    needs_repair: bool,
 }
 
 
@@ -429,29 +432,14 @@ fn plain_text(value: &Value) -> Option<String> {
     }
 }
 
-/// Determine the metadata status based on repair state and content.
+/// Determine the metadata status from freshness and content only.
 ///
-/// Returns a status string and optional retry delay in seconds.
-/// Priority order: repair state > deep fetch status > credit availability.
-fn status(mapped: &Mapped, repair: Option<&Repair>) -> (String, Option<i64>) {
-    if let Some(repair) = repair {
-        let active = match repair.state.as_str() {
-            "pending" => Some("refresh_pending"),
-            "running" => Some("refresh_running"),
-            "deferred" => Some("refresh_deferred"),
-            "failed" => Some("refresh_failed"),
-            _ => None,
-        };
-        if let Some(state) = active {
-            let retry = if state == "refresh_deferred" || state == "refresh_failed" {
-                repair
-                    .next_attempt_at
-                    .map(|stamp| (stamp - chrono::Utc::now().timestamp() as f64).max(0.0) as i64)
-            } else {
-                None
-            };
-            return (state.to_string(), retry);
-        }
+/// There is no queue state to report: a confirmed issue whose stored metadata
+/// is stale is `needs_hydration`, which is the explicit, user-driven Retry
+/// signal. No retry delay is emitted because nothing retries automatically.
+fn status(mapped: &Mapped) -> (String, Option<i64>) {
+    if mapped.needs_repair {
+        return ("needs_hydration".into(), None);
     }
     let raw = &mapped.metadata["raw_provider_payload"];
     let deep = [
@@ -485,7 +473,6 @@ fn status(mapped: &Mapped, repair: Option<&Repair>) -> (String, Option<i64>) {
 /// story arcs, and related issues. Sorts and limits related issues.
 fn response(
     mapped: Mapped,
-    repair: Option<Repair>,
     arcs: Vec<ArcReference>,
     related: Vec<Related>,
 ) -> IssueIntelligence {
@@ -540,7 +527,7 @@ fn response(
         });
     }
     let (series_id, series_name) = series(&mapped.metadata);
-    let (metadata_status, refresh_retry_after_seconds) = status(&mapped, repair.as_ref());
+    let (metadata_status, refresh_retry_after_seconds) = status(&mapped);
     IssueIntelligence {
         comicvine_issue_id: mapped.external_id,
         comicvine_url: mapped
@@ -604,7 +591,7 @@ pub async fn issue_intelligence(
         return Err(ApiError::NotFound("Issue not found".into()));
     }
     Ok(Json(snapshot.mapped.map(|metadata| {
-        response(metadata, snapshot.repair, snapshot.arcs, snapshot.related)
+        response(metadata, snapshot.arcs, snapshot.related)
     })))
 }
 
