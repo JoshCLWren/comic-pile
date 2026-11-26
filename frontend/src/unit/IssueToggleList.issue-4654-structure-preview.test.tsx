@@ -213,7 +213,7 @@ describe('IssueToggleList #4654 delete/reorder structure preview', () => {
     await openReorderPreview()
 
     expect(screen.getByTestId('structure-preview-conflict')).toHaveTextContent('Reading-graph cycle: #140 -> #129')
-    expect(screen.getByTestId('structure-preview-cycle-path')).toHaveTextContent('#140 -> #129')
+    expect(screen.getByTestId('structure-preview-cycle-path')).toHaveTextContent('Synthetic nonnumeric series #140 -> Synthetic nonnumeric series #129')
     expect(screen.getByTestId('confirm-structure-preview')).toBeDisabled()
   })
 
