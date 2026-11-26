@@ -3880,7 +3880,7 @@ async fn reconcile_entries_impl<E: DbExec>(
     .await?;
 
     let mut out = Vec::with_capacity(rows.len());
-    for (row, _title_matches) in rows.iter().zip(title_matches.iter()) {
+    for row in &rows {
         let cse_id: i32 = row.get(0);
         let position: i32 = row.get(1);
         let series_name: String = row.get(2);
