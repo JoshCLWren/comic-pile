@@ -4911,14 +4911,13 @@ async fn materialize_missing_issue_tx(
             comicvine_id.as_deref(),
         )
         .await?;
-        // Python applies tracking state only for a genuinely inserted issue;
-        // the IntegrityError reuse path returns the existing row untouched.
-        if created {
-            apply_thread_issue_tracking_state_tx(&sp, thread_id).await?;
-        }
+        // Tracking state is applied once per affected thread after the full
+        // adoption merge so a large commit does not recompute thread counters
+        // after every inserted issue.
 
         Ok(MaterializeOutcome::Issue {
             id: issue_id,
+            thread_id,
             created,
         })
     }
