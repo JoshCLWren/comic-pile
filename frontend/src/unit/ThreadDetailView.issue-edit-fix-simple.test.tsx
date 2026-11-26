@@ -8,6 +8,7 @@ import { useUpdateThread } from '../hooks/useThread'
 import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
+import { undoApi } from '../services/api-undo'
 import { tagsApi } from '../services/api-tags'
 
 /**
@@ -59,6 +60,10 @@ vi.mock('../services/api-issues', () => ({
   },
 }))
 
+vi.mock('../services/api-undo', () => ({
+  undoApi: { undo: vi.fn().mockResolvedValue(undefined) },
+}))
+
 vi.mock('../services/api-tags', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-tags')>()
   return {
@@ -95,6 +100,7 @@ const mockedIssuesApiCreate = vi.mocked(issuesApi.create)
 const mockedIssuesApiPreviewCreate = vi.mocked(issuesApi.previewCreate)
 const mockedConnectedThreads = vi.mocked(dependenciesApi.getConnectedThreads)
 const mockedThreadIssuesTags = vi.mocked(tagsApi.threadIssuesEffective)
+const mockedUndo = vi.mocked(undoApi.undo)
 
 beforeEach(() => {
   routeParams.id = '1'
@@ -271,5 +277,34 @@ describe('ThreadDetailView Edit dialog rejects invalid issue entries (#3586)', (
     expect(screen.queryByTestId('pending-creates')).not.toBeInTheDocument()
     expect(mockedIssuesApiCreate).not.toHaveBeenCalled()
     expect(screen.getByTestId('issue-add-validation-error')).toBeInTheDocument()
+  })
+
+  it('keeps the Undo bar reachable after Save commits an undo point (#4654)', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+    mockedUndo.mockReset()
+    mockedUndo.mockResolvedValue(undefined)
+    // SAFETY: the stubbed create supplies only the undo fields this flow reads.
+    mockedIssuesApiCreate.mockResolvedValueOnce({
+      issues: [],
+      next_page_token: null,
+      total_count: 1,
+      page_size: 100,
+      undo_session_id: 7,
+      undo_snapshot_id: 42,
+    } as never)
+
+    const { user, addInput } = await openEditDialog()
+    await user.type(addInput, '2')
+    await user.click(screen.getByTestId('issue-add-button'))
+    await user.click(await screen.findByTestId('confirm-preview-add'))
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }))
+
+    // The dialog must stay mounted: unmounting it would destroy the Undo bar.
+    const undoBar = await screen.findByTestId('edit-series-undo-bar')
+    expect(screen.getByRole('dialog', { name: 'Edit Series' })).toBeVisible()
+    await user.click(screen.getByTestId('undo-edit-add'))
+    await waitFor(() => expect(mockedUndo).toHaveBeenCalledWith(7, 42))
+    await waitFor(() => expect(screen.queryByTestId('edit-series-undo-bar')).not.toBeInTheDocument())
   })
 })
