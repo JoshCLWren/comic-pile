@@ -1231,18 +1231,6 @@ async fn delete_once(
             .map_err(delete_error)?;
         }
 
-        // Remove snapshots that point at the thread's events before removing the
-        // events themselves. The canonical snapshots_event_id_fkey cascades, but
-        // production drift can leave it without ON DELETE CASCADE (#5860, the
-        // same failure class as the events_thread_id_fkey drift in #5461). One
-        // set-based statement mirrors the cascade without a per-event round trip.
-        tx.execute(
-            "DELETE FROM snapshots WHERE event_id IN (SELECT id FROM events WHERE thread_id = $1)",
-            &[&id],
-        )
-        .await
-        .map_err(delete_error)?;
-
         // Remove the thread's existing events before recording the delete action
         // so deletion succeeds even when events.thread_id lacks ON DELETE CASCADE.
         tx.execute("DELETE FROM events WHERE thread_id = $1", &[&id])
