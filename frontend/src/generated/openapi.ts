@@ -3735,6 +3735,8 @@ export interface components {
             /** Format: int32 */
             issue_id?: number | null;
             issue_number?: string | null;
+            /** @description Alternate overall/story number for the same physical comic (#4652). */
+            issue_number_alias?: string | null;
             /** Format: int32 */
             issues_read: number;
             /** Format: int32 */
@@ -3746,6 +3748,8 @@ export interface components {
             /** Format: int32 */
             next_issue_id?: number | null;
             next_issue_number?: string | null;
+            /** @description Provider's own issue number, only from a confirmed identity (#4652). */
+            provider_issue_number?: string | null;
             /** Format: int32 */
             queue_position: number;
             reading_progress?: string | null;
