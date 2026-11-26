@@ -120,13 +120,13 @@ describe('PlannerAddSteps', () => {
     // series without issues. A thread's remaining count is independent from
     // the number of issue records fetched for the picker; keep them separate
     // here so the empty state is genuinely asserted.
-    const emptySeries = {
+    const emptySeries: ThreadListItem = {
       ...threads[0],
       id: 5,
       title: 'Series With No Issues',
       issues_remaining: 1,
       total_issues: 1,
-    } as ThreadListItem
+    }
     expect(emptySeries.issues_remaining).toBeGreaterThan(0)
 
     render(
