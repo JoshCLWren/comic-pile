@@ -8,6 +8,7 @@ import { useUpdateThread } from '../hooks/useThread'
 import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
+import { undoApi } from '../services/api-undo'
 import { tagsApi } from '../services/api-tags'
 
 /**
@@ -51,11 +52,16 @@ vi.mock('../services/api-issues', () => ({
   issuesApi: {
     list: vi.fn(),
     create: vi.fn(),
+    previewCreate: vi.fn(),
     markRead: vi.fn(),
     markUnread: vi.fn(),
     delete: vi.fn(),
     reorder: vi.fn(),
   },
+}))
+
+vi.mock('../services/api-undo', () => ({
+  undoApi: { undo: vi.fn().mockResolvedValue(undefined) },
 }))
 
 vi.mock('../services/api-tags', async (importOriginal) => {
@@ -91,8 +97,10 @@ const mockedUseUpdateThread = vi.mocked(useUpdateThread)
 const mockedThreadsApiGet = vi.mocked(threadsApi.get)
 const mockedIssuesApiList = vi.mocked(issuesApi.list)
 const mockedIssuesApiCreate = vi.mocked(issuesApi.create)
+const mockedIssuesApiPreviewCreate = vi.mocked(issuesApi.previewCreate)
 const mockedConnectedThreads = vi.mocked(dependenciesApi.getConnectedThreads)
 const mockedThreadIssuesTags = vi.mocked(tagsApi.threadIssuesEffective)
+const mockedUndo = vi.mocked(undoApi.undo)
 
 beforeEach(() => {
   routeParams.id = '1'
@@ -124,6 +132,14 @@ beforeEach(() => {
     page_size: 100,
   })
   mockedIssuesApiCreate.mockReset()
+  mockedIssuesApiPreviewCreate.mockReset()
+  // SAFETY: the stubbed preview supplies only the fields this view reads.
+  mockedIssuesApiPreviewCreate.mockResolvedValue({
+    thread_id: 1, thread_title: 'Saga', requested_strategy: 'safe_default',
+    default_outcome: { strategy: 'safe_default', can_commit: true, preserves_existing_relative_order: true,
+      before: [], after: [], added_issue_numbers: ['1'], graph: { status: 'ok', cycles: [] }, conflict_message: null },
+    numeric_resort_outcome: null,
+  } as never)
   // SAFETY: the stubbed create response supplies only the fields this view reads
   mockedIssuesApiCreate.mockResolvedValue({
     issues: [],
@@ -163,6 +179,8 @@ describe('ThreadDetailView Edit dialog defers issue Add until Save (#3444)', () 
     const { user, addInput } = await openEditDialog()
     await user.type(addInput, '10-12')
     await user.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    await user.click(screen.getByTestId('confirm-preview-add'))
 
     expect(mockedIssuesApiCreate).not.toHaveBeenCalled()
     expect(await screen.findByTestId('pending-creates')).toHaveTextContent('10-12')
@@ -175,11 +193,13 @@ describe('ThreadDetailView Edit dialog defers issue Add until Save (#3444)', () 
     const { user, addInput } = await openEditDialog()
     await user.type(addInput, '2')
     await user.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    await user.click(screen.getByTestId('confirm-preview-add'))
     expect(mockedIssuesApiCreate).not.toHaveBeenCalled()
 
     await user.click(screen.getByRole('button', { name: 'Save Changes' }))
 
-    await waitFor(() => expect(mockedIssuesApiCreate).toHaveBeenCalledWith(1, '2'))
+    await waitFor(() => expect(mockedIssuesApiCreate).toHaveBeenCalledWith(1, '2', { strategy: 'safe_default' }))
   })
 
   it('discards the queued Add when the dialog closes without saving', async () => {
@@ -189,6 +209,8 @@ describe('ThreadDetailView Edit dialog defers issue Add until Save (#3444)', () 
     const { user, addInput } = await openEditDialog()
     await user.type(addInput, '7-8')
     await user.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    await user.click(screen.getByTestId('confirm-preview-add'))
     expect(await screen.findByTestId('pending-creates')).toHaveTextContent('7-8')
 
     // A queued issue edit makes the draft unsaved, so the close control asks
@@ -220,7 +242,10 @@ describe('ThreadDetailView Edit dialog rejects invalid issue entries (#3586)', (
 
     const { user, addInput } = await openEditDialog()
     await user.type(addInput, value)
+    expect(screen.getByTestId('issue-add-button')).toBeDisabled()
     await user.click(screen.getByTestId('issue-add-button'))
+    expect(screen.queryByTestId('edit-series-preview-modal')).not.toBeInTheDocument()
+    expect(mockedIssuesApiPreviewCreate).not.toHaveBeenCalled()
 
     expect(screen.queryByTestId('pending-creates')).not.toBeInTheDocument()
     expect(mockedIssuesApiCreate).not.toHaveBeenCalled()
@@ -244,10 +269,42 @@ describe('ThreadDetailView Edit dialog rejects invalid issue entries (#3586)', (
 
     const { user, addInput } = await openEditDialog()
     await user.type(addInput, ',')
+    expect(screen.getByTestId('issue-add-button')).toBeDisabled()
     await user.click(screen.getByTestId('issue-add-button'))
+    expect(screen.queryByTestId('edit-series-preview-modal')).not.toBeInTheDocument()
+    expect(mockedIssuesApiPreviewCreate).not.toHaveBeenCalled()
 
     expect(screen.queryByTestId('pending-creates')).not.toBeInTheDocument()
     expect(mockedIssuesApiCreate).not.toHaveBeenCalled()
     expect(screen.getByTestId('issue-add-validation-error')).toBeInTheDocument()
+  })
+
+  it('keeps the Undo bar reachable after Save commits an undo point (#4654)', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+    mockedUndo.mockReset()
+    mockedUndo.mockResolvedValue(undefined)
+    // SAFETY: the stubbed create supplies only the undo fields this flow reads.
+    mockedIssuesApiCreate.mockResolvedValueOnce({
+      issues: [],
+      next_page_token: null,
+      total_count: 1,
+      page_size: 100,
+      undo_session_id: 7,
+      undo_snapshot_id: 42,
+    } as never)
+
+    const { user, addInput } = await openEditDialog()
+    await user.type(addInput, '2')
+    await user.click(screen.getByTestId('issue-add-button'))
+    await user.click(await screen.findByTestId('confirm-preview-add'))
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }))
+
+    // The dialog must stay mounted: unmounting it would destroy the Undo bar.
+    const undoBar = await screen.findByTestId('edit-series-undo-bar')
+    expect(screen.getByRole('dialog', { name: 'Edit Series' })).toBeVisible()
+    await user.click(screen.getByTestId('undo-edit-add'))
+    await waitFor(() => expect(mockedUndo).toHaveBeenCalledWith(7, 42))
+    await waitFor(() => expect(undoBar).not.toBeInTheDocument())
   })
 })

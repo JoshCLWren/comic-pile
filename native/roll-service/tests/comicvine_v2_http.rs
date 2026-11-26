@@ -594,7 +594,7 @@ async fn resolve_classifies_input_and_resolves_issue_links() {
     );
     let call = fake(&state).calls().last().unwrap().clone();
     assert!(
-        call.path.starts_with("/api/issue/4000-123?")
+        call.path.starts_with("/api/issue/4000-123/?")
             && call.path.contains("field_list=id,name,issue_number"),
         "{}",
         call.path
@@ -679,7 +679,7 @@ async fn resolve_volume_links_return_the_volume_and_its_roster() {
         .map(|c| c.path.clone())
         .collect();
     assert_eq!(paths.len(), 2, "{paths:?}");
-    assert!(paths[0].starts_with("/api/volume/4050-9?"), "{paths:?}");
+    assert!(paths[0].starts_with("/api/volume/4050-9/?"), "{paths:?}");
     assert!(
         paths[1].starts_with("/api/issues/?") && paths[1].contains("filter=volume:9"),
         "{paths:?}"
@@ -855,7 +855,7 @@ impl PagedComicVine {
     }
 
     fn payload(&self, path: &str) -> Value {
-        if path.starts_with(&format!("/api/volume/4050-{}?", self.volume)) {
+        if path.starts_with(&format!("/api/volume/4050-{}/?", self.volume)) {
             return json!({"status_code": 1, "error": "OK", "results": {"id": self.volume, "name": "Paged"}});
         }
         let offset: usize = path
@@ -1430,16 +1430,6 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
     assert_eq!(mapping["confidence"], 1.0);
     assert_eq!(mapping["evidence_source"], "user_confirmed");
     assert!(mapping["created_at"].as_str().unwrap().ends_with('Z'));
-    // Confirming queues exactly one deep-metadata refresh for the identity.
-    let queued: i64 = conn
-        .query_one(
-            "SELECT count(*) FROM comicvine_metadata_refresh_requests WHERE state = 'pending'",
-            &[],
-        )
-        .await
-        .unwrap()
-        .get(0);
-    assert_eq!(queued, 1);
     // Re-confirming the same id is idempotent and does not queue a second job.
     let (status, _) = send(
         &state,
@@ -1453,15 +1443,6 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    let queued: i64 = conn
-        .query_one(
-            "SELECT count(*) FROM comicvine_metadata_refresh_requests",
-            &[],
-        )
-        .await
-        .unwrap()
-        .get(0);
-    assert_eq!(queued, 1);
 
     // A different confirmed id on the same issue is a 400, not a silent swap.
     let (status, body) = send(
@@ -1514,18 +1495,7 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
     );
 
     // Manual refresh recovers an already-confirmed identity without remapping:
-    // a failed job becomes immediately due with a fresh bounded attempt budget.
-    conn.execute(
-        "UPDATE comicvine_metadata_refresh_requests r \
-         SET state = 'failed', attempts = 3, next_attempt_at = now() + interval '1 day', \
-             lease_expires_at = now() + interval '1 day', last_error = 'provider_unavailable', \
-             completed_at = now() \
-         FROM external_identities e \
-         WHERE e.id = r.external_identity_id AND e.external_id = '2222'",
-        &[],
-    )
-    .await
-    .unwrap();
+    // it is one bounded awaited attempt and leaves the mapping untouched.
     let (status, body) = send(
         &state,
         call(
@@ -1542,60 +1512,17 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
         body,
         json!({"issue_id": i, "refreshed": true, "comicvine_issue_id": "2222"})
     );
-    let recovered = conn
+    let still_confirmed: String = conn
         .query_one(
-            "SELECT r.state, r.attempts, r.last_error, r.lease_expires_at, \
-                    r.completed_at, r.next_attempt_at <= now() \
-             FROM comicvine_metadata_refresh_requests r \
-             JOIN external_identities e ON e.id = r.external_identity_id \
+            "SELECT m.status FROM issue_external_identity_mappings m \
+             JOIN external_identities e ON e.id = m.external_identity_id \
              WHERE e.external_id = '2222'",
-            &[],
-        )
-        .await
-        .unwrap();
-    assert_eq!(recovered.get::<_, String>(0), "pending");
-    assert_eq!(recovered.get::<_, i32>(1), 0);
-    assert_eq!(recovered.get::<_, Option<String>>(2), None);
-    assert!(recovered
-        .get::<_, Option<chrono::DateTime<chrono::Utc>>>(3)
-        .is_none());
-    assert!(recovered
-        .get::<_, Option<chrono::DateTime<chrono::Utc>>>(4)
-        .is_none());
-    assert!(recovered.get::<_, bool>(5));
-
-    // The same recovery inserts durable work if an old identity has no row.
-    conn.execute(
-        "DELETE FROM comicvine_metadata_refresh_requests r \
-         USING external_identities e \
-         WHERE e.id = r.external_identity_id AND e.external_id = '2222'",
-        &[],
-    )
-    .await
-    .unwrap();
-    let (status, _) = send(
-        &state,
-        call(
-            "POST",
-            &format!("{base}/metadata:refresh"),
-            &token,
-            &csrf,
-            None,
-        ),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
-    let reinserted: i64 = conn
-        .query_one(
-            "SELECT count(*) FROM comicvine_metadata_refresh_requests r \
-             JOIN external_identities e ON e.id = r.external_identity_id \
-             WHERE e.external_id = '2222' AND r.state = 'pending' AND r.attempts = 0",
             &[],
         )
         .await
         .unwrap()
         .get(0);
-    assert_eq!(reinserted, 1);
+    assert_eq!(still_confirmed, "confirmed");
 
     // Remove: mapping becomes unresolved with evidence and confidence cleared.
     let (status, body) = send(
@@ -1736,8 +1663,8 @@ async fn confirm_and_replace_hydrate_creator_credits_inline() {
         2,
         "confirm and replace each fetch credits inline"
     );
-    assert!(calls[0].path.starts_with("/api/issue/4000-1111?"));
-    assert!(calls[1].path.starts_with("/api/issue/4000-2222?"));
+    assert!(calls[0].path.starts_with("/api/issue/4000-1111/?"));
+    assert!(calls[1].path.starts_with("/api/issue/4000-2222/?"));
 
     let metadata: Value = serde_json::from_str(
         conn.query_one(
@@ -2161,67 +2088,6 @@ async fn identity_writers_take_the_queue_lock_before_row_locks() {
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(body["has_confirmed_identity"], false);
 }
-#[tokio::test]
-async fn confirmation_reopens_finished_refresh_jobs_instead_of_failing() {
-    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-refresh").await;
-    set_key(false);
-    for (n, finished) in ["failed", "completed", "no_credits"]
-        .into_iter()
-        .enumerate()
-    {
-        let cv = 9200 + n as i32;
-        let conn = state.pool.get().await.unwrap();
-        let t = thread(&conn, user_id, &format!("Refresh {finished}")).await;
-        let i = issue(&conn, t, "1", 1).await;
-        let identity: i32 = conn
-            .query_one(
-                "INSERT INTO external_identities (provider, entity_type, external_id, external_url, \
-                 metadata_json, created_at, updated_at) \
-                 VALUES ('comicvine', 'issue', $1, 'https://comicvine.gamespot.com/', '{}'::jsonb, now(), now()) \
-                 RETURNING id",
-                &[&cv.to_string()],
-            )
-            .await
-            .unwrap()
-            .get(0);
-        conn.execute(
-            "INSERT INTO comicvine_metadata_refresh_requests \
-                (external_identity_id, state, attempts, next_attempt_at, last_error, completed_at, \
-                 created_at, updated_at) \
-             VALUES ($1, $2, 4, now() + interval '1 day', 'old', now(), now(), now())",
-            &[&identity, &finished],
-        )
-        .await
-        .unwrap();
-        drop(conn);
-        let (status, body) = send(
-            &state,
-            call(
-                "POST",
-                &format!("/api/v2/comicvine/issues/{i}/identity:confirm"),
-                &token,
-                &csrf,
-                Some(json!({"comicvine_issue_id": cv})),
-            ),
-        )
-        .await;
-        assert_eq!(status, StatusCode::OK, "{finished}: {body:?}");
-        assert_eq!(body["has_confirmed_identity"], true);
-        let conn = state.pool.get().await.unwrap();
-        let row = conn
-            .query_one(
-                "SELECT state, attempts, last_error, completed_at IS NULL \
-                 FROM comicvine_metadata_refresh_requests WHERE external_identity_id = $1",
-                &[&identity],
-            )
-            .await
-            .unwrap();
-        assert_eq!(row.get::<_, String>(0), "pending", "{finished}");
-        assert_eq!(row.get::<_, i32>(1), 0);
-        assert_eq!(row.get::<_, Option<String>>(2), None);
-        assert!(row.get::<_, bool>(3));
-    }
-}
 
 #[tokio::test]
 async fn identity_writers_serialize_with_sibling_queue_writers() {
@@ -2449,69 +2315,6 @@ async fn correction_provider_values_use_python_str() {
 // ---------------------------------------------------------------------------
 // Chunk D: single-issue import.
 // ---------------------------------------------------------------------------
-
-/// #5592: single-issue adoption is an import commit — it must durably enqueue
-/// deep-metadata work without waiting for a Roll intelligence read, and a
-/// re-import that reuses the confirmed identity must not duplicate the request.
-#[tokio::test]
-async fn import_issue_enqueues_durable_metadata_refresh_request() {
-    let (state, token, csrf, _user_id, _guard) = setup_user("cvv2-5592-issue").await;
-    set_key(false);
-    let conn = state.pool.get().await.unwrap();
-    let (status, body) = send(
-        &state,
-        call(
-            "POST",
-            "/api/v2/comicvine/issues:import",
-            &token,
-            &csrf,
-            Some(json!({
-                "title": "Durable Issue", "comicvine_issue_id": 93001, "issue_number": "3"
-            })),
-        ),
-    )
-    .await;
-    assert_eq!(status, StatusCode::CREATED, "{body:?}");
-    let external_identity_id = body["external_identity_id"].as_i64().unwrap() as i32;
-
-    // No Roll read happened: the import commit itself queued the work.
-    let row = conn
-        .query_one(
-            "SELECT r.state, r.attempts, e.external_id \
-             FROM comicvine_metadata_refresh_requests r \
-             JOIN external_identities e ON e.id = r.external_identity_id \
-             WHERE r.external_identity_id = $1",
-            &[&external_identity_id],
-        )
-        .await
-        .unwrap();
-    assert_eq!(row.get::<_, String>(0), "pending");
-    assert_eq!(row.get::<_, i32>(1), 0);
-    assert_eq!(row.get::<_, String>(2), "93001");
-
-    // A Roll read now finds active durable work and must not add another row.
-    let issue_id = body["issue_id"].as_i64().unwrap() as i32;
-    let (status, intelligence) = send(
-        &state,
-        get(
-            &format!("/api/v2/issues/{issue_id}/comicvine"),
-            &token,
-            &csrf,
-        ),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK, "{intelligence:?}");
-    let count: i64 = conn
-        .query_one(
-            "SELECT count(*) FROM comicvine_metadata_refresh_requests \
-             WHERE external_identity_id = $1",
-            &[&external_identity_id],
-        )
-        .await
-        .unwrap()
-        .get(0);
-    assert_eq!(count, 1, "the Roll read must not duplicate the request");
-}
 
 #[tokio::test]
 async fn import_issue_creates_thread_identity_and_reading_order_slot() {
@@ -2847,108 +2650,6 @@ async fn imports_serialize_with_sibling_queue_writers() {
     );
 }
 
-/// #4638065822: the repair worker's `PERSIST` holds the refresh-request row
-/// and then updates the identity row. A confirmation already holds the
-/// identity row, so it must never wait on that request row. While another
-/// session holds the request row (as a worker does), the confirmation must
-/// finish without becoming a lock waiter, leave the running job alone, and
-/// release the identity row for the worker's update.
-#[tokio::test]
-async fn confirmation_never_waits_on_a_refresh_row_the_repair_worker_holds() {
-    let (state, token, csrf, user_id, _guard) = setup_user_with("cvv2-repair-race", 4, None).await;
-    let (i, identity) = {
-        let conn = state.pool.get().await.unwrap();
-        let t = thread(&conn, user_id, "Repair race").await;
-        let i = issue(&conn, t, "1", 1).await;
-        let identity: i32 = conn
-            .query_one(
-                "INSERT INTO external_identities (provider, entity_type, external_id, \
-                 external_url, metadata_json, created_at, updated_at) \
-                 VALUES ('comicvine', 'issue', '9700', NULL, '{}'::json, now(), now()) RETURNING id",
-                &[],
-            )
-            .await
-            .unwrap()
-            .get(0);
-        conn.execute(
-            "INSERT INTO comicvine_metadata_refresh_requests \
-                (external_identity_id, state, attempts, next_attempt_at, lease_expires_at, \
-                 created_at, updated_at) \
-             VALUES ($1, 'running', 1, now(), now() + interval '120 seconds', now(), now())",
-            &[&identity],
-        )
-        .await
-        .unwrap();
-        (i, identity)
-    };
-    let mut worker = state.pool.get().await.unwrap();
-    let worker_tx = worker.transaction().await.unwrap();
-    worker_tx
-        .query_one(
-            "SELECT id FROM comicvine_metadata_refresh_requests \
-             WHERE external_identity_id = $1 FOR UPDATE",
-            &[&identity],
-        )
-        .await
-        .unwrap();
-    let pending = spawn_send(
-        &state,
-        call(
-            "POST",
-            &format!("/api/v2/comicvine/issues/{i}/identity:confirm"),
-            &token,
-            &csrf,
-            Some(json!({"comicvine_issue_id": 9700})),
-        ),
-    );
-    // Deterministic: poll until the request finishes, failing the moment any
-    // session waits on a row or transaction lock (no sleeps, no deadlines).
-    while !pending.is_finished() {
-        let waiters: i64 = worker_tx
-            .query_one(
-                "SELECT count(*) FROM pg_stat_activity \
-                 WHERE datname = current_database() AND cardinality(pg_blocking_pids(pid)) > 0",
-                &[],
-            )
-            .await
-            .unwrap()
-            .get(0);
-        assert_eq!(
-            waiters, 0,
-            "the confirmation waited on the worker's request row"
-        );
-        tokio::task::yield_now().await;
-    }
-    let (status, body) = pending.await.unwrap();
-    assert_eq!(status, StatusCode::OK, "{body:?}");
-    assert_eq!(body["comicvine_issue_id"], "9700");
-    // The worker's PERSIST step can now update the identity row.
-    worker_tx
-        .execute(
-            "UPDATE external_identities SET updated_at = now() WHERE id = $1",
-            &[&identity],
-        )
-        .await
-        .unwrap();
-    let job: (String, i32) = {
-        let row = worker_tx
-            .query_one(
-                "SELECT state, attempts FROM comicvine_metadata_refresh_requests \
-                 WHERE external_identity_id = $1",
-                &[&identity],
-            )
-            .await
-            .unwrap();
-        (row.get(0), row.get(1))
-    };
-    assert_eq!(
-        job,
-        ("running".to_owned(), 1),
-        "the running job is untouched"
-    );
-    worker_tx.commit().await.unwrap();
-}
-
 // ---------------------------------------------------------------------------
 // Chunk E: series import and v2 import status.
 // ---------------------------------------------------------------------------
@@ -3134,178 +2835,13 @@ async fn import_series_adopts_roster_and_reuses_on_retry() {
     );
 }
 
-/// #5592: a fresh series import must durably enqueue deep-metadata refresh
-/// work for every confirmed imported issue identity at commit, without opening
-/// Roll. Reimport is idempotent (no duplicate requests).
-#[tokio::test]
-async fn import_series_enqueues_durable_metadata_refresh_requests() {
-    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-5592-enq").await;
-    set_key(true);
-    let conn = state.pool.get().await.unwrap();
-
-    provider_ok(
-        &state,
-        json!({"results": {"id": 5592, "name": "Hydration Test"}}),
-    );
-    provider_ok(
-        &state,
-        json!({"number_of_total_results": 2, "results": [
-            roster_row(91001, "1", 5592), roster_row(91002, "2", 5592)
-        ]}),
-    );
-    let (status, body) = send(
-        &state,
-        call(
-            "POST",
-            "/api/v2/comicvine/series:import",
-            &token,
-            &csrf,
-            Some(json!({"comicvine_volume_id": 5592})),
-        ),
-    )
-    .await;
-    assert_eq!(status, StatusCode::CREATED, "{body:?}");
-    let thread_id = body["thread_id"].as_i64().unwrap() as i32;
-
-    let rows = conn
-        .query(
-            "SELECT r.state, r.attempts, e.external_id \
-             FROM comicvine_metadata_refresh_requests r \
-             JOIN external_identities e ON e.id = r.external_identity_id \
-             JOIN issue_external_identity_mappings m ON m.external_identity_id = e.id \
-             JOIN issues i ON i.id = m.issue_id \
-             WHERE i.thread_id = $1 AND m.status = 'confirmed' \
-             ORDER BY e.external_id",
-            &[&thread_id],
-        )
-        .await
-        .unwrap();
-    assert_eq!(
-        rows.len(),
-        2,
-        "every imported identity gets a durable request"
-    );
-    for row in &rows {
-        assert_eq!(row.get::<_, String>(0), "pending");
-        assert_eq!(row.get::<_, i32>(1), 0);
-    }
-    let external_ids: Vec<String> = rows.iter().map(|r| r.get(2)).collect();
-    assert_eq!(external_ids, vec!["91001".to_owned(), "91002".to_owned()]);
-
-    // Seed user state and hydrated credits before the retry. Roster metadata
-    // must never erase any of it, and the retry must not add history events.
-    let first_issue_id = body["issue_results"][0]["issue_id"]
-        .as_i64()
-        .expect("first imported issue") as i32;
-    conn.execute(
-        "UPDATE external_identities \
-         SET metadata_json = (metadata_json::jsonb || ($1::text)::jsonb)::json \
-         WHERE provider = 'comicvine' AND entity_type = 'issue' AND external_id = '91001'",
-        &[
-            &json!({"creator_credits": [{"id": 88, "name": "Existing Creator", "role": "writer"}]})
-                .to_string(),
-        ],
-    )
-    .await
-    .unwrap();
-    conn.execute(
-        "UPDATE issues SET status = 'read', read_at = TIMESTAMPTZ '2026-11-01 00:00:00+00' \
-         WHERE id = $1",
-        &[&first_issue_id],
-    )
-    .await
-    .unwrap();
-    conn.execute(
-        "UPDATE threads SET queue_position = 9, last_rating = 4.5 WHERE id = $1",
-        &[&thread_id],
-    )
-    .await
-    .unwrap();
-    conn.execute(
-        "INSERT INTO events (type, thread_id, issue_id, user_id, rating) \
-         VALUES ('rate', $1, $2, $3, 4.5)",
-        &[&thread_id, &first_issue_id, &user_id],
-    )
-    .await
-    .unwrap();
-
-    // Retry import: no duplicate refresh requests, existing rows preserved.
-    fake(&state).clear();
-    provider_ok(
-        &state,
-        json!({"results": {"id": 5592, "name": "Hydration Test"}}),
-    );
-    provider_ok(
-        &state,
-        json!({"number_of_total_results": 2, "results": [
-            roster_row(91001, "1", 5592), roster_row(91002, "2", 5592)
-        ]}),
-    );
-    let (status, _) = send(
-        &state,
-        call(
-            "POST",
-            "/api/v2/comicvine/series:import",
-            &token,
-            &csrf,
-            Some(json!({"comicvine_volume_id": 5592})),
-        ),
-    )
-    .await;
-    assert_eq!(status, StatusCode::CREATED);
-    let count: i64 = conn
-        .query_one(
-            "SELECT count(*) FROM comicvine_metadata_refresh_requests r \
-             JOIN external_identities e ON e.id = r.external_identity_id \
-             WHERE e.provider = 'comicvine' AND e.entity_type = 'issue' \
-               AND e.external_id = ANY($1::text[])",
-            &[&vec!["91001".to_owned(), "91002".to_owned()]],
-        )
-        .await
-        .unwrap()
-        .get(0);
-    assert_eq!(
-        count, 2,
-        "reimport must not create duplicate refresh requests"
-    );
-    let preserved = conn
-        .query_one(
-            "SELECT t.queue_position, t.last_rating, i.status, i.read_at::text, \
-                    e.metadata_json::text, m.status, \
-                    (SELECT count(*) FROM events \
-                     WHERE thread_id = t.id AND type = 'issues_created'), \
-                    (SELECT count(*) FROM events \
-                     WHERE thread_id = t.id AND type = 'rate' AND rating = 4.5) \
-             FROM threads t \
-             JOIN issues i ON i.id = $2 \
-             JOIN issue_external_identity_mappings m ON m.issue_id = i.id \
-             JOIN external_identities e ON e.id = m.external_identity_id \
-             WHERE t.id = $1 AND m.status = 'confirmed'",
-            &[&thread_id, &first_issue_id],
-        )
-        .await
-        .unwrap();
-    assert_eq!(preserved.get::<_, i32>(0), 9);
-    assert_eq!(preserved.get::<_, Option<f64>>(1), Some(4.5));
-    assert_eq!(preserved.get::<_, String>(2), "read");
-    assert!(preserved
-        .get::<_, String>(3)
-        .starts_with("2026-11-01 00:00:00"));
-    let metadata: Value = serde_json::from_str(preserved.get(4)).unwrap();
-    assert_eq!(metadata["creator_credits"][0]["name"], "Existing Creator");
-    assert_eq!(preserved.get::<_, String>(5), "confirmed");
-    assert_eq!(preserved.get::<_, i64>(6), 2, "no new import history");
-    assert_eq!(preserved.get::<_, i64>(7), 1, "rating history is retained");
-}
-
-/// #5592: exercise the complete production read path used by Roll after a
-/// fresh import and an awaited repair batch. No Roll read is needed to enqueue
-/// the work, and no manual identity remap participates in hydration.
+/// Imported issues report `needs_hydration` and recover through the explicit
+/// synchronous `metadata:refresh` (Retry) path. No drain, enqueue, dispatch or
+/// remap participates, and the awaited response persists the fetched credits.
 #[tokio::test]
 async fn import_worker_and_roll_issue_read_show_hydrated_creators() {
     let (state, token, csrf, _user_id, _guard) = setup_user("cvv2-5592-roll").await;
     set_key(true);
-    std::env::set_var("CRON_SECRET", "test-secret");
     provider_ok(
         &state,
         json!({"results": {"id": 5593, "name": "Roll Hydration"}}),
@@ -3335,7 +2871,7 @@ async fn import_worker_and_roll_issue_read_show_hydrated_creators() {
 
     let (status, before) = send(&state, get(&intelligence_path, &token, &csrf)).await;
     assert_eq!(status, StatusCode::OK, "{before:?}");
-    assert_eq!(before["metadata_status"], "refresh_pending");
+    assert_eq!(before["metadata_status"], "needs_hydration");
     assert_eq!(before["creators"], json!([]));
 
     provider_ok(
@@ -3355,20 +2891,13 @@ async fn import_worker_and_roll_issue_read_show_hydrated_creators() {
             "date_last_updated": "2026-11-01 17:33:53"
         }}),
     );
-    let (status, drained) = send(
-        &state,
-        Request::builder()
-            .method("GET")
-            .uri("/api/v2/maintenance/comicvine-metadata-repairs")
-            .header(header::AUTHORIZATION, "Bearer test-secret")
-            .body(Body::empty())
-            .unwrap(),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK, "{drained:?}");
-    assert_eq!(drained["claimed"], 1);
-    assert_eq!(drained["completed"], 1);
-    assert_eq!(drained["deferred"], 0);
+    let retry_path = format!("/api/v2/comicvine/issues/{issue_id}/metadata:refresh");
+    let (status, retried) = send(&state, call("POST", &retry_path, &token, &csrf, None)).await;
+    assert_eq!(status, StatusCode::OK, "{retried:?}");
+    assert_eq!(retried["refreshed"], true);
+    // The confirmed external identity stores the numeric ComicVine issue id;
+    // the `4000-` prefix belongs only to the provider URL.
+    assert_eq!(retried["comicvine_issue_id"], "92001");
 
     let (status, after) = send(&state, get(&intelligence_path, &token, &csrf)).await;
     assert_eq!(status, StatusCode::OK, "{after:?}");
@@ -3380,11 +2909,11 @@ async fn import_worker_and_roll_issue_read_show_hydrated_creators() {
     let singular_calls = fake(&state)
         .calls()
         .iter()
-        .filter(|call| call.path.starts_with("/api/issue/4000-92001?"))
+        .filter(|call| call.path.starts_with("/api/issue/4000-92001/?"))
         .count();
     assert_eq!(
         singular_calls, 1,
-        "the durable worker fetched the issue once"
+        "the explicit synchronous Retry fetched the issue once"
     );
 }
 

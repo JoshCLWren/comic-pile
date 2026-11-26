@@ -1380,4 +1380,335 @@ mod tests {
         assert_ne!(id, overlap_identity("comicvine:2", "comicvine:1"));
         assert!(id.starts_with("overlap-") && id.len() == "overlap-".len() + 24);
     }
+
+    /// Counts real statements sent to PostgreSQL by wrapping the `DbExec`
+    /// executor. The queries themselves are unchanged; only the call count is
+    /// observed, so a per-row fan-out is caught deterministically.
+    struct CountingExec<'a, E> {
+        inner: &'a E,
+        statements: std::cell::Cell<usize>,
+    }
+
+    impl<E> CountingExec<'_, E> {
+        fn statements(&self) -> usize {
+            self.statements.get()
+        }
+    }
+
+    impl<E: crate::issue_identity::DbExec> crate::issue_identity::DbExec for CountingExec<'_, E> {
+        async fn run_query(
+            &self,
+            sql: &str,
+            params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+        ) -> Result<Vec<tokio_postgres::Row>, tokio_postgres::Error> {
+            self.statements.set(self.statements.get() + 1);
+            self.inner.run_query(sql, params).await
+        }
+
+        async fn run_query_opt(
+            &self,
+            sql: &str,
+            params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+        ) -> Result<Option<tokio_postgres::Row>, tokio_postgres::Error> {
+            self.statements.set(self.statements.get() + 1);
+            self.inner.run_query_opt(sql, params).await
+        }
+
+        async fn run_query_one(
+            &self,
+            sql: &str,
+            params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+        ) -> Result<tokio_postgres::Row, tokio_postgres::Error> {
+            self.statements.set(self.statements.get() + 1);
+            self.inner.run_query_one(sql, params).await
+        }
+
+        async fn run_execute(
+            &self,
+            sql: &str,
+            params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+        ) -> Result<u64, tokio_postgres::Error> {
+            self.statements.set(self.statements.get() + 1);
+            self.inner.run_execute(sql, params).await
+        }
+    }
+
+    async fn seed_statement_count_source(connection: &tokio_postgres::Client) {
+        connection
+            .batch_execute(
+                r#"
+                INSERT INTO users (id, username) VALUES (9101, 'statement-count-reader');
+                INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, total_issues, reading_progress, created_at)
+                VALUES (9101, 9101, 'Series #1', 'comic', 1, 1, 'active', 1, 'not_started', NOW());
+                INSERT INTO issues (id, thread_id, issue_number, position, status, created_at)
+                VALUES (9101, 9101, '1', 0, 'unread', NOW());
+                INSERT INTO cbl_sources (id, repository, revision_sha, synced_at, created_at, updated_at)
+                VALUES (9101, 'cbl-statement-count', 'rev', NOW(), NOW(), NOW());
+                INSERT INTO cbl_source_lists
+                    (id, source_id, source_path, name, declared_issue_count,
+                     content_hash, revision_sha, active, created_at, updated_at)
+                VALUES (9101, 9101, 'lists/statement-count.json', 'Statement count', 1001,
+                        'hash', 'rev', TRUE, NOW(), NOW());
+                INSERT INTO external_identities
+                    (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                SELECT 200000 + g, 'comicvine', 'issue', format('cv-count-%s', g), '{}'::json, NOW(), NOW()
+                FROM generate_series(1, 1001) g;
+                INSERT INTO cbl_source_entries
+                    (id, list_id, position, series_name, issue_number, external_issue_identity_id, created_at)
+                SELECT 300000 + g, 9101, g, 'Series', g::text, 200000 + g, NOW()
+                FROM generate_series(1, 1001) g;
+                "#,
+            )
+            .await
+            .expect("seed 1001-position statement-count source");
+    }
+
+    /// #5522: adoption reconciliation must issue a bounded number of real
+    /// PostgreSQL statements regardless of source-list size. The old resolver
+    /// issued 2-4 queries per row; a 1001-position preview issued thousands.
+    #[tokio::test]
+    async fn adoption_reconcile_statement_count_is_bounded_by_list_size() {
+        let state = crate::test_support::test_state(1)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("test connection");
+        seed_statement_count_source(&connection).await;
+        let meta = crate::issue_identity::load_active_cbl_list_meta(&connection, 9101)
+            .await
+            .expect("list meta");
+
+        let mut counts = Vec::new();
+        for size in [1_usize, 25, 228, 1001] {
+            let counter = CountingExec {
+                inner: &connection,
+                statements: std::cell::Cell::new(0),
+            };
+            let positions: Vec<i64> = (1..=size).map(|p| p as i64).collect();
+            let entries = crate::issue_identity::reconcile_entries_for_adoption_positions(
+                &counter, 9101, &meta, &positions,
+            )
+            .await
+            .expect("reconcile positions");
+            assert_eq!(entries.len(), size);
+            let statements = counter.statements();
+            assert!(
+                statements <= 12,
+                "preview for {size} positions issued {statements} statements (bounded N+1 regression)"
+            );
+            counts.push(statements);
+        }
+        assert_eq!(
+            counts.first(),
+            counts.last(),
+            "statement count must not grow with source size: {counts:?}"
+        );
+    }
+
+    /// #5522: the batched resolver must preserve duplicate-identity and
+    /// read-status disambiguation exactly (the old per-entry resolver picked
+    /// the earliest-read canonical issue and marked ambiguous mixed read state).
+    #[tokio::test]
+    async fn adoption_reconcile_preserves_duplicate_identity_and_read_status() {
+        let state = crate::test_support::test_state(1)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("test connection");
+        connection
+            .batch_execute(
+                r#"
+                INSERT INTO users (id, username) VALUES (9401, 'duplicate-identity-reader');
+                INSERT INTO threads
+                    (id, user_id, title, format, issues_remaining, queue_position, status, total_issues, reading_progress, created_at)
+                VALUES
+                    (9401, 9401, 'Thread A', 'comic', 2, 1, 'active', 2, 'in_progress', NOW()),
+                    (9402, 9401, 'Thread B', 'comic', 2, 2, 'active', 2, 'in_progress', NOW());
+                INSERT INTO issues (id, thread_id, issue_number, position, status, read_at, created_at)
+                VALUES
+                    (9401, 9401, '1', 0, 'read', '2026-01-02T00:00:00Z', NOW()),
+                    (9402, 9402, '1', 0, 'unread', NULL, NOW()),
+                    (9403, 9401, '2', 1, 'read', '2026-02-01T00:00:00Z', NOW()),
+                    (9404, 9402, '2', 1, 'read', '2026-01-01T00:00:00Z', NOW());
+                INSERT INTO external_identities
+                    (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                VALUES
+                    (9401, 'comicvine', 'issue', 'cv-dup-a', '{}'::json, NOW(), NOW()),
+                    (9402, 'comicvine', 'issue', 'cv-dup-b', '{}'::json, NOW(), NOW());
+                INSERT INTO issue_external_identity_mappings
+                    (issue_id, external_identity_id, status, evidence_source, evidence_json, created_at, updated_at)
+                VALUES
+                    (9401, 9401, 'confirmed', 'test', '{}'::json, NOW(), NOW()),
+                    (9402, 9401, 'confirmed', 'test', '{}'::json, NOW(), NOW()),
+                    (9403, 9402, 'confirmed', 'test', '{}'::json, NOW(), NOW()),
+                    (9404, 9402, 'confirmed', 'test', '{}'::json, NOW(), NOW());
+                INSERT INTO cbl_sources (id, repository, revision_sha, synced_at, created_at, updated_at)
+                VALUES (9401, 'cbl-duplicate', 'rev', NOW(), NOW(), NOW());
+                INSERT INTO cbl_source_lists
+                    (id, source_id, source_path, name, declared_issue_count,
+                     content_hash, revision_sha, active, created_at, updated_at)
+                VALUES (9401, 9401, 'lists/duplicate.json', 'Duplicate', 2,
+                        'hash', 'rev', TRUE, NOW(), NOW());
+                INSERT INTO cbl_source_entries
+                    (id, list_id, position, series_name, issue_number, external_issue_identity_id, created_at)
+                VALUES
+                    (9401, 9401, 1, 'Alpha', '1', 9401, NOW()),
+                    (9402, 9401, 2, 'Alpha', '2', 9402, NOW());
+                "#,
+            )
+            .await
+            .expect("seed duplicate identities");
+        let meta = crate::issue_identity::load_active_cbl_list_meta(&connection, 9401)
+            .await
+            .expect("list meta");
+        let entries =
+            crate::issue_identity::reconcile_entries_for_adoption(&connection, 9401, &meta)
+                .await
+                .expect("reconcile duplicate identities");
+        assert_eq!(entries.len(), 2);
+
+        let mixed = &entries[0];
+        assert_eq!(
+            mixed.get("resolved_issue_id").and_then(Value::as_i64),
+            Some(9401),
+            "read issue wins over unread duplicate"
+        );
+        assert_eq!(
+            mixed.get("resolution_status").and_then(Value::as_str),
+            Some("resolved_via_comicvine_canonical_ambiguous")
+        );
+        assert_eq!(
+            mixed.get("is_duplicate_identity").and_then(Value::as_bool),
+            Some(true)
+        );
+
+        let both_read = &entries[1];
+        assert_eq!(
+            both_read.get("resolved_issue_id").and_then(Value::as_i64),
+            Some(9404),
+            "earliest read_at wins when both duplicates are read"
+        );
+        assert_eq!(
+            both_read.get("resolution_status").and_then(Value::as_str),
+            Some("resolved_via_comicvine_canonical")
+        );
+        assert_eq!(
+            both_read
+                .get("is_duplicate_identity")
+                .and_then(Value::as_bool),
+            Some(true)
+        );
+    }
+
+    /// #5522: the reported QA shape (a 228-entry source with one position
+    /// selected) must not fan out. The full source is still reconciled so no
+    /// position is silently skipped; only the statement count is bounded.
+    #[tokio::test]
+    async fn adoption_reconcile_228_source_with_one_selected_is_bounded() {
+        let state = crate::test_support::test_state(1)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("test connection");
+        connection
+            .batch_execute(
+                r#"
+                INSERT INTO users (id, username) VALUES (9301, 'one-selected-reader');
+                INSERT INTO cbl_sources (id, repository, revision_sha, synced_at, created_at, updated_at)
+                VALUES (9301, 'cbl-one-selected', 'rev', NOW(), NOW(), NOW());
+                INSERT INTO cbl_source_lists
+                    (id, source_id, source_path, name, declared_issue_count,
+                     content_hash, revision_sha, active, created_at, updated_at)
+                VALUES (9301, 9301, 'lists/one-selected.json', 'One selected', 228,
+                        'hash', 'rev', TRUE, NOW(), NOW());
+                INSERT INTO external_identities
+                    (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                SELECT 400000 + g, 'comicvine', 'issue', format('cv-one-%s', g), '{}'::json, NOW(), NOW()
+                FROM generate_series(1, 228) g;
+                INSERT INTO cbl_source_entries
+                    (id, list_id, position, series_name, issue_number, external_issue_identity_id, created_at)
+                SELECT 500000 + g, 9301, g, 'Alpha Flight', g::text, 400000 + g, NOW()
+                FROM generate_series(1, 228) g;
+                "#,
+            )
+            .await
+            .expect("seed 228-entry source");
+        let meta = crate::issue_identity::load_active_cbl_list_meta(&connection, 9301)
+            .await
+            .expect("list meta");
+
+        // Commit reconciles the whole source even when one position is chosen.
+        let full_counter = CountingExec {
+            inner: &connection,
+            statements: std::cell::Cell::new(0),
+        };
+        let all = crate::issue_identity::reconcile_entries_for_adoption(&full_counter, 9301, &meta)
+            .await
+            .expect("full source reconcile");
+        assert_eq!(all.len(), 228);
+        assert!(
+            full_counter.statements() <= 12,
+            "full 228-entry reconcile issued {} statements",
+            full_counter.statements()
+        );
+
+        let selected_counter = CountingExec {
+            inner: &connection,
+            statements: std::cell::Cell::new(0),
+        };
+        let selected = crate::issue_identity::reconcile_entries_for_adoption_positions(
+            &selected_counter,
+            9301,
+            &meta,
+            &[7],
+        )
+        .await
+        .expect("one selected position");
+        assert_eq!(selected.len(), 1);
+        assert_eq!(
+            selected[0].get("cbl_position").and_then(Value::as_i64),
+            Some(7)
+        );
+        assert!(
+            selected_counter.statements() <= 12,
+            "one-position reconcile issued {} statements",
+            selected_counter.statements()
+        );
+    }
+
+    /// #5522: the commit path reconciles inside its write transaction. The
+    /// same batched resolver must keep that transactional read bounded too,
+    /// while the write-side atomicity/receipt tests live in tests/issue_identity.rs.
+    #[tokio::test]
+    async fn adoption_commit_reconcile_inside_transaction_is_bounded() {
+        let state = crate::test_support::test_state(1)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let mut connection = db::checkout(&state).await.expect("test connection");
+        seed_statement_count_source(&connection).await;
+        let meta = crate::issue_identity::load_active_cbl_list_meta(&connection, 9101)
+            .await
+            .expect("list meta");
+
+        let tx = connection
+            .build_transaction()
+            .start()
+            .await
+            .expect("transaction");
+        let counter = CountingExec {
+            inner: &tx,
+            statements: std::cell::Cell::new(0),
+        };
+        let entries = crate::issue_identity::reconcile_entries_for_adoption(&counter, 9101, &meta)
+            .await
+            .expect("reconcile full source");
+        assert_eq!(entries.len(), 1001);
+        let statements = counter.statements();
+        assert!(
+            statements <= 12,
+            "commit reconcile for 1001 positions issued {statements} statements"
+        );
+        tx.commit().await.expect("commit read-only transaction");
+    }
 }

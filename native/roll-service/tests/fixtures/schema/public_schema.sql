@@ -226,7 +226,8 @@ CREATE TABLE public.cbl_adoption_receipts (
     cbl_source_list_id integer NOT NULL,
     plan_id integer NOT NULL,
     request_fingerprint character varying(64) NOT NULL,
-    created_at timestamp with time zone NOT NULL
+    created_at timestamp with time zone NOT NULL,
+    response_json jsonb
 );
 
 
@@ -395,45 +396,6 @@ CREATE SEQUENCE public.collection_exclusions_id_seq
 --
 
 ALTER SEQUENCE public.collection_exclusions_id_seq OWNED BY public.collection_exclusions.id;
-
-
---
--- Name: comicvine_metadata_refresh_requests; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.comicvine_metadata_refresh_requests (
-    id integer NOT NULL,
-    external_identity_id integer NOT NULL,
-    state character varying(20) DEFAULT 'pending'::character varying NOT NULL,
-    attempts integer DEFAULT 0 NOT NULL,
-    next_attempt_at timestamp with time zone NOT NULL,
-    lease_expires_at timestamp with time zone,
-    last_error character varying(200),
-    completed_at timestamp with time zone,
-    created_at timestamp with time zone NOT NULL,
-    updated_at timestamp with time zone NOT NULL,
-    CONSTRAINT ck_comicvine_metadata_refresh_state CHECK (((state)::text = ANY ((ARRAY['pending'::character varying, 'running'::character varying, 'completed'::character varying, 'no_credits'::character varying, 'deferred'::character varying, 'failed'::character varying])::text[])))
-);
-
-
---
--- Name: comicvine_metadata_refresh_requests_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-CREATE SEQUENCE public.comicvine_metadata_refresh_requests_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
---
--- Name: comicvine_metadata_refresh_requests_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
---
-
-ALTER SEQUENCE public.comicvine_metadata_refresh_requests_id_seq OWNED BY public.comicvine_metadata_refresh_requests.id;
 
 
 --
@@ -1067,7 +1029,8 @@ CREATE TABLE public.issues (
     "position" integer NOT NULL,
     catalog_issue_id bigint,
     merged_into_issue_id integer,
-    merged_at timestamp with time zone
+    merged_at timestamp with time zone,
+    issue_number_alias character varying(50)
 );
 
 
@@ -1979,13 +1942,6 @@ ALTER TABLE ONLY public.collection_exclusions ALTER COLUMN id SET DEFAULT nextva
 
 
 --
--- Name: comicvine_metadata_refresh_requests id; Type: DEFAULT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.comicvine_metadata_refresh_requests ALTER COLUMN id SET DEFAULT nextval('public.comicvine_metadata_refresh_requests_id_seq'::regclass);
-
-
---
 -- Name: continuity_plans id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -2338,14 +2294,6 @@ ALTER TABLE ONLY public.cbl_sources
 
 ALTER TABLE ONLY public.collection_exclusions
     ADD CONSTRAINT collection_exclusions_pkey PRIMARY KEY (id);
-
-
---
--- Name: comicvine_metadata_refresh_requests comicvine_metadata_refresh_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.comicvine_metadata_refresh_requests
-    ADD CONSTRAINT comicvine_metadata_refresh_requests_pkey PRIMARY KEY (id);
 
 
 --
@@ -2706,14 +2654,6 @@ ALTER TABLE ONLY public.cbl_source_entries
 
 ALTER TABLE ONLY public.cbl_source_lists
     ADD CONSTRAINT uq_cbl_source_list_path UNIQUE (source_id, source_path);
-
-
---
--- Name: comicvine_metadata_refresh_requests uq_comicvine_metadata_refresh_identity; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.comicvine_metadata_refresh_requests
-    ADD CONSTRAINT uq_comicvine_metadata_refresh_identity UNIQUE (external_identity_id);
 
 
 --
@@ -3084,13 +3024,6 @@ CREATE INDEX ix_cbl_source_list_source_path_trgm ON public.cbl_source_lists USIN
 --
 
 CREATE INDEX ix_collection_exclusions_user_id ON public.collection_exclusions USING btree (user_id);
-
-
---
--- Name: ix_comicvine_metadata_refresh_due; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX ix_comicvine_metadata_refresh_due ON public.comicvine_metadata_refresh_requests USING btree (state, next_attempt_at);
 
 
 --
@@ -3831,14 +3764,6 @@ ALTER TABLE ONLY public.cbl_source_lists
 
 ALTER TABLE ONLY public.collection_exclusions
     ADD CONSTRAINT collection_exclusions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
-
-
---
--- Name: comicvine_metadata_refresh_requests comicvine_metadata_refresh_requests_external_identity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.comicvine_metadata_refresh_requests
-    ADD CONSTRAINT comicvine_metadata_refresh_requests_external_identity_id_fkey FOREIGN KEY (external_identity_id) REFERENCES public.external_identities(id) ON DELETE CASCADE;
 
 
 --

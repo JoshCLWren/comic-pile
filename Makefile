@@ -1,6 +1,4 @@
 .PHONY: help setup lint verify verify-e2e verify-e2e-regression sync venv githook install-githook tidy
-.PHONY: create-phase1 create-phase2 create-phase3 create-phase4 create-phase5 create-phase6 create-phase7 create-phase8 create-phase9
-.PHONY: merge-phase1 merge-phase2 merge-phase3 merge-phase4 merge-phase5 merge-phase6 merge-phase7 merge-phase8 merge-phase9
 .PHONY: dev migrate db-up db-down worktrees status deploy-prod prod-migrate deploy-prod-migrate dev-all dev-frontend
 .PHONY: docker-test-up docker-test-down docker-test-logs docker-test-health test-e2e-browser-docker test-e2e-browser-quick
 .PHONY: test-e2e-prod-smoke check-prod-assets clone-prod-export clone-prod-import
@@ -85,105 +83,6 @@ sync:  ## Install dependencies via uv
 venv:  ## Create virtual environment with uv
 	uv venv
 
-create-phase1:  ## Create Phase 1 branch (phase/1-cleanup-fastapi-setup)
-	@git checkout main && git pull && git checkout -b phase/1-cleanup-fastapi-setup
-
-create-phase2:  ## Create Phase 2 branch (phase/2-database-models)
-	@git checkout main && git pull && git checkout -b phase/2-database-models
-
-create-phase3:  ## Create Phase 3 branch (phase/3-rest-api)
-	@git checkout main && git pull && git checkout -b phase/3-rest-api
-
-create-phase4:  ## Create Phase 4 branch (phase/4-templates-views)
-	@git checkout main && git pull && git checkout -b phase/4-templates-views
-
-create-phase5:  ## Create Phase 5 branch (phase/5-interactive-features)
-	@git checkout main && git pull && git checkout -b phase/5-interactive-features
-
-create-phase6:  ## Create Phase 6 branch (phase/6-testing)
-	@git checkout main && git pull && git checkout -b phase/6-testing
-
-create-phase7:  ## Create Phase 7 branch (phase/7-data-import)
-	@git checkout main && git pull && git checkout -b phase/7-data-import
-
-create-phase8:  ## Create Phase 8 branch (phase/8-polish)
-	@git checkout main && git pull && git checkout -b phase/8-polish
-
-create-phase9:  ## Create Phase 9 branch (phase/9-documentation)
-	@git checkout main && git pull && git checkout -b phase/9-documentation
-
-merge-phase1:  ## Merge Phase 1 to main
-	@git checkout main && git pull && \
-	git merge --no-ff phase/1-cleanup-fastapi-setup && \
-	$(MAKE) test && \
-	$(MAKE) lint && \
-	ty check --error-on-warning && \
-	git push origin main
-
-merge-phase2:  ## Merge Phase 2 to main
-	@git checkout main && git pull && \
-	git merge --no-ff phase/2-database-models && \
-	$(MAKE) test && \
-	$(MAKE) lint && \
-	ty check --error-on-warning && \
-	git push origin main
-
-merge-phase3:  ## Merge Phase 3 to main
-	@git checkout main && git pull && \
-	git merge --no-ff phase/3-rest-api && \
-	$(MAKE) test && \
-	$(MAKE) lint && \
-	ty check --error-on-warning && \
-	git push origin main
-
-merge-phase4:  ## Merge Phase 4 to main
-	@git checkout main && git pull && \
-	git merge --no-ff phase/4-templates-views && \
-	$(MAKE) test && \
-	$(MAKE) lint && \
-	ty check --error-on-warning && \
-	git push origin main
-
-merge-phase5:  ## Merge Phase 5 to main
-	@git checkout main && git pull && \
-	git merge --no-ff phase/5-interactive-features && \
-	$(MAKE) test && \
-	$(MAKE) lint && \
-	ty check --error-on-warning && \
-	git push origin main
-
-merge-phase6:  ## Merge Phase 6 to main
-	@git checkout main && git pull && \
-	git merge --no-ff phase/6-testing && \
-	$(MAKE) test && \
-	$(MAKE) lint && \
-	ty check --error-on-warning && \
-	git push origin main
-
-merge-phase7:  ## Merge Phase 7 to main
-	@git checkout main && git pull && \
-	git merge --no-ff phase/7-data-import && \
-	$(MAKE) test && \
-	$(MAKE) lint && \
-	ty check --error-on-warning && \
-	git push origin main
-
-merge-phase8:  ## Merge Phase 8 to main
-	@git checkout main && git pull && \
-	git merge --no-ff phase/8-polish && \
-	$(MAKE) test && \
-	$(MAKE) lint && \
-	ty check --error-on-warning && \
-	git push origin main
-
-merge-phase9:  ## Merge Phase 9 to main
-	@git checkout main && git pull && \
-	git merge --no-ff phase/9-documentation && \
-	$(MAKE) test && \
-	$(MAKE) lint && \
-	ty check --error-on-warning && \
-	git push origin main
-
 dev:  ## Run the frontend and API development servers together
 	@$(MAKE) dev-all
 
@@ -222,14 +121,6 @@ docker-down:  ## Stop Docker containers (docker compose down)
 docker-logs:  ## Show Docker container logs (docker compose logs -f)
 	@echo "Showing Docker container logs..."
 	@docker compose logs -f
-
-docker-migrate:  ## Run database migrations in Docker container
-	@echo "Running database migrations in Docker..."
-	@docker compose exec -T app .venv/bin/alembic upgrade head
-
-docker-test:  ## Run pytest in Docker container
-	@echo "Running tests in Docker container..."
-	@docker compose exec -T app .venv/bin/pytest --cov=comic_pile --cov-report=term-missing
 
 docker-health:  ## Check Docker container health status
 	@echo "Checking Docker container health..."

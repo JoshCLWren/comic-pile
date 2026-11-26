@@ -20,6 +20,27 @@ export interface ThreadIssueCreatorsResponse {
   issues: { issue_id: number; creators: ThreadIssueCreatorCredit[] }[]
 }
 
+export interface IssueReadOperationItem {
+  issue_id: number
+  thread_id: number
+  issue_number: string
+  previous_status: string
+}
+
+export interface IssueReadOperationResponse {
+  id: number
+  operation_type: 'bulk_mark_read' | 'bulk_mark_unread'
+  created_at: string
+  undone_at?: string | null
+  items: IssueReadOperationItem[]
+}
+
+export interface IssueReadOperationUndoResponse {
+  operation: IssueReadOperationResponse
+  undone_issue_ids: number[]
+  skipped_issue_ids: number[]
+}
+
 export interface SetCurrentIssueResponse {
   thread_id: number
   title: string
@@ -38,6 +59,70 @@ interface CreateIssuesPayload {
   issue_range: string
   insert_after_issue_id?: number
   append_to_end?: boolean
+  strategy?: 'safe_default' | 'numeric_resort'
+  expected_issue_ids?: number[]
+  accepted_alias_numbers?: string[]
+}
+
+/** Options shared by the create and preview create calls (#4654). */
+export interface IssueCreateOptions {
+  insert_after_issue_id?: number | null
+  strategy?: 'safe_default' | 'numeric_resort'
+  expected_issue_ids?: number[]
+  accepted_alias_numbers?: string[]
+}
+
+/** A source-preserving alternative to creating a physical duplicate. */
+export interface IssueEditAliasOffer {
+  requested_issue_number: string
+  existing_issue_id: number
+  existing_issue_number: string
+  series_title: string
+  evidence: string
+}
+
+export interface IssuePreviewItem {
+  issue_id: number | null
+  issue_number: string
+  position: number
+  is_new: boolean
+  /** Human-readable series title so two issues sharing a number stay distinct. */
+  series_title?: string
+  /** Names of the source reading lists this issue belongs to. */
+  source_lists?: string[]
+  is_read?: boolean
+  is_mapped?: boolean
+  has_rating?: boolean
+  /** Affected Queue/Roll frontier label, e.g. the current unread issue. */
+  frontier_label?: string | null
+  /** Human-readable description of this row's order effect. */
+  effect?: string
+  /** Whether a second physical issue with the same number exists. */
+  is_duplicate?: boolean
+}
+
+export interface IssueEditPreviewOutcome {
+  strategy: 'safe_default' | 'numeric_resort'
+  can_commit: boolean
+  preserves_existing_relative_order: boolean
+  before: IssuePreviewItem[]
+  after: IssuePreviewItem[]
+  added_issue_numbers: string[]
+  graph: {
+    status: string
+    cycles: Array<{ message: string; edges: Array<{ source: { issue_id: number; issue_number: string; series_title: string }; target: { issue_id: number; issue_number: string; series_title: string }; origin: string; list_name?: string | null }> }>
+  }
+  conflict_message: string | null
+}
+
+export interface IssueEditPreviewResponse {
+  thread_id: number
+  thread_title: string
+  requested_strategy: 'safe_default' | 'numeric_resort'
+  default_outcome: IssueEditPreviewOutcome
+  numeric_resort_outcome: IssueEditPreviewOutcome | null
+  alias_offers?: IssueEditAliasOffer[]
+  expected_issue_ids?: number[]
 }
 
 /** Query parameters accepted by the thread issue list endpoint. */
@@ -89,7 +174,7 @@ export function createIssuesApi(client: HttpClient) {
     create: async (
       threadId: number,
       issueRange: string,
-      options?: { insert_after_issue_id?: number | null }
+      options?: IssueCreateOptions
     ): Promise<IssueListResponse> => {
       const payload: CreateIssuesPayload = {
         issue_range: issueRange,
@@ -103,9 +188,59 @@ export function createIssuesApi(client: HttpClient) {
           payload.insert_after_issue_id = options.insert_after_issue_id
         }
       }
+      if (options?.strategy) payload.strategy = options.strategy
+      if (options?.expected_issue_ids) payload.expected_issue_ids = options.expected_issue_ids
+      if (options?.accepted_alias_numbers) {
+        payload.accepted_alias_numbers = options.accepted_alias_numbers
+      }
 
       return client.post(`/v2/threads/${threadId}/issues`, payload)
     },
+
+    previewCreate: async (
+      threadId: number,
+      issueRange: string,
+      options?: IssueCreateOptions
+    ): Promise<IssueEditPreviewResponse> => {
+      const payload: CreateIssuesPayload = { issue_range: issueRange }
+      if (options && 'insert_after_issue_id' in options) {
+        if (options.insert_after_issue_id === null) payload.append_to_end = true
+        else payload.insert_after_issue_id = options.insert_after_issue_id
+      }
+      if (options?.strategy) payload.strategy = options.strategy
+      if (options?.expected_issue_ids) payload.expected_issue_ids = options.expected_issue_ids
+      if (options?.accepted_alias_numbers) {
+        payload.accepted_alias_numbers = options.accepted_alias_numbers
+      }
+      return client.post(`/v2/threads/${threadId}/issues/preview`, payload)
+    },
+
+    /**
+     * Preview a delete before the queued mutation is accepted (#4654). The
+     * server projects the series without the issue inside a rolled-back
+     * savepoint, so no row is changed by the preview.
+     */
+    previewDelete: async (
+      threadId: number,
+      issueId: number,
+    ): Promise<IssueEditPreviewResponse> =>
+      client.post(`/v2/threads/${threadId}/issues/structure-preview`, {
+        operation: 'delete',
+        issue_id: issueId,
+      }),
+
+    /**
+     * Preview a reorder before the queued mutation is accepted (#4654).
+     * `issueIds` must list every issue in the series exactly once.
+     */
+    previewReorder: async (
+      threadId: number,
+      issueIds: number[],
+    ): Promise<IssueEditPreviewResponse> =>
+      client.post(`/v2/threads/${threadId}/issues/structure-preview`, {
+        operation: 'reorder',
+        issue_ids: issueIds,
+      }),
 
     /**
      * Get a single issue by ID
@@ -134,12 +269,20 @@ export function createIssuesApi(client: HttpClient) {
       await client.delete(`/v2/issues/${issueId}/read-markers`)
     },
 
-    bulkMarkRead: async (issueIds: number[]): Promise<void> => {
-      await client.post(`/v2/issue-read-markers`, { issue_ids: issueIds })
+    bulkMarkRead: async (issueIds: number[]): Promise<IssueReadOperationResponse> => {
+      return client.post(`/v2/issue-read-markers`, { issue_ids: issueIds })
     },
 
-    bulkMarkUnread: async (issueIds: number[]): Promise<void> => {
-      await client.post(`/v2/issue-read-marker-removals`, { issue_ids: issueIds })
+    bulkMarkUnread: async (issueIds: number[]): Promise<IssueReadOperationResponse> => {
+      return client.post(`/v2/issue-read-marker-removals`, { issue_ids: issueIds })
+    },
+
+    getReadOperation: async (operationId: number): Promise<IssueReadOperationResponse> => {
+      return client.get(`/v2/issue-read-operations/${operationId}`)
+    },
+
+    undoReadOperation: async (operationId: number): Promise<IssueReadOperationUndoResponse> => {
+      return client.post(`/v2/issue-read-operations/${operationId}/undo`)
     },
 
     /**

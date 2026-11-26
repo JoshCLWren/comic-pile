@@ -3,7 +3,7 @@
 //! Preview token verification and plan/state-digest revalidation must remain
 //! compatible with the Python preview implementation until #4842 migrates preview.
 
-use crate::{auth::AuthenticatedUser, comicvine_repair, db, ApiError, AppState};
+use crate::{auth::AuthenticatedUser, comicvine_provider, db, ApiError, AppState};
 use axum::{
     extract::{Json as AxumJson, State},
     Json,
@@ -320,6 +320,7 @@ pub async fn commit_series_mapping_handler(
 
     // Rebuild plan and validate digest - delegate to plan builder
     let plan = build_plan_for_commit(
+        &state.comicvine_limits,
         &state.outbound,
         &conn,
         user.id(),
@@ -385,7 +386,7 @@ pub async fn commit_series_mapping_handler(
     // Mirror Python's request-relative inline hydration deadline (#3776).
     // No detached serverless work, and no provider error can roll back identity.
     let budget = inline_hydration_budget(started.elapsed());
-    comicvine_repair::hydrate_catalog_commit(
+    comicvine_provider::hydrate_catalog_commit(
         &state,
         user.id(),
         &response.confirmed_issue_ids,
@@ -554,7 +555,9 @@ async fn assert_no_confirmed_mapping_conflict(
 // Plan building - compatibility layer. This must produce the same state_digest
 // as Python for the same DB state. A full port is large; we implement the
 // DB-backed core and compute the digest in the same format.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn build_plan_for_commit(
+    limits: &crate::comicvine_limits::ComicVineLimits,
     outbound: &std::sync::Arc<dyn crate::outbound::OutboundHttp>,
     conn: &tokio_postgres::Client,
     user_id: i32,
@@ -568,6 +571,7 @@ pub(crate) async fn build_plan_for_commit(
     // flows as exercised by existing tests. It queries the same tables Python queries.
     // The digest format must match _plan_state_digest exactly.
     build_plan_db(
+        limits,
         outbound,
         conn,
         user_id,
@@ -690,7 +694,9 @@ fn unavailable_plan(origin_issue_id: i32, basis: &str, scope_mode: &str) -> Valu
 // Python's build_series_mapping_plan can call ComicVine for rosters - for
 // commit-time revalidation this is the same logic. We implement DB-only rebuild
 // covering the test scenarios and common cases.
+#[allow(clippy::too_many_arguments)]
 async fn build_plan_db(
+    limits: &crate::comicvine_limits::ComicVineLimits,
     outbound: &std::sync::Arc<dyn crate::outbound::OutboundHttp>,
     conn: &tokio_postgres::Client,
     user_id: i32,
@@ -735,6 +741,7 @@ async fn build_plan_db(
 
     if scope_mode == "queue_thread_bootstrap" {
         return build_queue_bootstrap_plan_db(
+            limits,
             outbound,
             conn,
             user_id,
@@ -835,7 +842,8 @@ async fn build_plan_db(
         if origin_confirmed || linked_thread {
             // This lookup is best-effort only for locally confirmed series:
             // Python falls back to local rows on provider 503.
-            if let Ok((provider_info, roster)) = crate::comicvine_repair::catalog_volume_roster(
+            if let Ok((provider_info, roster)) = crate::comicvine_provider::catalog_volume_roster(
+                limits,
                 outbound,
                 provider_series_external_id,
             )
@@ -897,9 +905,12 @@ async fn build_plan_db(
     } else {
         // A brand-new provider volume is a normal valid preview. Rebuild its
         // complete roster instead of turning every signed preview into a 409.
-        let (provider_series, fetched_roster) =
-            crate::comicvine_repair::catalog_volume_roster(outbound, provider_series_external_id)
-                .await?;
+        let (provider_series, fetched_roster) = crate::comicvine_provider::catalog_volume_roster(
+            limits,
+            outbound,
+            provider_series_external_id,
+        )
+        .await?;
         series_info = Some(provider_series);
         issues_with_mappings = fetched_roster.clone();
         roster_rows = fetched_roster;
@@ -1339,7 +1350,7 @@ fn attach_verified_roster_metadata(rows: &mut [Value], roster: &[Value]) {
             if let Some(raw) = raw.filter(|value| value.is_object()) {
                 obj.insert(
                     "_provider_metadata".to_owned(),
-                    crate::comicvine_repair::normalize_roster_issue_metadata(raw),
+                    crate::comicvine_provider::normalize_roster_issue_metadata(raw),
                 );
             }
             if already_confirmed && incomplete {
@@ -1381,6 +1392,7 @@ fn derive_scope_key_str(rows: &[Value], origin_issue_id: i32) -> String {
 
 #[allow(clippy::too_many_arguments)]
 async fn build_queue_bootstrap_plan_db(
+    limits: &crate::comicvine_limits::ComicVineLimits,
     outbound: &std::sync::Arc<dyn crate::outbound::OutboundHttp>,
     conn: &tokio_postgres::Client,
     user_id: i32,
@@ -1401,9 +1413,12 @@ async fn build_queue_bootstrap_plan_db(
     };
     // The Queue preview relies on an actual, complete provider roster to
     // prove cardinality. Do not replace that evidence with local guesses.
-    let (series_info, roster) =
-        crate::comicvine_repair::catalog_volume_roster(outbound, provider_series_external_id)
-            .await?;
+    let (series_info, roster) = crate::comicvine_provider::catalog_volume_roster(
+        limits,
+        outbound,
+        provider_series_external_id,
+    )
+    .await?;
     if roster.is_empty() {
         return Ok(unavailable_plan(
             origin_issue_id,
@@ -2261,7 +2276,9 @@ mod tests {
             .expect("seed second valid mapping for origin issue");
         let fake_outbound: std::sync::Arc<dyn crate::outbound::OutboundHttp> =
             std::sync::Arc::new(crate::outbound::RecordingFakeOutbound::new());
+        let limits = crate::comicvine_limits::ComicVineLimits::default();
         let plan = build_plan_db(
+            &limits,
             &fake_outbound,
             &connection,
             1,
@@ -2454,6 +2471,32 @@ mod tests {
         assert_eq!(
             canonical_json(&unicode),
             r#"{"issue_numbers": ["\u00c9t\u00e9", "\ud83e\udd87"]}"#
+        );
+    }
+
+    /// #5851: a preview token carries float timestamps. Without serde_json's
+    /// `float_roundtrip`, parsing the token truncates the last decimal digit,
+    /// so the commit re-signs a different payload and rejects a valid preview
+    /// as `invalid_preview_token` for a real reader.
+    #[test]
+    fn canonical_json_preserves_float_timestamps_through_token_round_trip() {
+        let payload = serde_json::json!({
+            "issued_at": 1_795_710_842.8638973_f64,
+            "expires_at": 1_795_711_442.8638973_f64,
+            "user_id": 9001,
+        });
+        let wire = serde_json::to_string(&payload).expect("token payload JSON");
+        let parsed: Value = serde_json::from_str(&wire).expect("parse token payload");
+        assert_eq!(canonical_json(&payload), canonical_json(&parsed));
+        let signature_at_issue =
+            hmac_sha256_hex("synthetic-native-test", &canonical_json(&payload))
+                .expect("sign issued payload");
+        let signature_at_verify =
+            hmac_sha256_hex("synthetic-native-test", &canonical_json(&parsed))
+                .expect("sign parsed payload");
+        assert_eq!(
+            signature_at_issue, signature_at_verify,
+            "a signed preview must survive the token's JSON round trip"
         );
     }
 

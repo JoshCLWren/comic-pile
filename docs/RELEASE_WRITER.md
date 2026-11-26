@@ -19,10 +19,23 @@ also reacts to `Factory Ready Merge Drain` and `Fixed Model Factory Dispatcher`
 `workflow_run` completions by dispatching exact-PR release-writer runs for
 recently merged PRs (bounded lookback, not a historical reconciliation).
 
+Recovery after a missed event, a failed generation, or a failed persistence step
+is driven by `Deploy Production` completions rather than by a schedule. The
+trusted `recover` job reads the live production `/api/v2/health` identity, keeps
+only merged PRs contained in the deployed revision, and selects the oldest one
+with no release-ledger row. It dispatches exactly one `workflow_dispatch` run for
+that PR, so a failed or missed writer event is retried on the next successful
+deployment without manual refresh and without announcing undeployed work. The
+bounded publication delay is therefore **one successful production deployment
+plus one complete writer run**; a failed write is retried by the next deployment.
+
 Each PR gets its own release-writer concurrency group so a later merge cannot
 replace an earlier pending PR. Single-writer publication is preserved by the
 trusted Neon publish transaction: source identity rows are locked/checked and
 inserted with `ON CONFLICT DO NOTHING`, so duplicate dispatches are idempotent.
+The recovery selector reuses the same two ledger source identities and fails
+closed on ambiguous provenance; repeated discovery never duplicates or rewrites
+a correct entry.
 
 1. An unprivileged generate job invokes the restricted OpenCode agent. The
    release_writer.py helper validates content and classification and writes
@@ -31,9 +44,11 @@ inserted with `ON CONFLICT DO NOTHING`, so duplicate dispatches are idempotent.
 2. The candidate is transferred between jobs as a short-lived GitHub Actions
    artifact containing release content and public merge metadata only.
 3. A separate trusted persist job rechecks the PR number and merge SHA against
-   GitHub, validates public/internal provenance and reader-facing content
-   again, and connects directly to production Neon PostgreSQL using a DSN
-   obtained through the Neon management API.
+   GitHub, re-proves that the merge is still contained in the live production
+   revision before loading any database credential, reclassifies a complete
+   test-only diff as internal, validates public/internal provenance and
+   reader-facing content again, and connects directly to production Neon
+   PostgreSQL using a DSN obtained through the Neon management API.
 4. Parameterized SQL inserts a record only when both stable source identities
    are unused. Exact retries are no-ops; conflicting PR or SHA identities
    fail without overwriting records (even retracted ones).
@@ -59,12 +74,14 @@ unit tests and backwards compatibility, not the GitHub Actions path.
 
 ## Operating constraints
 
-Do not restore the September 22 backfill, an hourly schedule, or broad source
+Do not restore the September 22 backfill, a schedule, or broad source
 reconciliation. The merge-drain `workflow_run` recovery is a bounded lookback
-(30 minutes, at most 20 PRs) that dispatches exact PR numbers; it is not a
-historical scan. Generation and trusted persistence are separate jobs; the
-latter runs only after generation succeeds. The factory completion dispatcher
-remains disabled to prevent duplicate releases from the same merged PR.
+(30 minutes, at most 20 PRs) that dispatches exact PR numbers; deployment-driven
+recovery inspects at most 72 hours and three pages of merged PRs and stages at
+most one source per run. Neither is a historical scan. Generation and trusted
+persistence are separate jobs; the latter runs only after generation succeeds
+and deployment is re-proven. The factory completion dispatcher remains disabled
+to prevent duplicate releases from the same merged PR.
 
 Exact source checks, content validation, conflict handling, idempotent retries,
 and isolation of model and database credentials are required. A production

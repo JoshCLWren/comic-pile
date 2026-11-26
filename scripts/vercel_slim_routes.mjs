@@ -3,10 +3,10 @@
  * already provides.
  *
  * Vercel uses the first matching route. A fragment-derived native_roll route is
- * only REQUIRED when a LATER route (before the catch-all) that points at
- * `/api/index.py` could also match the same method +
- * path. Overlap is decided by unifying the two routes segment by segment, so a
- * pair is dropped only when the regexes are PROVEN disjoint. Any regex shape the
+ * only REQUIRED when a LATER non-native route (before the catch-all) could also
+ * match the same method and path. Overlap is decided by unifying the two routes
+ * segment by segment, so a pair is dropped only when the regexes are PROVEN
+ * disjoint. Any regex shape the
  * unifier does not understand (lookaheads, alternation, ...) is treated as
  * overlapping, i.e. the roll route is kept. scripts/generate_route_burndown.mjs
  * mirrors this algorithm exactly; keep the two in sync.

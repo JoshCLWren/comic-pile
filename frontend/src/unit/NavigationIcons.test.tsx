@@ -69,7 +69,7 @@ test('renders recognizable icon primitives in the mobile footer', async () => {
   expect(within(mobileNav).getByText('Roll')).toBeVisible()
   expect(within(mobileNav).getByText('Queue')).toBeVisible()
   expect(within(mobileNav).getByText('History')).toBeVisible()
-  expect(within(mobileNav).getByText('Reading plans')).toBeVisible()
+  expect(within(mobileNav).getByText('Plans')).toBeVisible()
 
   const rollIcon = within(mobileNav).getByRole('link', { name: /roll page/i })
     .querySelector('svg[data-nav-icon="roll"]')

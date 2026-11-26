@@ -28,6 +28,19 @@ describe('issuesApi', () => {
     expect(client.post).toHaveBeenNthCalledWith(3, '/v2/threads/1/issues', { issue_range: '9', append_to_end: true })
   })
 
+  it('previews creates with every positioning and strategy option', async () => {
+    await issuesApi.previewCreate(1, '1-5')
+    await issuesApi.previewCreate(1, '6-8', { insert_after_issue_id: 4 })
+    await issuesApi.previewCreate(1, '9', { insert_after_issue_id: null })
+    await issuesApi.previewCreate(1, '10', { strategy: 'numeric_resort' })
+    await issuesApi.create(1, '11', { insert_after_issue_id: 4, strategy: 'safe_default' })
+    expect(client.post).toHaveBeenNthCalledWith(1, '/v2/threads/1/issues/preview', { issue_range: '1-5' })
+    expect(client.post).toHaveBeenNthCalledWith(2, '/v2/threads/1/issues/preview', { issue_range: '6-8', insert_after_issue_id: 4 })
+    expect(client.post).toHaveBeenNthCalledWith(3, '/v2/threads/1/issues/preview', { issue_range: '9', append_to_end: true })
+    expect(client.post).toHaveBeenNthCalledWith(4, '/v2/threads/1/issues/preview', { issue_range: '10', strategy: 'numeric_resort' })
+    expect(client.post).toHaveBeenNthCalledWith(5, '/v2/threads/1/issues', { issue_range: '11', insert_after_issue_id: 4, strategy: 'safe_default' })
+  })
+
   it('calls issue mutations and migration endpoints', async () => {
     await issuesApi.get(2)
     await issuesApi.markRead(2)

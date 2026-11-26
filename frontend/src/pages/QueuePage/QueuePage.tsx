@@ -1,7 +1,9 @@
 import { useCallback, useState } from 'react'
 import { useRollNudge } from './useRollNudge'
+import { useQueueCompletedSearch } from './useQueueCompletedSearch'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
+import QueueBulkReadOperations from './QueueBulkReadOperations'
 import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hooks/useThread'
 import { useExcludedThreads, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../../hooks/useQueue'
 import { useCompletedThreads } from '../../hooks/useCompletedThreads'
@@ -81,6 +83,8 @@ export default function QueuePage() {
   // True while the Queue list is still fetching; the list uses it to tell
   // "still fetching" apart from a settled zero-match (#3912).
   const queueListLoading = useQueueListLoading()
+
+  const completedSearch = useQueueCompletedSearch(searchQuery)
 
   const actions = useQueueThreadActions({})
 
@@ -186,6 +190,8 @@ export default function QueuePage() {
           onSearchChange={setSearchQuery}
         />
 
+        <QueueBulkReadOperations />
+
         {mobileAddEnabled && (
           <button
             type="button"
@@ -211,6 +217,11 @@ export default function QueuePage() {
           hasNextPage={!!nextPageToken}
           isLoading={queueListLoading}
           onAddSeries={modals.showCreateModal}
+          completedMatches={completedSearch.completedMatches}
+          excludedMatches={completedSearch.excludedMatches}
+          onOpenCompletedSeries={completedSearch.openCompletedSeries}
+          onRestoreCompletedSeries={(id) => { void completedSearch.handleRestoreCompletedSeries(id) }}
+          onOpenExcludedSeries={completedSearch.openExcludedSeries}
         />
 
         <CompletedThreadsSection
@@ -279,6 +290,7 @@ export default function QueuePage() {
           queueSize={authoritativeActiveCount}
           onCreateSubmit={modals.handleCreateSubmit}
           onEditSubmit={modals.handleEditSubmit}
+          onEditUndoAvailable={modals.setEditUndoAvailable}
           onReactivateSubmit={modals.handleReactivateSubmit}
           onRepositionConfirm={handleRepositionConfirm}
           onDependencyChanged={() => invalidateAfterQueueMutation(queryClient)}

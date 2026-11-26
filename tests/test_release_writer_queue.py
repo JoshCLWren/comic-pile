@@ -91,3 +91,63 @@ def test_workflow_run_names_match_installed_merge_workflows() -> None:
 
     unknown = configured - installed_names
     assert not unknown, f"workflow_run names do not match any installed workflow: {sorted(unknown)}"
+
+
+def test_release_writer_triggers_recovery_after_successful_deploy() -> None:
+    """A missed or failed writer event is retried from deployed provenance."""
+    workflow = _release_writer()
+    triggers = workflow.get(True) or workflow.get("on") or {}
+    workflow_run = triggers.get("workflow_run") or {}
+    assert "Deploy Production" in (workflow_run.get("workflows") or [])
+    assert "completed" in (workflow_run.get("types") or [])
+
+
+def test_recovery_job_selects_oldest_missing_deployed_source() -> None:
+    """Recovery uses the bounded selector, then dispatches one exact PR run."""
+    workflow = _release_writer()
+    recover = workflow["jobs"].get("recover")
+    assert recover is not None, "deployment-driven recovery job is required"
+    condition = str(recover.get("if", ""))
+    assert "Deploy Production" in condition
+    assert "success" in condition
+    run_scripts = "\n".join(str(step.get("run", "")) for step in recover.get("steps") or [])
+    assert "release_recovery.py select" in run_scripts
+    assert "--lookback-hours" in run_scripts
+    assert "gh workflow run release-writer.yml" in run_scripts
+    assert "pr_number" in run_scripts
+    # Recovery dispatches; the model and publisher jobs remain separate.
+    assert "release_reconcile.py" not in run_scripts
+
+
+def test_dispatch_missed_ignores_deploy_completion() -> None:
+    """The fast factory path and deployment recovery must not double-dispatch."""
+    workflow = _release_writer()
+    dispatch_condition = str(workflow["jobs"]["dispatch-missed"].get("if", ""))
+    assert "Deploy Production" in dispatch_condition
+    assert "!=" in dispatch_condition
+
+
+def test_persist_reproves_deployment_before_loading_credentials() -> None:
+    """An undeployed merge must never be announced (issue #4810)."""
+    workflow = _release_writer()
+    persist = workflow["jobs"]["persist"]
+    checkout = (persist.get("steps") or [])[0]
+    assert checkout.get("with", {}).get("fetch-depth") == 0
+    run_scripts = [str(step.get("run", "")) for step in persist.get("steps") or []]
+    verify_index = next(
+        index for index, script in enumerate(run_scripts) if "verify-deployed" in script
+    )
+    credential_index = next(
+        index for index, script in enumerate(run_scripts) if "add-mask" in script
+    )
+    assert verify_index < credential_index
+
+
+def test_persist_grounds_complete_test_only_candidates() -> None:
+    """Developer-only test diffs are recorded internal, never shown to readers."""
+    workflow = _release_writer()
+    run_scripts = "\n".join(
+        str(step.get("run", ""))
+        for step in workflow["jobs"]["persist"].get("steps") or []
+    )
+    assert "release_recovery.py ground-candidate" in run_scripts

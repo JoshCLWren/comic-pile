@@ -364,6 +364,7 @@ export function createCblSourcesApi(client: HttpClient) {
       client.post<CBLAdoptionCommitResult>(
         `/v2/reading-lists/${listId}/reading-plans/${planId}/adoption-commits`,
         commitPayload(preview, choices),
+        { timeout: 60_000 },
       ),
     /**
      * One-decision adoption: adopt the source into a Reading Plan, creating the

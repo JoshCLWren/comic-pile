@@ -4,7 +4,7 @@
 //! [`OutboundHttp`] trait held in [`crate::AppState`]:
 //!
 //! * GitHub issue creation (`bug_reports.rs`, `api.github.com`)
-//! * ComicVine metadata repair / catalog rosters (`comicvine_repair.rs`)
+//! * ComicVine metadata repair / catalog rosters (`comicvine_provider.rs`)
 //! * ComicVine release sync (`reading_plan_sync.rs`)
 //! * ComicVine identity-inbox search (`identity_inbox.rs`)
 //!
