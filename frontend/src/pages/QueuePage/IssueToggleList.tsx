@@ -192,7 +192,6 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   const [isUndoing, setIsUndoing] = useState(false)
   const baseIssuesRef = useRef<Issue[]>([])
   const pendingMutationsRef = useRef<IssueMutation[]>([])
-  const failedMutationsRef = useRef<IssueMutation[]>([])
   const isProcessingMutationsRef = useRef(false)
   const nextMutationIdRef = useRef(1)
   const onPendingMutationsChangeRef = useRef(onPendingMutationsChange)
@@ -200,9 +199,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     onPendingMutationsChangeRef.current = onPendingMutationsChange
   })
   const notifyPendingMutations = useCallback(() => {
-    onPendingMutationsChangeRef.current?.(
-      pendingMutationsRef.current.length > 0 || failedMutationsRef.current.length > 0
-    )
+    onPendingMutationsChangeRef.current?.(pendingMutationsRef.current.length > 0)
   }, [])
   const loadGenerationRef = useRef(0)
   const totalCountRef = useRef(0)
@@ -406,11 +403,6 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
 
     isProcessingMutationsRef.current = true
     let hadSuccess = false
-    // Rejected mutations wait here (not in the optimistic queue) until the
-    // reader's next Save, so the failed edit still rolls back in the UI while
-    // remaining available for an explicit retry (#4654).
-    const retryable = failedMutationsRef.current.splice(0);
-    pendingMutationsRef.current = [...retryable, ...pendingMutationsRef.current]
 
     try {
       while (pendingMutationsRef.current.length > 0) {
@@ -446,9 +438,9 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
           hadSuccess = true
         } catch (err: unknown) {
           // A failed mutation stops the queue and is reported to the caller.
-          // Park it for the next Save so the optimistic UI still rolls back,
-          // while the rejected edit remains available for an explicit retry.
-          failedMutationsRef.current.push(currentMutation)
+          // The rejected edit rolls back; later mutations stay queued so the
+          // reader's next Save retries the remaining batch. A fresh preview
+          // can always re-add the rejected edit (#4654).
           //
           // The base list is resynchronized with the server first. When that
           // resynchronization is itself incomplete, later mutations would be
@@ -539,8 +531,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       }
       await processIssueMutations()
     } ,
-    hasPendingMutations: () =>
-      pendingMutationsRef.current.length > 0 || failedMutationsRef.current.length > 0,
+    hasPendingMutations: () => pendingMutationsRef.current.length > 0,
   }), [processIssueMutations, setActionError])
 
   const enqueueIssueReorder = useCallback((
