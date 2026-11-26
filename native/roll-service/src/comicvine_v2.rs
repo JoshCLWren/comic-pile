@@ -1568,18 +1568,20 @@ pub async fn refresh_metadata(
     let outcome = if comicvine_issue_id.is_none() {
         HydrationOutcome::NotConfirmed
     } else {
-        let Some(api_key) = crate::comicvine_repair::provider_api_key() else {
-            HydrationOutcome::NotConfigured
-        };
-        hydrate_confirmed_identity_sync(
-            &state,
-            user.id(),
-            issue_id,
-            inline_hydration_budget(started.elapsed()),
-            &api_key,
-            true,
-        )
-        .await
+        match crate::comicvine_repair::provider_api_key() {
+            Some(api_key) => {
+                hydrate_confirmed_identity_sync(
+                    &state,
+                    user.id(),
+                    issue_id,
+                    inline_hydration_budget(started.elapsed()),
+                    &api_key,
+                    true,
+                )
+                .await
+            }
+            None => HydrationOutcome::NotConfigured,
+        }
     };
     Ok(Json(MetadataRefreshResponse {
         issue_id,

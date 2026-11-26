@@ -2259,13 +2259,7 @@ mod tests {
         queue_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
 
         let outcome =
-            let outcome =
-            let outcome =
-            let outcome =
             hydrate_confirmed_identity_sync(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", false).await;
-        assert_eq!(outcome, HydrationOutcome::Complete);
-        assert_eq!(outcome, HydrationOutcome::NoCredits);
-        assert_eq!(outcome, HydrationOutcome::Unavailable);
         assert_eq!(outcome, HydrationOutcome::Complete);
 
         let connection = db::checkout(&state).await.expect("assert connection");
@@ -2308,7 +2302,9 @@ mod tests {
         let identity_id = seed_confirmed_identity(&state, "4000-29319", &json!({})).await;
         // No canned provider response: the recording fake fails closed.
 
+        let outcome =
         hydrate_confirmed_identity_sync(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", false).await;
+        assert_eq!(outcome, HydrationOutcome::Unavailable);
 
         let connection = db::checkout(&state).await.expect("assert connection");
         let mapping_status: String = connection
@@ -2366,7 +2362,9 @@ mod tests {
             Bytes::from(body),
         );
 
+        let outcome =
         hydrate_confirmed_identity_sync(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", false).await;
+        assert_eq!(outcome, HydrationOutcome::NoCredits);
 
         let connection = db::checkout(&state).await.expect("assert connection");
         let request_state: String = connection
@@ -2416,7 +2414,9 @@ mod tests {
             Bytes::from(body),
         );
 
+        let outcome =
         hydrate_confirmed_identity_sync(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", false).await;
+        assert_eq!(outcome, HydrationOutcome::Complete);
 
         let connection = db::checkout(&state).await.expect("assert connection");
         let metadata: Value = serde_json::from_str(
