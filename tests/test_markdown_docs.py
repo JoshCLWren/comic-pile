@@ -172,6 +172,53 @@ def test_find_broken_anchors_ignores_missing_files_and_code_fences(tmp_path: Pat
     )
 
 
+def test_find_broken_anchors_ignores_links_inside_fenced_code_blocks(tmp_path: Path) -> None:
+    """Skip illustrative inline and reference links without weakening real link checks.
+
+    Args:
+        tmp_path: Temporary repository root supplied by pytest.
+    """
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "target.md").write_text("# Target\n", encoding="utf-8")
+    source = docs / "README.md"
+    source.write_text(
+        "[real](target.md#target) [bad](target.md#bad)\n\n"
+        "```markdown\n[example](target.md#nonexistent) [ref][fenced-ref]\n```\n\n"
+        "[fenced-ref]: target.md#also-nonexistent\n",
+        encoding="utf-8",
+    )
+
+    errors = find_broken_anchors(tmp_path, [source])
+
+    assert errors == ["docs/README.md: broken anchor: target.md#bad"]
+
+
+def test_find_broken_anchors_accepts_setext_and_html_heading_anchors(tmp_path: Path) -> None:
+    """Resolve setext headings and explicit id/name attributes on HTML heading elements.
+
+    Args:
+        tmp_path: Temporary repository root supplied by pytest.
+    """
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "target.md").write_text(
+        "Setext Title\n============\n\n"
+        "## Hyphen Setext\n----------------\n\n"
+        '<h2 id="explicit-html">HTML heading</h2>\n\n'
+        '<a name="legacy-anchor"></a>\n',
+        encoding="utf-8",
+    )
+    source = docs / "README.md"
+    source.write_text(
+        "[setext](target.md#setext-title) [hyphen](target.md#hyphen-setext) "
+        '[html](target.md#explicit-html) [legacy](target.md#legacy-anchor)\n',
+        encoding="utf-8",
+    )
+
+    assert find_broken_anchors(tmp_path, [source]) == []
+
+
 def test_current_repository_has_no_broken_anchors() -> None:
     """Keep cross-document navigation valid as active documents move and headings change."""
     root = Path(__file__).parents[1]
