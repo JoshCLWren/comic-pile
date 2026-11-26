@@ -2556,4 +2556,33 @@ mod tests {
             serde_json::json!("bearer")
         );
     }
+
+    #[test]
+    fn display_issue_number_includes_distinct_alias() {
+        assert_eq!(display_issue_number("3", Some("100")), "3 (100)");
+        assert_eq!(display_issue_number("3", Some(" 100 ")), "3 (100)");
+        assert_eq!(display_issue_number("3", Some("3")), "3");
+        assert_eq!(display_issue_number("3", Some(" 3 ")), "3");
+        assert_eq!(display_issue_number("3", None), "3");
+        assert_eq!(display_issue_number("3", Some("")), "3");
+    }
+
+    #[test]
+    fn validate_accepts_alias_only_update() {
+        let mut req = request(None, None);
+        req.issue_number_alias = Some(Some("100".into()));
+        assert!(validate(&req).is_ok());
+        req.issue_number_alias = Some(Some("   ".into()));
+        assert!(validate(&req).is_ok());
+        req.issue_number_alias = Some(None);
+        assert!(validate(&req).is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_long_alias() {
+        let mut req = request(None, None);
+        req.issue_number_alias = Some(Some("x".repeat(51)));
+        let err = validate(&req).unwrap_err();
+        assert_eq!(err.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    }
 }
