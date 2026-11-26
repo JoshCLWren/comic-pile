@@ -716,6 +716,39 @@ async fn persist(
     row.try_get(0).map_err(db::query_error)
 }
 
+/// Discover confirmed ComicVine identities that never received a refresh row.
+/// The per-issue read and operator backfill already repair one identity at a
+/// time; the scheduled drain must also reconcile the durable backlog so an
+/// unopened issue cannot remain empty forever. The scan and insert are bounded,
+/// set-based, and safe when concurrent drains select the same identities.
+async fn reconcile_orphaned_refresh_requests(state: &AppState) -> Result<(), ApiError> {
+    let connection = db::checkout(state).await?;
+    let rows = connection
+        .query(RECONCILE_ORPHANED, &[&RECONCILE_SCAN_LIMIT])
+        .await
+        .map_err(db::query_error)?;
+    // Every confirmed identity without a ledger row is a candidate. The
+    // canonical freshness predicate is applied by process() on claim: a fresh
+    // row settles as completed/no_credits from cache without a provider call,
+    // then gains a ledger row and leaves this scan. Bounded enqueue plus that
+    // immediate settle is what advances the scan past fresh rows instead of
+    // reselecting the same page on every drain. A SQL shape prefilter here
+    // would silently exclude full-shaped but stale payloads (#5695).
+    let missing: Vec<i32> = rows
+        .iter()
+        .take(BATCH_LIMIT)
+        .map(|row| row.get::<_, i32>(0))
+        .collect();
+    if missing.is_empty() {
+        return Ok(());
+    }
+    connection
+        .execute(RECONCILE_INSERT, &[&missing])
+        .await
+        .map_err(db::query_error)?;
+    Ok(())
+}
+
 fn failure_transition(error: &ProviderFailure, attempt: i32) -> (&'static str, i32, &'static str) {
     match error {
         ProviderFailure::RateLimited(_) if attempt >= 3 => ("failed", 21600, "rate_limit"),
@@ -1283,39 +1316,6 @@ pub(crate) async fn notify_repair_enqueued(state: &AppState) {
         return;
     };
     dispatch_repair_wake(state, &token).await;
-}
-
-/// Discover confirmed ComicVine identities that never received a refresh row.
-/// The per-issue read and operator backfill already repair one identity at a
-/// time; the scheduled drain must also reconcile the durable backlog so an
-/// unopened issue cannot remain empty forever. The scan and insert are bounded,
-/// set-based, and safe when concurrent drains select the same identities.
-async fn reconcile_orphaned_refresh_requests(state: &AppState) -> Result<(), ApiError> {
-    let connection = db::checkout(state).await?;
-    let rows = connection
-        .query(RECONCILE_ORPHANED, &[&RECONCILE_SCAN_LIMIT])
-        .await
-        .map_err(db::query_error)?;
-    // Every confirmed identity without a ledger row is a candidate. The
-    // canonical freshness predicate is applied by process() on claim: a fresh
-    // row settles as completed/no_credits from cache without a provider call,
-    // then gains a ledger row and leaves this scan. Bounded enqueue plus that
-    // immediate settle is what advances the scan past fresh rows instead of
-    // reselecting the same page on every drain. A SQL shape prefilter here
-    // would silently exclude full-shaped but stale payloads (#5695).
-    let missing: Vec<i32> = rows
-        .iter()
-        .take(BATCH_LIMIT)
-        .map(|row| row.get::<_, i32>(0))
-        .collect();
-    if missing.is_empty() {
-        return Ok(());
-    }
-    connection
-        .execute(RECONCILE_INSERT, &[&missing])
-        .await
-        .map_err(db::query_error)?;
-    Ok(())
 }
 
 /// CRON_SECRET authenticated, awaited Rust repair batch. No detached task or silent success.
