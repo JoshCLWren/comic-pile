@@ -371,6 +371,20 @@ fn canonical_block_reason(validated: &ValidatedReadingInputs, thread_id: i32) ->
         .unwrap_or_default()
 }
 
+/// Threads the canonical evaluator does not hold behind an authentic blocker.
+///
+/// Staleness is not an automatic offer: threads without a next unread issue are
+/// still stale candidates. Only the graph's real blockers (prerequisites,
+/// holds, strict order, exclusions, cycles) remove them, replacing the stored
+/// `is_blocked` flag without a mode switch (#5525 A16/A17).
+fn canonical_available_ids(validated: &ValidatedReadingInputs) -> Result<HashSet<i32>, ApiError> {
+    Ok(crate::reading_eligibility::evaluate(validated)?
+        .into_iter()
+        .filter(|(_, state)| state.blockers.is_empty())
+        .map(|(id, _)| id)
+        .collect())
+}
+
 /// Load `ThreadResponse` projections for owned threads, in `ids` order.
 ///
 /// Mirrors `thread_to_response`: unread counts for issue-tracked threads, the
