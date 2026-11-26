@@ -403,6 +403,10 @@ export type Issue = Omit<components['schemas']['IssueResponse'], 'status' | 'pos
   status: 'unread' | 'read';
   /** Canonical one-based reading-order position when supplied by the API */
   position?: number;
+  /** Alternate overall/story number for the same physical comic (#4652). */
+  issue_number_alias?: string | null;
+  /** Authored number with alias when distinct. */
+  display_issue_number?: string;
 };
 
 /**

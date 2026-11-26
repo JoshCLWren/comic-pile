@@ -269,6 +269,8 @@ export interface ComicIssueCardProps {
   /** Fallbacks from the owning list/thread payload while the batch loads. */
   threadTitle: string
   issueNumber: string
+  /** Alternate overall/story number (#4652) when known outside the card batch. */
+  issueNumberAlias?: string | null
   status: 'read' | 'unread'
   rating?: number | null
   variant?: ComicIssueCardVariant
@@ -324,6 +326,7 @@ export function ComicIssueCard({
   card,
   threadTitle,
   issueNumber,
+  issueNumberAlias,
   status,
   rating,
   variant = 'standard',
@@ -348,7 +351,7 @@ export function ComicIssueCard({
 
   const resolvedTitle = card?.thread_title || threadTitle
   const resolvedNumber = card?.issue_number || issueNumber
-  const resolvedAlias = card?.issue_number_alias ?? null
+  const resolvedAlias = card?.issue_number_alias ?? issueNumberAlias ?? null
   const resolvedProviderNumber = card?.provider_issue_number ?? null
   const resolvedStatus = (card?.status ?? status) === 'read' ? 'read' : 'unread'
   const resolvedRating = card?.rating ?? rating ?? null
