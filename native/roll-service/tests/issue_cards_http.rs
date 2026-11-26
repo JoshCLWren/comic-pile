@@ -893,14 +893,6 @@ async fn a7_alias_edit_replays_safely_without_extra_rows_or_history() {
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert!(body["issue"]["issue_number_alias"].is_null());
 
-    let (number, position, status, alias): (String, i32, String, Option<String>) = conn
-        .query_one(
-            "SELECT issue_number, position, status, issue_number_alias FROM issues WHERE id=$1",
-            &[&issue_id],
-        )
-        .await
-        .unwrap();
-    // `query_one` returns one row; re-read typed columns individually for clarity.
     let row = conn
         .query_one(
             "SELECT issue_number, position, status, issue_number_alias FROM issues WHERE id=$1",
@@ -912,7 +904,6 @@ async fn a7_alias_edit_replays_safely_without_extra_rows_or_history() {
     assert_eq!(row.get::<_, i32>(1), 1);
     assert_eq!(row.get::<_, &str>(2), "unread");
     assert!(row.get::<_, Option<&str>>(3).is_none());
-    drop((number, position, status, alias));
     let row_count: i64 = conn
         .query_one("SELECT count(*) FROM issues", &[])
         .await
