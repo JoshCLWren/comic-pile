@@ -180,7 +180,9 @@ async fn create_test_user(state: &Arc<AppState>, label: &str) -> (String, String
 async fn send(state: &Arc<AppState>, request: Request<Body>) -> (StatusCode, Value) {
     let response = router(state.clone()).oneshot(request).await.unwrap();
     let status = response.status();
-    let bytes = to_bytes(response.into_body(), 64 * 1024).await.unwrap();
+    // Large adoption responses carry a node per issue (#5522); allow enough
+    // body room to assert the full atomic result instead of truncating it.
+    let bytes = to_bytes(response.into_body(), 4 * 1024 * 1024).await.unwrap();
     (
         status,
         serde_json::from_slice(&bytes).unwrap_or(Value::Null),
@@ -1210,6 +1212,120 @@ async fn adoption_commit_materializes_missing_importable_issue() {
     assert_eq!(body["created_positions"], json!([0]), "{body}");
     assert_eq!(body["unresolved_positions"], json!([]), "{body}");
     assert_eq!(body["excluded_positions"], json!([]), "{body}");
+}
+
+/// #5522: the QA repro (Alpha Flight, 228 entries) must commit atomically
+/// within the client's 60s timeout and replay the authoritative receipt when
+/// the response is lost. No partial plan or dropped entry may be returned.
+#[tokio::test]
+async fn adoption_commit_large_source_commits_and_replays_receipt_5522() {
+    let (state, token, csrf, _guard) = setup().await;
+
+    let conn = state.pool.get().await.unwrap();
+    conn.batch_execute(&format!(
+        r#"
+        INSERT INTO cbl_sources (id, repository, revision_sha, synced_at, created_at, updated_at)
+        VALUES (9001, '{MIRROR_REPOSITORY}-large', 'rev-1', NOW(), NOW(), NOW());
+        INSERT INTO cbl_source_lists
+          (id, source_id, source_path, name, declared_issue_count, content_hash,
+           revision_sha, active, created_at, updated_at)
+        VALUES
+          (9001, 9001, 'Marvel/Alpha Flight (1983)/Alpha Flight.cbl',
+           'Alpha Flight (1983)', 228, 'h-large', 'rev-1', TRUE, NOW(), NOW());
+        INSERT INTO external_identities
+          (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+        SELECT 20000 + g, 'comicvine', 'issue', format('4000-large-%s', g), '{{}}'::json, NOW(), NOW()
+        FROM generate_series(0, 227) AS g;
+        INSERT INTO cbl_source_entries
+          (id, list_id, "position", series_name, issue_number, volume_year,
+           publication_year, external_issue_identity_id, created_at)
+        SELECT 10000 + g, 9001, g, 'Alpha Flight', g::text, 1983, 1983, 20000 + g, NOW()
+        FROM generate_series(0, 227) AS g;
+        "#
+    ))
+    .await
+    .unwrap();
+
+    let payload = json!({
+        "entry_decisions": {},
+        "series_decisions": [],
+        "series_overrides": [],
+        "content_hash": "h-large",
+        "revision_sha": "rev-1",
+        "idempotency_key": "qa-alpha-flight-228"
+    });
+    let started = std::time::Instant::now();
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/9001/adoption-commits",
+        payload.clone(),
+    )
+    .await;
+    let elapsed = started.elapsed();
+    assert_eq!(status, StatusCode::CREATED, "{status} {body}");
+    assert!(
+        elapsed < std::time::Duration::from_secs(60),
+        "large adoption exceeded the 60s client timeout: {elapsed:?}"
+    );
+    assert_eq!(
+        body["created_positions"].as_array().map(Vec::len),
+        Some(228),
+        "all approved entries must commit in one transaction: {body}"
+    );
+    assert_eq!(body["unresolved_positions"], json!([]), "{body}");
+
+    let plan_id = body["id"].as_i64().unwrap() as i32;
+    let (reader_status, reader_body) =
+        get(&state, &token, &format!("/api/v2/continuity-plans/{plan_id}/reader")).await;
+    assert_eq!(reader_status, StatusCode::OK, "{reader_body}");
+    assert_eq!(reader_body["progress"]["total_issues"], 228, "{reader_body}");
+
+    let list_id: i32 = conn
+        .query_one(
+            "SELECT custom_cbl_list_id FROM reading_plan_sources
+             WHERE plan_id = $1 AND custom_cbl_list_id IS NOT NULL
+             ORDER BY id DESC LIMIT 1",
+            &[&plan_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let entry_count: i64 = conn
+        .query_one(
+            "SELECT COUNT(*)::bigint FROM custom_cbl_entries WHERE list_id = $1",
+            &[&list_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        entry_count, 228,
+        "the canonical reading list must hold every adopted issue: {body}"
+    );
+
+    // A lost response replays the authoritative stored result instead of
+    // re-running the adoption or reporting "nothing happened" (#5522).
+    let (replay_status, replay_body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/9001/adoption-commits",
+        payload,
+    )
+    .await;
+    assert_eq!(replay_status, StatusCode::CREATED, "{replay_status} {replay_body}");
+    assert_eq!(replay_body, body, "receipt replay must be byte-identical");
+    let plan_count: i64 = conn
+        .query_one(
+            "SELECT COUNT(*)::bigint FROM continuity_plans WHERE user_id = (SELECT id FROM users WHERE username LIKE 'issue-identity-%' ORDER BY id DESC LIMIT 1)",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(plan_count, 1, "replay must not create a duplicate plan");
 }
 
 #[tokio::test]
