@@ -2990,6 +2990,165 @@ async fn do_cbl_adoption_commit(
             CommitErr::Unexpected(format!("update plan: {e}"))
         }
     })?;
+
+    // Persist to canonical, source-linked Option E Reading List (custom_cbl_list).
+    // This keeps the Reading List as the source of truth for adopted CBL entries.
+    let adopted_issue_ids: Vec<i32> = merge.4.clone();
+    let raw_source_path = format!("custom-cbl:{}", list_id);
+    // Find existing authoritative list for this plan+source, or any user source-linked list.
+    let existing_list_id: Option<i32> = {
+        let plan_list = tx
+            .run_query_opt(
+                "SELECT s.custom_cbl_list_id
+                 FROM reading_plan_sources s
+                 JOIN custom_cbl_lists l ON l.id = s.custom_cbl_list_id AND l.user_id = $2
+                 WHERE s.plan_id = $1 AND s.custom_cbl_list_id IS NOT NULL
+                 ORDER BY s.id DESC LIMIT 1",
+                &[&plan_id, &user_id],
+            )
+            .await
+            .map_err(|e| {
+                if crate::db::is_transport_failure(&e) {
+                    CommitErr::Db(ApiError::database_unavailable())
+                } else {
+                    CommitErr::Unexpected(format!("lookup plan reading list: {e}"))
+                }
+            })?;
+        if let Some(row) = plan_list {
+            row.get::<_, Option<i32>>(0)
+        } else {
+            let source_list = tx
+                .run_query_opt(
+                    "SELECT s.custom_cbl_list_id
+                     FROM reading_plan_sources s
+                     JOIN custom_cbl_lists l ON l.id = s.custom_cbl_list_id AND l.user_id = $1
+                     WHERE s.raw_source_path = $2 AND s.custom_cbl_list_id IS NOT NULL
+                     ORDER BY s.id DESC LIMIT 1",
+                    &[&user_id, &raw_source_path],
+                )
+                .await
+                .map_err(|e| {
+                    if crate::db::is_transport_failure(&e) {
+                        CommitErr::Db(ApiError::database_unavailable())
+                    } else {
+                        CommitErr::Unexpected(format!("lookup source reading list: {e}"))
+                    }
+                })?;
+            source_list.and_then(|row| row.get::<_, Option<i32>>(0))
+        }
+    };
+
+    let canonical_list_id: i32 = if let Some(existing_id) = existing_list_id {
+        tx.run_execute(
+            "UPDATE custom_cbl_lists SET updated_at = NOW() WHERE id = $1 AND user_id = $2",
+            &[&existing_id, &user_id],
+        )
+        .await
+        .map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("update reading list: {e}"))
+            }
+        })?;
+        existing_id
+    } else {
+        let list_name = if list_name.is_empty() {
+            format!("CBL adoption for {source_path}")
+        } else {
+            list_name.clone()
+        };
+        let row = tx
+            .run_query_one(
+                "INSERT INTO custom_cbl_lists (user_id, name, description, mode, created_at, updated_at)
+                 VALUES ($1, $2, NULL, 'loose', NOW(), NOW())
+                 RETURNING id",
+                &[&user_id, &list_name],
+            )
+            .await
+            .map_err(|e| {
+                if crate::db::is_transport_failure(&e) {
+                    CommitErr::Db(ApiError::database_unavailable())
+                } else {
+                    CommitErr::Unexpected(format!("create reading list: {e}"))
+                }
+            })?;
+        row.get::<_, i32>(0)
+    };
+
+    // Replace list entries with the committed adopted issue set.
+    tx.run_execute(
+        "DELETE FROM custom_cbl_entries WHERE list_id = $1",
+        &[&canonical_list_id],
+    )
+    .await
+    .map_err(|e| {
+        if crate::db::is_transport_failure(&e) {
+            CommitErr::Db(ApiError::database_unavailable())
+        } else {
+            CommitErr::Unexpected(format!("clear reading list entries: {e}"))
+        }
+    })?;
+    for (position, issue_id) in adopted_issue_ids.iter().enumerate() {
+        tx.run_execute(
+            "INSERT INTO custom_cbl_entries
+               (list_id, issue_id, position, created_at, is_checkpoint, checkpoint_target_issue_ids, gate, skipped)
+             VALUES ($1, $2, $3, NOW(), false, '[]'::json, 'none', false)",
+            &[&canonical_list_id, issue_id, &(position as i32)],
+        )
+        .await
+        .map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("insert reading list entry: {e}"))
+            }
+        })?;
+    }
+
+    // Link plan to authoritative reading list via reading_plan_sources.
+    tx.run_execute(
+        "UPDATE reading_plan_sources SET custom_cbl_list_id = $1, adopted_at = COALESCE(adopted_at, NOW())
+         WHERE plan_id = $2 AND raw_source_path = $3",
+        &[&canonical_list_id, &plan_id, &raw_source_path],
+    )
+    .await
+    .map_err(|e| {
+        if crate::db::is_transport_failure(&e) {
+            CommitErr::Db(ApiError::database_unavailable())
+        } else {
+            CommitErr::Unexpected(format!("update reading plan source link: {e}"))
+        }
+    })?;
+    let updated_source = tx
+        .run_query_opt(
+            "SELECT id FROM reading_plan_sources WHERE plan_id = $1 AND raw_source_path = $2",
+            &[&plan_id, &raw_source_path],
+        )
+        .await
+        .map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("lookup reading plan source: {e}"))
+            }
+        })?;
+    if updated_source.is_none() {
+        tx.run_execute(
+            "INSERT INTO reading_plan_sources (plan_id, raw_source_path, custom_cbl_list_id, adopted_at, recorded_at)
+             VALUES ($1, $2, $3, NOW(), NOW())",
+            &[&plan_id, &raw_source_path, &canonical_list_id],
+        )
+        .await
+        .map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("insert reading plan source: {e}"))
+            }
+        })?;
+    }
+
     let prow = tx.run_query_one("SELECT id,user_id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1", &[&plan_id]).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(format!("reload plan: {e}")) })?;
     tx.commit().await.map_err(|e| {
         if crate::db::is_transport_failure(&e) {
