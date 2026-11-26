@@ -286,34 +286,34 @@ fn iso(column: &str) -> String {
     )
 }
 
-/// Thread ids evaluated as eligible while the Option E preview is active.
+/// Thread ids used for the dense Queue ordinal in lifecycle responses.
+///
+/// Presentation-only: the preview keeps the frozen Python response ordering,
+/// while the write authority paths below always use the canonical evaluator.
 async fn option_e_eligible(
     state: &AppState,
     user: AuthenticatedUser,
 ) -> Result<Option<HashSet<i32>>, ApiError> {
-    canonical_eligibility_inputs(state, user)
-        .await?
-        .map(|validated| queue::evaluated_eligible_ids(&validated))
-        .transpose()
+    if !state.option_e {
+        return Ok(None);
+    }
+    Ok(Some(queue::evaluated_eligible_ids(
+        &canonical_eligibility_inputs(state, user).await?,
+    )?))
 }
 
 /// Canonical reading-list inputs for the automatic-Roll authority paths.
 ///
-/// The loader checks out its own pooled connection, so callers resolve the
-/// snapshot before opening a write transaction and never nest two checkouts.
-/// With the setting inactive the legacy stored-flag authority is retained;
-/// when it is active the evaluated graph is authoritative and `is_blocked` is
-/// never consulted as permission (#5525 A16/A17).
+/// The evaluated graph is the only execution model: the snapshot is resolved
+/// unconditionally, never behind `OPTION_E_ENABLED` (#5525 A7/A17), so stored
+/// `threads.is_blocked` is never consulted as permission. The loader checks
+/// out its own pooled connection; callers resolve it before opening a write
+/// transaction and never nest two checkouts.
 async fn canonical_eligibility_inputs(
     state: &AppState,
     user: AuthenticatedUser,
-) -> Result<Option<ValidatedReadingInputs>, ApiError> {
-    if !state.option_e {
-        return Ok(None);
-    }
-    Ok(Some(
-        option_inputs::load_option_inputs_contained(state, user).await?,
-    ))
+) -> Result<ValidatedReadingInputs, ApiError> {
+    option_inputs::load_option_inputs_contained(state, user).await
 }
 
 /// Reader-facing reason for a thread the canonical evaluator rejects.
@@ -1661,98 +1661,47 @@ async fn validate_set_pending_selection(
     user_id: i32,
     thread_id: i64,
     expected_issue_id: Option<i32>,
-    canonical: Option<&ValidatedReadingInputs>,
+    canonical: &ValidatedReadingInputs,
 ) -> Result<SetPendingSelection, LifecycleError> {
     let thread = find_owned(tx, user_id, thread_id, true).await?;
     if thread.status != "active" {
         return Err(ApiError::BadRequest(format!("Thread {thread_id} is not active")).into());
     }
-    // The evaluated graph is the only authority when it is active. The stored
-    // `is_blocked` flag is never consulted in that mode (#5525 A16/A17); it is
-    // retained only for the legacy path where no canonical snapshot exists.
-    let evaluated = match canonical {
-        Some(validated) => Some(crate::reading_eligibility::evaluate(validated)?),
-        None => None,
-    };
-    let blocked_reason = if let (Some(validated), Some(evaluated)) = (canonical, evaluated.as_ref())
-    {
-        if evaluated
-            .get(&thread.id)
-            .is_some_and(|state| state.eligible)
-        {
-            None
-        } else {
-            Some(canonical_block_reason(validated, thread.id))
-        }
-    } else if thread.is_blocked {
-        Some(
-            tx.query_opt(
-                "SELECT DISTINCT st.id, st.title, si.id, si.issue_number
-                 FROM threads tt
-                 JOIN issues nu ON nu.id = tt.next_unread_issue_id
-                 JOIN dependencies d ON d.target_issue_id = nu.id
-                 JOIN issues si ON si.id = d.source_issue_id
-                 JOIN threads st ON st.id = si.thread_id
-                 WHERE tt.id = $1 AND tt.user_id = $2 AND st.user_id = $2
-                   AND si.status <> 'read' AND nu.status <> 'read'
-                   AND tt.next_unread_issue_id IS NOT NULL
-                   AND (d.note IS NULL OR d.note NOT LIKE 'cbl-order:%')
-                 ORDER BY st.id, st.title, si.id, si.issue_number
-                 LIMIT 1",
-                &[&thread.id, &user_id],
-            )
-            .await
-            .map_err(db::tx_error)?
-            .map(|row| {
-                let title: String = row.get(1);
-                let number: String = row.get(3);
-                format!(": Blocked by {title}: #{number}")
-            })
-            .unwrap_or_default(),
-        )
-    } else {
-        None
-    };
-    if let Some(reason) = blocked_reason {
+    // The evaluated graph is the sole authority. `is_blocked` and the stored
+    // queue position never grant or veto permission (#5525 A16/A17).
+    let evaluated = crate::reading_eligibility::evaluate(canonical)?;
+    let reason = canonical_block_reason(canonical, thread.id);
+    if !reason.is_empty() {
         return Err(ApiError::BadRequest(format!(
             "Thread {thread_id} is blocked by a dependency{reason}"
         ))
         .into());
     }
     let eligible_ids: Vec<i32> = evaluated
-        .as_ref()
-        .map(|states| {
-            states
-                .iter()
-                .filter(|(_, state)| state.eligible)
-                .map(|(id, _)| *id)
-                .collect()
-        })
-        .unwrap_or_default();
+        .iter()
+        .filter(|(_, state)| state.eligible)
+        .map(|(id, _)| *id)
+        .collect();
     let position_row = tx
         .query_opt(
             "SELECT pos FROM (
                  SELECT id, row_number() OVER (
-                     ORDER BY CASE WHEN $3::boolean THEN NOT (id = ANY($4::int[]))
-                                   ELSE is_blocked END,
+                     ORDER BY CASE WHEN id = ANY($3::int[]) THEN 0 ELSE 1 END,
                               queue_position, id)::int AS pos
                  FROM threads
                  WHERE user_id = $1 AND status = 'active' AND queue_position >= 1) ranked
              WHERE id = $2",
-            &[&user_id, &thread.id, &evaluated.is_some(), &eligible_ids],
+            &[&user_id, &thread.id, &eligible_ids],
         )
         .await
         .map_err(db::tx_error)?;
     let queue_position: i32 = position_row.map(|row| row.get(0)).unwrap_or(0);
-    let canonical_frontier = evaluated
-        .as_ref()
-        .and_then(|states| states.get(&thread.id))
-        .and_then(|state| state.next_issue_id);
+    let canonical_frontier = evaluated.get(&thread.id).and_then(|state| state.next_issue_id);
 
     let mut issue_id: Option<i32> = None;
     let mut issue_number: Option<String> = None;
     if thread.total_issues.is_some() {
-        if let Some(next_id) = canonical_frontier.or(thread.next_unread_issue_id) {
+        if let Some(next_id) = canonical_frontier {
             if let Some(row) = tx
                 .query_opt(
                     "SELECT id, issue_number FROM issues WHERE id = $1",
@@ -1797,7 +1746,7 @@ async fn set_pending_once(
     user: AuthenticatedUser,
     thread_id: i64,
     expected_issue_id: Option<i32>,
-    canonical: Option<&ValidatedReadingInputs>,
+    canonical: &ValidatedReadingInputs,
 ) -> Result<RollResponse, LifecycleError> {
     let user_id = user.id();
 
@@ -1932,14 +1881,8 @@ pub async fn set_pending_thread(
     // connection: the loader owns its own pooled checkout, so nesting the two
     // would risk a second-connection deadlock under a saturated pool.
     let canonical = canonical_eligibility_inputs(&state, user).await?;
-    let response = set_pending_once(
-        &state,
-        user,
-        thread_id.unwrap_or_default(),
-        expected,
-        canonical.as_ref(),
-    )
-    .await?;
+    let response =
+        set_pending_once(&state, user, thread_id.unwrap_or_default(), expected, &canonical).await?;
     Ok(json_response(StatusCode::OK, response))
 }
 
@@ -2048,15 +1991,11 @@ pub async fn list_stale_threads(
     let days = days.unwrap_or(30);
     let page_size = page_size.unwrap_or(200);
     let user_id = user.id();
-    // Load the evaluated snapshot before taking the write connection (the
-    // loader owns its own pooled checkout). With Option E active the canonical
-    // set replaces the stale stored `is_blocked` filter entirely (#5525 A16).
+    // The evaluated snapshot is always authoritative (#5525 A16/A17): stored
+    // `is_blocked` never decides which threads are stale candidates. Load it
+    // before taking the write connection (the loader owns its own checkout).
     let canonical = canonical_eligibility_inputs(&state, user).await?;
-    let eligible_ids: HashSet<i32> = canonical
-        .as_ref()
-        .map(queue::evaluated_eligible_ids)
-        .transpose()?
-        .unwrap_or_default();
+    let eligible_ids: HashSet<i32> = queue::evaluated_eligible_ids(&canonical)?;
     let eligible_list: Vec<i32> = eligible_ids.iter().copied().collect();
     let views = with_tx!(&state, tx, db::tx_error, {
         let session = tx
@@ -2081,8 +2020,7 @@ pub async fn list_stale_threads(
             .query(
                 "SELECT id FROM threads
              WHERE user_id = $1 AND status = 'active'
-               AND (CASE WHEN $5::boolean THEN id = ANY($6::int[])
-                         ELSE NOT is_blocked END)
+               AND id = ANY($5::int[])
                AND (last_activity_at < NOW() - make_interval(days => $2::int)
                     OR last_activity_at IS NULL)
                AND NOT (id = ANY($3::int[]))
@@ -2093,7 +2031,6 @@ pub async fn list_stale_threads(
                     &(days as i32),
                     &snoozed,
                     &page_size,
-                    &canonical.is_some(),
                     &eligible_list,
                 ],
             )
@@ -2102,8 +2039,7 @@ pub async fn list_stale_threads(
             .iter()
             .map(|row| row.get(0))
             .collect();
-        let eligible = canonical.as_ref().map(|_| &eligible_ids);
-        Ok(load_views(&*tx, user_id, &ids, eligible).await?)
+        Ok(load_views(&*tx, user_id, &ids, Some(&eligible_ids)).await?)
     })?;
     Ok(json_response(StatusCode::OK, views))
 }
