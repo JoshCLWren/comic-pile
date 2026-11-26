@@ -1766,6 +1766,10 @@ async fn set_pending_once(
     // rejected request (notably a stale expected_issue_id 409) does not commit a
     // session-start undo checkpoint like Python's pre-get_or_create checks.
     with_tx!(state, tx, db::tx_error, {
+        // Every queue writer takes the per-reader queue lock before the thread
+        // row lock. Validation also locks the row, so it must follow the same
+        // order as the commit transaction below (#5398/#5419).
+        acquire_queue_lock(&tx, user_id).await?;
         validate_set_pending_selection(&tx, user_id, thread_id, expected_issue_id, canonical)
             .await?;
         Ok::<_, LifecycleError>(())
@@ -1774,6 +1778,7 @@ async fn set_pending_once(
     let active = reading_session::initialize(state, user, None, SessionPolicy::default()).await?;
 
     with_tx!(state, tx, db::tx_error, {
+        acquire_queue_lock(&tx, user_id).await?;
         let selection =
             validate_set_pending_selection(&tx, user_id, thread_id, expected_issue_id, canonical)
                 .await?;
