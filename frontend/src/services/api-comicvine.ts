@@ -214,6 +214,17 @@ export interface MetadataRefreshResponse {
   issue_id: number
   refreshed: boolean
   comicvine_issue_id: string | null
+  /** Terminal outcome of the bounded synchronous attempt. */
+  outcome:
+    | 'complete'
+    | 'no_credits'
+    | 'not_confirmed'
+    | 'provider_not_configured'
+    | 'provider_unavailable'
+    | 'rate_limited'
+    | 'timeout'
+    | 'invalid_response'
+  retry_after_seconds: number | null
 }
 
 export interface CanonicalCorrection {

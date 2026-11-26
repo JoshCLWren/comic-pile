@@ -155,7 +155,24 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
     refreshPollCountRef.current = 0
     setIsRefreshPollingExhausted(false)
     try {
-      await comicVineApi.refreshMetadata(issueId)
+      const result = await comicVineApi.refreshMetadata(issueId)
+      // The retry is synchronous on the server. A 200 with `refreshed: false`
+      // is a truthful provider outcome, not success — say which one happened.
+      if (!result?.refreshed) {
+        const retryAfter = result?.retry_after_seconds
+        const message: Record<string, string> = {
+          provider_unavailable: 'ComicVine is unavailable right now. Your mapping is safe — try again.',
+          timeout: 'ComicVine did not answer in time. Your mapping is safe — try again.',
+          invalid_response: 'ComicVine returned an invalid response. Try again.',
+          provider_not_configured: 'ComicVine credentials are not configured on this server.',
+          not_confirmed: 'No confirmed ComicVine issue is mapped to this comic.',
+        }
+        setRefreshRecoveryError(
+          result?.outcome === 'rate_limited' && retryAfter != null && retryAfter > 0
+            ? `ComicVine rate limited this retry. Try again in ${retryAfter}s.`
+            : message[result?.outcome ?? ''] ?? 'Could not refresh creator credits. Try again.',
+        )
+      }
     } catch {
       setRefreshRecoveryError('Could not request a creator refresh. Try again.')
     } finally {
@@ -477,9 +494,12 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
               switch (status) {
                 case 'not_deep_fetched':
                   return (
-                    <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-not-fetched">
-                      Creator credits not yet fetched
-                    </p>
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-not-fetched">
+                        Creator credits not yet fetched
+                      </p>
+                      {retryRefreshButton}
+                    </div>
                   );
                 case 'refresh_pending':
                 case 'refresh_running':
@@ -522,9 +542,12 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                   );
                 case 'deep_fetched_no_credits':
                   return (
-                    <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-no-credits">
-                      ComicVine currently has no creator credits
-                    </p>
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-no-credits">
+                        ComicVine currently has no creator credits
+                      </p>
+                      {retryRefreshButton}
+                    </div>
                   );
                 default:
                   return null;
