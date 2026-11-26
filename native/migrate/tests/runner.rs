@@ -175,14 +175,10 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
     let db = Scratch::create().await;
     let mut client = db.client().await;
     let report = run(&mut client).await.unwrap();
-<<<<<<< HEAD
     assert_eq!(
         (report.applied, report.adopted),
         (versions_after(0), vec![])
     );
-=======
-    assert_eq!((report.applied, report.adopted), (vec![1, 2, 3, 4], vec![]));
->>>>>>> origin/main
 
     let stamp: String = client
         .query_one("SELECT version_num FROM public.alembic_version", &[])

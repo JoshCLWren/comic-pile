@@ -3,7 +3,6 @@ import type { KeyboardEvent } from 'react'
 import Modal from './Modal'
 import CompactIssueCardTrigger from './CompactIssueCardTrigger'
 import { issuesApi } from '../services/api-issues'
-<<<<<<< HEAD
 import type { IssueListParams, IssueReadOperationResponse, IssueReadOperationUndoResponse } from '../services/api-issues'
 import { issueCardsApi } from '../services/issueCardsApi'
 import { issueDependenciesApi } from '../services/api-dependencies'
@@ -13,9 +12,6 @@ import {
   findBulkReadReceipt,
   writeBulkReadReceipt,
 } from '../hooks/useBulkReadOperations'
-=======
-import type { IssueListParams } from '../services/api-issues'
->>>>>>> origin/main
 import { invalidateAfterIssueEdit } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 import type { Issue, IssueListResponse } from '../types'
