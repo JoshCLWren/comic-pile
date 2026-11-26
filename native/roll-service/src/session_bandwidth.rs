@@ -104,7 +104,7 @@ pub(crate) async fn predict(
       x.selected_thread_id = r.thread_id
       FROM events r JOIN threads t ON t.id=r.thread_id
       LEFT JOIN events x ON x.id=r.source_roll_event_id
-      WHERE t.user_id=$1 AND r.type='rate' ORDER BY r.id",
+      WHERE t.user_id=$1 AND r.type='rate' AND r.context->>'undone_by_snapshot_id' IS NULL ORDER BY r.id",
             &[&user.id()],
         )
         .await

@@ -365,11 +365,14 @@ SELECT t.id, t.title, t.format, t.last_activity_at::text, i.id, i.issue_number,
  (SELECT count(*) FROM issues owned WHERE owned.thread_id=t.id AND owned.merged_into_issue_id IS NULL),
  (SELECT e.rating::double precision FROM events e JOIN sessions s ON s.id=e.session_id
     WHERE s.user_id=$1 AND e.thread_id=t.id AND e.type='rate' AND e.rating IS NOT NULL
+      AND e.context->>'undone_by_snapshot_id' IS NULL
     ORDER BY e.timestamp DESC,e.id DESC LIMIT 1),
  (SELECT avg(e.rating)::double precision FROM events e JOIN sessions s ON s.id=e.session_id
-    WHERE s.user_id=$1 AND e.thread_id=t.id AND e.type='rate' AND e.rating IS NOT NULL),
+    WHERE s.user_id=$1 AND e.thread_id=t.id AND e.type='rate' AND e.rating IS NOT NULL
+      AND e.context->>'undone_by_snapshot_id' IS NULL),
  (SELECT count(*) FROM events e JOIN sessions s ON s.id=e.session_id
-    WHERE s.user_id=$1 AND e.thread_id=t.id AND e.type='rate' AND e.rating IS NOT NULL),
+    WHERE s.user_id=$1 AND e.thread_id=t.id AND e.type='rate' AND e.rating IS NOT NULL
+      AND e.context->>'undone_by_snapshot_id' IS NULL),
  COALESCE((SELECT array_agg(names.name ORDER BY names.name) FROM (
     SELECT DISTINCT g.name FROM dependency_groups g
     JOIN dependency_group_memberships m ON m.group_id=g.id
@@ -425,6 +428,7 @@ async fn latest_session_read(
              LIMIT 1
          ) cover_identity ON TRUE
          WHERE e.session_id=$1 AND e.type='rate'
+           AND e.context->>'undone_by_snapshot_id' IS NULL
            AND EXISTS (SELECT 1 FROM sessions s WHERE s.id=e.session_id AND s.user_id=$2)
          ORDER BY e.timestamp DESC,e.id DESC LIMIT 1",
         &[&session_id,&user.id()],
@@ -650,6 +654,7 @@ async fn canonical_series_stats(
           FROM mapped LEFT JOIN LATERAL (
             SELECT ev.rating,ev.timestamp FROM events ev
             WHERE ev.issue_id=mapped.id AND ev.type='rate' AND ev.rating IS NOT NULL
+               AND ev.context->>'undone_by_snapshot_id' IS NULL
             ORDER BY ev.timestamp DESC,ev.id DESC LIMIT 1
           ) rating ON TRUE
           WHERE mapped.volume_id=ANY($2::text[])
