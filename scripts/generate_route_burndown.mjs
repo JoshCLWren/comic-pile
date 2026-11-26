@@ -8,16 +8,8 @@
 import {readFileSync, writeFileSync, readdirSync} from 'node:fs';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
-<<<<<<< HEAD
-import {
-  canonicalNativeBuild,
-  canonicalNativeDestination,
-  slimNativeApiRoutes,
-} from './vercel_slim_routes.mjs';
-=======
 import {withCanonicalBuilds} from './vercel_builds.mjs';
 import {slimNativeRollRoutes} from './vercel_slim_routes.mjs';
->>>>>>> origin/main
 
 const INVENTORY_PATH = 'docs/api/v2-route-inventory.json';
 const FRAGMENT_DIR = 'docs/api/route-fragments';
@@ -25,15 +17,9 @@ const SQL_BUDGET_SOURCES_PATH = 'docs/api/sql-budget-sources.json';
 const REWRITE_FRAGMENT_PATH = path.posix.join(FRAGMENT_DIR, 'vercel-rewrites.json');
 const VERCEL_PATH = 'vercel.json';
 const AGENTS_PATH = 'AGENTS.md';
-<<<<<<< HEAD
-const NATIVE_DESTINATIONS = new Set(['/api/native_api.rs']);
-const PYTHON_DESTINATION = '/api/index.py';
-const VERCEL_DESTINATIONS = new Set([...NATIVE_DESTINATIONS, PYTHON_DESTINATION]);
-=======
 const NATIVE_DESTINATIONS = new Set(['/api/native_roll.rs']);
->>>>>>> origin/main
 const CATCH_ALL_SRC = '/api(?:/.*)?';
-const CATCH_ALL_DEST = '/api/native_api.rs';
+const CATCH_ALL_DEST = '/api/native_roll.rs';
 const BURN_DOWN_ISSUE = 4739;
 const METHOD_ORDER = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 const AGENTS_BEGIN_MARKER =
@@ -443,8 +429,6 @@ export function _generateVercelDocument(previous, fragments, {slim = true} = {})
       throw new BurndownGenerationError('vercel.json routes must be objects');
     }
     const full = Object.fromEntries(Object.entries(rawRoute).map(([k, v]) => [String(k), v]));
-    const canonicalDest = canonicalNativeDestination(full.dest);
-    if (canonicalDest !== full.dest) full.dest = canonicalDest;
     previousFull.push(full);
     const src = full.src;
     const dest = full.dest;
@@ -498,36 +482,14 @@ export function _generateVercelDocument(previous, fragments, {slim = true} = {})
     ...nonApi,
   ];
   const newRoutes = slim
-    ? slimNativeApiRoutes(
+    ? slimNativeRollRoutes(
       fullRoutes,
       new Set(generated),
     )
     : fullRoutes;
-<<<<<<< HEAD
-  const nativeIndices = [];
-  const pythonIndices = [];
-  let catchIndex = -1;
-  for (let index = 0; index < newRoutes.length; index++) {
-    const route = newRoutes[index];
-    if (NATIVE_DESTINATIONS.has(route.dest) && route.src !== CATCH_ALL_SRC) nativeIndices.push(index);
-    if (route.dest === PYTHON_DESTINATION) pythonIndices.push(index);
-    if (route.src === CATCH_ALL_SRC) catchIndex = index;
-  }
-  if (nativeIndices.length && pythonIndices.length && Math.max(...nativeIndices) > Math.min(...pythonIndices)) {
-    throw new BurndownGenerationError('native routes must precede Python exceptions');
-  }
-  if (pythonIndices.length && catchIndex < Math.max(...pythonIndices)) {
-    throw new BurndownGenerationError('Python exceptions must precede catch-all');
-  }
-  const document = Object.fromEntries(Object.entries(previous).map(([k, v]) => [String(k), v]));
-  if (Array.isArray(document.builds)) {
-    document.builds = document.builds.map(canonicalNativeBuild);
-  }
-=======
   const document = withCanonicalBuilds(
     Object.fromEntries(Object.entries(previous).map(([k, v]) => [String(k), v])),
   );
->>>>>>> origin/main
   document.routes = newRoutes;
   return document;
 }
@@ -832,7 +794,7 @@ function _renderAgentsBlock(enriched, fullSummary = null) {
     '> API version is not implementation language.',
     '',
     `- Live v2 operations: ${total} (${native} native-rust + ${pythonTotal} python-fastapi).`,
-    '- Native ingress: `/api/native_api.rs` (via `vercel.json`).',
+    '- Native ingress: `/api/native_roll.rs` (via `vercel.json`).',
   ];
   if (fullSummary !== null) {
     const v1Total = fullSummary.v1_total;
@@ -850,7 +812,7 @@ function _renderAgentsBlock(enriched, fullSummary = null) {
       `${unversionedLive} live Python / ${unversionedShadowed} migrated ` +
       '(shadowed by Rust); remaining declared methods use explicit Python exceptions.',
     );
-    lines.push('- Catch-all: `/api(?:/.*)? -> /api/native_api.rs` (Rust JSON 404).');
+    lines.push('- Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404).');
     lines.push(
       '- Full-surface inventory (v2 + v1 + unversioned + catch-all) and per-operation callers: see `docs/api/v2-route-inventory.json` `full_surface` (authoritative).',
     );

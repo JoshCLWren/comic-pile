@@ -6,21 +6,10 @@
  */
 import {readFileSync, readdirSync, writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
-<<<<<<< HEAD
-import {
-  canonicalNativeBuild,
-  canonicalNativeDestination,
-  slimNativeApiRoutes,
-} from './vercel_slim_routes.mjs';
-
-const PYTHON = '/api/index.py';
-const RUST = '/api/native_api.rs';
-=======
 import {withCanonicalBuilds} from './vercel_builds.mjs';
 import {slimNativeRollRoutes} from './vercel_slim_routes.mjs';
 
 const RUST = '/api/native_roll.rs';
->>>>>>> origin/main
 const NATIVE = new Set([RUST]);
 const FALLBACK = '/api(?:/.*)?';
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
@@ -113,7 +102,7 @@ export function fragmentVercelRoutes(fragments, previousRoutes = []) {
       }
       if (!src) {
         // The catch-all is never a fragment's own ingress src (slim vercel.json
-        // relies on it instead of explicit native_api entries).
+        // relies on it instead of explicit native_roll entries).
         src = (previous && previous.src !== FALLBACK && previous.src) || routeRegex(path);
       }
       if (!NATIVE.has(dest)) {
@@ -141,35 +130,10 @@ export function generateVercel(config, fragments) {
   const baselineNatives = config.routes.filter(
     route => NATIVE.has(route.dest) && route.src !== FALLBACK && !fragmentSrcs.has(route.src),
   );
-<<<<<<< HEAD
-  const byPath = new Map();
-  for (const [method, path] of operations) {
-    if (fragmentOps.has(`${method} ${path}`)) continue;
-    if (alreadyNative(method, path, native)) continue;
-    if (!byPath.has(path)) byPath.set(path, new Set());
-    byPath.get(path).add(method);
-  }
-  const baselineExceptions = [...byPath].sort(([a], [b]) => a.localeCompare(b))
-    .map(([path, methods]) => {
-      methods.add('OPTIONS');
-      return {src: routeRegex(path), methods: METHODS.filter(m => methods.has(m)), dest: PYTHON};
-    });
-  const fragmentNatives = fragmentRoutes.filter(r => NATIVE.has(r.dest));
-  const fragmentPythons = fragmentRoutes.filter(r => r.dest === PYTHON);
-  const rest = config.routes.filter(route => !native.includes(route) && route.dest !== PYTHON
-    && !(route.src === FALLBACK && NATIVE.has(route.dest)));
-  // Deterministic native-before-Python order: baseline natives (preserved
-  // order) + fragment natives (sorted) + fragment pythons (sorted) +
-  // baseline exceptions (sorted by path) + catch-all + non-API tail.
-  // Fragment-derived native_api routes are emitted only when a later Python
-  // route could otherwise shadow them (the catch-all already
-  // sends everything else to native_api).
-=======
   // Only non-API routes survive from the previous document. Every API route
   // is either fragment-derived or the native catch-all below, so a retired
   // Python exception can never be carried forward.
   const rest = config.routes.filter(route => !native.includes(route) && !isApiSource(route.src));
->>>>>>> origin/main
   const fullRoutes = [
     ...baselineNatives,
     ...fragmentRoutes,
@@ -178,16 +142,8 @@ export function generateVercel(config, fragments) {
   ];
   return withCanonicalBuilds(applyStaticCsp({
     ...config,
-<<<<<<< HEAD
-    routes: slimNativeApiRoutes(
-      fullRoutes,
-      new Set(fragmentNatives),
-    ),
-  });
-=======
     routes: slimNativeRollRoutes(fullRoutes, new Set(fragmentRoutes)),
   }));
->>>>>>> origin/main
 }
 export function loadFragmentFiles(directory = 'docs/api/route-fragments') {
   return readdirSync(directory)
@@ -198,30 +154,9 @@ export function loadFragmentFiles(directory = 'docs/api/route-fragments') {
 
 function run() {
   const check = process.argv.includes('--check');
-<<<<<<< HEAD
-  const committed = JSON.parse(readFileSync('vercel.json', 'utf8'));
-  // Ordinary route PRs cannot commit bot-owned vercel.json. Normalize the
-  // previous native entrypoint before deriving the next artifact so a rename
-  // can land in the fragments first and be regenerated after merge.
-  const original = {
-    ...committed,
-    builds: Array.isArray(committed.builds)
-      ? committed.builds.map(canonicalNativeBuild)
-      : committed.builds,
-    routes: committed.routes.map(route => {
-      const dest = canonicalNativeDestination(route.dest);
-      return dest === route.dest ? route : {...route, dest};
-    }),
-  };
-  const inventory = JSON.parse(readFileSync('docs/api/v2-route-inventory.json', 'utf8'));
-  // The Python API is deleted: no Python operation declares an ingress any
-  // longer. Route fragments are the sole source of explicit /api rewrites.
-  const operations = [];
-=======
   const original = JSON.parse(readFileSync('vercel.json', 'utf8'));
   // Route fragments are the sole source of explicit /api rewrites; there is
   // no Python operation registry to sync into the inventory any longer.
->>>>>>> origin/main
   const fragments = loadFragmentFiles();
   const nextVercel = JSON.stringify(generateVercel(original, fragments), null, 2) + '\n';
   if (check) {

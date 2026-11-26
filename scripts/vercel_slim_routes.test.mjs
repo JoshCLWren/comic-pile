@@ -2,20 +2,10 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import {_generateVercelDocument, _loadRouteFragments} from './generate_route_burndown.mjs';
-import {
-  canonicalNativeBuild,
-  canonicalNativeDestination,
-  slimNativeApiRoutes,
-  parseSegments,
-  routesMayOverlap,
-} from './vercel_slim_routes.mjs';
+import {slimNativeRollRoutes, parseSegments, routesMayOverlap} from './vercel_slim_routes.mjs';
 
-<<<<<<< HEAD
-const NATIVE_API = '/api/native_api.rs';
-=======
 const ROLL = '/api/native_roll.rs';
 const SHADOW = '/api/shadow.ingress';
->>>>>>> origin/main
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 const json = file => JSON.parse(readFileSync(file, 'utf8'));
 
@@ -43,36 +33,12 @@ function allTemplates(inventory, fragments) {
   return [...templates];
 }
 
-test('legacy native destinations are canonicalized at the I/O boundary', () => {
-  assert.equal(canonicalNativeDestination('/api/native_roll.rs'), NATIVE_API);
-  assert.equal(canonicalNativeDestination('/api/native_api.rs'), NATIVE_API);
-  assert.equal(canonicalNativeDestination('/api/index.py'), '/api/index.py');
-  assert.equal(canonicalNativeDestination('/api/native_roll.rs/extra'), '/api/native_roll.rs/extra');
-  assert.equal(canonicalNativeDestination(undefined), undefined);
-  assert.equal(canonicalNativeDestination(null), null);
-  assert.equal(canonicalNativeDestination(42), 42);
-});
-
-test('legacy native builds are canonicalized at the I/O boundary', () => {
-  const legacy = {src: 'api/native_roll.rs', use: '@vercel/rust'};
-  assert.deepEqual(canonicalNativeBuild(legacy), {src: 'api/native_api.rs', use: '@vercel/rust'});
-  assert.deepEqual(legacy, {src: 'api/native_roll.rs', use: '@vercel/rust'});
-  const canonical = {src: 'api/native_api.rs', use: '@vercel/rust'};
-  assert.equal(canonicalNativeBuild(canonical), canonical);
-  const python = {src: 'api/index.py', use: '@vercel/python'};
-  assert.equal(canonicalNativeBuild(python), python);
-  const numeric = {src: 42};
-  assert.equal(canonicalNativeBuild(numeric), numeric);
-  assert.equal(canonicalNativeBuild(undefined), undefined);
-  assert.equal(canonicalNativeBuild(null), null);
-});
-
 test('slim vercel routes resolve identically to the full route list', () => {
   const fragments = _loadRouteFragments('docs/api/route-fragments');
   const previous = json('vercel.json');
   const full = _generateVercelDocument(previous, fragments, {slim: false}).routes;
   const slim = _generateVercelDocument(previous, fragments, {slim: true}).routes;
-  assert.ok(slim.length < full.length, 'slim list must drop redundant native_api routes');
+  assert.ok(slim.length < full.length, 'slim list must drop redundant native_roll routes');
   const inventory = json('docs/api/v2-route-inventory.json');
   const templates = allTemplates(inventory, fragments);
   let checked = 0;
@@ -90,48 +56,18 @@ test('slim vercel routes resolve identically to the full route list', () => {
   }
   assert.ok(checked > 1000);
   // Unknown paths still reach the catch-all.
-  assert.equal(resolve(slim, 'GET', '/api/v2/never-registered'), NATIVE_API);
+  assert.equal(resolve(slim, 'GET', '/api/v2/never-registered'), ROLL);
 });
 
-<<<<<<< HEAD
-test('slim list keeps python, issue, catch-all and non-api routes and every needed native_api route', () => {
-=======
 test('slim list keeps non-native, catch-all and non-api routes and every needed roll route', () => {
->>>>>>> origin/main
   const fragments = _loadRouteFragments('docs/api/route-fragments');
   const previous = json('vercel.json');
   const full = _generateVercelDocument(previous, fragments, {slim: false}).routes;
   const slim = _generateVercelDocument(previous, fragments, {slim: true}).routes;
-  const keep = route => route.dest !== NATIVE_API || route.src === '/api(?:/.*)?';
+  const keep = route => route.dest !== ROLL || route.src === '/api(?:/.*)?';
   assert.deepEqual(slim.filter(keep), full.filter(keep));
   const slimSet = new Set(slim.map(route => JSON.stringify(route)));
   for (const route of slim) assert.ok(slimSet.has(JSON.stringify(route)));
-<<<<<<< HEAD
-  // A native_api route shadowed by a later python route must survive.
-  const kept = slim.filter(route => route.dest === NATIVE_API && route.src !== '/api(?:/.*)?');
-  assert.ok(kept.length > 0);
-});
-
-test('synthetic: a native_api route is dropped unless a later python or issue route overlaps', () => {
-  const free = {src: '^/api/v2/free$', methods: ['GET'], dest: NATIVE_API};
-  const shadowed = {src: '^/api/v1/things/summaries$', methods: ['GET'], dest: NATIVE_API};
-  const otherMethod = {src: '^/api/v1/other$', methods: ['POST'], dest: NATIVE_API};
-  const python = {src: '^/api/v1/things/[^/]+$', methods: ['GET', 'OPTIONS'], dest: '/api/index.py'};
-  const pythonOther = {src: '^/api/v1/other$', methods: ['GET'], dest: '/api/index.py'};
-  const catchAll = {src: '/api(?:/.*)?', dest: NATIVE_API};
-  const spa = {src: '/(.*)', dest: '/index.html'};
-  const routes = [free, shadowed, otherMethod, python, pythonOther, catchAll, spa];
-  const out = slimNativeApiRoutes(routes, new Set([free, shadowed, otherMethod]));
-  assert.deepEqual(out, [shadowed, python, pythonOther, catchAll, spa]);
-});
-
-test('crossed-parameter routes overlap even though no template produces a shared sample', () => {
-  const roll = {src: '^/api/a/[^/]+/b$', methods: ['GET'], dest: NATIVE_API};
-  const python = {src: '^/api/a/c/[^/]+$', methods: ['GET', 'OPTIONS'], dest: '/api/index.py'};
-  assert.equal(routesMayOverlap(roll, python), true);
-  const catchAll = {src: '/api(?:/.*)?', dest: NATIVE_API};
-  assert.deepEqual(slimNativeApiRoutes([roll, python, catchAll], new Set([roll])), [roll, python, catchAll]);
-=======
   // A roll route shadowed by a later non-native route must survive.
   const kept = slim.filter(route => route.dest === ROLL && route.src !== '/api(?:/.*)?');
   assert.ok(kept.length > 0);
@@ -156,7 +92,6 @@ test('crossed-parameter routes overlap even though no template produces a shared
   assert.equal(routesMayOverlap(roll, shadow), true);
   const catchAll = {src: '/api(?:/.*)?', dest: ROLL};
   assert.deepEqual(slimNativeRollRoutes([roll, shadow, catchAll], new Set([roll])), [roll, shadow, catchAll]);
->>>>>>> origin/main
 });
 
 test('segment unifier proves disjointness and treats unknown shapes as overlapping', () => {
@@ -171,15 +106,6 @@ test('segment unifier proves disjointness and treats unknown shapes as overlappi
   assert.equal(routesMayOverlap(route('^/api/a$', ['GET']), route('^/api/a$', ['POST'])), false);
 });
 
-<<<<<<< HEAD
-test('character-class escapes are unknown shapes, so the native_api route is kept', () => {
-  const roll = {src: '^/api/a/\\d$', methods: ['GET'], dest: NATIVE_API};
-  const python = {src: '^/api/a/5$', methods: ['GET', 'OPTIONS'], dest: '/api/index.py'};
-  assert.equal(parseSegments(roll.src), null);
-  assert.equal(routesMayOverlap(roll, python), true);
-  const catchAll = {src: '/api(?:/.*)?', dest: NATIVE_API};
-  assert.deepEqual(slimNativeApiRoutes([roll, python, catchAll], new Set([roll])), [roll, python, catchAll]);
-=======
 test('character-class escapes are unknown shapes, so the roll route is kept', () => {
   const roll = {src: '^/api/a/\\d$', methods: ['GET'], dest: ROLL};
   const shadow = {src: '^/api/a/5$', methods: ['GET', 'OPTIONS'], dest: SHADOW};
@@ -187,7 +113,6 @@ test('character-class escapes are unknown shapes, so the roll route is kept', ()
   assert.equal(routesMayOverlap(roll, shadow), true);
   const catchAll = {src: '/api(?:/.*)?', dest: ROLL};
   assert.deepEqual(slimNativeRollRoutes([roll, shadow, catchAll], new Set([roll])), [roll, shadow, catchAll]);
->>>>>>> origin/main
 });
 
 test('regenerating from an already-slim vercel.json is stable and still equivalent', () => {
