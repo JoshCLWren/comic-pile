@@ -106,6 +106,19 @@ async function renderList() {
   return ref
 }
 
+async function queueCreate() {
+  fireEvent.change(screen.getByTestId('issue-add-input'), {
+    target: { value: '101' },
+  })
+  fireEvent.click(screen.getByTestId('issue-add-button'))
+  await screen.findByTestId('edit-series-preview-modal')
+  fireEvent.click(screen.getByTestId('confirm-preview-add'))
+}
+
+function createdResponse(sessionId: number, snapshotId: number): IssueListResponse {
+  return { ...listResponse, undo_session_id: sessionId, undo_snapshot_id: snapshotId }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   mockedIssuesApi.list.mockResolvedValue(listResponse)
@@ -218,6 +231,69 @@ describe('IssueToggleList #5852 visible reorder, preview and Undo', () => {
     fireEvent.click(screen.getByTestId('undo-edit-add'))
     await waitFor(() => expect(mockedIssuesApi.reorder).toHaveBeenLastCalledWith(99, [1, 2, 3]))
     expect(ref.current?.hasUndoPoint()).toBe(false)
+  })
+
+  it('undo after reorder-then-create replays the create snapshot before the reorder', async () => {
+    const replayOrder: string[] = []
+    mockedIssuesApi.reorder.mockImplementation(async () => {
+      replayOrder.push('reorder')
+    })
+    mockedUndo.mockImplementation(async (sessionId) => {
+      replayOrder.push(`undo:${String(sessionId)}`)
+    })
+    mockedIssuesApi.create.mockResolvedValueOnce(createdResponse(7, 42))
+
+    const ref = await renderList()
+    fireEvent.click(screen.getByTestId('issue-move-down-1'))
+    await screen.findByTestId('edit-series-structure-preview-modal')
+    fireEvent.click(screen.getByTestId('confirm-structure-preview'))
+    await queueCreate()
+    await act(async () => {
+      await ref.current?.flush()
+    })
+
+    expect(ref.current?.hasUndoPoint()).toBe(true)
+    await screen.findByTestId('edit-series-undo-bar')
+    // Discard the forward reorder recorded during Save; only the replay counts.
+    replayOrder.length = 0
+    fireEvent.click(screen.getByTestId('undo-edit-add'))
+
+    await waitFor(() => {
+      expect(replayOrder).toEqual(['undo:7', 'reorder'])
+    })
+    expect(mockedIssuesApi.reorder).toHaveBeenLastCalledWith(99, [1, 2, 3])
+    await waitFor(() => {
+      expect(screen.queryByTestId('edit-series-undo-bar')).not.toBeInTheDocument()
+    })
+  })
+
+  it('undo after two creates restores the newest snapshot first', async () => {
+    const undoneSnapshots: Array<[unknown, unknown]> = []
+    mockedUndo.mockImplementation(async (sessionId, snapshotId) => {
+      undoneSnapshots.push([sessionId, snapshotId])
+    })
+    mockedIssuesApi.create
+      .mockResolvedValueOnce(createdResponse(7, 42))
+      .mockResolvedValueOnce(createdResponse(8, 43))
+
+    const ref = await renderList()
+    await queueCreate()
+    await queueCreate()
+    await act(async () => {
+      await ref.current?.flush()
+    })
+
+    expect(mockedIssuesApi.create).toHaveBeenCalledTimes(2)
+    await screen.findByTestId('edit-series-undo-bar')
+    fireEvent.click(screen.getByTestId('undo-edit-add'))
+
+    // Oldest snapshot must be restored last, or the older create survives.
+    await waitFor(() => {
+      expect(undoneSnapshots).toEqual([[8, 43], [7, 42]])
+    })
+    await waitFor(() => {
+      expect(screen.queryByTestId('edit-series-undo-bar')).not.toBeInTheDocument()
+    })
   })
 
   it('a failed reorder preview is retryable and never commits the draft', async () => {

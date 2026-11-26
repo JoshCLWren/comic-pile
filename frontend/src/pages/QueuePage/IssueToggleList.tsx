@@ -340,7 +340,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         // list memberships, ratings, read facts and Queue position.
         const previousIssueIds = baseIssuesRef.current.map((issue) => issue.id)
         await issuesService.reorder(threadId, normalizeIssueOrder(baseIssuesRef.current, mutation.issueIds))
-        recordUndoAction({ kind: 'reorder', issueIds: previousIssueIds }, true)
+        recordUndoAction({ kind: 'reorder', issueIds: previousIssueIds })
         return
       }
       case 'create': {
