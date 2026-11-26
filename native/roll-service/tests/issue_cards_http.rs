@@ -387,6 +387,7 @@ async fn authenticated_issue_cards_are_owner_scoped_and_bounded() {
                 "thread_id": hellboy_id,
                 "thread_title": "Hellboy in Hell",
                 "issue_number": "10",
+                "display_issue_number": "10",
                 "status": "read",
                 "read_at": "2026-01-02T03:04:05.123Z",
                 "rating": 4.5,
@@ -780,10 +781,12 @@ async fn a7_five_part_series_keeps_authored_identity_and_exact_provider_links() 
             .unwrap_or_else(|| panic!("missing authored issue {number}: {body:?}"));
         assert_eq!(card["issue_number"], *number, "authored label is immutable");
         assert_eq!(card["issue_number_alias"], *provider);
-        assert_eq!(
-            card["display_issue_number"],
+        let expected_display = if *number == *provider {
+            (*number).to_string()
+        } else {
             format!("{number} ({provider})")
-        );
+        };
+        assert_eq!(card["display_issue_number"], expected_display);
         assert_eq!(card["comicvine_issue_id"], format!("4050-{provider}"));
         assert_eq!(card["provider_issue_number"], *provider);
         assert_eq!(
