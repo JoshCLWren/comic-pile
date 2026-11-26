@@ -796,11 +796,6 @@ mod tests {
             "preview must reuse the shared provider cache"
         );
 
-        println!(
-            "DEBUG_TOKEN={} SECRET={}",
-            preview.preview_token.clone().unwrap_or_default(),
-            state.preview_token_secret
-        );
         let Json(committed) = catalog_commit::commit_series_mapping_handler(
             State(state.clone()),
             crate::auth::AuthenticatedUser::for_test(QUEUE_MAPPING_USER_ID),

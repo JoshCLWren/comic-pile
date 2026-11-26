@@ -179,9 +179,6 @@ fn verify_preview_token(
     let payload_json = canonical_json(&payload);
     let expected_sig = hmac_sha256_hex(secret, &payload_json)?;
     if !constant_time_eq(expected_sig.as_bytes(), signature.as_bytes()) {
-        eprintln!(
-            "DEBUG_VERIFY sig_mismatch expected={expected_sig} given={signature} secret={secret} canonical={payload_json}"
-        );
         return Err(unauthorized("invalid_preview_token"));
     }
     let expires_at = payload
@@ -2083,21 +2080,6 @@ async fn persist_commit_series_mapping_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn debug_float_roundtrip() {
-        let value = 1_795_710_842.8638973_f64;
-        let token = serde_json::json!({"t": value}).to_string();
-        eprintln!("DEBUG_TOKEN_JSON={token}");
-        let parsed: serde_json::Value = serde_json::from_str(&token).expect("parse");
-        eprintln!("DEBUG_CANONICAL={}", canonical_json(&parsed));
-        eprintln!("DEBUG_F64_DISPLAY={}", parsed["t"].as_f64().expect("f64"));
-        eprintln!(
-            "DEBUG_SERDE_JSON={}",
-            serde_json::to_string(&parsed["t"]).expect("serde number")
-        );
-        eprintln!("DEBUG_DEBUG_FMT={:?}", parsed["t"].as_f64().expect("f64"));
-    }
 
     #[test]
     fn queue_bootstrap_requires_volume_identity_and_unique_roster_numbers() {
