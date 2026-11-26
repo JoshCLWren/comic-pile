@@ -3669,6 +3669,7 @@ async fn merge_adoption_nodes_tx(
     let mut excluded_positions = Vec::new();
     let mut unresolved_positions = Vec::new();
     let mut adopted_order: Vec<String> = Vec::new();
+    let mut affected_threads: std::collections::HashSet<i32> = std::collections::HashSet::new();
 
     // Index existing issue nodes by ref_id
     let mut issue_node_index: std::collections::HashMap<i32, usize> =
@@ -3730,11 +3731,11 @@ async fn merge_adoption_nodes_tx(
                 v.as_i64().map(|x| x as i32)
             }
         });
-        let (issue_id, created_now) = if let Some(id) = resolved {
-            (id, false)
+        let (issue_id, created_now, materialized_thread_id) = if let Some(id) = resolved {
+            (id, false, None)
         } else {
             match materialize_missing_issue_tx(tx, user_id, entry).await {
-                Ok(MaterializeOutcome::Issue { id, created }) => (id, created),
+                Ok(MaterializeOutcome::Issue { id, thread_id, created }) => (id, created, Some(thread_id)),
                 Ok(MaterializeOutcome::Excluded { reason }) => {
                     if reason == "collection_identity_requires_review" {
                         unresolved_positions.push(pos);
@@ -3755,6 +3756,9 @@ async fn merge_adoption_nodes_tx(
         };
         if created_now {
             created_positions.push(pos);
+            if let Some(tid) = materialized_thread_id {
+                affected_threads.insert(tid);
+            }
         }
         let series_name = entry
             .get("series_name")
@@ -3847,6 +3851,15 @@ async fn merge_adoption_nodes_tx(
             *p += 1;
         }
         *nodes_arr = reordered;
+    }
+
+    for thread_id in &affected_threads {
+        apply_thread_issue_tracking_state_tx(tx, *thread_id)
+            .await
+            .map_err(|err| match err {
+                MaterializeErr::DbUnavailable => CommitErr::Db(ApiError::database_unavailable()),
+                MaterializeErr::Unexpected(msg) => CommitErr::Unexpected(msg),
+            })?;
     }
 
     Ok((
@@ -4471,14 +4484,13 @@ async fn materialize_missing_issue_tx(
             comicvine_id.as_deref(),
         )
         .await?;
-        // Python applies tracking state only for a genuinely inserted issue;
-        // the IntegrityError reuse path returns the existing row untouched.
-        if created {
-            apply_thread_issue_tracking_state_tx(&sp, thread_id).await?;
-        }
+        // Tracking state is applied once per affected thread after the full
+        // adoption merge so a large commit does not recompute thread counters
+        // after every inserted issue.
 
         Ok(MaterializeOutcome::Issue {
             id: issue_id,
+            thread_id,
             created,
         })
     }
