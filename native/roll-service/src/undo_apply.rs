@@ -810,6 +810,18 @@ async fn restore_thread_from_state(
             }
         }
 
+        // Restore the captured effective thread rating, including an explicit null.
+        // Older snapshots without this key must leave the existing value alone.
+        if let Some(value) = state.get("last_rating") {
+            let last_rating = value.as_f64();
+            tx.execute(
+                "UPDATE threads SET last_rating = $1 WHERE id = $2 AND user_id = $3",
+                &[&last_rating, &thread_id, &user_id],
+            )
+            .await
+            .map_err(db::query_error)?;
+        }
+
         // Restore thread counters from state
         if let Some(total_issues) = state.get("total_issues").and_then(|v| v.as_i64()) {
             tx.execute(
@@ -1102,6 +1114,38 @@ async fn record_undo_event(
     Ok(())
 }
 
+/// Mark the exact rating and its companion Roll dice event as ineffective.
+/// Keep both original events (and their original ratings) for History and
+/// idempotency; only effective-rating projections ignore the marked events.
+async fn invalidate_rating_events(
+    tx: &tokio_postgres::Transaction<'_>,
+    user_id: i32,
+    event_id: i32,
+    snapshot_id: i32,
+) -> Result<(), ApiError> {
+    tx.execute(
+        "WITH target AS (
+             SELECT id, thread_id, issue_id, context
+             FROM events WHERE id = $1 AND user_id = $2
+         )
+         UPDATE events e
+         SET context = (COALESCE(e.context::jsonb, '{}'::jsonb)
+                        || jsonb_build_object('undone_by_snapshot_id', $3::int))::json
+         FROM target
+         WHERE e.user_id = $2 AND e.type = 'rate'
+           AND (e.id = target.id OR (
+                e.thread_id = target.thread_id AND e.issue_id = target.issue_id
+                AND e.context->>'dice_command_key' =
+                    'roll-rating-' || target.thread_id || '-' ||
+                    (target.context->>'issue_command_key')
+           ))",
+        &[&event_id, &user_id, &snapshot_id],
+    )
+    .await
+    .map_err(db::tx_error)?;
+    Ok(())
+}
+
 /// Delete a delta snapshot after applying.
 async fn delete_delta_snapshot(
     tx: &tokio_postgres::Transaction<'_>,
@@ -1342,8 +1386,12 @@ pub async fn undo_to_snapshot(
             )
             .await?;
 
-            // Delete delta snapshot after applying
+            // Retire the effective rating atomically with restoring progress,
+            // recording History and consuming the snapshot.
             if is_delta {
+                if let Some(event_id) = snapshot_event_id {
+                    invalidate_rating_events(&tx, user.id(), event_id, snapshot_id).await?;
+                }
                 delete_delta_snapshot(&tx, snapshot_id).await?;
             }
 
@@ -2039,6 +2087,79 @@ mod tests {
             .expect("issue row")
             .get(0);
         assert_eq!(issue_status, "unread", "the rating's read state reverts");
+        let cards =
+            crate::issue_service::cards(&connection, AuthenticatedUser::for_test(9101), &[9501])
+                .await
+                .expect("effective issue card after undo");
+        assert_eq!(
+            cards.items[0].rating, None,
+            "the undone rating is not effective"
+        );
+    }
+
+    #[tokio::test]
+    async fn undo_rating_preserves_previous_rating_and_invalidates_companion() {
+        let (state, user, _guard) = rating_undo_fixture().await;
+        let connection = db::checkout(&state).await.expect("fixture connection");
+        connection
+            .batch_execute(
+                "UPDATE threads SET last_rating = 3.0 WHERE id = 9201;
+                 UPDATE snapshots SET thread_states = jsonb_set(thread_states::jsonb,
+                    '{9201,last_rating}', '4.5'::jsonb)::json WHERE id = 9401;
+                 UPDATE events SET context = '{\"issue_command_key\":\"undo-rating-fixture\"}'::json
+                    WHERE id = 9601;
+                 INSERT INTO events (id,user_id,type,timestamp,thread_id,issue_id,rating,context)
+                 VALUES (9602,9101,'rate',NOW() - interval '1 day',9201,9501,4.5,NULL),
+                        (9603,9101,'rate',NOW(),9201,9501,3.0,
+                         '{\"dice_command_key\":\"roll-rating-9201-undo-rating-fixture\"}'::json);",
+            )
+            .await
+            .expect("seed prior rating and companion dice event");
+        drop(connection);
+
+        let Json(_) = undo_to_snapshot(Path((9301, 9401)), user, State(state.clone()))
+            .await
+            .expect("undo applies rating delta");
+        let connection = db::checkout(&state).await.expect("post-undo connection");
+        let cards =
+            crate::issue_service::cards(&connection, AuthenticatedUser::for_test(9101), &[9501])
+                .await
+                .expect("effective issue card after undo");
+        assert_eq!(cards.items[0].rating, Some(4.5));
+        let row = connection
+            .query_one("SELECT last_rating FROM threads WHERE id = 9201", &[])
+            .await
+            .expect("restored thread rating");
+        assert_eq!(row.get::<_, Option<f64>>(0), Some(4.5));
+        let marked = connection
+            .query_one(
+                "SELECT count(*) FROM events WHERE id IN (9601,9603)
+                 AND type = 'rate' AND rating = 3.0
+                 AND context->>'undone_by_snapshot_id' = '9401'",
+                &[],
+            )
+            .await
+            .expect("rating audit records retained");
+        assert_eq!(marked.get::<_, i64>(0), 2);
+
+        // Re-rate after undo: the new rating is effective and counted once.
+        connection
+            .batch_execute(
+                "INSERT INTO events (id,user_id,type,timestamp,thread_id,issue_id,rating,context)
+                 VALUES (9604,9101,'rate',NOW(),9201,9501,2.0,NULL);
+                 UPDATE threads SET last_rating = 2.0 WHERE id = 9201;",
+            )
+            .await
+            .expect("seed re-rate after undo");
+        let cards =
+            crate::issue_service::cards(&connection, AuthenticatedUser::for_test(9101), &[9501])
+                .await
+                .expect("effective issue card after re-rate");
+        assert_eq!(
+            cards.items[0].rating,
+            Some(2.0),
+            "re-rate after undo is effective and counted once"
+        );
     }
 
     /// Greptile #4617381402: a full (session-start) restore must not erase a

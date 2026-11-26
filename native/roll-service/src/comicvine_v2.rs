@@ -582,7 +582,7 @@ fn issue_candidate(value: &Value) -> Option<ComicVineIssueCandidate> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ParsedResource {
+pub(crate) enum ParsedResource {
     Issue(i32),
     Volume(i32),
 }
@@ -600,7 +600,7 @@ impl ParsedResource {
 /// final `4000-<id>` (issue) / `4050-<id>` (volume) path segment are accepted.
 /// Query strings, fragments, ports, user info and trailing slashes are
 /// tolerated.
-fn parse_comicvine_url(raw: &str) -> Option<ParsedResource> {
+pub(crate) fn parse_comicvine_url(raw: &str) -> Option<ParsedResource> {
     let value = raw.trim();
     if value.is_empty() {
         return None;
@@ -1120,25 +1120,30 @@ async fn link_confirmed(
     tx: &Transaction<'_>,
     issue_id: i32,
     comicvine_issue_id: i32,
-) -> Result<(), ApiError> {
+) -> Result<bool, ApiError> {
     let identity_id = link_with_source(tx, issue_id, comicvine_issue_id, "user_confirmed").await?;
     tx.batch_execute("SAVEPOINT comicvine_hydration_enqueue")
         .await
         .map_err(db::query_error)?;
-    if enqueue_hydration_if_needed(tx, identity_id).await.is_ok() {
-        tx.batch_execute("RELEASE SAVEPOINT comicvine_hydration_enqueue")
-            .await
-            .map_err(db::query_error)?;
-    } else {
-        tracing::warn!(
-            identity_id,
-            "comicvine hydration scheduling failed; confirmation kept"
-        );
-        tx.batch_execute("ROLLBACK TO SAVEPOINT comicvine_hydration_enqueue")
-            .await
-            .map_err(db::query_error)?;
-    }
-    Ok(())
+    let enqueued = match enqueue_hydration_if_needed(tx, identity_id).await {
+        Ok(enqueued) => {
+            tx.batch_execute("RELEASE SAVEPOINT comicvine_hydration_enqueue")
+                .await
+                .map_err(db::query_error)?;
+            enqueued
+        }
+        Err(_) => {
+            tracing::warn!(
+                identity_id,
+                "comicvine hydration scheduling failed; confirmation kept"
+            );
+            tx.batch_execute("ROLLBACK TO SAVEPOINT comicvine_hydration_enqueue")
+                .await
+                .map_err(db::query_error)?;
+            false
+        }
+    };
+    Ok(enqueued)
 }
 
 /// Rust analogue of Python's post-commit `refresh_issue_metadata`: when the
@@ -1157,7 +1162,7 @@ async fn link_confirmed(
 async fn enqueue_hydration_if_needed(
     tx: &Transaction<'_>,
     identity_id: i32,
-) -> Result<(), ApiError> {
+) -> Result<bool, ApiError> {
     enqueue_hydration_for_identities(tx, &[identity_id]).await
 }
 
@@ -1167,13 +1172,14 @@ async fn enqueue_hydration_if_needed(
 /// request rows (a worker claiming/persisting them) are skipped with
 /// `SKIP LOCKED`, preserving the same deadlock-avoidance contract as the
 /// single-identity enqueue. Idempotent: pending/running/deferred rows and
-/// fresh complete metadata are left alone.
+/// fresh complete metadata are left alone. Returns whether new work was made
+/// available so callers can wake the sparse drain (#4748).
 async fn enqueue_hydration_for_identities(
     tx: &Transaction<'_>,
     identity_ids: &[i32],
-) -> Result<(), ApiError> {
+) -> Result<bool, ApiError> {
     if identity_ids.is_empty() {
-        return Ok(());
+        return Ok(false);
     }
     let metadata_rows = tx
         .query(
@@ -1199,7 +1205,7 @@ async fn enqueue_hydration_for_identities(
         }
     }
     if needs_fetch.is_empty() {
-        return Ok(());
+        return Ok(false);
     }
 
     let claimable_rows = tx
@@ -1218,37 +1224,44 @@ async fn enqueue_hydration_for_identities(
                 WHERE r.id = c.id AND r.state NOT IN ('pending', 'running', 'deferred') \
                 RETURNING r.external_identity_id \
              ) \
-             SELECT external_identity_id FROM claimable",
+             SELECT external_identity_id, state FROM claimable",
             &[&needs_fetch],
         )
         .await
         .map_err(db::query_error)?;
-    let claimable: HashSet<i32> = claimable_rows
-        .iter()
-        .map(|row| row.get::<_, i32>(0))
-        .collect();
+    let mut claimable: HashSet<i32> = HashSet::new();
+    let mut reopened = 0u32;
+    for row in &claimable_rows {
+        let id: i32 = row.get(0);
+        let state: String = row.get(1);
+        claimable.insert(id);
+        if !matches!(state.as_str(), "pending" | "running" | "deferred") {
+            reopened += 1;
+        }
+    }
     let missing: Vec<i32> = needs_fetch
         .into_iter()
         .filter(|id| !claimable.contains(id))
         .collect();
     if missing.is_empty() {
-        return Ok(());
+        return Ok(reopened > 0);
     }
-    tx.execute(
-        "INSERT INTO comicvine_metadata_refresh_requests \
-            (external_identity_id, state, attempts, next_attempt_at, created_at, updated_at) \
-         SELECT v, 'pending', 0, now(), now(), now() \
-         FROM unnest($1::int[]) AS v \
-         WHERE NOT EXISTS ( \
-             SELECT 1 FROM comicvine_metadata_refresh_requests \
-             WHERE external_identity_id = v \
-         ) \
-         ON CONFLICT ON CONSTRAINT uq_comicvine_metadata_refresh_identity DO NOTHING",
-        &[&missing],
-    )
-    .await
-    .map_err(db::query_error)?;
-    Ok(())
+    let inserted = tx
+        .execute(
+            "INSERT INTO comicvine_metadata_refresh_requests \
+                (external_identity_id, state, attempts, next_attempt_at, created_at, updated_at) \
+             SELECT v, 'pending', 0, now(), now(), now() \
+             FROM unnest($1::int[]) AS v \
+             WHERE NOT EXISTS ( \
+                 SELECT 1 FROM comicvine_metadata_refresh_requests \
+                 WHERE external_identity_id = v \
+             ) \
+             ON CONFLICT ON CONSTRAINT uq_comicvine_metadata_refresh_identity DO NOTHING",
+            &[&missing],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(reopened > 0 || inserted > 0)
 }
 
 // ---------------------------------------------------------------------------
@@ -1442,9 +1455,12 @@ pub async fn confirm_identity(
     let tx = connection.transaction().await.map_err(db::query_error)?;
     crate::queue::lock_queue(&tx, user.id()).await?;
     lock_owned_issue(&tx, user.id(), issue_id).await?;
-    link_confirmed(&tx, issue_id, request.comicvine_issue_id).await?;
+    let enqueued_repair = link_confirmed(&tx, issue_id, request.comicvine_issue_id).await?;
     let response = identity_state(&tx, user.id(), issue_id).await?;
     tx.commit().await.map_err(db::query_error)?;
+    if enqueued_repair {
+        crate::comicvine_repair::notify_repair_enqueued(&state).await;
+    }
     // Release the pooled connection before inline hydration checks one out;
     // on a small pool the handler holding it would starve the hydrator.
     drop(connection);
@@ -1508,9 +1524,12 @@ pub async fn replace_identity(
     )
     .await
     .map_err(db::query_error)?;
-    link_confirmed(&tx, issue_id, request.comicvine_issue_id).await?;
+    let enqueued_repair = link_confirmed(&tx, issue_id, request.comicvine_issue_id).await?;
     let response = identity_state(&tx, user.id(), issue_id).await?;
     tx.commit().await.map_err(db::query_error)?;
+    if enqueued_repair {
+        crate::comicvine_repair::notify_repair_enqueued(&state).await;
+    }
     drop(connection);
     hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started).await;
     Ok(Json(response))
@@ -1706,6 +1725,9 @@ pub async fn refresh_metadata(
         .map_err(db::query_error)?;
     }
     tx.commit().await.map_err(db::query_error)?;
+    if comicvine_issue_id.is_some() {
+        crate::comicvine_repair::notify_repair_enqueued(&state).await;
+    }
     Ok(Json(MetadataRefreshResponse {
         issue_id,
         refreshed: comicvine_issue_id.is_some(),
@@ -1945,22 +1967,24 @@ pub async fn import_issue(
     tx.batch_execute("SAVEPOINT comicvine_hydration_enqueue")
         .await
         .map_err(db::query_error)?;
-    if enqueue_hydration_if_needed(&tx, external_identity_id)
-        .await
-        .is_ok()
-    {
-        tx.batch_execute("RELEASE SAVEPOINT comicvine_hydration_enqueue")
-            .await
-            .map_err(db::query_error)?;
-    } else {
-        tracing::warn!(
-            identity_id = external_identity_id,
-            "comicvine hydration scheduling failed; import kept"
-        );
-        tx.batch_execute("ROLLBACK TO SAVEPOINT comicvine_hydration_enqueue")
-            .await
-            .map_err(db::query_error)?;
-    }
+    let enqueued_repair = match enqueue_hydration_if_needed(&tx, external_identity_id).await {
+        Ok(enqueued) => {
+            tx.batch_execute("RELEASE SAVEPOINT comicvine_hydration_enqueue")
+                .await
+                .map_err(db::query_error)?;
+            enqueued
+        }
+        Err(_) => {
+            tracing::warn!(
+                identity_id = external_identity_id,
+                "comicvine hydration scheduling failed; import kept"
+            );
+            tx.batch_execute("ROLLBACK TO SAVEPOINT comicvine_hydration_enqueue")
+                .await
+                .map_err(db::query_error)?;
+            false
+        }
+    };
 
     let mut response = ImportIssueResponse {
         thread_id,
@@ -1995,6 +2019,9 @@ pub async fn import_issue(
         response.total_items = Some(items.len() as i32 + 1);
     }
     tx.commit().await.map_err(db::query_error)?;
+    if enqueued_repair {
+        crate::comicvine_repair::notify_repair_enqueued(&state).await;
+    }
     Ok((StatusCode::CREATED, Json(response)))
 }
 
@@ -2061,14 +2088,24 @@ fn normalize_roster_issue(row: &Value) -> Value {
         .get("image")
         .and_then(Value::as_object)
         .and_then(|image| {
-            ["original_url", "super_url", "medium_url", "small_url"]
-                .iter()
-                .find_map(|key| {
-                    image
-                        .get(*key)
-                        .and_then(Value::as_str)
-                        .filter(|url| !url.is_empty())
-                })
+            [
+                "original_url",
+                "super_url",
+                "screen_large_url",
+                "medium_url",
+                "screen_url",
+                "small_url",
+                "thumb_url",
+                "tiny_url",
+                "icon_url",
+            ]
+            .iter()
+            .find_map(|key| {
+                image
+                    .get(*key)
+                    .and_then(Value::as_str)
+                    .filter(|url| !url.is_empty())
+            })
         })
         .map(|url| Value::String(url.to_owned()))
         .unwrap_or(Value::Null);
@@ -2471,7 +2508,17 @@ pub async fn import_series(
                 };
                 identity_specs.push((cv_text.clone(), item.url.clone(), metadata));
             }
-            let found = all.iter().position(|issue| issue.number == number);
+            let found = all
+                .iter()
+                .position(|issue| issue.number == number)
+                .or_else(|| {
+                    all.iter().position(|issue| {
+                        !matches!(
+                            crate::comicvine_matching::compare_issue_labels(&issue.number, &number),
+                            crate::comicvine_matching::LabelMatch::None
+                        )
+                    })
+                });
             let (sim, created) = match found {
                 Some(sim) => (sim, false),
                 None => (sim_place(&mut all, &number), true),
@@ -2620,7 +2667,7 @@ pub async fn import_series(
         .iter()
         .map(|row| row.get::<_, i32>(0))
         .collect();
-    enqueue_hydration_for_identities(&tx, &imported_identity_ids).await?;
+    let enqueued_repairs = enqueue_hydration_for_identities(&tx, &imported_identity_ids).await?;
 
     // Results, in roster order.
     let mut issue_results = Vec::with_capacity(entries.len());
@@ -2810,6 +2857,9 @@ pub async fn import_series(
         response.total_items = Some(total as i32);
     }
     tx.commit().await.map_err(db::query_error)?;
+    if enqueued_repairs {
+        crate::comicvine_repair::notify_repair_enqueued(&state).await;
+    }
     Ok((StatusCode::CREATED, Json(response)))
 }
 

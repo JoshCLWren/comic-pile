@@ -549,3 +549,54 @@ async fn seed_confirmed_cover_raw(
         .await
         .unwrap();
 }
+
+#[tokio::test]
+async fn series_cover_finds_raw_provider_payload_image() {
+    let ctx = setup("sc-raw-cover").await;
+    let thread_id = seed_thread(&ctx, ctx.user_id, "Detective Comics", "active", 1).await;
+    let issue_id = seed_issue(&ctx, thread_id, "5", 1, "unread").await;
+    set_frontier(&ctx, thread_id, Some(issue_id)).await;
+
+    let identity: i32 = ctx
+        .state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one(
+            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, \
+             created_at, updated_at) VALUES ('comicvine', 'issue', $1, $2, NOW(), NOW()) RETURNING id",
+            &[
+                &"raw-cover-5677",
+                &json!({
+                    "raw_provider_payload": {
+                        "image": {
+                            "thumb_url": "https://comicvine.gamespot.com/a/uploads/scale_avatar/0/4/5677-5.jpg"
+                        }
+                    }
+                }),
+            ],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    ctx.state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .execute(
+            "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, \
+             created_at, updated_at, evidence_json) VALUES ($1, $2, 'confirmed', NOW(), NOW(), '{}'::json)",
+            &[&issue_id, &identity],
+        )
+        .await
+        .unwrap();
+
+    let (status, body) = call(&ctx, "GET", "/api/v2/threads").await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        thread_cover(&body, "Detective Comics"),
+        Some("https://comicvine.gamespot.com/a/uploads/scale_avatar/0/4/5677-5.jpg".to_owned())
+    );
+}

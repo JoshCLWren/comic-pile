@@ -457,3 +457,69 @@ async fn authenticated_issue_cards_are_owner_scoped_and_bounded() {
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     }
 }
+
+#[tokio::test]
+async fn issue_cards_find_cover_in_raw_provider_payload_image() {
+    let (state, token, csrf, owner_id, _guard) = setup_user("cards-raw-cover").await;
+    let conn = state.pool.get().await.unwrap();
+
+    let thread_id: i32 = conn
+        .query_one(
+            "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status, created_at, total_issues, reading_progress)
+             VALUES ($1, $2, 'Comic', 1, 1, 'active', NOW(), 1, 'in_progress') RETURNING id",
+            &[&owner_id, &"Detective Comics"],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let issue_id: i32 = conn
+        .query_one(
+            "INSERT INTO issues (thread_id, issue_number, position, status, created_at)
+             VALUES ($1, '5', 1, 'unread', NOW()) RETURNING id",
+            &[&thread_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+
+    let identity_id: i32 = conn
+        .query_one(
+            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, created_at, updated_at)
+             VALUES ('comicvine', 'issue', '4000-5677', $1, NOW(), NOW()) RETURNING id",
+            &[&json!({
+                "raw_provider_payload": {
+                    "image": {
+                        "thumb_url": "https://comicvine.gamespot.com/a/uploads/scale_avatar/0/4/5677-5.jpg"
+                    }
+                }
+            })],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    conn.execute(
+        "INSERT INTO issue_external_identity_mappings
+            (issue_id, external_identity_id, status, confidence, evidence_json, created_at, updated_at)
+         VALUES ($1, $2, 'confirmed', 1.0, '{}'::jsonb, NOW(), NOW())",
+        &[&issue_id, &identity_id],
+    )
+    .await
+    .unwrap();
+
+    let (status, body) = send(
+        &state,
+        authed(
+            "POST",
+            "/api/v2/issues/cards",
+            &token,
+            &csrf,
+            Some(json!({ "issue_ids": [issue_id] })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        body["items"][0]["cover_image_url"],
+        "https://comicvine.gamespot.com/a/uploads/scale_avatar/0/4/5677-5.jpg"
+    );
+}

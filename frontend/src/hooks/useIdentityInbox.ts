@@ -49,6 +49,18 @@ export function useIdentityInboxStatus(enabled = true) {
   })
 }
 
+/**
+ * #5434 provider discovery for one inbox item. The query is user-triggered
+ * (a name or a pasted ComicVine URL) and never runs until the reviewer asks.
+ */
+export function useIdentityInboxSearch(query: string, issueId: number, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.identityInbox.search(query, issueId),
+    queryFn: () => identityInboxApi.searchMatches(query.trim(), issueId),
+    enabled: enabled && query.trim().length > 0,
+  })
+}
+
 export function useConfirmInboxCandidate() {
   return useMutation({
     mutationFn: ({
