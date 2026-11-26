@@ -89,7 +89,7 @@ export function AliasOfferList({
   )
 }
 
-/** Post-commit Undo affordance backed by the existing snapshot/Undo flow. */
+/** Post-commit Undo affordance for creates and reorders (#4654, #5852). */
 export function PostCreateUndoBar({
   isUndoing,
   onUndo,
@@ -102,7 +102,7 @@ export function PostCreateUndoBar({
       className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-[var(--theme-border)] px-3 py-2 text-xs"
       data-testid="edit-series-undo-bar"
     >
-      <span className="text-[var(--theme-text-muted)]">Issues added. You can still undo this edit.</span>
+      <span className="text-[var(--theme-text-muted)]">Issue changes saved. You can still undo this edit.</span>
       <button
         type="button"
         onClick={onUndo}

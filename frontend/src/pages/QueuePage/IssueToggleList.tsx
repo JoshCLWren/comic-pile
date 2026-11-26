@@ -1471,9 +1471,55 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
           kind={structurePreview.edit.type}
           response={structurePreview.response}
           isPreviewing={isPreviewingStructure}
-          onConfirm={confirmStructurePreview}
-          onCancel={cancelStructurePreview}
+          onConfirm={() => {
+            confirmStructurePreview()
+            setDraftReorder(null)
+            setStructurePreviewError(null)
+          }}
+          onCancel={cancelDraftReorder}
         />
+      )}
+      {structurePreviewError && structuralEditRef.current && (
+        <Modal
+          isOpen
+          title="Preview unavailable"
+          onClose={cancelDraftReorder}
+          data-testid="edit-series-structure-preview-error-modal"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-[var(--theme-text-muted)]" role="alert">
+              Could not preview this issue change: {structurePreviewError}
+            </p>
+            <p className="text-xs text-stone-400">
+              {structuralEditRef.current.type === 'reorder'
+                ? 'The proposed order is shown above but has not been saved. Retry the preview, or undo it.'
+                : 'Nothing was changed. Retry the preview or cancel.'}
+            </p>
+            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+              <button
+                type="button"
+                onClick={cancelDraftReorder}
+                className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const edit = structuralEditRef.current
+                  if (!edit) return
+                  setStructurePreviewError(null)
+                  requestStructuralEdit(edit)
+                }}
+                disabled={isPreviewingStructure}
+                className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-xs font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60 transition-colors"
+                data-testid="retry-structure-preview"
+              >
+                Retry preview
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
       <DeleteIssueDialog
         issue={deleteDialogIssue}
