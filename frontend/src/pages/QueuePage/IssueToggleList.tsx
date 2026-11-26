@@ -160,14 +160,11 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       pendingMutationsRef.current.length > 0 || hasStagedStructuralRef.current
     )
   }, [])
-<<<<<<< HEAD
-=======
   const setStagedStructural = useCallback((staged: boolean) => {
     if (hasStagedStructuralRef.current === staged) return
     hasStagedStructuralRef.current = staged
     notifyPendingMutations()
   }, [notifyPendingMutations])
->>>>>>> origin/main
   const recordUndoAction = useCallback((action: UndoAction) => {
     // handleUndoEdit replays this array, so keep it strictly newest-first:
     // every committed action is prepended, never appended (#5852).
@@ -739,10 +736,6 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     deferred,
     previewDelete: issuesService.previewDelete,
     previewReorder: issuesService.previewReorder,
-<<<<<<< HEAD
-    onDelete: (issueId: number) => { setActionError(null); enqueueIssueMutation({ type: 'delete', issueId }) },
-    onReorder: enqueueIssueReorder,
-=======
     onDelete: (issueId: number) => {
       setActionError(null)
       setStagedStructural(false)
@@ -753,7 +746,6 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         setStagedStructural(false)
       }
     },
->>>>>>> origin/main
     onError: (message: string) => {
       setActionError(message)
       setStructurePreviewError(message)
@@ -776,12 +768,6 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         announcement: edit.announcement,
         focusTarget: edit.focusTarget,
       })
-<<<<<<< HEAD
-    }
-    setStructurePreviewError(null)
-    void requestStructuralPreview(edit)
-  }, [deferred, hasStructuralPreview, issuesService.previewDelete, requestStructuralPreview])
-=======
       // The proposed order is visible immediately, so the draft is already
       // dirty even though the mutation is queued only after preview confirm.
       setStagedStructural(true)
@@ -789,16 +775,11 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     setStructurePreviewError(null)
     void requestStructuralPreview(edit)
   }, [deferred, hasStructuralPreview, issuesService.previewDelete, requestStructuralPreview, setStagedStructural])
->>>>>>> origin/main
 
   const cancelDraftReorder = useCallback(() => {
     setDraftReorder(null)
     setStructurePreviewError(null)
     setActionError(null)
-<<<<<<< HEAD
-    cancelStructurePreview()
-  }, [cancelStructurePreview])
-=======
     // Withdrawing a reorder withdraws the staged change. A delete preview
     // cancellation does not revoke the removal intent committed in the
     // destructive dialog: keep the draft dirty until Save or Discard.
@@ -807,7 +788,6 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     }
     cancelStructurePreview()
   }, [cancelStructurePreview, setStagedStructural])
->>>>>>> origin/main
 
   async function handleUndoEdit() {
     if (undoActions.length === 0 || isUndoing) return
@@ -882,17 +862,12 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     const issueId = deleteDialogIssue.id
     // Close the destructive dialog before opening the preview: stacking two
     // modals would trap focus inside the Edit Series dialog (#3267). The delete
-<<<<<<< HEAD
-    // is queued only after the reader confirms the projected before/after rows.
-    setDeleteDialogIssue(null)
-=======
     // is queued only after the reader confirms the projected before/after rows,
     // but confirming "Remove from series" already stages a draft change: the
     // Edit Series close control must warn even while the preview is pending or
     // has failed (MQA-QUEUE-008 / #5864).
     setDeleteDialogIssue(null)
     setStagedStructural(true)
->>>>>>> origin/main
     requestStructuralEdit({ type: 'delete', issueId })
   }
 
