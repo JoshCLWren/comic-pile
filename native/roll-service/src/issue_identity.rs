@@ -3603,7 +3603,14 @@ fn title_number_fallback_batched(
         .rows
         .iter()
         .filter(|row| row.series_norm == want_series && row.issue_norm == want_issue)
-        .map(|row| (row.id, row.status.clone(), row.read_at.clone(), row.thread_id))
+        .map(|row| {
+            (
+                row.id,
+                row.status.clone(),
+                row.read_at.clone(),
+                row.thread_id,
+            )
+        })
         .collect();
     // An issue already confirmed against ComicVine would have been resolved by
     // the identity path; keeping it here would create a duplicate.
@@ -3683,10 +3690,7 @@ fn resolve_canonical_for_entry_batched(
     Option<String>,
     Option<String>,
 ) {
-    let Some(cvid) = comicvine_issue_id
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-    else {
+    let Some(cvid) = comicvine_issue_id.map(str::trim).filter(|s| !s.is_empty()) else {
         return (
             None,
             None,
@@ -3745,12 +3749,13 @@ fn resolve_canonical_for_entry_batched(
                 .cmp(b.2.as_deref().unwrap_or("9999"))
                 .then(a.0.cmp(&b.0))
         });
-        read_rows
-            .first()
-            .map(|row| row.0)
-            .unwrap_or(issues[0].id)
+        read_rows.first().map(|row| row.0).unwrap_or(issues[0].id)
     } else {
-        issues.iter().map(|issue| issue.id).min().unwrap_or(issues[0].id)
+        issues
+            .iter()
+            .map(|issue| issue.id)
+            .min()
+            .unwrap_or(issues[0].id)
     };
     let canon_row = issues
         .iter()
@@ -3849,9 +3854,7 @@ async fn reconcile_entries_impl<E: DbExec>(
             fallback_index
                 .rows
                 .iter()
-                .filter(|owned| {
-                    owned.series_norm == want_series && owned.issue_norm == want_issue
-                })
+                .filter(|owned| owned.series_norm == want_series && owned.issue_norm == want_issue)
                 .map(|owned| {
                     (
                         owned.id,
@@ -4072,7 +4075,6 @@ async fn load_owned_issue_fallback_index<E: DbExec>(
     }
     Ok(OwnedIssueFallbackIndex { rows: out })
 }
-
 
 /// Return Plans whose former authoritative Reading List no longer exists.
 /// This is the same ownership and provenance boundary as the Plan reader: a
