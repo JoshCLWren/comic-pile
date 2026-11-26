@@ -738,10 +738,10 @@ async fn confirmed_identity_for_issue(
 /// unconfigured key never rolls back the confirmation. On success the fetched
 /// credits (names + roles) and deep metadata are merged into the identity's
 /// `metadata_json`, so the immediately-following `getIssueIntelligence` refetch
-/// shows them without waiting on a background worker. The enqueued refresh row
-/// remains the fallback when this work cannot complete: nothing is persisted on
-/// failure, leaving the row `pending`. The whole operation is enclosed in a
-/// single `timeout(budget, ...)` that covers the DB and provider calls.
+/// shows them without waiting on a background worker. On failure nothing is
+/// persisted and the stored metadata stays usable; the issue remains eligible
+/// for another explicit Retry. The whole operation is enclosed in a single
+/// `timeout(budget, ...)` that covers the DB and provider calls.
 pub(crate) async fn hydrate_confirmed_identity_inline(
     state: &AppState,
     user_id: i32,

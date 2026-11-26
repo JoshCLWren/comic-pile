@@ -1327,8 +1327,8 @@ pub async fn confirm_identity(
 }
 
 /// Best-effort synchronous creator-credit hydration after a confirmed mapping
-/// commits. The provider key lookup stays at the mutation boundary; the
-/// enqueued refresh row remains the fallback when this cannot complete.
+/// commits. The provider key lookup stays at the mutation boundary; on failure
+/// the stored metadata is preserved and the user can retry explicitly.
 async fn hydrate_confirmed_identity_if_configured(
     state: &AppState,
     user_id: i32,
