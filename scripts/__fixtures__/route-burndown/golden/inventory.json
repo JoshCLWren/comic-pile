@@ -40,11 +40,7 @@
       "consumers": [
         "caf\u00e9.ts \ud83d\ude00"
       ],
-<<<<<<< HEAD
       "ingress_destination": "/api/native_api.rs",
-=======
-      "ingress_destination": "/api/native_roll.rs",
->>>>>>> origin/main
       "burndown_status": "shadowed by Rust",
       "verified_against": "vercel.json"
     }
