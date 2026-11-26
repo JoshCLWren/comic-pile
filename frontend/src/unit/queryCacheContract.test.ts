@@ -467,6 +467,37 @@ describe('targeted cache effects', () => {
     }
   })
 
+  it('restarts a canonical projection with cached data that began before the read committed (#5865)', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const key = queryKeys.dependencies.readingBoundaries([7])
+    // The open Thread/Queue surface already rendered this projection. Its next
+    // refetch starts before the direct read commits; without cancellation the
+    // invalidation joins that pre-mutation request and restores its stale
+    // Next/blocker explanation, which is the #5865 recurrence of #5537.
+    client.setQueryData(key, 'stale-next')
+    let resolveOld!: (value: string) => void
+    const oldRequest = new Promise<string>((resolve) => { resolveOld = resolve })
+    const queryFn = vi.fn<() => Promise<string>>()
+      .mockReturnValueOnce(oldRequest)
+      .mockResolvedValue('fresh-next')
+    const observer = new QueryObserver(client, { queryKey: key, queryFn })
+    const unsubscribe = observer.subscribe(() => undefined)
+    try {
+      expect(client.getQueryData(key)).toBe('stale-next')
+      expect(queryFn).toHaveBeenCalledTimes(1)
+      await invalidateAfterReaderProgress(client)
+      expect(queryFn).toHaveBeenCalledTimes(2)
+      expect(client.getQueryData(key)).toBe('fresh-next')
+      resolveOld('stale-next')
+      await oldRequest
+      expect(client.getQueryData(key)).toBe('fresh-next')
+    } finally {
+      resolveOld('stale-next')
+      unsubscribe()
+      client.clear()
+    }
+  })
+
   it('invalidates edited issue surfaces and reconciles open views after read/progress edits', async () => {
     const { client, invalidateQueries, resetQueries } = createSpiedClient()
 
