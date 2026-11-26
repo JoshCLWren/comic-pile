@@ -20,3 +20,33 @@ seeded-demo login and five-title safety preconditions are not provisioned by the
 current setup. Replacing the hero therefore requires an explicitly prepared
 loopback-only demo fixture and updated provenance. Never point capture tooling
 at production or a shared reader account.
+
+## `social-preview.png`
+
+The 1280×640 repository social preview delivered for #3887 is rendered from
+`social-preview.html` in this directory. It uses the actual Comic Pile logo mark
+copied verbatim from `static/favicon.svg` (teal rounded die with five white pips)
+and the committed `roll-hero.png` capture on the right. That capture comes only
+from the seeded/demo library (Superman, Batman, The Flash and Aquaman in play);
+no personal reading library, QA account, or invented logo is depicted.
+
+Regenerate the PNG deterministically from the checked-out sources:
+
+```bash
+chromium --headless --no-sandbox --disable-gpu --hide-scrollbars \
+  --allow-file-access-from-files --force-device-scale-factor=1 \
+  --window-size=1280,640 \
+  --screenshot=docs/images/social-preview.png \
+  file://$PWD/docs/images/social-preview.html
+```
+
+The committed PNG must stay exactly 1280×640 and under 2 MiB;
+`tests/test_social_preview_asset.py` guards those properties and the use of only
+the verified repository assets.
+
+**Owner action still required.** This is a repository-admin setting, so a factory
+worker cannot apply it. The repository owner must upload `social-preview.png`
+under **Settings → General → Social preview**, then verify that GitHub renders
+it at 1280×640. Enabling **Discussions** under **Settings → General → Features**
+is a separate owner action that also remains unverified. Do not change repository
+topics or the description as part of this work.
