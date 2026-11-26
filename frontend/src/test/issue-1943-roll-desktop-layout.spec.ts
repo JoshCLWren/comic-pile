@@ -109,6 +109,17 @@ const RATING_STATES = {
     },
     settleText: 'Your rating',
   },
+  noContext: {
+    readingOrders: [],
+    connectedThreads: [],
+    readerContext: null,
+    comicvine: null,
+    identity: {
+      issue_id: 1, thread_id: 1, thread_title: 'Layout Thread',
+      has_confirmed_identity: false, confirmed_mappings: [], candidate_mappings: [], has_unresolved: false,
+    },
+    settleText: 'Your rating',
+  },
   coverHeavy: {
     readingOrders: [],
     connectedThreads: [],
