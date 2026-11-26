@@ -1,9 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CustomCBLBuilder from '../components/CustomCBLBuilder'
 import { beginRouteRestore } from '../scroll/scrollCoordinator'
+import { issueCardsApi, type IssueCard, type IssueReadRateResponse } from '../services/issueCardsApi'
 import { getReadingListProgressIndex } from '../utils/readingListProgress'
 
 const mocks = vi.hoisted(() => ({
@@ -21,6 +23,43 @@ vi.mock('../services/api-custom-cbl', async () => {
   const actual = await vi.importActual<typeof import('../services/api-custom-cbl')>('../services/api-custom-cbl')
   return { ...actual, customCBLApi: mocks }
 })
+
+const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards')
+const patchIssue = vi.spyOn(issueCardsApi, 'patchIssue')
+
+function detectiveEntries() {
+  return [
+    {
+      id: 1, position: 0, issue_id: 9001, thread_id: 55,
+      series_name: 'Detective Comics', issue_number: '3', status: 'read',
+      skipped: false, is_checkpoint: false, gate: 'none' as const,
+    },
+    {
+      id: 2, position: 1, issue_id: 9002, thread_id: 55,
+      series_name: 'Detective Comics', issue_number: '4', status: 'read',
+      skipped: false, is_checkpoint: false, gate: 'none' as const,
+    },
+  ]
+}
+
+function detectiveCard(issueId: number, status: string): IssueCard {
+  return {
+    issue_id: issueId, thread_id: 55, thread_title: 'Detective Comics',
+    issue_number: issueId === 9001 ? '3' : '4', status, rating: null,
+    mapping_state: 'unmapped', has_confirmed_identity: false, cover_image_url: null,
+  }
+}
+
+function directReceipt(issueId: number, status: 'read' | 'unread'): IssueReadRateResponse {
+  return {
+    issue: detectiveCard(issueId, status),
+    thread: {
+      thread_id: 55, status: 'active', issues_remaining: status === 'read' ? 0 : 1,
+      next_unread_issue_id: status === 'unread' ? issueId : null,
+    },
+    read_event_created: true, rating_event_created: false, replayed: false,
+  }
+}
 
 function entriesWithProgress(firstUnread: number, skippedPositions: number[] = []) {
   return Array.from({ length: 466 }, (_, position) => ({

@@ -1204,9 +1204,11 @@ async function invalidateReadingEligibility(
     refetchRollBootstrap = true,
     resetQueue = false,
   } = options
-  // An initial request with no cached data is not restarted by invalidateQueries.
-  // It may have started before the committed read and return stale blockers or
-  // progress. Cancel those requests before refetching the same projections.
+  // A request started before the committed read is not restarted by
+  // invalidateQueries: TanStack joins the in-flight fetch and its pre-mutation
+  // response clears the invalidation, leaving stale Next/blocker explanations
+  // on already-open surfaces (#5537 initial loads, #5865 refetches with cached
+  // data). Cancel every active fetch of the affected projections first.
   const refreshPrefixes = [
     queryKeys.thread.all,
     queryKeys.issueCards.all,
@@ -1227,7 +1229,6 @@ async function invalidateReadingEligibility(
   await client.cancelQueries({
     predicate: (query) =>
       query.isActive() &&
-      query.state.data === undefined &&
       query.state.fetchStatus === 'fetching' &&
       refreshPrefixes.some((prefix) =>
         prefix.every((part, index) => query.queryKey[index] === part),
