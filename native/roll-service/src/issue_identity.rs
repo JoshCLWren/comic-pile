@@ -3099,6 +3099,7 @@ async fn do_cbl_adoption_commit(
                 .map(|id| id as i32)
         })
         .collect();
+    eprintln!("DEBUG5523 source_issue_ids={source_issue_ids:?} adopted={adopted_issue_ids:?} list={canonical_list_id} user={user_id}");
     if !source_issue_ids.is_empty() {
         tx.run_execute(
             "DELETE FROM custom_cbl_entries e
