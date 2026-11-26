@@ -516,7 +516,8 @@ pub(crate) async fn catalog_volume_roster(
     let volume = limits
         .call(outbound, &format!("volume/4050-{volume_id}"), "", &api_key)
         .await
-        .map_err(|_| unavailable())?;    let volume_info = volume
+        .map_err(|_| unavailable())?;
+    let volume_info = volume
         .get("results")
         .filter(|v| v.is_object())
         .ok_or_else(unavailable)?;
