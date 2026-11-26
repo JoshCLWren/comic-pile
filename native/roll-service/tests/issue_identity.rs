@@ -1933,7 +1933,7 @@ async fn adoption_commit_large_228_entry_commit_and_receipt_replay_is_atomic() {
     let conn = state.pool.get().await.unwrap();
     let persisted_nodes: i64 = conn
         .query_one(
-            "SELECT jsonb_array_length(nodes_json)::bigint FROM continuity_plans WHERE id = $1",
+            "SELECT jsonb_array_length(nodes_json::jsonb)::bigint FROM continuity_plans WHERE id = $1",
             &[&(plan_id as i32)],
         )
         .await
