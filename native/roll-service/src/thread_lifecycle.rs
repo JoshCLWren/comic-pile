@@ -292,10 +292,10 @@ async fn option_e_eligible(
     state: &AppState,
     user: AuthenticatedUser,
 ) -> Result<Option<HashSet<i32>>, ApiError> {
-    Ok(canonical_eligibility_inputs(state, user)
+    canonical_eligibility_inputs(state, user)
         .await?
         .map(|validated| queue::evaluated_eligible_ids(&validated))
-        .transpose()?)
+        .transpose()
 }
 
 /// Canonical reading-list inputs for the automatic-Roll authority paths.
@@ -2055,7 +2055,7 @@ pub async fn list_stale_threads(
     let canonical = canonical_eligibility_inputs(&state, user).await?;
     let eligible_ids: HashSet<i32> = canonical
         .as_ref()
-        .map(|validated| queue::evaluated_eligible_ids(validated))
+        .map(queue::evaluated_eligible_ids)
         .transpose()?
         .unwrap_or_default();
     let eligible_list: Vec<i32> = eligible_ids.iter().copied().collect();
