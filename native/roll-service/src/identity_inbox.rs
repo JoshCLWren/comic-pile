@@ -2346,4 +2346,174 @@ mod tests {
             detail_item.candidates.len()
         );
     }
+
+    /// Seed one owned thread with a confirmed sibling volume, a confirmed
+    /// series identity and a CBL source label. These are the real inputs #5434
+    /// discovery must consume instead of empty fixture vectors.
+    async fn seed_matching_fixture(state: &Arc<AppState>) {
+        let conn = state.pool.get().await.unwrap();
+        conn.batch_execute(
+            "INSERT INTO users (id, username, is_admin, created_at) VALUES (1,'matcher',false,NOW()); \
+             INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, manual_creator_credits, is_blocked, is_test, queue_position_is_manual, created_at) VALUES \
+                (1,1,'BPRD','comics',2,0,'active','[]'::json,false,false,false,NOW()); \
+             INSERT INTO issues (id, thread_id, issue_number, status, position, created_at) VALUES \
+                (1,1,'1.MU','unread',0,NOW()), \
+                (2,1,'2','unread',1,NOW()); \
+             INSERT INTO external_identities (id, provider, entity_type, external_id, metadata_json, created_at, updated_at) VALUES \
+                (1,'comicvine','issue','4000001','{\"volume\":{\"id\":405031409}}'::json,NOW(),NOW()), \
+                (2,'comicvine','issue','4000002','{}'::json,NOW(),NOW()), \
+                (3,'comicvine','series','405031409','{\"name\":\"B.P.R.D.: Hell on Earth\",\"publisher\":\"Dark Horse Comics\",\"start_year\":2010}'::json,NOW(),NOW()); \
+             INSERT INTO issue_external_identity_mappings \
+                (id, issue_id, external_identity_id, status, evidence_source, confidence, created_at, updated_at, evidence_json) VALUES \
+                (1,1,2,'unresolved','test',0.1,NOW(),NOW(),'{}'::json), \
+                (2,2,1,'confirmed','user_confirmed',1.0,NOW(),NOW(),'{}'::json); \
+             INSERT INTO thread_external_series_mappings \
+                (id, thread_id, external_identity_id, status, evidence_source, created_at, updated_at) VALUES \
+                (1,1,3,'confirmed','test',NOW(),NOW()); \
+             INSERT INTO cbl_sources (id, repository, revision_sha, synced_at, created_at, updated_at) VALUES \
+                (1,'fixture','rev',NOW(),NOW(),NOW()); \
+             INSERT INTO cbl_source_lists (id, source_id, source_path, name, content_hash, revision_sha, active, created_at, updated_at) VALUES \
+                (1,1,'fixture.cbl','Fixture','hash','rev',true,NOW(),NOW()); \
+             INSERT INTO cbl_source_entries (id, list_id, position, series_name, issue_number, external_series_identity_id, external_issue_identity_id, created_at) VALUES \
+                (1,1,1,'B.P.R.D. Hell on Earth','1',3,1,NOW());",
+        )
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn load_match_context_uses_real_sibling_series_and_cbl_hints() {
+        let Some(state) = test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = test_support::reset_for_test(&state).await;
+        seed_matching_fixture(&state).await;
+        let conn = state.pool.get().await.unwrap();
+        let hints = load_match_context(&conn, 1, 1, "BPRD", "1.MU")
+            .await
+            .expect("hints must load");
+        assert_eq!(hints.volume_hint_ids, vec![405031409]);
+        assert_eq!(hints.publisher.as_deref(), Some("Dark Horse Comics"));
+        assert_eq!(hints.start_year, Some(2010));
+        assert!(hints.source_volume_ids.contains(&405031409));
+        assert!(hints.aliases.iter().any(|a| a == "B.P.R.D.: Hell on Earth"));
+        assert!(hints.aliases.iter().any(|a| a == "B.P.R.D. Hell on Earth"));
+    }
+
+    #[tokio::test]
+    async fn search_scores_variant_label_with_real_hints() {
+        let Some(state) = test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = test_support::reset_for_test(&state).await;
+        seed_matching_fixture(&state).await;
+        let fake = state
+            .recording_fake()
+            .expect("test state must install the recording fake outbound client");
+        fake.clear();
+        fake.push_ok(
+            http::StatusCode::OK,
+            http::HeaderMap::new(),
+            Bytes::from_static(
+                br#"{"status_code":1,"number_of_total_results":1,"results":[{"id":400077,"name":"A Cold Day in Hell","issue_number":"1.MU","cover_date":"2013-03-20","volume":{"id":405031409,"name":"B.P.R.D.: Hell on Earth"},"publisher":{"name":"Dark Horse Comics"},"site_detail_url":"https://comicvine.gamespot.com/issue/4000-77/"}]}"#,
+            ),
+        );
+        let _env = ComicvineKeyEnv::install();
+        let response = search_issues(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Query(SearchQuery {
+                q: "anything".to_string(),
+                limit: Some(10),
+                issue_id: Some(1),
+            }),
+        )
+        .await
+        .expect("search must succeed");
+        assert_eq!(response.results.len(), 1);
+        let result = &response.results[0];
+        assert!(
+            result.score.unwrap_or(0.0) >= 0.28,
+            "variant label + alias hints must score the result: {:?}",
+            result.score
+        );
+        assert!(
+            result.evidence.iter().any(|e| e.contains("alias")),
+            "evidence must explain the alias hit: {:?}",
+            result.evidence
+        );
+        assert!(
+            result.evidence.iter().any(|e| e.contains("1.MU")),
+            "evidence must explain the flexible label match: {:?}",
+            result.evidence
+        );
+    }
+
+    #[tokio::test]
+    async fn pasted_volume_url_resolves_issues_through_the_recording_fake() {
+        let Some(state) = test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = test_support::reset_for_test(&state).await;
+        let fake = state
+            .recording_fake()
+            .expect("test state must install the recording fake outbound client");
+        fake.clear();
+        fake.push_ok(
+            http::StatusCode::OK,
+            http::HeaderMap::new(),
+            Bytes::from_static(
+                br#"{"status_code":1,"number_of_total_results":1,"results":[{"id":400078,"issue_number":"1","volume":{"id":405031409,"name":"B.P.R.D.: Hell on Earth"}}]}"#,
+            ),
+        );
+        let _env = ComicvineKeyEnv::install();
+        let response = search_issues(
+            State(state),
+            AuthenticatedUser::for_test(1),
+            Query(SearchQuery {
+                q: "https://comicvine.gamespot.com/volume/4050-31409/".to_string(),
+                limit: Some(10),
+                issue_id: None,
+            }),
+        )
+        .await
+        .expect("pasted URL must resolve through the fake");
+        assert_eq!(response.results.len(), 1);
+        let calls = fake.calls();
+        assert_eq!(calls.len(), 1);
+        assert!(
+            calls[0].path.contains("filter=volume%3A405031409"),
+            "pasted volume URL must query that volume: {}",
+            calls[0].path
+        );
+    }
+
+    #[tokio::test]
+    async fn list_and_detail_reasons_are_consistent() {
+        let Some(state) = test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = test_support::reset_for_test(&state).await;
+        seed_matching_fixture(&state).await;
+        let list = list_inbox(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Query(ListQuery {
+                offset: None,
+                limit: None,
+            }),
+        )
+        .await
+        .expect("list must succeed")
+        .0;
+        let detail = fetch_item(&state, 1, 1).await.expect("detail").expect("item");
+        let listed = list.items.iter().find(|item| item.mapping_id == 1).unwrap();
+        assert_eq!(listed.why_stopped, detail.why_stopped);
+        assert_eq!(listed.next_steps, detail.next_steps);
+        assert!(
+            detail.why_stopped.contains("4050-405031409"),
+            "reason must name the real sibling volume: {}",
+            detail.why_stopped
+        );
+    }
 }
