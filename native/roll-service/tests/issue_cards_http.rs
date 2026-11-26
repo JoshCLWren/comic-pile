@@ -751,11 +751,7 @@ async fn issue_cards_preserve_mixed_numbering_series_and_adjacent_volume() {
     .await
     .unwrap();
 
-    let requested: Vec<i32> = rows
-        .iter()
-        .map(|row| row.get::<_, i32>(0))
-        .rev()
-        .collect();
+    let requested: Vec<i32> = rows.iter().map(|row| row.get::<_, i32>(0)).rev().collect();
     let volumes = ["4050", "4050", "4050", "4050", "4050", "9000"];
     let expected: Vec<(i32, String, String, String, i32)> = rows
         .iter()
@@ -786,12 +782,19 @@ async fn issue_cards_preserve_mixed_numbering_series_and_adjacent_volume() {
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     let items = body["items"].as_array().expect("cards items");
-    assert_eq!(items.len(), 6, "every requested physical comic has one card");
+    assert_eq!(
+        items.len(),
+        6,
+        "every requested physical comic has one card"
+    );
 
     for (index, (id, authored, provider, external_id, position)) in expected.iter().enumerate() {
         let card = &items[index];
         assert_eq!(card["issue_id"], *id);
-        assert_eq!(card["issue_number"], authored, "authored label must not be renumbered");
+        assert_eq!(
+            card["issue_number"], authored,
+            "authored label must not be renumbered"
+        );
         assert_eq!(card["issue_number_alias"], *provider);
         let expected_display = if provider == authored {
             authored.clone()
