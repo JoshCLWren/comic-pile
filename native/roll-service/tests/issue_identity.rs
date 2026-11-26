@@ -1943,6 +1943,26 @@ async fn adoption_commit_large_228_entry_commit_and_receipt_replay_is_atomic() {
         persisted_nodes, 228,
         "replayed large adoption must not duplicate persisted nodes"
     );
+
+    // #5522: the authoritative response must be stored inside the commit
+    // transaction, so a lost client response replays the full result instead of
+    // reconstructing a partial one from the plan alone.
+    let stored_response: Option<String> = conn
+        .query_opt(
+            "SELECT response_json::text FROM cbl_adoption_receipts WHERE cbl_source_list_id = 5522",
+            &[],
+        )
+        .await
+        .unwrap()
+        .and_then(|row| row.get(0));
+    let stored_response: serde_json::Value = serde_json::from_str(
+        &stored_response.expect("large commit must persist its authoritative receipt response"),
+    )
+    .expect("stored receipt response_json must be valid JSON");
+    assert_eq!(
+        stored_response, body1,
+        "receipt must persist the authoritative large-commit response"
+    );
 }
 
 /// MQA-CBL-003 / #3933: an untargeted "Add this reading order" must never
