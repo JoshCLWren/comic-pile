@@ -515,6 +515,8 @@ export function ComicIssueCard({
             issueId={isOwned ? issueId : null}
             threadTitle={resolvedTitle}
             issueNumber={resolvedNumber}
+            issueNumberAlias={resolvedAlias}
+            providerIssueNumber={resolvedProviderNumber}
             initialIdentity={identityForMapping}
             fetchEnabled={card != null}
             isOwned={isOwned}

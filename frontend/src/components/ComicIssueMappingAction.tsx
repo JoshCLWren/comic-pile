@@ -167,6 +167,8 @@ export default function ComicIssueMappingAction({
           issueId={issueId}
           threadTitle={threadTitle}
           issueNumber={issueNumber}
+          issueNumberAlias={issueNumberAlias}
+          providerIssueNumber={providerIssueNumber}
           mode={mapping.searchMode}
           onClose={mapping.closeSearchDialog}
           onConfirmed={mapping.handleIdentityConfirmed}
