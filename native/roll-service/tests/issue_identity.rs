@@ -1809,6 +1809,142 @@ async fn adoption_commit_recommit_is_idempotent() {
     );
 }
 
+/// #5522: large CBL adoptions must commit atomically and be idempotent on
+/// retry/replay. This covers the reported 228-entry shape so the 60s client
+/// timeout is backed by a DB-backed regression instead of only small fixtures.
+#[tokio::test]
+async fn adoption_commit_large_228_entry_commit_and_receipt_replay_is_atomic() {
+    let (state, token, csrf, _guard) = setup().await;
+    let conn = state.pool.get().await.unwrap();
+
+    let mut entry_rows = Vec::with_capacity(228);
+    for i in 0..228i32 {
+        let entry_id = 55220 + i;
+        let ext_issue_id = 552200 + i;
+        let issue_num = (i + 1).to_string();
+        let title = format!("Alpha Flight {}", i + 1).replace('\'', "''");
+        entry_rows.push(format!(
+            "({entry_id}, 5522, {i}, '{title}', '{issue_num}', 1983, 1983, {ext_issue_id}, 55220, NOW())"
+        ));
+    }
+    let mut ext_rows = Vec::with_capacity(228);
+    for i in 0..228i32 {
+        let ext_issue_id = 552200 + i;
+        ext_rows.push(format!(
+            "({ext_issue_id}, 'comicvine', 'issue', '4000-5522-{i}', '{{}}'::json, NOW(), NOW())"
+        ));
+    }
+
+    conn.batch_execute(&format!(
+        r#"
+        INSERT INTO cbl_sources (id, repository, revision_sha, synced_at, created_at, updated_at)
+        VALUES (5522, '{MIRROR_REPOSITORY}-5522', 'rev-5522', NOW(), NOW(), NOW());
+        INSERT INTO cbl_source_lists
+          (id, source_id, source_path, name, declared_issue_count, content_hash,
+           revision_sha, active, created_at, updated_at)
+        VALUES
+          (5522, 5522, 'Marvel/Alpha Flight/Alpha Flight.cbl', 'Alpha Flight',
+           228, 'h-5522', 'rev-5522', TRUE, NOW(), NOW());
+        INSERT INTO external_identities
+          (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+        VALUES
+          (55220, 'comicvine', 'series', '4050-5522', '{{}}'::json, NOW(), NOW()),
+          {ext_identities};
+        INSERT INTO cbl_source_entries
+          (id, list_id, "position", series_name, issue_number, volume_year,
+           publication_year, external_issue_identity_id, external_series_identity_id, created_at)
+        VALUES
+          {entries};
+        "#,
+        ext_identities = ext_rows.join(",\n          "),
+        entries = entry_rows.join(",\n          "),
+    ))
+    .await
+    .unwrap();
+
+    let payload = json!({
+        "entry_decisions": {},
+        "series_decisions": [],
+        "series_overrides": [],
+        "content_hash": "h-5522",
+        "revision_sha": "rev-5522",
+        "idempotency_key": "qa-5522-alpha-flight-commit"
+    });
+
+    let (status1, body1) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/5522/adoption-commits",
+        payload.clone(),
+    )
+    .await;
+    assert!(
+        status1 == StatusCode::CREATED || status1 == StatusCode::OK,
+        "{status1} {body1}"
+    );
+    let plan_id = body1["id"].as_i64().expect("plan id");
+    let nodes1 = body1["nodes"].as_array().cloned().unwrap_or_default();
+    assert_eq!(
+        nodes1.len(),
+        228,
+        "large adoption must commit all 228 entries atomically: {body1}"
+    );
+    let created1 = body1["created_positions"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let reused1 = body1["reused_positions"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(
+        created1.len() + reused1.len(),
+        228,
+        "every entry must be created or reused, never partially dropped: {body1}"
+    );
+    assert!(
+        body1["unresolved_positions"]
+            .as_array()
+            .is_some_and(|a| a.is_empty()),
+        "fixture has no unresolved entries: {body1}"
+    );
+
+    // Replaying the same idempotency key/fingerprint must return the same
+    // authoritative receipt without duplicating nodes or creating partial state.
+    let (status2, body2) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/5522/adoption-commits",
+        payload,
+    )
+    .await;
+    assert!(
+        status2 == StatusCode::CREATED || status2 == StatusCode::OK,
+        "{status2} {body2}"
+    );
+    assert_eq!(body2["id"], plan_id, "replay must target same plan");
+    assert_eq!(
+        body2, body1,
+        "large adoption replay must return authoritative receipt: first={body1} second={body2}"
+    );
+
+    let conn = state.pool.get().await.unwrap();
+    let persisted_nodes: i64 = conn
+        .query_one(
+            "SELECT jsonb_array_length(nodes_json)::bigint FROM continuity_plans WHERE id = $1",
+            &[&(plan_id as i32)],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        persisted_nodes, 228,
+        "replayed large adoption must not duplicate persisted nodes"
+    );
+}
+
 /// MQA-CBL-003 / #3933: an untargeted "Add this reading order" must never
 /// silently replace (or create an indistinguishable duplicate of) a plan the
 /// reader already owns. The adopted content goes into a distinct, suffixed plan
