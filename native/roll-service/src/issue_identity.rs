@@ -4076,11 +4076,8 @@ async fn merge_adoption_nodes_tx(
     let mut excluded_positions = Vec::new();
     let mut unresolved_positions = Vec::new();
     let mut adopted_order: Vec<String> = Vec::new();
-<<<<<<< HEAD
     let mut affected_threads: std::collections::HashSet<i32> = std::collections::HashSet::new();
-=======
     let mut adopted_issue_ids: Vec<i32> = Vec::new();
->>>>>>> origin/main
 
     // Index existing issue nodes by ref_id
     let mut issue_node_index: std::collections::HashMap<i32, usize> =
