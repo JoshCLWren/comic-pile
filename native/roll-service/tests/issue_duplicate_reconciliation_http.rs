@@ -1450,7 +1450,10 @@ async fn five_part_series_maps_provider_numbers_without_renumbering_or_extra_row
         .await;
         assert_eq!(status, StatusCode::OK, "{body:?}");
         assert_eq!(body["issue"]["issue_number"], item.authored, "{body:?}");
-        assert_eq!(body["issue"]["issue_number_alias"], item.provider, "{body:?}");
+        assert_eq!(
+            body["issue"]["issue_number_alias"], item.provider,
+            "{body:?}"
+        );
         assert_eq!(body["issue"]["comicvine_issue_id"], item.cv_id, "{body:?}");
     }
 
@@ -1514,7 +1517,15 @@ async fn five_part_series_maps_provider_numbers_without_renumbering_or_extra_row
     .await;
     assert_eq!(status, StatusCode::OK, "{eligible:?}");
     let rollable = eligible["issue_ids"].as_array().unwrap();
-    for id in &all_ids {
+    // The die bound is six, so the seven fixture rows produce six rollable
+    // ids; none of them is an extra row created by the alias writes.
+    assert_eq!(rollable.len(), 6, "{eligible:?}");
+    for id in rollable {
+        let id: i32 = id.as_i64().unwrap() as i32;
+        assert!(all_ids.contains(&id), "{eligible:?}");
+    }
+    // Every physical issue of the five-part series stays rollable.
+    for id in all_ids.iter().take(5) {
         assert!(rollable.contains(&json!(id)), "{eligible:?}");
     }
 
@@ -1532,5 +1543,9 @@ async fn five_part_series_maps_provider_numbers_without_renumbering_or_extra_row
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{detected:?}");
-    assert_eq!(detected["groups"].as_array().unwrap().len(), 0, "{detected:?}");
+    assert_eq!(
+        detected["groups"].as_array().unwrap().len(),
+        0,
+        "{detected:?}"
+    );
 }
