@@ -27,15 +27,23 @@ const RETIRED_CALLS: ReadonlyArray<{ label: string; pattern: RegExp }> = [
   { label: 'retired v1/unversioned undo reads', pattern: /\/v1\/undo|\/api\/undo/ },
 ]
 
+const RETIRED_SESSION_WIRE_TYPES = /\b(?:SessionCurrent|SessionSummary|SessionListResponse)\b/
+
 function liveSourceFiles(): string[] {
   const files: string[] = []
+  const collect = (directory: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = resolve(directory, entry.name)
+      if (entry.isDirectory()) {
+        collect(path)
+      } else if (entry.isFile() && /\.(ts|tsx)$/.test(entry.name)) {
+        files.push(path)
+      }
+    }
+  }
   for (const dir of LIVE_SOURCE_DIRS) {
     const absolute = resolve(srcRoot, dir)
-    if (!existsSync(absolute)) continue
-    for (const entry of readdirSync(absolute)) {
-      const path = resolve(absolute, entry)
-      if (statSync(path).isFile() && /\.(ts|tsx)$/.test(entry)) files.push(path)
-    }
+    if (existsSync(absolute)) collect(absolute)
   }
   for (const file of LIVE_SOURCE_FILES) {
     const path = resolve(srcRoot, file)
@@ -54,6 +62,20 @@ describe('retired session/undo callers (#4839)', () => {
     })
 
     expect(violations).toEqual([])
+  })
+
+  it('scans nested shipped source, not just the top level of each folder', () => {
+    const nested = liveSourceFiles().some((path) =>
+      path.includes('/pages/RollPage/components/'),
+    )
+
+    expect(nested).toBe(true)
+  })
+
+  it('no longer ships the retired session index/current wire types', () => {
+    const typeSource = readFileSync(resolve(srcRoot, 'types/index.ts'), 'utf-8')
+
+    expect(RETIRED_SESSION_WIRE_TYPES.test(typeSource)).toBe(false)
   })
 
   it('no longer ships the unused session pager hook', () => {
