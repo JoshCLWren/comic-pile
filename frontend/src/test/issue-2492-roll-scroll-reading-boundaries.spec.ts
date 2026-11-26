@@ -67,6 +67,9 @@ test.describe('issue #2492: fresh roll keeps the rating start at the top when re
       // Optional reading cards are part of the live rating surface; wait for
       // them so any late layout growth is represented before the final
       // position is asserted.
+      // Scope note (#3507): this adapts one of the four scroll failures
+      // originally inventoried in this file. The other three remain open in
+      // #3507; this PR is an intermediate deliverable, not a closure of it.
       await expect(page.getByTestId('rating-region-reading-optional')).toBeVisible({ timeout: 20000 })
 
       // The rating surface start must still be at the top of the viewport with
