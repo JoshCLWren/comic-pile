@@ -810,6 +810,18 @@ async fn restore_thread_from_state(
             }
         }
 
+        // Restore the captured effective thread rating, including an explicit null.
+        // Older snapshots without this key must leave the existing value alone.
+        if let Some(value) = state.get("last_rating") {
+            let last_rating = value.as_f64();
+            tx.execute(
+                "UPDATE threads SET last_rating = $1 WHERE id = $2 AND user_id = $3",
+                &[&last_rating, &thread_id, &user_id],
+            )
+            .await
+            .map_err(db::query_error)?;
+        }
+
         // Restore thread counters from state
         if let Some(total_issues) = state.get("total_issues").and_then(|v| v.as_i64()) {
             tx.execute(
@@ -1102,6 +1114,38 @@ async fn record_undo_event(
     Ok(())
 }
 
+/// Mark the exact rating and its companion Roll dice event as ineffective.
+/// Keep both original events (and their original ratings) for History and
+/// idempotency; only effective-rating projections ignore the marked events.
+async fn invalidate_rating_events(
+    tx: &tokio_postgres::Transaction<'_>,
+    user_id: i32,
+    event_id: i32,
+    snapshot_id: i32,
+) -> Result<(), ApiError> {
+    tx.execute(
+        "WITH target AS (
+             SELECT id, thread_id, issue_id, context
+             FROM events WHERE id = $1 AND user_id = $2
+         )
+         UPDATE events e
+         SET context = (COALESCE(e.context::jsonb, '{}'::jsonb)
+                        || jsonb_build_object('undone_by_snapshot_id', $3::int))::json
+         FROM target
+         WHERE e.user_id = $2 AND e.type = 'rate'
+           AND (e.id = target.id OR (
+                e.thread_id = target.thread_id AND e.issue_id = target.issue_id
+                AND e.context->>'dice_command_key' =
+                    'roll-rating-' || target.thread_id || '-' ||
+                    (target.context->>'issue_command_key')
+           ))",
+        &[&event_id, &user_id, &snapshot_id],
+    )
+    .await
+    .map_err(db::tx_error)?;
+    Ok(())
+}
+
 /// Delete a delta snapshot after applying.
 async fn delete_delta_snapshot(
     tx: &tokio_postgres::Transaction<'_>,
@@ -1342,8 +1386,12 @@ pub async fn undo_to_snapshot(
             )
             .await?;
 
-            // Delete delta snapshot after applying
+            // Retire the effective rating atomically with restoring progress,
+            // recording History and consuming the snapshot.
             if is_delta {
+                if let Some(event_id) = snapshot_event_id {
+                    invalidate_rating_events(&tx, user.id(), event_id, snapshot_id).await?;
+                }
                 delete_delta_snapshot(&tx, snapshot_id).await?;
             }
 
