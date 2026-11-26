@@ -3000,7 +3000,7 @@ async fn do_cbl_adoption_commit(
         _created_new,
         _plan_name,
         _ordering_mode,
-        _lanes_json,
+        lanes_json,
         mut nodes_json,
         _created_at,
         _updated_at,
@@ -3098,12 +3098,63 @@ async fn do_cbl_adoption_commit(
     };
 
     // Merge nodes (preserves key semantics and propagates DB outages as 503).
+    let target_lane_id = lanes_json
+        .as_array()
+        .and_then(|lanes| {
+            lanes.iter().find_map(|lane| {
+                let id = lane.get("id").and_then(|v| v.as_str())?;
+                if id == "default" {
+                    Some(id.to_string())
+                } else {
+                    None
+                }
+            })
+        })
+        .or_else(|| {
+            lanes_json
+                .as_array()
+                .and_then(|lanes| lanes.first())
+                .and_then(|lane| lane.get("id").and_then(|v| v.as_str()))
+                .map(|s| s.to_string())
+        })
+        .unwrap_or_else(|| "default".to_string());
+    // Capture the issues this plan previously adopted from this CBL source
+    // before the merge rewrites nodes_json. A later commit that excludes one of
+    // them must drop its canonical Reading List entry (#5523). Deriving the set
+    // from source provenance keeps entries added manually or from other sources
+    // untouched.
+    let previous_source_issue_ids: Vec<i32> = nodes_json
+        .as_array()
+        .map(|nodes| {
+            nodes
+                .iter()
+                .filter(|node| {
+                    node.get("node_type").and_then(|value| value.as_str()) == Some("issue")
+                        && node
+                            .get("source_paths")
+                            .and_then(|value| value.as_array())
+                            .map(|paths| {
+                                paths
+                                    .iter()
+                                    .any(|path| path.as_str() == Some(source_path.as_str()))
+                            })
+                            .unwrap_or(false)
+                })
+                .filter_map(|node| {
+                    node.get("ref_id")
+                        .and_then(|value| value.as_i64())
+                        .map(|id| id as i32)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     let merge_ctx = MergeAdoptionCtx {
         user_id,
         planned: &planned,
         source_path: &source_path,
         series_overrides: &override_bool,
         preserve_existing_order: update_target_plan_id.is_some(),
+        target_lane_id: &target_lane_id,
     };
     let merge = merge_adoption_nodes_tx(&mut tx, &mut nodes_json, &merge_ctx).await?;
     tx.run_execute(
@@ -3118,6 +3169,211 @@ async fn do_cbl_adoption_commit(
             CommitErr::Unexpected(format!("update plan: {e}"))
         }
     })?;
+
+    // Persist to canonical, source-linked Option E Reading List (custom_cbl_list).
+    // This keeps the Reading List as the source of truth for adopted CBL entries.
+    let adopted_issue_ids: Vec<i32> = merge.4.clone();
+    let existing_list_id: Option<i32> = {
+        let plan_list = tx
+            .run_query_opt(
+                "SELECT s.custom_cbl_list_id
+                 FROM reading_plan_sources s
+                 JOIN custom_cbl_lists l ON l.id = s.custom_cbl_list_id AND l.user_id = $2
+                 WHERE s.plan_id = $1 AND s.custom_cbl_list_id IS NOT NULL
+                 ORDER BY s.id DESC LIMIT 1",
+                &[&plan_id, &user_id],
+            )
+            .await
+            .map_err(|e| {
+                if crate::db::is_transport_failure(&e) {
+                    CommitErr::Db(ApiError::database_unavailable())
+                } else {
+                    CommitErr::Unexpected(format!("lookup plan reading list: {e}"))
+                }
+            })?;
+        if let Some(row) = plan_list {
+            row.get::<_, Option<i32>>(0)
+        } else {
+            let source_list = tx
+                .run_query_opt(
+                    "SELECT s.custom_cbl_list_id
+                     FROM reading_plan_sources s
+                     JOIN custom_cbl_lists l ON l.id = s.custom_cbl_list_id AND l.user_id = $1
+                     WHERE s.cbl_source_list_id = $2 AND s.custom_cbl_list_id IS NOT NULL
+                     ORDER BY s.id DESC LIMIT 1",
+                    &[&user_id, &list_id],
+                )
+                .await
+                .map_err(|e| {
+                    if crate::db::is_transport_failure(&e) {
+                        CommitErr::Db(ApiError::database_unavailable())
+                    } else {
+                        CommitErr::Unexpected(format!("lookup source reading list: {e}"))
+                    }
+                })?;
+            source_list.and_then(|row| row.get::<_, Option<i32>>(0))
+        }
+    };
+
+    let canonical_list_id: i32 = if let Some(existing_id) = existing_list_id {
+        tx.run_execute(
+            "UPDATE custom_cbl_lists SET updated_at = NOW() WHERE id = $1 AND user_id = $2",
+            &[&existing_id, &user_id],
+        )
+        .await
+        .map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("update reading list: {e}"))
+            }
+        })?;
+        existing_id
+    } else {
+        let list_name = if list_name.is_empty() {
+            format!("CBL adoption for {source_path}")
+        } else {
+            list_name.clone()
+        };
+        let row = tx
+            .run_query_one(
+                "INSERT INTO custom_cbl_lists (user_id, name, description, mode, created_at, updated_at)
+                 VALUES ($1, $2, NULL, 'loose', NOW(), NOW())
+                 RETURNING id",
+                &[&user_id, &list_name],
+            )
+            .await
+            .map_err(|e| {
+                if crate::db::is_transport_failure(&e) {
+                    CommitErr::Db(ApiError::database_unavailable())
+                } else {
+                    CommitErr::Unexpected(format!("create reading list: {e}"))
+                }
+            })?;
+        row.get::<_, i32>(0)
+    };
+
+    let canonical_source_path = format!("custom-cbl:{canonical_list_id}");
+
+    // A single source can resolve several positions to the same canonical
+    // issue. Deduplicate while keeping source order so the set-based insert
+    // respects the (list_id, issue_id) unique constraint (#5523).
+    let mut seen_adopted = std::collections::HashSet::new();
+    let adopted_issue_ids: Vec<i32> = adopted_issue_ids
+        .into_iter()
+        .filter(|issue_id| seen_adopted.insert(*issue_id))
+        .collect();
+
+    // Reconcile this source's list entries to the newly committed adopted set
+    // inside the same transaction. An issue included by an earlier commit but
+    // excluded now must not survive in the list or its reader/Queue projections.
+    // Removal is scoped to issues that carry this source's provenance on the
+    // plan, so manually added entries or entries from other sources remain.
+    if !previous_source_issue_ids.is_empty() {
+        tx.run_execute(
+            "DELETE FROM custom_cbl_entries e
+             USING custom_cbl_lists l
+             WHERE e.list_id = l.id
+               AND l.user_id = $1 AND e.list_id = $2
+               AND e.issue_id = ANY($3::int[])
+               AND e.issue_id <> ALL($4::int[])",
+            &[
+                &user_id,
+                &canonical_list_id,
+                &previous_source_issue_ids,
+                &adopted_issue_ids,
+            ],
+        )
+        .await
+        .map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("reconcile reading list entries: {e}"))
+            }
+        })?;
+    }
+
+    // Insert the missing entries with one set-based statement rather than one
+    // round trip per issue (the Alpha Flight source has 228 entries). Positions
+    // are derived in SQL from the list's current maximum, with an explicit -1
+    // floor for an empty list, so there is no unchecked i32 + 1 in Rust. The
+    // NOT EXISTS guard keeps repeated commits idempotent (#5523).
+    if !adopted_issue_ids.is_empty() {
+        tx.run_execute(
+            r#"
+            INSERT INTO custom_cbl_entries
+              (list_id, issue_id, position, created_at, is_checkpoint,
+               checkpoint_target_issue_ids, gate, skipped)
+            SELECT $1, ids.issue_id,
+                   (COALESCE(base.max_position, -1) + ids.ord)::int,
+                   NOW(), false, '[]'::json, 'none', false
+            FROM unnest($2::int[]) WITH ORDINALITY AS ids(issue_id, ord)
+            CROSS JOIN (
+                SELECT MAX(position) AS max_position
+                FROM custom_cbl_entries WHERE list_id = $1
+            ) AS base
+            WHERE NOT EXISTS (
+                SELECT 1 FROM custom_cbl_entries existing
+                WHERE existing.list_id = $1 AND existing.issue_id = ids.issue_id
+            )
+            "#,
+            &[&canonical_list_id, &adopted_issue_ids],
+        )
+        .await
+        .map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("insert reading list entries: {e}"))
+            }
+        })?;
+    }
+
+    // Link plan to authoritative reading list via reading_plan_sources.
+    tx.run_execute(
+        "UPDATE reading_plan_sources
+         SET custom_cbl_list_id = $1, cbl_source_list_id = $4, adopted_at = COALESCE(adopted_at, NOW())
+         WHERE plan_id = $2 AND raw_source_path = $3",
+        &[&canonical_list_id, &plan_id, &canonical_source_path, &list_id],
+    )
+    .await
+    .map_err(|e| {
+        if crate::db::is_transport_failure(&e) {
+            CommitErr::Db(ApiError::database_unavailable())
+        } else {
+            CommitErr::Unexpected(format!("update reading plan source link: {e}"))
+        }
+    })?;
+    let updated_source = tx
+        .run_query_opt(
+            "SELECT id FROM reading_plan_sources WHERE plan_id = $1 AND raw_source_path = $2",
+            &[&plan_id, &canonical_source_path],
+        )
+        .await
+        .map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("lookup reading plan source: {e}"))
+            }
+        })?;
+    if updated_source.is_none() {
+        tx.run_execute(
+            "INSERT INTO reading_plan_sources (plan_id, raw_source_path, custom_cbl_list_id, cbl_source_list_id, adopted_at, recorded_at)
+             VALUES ($1, $2, $3, $4, NOW(), NOW())",
+            &[&plan_id, &canonical_source_path, &canonical_list_id, &list_id],
+        )
+        .await
+        .map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("insert reading plan source: {e}"))
+            }
+        })?;
+    }
+
     let prow = tx.run_query_one("SELECT id,user_id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1", &[&plan_id]).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(format!("reload plan: {e}")) })?;
     let status = if requested_target_plan_id.is_some() {
         StatusCode::OK
@@ -3798,18 +4054,20 @@ struct MergeAdoptionCtx<'a> {
     source_path: &'a str,
     series_overrides: &'a std::collections::HashMap<String, bool>,
     preserve_existing_order: bool,
+    target_lane_id: &'a str,
 }
 
 async fn merge_adoption_nodes_tx(
     tx: &mut tokio_postgres::Transaction<'_>,
     nodes_json: &mut JsonValue,
     ctx: &MergeAdoptionCtx<'_>,
-) -> Result<(Vec<i32>, Vec<i32>, Vec<i32>, Vec<i32>), CommitErr> {
+) -> Result<(Vec<i32>, Vec<i32>, Vec<i32>, Vec<i32>, Vec<i32>), CommitErr> {
     let user_id = ctx.user_id;
     let planned = ctx.planned;
     let source_path = ctx.source_path;
     let series_overrides = ctx.series_overrides;
     let preserve_existing_order = ctx.preserve_existing_order;
+    let target_lane_id = ctx.target_lane_id;
     let nodes_arr = nodes_json
         .as_array_mut()
         .ok_or_else(|| CommitErr::Unexpected("invalid nodes_json".to_string()))?;
@@ -3818,7 +4076,11 @@ async fn merge_adoption_nodes_tx(
     let mut excluded_positions = Vec::new();
     let mut unresolved_positions = Vec::new();
     let mut adopted_order: Vec<String> = Vec::new();
+<<<<<<< HEAD
     let mut affected_threads: std::collections::HashSet<i32> = std::collections::HashSet::new();
+=======
+    let mut adopted_issue_ids: Vec<i32> = Vec::new();
+>>>>>>> origin/main
 
     // Index existing issue nodes by ref_id
     let mut issue_node_index: std::collections::HashMap<i32, usize> =
@@ -3939,6 +4201,7 @@ async fn merge_adoption_nodes_tx(
                     .unwrap_or("")
                     .to_string(),
             );
+            adopted_issue_ids.push(issue_id);
             if !created_now {
                 reused_positions.push(pos);
             }
@@ -3952,7 +4215,7 @@ async fn merge_adoption_nodes_tx(
                 "id": node_id,
                 "node_type": "issue",
                 "ref_id": issue_id,
-                "lane_id": "default",
+                "lane_id": target_lane_id,
                 "position": next_pos,
                 "is_checkpoint": false,
                 "convergence_gate": [],
@@ -3964,6 +4227,7 @@ async fn merge_adoption_nodes_tx(
             nodes_arr.push(node);
             issue_node_index.insert(issue_id, nodes_arr.len() - 1);
             adopted_order.push(format!("cbl-{cse_id}"));
+            adopted_issue_ids.push(issue_id);
             if !created_now {
                 reused_positions.push(pos);
             }
@@ -4020,6 +4284,7 @@ async fn merge_adoption_nodes_tx(
         created_positions,
         excluded_positions,
         unresolved_positions,
+        adopted_issue_ids,
     ))
 }
 

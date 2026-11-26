@@ -5818,6 +5818,11 @@ export interface components {
             issue_number: string;
             /** Format: int32 */
             mapping_id: number;
+            /**
+             * @description Actionable next steps for the reviewer when the match is unresolved,
+             *     ambiguous, or missing. Empty when no guidance is needed.
+             */
+            next_steps?: string[];
             provider?: string | null;
             source_entry_summary: string;
             status: string;
@@ -5827,6 +5832,31 @@ export interface components {
             /** Format: double */
             updated_at?: number | null;
             why_stopped: string;
+        };
+        IdentityInboxPartialMatch: {
+            actionable_reason: string;
+            /** Format: int32 */
+            comicvine_volume_id: number;
+            matched: components["schemas"]["IdentityInboxPartialMatchIssue"][];
+            unmatched: components["schemas"]["IdentityInboxPartialMatchIssue"][];
+            volume_name: string;
+        };
+        /**
+         * @description One issue in an explainable partial series match. When a stored candidate
+         *     exists, `mapping_id`/`external_identity_id` let the UI confirm it through
+         *     the existing confirmation endpoint; otherwise the issue stays for review.
+         */
+        IdentityInboxPartialMatchIssue: {
+            /** Format: int32 */
+            comicvine_issue_id: number;
+            /** Format: int32 */
+            external_identity_id?: number | null;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            mapping_id?: number | null;
+            reason: string;
         };
         /** @description Body for rejecting an identity inbox candidate. */
         IdentityInboxRejectRequest: {
@@ -5846,6 +5876,16 @@ export interface components {
         IdentityInboxSearchResponse: {
             /** Format: int32 */
             issue_id: number;
+            /**
+             * @description Explainable reason when discovery found nothing, produced by the same
+             *     matcher that scores successful searches.
+             */
+            no_match_reason?: string | null;
+            /**
+             * @description Series-level partial matches derived from the same provider response.
+             *     Always emitted (empty when no volume resolves) for wire stability.
+             */
+            partial_matches: components["schemas"]["IdentityInboxPartialMatch"][];
             query: string;
             results: components["schemas"]["IdentityInboxSearchResult"][];
             /** Format: int64 */

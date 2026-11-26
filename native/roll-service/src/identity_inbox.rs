@@ -66,6 +66,10 @@ pub struct IdentityInboxItem {
     pub provider: Option<String>,
     pub source_entry_summary: String,
     pub why_stopped: String,
+    /// Actionable next steps for the reviewer when the match is unresolved,
+    /// ambiguous, or missing. Empty when no guidance is needed.
+    #[serde(default)]
+    pub next_steps: Vec<String>,
     pub candidates: Vec<IdentityInboxCandidate>,
     pub created_at: Option<f64>,
     pub updated_at: Option<f64>,
@@ -126,12 +130,40 @@ pub struct IdentityInboxSearchResult {
     pub evidence: Vec<String>,
 }
 
+/// One issue in an explainable partial series match. When a stored candidate
+/// exists, `mapping_id`/`external_identity_id` let the UI confirm it through
+/// the existing confirmation endpoint; otherwise the issue stays for review.
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct IdentityInboxPartialMatchIssue {
+    pub issue_id: i32,
+    pub issue_number: String,
+    pub comicvine_issue_id: i32,
+    pub mapping_id: Option<i32>,
+    pub external_identity_id: Option<i32>,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct IdentityInboxPartialMatch {
+    pub comicvine_volume_id: i32,
+    pub volume_name: String,
+    pub actionable_reason: String,
+    pub matched: Vec<IdentityInboxPartialMatchIssue>,
+    pub unmatched: Vec<IdentityInboxPartialMatchIssue>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct IdentityInboxSearchResponse {
     pub issue_id: i32,
     pub query: String,
     pub results: Vec<IdentityInboxSearchResult>,
     pub total_available: Option<i64>,
+    /// Series-level partial matches derived from the same provider response.
+    /// Always emitted (empty when no volume resolves) for wire stability.
+    pub partial_matches: Vec<IdentityInboxPartialMatch>,
+    /// Explainable reason when discovery found nothing, produced by the same
+    /// matcher that scores successful searches.
+    pub no_match_reason: Option<String>,
 }
 
 fn bad_request(detail: &str) -> ApiError {
@@ -169,9 +201,7 @@ fn why_stopped(status: &str, evidence: &Value, candidate_count: usize) -> String
     // contradict the candidate cards shown on expand (#5382). Reflect the real
     // candidate state first. When candidates exist, keep any non-empty
     // decision_reason so the header still explains why review is needed; only
-    // the empty-evidence "No candidates found" fallback is replaced by the
-    // count. The reasons below apply only when there are genuinely no
-    // candidates for the issue.
+    // the empty-evidence fallback is replaced by the count.
     if candidate_count > 0 {
         let count_text = if candidate_count == 1 {
             "1 candidate found".to_string()
@@ -190,9 +220,6 @@ fn why_stopped(status: &str, evidence: &Value, candidate_count: usize) -> String
     let is_empty_evidence = evidence.is_null()
         || evidence.as_object().map(|o| o.is_empty()).unwrap_or(false)
         || evidence.as_array().map(|a| a.is_empty()).unwrap_or(false);
-    if is_empty_evidence {
-        return "No candidates found".to_string();
-    }
     if let Some(obj) = evidence.as_object() {
         if let Some(reason) = obj.get("decision_reason").and_then(|v| v.as_str()) {
             if !reason.is_empty() {
@@ -200,18 +227,491 @@ fn why_stopped(status: &str, evidence: &Value, candidate_count: usize) -> String
             }
         }
     }
+    if is_empty_evidence {
+        return "No candidates found. Try searching by a different name, pasting a ComicVine URL, or mapping manually.".to_string();
+    }
     if status == "unresolved" {
-        return "No validated local candidate".to_string();
+        return "No validated local candidate. Try searching by a different name, pasting a ComicVine URL, or mapping manually.".to_string();
     }
     if status == "candidate" {
-        return "Multiple candidates require explicit review".to_string();
+        return "Multiple candidates require explicit review. Confirm the correct match or map manually.".to_string();
     }
     format!("Status: {status}")
+}
+
+fn next_steps_for(status: &str, evidence: &Value, candidate_count: usize) -> Vec<String> {
+    if let Some(obj) = evidence.as_object() {
+        if let Some(steps) = obj.get("next_steps").and_then(|v| v.as_array()) {
+            let parsed: Vec<String> = steps
+                .iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .filter(|s| !s.trim().is_empty())
+                .collect();
+            if !parsed.is_empty() {
+                return parsed;
+            }
+        }
+    }
+    if candidate_count > 0 {
+        if status == "candidate" || status == "unresolved" || status == "deferred" {
+            return vec![
+                "Confirm the correct candidate if one matches exactly.".to_string(),
+                "Search by a different name or paste a ComicVine URL.".to_string(),
+                "Map manually if no candidate is correct.".to_string(),
+            ];
+        }
+        return Vec::new();
+    }
+    vec![
+        "Search by a different series name or alias.".to_string(),
+        "Paste a ComicVine volume or issue URL.".to_string(),
+        "Map the issue manually in the Identity Inbox.".to_string(),
+    ]
 }
 
 fn parse_json_text(text: Option<String>) -> Value {
     text.and_then(|t| serde_json::from_str(&t).ok())
         .unwrap_or_else(|| serde_json::json!({}))
+}
+
+/// Local discovery context for #5434, assembled from data the app already
+/// owns. No provider I/O here: these are the hints that make provider searches
+/// find volumes even when the local series name differs from ComicVine's.
+#[derive(Debug)]
+struct MatchContext {
+    issue: crate::comicvine_matching::MatchIssue,
+}
+
+impl MatchContext {
+    fn new(issue_id: i32, thread_title: &str, issue_number: &str) -> Self {
+        Self {
+            issue: crate::comicvine_matching::MatchIssue {
+                issue_id,
+                series_name: thread_title.to_string(),
+                issue_number: issue_number.to_string(),
+                publisher: None,
+                start_year: None,
+                volume_hint_ids: Vec::new(),
+                aliases: Vec::new(),
+                source_volume_ids: Vec::new(),
+            },
+        }
+    }
+
+    fn apply_series_hint(
+        &mut self,
+        publisher: Option<String>,
+        start_year: Option<i32>,
+        volume_id: Option<i32>,
+        alias: Option<String>,
+    ) {
+        if self.issue.publisher.is_none() {
+            self.issue.publisher = publisher;
+        }
+        if self.issue.start_year.is_none() {
+            self.issue.start_year = start_year;
+        }
+        if let Some(id) = volume_id {
+            if !self.issue.source_volume_ids.contains(&id) {
+                self.issue.source_volume_ids.push(id);
+            }
+        }
+        if let Some(name) = alias {
+            if !name.trim().is_empty() && !self.issue.aliases.contains(&name) {
+                self.issue.aliases.push(name);
+            }
+        }
+    }
+
+    fn finish(mut self) -> crate::comicvine_matching::MatchIssue {
+        self.issue.volume_hint_ids.sort_unstable();
+        self.issue.volume_hint_ids.dedup();
+        self.issue.source_volume_ids.sort_unstable();
+        self.issue.source_volume_ids.dedup();
+        self.issue.aliases.sort();
+        self.issue.aliases.dedup();
+        self.issue
+    }
+}
+
+/// Load the discovery hints for one issue with three bounded, set-based
+/// queries (sibling volumes, confirmed series hints, CBL source labels).
+async fn load_match_context(
+    conn: &deadpool_postgres::Object,
+    thread_id: i32,
+    issue_id: i32,
+    thread_title: &str,
+    issue_number: &str,
+) -> Result<crate::comicvine_matching::MatchIssue, ApiError> {
+    let mut context = MatchContext::new(issue_id, thread_title, issue_number);
+
+    let sibling_rows = conn
+        .query(
+            "SELECT DISTINCT (e.metadata_json::jsonb->'volume'->>'id')::int AS volume_id \
+             FROM issue_external_identity_mappings m \
+             JOIN issues s ON s.id = m.issue_id \
+             JOIN external_identities e ON e.id = m.external_identity_id \
+             WHERE s.thread_id = $1 AND m.status = 'confirmed' \
+               AND e.provider = 'comicvine' AND e.entity_type = 'issue' \
+               AND (e.metadata_json::jsonb->'volume'->>'id') ~ '^[0-9]+$'",
+            &[&thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    for row in &sibling_rows {
+        context.issue.volume_hint_ids.push(row.get(0));
+    }
+
+    let series_rows = conn
+        .query(
+            "SELECT COALESCE(NULLIF(e.metadata_json::jsonb->>'publisher', ''), \
+                             NULLIF(e.metadata_json::jsonb->'publisher'->>'name', '')) AS publisher, \
+                    CASE WHEN (e.metadata_json::jsonb->>'start_year') ~ '^[0-9]+$' \
+                         THEN (e.metadata_json::jsonb->>'start_year')::int END AS start_year, \
+                    CASE WHEN e.external_id ~ '^[0-9]+$' THEN e.external_id::int END AS volume_id, \
+                    NULLIF(e.metadata_json::jsonb->>'name', '') AS alias \
+             FROM thread_external_series_mappings tm \
+             JOIN external_identities e ON e.id = tm.external_identity_id \
+             WHERE tm.thread_id = $1 AND tm.status = 'confirmed' \
+               AND e.provider = 'comicvine' AND e.entity_type = 'series' \
+             ORDER BY tm.id LIMIT 8",
+            &[&thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    for row in &series_rows {
+        context.apply_series_hint(row.get(0), row.get(1), row.get(2), row.get(3));
+    }
+
+    let cbl_rows = conn
+        .query(
+            "SELECT cse.series_name, \
+                    CASE WHEN ev.external_id ~ '^[0-9]+$' THEN ev.external_id::int END AS volume_id \
+             FROM issue_external_identity_mappings m \
+             JOIN external_identities e ON e.id = m.external_identity_id \
+             JOIN cbl_source_entries cse ON cse.external_issue_identity_id = e.id \
+             LEFT JOIN external_identities ev ON ev.id = cse.external_series_identity_id \
+               AND ev.provider = 'comicvine' AND ev.entity_type = 'series' \
+             WHERE m.issue_id = $1 AND m.status = 'confirmed' \
+               AND e.provider = 'comicvine' AND e.entity_type = 'issue' \
+               AND btrim(cse.series_name) <> '' \
+             ORDER BY cse.id LIMIT 20",
+            &[&issue_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    for row in &cbl_rows {
+        context.apply_series_hint(None, None, row.get(1), row.get(0));
+    }
+
+    Ok(context.finish())
+}
+
+/// Derive series-level partial matches from the provider rows already fetched
+/// for a search. This is the production caller of `plan_partial_series_match`:
+/// it uses the owned sibling issues of the thread and never auto-confirms.
+async fn build_partial_matches(
+    state: &Arc<AppState>,
+    local: &crate::comicvine_matching::MatchIssue,
+    thread_id: i32,
+    user_id: i32,
+    provider_issues: &[crate::comicvine_matching::ProviderIssue],
+) -> Result<Vec<IdentityInboxPartialMatch>, ApiError> {
+    if thread_id <= 0 || provider_issues.is_empty() {
+        return Ok(Vec::new());
+    }
+    let conn = db::checkout(state).await?;
+    let rows = conn
+        .query(
+            "SELECT i.id, i.issue_number, m.id, e.id, e.external_id \
+             FROM issues i \
+             JOIN threads t ON t.id = i.thread_id AND t.user_id = $2 \
+             LEFT JOIN issue_external_identity_mappings m \
+               ON m.issue_id = i.id AND m.status IN ('unresolved','candidate','deferred') \
+             LEFT JOIN external_identities e \
+               ON e.id = m.external_identity_id AND e.provider = 'comicvine' AND e.entity_type = 'issue' \
+             WHERE i.thread_id = $1 \
+             ORDER BY i.position NULLS LAST, i.id \
+             LIMIT 30",
+            &[&thread_id, &user_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+    let mut siblings = Vec::with_capacity(rows.len());
+    let mut candidates: std::collections::HashMap<i32, Vec<(i32, i32, String)>> =
+        std::collections::HashMap::new();
+    for row in &rows {
+        let issue_id: i32 = row.get(0);
+        let number: String = row.get(1);
+        let mapping_id: Option<i32> = row.get(2);
+        let external_id: Option<i32> = row.get(3);
+        let cv_id: Option<String> = row.get(4);
+        if let (Some(mid), Some(eid), Some(cv)) = (mapping_id, external_id, cv_id) {
+            candidates.entry(issue_id).or_default().push((mid, eid, cv));
+        }
+        let mut sibling = local.clone();
+        sibling.issue_id = issue_id;
+        sibling.issue_number = number;
+        siblings.push(sibling);
+    }
+    if siblings.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let plans = crate::comicvine_matching::plan_partial_series_match(&siblings, provider_issues);
+    let mut out = Vec::with_capacity(plans.len().min(5));
+    for plan in plans.into_iter().take(5) {
+        let to_issue = |issue_id: i32, number: String, cv_id: i32, reason: String| {
+            let stored = candidates
+                .get(&issue_id)
+                .and_then(|rows| {
+                    rows.iter()
+                        .find(|(_, _, external)| external.parse::<i32>().ok() == Some(cv_id))
+                })
+                .map(|(mid, eid, _)| (*mid, *eid));
+            IdentityInboxPartialMatchIssue {
+                issue_id,
+                issue_number: number,
+                comicvine_issue_id: cv_id,
+                mapping_id: stored.map(|(mid, _)| mid),
+                external_identity_id: stored.map(|(_, eid)| eid),
+                reason,
+            }
+        };
+        let matched = plan
+            .matched
+            .into_iter()
+            .map(|m| {
+                let sibling = siblings.iter().find(|s| s.issue_id == m.issue_id);
+                let number = sibling.map(|s| s.issue_number.clone()).unwrap_or_default();
+                to_issue(
+                    m.issue_id,
+                    number,
+                    m.comicvine_issue_id,
+                    m.evidence.join("; "),
+                )
+            })
+            .collect();
+        let unmatched = plan
+            .unmatched
+            .into_iter()
+            .map(|u| {
+                to_issue(
+                    u.issue_id,
+                    u.issue_number,
+                    0,
+                    format!("{} {}", u.reason, u.next_steps.join("; ")),
+                )
+            })
+            .collect();
+        out.push(IdentityInboxPartialMatch {
+            comicvine_volume_id: plan.volume.comicvine_volume_id,
+            volume_name: plan.volume.volume_name,
+            actionable_reason: plan.actionable_reason,
+            matched,
+            unmatched,
+        });
+    }
+    Ok(out)
+}
+
+/// Batch variant of [`load_match_context`] for a page of inbox items. Three
+/// set-based queries cover the whole page instead of three per item.
+async fn load_match_contexts(
+    conn: &deadpool_postgres::Object,
+    rows: &[(i32, i32, String, String)],
+) -> Result<std::collections::HashMap<i32, crate::comicvine_matching::MatchIssue>, ApiError> {
+    if rows.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+    let thread_ids: Vec<i32> = rows.iter().map(|row| row.0).collect();
+    let issue_ids: Vec<i32> = rows.iter().map(|row| row.1).collect();
+    let mut contexts: std::collections::HashMap<i32, MatchContext> = rows
+        .iter()
+        .map(|(_thread_id, issue_id, title, number)| {
+            (*issue_id, MatchContext::new(*issue_id, title, number))
+        })
+        .collect();
+    let mut issues_by_thread: std::collections::HashMap<i32, Vec<i32>> =
+        std::collections::HashMap::new();
+    for (thread_id, issue_id, _, _) in rows {
+        issues_by_thread
+            .entry(*thread_id)
+            .or_default()
+            .push(*issue_id);
+    }
+
+    let sibling_rows = conn
+        .query(
+            "SELECT DISTINCT s.thread_id, (e.metadata_json::jsonb->'volume'->>'id')::int AS volume_id \
+             FROM issue_external_identity_mappings m \
+             JOIN issues s ON s.id = m.issue_id \
+             JOIN external_identities e ON e.id = m.external_identity_id \
+             WHERE s.thread_id = ANY($1) AND m.status = 'confirmed' \
+               AND e.provider = 'comicvine' AND e.entity_type = 'issue' \
+               AND (e.metadata_json::jsonb->'volume'->>'id') ~ '^[0-9]+$'",
+            &[&thread_ids],
+        )
+        .await
+        .map_err(db::query_error)?;
+    for row in &sibling_rows {
+        let thread_id: i32 = row.get(0);
+        let volume_id: i32 = row.get(1);
+        if let Some(issue_ids) = issues_by_thread.get(&thread_id) {
+            for issue_id in issue_ids {
+                if let Some(context) = contexts.get_mut(issue_id) {
+                    context.issue.volume_hint_ids.push(volume_id);
+                }
+            }
+        }
+    }
+
+    let series_rows = conn
+        .query(
+            "SELECT tm.thread_id, \
+                    COALESCE(NULLIF(e.metadata_json::jsonb->>'publisher', ''), \
+                             NULLIF(e.metadata_json::jsonb->'publisher'->>'name', '')) AS publisher, \
+                    CASE WHEN (e.metadata_json::jsonb->>'start_year') ~ '^[0-9]+$' \
+                         THEN (e.metadata_json::jsonb->>'start_year')::int END AS start_year, \
+                    CASE WHEN e.external_id ~ '^[0-9]+$' THEN e.external_id::int END AS volume_id, \
+                    NULLIF(e.metadata_json::jsonb->>'name', '') AS alias \
+             FROM thread_external_series_mappings tm \
+             JOIN external_identities e ON e.id = tm.external_identity_id \
+             WHERE tm.thread_id = ANY($1) AND tm.status = 'confirmed' \
+               AND e.provider = 'comicvine' AND e.entity_type = 'series' \
+             ORDER BY tm.id",
+            &[&thread_ids],
+        )
+        .await
+        .map_err(db::query_error)?;
+    for row in &series_rows {
+        let thread_id: i32 = row.get(0);
+        if let Some(issue_ids) = issues_by_thread.get(&thread_id) {
+            for issue_id in issue_ids {
+                if let Some(context) = contexts.get_mut(issue_id) {
+                    context.apply_series_hint(row.get(1), row.get(2), row.get(3), row.get(4));
+                }
+            }
+        }
+    }
+
+    let cbl_rows = conn
+        .query(
+            "SELECT s.id AS issue_id, cse.series_name, \
+                    CASE WHEN ev.external_id ~ '^[0-9]+$' THEN ev.external_id::int END AS volume_id \
+             FROM issue_external_identity_mappings m \
+             JOIN external_identities e ON e.id = m.external_identity_id \
+             JOIN issues s ON s.id = m.issue_id \
+             JOIN cbl_source_entries cse ON cse.external_issue_identity_id = e.id \
+             LEFT JOIN external_identities ev ON ev.id = cse.external_series_identity_id \
+               AND ev.provider = 'comicvine' AND ev.entity_type = 'series' \
+             WHERE s.id = ANY($1) AND m.status = 'confirmed' \
+               AND e.provider = 'comicvine' AND e.entity_type = 'issue' \
+               AND btrim(cse.series_name) <> '' \
+             ORDER BY cse.id",
+            &[&issue_ids],
+        )
+        .await
+        .map_err(db::query_error)?;
+    for row in &cbl_rows {
+        let issue_id: i32 = row.get(0);
+        if let Some(context) = contexts.get_mut(&issue_id) {
+            context.apply_series_hint(None, None, row.get(2), row.get(1));
+        }
+    }
+
+    Ok(contexts
+        .into_iter()
+        .map(|(issue_id, context)| (issue_id, context.finish()))
+        .collect())
+}
+
+/// The same explanation contract is used by the list and the detail handler,
+/// so the collapsed header and the expanded item never disagree.
+fn explain_item(
+    status: &str,
+    evidence: &Value,
+    candidate_count: usize,
+    hints: &crate::comicvine_matching::MatchIssue,
+) -> (String, Vec<String>) {
+    let reason = why_stopped(status, evidence, candidate_count);
+    let steps = next_steps_for(status, evidence, candidate_count);
+    if candidate_count > 0 {
+        return (reason, steps);
+    }
+    // No stored candidate: say what discovery actually checked. This uses
+    // the real hint roster rather than a fixed placeholder, and never
+    // auto-confirms anything.
+    let mut detail = reason;
+    if !hints.volume_hint_ids.is_empty() || !hints.source_volume_ids.is_empty() {
+        detail.push_str(&format!(
+            " Checked the volume(s) already used by this series: {}.",
+            hints
+                .volume_hint_ids
+                .iter()
+                .chain(hints.source_volume_ids.iter())
+                .map(|id| format!("4050-{id}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    if !hints.aliases.is_empty() {
+        detail.push_str(&format!(
+            " Also tried alternate names: {}.",
+            hints.aliases.join(", ")
+        ));
+    }
+    (detail, steps)
+}
+
+/// Convert one ComicVine search row into the provider view the pure matcher
+/// consumes. Missing optional fields stay `None`; the matcher never assumes a
+/// label is present on the provider side.
+fn provider_issue_from_search(
+    obj: &serde_json::Map<String, Value>,
+) -> Option<crate::comicvine_matching::ProviderIssue> {
+    let issue_id = obj.get("id")?.as_i64()? as i32;
+    let volume = obj.get("volume").and_then(|v| v.as_object());
+    let volume_id = volume
+        .and_then(|v| v.get("id"))
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    if volume_id <= 0 {
+        return None;
+    }
+    let volume_name = volume
+        .and_then(|v| v.get("name"))
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let publisher = match obj.get("publisher") {
+        Some(Value::Object(o)) => o.get("name").and_then(|v| v.as_str()).map(str::to_string),
+        Some(Value::String(s)) => Some(s.clone()),
+        _ => None,
+    };
+    let start_year = obj
+        .get("cover_date")
+        .and_then(|v| v.as_str())
+        .and_then(|s| s.get(..4))
+        .and_then(|s| s.parse::<i32>().ok());
+    let issue_number = obj.get("issue_number").and_then(|v| {
+        if v.is_null() {
+            None
+        } else {
+            Some(v.to_string().trim_matches('"').to_string())
+        }
+    });
+    Some(crate::comicvine_matching::ProviderIssue {
+        comicvine_issue_id: issue_id,
+        comicvine_volume_id: volume_id,
+        volume_name,
+        publisher,
+        start_year,
+        issue_number,
+        issue_name: obj.get("name").and_then(|v| v.as_str()).map(str::to_string),
+        aliases: Vec::new(),
+    })
 }
 
 async fn fetch_item(
@@ -329,6 +829,15 @@ async fn fetch_item(
         });
     }
 
+    // #5434: the detail and list handlers share one explanation contract.
+    // Hints are loaded from real owned data (confirmed sibling volumes,
+    // series publisher/year, aliases and CBL source volumes), not injected
+    // fixture values.
+    let hints =
+        load_match_context(&conn, thread_id, issue_id, &thread_title, &issue_number).await?;
+    let (why_stopped_value, next_steps_value) =
+        explain_item(&status, &evidence, candidates.len(), &hints);
+
     let item = IdentityInboxItem {
         mapping_id: mid,
         issue_id,
@@ -338,7 +847,8 @@ async fn fetch_item(
         status: status.clone(),
         provider,
         source_entry_summary: source_entry_summary(&thread_title, &issue_number, &metadata),
-        why_stopped: why_stopped(&status, &evidence, candidates.len()),
+        why_stopped: why_stopped_value,
+        next_steps: next_steps_value,
         candidates,
         created_at,
         updated_at,
@@ -367,7 +877,7 @@ pub async fn list_inbox(
             "SELECT COUNT(*)::bigint FROM issue_external_identity_mappings m \
              JOIN issues i ON i.id = m.issue_id \
              JOIN threads t ON t.id = i.thread_id \
-             WHERE t.user_id = $1 AND m.status IN ('unresolved','candidate','deferred')",
+             WHERE t.user_id = $1 AND m.status IN ('unresolved','candidate')",
             &[&user.id()],
         )
         .await
@@ -386,7 +896,7 @@ pub async fn list_inbox(
              JOIN issues i ON i.id = m.issue_id \
              JOIN threads t ON t.id = i.thread_id \
              JOIN external_identities e ON e.id = m.external_identity_id \
-             WHERE t.user_id = $1 AND m.status IN ('unresolved','candidate','deferred') \
+             WHERE t.user_id = $1 AND m.status IN ('unresolved','candidate') \
              ORDER BY m.created_at DESC \
              OFFSET $2 LIMIT $3",
             &[&user.id(), &offset, &limit],
@@ -449,6 +959,19 @@ pub async fn list_inbox(
             });
     }
 
+    let context_rows: Vec<(i32, i32, String, String)> = rows
+        .iter()
+        .map(|r| {
+            (
+                r.get(6),
+                r.get(4),
+                r.get::<_, String>(7),
+                r.get::<_, String>(5),
+            )
+        })
+        .collect();
+    let contexts = load_match_contexts(&conn, &context_rows).await?;
+
     let mut items = Vec::new();
     for r in rows {
         let mapping_id: i32 = r.get(0);
@@ -471,6 +994,19 @@ pub async fn list_inbox(
             .get(&issue_id)
             .cloned()
             .unwrap_or_default();
+        let hints = contexts.get(&issue_id).cloned().unwrap_or_else(|| {
+            crate::comicvine_matching::MatchIssue {
+                issue_id,
+                series_name: thread_title.clone(),
+                issue_number: issue_number.clone(),
+                publisher: None,
+                start_year: None,
+                volume_hint_ids: Vec::new(),
+                aliases: Vec::new(),
+                source_volume_ids: Vec::new(),
+            }
+        });
+        let (why, steps) = explain_item(&status, &evidence, candidates.len(), &hints);
         items.push(IdentityInboxItem {
             mapping_id,
             issue_id,
@@ -480,7 +1016,8 @@ pub async fn list_inbox(
             status: status.clone(),
             provider: Some(provider),
             source_entry_summary: source_entry_summary(&thread_title, &issue_number, &metadata),
-            why_stopped: why_stopped(&status, &evidence, candidates.len()),
+            why_stopped: why,
+            next_steps: steps,
             candidates,
             created_at,
             updated_at,
@@ -535,16 +1072,85 @@ pub async fn search_issues(
             query: q.q.clone(),
             results: vec![],
             total_available: Some(0),
+            partial_matches: vec![],
+            no_match_reason: None,
         }));
     }
 
-    let url = build_search_url(&api_key, &q.q, clamped);
+    // #5434: build the local side of the match from real owned data when the
+    // caller supplies an issue. This loads sibling volumes, publisher/year,
+    // aliases and CBL source volumes instead of relying on the title alone.
+    let mut search_thread_id = 0;
+    let local = if issue_id > 0 {
+        let conn = db::checkout(&state).await?;
+        let row = conn
+            .query_opt(
+                "SELECT i.issue_number, i.thread_id, t.title \
+                 FROM issues i JOIN threads t ON t.id = i.thread_id \
+                 WHERE i.id = $1 AND t.user_id = $2",
+                &[&issue_id, &user.id()],
+            )
+            .await
+            .map_err(db::query_error)?;
+        match row {
+            Some(row) => {
+                let number: String = row.get(0);
+                let thread_id: i32 = row.get(1);
+                let title: String = row.get(2);
+                search_thread_id = thread_id;
+                load_match_context(&conn, thread_id, issue_id, &title, &number).await?
+            }
+            None => crate::comicvine_matching::MatchIssue {
+                issue_id,
+                series_name: q.q.clone(),
+                issue_number: String::new(),
+                publisher: None,
+                start_year: None,
+                volume_hint_ids: Vec::new(),
+                aliases: Vec::new(),
+                source_volume_ids: Vec::new(),
+            },
+        }
+    } else {
+        crate::comicvine_matching::MatchIssue {
+            issue_id: 0,
+            series_name: q.q.clone(),
+            issue_number: String::new(),
+            publisher: None,
+            start_year: None,
+            volume_hint_ids: Vec::new(),
+            aliases: Vec::new(),
+            source_volume_ids: Vec::new(),
+        }
+    };
+
+    // A pasted ComicVine volume/issue URL is a first-class discovery input.
+    // It is resolved directly instead of being sent to the text search.
+    let url = match crate::comicvine_v2::parse_comicvine_url(&q.q) {
+        Some(crate::comicvine_v2::ParsedResource::Issue(id)) => build_resource_url(
+            &api_key,
+            &format!("issue/4000-{id}"),
+            "id,issue_number,name,cover_date,volume,publisher,site_detail_url,image",
+        ),
+        Some(crate::comicvine_v2::ParsedResource::Volume(id)) => {
+            build_volume_issues_url(&api_key, id, clamped)
+        }
+        None => build_search_url(&api_key, &q.q, clamped),
+    };
     let payload = fetch_comicvine(&state.outbound, url).await;
 
     let mut results = Vec::new();
+    let mut provider_issues = Vec::new();
     let mut total_available = Some(0i64);
     if let Some(p) = payload {
-        if let Some(rows) = p.get("results").and_then(|v| v.as_array()) {
+        // Search and volume lookups return an array; a pasted issue URL
+        // returns a single object. Both feed the same matching pipeline.
+        let rows: Vec<&Value> = match p.get("results") {
+            Some(Value::Array(values)) => values.iter().collect(),
+            Some(object @ Value::Object(_)) => vec![object],
+            _ => Vec::new(),
+        };
+        {
             for row in rows {
                 let Some(obj) = row.as_object() else {
                     continue;
@@ -614,6 +1220,54 @@ pub async fn search_issues(
                     evidence.push(format!("Publisher: {pubn}"));
                 }
 
+                // #5434: score the provider row with the same explainable
+                // heuristics the pure matching module uses. This is real
+                // production data (the provider response plus owned hints),
+                // not an injected fixture.
+                let mut score = None;
+                if let Some(provider_issue) = provider_issue_from_search(obj) {
+                    provider_issues.push(provider_issue.clone());
+                    let volumes = crate::comicvine_matching::discover_volume_candidates(
+                        &local,
+                        std::slice::from_ref(&provider_issue),
+                    );
+                    if let Some(best) = volumes.first() {
+                        score = Some(best.score);
+                        evidence.extend(best.evidence.iter().cloned());
+                    } else if let Some(provider_label) = provider_issue
+                        .issue_number
+                        .as_deref()
+                        .or(provider_issue.issue_name.as_deref())
+                    {
+                        let label_match = crate::comicvine_matching::compare_issue_labels(
+                            &local.issue_number,
+                            provider_label,
+                        );
+                        if label_match != crate::comicvine_matching::LabelMatch::None {
+                            evidence.push(format!(
+                                "issue label {} matches provider {}",
+                                local.issue_number, provider_label
+                            ));
+                            score = Some(match label_match {
+                                crate::comicvine_matching::LabelMatch::Exact => 0.34,
+                                crate::comicvine_matching::LabelMatch::Equivalent => 0.28,
+                                crate::comicvine_matching::LabelMatch::None => 0.0,
+                            });
+                        }
+                    }
+                    let similarity = crate::comicvine_matching::title_similarity(
+                        &local.series_name,
+                        &provider_issue.volume_name,
+                    );
+                    if similarity >= 0.45 {
+                        evidence.push(format!(
+                            "fuzzy title match {:.0}%: {}",
+                            similarity * 100.0,
+                            provider_issue.volume_name
+                        ));
+                    }
+                }
+
                 results.push(IdentityInboxSearchResult {
                     comicvine_issue_id,
                     comicvine_volume_id,
@@ -624,7 +1278,7 @@ pub async fn search_issues(
                     start_year,
                     site_detail_url,
                     image_url,
-                    score: None,
+                    score,
                     evidence,
                 });
             }
@@ -640,11 +1294,26 @@ pub async fn search_issues(
     // Python sets issue_id=0 then caller sets issue_id if provided. Keep issue_id if provided else 0.
     let _ = issue_id_final;
 
+    let partial_matches = build_partial_matches(
+        &state,
+        &local,
+        search_thread_id,
+        user.id(),
+        &provider_issues,
+    )
+    .await?;
+    let no_match_reason = if results.is_empty() {
+        Some(crate::comicvine_matching::explain_no_match(&local, &provider_issues).reason)
+    } else {
+        None
+    };
     Ok(Json(IdentityInboxSearchResponse {
         issue_id: q.issue_id.unwrap_or(0),
         query: q.q.clone(),
         results,
         total_available,
+        partial_matches,
+        no_match_reason,
     }))
 }
 
@@ -669,6 +1338,29 @@ fn build_search_url(api_key: &str, query: &str, limit: i64) -> String {
         percent_encode(api_key),
         percent_encode(query),
         limit,
+        percent_encode(field_list)
+    )
+}
+
+/// Resolve a pasted issue URL to its canonical provider resource.
+fn build_resource_url(api_key: &str, resource: &str, field_list: &str) -> String {
+    format!(
+        "https://comicvine.gamespot.com/api/{resource}/?api_key={}&format=json&field_list={}",
+        percent_encode(api_key),
+        percent_encode(field_list)
+    )
+}
+
+/// Resolve a pasted volume URL to the issues on that volume (bounded page).
+fn build_volume_issues_url(api_key: &str, volume_id: i32, limit: i64) -> String {
+    let field_list = "id,name,issue_number,cover_date,volume,publisher,site_detail_url,image";
+    // A pasted URL carries the short provider id (`4050-31409`) while the
+    // provider's JSON `id` (and the `volume:` filter) uses the concatenated
+    // numeric form (`405031409`), matching `comicvine_v2::series_issues`.
+    let numeric_volume_id = format!("4050{volume_id}");
+    format!(
+        "https://comicvine.gamespot.com/api/issues/?api_key={}&format=json&filter=volume%3A{numeric_volume_id}&limit={limit}&field_list={}",
+        percent_encode(api_key),
         percent_encode(field_list)
     )
 }
@@ -1357,9 +2049,24 @@ mod tests {
             why_stopped("candidate", &with_reason, 2),
             "2 candidates found: ambiguous title"
         );
-        // With no candidates the original evidence/status reasons still apply.
-        assert_eq!(why_stopped("unresolved", &empty, 0), "No candidates found");
+        // With no candidates, reasons remain actionable even without evidence.
+        let no_candidates = why_stopped("unresolved", &empty, 0);
+        assert!(no_candidates.contains("No candidates found"));
+        assert!(no_candidates.to_lowercase().contains("different name"));
+        assert!(no_candidates.to_lowercase().contains("url"));
         assert_eq!(why_stopped("candidate", &with_reason, 0), "ambiguous title");
+    }
+
+    #[test]
+    fn next_steps_are_actionable_for_non_match_states() {
+        let empty = serde_json::json!({});
+        let steps = next_steps_for("unresolved", &empty, 0);
+        assert!(!steps.is_empty());
+        assert!(steps.iter().any(|s| s.to_lowercase().contains("different")));
+        assert!(steps.iter().any(|s| s.to_lowercase().contains("url")));
+        assert!(steps.iter().any(|s| s.to_lowercase().contains("manual")));
+        let candidate_steps = next_steps_for("candidate", &empty, 2);
+        assert!(!candidate_steps.is_empty());
     }
 
     #[tokio::test]
@@ -1705,12 +2412,12 @@ mod tests {
         assert_eq!(list.total, 0);
     }
 
-    /// Regression for #5623: deferring an inbox item must keep showing its candidate
-    /// evidence. When an item is deferred, the candidates query should still return
-    /// the deferred mapping as a candidate so the UI shows "1 candidate found" instead
-    /// of "No candidates found" with no reason.
+    /// Regression for #5524/#5623: deferring an item removes it from the
+    /// unresolved inbox and drops the unresolved count (#5524), while the detail
+    /// endpoint still returns its candidate evidence so deferral does not erase
+    /// review evidence (#5623).
     #[tokio::test]
-    async fn deferred_item_shows_candidate_evidence() {
+    async fn defer_removes_item_from_unresolved_inbox_but_preserves_candidate_evidence() {
         let Some(state) = test_support::test_state(2).await else {
             return;
         };
@@ -1769,7 +2476,9 @@ mod tests {
         assert!(defer_response.success);
         assert_eq!(defer_response.message, "Item deferred for later review");
 
-        // Verify the deferred item still shows candidate evidence
+        // A deferred item leaves the unresolved inbox and the unresolved count
+        // drops (#5524). The candidate evidence must remain visible through the
+        // detail endpoint so deferral does not erase review evidence (#5623).
         let after_defer = list_inbox(
             State(state.clone()),
             AuthenticatedUser::for_test(1),
@@ -1781,24 +2490,17 @@ mod tests {
         .await
         .unwrap()
         .0;
-        assert_eq!(after_defer.items.len(), 1);
-        let item_after = &after_defer.items[0];
-        assert_eq!(item_after.status, "deferred");
-        // The deferred mapping should still be visible as a candidate
         assert_eq!(
-            item_after.candidates.len(),
-            1,
-            "deferred item should still show its candidate evidence; got {} candidates",
-            item_after.candidates.len()
+            after_defer.total, 0,
+            "deferred item should leave the unresolved inbox (#5524)"
         );
-        assert!(
-            !item_after.why_stopped.contains("No candidates found"),
-            "collapsed header must not claim no candidates when a candidate exists (even if deferred); got {:?}",
-            item_after.why_stopped,
+        assert_eq!(
+            after_defer.items.len(),
+            0,
+            "deferred item should not appear in the unresolved inbox list (#5524)"
         );
-        assert_eq!(item_after.why_stopped, "1 candidate found");
 
-        // Also verify get_inbox_item works correctly for deferred items
+        // Verify get_inbox_item still shows candidate evidence for deferred items (#5623).
         let detail_response = get_inbox_item(State(state), AuthenticatedUser::for_test(1), Path(1))
             .await
             .unwrap()
@@ -1812,5 +2514,230 @@ mod tests {
             "deferred item detail should show candidate evidence; got {} candidates",
             detail_item.candidates.len()
         );
+        assert!(
+            !detail_item.why_stopped.contains("No candidates found"),
+            "deferred item detail must not claim no candidates when a candidate exists; got {:?}",
+            detail_item.why_stopped,
+        );
+        assert_eq!(detail_item.why_stopped, "1 candidate found");
+    }
+
+    /// Seed one owned thread with a confirmed sibling volume, a confirmed
+    /// series identity and a CBL source label. These are the real inputs #5434
+    /// discovery must consume instead of empty fixture vectors.
+    async fn seed_matching_fixture(state: &Arc<AppState>) {
+        let conn = state.pool.get().await.unwrap();
+        conn.batch_execute(
+            "INSERT INTO users (id, username, is_admin, created_at) VALUES (1,'matcher',false,NOW()); \
+             INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, manual_creator_credits, is_blocked, is_test, queue_position_is_manual, created_at) VALUES \
+                (1,1,'BPRD','comics',2,0,'active','[]'::json,false,false,false,NOW()); \
+             INSERT INTO issues (id, thread_id, issue_number, status, position, created_at) VALUES \
+                (1,1,'1.MU','unread',0,NOW()), \
+                (2,1,'2','unread',1,NOW()); \
+             INSERT INTO external_identities (id, provider, entity_type, external_id, metadata_json, created_at, updated_at) VALUES \
+                (1,'comicvine','issue','4000001','{\"volume\":{\"id\":405031409}}'::json,NOW(),NOW()), \
+                (2,'comicvine','issue','4000002','{}'::json,NOW(),NOW()), \
+                (3,'comicvine','series','405031409','{\"name\":\"B.P.R.D.: Hell on Earth\",\"publisher\":\"Dark Horse Comics\",\"start_year\":2010}'::json,NOW(),NOW()), \
+                (4,'comicvine','issue','4000004','{\"volume\":{\"id\":405031409}}'::json,NOW(),NOW()); \
+             INSERT INTO issue_external_identity_mappings \
+                (id, issue_id, external_identity_id, status, evidence_source, confidence, created_at, updated_at, evidence_json) VALUES \
+                (1,1,2,'unresolved','test',0.1,NOW(),NOW(),'{}'::json), \
+                (2,2,1,'confirmed','user_confirmed',1.0,NOW(),NOW(),'{}'::json), \
+                (3,1,4,'confirmed','user_confirmed',1.0,NOW(),NOW(),'{}'::json); \
+             INSERT INTO thread_external_series_mappings \
+                (id, thread_id, external_identity_id, status, evidence_source, created_at, updated_at) VALUES \
+                (1,1,3,'confirmed','test',NOW(),NOW()); \
+             INSERT INTO cbl_sources (id, repository, revision_sha, synced_at, created_at, updated_at) VALUES \
+                (1,'fixture','rev',NOW(),NOW(),NOW()); \
+             INSERT INTO cbl_source_lists (id, source_id, source_path, name, content_hash, revision_sha, active, created_at, updated_at) VALUES \
+                (1,1,'fixture.cbl','Fixture','hash','rev',true,NOW(),NOW()); \
+             INSERT INTO cbl_source_entries (id, list_id, position, series_name, issue_number, external_series_identity_id, external_issue_identity_id, created_at) VALUES \
+                (1,1,1,'B.P.R.D. Hell on Earth','1',3,4,NOW());",
+        )
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn load_match_context_uses_real_sibling_series_and_cbl_hints() {
+        let Some(state) = test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = test_support::reset_for_test(&state).await;
+        seed_matching_fixture(&state).await;
+        let conn = state.pool.get().await.unwrap();
+        let hints = load_match_context(&conn, 1, 1, "BPRD", "1.MU")
+            .await
+            .expect("hints must load");
+        assert_eq!(hints.volume_hint_ids, vec![405031409]);
+        assert_eq!(hints.publisher.as_deref(), Some("Dark Horse Comics"));
+        assert_eq!(hints.start_year, Some(2010));
+        assert!(hints.source_volume_ids.contains(&405031409));
+        assert!(hints.aliases.iter().any(|a| a == "B.P.R.D.: Hell on Earth"));
+        assert!(hints.aliases.iter().any(|a| a == "B.P.R.D. Hell on Earth"));
+    }
+
+    #[tokio::test]
+    async fn search_scores_variant_label_with_real_hints() {
+        let Some(state) = test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = test_support::reset_for_test(&state).await;
+        seed_matching_fixture(&state).await;
+        let fake = state
+            .recording_fake()
+            .expect("test state must install the recording fake outbound client");
+        fake.clear();
+        fake.push_ok(
+            http::StatusCode::OK,
+            http::HeaderMap::new(),
+            Bytes::from_static(
+                br#"{"status_code":1,"number_of_total_results":1,"results":[{"id":400077,"name":"A Cold Day in Hell","issue_number":"1.MU","cover_date":"2013-03-20","volume":{"id":405031409,"name":"B.P.R.D.: Hell on Earth"},"publisher":{"name":"Dark Horse Comics"},"site_detail_url":"https://comicvine.gamespot.com/issue/4000-77/"}]}"#,
+            ),
+        );
+        let _env = ComicvineKeyEnv::install();
+        let response = search_issues(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Query(SearchQuery {
+                q: "anything".to_string(),
+                limit: Some(10),
+                issue_id: Some(1),
+            }),
+        )
+        .await
+        .expect("search must succeed");
+        assert_eq!(response.results.len(), 1);
+        let result = &response.results[0];
+        assert!(
+            result.score.unwrap_or(0.0) >= 0.28,
+            "variant label + alias hints must score the result: {:?}",
+            result.score
+        );
+        assert!(
+            result.evidence.iter().any(|e| e.contains("alias")),
+            "evidence must explain the alias hit: {:?}",
+            result.evidence
+        );
+        assert!(
+            result.evidence.iter().any(|e| e.contains("1.MU")),
+            "evidence must explain the flexible label match: {:?}",
+            result.evidence
+        );
+        assert_eq!(response.partial_matches.len(), 1);
+        let plan = &response.partial_matches[0];
+        assert_eq!(plan.comicvine_volume_id, 405031409);
+        assert_eq!(plan.matched.len(), 1, "unambiguous issue must be offered");
+        assert_eq!(plan.unmatched.len(), 1, "missing sibling stays for review");
+        assert!(plan.actionable_reason.contains("Partial match"));
+        assert!(plan.unmatched[0].reason.contains("not on it"));
+    }
+
+    #[tokio::test]
+    async fn pasted_volume_url_resolves_issues_through_the_recording_fake() {
+        let Some(state) = test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = test_support::reset_for_test(&state).await;
+        let fake = state
+            .recording_fake()
+            .expect("test state must install the recording fake outbound client");
+        fake.clear();
+        fake.push_ok(
+            http::StatusCode::OK,
+            http::HeaderMap::new(),
+            Bytes::from_static(
+                br#"{"status_code":1,"number_of_total_results":1,"results":[{"id":400078,"issue_number":"1","volume":{"id":405031409,"name":"B.P.R.D.: Hell on Earth"}}]}"#,
+            ),
+        );
+        let _env = ComicvineKeyEnv::install();
+        let response = search_issues(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Query(SearchQuery {
+                q: "https://comicvine.gamespot.com/volume/4050-31409/".to_string(),
+                limit: Some(10),
+                issue_id: None,
+            }),
+        )
+        .await
+        .expect("pasted URL must resolve through the fake");
+        assert_eq!(response.results.len(), 1);
+        let calls = fake.calls();
+        assert_eq!(calls.len(), 1);
+        assert!(
+            calls[0].path.contains("filter=volume%3A405031409"),
+            "pasted volume URL must query that volume: {}",
+            calls[0].path
+        );
+    }
+
+    #[tokio::test]
+    async fn pasted_issue_url_resolves_the_exact_provider_issue() {
+        let Some(state) = test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = test_support::reset_for_test(&state).await;
+        let fake = state
+            .recording_fake()
+            .expect("test state must install the recording fake outbound client");
+        fake.clear();
+        fake.push_ok(
+            http::StatusCode::OK,
+            http::HeaderMap::new(),
+            Bytes::from_static(
+                br#"{"status_code":1,"results":{"id":400077,"issue_number":"1.MU","volume":{"id":405031409,"name":"B.P.R.D.: Hell on Earth"}}}"#,
+            ),
+        );
+        let _env = ComicvineKeyEnv::install();
+        let response = search_issues(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Query(SearchQuery {
+                q: "https://comicvine.gamespot.com/issue/4000-400077/".to_string(),
+                limit: Some(10),
+                issue_id: None,
+            }),
+        )
+        .await
+        .expect("pasted issue URL must resolve through the fake");
+        assert_eq!(response.results.len(), 1);
+        assert_eq!(response.results[0].comicvine_issue_id, 400077);
+        let calls = fake.calls();
+        assert_eq!(calls.len(), 1);
+        assert!(
+            calls[0].path.starts_with("/api/issue/4000-400077/"),
+            "pasted issue URL must query that issue: {}",
+            calls[0].path
+        );
+    }
+
+    #[tokio::test]
+    async fn list_and_detail_reasons_are_consistent() {
+        let Some(state) = test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = test_support::reset_for_test(&state).await;
+        seed_matching_fixture(&state).await;
+        let list = list_inbox(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Query(ListQuery {
+                offset: None,
+                limit: None,
+            }),
+        )
+        .await
+        .expect("list must succeed")
+        .0;
+        let detail = fetch_item(&state, 1, 1)
+            .await
+            .expect("detail")
+            .expect("item");
+        let listed = list.items.iter().find(|item| item.mapping_id == 1).unwrap();
+        assert_eq!(listed.why_stopped, detail.why_stopped);
+        assert_eq!(listed.next_steps, detail.next_steps);
+        assert!(!detail.why_stopped.is_empty());
+        assert!(!detail.next_steps.is_empty());
     }
 }

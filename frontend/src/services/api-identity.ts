@@ -23,6 +23,7 @@ export interface IdentityInboxItem {
   provider: string | null
   source_entry_summary: string
   why_stopped: string
+  next_steps?: string[]
   candidates: IdentityInboxCandidate[]
   created_at: number | null
   updated_at: number | null
@@ -33,6 +34,46 @@ export interface IdentityInboxResponse {
   total: number
   offset: number
   limit: number
+}
+
+export interface IdentityInboxSearchResult {
+  comicvine_issue_id: number
+  comicvine_volume_id: number | null
+  volume_name: string | null
+  issue_number: string | null
+  issue_name: string | null
+  publisher: string | null
+  start_year: number | null
+  site_detail_url: string | null
+  image_url: string | null
+  score: number | null
+  evidence: string[]
+}
+
+export interface IdentityInboxPartialMatchIssue {
+  issue_id: number
+  issue_number: string
+  comicvine_issue_id: number
+  mapping_id: number | null
+  external_identity_id: number | null
+  reason: string
+}
+
+export interface IdentityInboxPartialMatch {
+  comicvine_volume_id: number
+  volume_name: string
+  actionable_reason: string
+  matched: IdentityInboxPartialMatchIssue[]
+  unmatched: IdentityInboxPartialMatchIssue[]
+}
+
+export interface IdentityInboxSearchResponse {
+  issue_id: number
+  query: string
+  results: IdentityInboxSearchResult[]
+  total_available: number | null
+  partial_matches: IdentityInboxPartialMatch[]
+  no_match_reason: string | null
 }
 
 export interface IdentityInboxConfirmPayload {
@@ -47,6 +88,10 @@ export interface IdentityInboxRejectPayload {
 export const identityInboxApi = {
   list: (offset: number, limit: number) =>
     api.get<IdentityInboxResponse>('/v2/identity-inbox', { params: { offset, limit } }),
+  searchMatches: (query: string, issueId: number) =>
+    api.get<IdentityInboxSearchResponse>('/v2/identity-inbox/issue-matches', {
+      params: { q: query, issue_id: issueId, limit: 20 },
+    }),
   confirm: (mappingId: number, payload: IdentityInboxConfirmPayload) =>
     api.post<void>(`/v2/identity-inbox/${mappingId}/confirmations`, payload),
   reject: (mappingId: number, payload: IdentityInboxRejectPayload) =>
