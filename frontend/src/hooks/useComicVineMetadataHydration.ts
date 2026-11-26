@@ -121,11 +121,6 @@ function detailsForStoredStatus(status: string | undefined): PresentationDetails
   }
 }
 
-interface OutcomeState {
-  details: PresentationDetails
-  message: string
-  retryAfterSeconds: number | null
-}
 
 function messageWithDelay(base: string, retryAfterSeconds: number | null): string {
   if (retryAfterSeconds == null || retryAfterSeconds <= 0) {
