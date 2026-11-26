@@ -2990,6 +2990,7 @@ mod tests {
         let previous_key = std::env::var("COMICVINE_API_KEY").ok();
         std::env::set_var("COMICVINE_API_KEY", "TESTKEY123");
         let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
+        let outbound: Arc<dyn OutboundHttp> = fake.clone();
         let limits = crate::comicvine_limits::ComicVineLimits::default();
         let volume_id = "5610999";
 
@@ -3005,7 +3006,7 @@ mod tests {
             ),
         );
         limits
-            .call(&fake, "volume/4050-5610999", "", "TESTKEY123")
+            .call(&outbound, "volume/4050-5610999", "", "TESTKEY123")
             .await
             .expect("prime volume cache");
         let query = "&filter=volume:5610999&limit=100&offset=0";
@@ -3021,20 +3022,23 @@ mod tests {
             ),
         );
         limits
-            .call(&fake, "issues", query, "TESTKEY123")
+            .call(&outbound, "issues", query, "TESTKEY123")
             .await
             .expect("prime roster cache");
         // No canned response remains: a raw provider call would fail closed.
         fake.clear();
 
-        let result = catalog_volume_roster(&limits, &fake, volume_id).await;
+        let result = catalog_volume_roster(&limits, &outbound, volume_id).await;
         match previous_key {
             Some(key) => std::env::set_var("COMICVINE_API_KEY", key),
             None => std::env::remove_var("COMICVINE_API_KEY"),
         }
 
         let (series, roster) = result.expect("cached roster must satisfy the preview");
-        assert_eq!(series.get("name").and_then(Value::as_str), Some("Cached Volume"));
+        assert_eq!(
+            series.get("name").and_then(Value::as_str),
+            Some("Cached Volume")
+        );
         assert_eq!(roster.len(), 1);
         assert_eq!(
             roster[0].get("issue_number").and_then(Value::as_str),
