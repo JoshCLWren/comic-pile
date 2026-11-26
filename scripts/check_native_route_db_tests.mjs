@@ -53,7 +53,6 @@ export const ALLOWLIST = new Map([
     'bug_reports',
     'catalog_commit',
     'comicvine_issue',
-    'comicvine_provider',
     'comicvine_resolution',
     'continuity_rules',
     'creators',

@@ -37,14 +37,14 @@ report.
 
 ## ComicVine provider limits
 
-ComicVine repair defines its own provider backoff
-(`native/roll-service/src/comicvine_provider.rs`):
+`native/roll-service/src/comicvine_provider.rs` classifies provider throttling
+inside the request that made the call:
 
-- HTTP 420/429 responses are treated as provider rate limiting.
-- The work item becomes `deferred` with a bounded `retry_after` (local backoff,
-  capped at one hour).
-- After repeated failures (three attempts) the item is marked `failed` with a
-  six-hour retry window instead of retrying indefinitely.
+- HTTP 420/429 responses are reported as rate limiting with the provider's
+  bounded `Retry-After` (clamped to 60..3600 seconds).
+- Nothing is deferred to a worker and nothing retries automatically. An
+  explicit authenticated Retry (`POST /api/v2/comicvine/issues/{issue_id}/
+  metadata:refresh`) is the only next attempt, so the user controls cadence.
 
 ## Client guidance
 
