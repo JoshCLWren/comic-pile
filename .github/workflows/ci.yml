@@ -372,6 +372,11 @@ jobs:
           enable-cache: true
       - name: Rotisserie adopter contract
         run: uv run --frozen python -m pytest -q --no-cov tests/test_rotisserie_adopter_contract.py
+      # The contributor fork CI guards must actually gate CI, not merely be
+      # linted/type-checked. This job is required on both the full and the
+      # factory-only fast path, so the assertions run for every pull request.
+      - name: Contributor fork CI boundary guards
+        run: uv run --frozen python -m pytest -q --no-cov tests/test_contributor_ci.py
 
   factory-shellcheck:
     name: Factory Shell Scripts (shellcheck)
