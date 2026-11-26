@@ -124,7 +124,8 @@ async fn seed(state: &Arc<AppState>, user_id: i32) {
     let connection = state.pool.get().await.unwrap();
     connection
         .batch_execute(&format!(
-            "INSERT INTO threads (id, user_id, title, format, issues_remaining, total_issues, queue_position, status, is_blocked)
+            "INSERT INTO users (id, username) VALUES (999999, 'session-v2-foreign-owner');
+             INSERT INTO threads (id, user_id, title, format, issues_remaining, total_issues, queue_position, status, is_blocked)
              VALUES (92101, {user_id}, 'Restored Comic', 'comics', 2, 2, 1, 'active', false);
              INSERT INTO sessions (id, user_id, started_at, ended_at, start_die, manual_die, pending_thread_id, reading_mode_suggested, snoozed_thread_ids)
              VALUES (93101, {user_id}, NOW() - interval '1 hour', NULL, 6, NULL, NULL, false, '[92101]'::json),
