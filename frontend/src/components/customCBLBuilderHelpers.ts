@@ -37,6 +37,30 @@ export function draftEntry(result: CustomCBLIssueSearchResult, position: number)
   }
 }
 
+/**
+ * Adopt a committed direct read/unread into staged Reading List entries.
+ *
+ * A direct issue write changes global read state, not the list record. The
+ * editor deliberately keeps its seeded draft instead of re-seeding from a
+ * background detail refetch, so only the read status may be reconciled here;
+ * gate, skip, checkpoint, order and unsaved intent remain editor-owned.
+ *
+ * @param entries - Currently staged entries.
+ * @param issueId - Canonical issue id from the committed direct receipt.
+ * @param status - Committed read status (`read` or `unread`).
+ * @returns The original array when nothing changes, otherwise a copy with the
+ * reconciled status.
+ */
+export function reconcileEntryReadStatus(
+  entries: CustomCBLEntry[],
+  issueId: number,
+  status: string,
+): CustomCBLEntry[] {
+  if (status !== 'read' && status !== 'unread') return entries
+  if (!entries.some((entry) => entry.issue_id === issueId && entry.status !== status)) return entries
+  return entries.map((entry) => entry.issue_id === issueId ? { ...entry, status } : entry)
+}
+
 export function sameEntries(left: CustomCBLEntry[], right: CustomCBLEntry[]): boolean {
   return (
     left.length === right.length &&

@@ -1,9 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CustomCBLBuilder from '../components/CustomCBLBuilder'
 import { beginRouteRestore } from '../scroll/scrollCoordinator'
+import { issueCardsApi, type IssueCard, type IssueReadRateResponse } from '../services/issueCardsApi'
 import { getReadingListProgressIndex } from '../utils/readingListProgress'
 
 const mocks = vi.hoisted(() => ({
@@ -21,6 +23,43 @@ vi.mock('../services/api-custom-cbl', async () => {
   const actual = await vi.importActual<typeof import('../services/api-custom-cbl')>('../services/api-custom-cbl')
   return { ...actual, customCBLApi: mocks }
 })
+
+const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards')
+const patchIssue = vi.spyOn(issueCardsApi, 'patchIssue')
+
+function detectiveEntries() {
+  return [
+    {
+      id: 1, position: 0, issue_id: 9001, thread_id: 55,
+      series_name: 'Detective Comics', issue_number: '3', status: 'read',
+      skipped: false, is_checkpoint: false, gate: 'none' as const,
+    },
+    {
+      id: 2, position: 1, issue_id: 9002, thread_id: 55,
+      series_name: 'Detective Comics', issue_number: '4', status: 'read',
+      skipped: false, is_checkpoint: false, gate: 'none' as const,
+    },
+  ]
+}
+
+function detectiveCard(issueId: number, status: string): IssueCard {
+  return {
+    issue_id: issueId, thread_id: 55, thread_title: 'Detective Comics',
+    issue_number: issueId === 9001 ? '3' : '4', status, rating: null,
+    mapping_state: 'unmapped', has_confirmed_identity: false, cover_image_url: null,
+  }
+}
+
+function directReceipt(issueId: number, status: 'read' | 'unread'): IssueReadRateResponse {
+  return {
+    issue: detectiveCard(issueId, status),
+    thread: {
+      thread_id: 55, status: 'active', issues_remaining: status === 'read' ? 0 : 1,
+      next_unread_issue_id: status === 'unread' ? issueId : null,
+    },
+    read_event_created: true, rating_event_created: false, replayed: false,
+  }
+}
 
 function entriesWithProgress(firstUnread: number, skippedPositions: number[] = []) {
   return Array.from({ length: 466 }, (_, position) => ({
@@ -130,5 +169,45 @@ describe('Reading List editing progress', () => {
       { status: 'read', skipped: false },
       { status: 'read', skipped: false },
     ])).toBe(1)
+  })
+
+  it('reconciles the Current position banner immediately after a direct read/unread (#5865)', async () => {
+    const user = userEvent.setup()
+    const entries = detectiveEntries()
+    mocks.get.mockResolvedValue({
+      id: 2, user_id: 1, name: 'Detective Comics', description: '', mode: 'strict',
+      issue_count: entries.length, entries,
+      created_at: '2026-11-26T00:00:00Z', updated_at: '2026-11-26T00:00:00Z',
+    })
+    const statuses = new Map(entries.map((entry) => [entry.issue_id, entry.status]))
+    fetchCards.mockImplementation(async (ids) => ids.map((id) => detectiveCard(id, statuses.get(id) ?? 'read')))
+    patchIssue.mockImplementation(async (id, input) => {
+      const status = input.status === 'unread' ? 'unread' : 'read'
+      statuses.set(id, status)
+      return directReceipt(id, status)
+    })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30000 } } })
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter><CustomCBLBuilder initialListId={2} /></MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByText('Current position: all issues in this list are read or skipped.')).toBeVisible()
+    // SAFETY: the visible issue label is rendered inside a reading-list entry row.
+    const entry = (await screen.findByText('Detective Comics #3')).closest('[data-testid="reading-list-entry"]') as HTMLElement
+    const card = within(entry).getByTestId('comic-issue-card')
+
+    await user.click(within(card).getByRole('button', { name: 'Mark unread' }))
+    expect(await screen.findByText(
+      'Current position: next unread is #1 · Detective Comics #3 (unread).',
+    )).toBeVisible()
+    expect(entry).toHaveAttribute('aria-current', 'step')
+
+    await user.click(within(card).getByRole('button', { name: 'Read now' }))
+    await user.click(within(card).getByRole('button', { name: 'Mark read & save' }))
+    expect(await screen.findByText('Current position: all issues in this list are read or skipped.')).toBeVisible()
+    expect(patchIssue).toHaveBeenCalledWith(9001, expect.objectContaining({ status: 'unread' }))
+    expect(patchIssue).toHaveBeenCalledWith(9001, expect.objectContaining({ status: 'read' }))
   })
 })

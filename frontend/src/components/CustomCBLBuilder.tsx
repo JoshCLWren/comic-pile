@@ -13,6 +13,7 @@ import {
   type ReadingListEntryIntent, type ReadingListGate, type ReadingListMode, type ReadingListPredecessorChange,
 } from '../services/api-custom-cbl'
 import type { ContinuityPlan } from '../services/api-continuity-plans'
+import type { IssueReadRateResponse } from '../services/issueCardsApi'
 import { cblSourcesApi, type CBLSourceListDiscoveryItem } from '../services/api-cbl-sources'
 import CblReplaceReviewPanel from './CblReplaceReviewPanel'
 import ReadingListEntryCard from './ReadingListEntryCard'
@@ -29,6 +30,7 @@ import {
   computeSemanticPreview,
   draftEntry,
   findMatchedEntries,
+  reconcileEntryReadStatus,
   messageFor,
   moveEntryRelativeToEntry,
   normalizePositions,
@@ -516,6 +518,19 @@ export default function CustomCBLBuilder({
       target.focus({ preventScroll: true })
     })
   }, [entries, currentPage, entrySearch, nextUnreadIssueId])
+  // A confirmed direct read/unread changes global issue state, but the editor's
+  // staged draft is intentionally not re-seeded from a background detail refetch
+  // (#5537). Adopt only the committed status so the Current position banner and
+  // the row badge agree immediately without discarding unsaved list edits.
+  const reconcileDirectIssueStatus = useCallback((response: IssueReadRateResponse) => {
+    const status = response.issue.status
+    if (status !== 'read' && status !== 'unread') return
+    const issueId = response.issue.issue_id
+    setEntries((current) => reconcileEntryReadStatus(current, issueId, status))
+    setDraftBaseline((current) => current && current.id === selectedId
+      ? { ...current, entries: reconcileEntryReadStatus(current.entries, issueId, status) }
+      : current)
+  }, [selectedId])
   const returnToProgress = () => {
     if (!progressIssue) return
     pendingProgressRevealRef.current = progressIssue.issue_id
@@ -1005,6 +1020,7 @@ export default function CustomCBLBuilder({
                     onMoveAfterIssue={() => moveIssueRelativeToIssue(index, entry.issue_id, 'after')}
                     onInsertBefore={() => { setInsertAt({ index, position: 'before' }); issueSearchInput.current?.focus() }}
                     onInsertAfter={() => { setInsertAt({ index, position: 'after' }); issueSearchInput.current?.focus() }}
+                    onIssueMutated={reconcileDirectIssueStatus}
                   />
                 ))}
               </ol>
