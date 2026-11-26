@@ -9,7 +9,11 @@ import {readFileSync, writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
 
 // The whole /api surface is served by the single native Rust ingress.
+<<<<<<< HEAD
 const RUST = {has: dest => dest === '/api/native_api.rs'};
+=======
+const RUST = {has: dest => dest === '/api/native_roll.rs'};
+>>>>>>> origin/main
 const FALLBACK = '/api(?:/.*)?';
 const ALL_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 

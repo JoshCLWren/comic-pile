@@ -9,7 +9,11 @@ import {
 } from './generate_vercel_routes.mjs';
 import {CANONICAL_BUILDS} from './vercel_builds.mjs';
 
+<<<<<<< HEAD
 const ROLL = '/api/native_api.rs';
+=======
+const ROLL = '/api/native_roll.rs';
+>>>>>>> origin/main
 const FALLBACK = '/api(?:/.*)?';
 
 function baseConfig() {
