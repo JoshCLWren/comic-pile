@@ -935,7 +935,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       )}
       {isReorderMode ? (
         <div className="space-y-1 max-h-64 overflow-auto" data-testid="issue-reorder-list">
-          {issues.map((issue, index) => {
+          {displayIssues.map((issue, index) => {
             const isBusy = toggling.has(issue.id) || deleting.has(issue.id)
 
             return (
@@ -978,7 +978,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
                 <button
                   type="button"
                   onClick={() => handleMoveIssue(issue, 'down')}
-                  disabled={isBusy || index === issues.length - 1}
+                  disabled={isBusy || index === displayIssues.length - 1}
                   className={[
                     'min-h-[44px] min-w-[44px] flex items-center justify-center text-xs font-black transition-colors',
                     'text-[var(--theme-text-muted)] hover:text-amber-300 disabled:opacity-40',
@@ -997,12 +997,12 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       ) : (
       <div className="flex flex-wrap gap-1 max-h-40 overflow-auto">
         {visibleIssues.map((issue) => {
-    const fullIndex = issues.findIndex((i) => i.id === issue.id)
+    const fullIndex = displayIssues.findIndex((i) => i.id === issue.id)
     const isBusy = toggling.has(issue.id) || deleting.has(issue.id)
     const isDragOver = dragOverIssueId === issue.id
     const isDragged = draggedIssueId === issue.id
     const canMoveUp = fullIndex > 0
-    const canMoveDown = fullIndex < issues.length - 1
+    const canMoveDown = fullIndex < displayIssues.length - 1
     const hasDeps = dependencies[issue.id] !== undefined
     const tooltipContent = getDependencyTooltip(dependencies[issue.id])
 
@@ -1119,6 +1119,37 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
          })}
       </div>
       )}
+      {draftReorder && (
+        <div
+          className="rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3 space-y-2"
+          data-testid="pending-reorder-preview"
+        >
+          <p className="text-xs font-bold text-[var(--theme-text-primary)]">
+            Pending order change — not saved
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {pendingReorderEffects.length === 0 ? (
+              <span className="text-xs text-[var(--theme-text-muted)]">Review the new order above before saving.</span>
+            ) : pendingReorderEffects.map((effect) => (
+              <span
+                key={effect.id}
+                className="rounded border border-[var(--theme-border)] px-2 py-1 text-xs text-[var(--theme-text-muted)]"
+                data-testid={`pending-reorder-effect-${effect.id}`}
+              >
+                #{effect.issueNumber}: {effect.before} → {effect.after}
+              </span>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={cancelDraftReorder}
+            className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 py-1.5 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] transition-colors"
+            data-testid="undo-pending-reorder"
+          >
+            Undo reorder
+          </button>
+        </div>
+      )}
       <div className="flex gap-2">
         <label htmlFor={addInputId} className="sr-only">
           Add issues
@@ -1154,7 +1185,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
           {(isAdding || isPreviewing) ? '…' : 'Add'}
         </button>
       </div>
-      {undoPoint && (
+      {undoActions.length > 0 && (
         <PostCreateUndoBar
           isUndoing={isUndoing}
           onUndo={() => void handleUndoEdit()}
