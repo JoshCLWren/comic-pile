@@ -48,7 +48,7 @@ test.describe('reading-mode quiz acceptance', () => {
     expect(seed.ok(), `reading-mode PUT failed: ${seed.status()}`).toBe(true)
 
     const response = await page.request.get('/api/v2/reading-mode', {
-      headers: { Accept: 'application/json' },
+      headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
     })
     expect(response.ok()).toBe(true)
     // SAFETY: the test reads only the mode fields it asserts
