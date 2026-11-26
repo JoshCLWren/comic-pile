@@ -10687,6 +10687,13 @@
           },
           "type": {
             "type": "string"
+          },
+          "session_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
           }
         }
       },

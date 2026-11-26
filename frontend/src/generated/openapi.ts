@@ -3642,6 +3642,8 @@ export interface components {
             /** Format: double */
             rating?: number | null;
             /** Format: int32 */
+            session_id?: number | null;
+            /** Format: int32 */
             thread_id?: number | null;
             thread_title?: string | null;
             timestamp: string;

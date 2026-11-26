@@ -287,6 +287,7 @@ fn logical_items(row: &tokio_postgres::Row) -> Vec<(StreamKey, ActivityItem)> {
                 issue_number: row.get(21),
                 thread_id: row.get(22),
                 thread_title: row.get(23),
+                session_id: row.get(25),
             },
         ));
     }
@@ -433,6 +434,7 @@ mod tests {
             thread_id: None,
             thread_title: None,
             issue_number: None,
+            session_id: None,
         }
     }
 
