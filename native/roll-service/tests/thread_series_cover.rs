@@ -803,6 +803,7 @@ async fn series_cover_is_present_on_later_cursor_pages() {
 
     let (status, far_page) = call(
         &ctx,
+        "GET",
         &format!("/api/v2/threads?page_size=1&page_token={second_token}"),
     )
     .await;
