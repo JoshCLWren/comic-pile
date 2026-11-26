@@ -905,9 +905,12 @@ async fn build_plan_db(
     } else {
         // A brand-new provider volume is a normal valid preview. Rebuild its
         // complete roster instead of turning every signed preview into a 409.
-        let (provider_series, fetched_roster) =
-            crate::comicvine_repair::catalog_volume_roster(limits, outbound, provider_series_external_id)
-                .await?;
+        let (provider_series, fetched_roster) = crate::comicvine_repair::catalog_volume_roster(
+            limits,
+            outbound,
+            provider_series_external_id,
+        )
+        .await?;
         series_info = Some(provider_series);
         issues_with_mappings = fetched_roster.clone();
         roster_rows = fetched_roster;
@@ -1410,9 +1413,12 @@ async fn build_queue_bootstrap_plan_db(
     };
     // The Queue preview relies on an actual, complete provider roster to
     // prove cardinality. Do not replace that evidence with local guesses.
-    let (series_info, roster) =
-        crate::comicvine_repair::catalog_volume_roster(limits, outbound, provider_series_external_id)
-            .await?;
+    let (series_info, roster) = crate::comicvine_repair::catalog_volume_roster(
+        limits,
+        outbound,
+        provider_series_external_id,
+    )
+    .await?;
     if roster.is_empty() {
         return Ok(unavailable_plan(
             origin_issue_id,
