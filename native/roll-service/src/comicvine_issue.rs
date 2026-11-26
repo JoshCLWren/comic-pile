@@ -730,11 +730,11 @@ mod tests {
             READ_SQL.contains("interval '7 days'"),
             "empty credits need a 7-day recheck, not a 30-day lock"
         );
-        assert!(READ_SQL.contains("state = 'no_credits'"));
         assert!(
-            READ_SQL.contains("state = 'completed'"),
-            "completed rows keep the 30-day window"
+            READ_SQL.contains("interval '30 days'"),
+            "complete rows keep the 30-day window"
         );
+        assert!(!READ_SQL.contains("comicvine_metadata_refresh_requests"));
         assert!(
             READ_SQL.contains("date_last_updated"),
             "provider revision must be compared against the deep fetch"
