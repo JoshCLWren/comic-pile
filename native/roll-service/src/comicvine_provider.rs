@@ -291,19 +291,18 @@ pub(crate) async fn provider_exchange(
         tracing::warn!("comicvine provider credential contains non-alphanumeric bytes");
         return Err(ProviderFailure::Unavailable);
     }
-    // Python `_provider_url`: only collection endpoints use a trailing slash.
-    // Singular issue/volume requests must not redirect with credentials in the
-    // URL; the native transport intentionally does not follow redirects.
-    let collection_slash = if matches!(resource, "issues" | "search") {
-        "/"
-    } else {
-        ""
-    };
+    // ComicVine's API appends a slash to every resource, singular ones
+    // included: `/api/volume/4050-<id>` and `/api/issue/4000-<id>` answer 301
+    // with a `Location` that repeats the credential. The native transport never
+    // follows redirects (so a credential can never be replayed on a new URL),
+    // which turns every slash-less roster fetch into `provider_unavailable`
+    // and breaks the Queue mapping-plan preview (#5851). Request the canonical
+    // slash URL directly instead; the caller-provided `resource` never carries
+    // a query string.
+    let resource = resource.trim_end_matches('/');
     let request = OutboundRequest {
         method: http::Method::GET,
-        path: format!(
-            "/api/{resource}{collection_slash}?api_key={api_key}&format=json{extra_query}"
-        ),
+        path: format!("/api/{resource}/?api_key={api_key}&format=json{extra_query}"),
         headers: vec![
             ("accept".to_string(), "application/json".to_string()),
             (
@@ -946,7 +945,7 @@ mod tests {
         assert_eq!(calls[0].host, HOST);
         assert_eq!(
             calls[0].path,
-            "/api/issue/4000-1?api_key=TESTKEY123&format=json"
+            "/api/issue/4000-1/?api_key=TESTKEY123&format=json"
         );
 
         fake.clear();
@@ -1068,7 +1067,7 @@ mod tests {
 
         let calls = state.recording_fake().expect("recording provider").calls();
         assert_eq!(calls.len(), 1, "cross-owner ids must not be fetched");
-        assert!(calls[0].path.starts_with("/api/issue/4000-29319?"));
+        assert!(calls[0].path.starts_with("/api/issue/4000-29319/?"));
     }
 
     /// Seed an owned issue with a freshly `user_confirmed` ComicVine identity
@@ -1142,7 +1141,7 @@ mod tests {
         drop(Object::take(connection));
         let calls = state.recording_fake().expect("recording provider").calls();
         assert_eq!(calls.len(), 1);
-        assert!(calls[0].path.starts_with("/api/issue/4000-29319?"));
+        assert!(calls[0].path.starts_with("/api/issue/4000-29319/?"));
     }
 
     #[tokio::test]
