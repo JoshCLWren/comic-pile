@@ -72,6 +72,7 @@ struct ActivityItem {
     thread_id: Option<i32>,
     thread_title: Option<String>,
     issue_number: Option<String>,
+    session_id: Option<i32>,
 }
 
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
@@ -147,7 +148,7 @@ const ACTIVITY_PAGE_SQL: &str = r#"
 WITH primaries AS (
     SELECT e.id, e.type, e.timestamp, e.die, e.die_after, e.rating, e.issue_id,
            e.issue_number, COALESCE(e.thread_id, e.selected_thread_id) AS thread_id,
-           e.context
+           e.session_id, e.context
       FROM events e
      WHERE e.user_id = $1
        AND ($2::timestamptz IS NULL OR (e.timestamp, e.id) >= ($2::timestamptz, $3::int))
@@ -183,7 +184,8 @@ SELECT p.id, p.type,
        d.die, d.die_after, d.rating,
        r.id, r.type,
        to_char(r.timestamp AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
-       r.die, r.die_after, r.rating, r.issue_id, r.issue_number, r.thread_id, rt.title
+       r.die, r.die_after, r.rating, r.issue_id, r.issue_number, r.thread_id, rt.title,
+       p.session_id, r.session_id
   FROM primaries p
   LEFT JOIN threads pt ON pt.id = p.thread_id
   LEFT JOIN LATERAL (
@@ -203,7 +205,8 @@ SELECT p.id, p.type,
          LIMIT 1) d ON TRUE
   LEFT JOIN LATERAL (
         SELECT r.id, r.type, r.timestamp, r.die, r.die_after, r.rating, r.issue_id,
-               r.issue_number, COALESCE(r.thread_id, r.selected_thread_id) AS thread_id
+               r.issue_number, COALESCE(r.thread_id, r.selected_thread_id) AS thread_id,
+               r.session_id
           FROM events r
          WHERE p.type = 'snooze'
            AND p.context->>'dice_command_key' LIKE '%-snooze'
@@ -256,6 +259,7 @@ fn logical_items(row: &tokio_postgres::Row) -> Vec<(StreamKey, ActivityItem)> {
         issue_number: row.get(8),
         thread_id: row.get(9),
         thread_title: row.get(10),
+        session_id: row.get(24),
     };
     let mut items = vec![(
         StreamKey {
