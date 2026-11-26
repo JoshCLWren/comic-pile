@@ -1514,12 +1514,13 @@ mod tests {
             } else if path.starts_with("/api/issues/") {
                 (
                     StatusCode::OK,
-                    Bytes::from(format!(
-                        r#"{{"status_code":1,"number_of_total_results":2,"results":[
-                            {{"id":5851000,"issue_number":"1","name":"One","volume":{{"id":5851001}}}},
-                            {{"id":5851001,"issue_number":"2","name":"Two","volume":{{"id":5851001}}}}
-                        ]}}"#,
-                    )),
+                    Bytes::from(
+                        r#"{"status_code":1,"number_of_total_results":2,"results":[
+                            {"id":5851000,"issue_number":"1","name":"One","volume":{"id":5851001}},
+                            {"id":5851001,"issue_number":"2","name":"Two","volume":{"id":5851001}}
+                        ]}"#
+                        .to_string(),
+                    ),
                 )
             } else {
                 (
