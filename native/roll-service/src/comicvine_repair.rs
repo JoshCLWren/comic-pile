@@ -1308,22 +1308,7 @@ pub(crate) async fn hydrate_confirmed_identity_sync(
             // affect zero rows, so stale A metadata can never land on B.
             let updated_rows = match conn
                 .execute(
-                    "UPDATE external_identities e
-                      SET metadata_json = (COALESCE(e.metadata_json::jsonb, '{}'::jsonb)
-                                           || ($2::text)::jsonb)::json,
-                          external_url = COALESCE($3, e.external_url),
-                          provider_updated_at = COALESCE(($4::text)::timestamptz, e.provider_updated_at),
-                          updated_at = now()
-                      WHERE e.id = $1 AND e.provider = 'comicvine' AND e.entity_type = 'issue'
-                        AND EXISTS (
-                          SELECT 1 FROM issue_external_identity_mappings m
-                          JOIN issues i ON i.id = m.issue_id
-                          JOIN threads t ON t.id = i.thread_id
-                          WHERE m.external_identity_id = e.id
-                            AND m.issue_id = $5 AND m.status = 'confirmed'
-                            AND t.user_id = $6
-                        )
-                      RETURNING e.id",
+                    PERSIST_SYNC,
                     &[
                         &identity_id,
                         &json_patch,
@@ -1727,6 +1712,76 @@ async fn backfill_authorized(
 mod tests {
     use super::*;
     use deadpool_postgres::Object;
+
+    #[test]
+    fn hydration_outcomes_are_truthful_and_distinct_on_the_wire() {
+        let codes: Vec<&str> = [
+            HydrationOutcome::Complete,
+            HydrationOutcome::NoCredits,
+            HydrationOutcome::NotConfirmed,
+            HydrationOutcome::NotConfigured,
+            HydrationOutcome::Unavailable,
+            HydrationOutcome::RateLimited { retry_after_seconds: 90 },
+            HydrationOutcome::Timeout,
+            HydrationOutcome::InvalidResponse,
+        ]
+        .iter()
+        .map(|outcome| outcome.as_str())
+        .collect();
+        assert_eq!(
+            codes,
+            vec![
+                "complete",
+                "no_credits",
+                "not_confirmed",
+                "provider_not_configured",
+                "provider_unavailable",
+                "rate_limited",
+                "timeout",
+                "invalid_response"
+            ]
+        );
+        // Only a real provider success is reported as "refreshed".
+        let successes: Vec<bool> = [
+            HydrationOutcome::Complete,
+            HydrationOutcome::NoCredits,
+            HydrationOutcome::Unavailable,
+            HydrationOutcome::RateLimited { retry_after_seconds: 60 },
+        ]
+        .iter()
+        .map(|outcome| outcome.refreshed())
+        .collect();
+        assert_eq!(successes, vec![true, true, false, false]);
+    }
+
+    #[test]
+    fn retry_after_is_exposed_only_for_throttling() {
+        assert_eq!(
+            HydrationOutcome::RateLimited { retry_after_seconds: 120 }.retry_after_seconds(),
+            Some(120)
+        );
+        for outcome in [
+            HydrationOutcome::Complete,
+            HydrationOutcome::Unavailable,
+            HydrationOutcome::Timeout,
+        ] {
+            assert_eq!(outcome.retry_after_seconds(), None);
+        }
+    }
+
+    #[test]
+    fn synchronous_persist_rechecks_identity_ownership_and_issue() {
+        // Concurrent A -> B remap must be fenced at the persist boundary.
+        assert!(PERSIST_SYNC.contains("m.issue_id = $5"));
+        assert!(PERSIST_SYNC.contains("m.status = 'confirmed'"));
+        assert!(PERSIST_SYNC.contains("t.user_id = $6"));
+        assert!(PERSIST_SYNC.contains("m.external_identity_id = e.id"));
+        assert!(PERSIST_SYNC.contains("RETURNING e.id"));
+        // Interactive hydration never creates or claims a ledger row.
+        let settle = "UPDATE comicvine_metadata_refresh_requests";
+        assert!(SETTLE.contains(settle));
+        assert!(!PERSIST_SYNC.contains("comicvine_metadata_refresh_requests"));
+    }
 
     async fn seed_identity(state: &AppState) -> i32 {
         let connection = db::checkout(state).await.expect("seed connection");
