@@ -69,9 +69,10 @@ production verification was attempted in this review runtime.
 
 Generated with `python3 scripts/generate_markdown_inventory.py --output
 /tmp/MARKDOWN_INVENTORY_5757.md` (the same generator the Documentation workflow
-publishes as an artifact). `git ls-files '*.md'` reports 291 tracked Markdown
-files; the generator excludes `docs/MARKDOWN_INVENTORY.md` so regeneration is
-idempotent. Disposition totals from the generated table:
+publishes as an artifact). At generation time `git ls-files '*.md'` reported 291
+tracked Markdown files, before this handoff file was added (it becomes the 292nd
+on delivery); the generator excludes `docs/MARKDOWN_INVENTORY.md` so regeneration
+is idempotent. Disposition totals from the generated table:
 
 | Disposition | Files |
 | --- | --- |

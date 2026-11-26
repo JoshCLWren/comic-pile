@@ -65,7 +65,7 @@ The inventory generator remains available for audits through the Documentation w
 
 Do not commit `docs/MARKDOWN_INVENTORY.md`; generate the inventory locally or download the Documentation workflow artifact when an audit requires it. <!-- docs-path-check: ignore -->
 
-Link, anchor and code-path checks do not prove semantic accuracy. When runtime behavior changes, reconcile active documents against the router, generated contracts, real callers, configuration and workflows; record unresolved contradictions in the existing issue or PR handoff rather than presenting them as intended behavior.
+Link, anchor and code-path checks do not prove semantic accuracy. When runtime behavior changes, reconcile active documents against the router, generated contracts, real callers, configuration and workflows; record unresolved contradictions in the existing issue or PR handoff rather than presenting them as intended behavior. The point-in-time accounting and handoff evidence for the #5757 audit are recorded in [MARKDOWN_RECONCILIATION_HANDOFF.md](MARKDOWN_RECONCILIATION_HANDOFF.md).
 
 The anchor check resolves `#fragment` links against headings published by the target Markdown file, including setext headings, explicit HTML `id`/`name` attributes, and GitHub's duplicate-heading suffixes. Links inside fenced code examples and fragments on non-Markdown files (code symbols or line references) are illustrative and are not checked; keep real cross-document navigation in prose where the guard can validate it.
 

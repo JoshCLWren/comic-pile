@@ -145,7 +145,9 @@ and the repair-dispatch token are removed. `CRON_SECRET` is still required only
 by the unrelated release-sync cron above. Hydration happens inside the exact
 issue map/remap request or the explicit authenticated `metadata:refresh` (Retry)
 request; an incomplete confirmed identity reports `needs_hydration` and remains
-recoverable without remapping. No polling or automatic retry loop remains.
+recoverable without remapping. No polling or automatic retry loop remains. The
+#5757 documentation audit recorded the evidence for this reconciliation in
+[MARKDOWN_RECONCILIATION_HANDOFF.md](MARKDOWN_RECONCILIATION_HANDOFF.md).
 
 ### Concurrency and retry behavior
 
