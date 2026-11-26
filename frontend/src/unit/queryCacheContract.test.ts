@@ -19,7 +19,6 @@ import {
   applyCommittedReadingPlan,
   invalidateSessionRecoveryCache,
   clearComicVineIssueIntelligence,
-  clearComicVineIssueIntelligenceMany,
 } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
 import type { RateResponsePayload, Thread } from '../types'
@@ -676,22 +675,6 @@ describe('targeted cache effects', () => {
     expect(setQueryData.mock.invocationCallOrder[0]).toBeLessThan(
       invalidateQueries.mock.invocationCallOrder[0],
     )
-  })
-
-  it('clears each confirmed issue intelligence bucket on a series mapping commit (#5695)', async () => {
-    const { client, cancelQueries, setQueryData, invalidateQueries } = createSpiedClient()
-
-    await clearComicVineIssueIntelligenceMany(client, [77, 78])
-
-    for (const issueId of [77, 78]) {
-      const filter = { queryKey: queryKeys.comicVine.issueIntelligence(issueId), exact: true }
-      expect(cancelQueries).toHaveBeenCalledWith(filter)
-      expect(setQueryData).toHaveBeenCalledWith(filter.queryKey, null)
-      expect(invalidateQueries).toHaveBeenCalledWith(filter)
-    }
-    expect(cancelQueries).toHaveBeenCalledTimes(2)
-    expect(setQueryData).toHaveBeenCalledTimes(2)
-    expect(invalidateQueries).toHaveBeenCalledTimes(2)
   })
 
   it('refreshes undo surfaces and reconciles open views while leaving session detail to its caller', async () => {

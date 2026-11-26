@@ -47,6 +47,21 @@ def _tracked_markdown_files(root: Path) -> list[Path] | None:
     return sorted(path for path in files if path.is_file())
 
 
+def _tracked_markdown_files(root: Path) -> list[Path] | None:
+    """Return existing tracked Markdown paths, or ``None`` outside a Git worktree."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "-z", "--", "*.md"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    files = [root / path for path in result.stdout.split("\0") if path]
+    return sorted(path for path in files if path.is_file())
+
+
 def iter_markdown_files(root: Path) -> list[Path]:
     """Return tracked Markdown paths that participate in documentation checks.
 
