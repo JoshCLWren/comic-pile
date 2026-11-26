@@ -186,6 +186,11 @@ export function useComicVineMetadataHydration({
   // in-flight response and terminal message from the previous identity.
   useEffect(() => {
     generationRef.current += 1
+    // The previous identity's request is now stale. Do not let its single-flight
+    // flag swallow an explicit Retry for the newly confirmed identity; the
+    // generation guard in `runHydration` still rejects its late response.
+    inFlightRef.current = false
+    setIsHydrating(false)
     nextRetryAtRef.current = 0
     setOutcomeState(null)
     autoHydrationKeyRef.current = null
@@ -286,8 +291,13 @@ export function useComicVineMetadataHydration({
         retryAfterSeconds: null,
       })
     } finally {
-      inFlightRef.current = false
-      if (mountedRef.current) setIsHydrating(false)
+      // Only the request for the still-current identity owns the single-flight
+      // flag and loading state; a superseded A request must not clear B's flag
+      // or hide B's in-flight progress when it settles late.
+      if (generation === generationRef.current) {
+        inFlightRef.current = false
+        if (mountedRef.current) setIsHydrating(false)
+      }
     }
   }, [])
 

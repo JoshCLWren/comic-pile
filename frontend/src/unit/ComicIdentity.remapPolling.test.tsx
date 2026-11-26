@@ -4,7 +4,7 @@ import type { ReactElement, ReactNode } from 'react'
 import { createToastSpy } from './toastSpy'
 import { ToastContextSpy } from './toastTestHarness'
 import { comicVineApi } from '../services/api-comicvine'
-import type { ComicVineIssueIntelligence } from '../services/api-comicvine'
+import type { ComicVineIssueIntelligence, MetadataRefreshResponse } from '../services/api-comicvine'
 import { ComicIdentity } from '../pages/RollPage/components/ComicIdentity'
 
 const toast = createToastSpy()
@@ -132,5 +132,50 @@ describe('ComicIdentity remapped issue metadata (#5841)', () => {
     expect(getIntelligence).toHaveBeenCalledTimes(2)
     expect(screen.getByText('Writer B')).toBeInTheDocument()
     expect(screen.queryByText('Writer A')).not.toBeInTheDocument()
+  })
+
+  it('accepts an explicit Retry for B while A is still in flight', async () => {
+    let resolveA: ((value: MetadataRefreshResponse) => void) | undefined
+    refreshMetadata.mockImplementation((issueId: number) => {
+      if (issueId === 1) {
+        return new Promise<MetadataRefreshResponse>((resolve) => {
+          resolveA = resolve
+        })
+      }
+      return Promise.resolve({
+        issue_id: 2,
+        refreshed: true,
+        comicvine_issue_id: 'B',
+        outcome: 'no_credits',
+        retry_after_seconds: null,
+      })
+    })
+    getIntelligence.mockImplementation((issueId: number) => Promise.resolve(
+      intelligence({
+        comicvine_issue_id: issueId === 1 ? 'A' : 'B',
+        metadata_status: 'needs_hydration',
+      }),
+    ))
+
+    const { rerender } = renderWithToast(<ComicIdentity issueId={1} />)
+    await waitFor(() => expect(screen.getByTestId('creator-status-not_hydrated')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry refresh' }))
+    await waitFor(() => expect(refreshMetadata).toHaveBeenCalledWith(1))
+
+    // Remap to B while A's request is still pending, then retry B immediately.
+    // A's stale single-flight flag must not swallow B's explicit click.
+    rerender(<ComicIdentity issueId={2} />)
+    await waitFor(() => expect(screen.getByTestId('creator-status-not_hydrated')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Retry refresh' }))
+    await waitFor(() => expect(refreshMetadata).toHaveBeenCalledWith(2))
+
+    await act(async () => {
+      resolveA?.({ issue_id: 1, refreshed: true, comicvine_issue_id: 'A', outcome: 'complete' })
+    })
+
+    await waitFor(() => expect(screen.getByTestId('creator-status-no_credits')).toBeInTheDocument())
+    expect(refreshMetadata).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('Test Issue')).toBeInTheDocument()
   })
 })
