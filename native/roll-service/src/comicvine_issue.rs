@@ -105,18 +105,6 @@ WITH auth AS (
         )
     END AS needs_repair
   FROM mapped m
-<<<<<<< HEAD
-), repair AS (
-  -- Read-only. The intelligence GET must never enqueue a provider refresh:
-  -- exact map/remap/import and explicit Retry hydrate synchronously in
-  -- comicvine_v2.rs. A legacy refresh row is only observed here, never created
-  -- or reopened by a reader.
-  SELECT r.state, r.next_attempt_at
-  FROM comicvine_metadata_refresh_requests r
-  JOIN freshness f ON f.id = r.external_identity_id
-  LIMIT 1
-=======
->>>>>>> origin/main
 ), arc_refs AS (
   SELECT arc_id, reference, ordinality FROM (
     SELECT DISTINCT ON ((arc.value->>'id')::int)
@@ -443,18 +431,6 @@ fn plain_text(value: &Value) -> Option<String> {
     }
 }
 
-<<<<<<< HEAD
-/// Determine the metadata status from persisted content first and a legacy
-/// repair row second.
-///
-/// Returns a status string and optional retry delay in seconds. A deep fetch
-/// that is already stored (with or without credits) is truthful on its own: a
-/// stale `pending`/`running` ledger row must not hide credits that are sitting
-/// in `metadata_json` behind another "queued for fetch" message. Only genuinely
-/// unfetched rows surface the ledger state, and a failed/deferred retry is kept
-/// visible for empty-credit rows so the explicit Retry stays discoverable.
-fn status(mapped: &Mapped, repair: Option<&Repair>) -> (String, Option<i64>) {
-=======
 /// Determine the metadata status from freshness and content only.
 ///
 /// There is no queue state to report: a confirmed issue whose stored metadata
@@ -464,7 +440,6 @@ fn status(mapped: &Mapped) -> (String, Option<i64>) {
     if mapped.needs_repair {
         return ("needs_hydration".into(), None);
     }
->>>>>>> origin/main
     let raw = &mapped.metadata["raw_provider_payload"];
     let deep = [
         "id",
@@ -482,41 +457,13 @@ fn status(mapped: &Mapped) -> (String, Option<i64>) {
     ]
     .iter()
     .all(|key| raw.get(*key).is_some());
-    let has_credits = !creators(&mapped.metadata).is_empty();
-
-    let repair_state = repair.and_then(|repair| {
-        let active = match repair.state.as_str() {
-            "pending" => Some("refresh_pending"),
-            "running" => Some("refresh_running"),
-            "deferred" => Some("refresh_deferred"),
-            "failed" => Some("refresh_failed"),
-            _ => None,
-        }?;
-        let retry = if active == "refresh_deferred" || active == "refresh_failed" {
-            repair
-                .next_attempt_at
-                .map(|stamp| (stamp - chrono::Utc::now().timestamp() as f64).max(0.0) as i64)
-        } else {
-            None
-        };
-        Some((active, retry))
-    });
-
-    if deep && has_credits {
-        return ("complete".into(), None);
+    if !deep {
+        ("not_deep_fetched".into(), None)
+    } else if creators(&mapped.metadata).is_empty() {
+        ("deep_fetched_no_credits".into(), None)
+    } else {
+        ("complete".into(), None)
     }
-    if deep && !has_credits {
-        // Preserve an actionable retry state when the last attempt failed, but
-        // never turn a successful empty-roster fetch into "queued".
-        if let Some((state @ ("refresh_deferred" | "refresh_failed"), retry)) = repair_state {
-            return (state.to_owned(), retry);
-        }
-        return ("deep_fetched_no_credits".into(), None);
-    }
-    if let Some((state, retry)) = repair_state {
-        return (state.to_owned(), retry);
-    }
-    ("not_deep_fetched".into(), None)
 }
 
 /// Build the complete issue intelligence response from mapped data.
@@ -727,23 +674,12 @@ mod tests {
         assert_eq!(people[1].creator_id, None);
     }
     #[test]
-<<<<<<< HEAD
-    fn read_is_owner_scoped_and_never_enqueues_provider_work() {
-        assert!(READ_SQL.contains("JOIN me ON me.user_id=t.user_id"));
-        assert!(
-            !READ_SQL.contains("INSERT INTO comicvine_metadata_refresh_requests"),
-            "an intelligence GET must not enqueue, reopen or dispatch a repair"
-        );
-        assert!(!READ_SQL.contains("ON CONFLICT (external_identity_id) DO UPDATE"));
-        assert!(!READ_SQL.contains("FOR UPDATE SKIP LOCKED"));
-=======
     fn read_is_owner_scoped_and_never_enqueues_background_work() {
         assert!(READ_SQL.contains("JOIN me ON me.user_id=t.user_id"));
         assert!(READ_SQL.contains("'needs_repair',needs_repair"));
         assert!(!READ_SQL.contains("INSERT INTO comicvine_metadata_refresh_requests"));
         assert!(!READ_SQL.contains("ON CONFLICT (external_identity_id) DO UPDATE"));
         assert!(!READ_SQL.contains("comicvine_metadata_refresh_requests"));
->>>>>>> origin/main
         assert_eq!(as_id(&json!("29319")), Some(29319));
     }
     #[test]
@@ -794,14 +730,11 @@ mod tests {
             READ_SQL.contains("interval '7 days'"),
             "empty credits need a 7-day recheck, not a 30-day lock"
         );
-<<<<<<< HEAD
-=======
         assert!(
             READ_SQL.contains("interval '30 days'"),
             "complete rows keep the 30-day window"
         );
         assert!(!READ_SQL.contains("comicvine_metadata_refresh_requests"));
->>>>>>> origin/main
         assert!(
             READ_SQL.contains("date_last_updated"),
             "provider revision must be compared against the deep fetch"
@@ -827,7 +760,8 @@ mod tests {
             READ_SQL.contains("m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL\n          AND LEFT(m.metadata->>'deep_metadata_refreshed_at', 19) <= to_char((now() AT TIME ZONE 'UTC') - interval '30 days'"),
             "30-day refresh must apply to credited rows"
         );
-        // Count only the deep-metadata freshness branches.
+        // Count only the deep-metadata freshness branches; the enqueue
+        // completed_at window is a separate 30-day retry guard.
         assert_eq!(
             READ_SQL
                 .matches("LEFT(m.metadata->>'deep_metadata_refreshed_at', 19) <= to_char((now() AT TIME ZONE 'UTC') - interval '30 days'")
@@ -885,67 +819,5 @@ mod tests {
         assert_eq!(wire["metadata_status"], "needs_hydration");
         assert!(wire["story_arcs"].is_array());
         assert_eq!(wire["series_name"], "Hellblazer");
-    }
-
-    #[test]
-    fn a_stale_ledger_row_never_hides_persisted_credits() {
-        // Synchronous hydration settles or bypasses the ledger, but legacy
-        // pending rows must not produce another endless "queued for fetch".
-        let mapped = Mapped {
-            external_id: "29319".into(),
-            external_url: None,
-            metadata: json!({
-                "creator_credits": [{"id": 1, "name": "Jamie Delano", "role": "writer"}],
-                "raw_provider_payload": {
-                    "id": 29319, "name": "Going For It", "issue_number": "3",
-                    "cover_date": "1988-03-01", "store_date": "1988-03-24",
-                    "image": {}, "volume": {}, "person_credits": [],
-                    "character_credits": [], "team_credits": [], "story_arc_credits": [],
-                    "date_last_updated": "2026-11-01T00:00:00Z"
-                }
-            }),
-        };
-        let wire = serde_json::to_value(response(
-            mapped,
-            Some(Repair {
-                state: "pending".into(),
-                next_attempt_at: None,
-            }),
-            vec![],
-            vec![],
-        ))
-        .unwrap();
-        assert_eq!(wire["metadata_status"], "complete");
-        assert_eq!(wire["creators"][0]["roles"][0], "writer");
-    }
-
-    #[test]
-    fn a_failed_retry_remains_visible_without_credits() {
-        let mapped = Mapped {
-            external_id: "29319".into(),
-            external_url: None,
-            metadata: json!({
-                "creator_credits": [],
-                "raw_provider_payload": {
-                    "id": 29319, "name": "Going For It", "issue_number": "3",
-                    "cover_date": "1988-03-01", "store_date": "1988-03-24",
-                    "image": {}, "volume": {}, "person_credits": [],
-                    "character_credits": [], "team_credits": [], "story_arc_credits": [],
-                    "date_last_updated": "2026-11-01T00:00:00Z"
-                }
-            }),
-        };
-        let wire = serde_json::to_value(response(
-            mapped,
-            Some(Repair {
-                state: "failed".into(),
-                next_attempt_at: Some(chrono::Utc::now().timestamp() as f64 + 60.0),
-            }),
-            vec![],
-            vec![],
-        ))
-        .unwrap();
-        assert_eq!(wire["metadata_status"], "refresh_failed");
-        assert!(wire["refresh_retry_after_seconds"].as_i64().is_some());
     }
 }
