@@ -1622,10 +1622,16 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
         ),
     )
     .await;
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(
         body,
-        json!({"issue_id": i, "refreshed": false, "comicvine_issue_id": null})
+        json!({
+            "issue_id": i,
+            "refreshed": false,
+            "comicvine_issue_id": null,
+            "outcome": "not_confirmed",
+            "retry_after_seconds": null,
+        })
     );
 
     // Replace with the default reason when none is supplied.
