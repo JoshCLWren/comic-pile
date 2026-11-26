@@ -668,9 +668,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     deferred,
     previewDelete: issuesService.previewDelete,
     previewReorder: issuesService.previewReorder,
-    onDelete: (issueId: number) => {
-      setActionError(null); enqueueIssueMutation({ type: 'delete', issueId })
-    },
+    onDelete: (issueId: number) => { setActionError(null); enqueueIssueMutation({ type: 'delete', issueId }) },
     onReorder: enqueueIssueReorder,
     onError: setActionError,
   })
