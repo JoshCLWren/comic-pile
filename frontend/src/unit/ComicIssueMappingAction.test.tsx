@@ -316,4 +316,21 @@ describe('ComicIssueMappingAction', () => {
       'Could not remove the ComicVine mapping.',
     )
   })
+
+  it('labels the mapping action with both authored and provider numbers (#4652)', () => {
+    render(
+      <ComicIssueMappingAction
+        issueId={77}
+        threadTitle="Saga"
+        issueNumber="3"
+        issueNumberAlias="100"
+        providerIssueNumber="101"
+        initialIdentity={MAPPED}
+      />,
+    )
+    expect(screen.getByTestId('comic-mapping-change')).toHaveAttribute(
+      'aria-label',
+      'Change ComicVine mapping for issue #3 (100) [CV #101]',
+    )
+  })
 })

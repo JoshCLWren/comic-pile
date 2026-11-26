@@ -650,7 +650,7 @@ describe('dual issue numbering (#4652)', () => {
     expect(screen.getByRole('article', { name: 'Issue Saga #3 (100)' })).toBeVisible()
   })
 
-  it('saves a new alias and clears an existing one without a rating or status write', async () => {
+  it('saves a new alias without a rating or status write', async () => {
     render(
       <ComicIssueCard issueId={75} card={{ ...card, issue_number: '3' }} threadTitle="Saga" issueNumber="3" status="read" />,
       { wrapper },
@@ -663,8 +663,9 @@ describe('dual issue numbering (#4652)', () => {
     expect(patch).toHaveBeenCalledExactlyOnceWith(75, expect.objectContaining({
       issueNumberAlias: '100', issueNumberAliasProvided: true, rating: undefined, status: undefined,
     }))
+  })
 
-    patch.mockClear()
+  it('clears an existing alias with a blank draft', async () => {
     render(
       <ComicIssueCard issueId={75} card={{ ...card, issue_number: '3', issue_number_alias: '100' }} threadTitle="Saga" issueNumber="3" status="read" />,
       { wrapper },
