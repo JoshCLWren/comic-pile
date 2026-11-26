@@ -49,8 +49,11 @@ export function routeRegex(path) {
   }
   return regex + escapeRegex(path.slice(cursor)) + '$';
 }
+function isString(value) {
+  return Object.prototype.toString.call(value) === '[object String]';
+}
 function isApiSource(src) {
-  return src === FALLBACK || (typeof src === 'string'
+  return src === FALLBACK || (isString(src)
     && (src.startsWith('/api/') || src.startsWith('^/api/')));
 }
 function compareCodeUnits(left, right) {
