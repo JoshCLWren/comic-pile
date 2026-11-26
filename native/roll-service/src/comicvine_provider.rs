@@ -955,7 +955,6 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
 ) {
     let _ = hydrate_confirmed_identity_sync(state, user_id, issue_id, budget, api_key, force).await;
 }
-}
 
 /// Extract the numeric ComicVine issue id from an external identity id.
 fn issue_id_from_external(external_id: &str) -> Option<u32> {
