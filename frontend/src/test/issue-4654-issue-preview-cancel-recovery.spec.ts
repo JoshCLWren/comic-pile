@@ -67,6 +67,8 @@ const previewBody = (threadId: number, threadTitle: string) => ({
     conflict_message: null,
   },
   numeric_resort_outcome: null,
+  alias_offers: [],
+  expected_issue_ids: [7],
 })
 
 test('Edit Series preview shows labels and cancel leaves the series unchanged', async ({ page }) => {
