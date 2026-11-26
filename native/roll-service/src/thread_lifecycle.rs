@@ -1688,7 +1688,7 @@ async fn validate_set_pending_selection(
     } else if thread.is_blocked {
         Some(
             tx.query_opt(
-                "SELECT DISTINCT st.title, si.issue_number
+                "SELECT DISTINCT st.id, st.title, si.id, si.issue_number
                  FROM threads tt
                  JOIN issues nu ON nu.id = tt.next_unread_issue_id
                  JOIN dependencies d ON d.target_issue_id = nu.id
@@ -1705,8 +1705,8 @@ async fn validate_set_pending_selection(
             .await
             .map_err(db::tx_error)?
             .map(|row| {
-                let title: String = row.get(0);
-                let number: String = row.get(1);
+                let title: String = row.get(1);
+                let number: String = row.get(3);
                 format!(": Blocked by {title}: #{number}")
             })
             .unwrap_or_default(),
