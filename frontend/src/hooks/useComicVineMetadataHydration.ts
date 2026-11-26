@@ -5,6 +5,7 @@ import {
   type MetadataRefreshResponse,
 } from '../services/api-comicvine'
 import { getApiErrorStatus } from '../utils/apiError'
+import { hasProperty, isNonNullObject, isNumber, isString } from '../utils/runtimeChecks'
 
 /**
  * Truthful presentation states for one confirmed owned issue's deep metadata.
@@ -137,20 +138,31 @@ function classifyFailure(error: unknown): ComicVineHydrationState {
   return 'unavailable'
 }
 
-function isRetryAfterHeader(value: unknown): value is string {
-  return typeof value === 'string'
+/**
+ * Decode an optional provider-declared delay into a positive finite second
+ * count. The value already crossed the typed API boundary; this only guards
+ * against a malformed or hostile payload before it is used as a cooldown.
+ */
+function positiveRetrySeconds(value: number | null | undefined): number | null {
+  return isNumber(value) && value > 0 ? value : null
 }
 
+/**
+ * Read a Retry-After header from an unknown transport rejection at the I/O
+ * boundary. Axios normalizes response headers to lowercase keys, so that is
+ * the only key read. No assertion is needed: the runtime checks narrow the
+ * value to a JsonRecord whose declared property type is JsonValue.
+ */
 function readRetryAfter(error: unknown): number | null {
-  if (typeof error !== 'object' || error === null || !('response' in error)) return null
-  const response: unknown = (error as { response?: unknown }).response
-  if (typeof response !== 'object' || response === null || !('headers' in response)) return null
-  const headers: unknown = (response as { headers?: unknown }).headers
-  if (typeof headers !== 'object' || headers === null || !('retry-after' in headers)) return null
-  const raw: unknown = (headers as Record<string, unknown>)['retry-after']
-  if (!isRetryAfterHeader(raw)) return null
+  if (!isNonNullObject(error) || !hasProperty(error, 'response')) return null
+  const response = error.response
+  if (!isNonNullObject(response) || !hasProperty(response, 'headers')) return null
+  const headers = response.headers
+  if (!isNonNullObject(headers) || !hasProperty(headers, 'retry-after')) return null
+  const raw = headers['retry-after']
+  if (!isString(raw)) return null
   const seconds = Number(raw)
-  return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : null
+  return isNumber(seconds) && seconds > 0 ? Math.ceil(seconds) : null
 }
 
 /**
@@ -213,8 +225,8 @@ export function useComicVineMetadataHydration({
   useEffect(() => {
     if (isLoading || metadata == null) return
     if (statusFromMetadata(metadata) !== 'rate-limited') return
-    const seconds = metadata.refresh_retry_after_seconds
-    if (typeof seconds !== 'number' || seconds <= 0) return
+    const seconds = positiveRetrySeconds(metadata.refresh_retry_after_seconds)
+    if (seconds === null) return
     if (cooldownUntil > Date.now()) return
     setCooldownUntil(Date.now() + seconds * 1000)
   }, [cooldownUntil, isLoading, metadata])
@@ -235,8 +247,8 @@ export function useComicVineMetadataHydration({
     try {
       const response = await task
       if (!mountedRef.current || generation !== generationRef.current) return
-      const retryAfter = response?.retry_after_seconds
-      if (typeof retryAfter === 'number' && retryAfter > 0) {
+      const retryAfter = positiveRetrySeconds(response?.retry_after_seconds)
+      if (retryAfter !== null) {
         setCooldownUntil(Date.now() + retryAfter * 1000)
       }
       const outcome = classifyOutcome(response?.outcome)
