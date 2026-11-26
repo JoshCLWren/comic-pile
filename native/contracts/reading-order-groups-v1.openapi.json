@@ -984,6 +984,12 @@
           "issue_number": {
             "type": "string"
           },
+          "issue_number_alias": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "position": {
             "type": "integer",
             "format": "int32"
