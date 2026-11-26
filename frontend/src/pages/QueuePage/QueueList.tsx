@@ -5,6 +5,12 @@ import VirtualizedThreadList, {
   type UseWindowVirtualizerOptions,
 } from './VirtualizedThreadList'
 
+interface QueueSearchMatch {
+  id: number
+  title: string
+  status: 'completed' | 'excluded'
+}
+
 interface QueueListProps {
   activeThreads: ThreadListItem[]
   filteredThreads: ThreadListItem[]
@@ -16,6 +22,12 @@ interface QueueListProps {
   sentinelRef: React.Ref<HTMLDivElement>
   hasNextPage: boolean
   isLoading?: boolean
+  /** Completed/removed series that match the current search (#4655). */
+  completedMatches?: QueueSearchMatch[]
+  excludedMatches?: QueueSearchMatch[]
+  onOpenCompletedSeries?: (threadId: number) => void
+  onRestoreCompletedSeries?: (threadId: number) => void
+  onOpenExcludedSeries?: (threadId: number) => void
   /**
    * Opens the existing series-create flow. The Queue page wires this to the
    * create modal; direct list consumers (tests, regression harnesses) may
@@ -47,6 +59,11 @@ export function QueueList({
   useVirtualizer,
   onAddSeries,
   isLoading = false,
+  completedMatches = [],
+  excludedMatches = [],
+  onOpenCompletedSeries,
+  onRestoreCompletedSeries,
+  onOpenExcludedSeries,
 }: QueueListProps) {
   // The current filtered page can be empty while its replacement request is
   // still loading. Use the whole-queue total, not the loaded row count, to
@@ -64,9 +81,60 @@ export function QueueList({
   }
 
   if (isSearching && filteredThreads.length === 0) {
+    const hasOtherMatches = completedMatches.length > 0 || excludedMatches.length > 0
     return (
-      <div className="text-center text-stone-500" data-testid="queue-search-empty">
-        No active series match your search
+      <div className="text-center text-stone-500 space-y-4" data-testid="queue-search-empty">
+        <p>No active series match your search.</p>
+        {hasOtherMatches ? (
+          <div className="space-y-3 text-left max-w-xl mx-auto">
+            <p className="text-sm text-stone-400">
+              Found in completed or removed series:
+            </p>
+            {completedMatches.map((match) => (
+              <div key={`completed-${match.id}`} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--theme-border)] px-3 py-2">
+                <div>
+                  <p className="text-sm font-semibold text-stone-200">{match.title}</p>
+                  <p className="text-xs text-stone-500">Completed</p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className="text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] underline"
+                    onClick={() => onOpenCompletedSeries?.(match.id)}
+                  >
+                    Open completed
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] underline"
+                    onClick={() => onRestoreCompletedSeries?.(match.id)}
+                  >
+                    Restore unread
+                  </button>
+                </div>
+              </div>
+            ))}
+            {excludedMatches.map((match) => (
+              <div key={`excluded-${match.id}`} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--theme-border)] px-3 py-2">
+                <div>
+                  <p className="text-sm font-semibold text-stone-200">{match.title}</p>
+                  <p className="text-xs text-stone-500">Removed</p>
+                </div>
+                <button
+                  type="button"
+                  className="text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] underline"
+                  onClick={() => onOpenExcludedSeries?.(match.id)}
+                >
+                  Open removed
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-stone-400">
+            No completed or removed series match this search either.
+          </p>
+        )}
       </div>
     )
   }
