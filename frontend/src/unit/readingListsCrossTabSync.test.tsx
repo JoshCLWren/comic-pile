@@ -1,5 +1,6 @@
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
-import { QueryClient, QueryClientProvider, type PropsWithChildren } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { PropsWithChildren } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import CustomCBLBuilder from '../components/CustomCBLBuilder'
