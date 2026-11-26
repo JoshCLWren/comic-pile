@@ -2,6 +2,7 @@
 
 import subprocess
 from pathlib import Path
+from unittest.mock import patch
 
 from scripts.check_markdown_docs import (
     find_broken_anchors,
@@ -9,6 +10,7 @@ from scripts.check_markdown_docs import (
     find_unapproved_root_markdown,
     iter_markdown_files,
 )
+from scripts.generate_markdown_inventory import build_inventory
 
 GOOD_FIRST_ISSUES_URL = (
     "https://github.com/JoshCLWren/comic-pile/issues"
@@ -282,6 +284,41 @@ def test_find_unapproved_root_markdown_flags_documentation_sprawl(tmp_path: Path
     (tmp_path / "RANDOM_NOTES.md").write_text("# Notes\n", encoding="utf-8")
 
     assert find_unapproved_root_markdown(tmp_path) == ["RANDOM_NOTES.md"]
+
+
+def test_reconciliation_handoff_is_linked_and_point_in_time() -> None:
+    """Keep issue #5757 audit evidence discoverable and explicitly historical."""
+    root = Path(__file__).parents[1]
+    hub = (root / "docs" / "README.md").read_text(encoding="utf-8")
+    handoff = (
+        root / "docs" / "MARKDOWN_RECONCILIATION_HANDOFF.md"
+    ).read_text(encoding="utf-8")
+
+    assert "[Markdown reconciliation handoff](MARKDOWN_RECONCILIATION_HANDOFF.md)" in hub
+    assert "<!-- docs-path-check: historical -->" in handoff
+    assert "## A19 — inventory accounting" in handoff
+    assert "## A28 — validation and handoff" in handoff
+    assert "## Remaining discrepancies" in handoff
+
+
+def test_inventory_classifies_every_tracked_markdown_file() -> None:
+    """Leave no tracked Markdown file unresolved by #5757's inventory accounting."""
+    root = Path(__file__).parents[1]
+
+    def git_in_root(*args: str) -> str:
+        result = subprocess.run(
+            ["git", "-C", str(root), *args],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return result.stdout.strip()
+
+    with patch("scripts.generate_markdown_inventory._git", side_effect=git_in_root):
+        rows = build_inventory()
+
+    assert rows
+    assert all(row.action != "review — classify" for row in rows)
 
 
 def test_contributing_links_good_first_issue_label_filter() -> None:
