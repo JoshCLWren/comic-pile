@@ -3911,7 +3911,7 @@ fn ensure_node_provenance(
 }
 
 enum MaterializeOutcome {
-    Issue { id: i32, created: bool },
+    Issue { id: i32, thread_id: i32, created: bool },
     Excluded { reason: String },
     Unresolved,
 }
@@ -4385,6 +4385,7 @@ async fn materialize_missing_issue_tx(
             }
             return Ok(MaterializeOutcome::Issue {
                 id: issue_id,
+                thread_id,
                 created: false,
             });
         }
@@ -4458,6 +4459,7 @@ async fn materialize_missing_issue_tx(
             }
             return Ok(MaterializeOutcome::Issue {
                 id: existing_issue_id,
+                thread_id,
                 created: false,
             });
         }
