@@ -1,11 +1,23 @@
 import assert from 'node:assert/strict';
 import {existsSync, readFileSync, readdirSync} from 'node:fs';
 import {test} from 'node:test';
+import {fileURLToPath} from 'node:url';
+import {generateVercel, loadFragmentFiles} from './generate_vercel_routes.mjs';
 
 const ROOT = new URL('../', import.meta.url);
 
 function read(relative) {
   return readFileSync(new URL(relative, ROOT), 'utf8');
+}
+
+// vercel.json is bot-owned: assert the document the fragment-derived generator
+// will publish, not the previous generated artifact committed on main.
+function generatedVercel() {
+  const previous = JSON.parse(read('vercel.json'));
+  const fragments = loadFragmentFiles(
+    fileURLToPath(new URL('docs/api/route-fragments', ROOT)),
+  );
+  return generateVercel(previous, fragments);
 }
 
 function rustSources() {
@@ -26,15 +38,18 @@ test('no scheduled ComicVine metadata repair invocation remains', () => {
     false,
     'the repair drain workflow must be deleted',
   );
-  const vercel = JSON.parse(read('vercel.json'));
+  const generated = generatedVercel();
   assert.deepEqual(
-    vercel.crons,
+    generated.crons,
     [{path: '/api/v1/cron/release-sync', schedule: '0 9 * * *'}],
-    'only the unrelated release-sync cron may remain',
+    'only the unrelated release-sync cron may remain in generated ingress',
   );
-  const api = JSON.stringify(vercel.routes);
+  const api = JSON.stringify(generated.routes);
   assert.ok(!api.includes('comicvine-metadata-repairs'));
   assert.ok(!api.includes('comicvine-metadata-backfill'));
+  assert.deepEqual(generateVercel(generated, loadFragmentFiles(
+    fileURLToPath(new URL('docs/api/route-fragments', ROOT)),
+  )), generated, 'regeneration must be idempotent');
 });
 
 test('no background repair ledger, dispatch or drain code remains in Rust', () => {
