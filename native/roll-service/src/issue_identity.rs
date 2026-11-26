@@ -2668,7 +2668,10 @@ fn map_commit_error(e: CommitErr) -> (StatusCode, Json<JsonValue>) {
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({"detail": msg})),
         ),
-        CommitErr::Unexpected(_) => adoption_unexpected(),
+        CommitErr::Unexpected(ref msg) => {
+            eprintln!("DEBUG adoption unexpected: {msg}");
+            adoption_unexpected()
+        }
         CommitErr::Db(api) => {
             if api.is_database_unavailable() {
                 (
