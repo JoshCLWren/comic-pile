@@ -23,21 +23,13 @@ test('audit ingress preserves production method/path routing and native priority
 test('audit ingress rejects retired API destinations instead of routing them to Rust', () => {
   assert.throws(() => renderAuditIngress({routes: [
     {src: '^/api/v1/legacy$', methods: ['GET'], dest: '/api/retired.ingress'},
-<<<<<<< HEAD
     {src: '/api(?:/.*)?', dest: '/api/native_api.rs'},
-=======
-    {src: '/api(?:/.*)?', dest: '/api/native_roll.rs'},
->>>>>>> origin/main
   ]}), /Unknown API destination/);
 });
 
 test('audit ingress rejects a non-Rust catch-all or unknown API runtime', () => {
   assert.throws(() => renderAuditIngress({routes: [
-<<<<<<< HEAD
     {src: '^/api/v2/ping$', methods: ['GET'], dest: '/api/native_api.rs'},
-=======
-    {src: '^/api/v2/ping$', methods: ['GET'], dest: '/api/native_roll.rs'},
->>>>>>> origin/main
     {src: '/api(?:/.*)?', dest: '/api/retired.ingress'},
   ]}), /fallback must use Rust/);
   assert.throws(() => renderAuditIngress({routes: [
