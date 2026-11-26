@@ -305,6 +305,6 @@ describe('ThreadDetailView Edit dialog rejects invalid issue entries (#3586)', (
     expect(screen.getByRole('dialog', { name: 'Edit Series' })).toBeVisible()
     await user.click(screen.getByTestId('undo-edit-add'))
     await waitFor(() => expect(mockedUndo).toHaveBeenCalledWith(7, 42))
-    await waitFor(() => expect(screen.queryByTestId('edit-series-undo-bar')).not.toBeInTheDocument())
+    await waitFor(() => expect(undoBar).not.toBeInTheDocument())
   })
 })

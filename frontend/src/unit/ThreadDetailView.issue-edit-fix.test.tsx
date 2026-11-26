@@ -38,6 +38,7 @@ vi.mock('../pages/QueuePage/IssueToggleList', () => ({
         }
       },
       hasPendingMutations: () => pendingAvailable,
+      hasUndoPoint: () => false,
     }))
     return <div data-testid="issue-toggle-list" />
   }),

@@ -71,6 +71,8 @@ interface UseQueueModalsResult {
   closeMigrationDialog: () => void
   handleCreateSubmit: (event: FormEvent) => Promise<void>
   handleEditSubmit: (event: FormEvent) => Promise<void>
+  /** Called by the modal after flushing so Save can preserve the Undo bar. */
+  setEditUndoAvailable: (available: boolean) => void
   handleReactivateSubmit: (event: FormEvent) => Promise<void>
   handleMigrationComplete: (migratedThread: Thread) => Promise<void>
   handleMigrationSkip: () => void
