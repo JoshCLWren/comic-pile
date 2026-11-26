@@ -1592,25 +1592,20 @@ pub async fn preview_issue_structure(
         .collect();
     let expected_issue_ids: Vec<i32> = existing.iter().map(|(id, _, _)| *id).collect();
 
-    let (merged, preserves, removed_issue_id) = match request.operation.as_str() {
+    let (merged, removed_issue_id) = match request.operation.as_str() {
         "delete" => {
             let issue_id = request.issue_id.ok_or_else(|| {
                 ApiError::BadRequest("issue_id is required for a delete preview".to_string())
             })?;
-            let target = existing
-                .iter()
-                .find(|(id, _, _)| *id == issue_id)
-                .ok_or_else(|| ApiError::NotFound(format!("Issue {issue_id} not found")))?;
+            if !existing.iter().any(|(id, _, _)| *id == issue_id) {
+                return Err(ApiError::NotFound(format!("Issue {issue_id} not found")));
+            }
             let merged = existing
                 .iter()
                 .filter(|(id, _, _)| *id != issue_id)
                 .map(|(id, number, _)| (*id, number.clone()))
                 .collect::<Vec<_>>();
-            let preserves = merged.iter().map(|(id, _)| *id).eq(existing
-                .iter()
-                .map(|(id, _, _)| *id)
-                .filter(|id| *id != target.0));
-            (merged, preserves, Some(issue_id))
+            (merged, Some(issue_id))
         }
         "reorder" => {
             let requested = request.issue_ids.clone().ok_or_else(|| {
@@ -1630,13 +1625,12 @@ pub async fn preview_issue_structure(
                 .map(|id| {
                     let (_, number, _) = existing
                         .iter()
-                        .find(|(issue_id, _, _)| issue_id == id)
-                        .expect("validated id belongs to the series");
-                    (*id, number.clone())
+                        .find(|(issue_id, _, _)| *issue_id == *id)
+                        .ok_or_else(|| ApiError::NotFound(format!("Issue {id} not found")))?;
+                    Ok((*id, number.clone()))
                 })
-                .collect::<Vec<_>>();
-            let preserves = requested == expected_issue_ids;
-            (merged, preserves, None)
+                .collect::<Result<Vec<_>, ApiError>>()?;
+            (merged, None)
         }
         other => {
             return Err(ApiError::BadRequest(format!(
@@ -1652,8 +1646,6 @@ pub async fn preview_issue_structure(
         &existing,
         &merged,
         IssuePlacementStrategy::SafeDefault,
-        preserves,
-        Vec::new(),
         removed_issue_id,
     )
     .await?;
