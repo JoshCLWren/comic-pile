@@ -12,6 +12,7 @@ import {
   type ReadingListEntryIntent, type ReadingListGate, type ReadingListMode, type ReadingListPredecessorChange,
 } from '../services/api-custom-cbl'
 import type { ContinuityPlan } from '../services/api-continuity-plans'
+import type { IssueReadRateResponse } from '../services/issueCardsApi'
 import { cblSourcesApi, type CBLSourceListDiscoveryItem } from '../services/api-cbl-sources'
 import CblReplaceReviewPanel from './CblReplaceReviewPanel'
 import ReadingListEntryCard from './ReadingListEntryCard'
@@ -28,6 +29,7 @@ import {
   computeSemanticPreview,
   draftEntry,
   findMatchedEntries,
+  reconcileEntryReadStatus,
   messageFor,
   moveEntryRelativeToEntry,
   normalizePositions,
