@@ -166,6 +166,15 @@ fn title_tokens(value: &str) -> BTreeSet<String> {
         .collect()
 }
 
+/// Explainable token/character similarity for two series titles.
+///
+/// Public so callers that already hold provider JSON (for example the Identity
+/// Inbox search results) can report the same similarity the discovery scorer
+/// uses, instead of reimplementing a second, drifting comparison.
+pub fn title_similarity(a: &str, b: &str) -> f64 {
+    dice_coefficient(a, b)
+}
+
 fn dice_coefficient(a: &str, b: &str) -> f64 {
     let na = normalize_title(a);
     let nb = normalize_title(b);

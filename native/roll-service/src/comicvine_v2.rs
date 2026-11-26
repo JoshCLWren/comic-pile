@@ -582,7 +582,7 @@ fn issue_candidate(value: &Value) -> Option<ComicVineIssueCandidate> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ParsedResource {
+pub(crate) enum ParsedResource {
     Issue(i32),
     Volume(i32),
 }
@@ -600,7 +600,7 @@ impl ParsedResource {
 /// final `4000-<id>` (issue) / `4050-<id>` (volume) path segment are accepted.
 /// Query strings, fragments, ports, user info and trailing slashes are
 /// tolerated.
-fn parse_comicvine_url(raw: &str) -> Option<ParsedResource> {
+pub(crate) fn parse_comicvine_url(raw: &str) -> Option<ParsedResource> {
     let value = raw.trim();
     if value.is_empty() {
         return None;
