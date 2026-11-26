@@ -74,7 +74,9 @@ test('account switching isolates inbox data and stops signed-out inbox requests'
     await page.getByRole('button', { name: 'Sign In', exact: true }).click()
   }
   async function openInbox(username: string) {
-    await page.getByRole('link', { name: 'Identity Inbox page' }).click()
+    const nav = page.getByLabel('Desktop navigation')
+    await expect(nav).toBeVisible()
+    await nav.getByRole('link', { name: 'Identity Inbox page' }).first().click()
     await expect(page.getByText(username + ' private comic', { exact: true })).toBeVisible()
   }
 

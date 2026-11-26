@@ -165,6 +165,17 @@ async function cardRowCounts(page: Page): Promise<number[]> {
   return [...rows.values()]
 }
 
+/**
+ * Selection is URL-authoritative: a click updates `?keys=` and the controlled
+ * checkbox flips on the following render. `.check()` samples the state too
+ * early; click and assert the settled checked state instead.
+ */
+async function toggleCreator(page: Page, name: string, checked: boolean): Promise<void> {
+  const box = page.getByLabel(`Select ${name} for comparison`)
+  await box.click()
+  await expect(box)[checked ? 'toBeChecked' : 'toBeUnchecked']()
+}
+
 test.describe('Issue #3091: creator comparison', () => {
   test('desktop selection opens a bounded side-by-side comparison', async ({
     authenticatedPage,
@@ -184,11 +195,11 @@ test.describe('Issue #3091: creator comparison', () => {
     await page.goto('/creators', { waitUntil: 'domcontentloaded' })
     await expect(page.getByText('Brian K. Vaughan')).toBeVisible({ timeout: 20000 })
 
-    await page.getByLabel('Select Brian K. Vaughan for comparison').check()
+    await toggleCreator(page, 'Brian K. Vaughan', true)
     await expect(page.getByText('1 of 4 selected for comparison')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Compare' })).toHaveCount(0)
 
-    await page.getByLabel('Select Steve McNiven for comparison').check()
+    await toggleCreator(page, 'Steve McNiven', true)
     await page.getByRole('button', { name: 'Compare' }).click()
 
     await expect(page).toHaveURL(/\/creators\/compare\?keys=/)
@@ -436,8 +447,8 @@ test('3624 - browser back from compare restores the selected creators', async ({
   })
 
   await page.goto('/creators')
-  await page.getByLabel('Select Brian K. Vaughan for comparison').check()
-  await page.getByLabel('Select Steve McNiven for comparison').check()
+  await toggleCreator(page, 'Brian K. Vaughan', true)
+  await toggleCreator(page, 'Steve McNiven', true)
   await expect(page.getByText('2 of 4 selected for comparison')).toBeVisible()
 
   await page.getByRole('button', { name: 'Compare' }).click()
@@ -473,7 +484,7 @@ test('3624 - Change selection returns with editable restored checkboxes', async 
   expect(new URL(page.url()).searchParams.get('keys')).toBe('creator:7,creator:12')
 
   // A restored checkbox stays enabled; dropping one writes the exact new set.
-  await page.getByLabel('Select Brian K. Vaughan for comparison').uncheck()
+  await toggleCreator(page, 'Brian K. Vaughan', false)
   await expect(page.getByText('1 of 4 selected for comparison')).toBeVisible()
   expect(new URL(page.url()).searchParams.get('keys')).toBe('creator:12')
 })
