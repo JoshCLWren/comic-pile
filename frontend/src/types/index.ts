@@ -366,7 +366,7 @@ export type ThreadListResponse = components['schemas']['QueueThreadListResponse'
   Pick<components['schemas']['ThreadListResponse'], 'filtered_count'>
 
 // The session index and current-session wire types were retired with the
-// `/api/v1/sessions/*` surface (#4839, #4343); supported reads use the
+// legacy session surface (#4839, #4343); supported reads use the
 // resource-shaped v2 details/snapshot contracts above.
 
 export type BlockingDependency = components['schemas']['BlockingDependency']
