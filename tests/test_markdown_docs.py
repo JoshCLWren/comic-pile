@@ -1,6 +1,5 @@
 """Tests for Markdown documentation validation helpers."""
 
-import re
 import subprocess
 from pathlib import Path
 
