@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Full rollback script for dockerized PostgreSQL environment
+# Rollback helper for the current Dockerized PostgreSQL environment.
 # Usage: ./scripts/rollback.sh <rollback-type> [options]
 
 ROLLBACK_TYPE="${1:-help}"
@@ -28,12 +28,12 @@ log_error() {
 }
 
 rollback_database() {
-    log_info "Starting database rollback..."
-    docker-compose exec -T db pg_dump -U comicpile comicpile > "$BACKUP_DIR/emergency_before_rollback_$TIMESTAMP.sql"
-    log_info "Rolling back migrations..."
-    docker-compose exec app alembic downgrade base
-    log_info "Database rollback complete"
-    log_info "Emergency backup: $BACKUP_DIR/emergency_before_rollback_$TIMESTAMP.sql"
+    log_warn "Automated database down-migrations are not supported."
+    log_info "The Rust refinery runner (comicpile-migrate) supports forward migrations only (up/plan)."
+    log_info "To apply pending migrations: cargo run --locked -p comicpile-migrate -- up"
+    log_info "To inspect migration state:   cargo run --locked -p comicpile-migrate -- plan"
+    log_info "For data recovery, restore a PostgreSQL backup with: ./scripts/rollback.sh restore <backup-file>"
+    exit 1
 }
 
 rollback_git() {
@@ -54,48 +54,31 @@ rollback_docker() {
         exit 1
     fi
     log_info "Stopping containers..."
-    docker-compose down
+    docker compose down
     log_info "Retagging previous image..."
     docker tag "$IMAGE_ID" comic-pile:latest
     log_info "Restarting containers..."
-    docker-compose up -d
-    log_info "Waiting for health check..."
-    sleep 10
-    if curl -f http://localhost:8000/health; then
-        log_info "Docker rollback successful"
-    else
-        log_error "Health check failed after rollback"
-        exit 1
-    fi
+    docker compose up -d
+    log_info "Docker rollback complete"
 }
 
 rollback_full() {
-    log_warn "This will rollback git, rebuild Docker images, and reset database"
+    log_warn "This will rollback git and reset local Docker services."
+    log_warn "Database down-migrations are not automated; restore a backup if you need data recovery."
     read -p "Are you sure? (yes/no): " CONFIRM
     if [ "$CONFIRM" != "yes" ]; then
         log_info "Rollback cancelled"
         exit 0
     fi
-    log_info "Starting full system rollback..."
+    log_info "Starting full rollback..."
     log_info "Step 1: Rolling back git..."
     rollback_git "${2:-HEAD~1}"
     log_info "Step 2: Rebuilding Docker images..."
-    docker-compose build --no-cache
-    log_info "Step 3: Stopping containers..."
-    docker-compose down
-    log_info "Step 4: Rolling back database..."
-    rollback_database
-    log_info "Step 5: Restarting services..."
-    docker-compose up -d
-    log_info "Step 6: Verifying health..."
-    sleep 15
-    if curl -f http://localhost:8000/health; then
-        log_info "Full rollback successful"
-    else
-        log_error "Health check failed after rollback"
-        log_error "Check logs: docker-compose logs"
-        exit 1
-    fi
+    docker compose build --no-cache
+    log_info "Step 3: Restarting containers..."
+    docker compose down
+    docker compose up -d
+    log_info "Full rollback complete (database schema/data was not down-migrated)"
 }
 
 restore_backup() {
@@ -109,12 +92,8 @@ restore_backup() {
         exit 1
     fi
     log_info "Restoring from $BACKUP_FILE..."
-    log_info "Stopping application..."
-    docker-compose stop app
     log_info "Restoring database..."
-    docker-compose exec -T db psql -U comicpile -d comicpile < "$BACKUP_FILE"
-    log_info "Starting application..."
-    docker-compose start app
+    docker compose exec -T db psql -U comicpile -d comicpile < "$BACKUP_FILE"
     log_info "Restore complete"
 }
 
@@ -125,10 +104,10 @@ Rollback Script for Dockerized PostgreSQL Environment
 Usage: ./scripts/rollback.sh <command> [options]
 
 Commands:
-    database           Rollback all database migrations to base
+    database           Explain database rollback limitations (no automated down-migrations)
     git [commit]       Rollback git to previous commit (default: HEAD~1)
     docker <image-id>  Rollback to previous Docker image
-    full [commit]      Full rollback (git + docker + database)
+    full [commit]      Full rollback (git + docker rebuild/restart; no database down-migration)
     restore <backup>   Restore database from backup file
     help               Show this help message
 

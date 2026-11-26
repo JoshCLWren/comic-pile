@@ -8,20 +8,25 @@
       "dest": "/api/native_api.rs"
     },
     {
-      "src": "^/api/v2/unicode$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "/api(?:/.*)?",
       "dest": "/api/native_api.rs"
     },
     {
       "src": "/(.*)",
       "dest": "/index.html"
+    }
+  ],
+  "builds": [
+    {
+      "src": "api/native_roll.rs",
+      "use": "@vercel/rust"
+    },
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "static/react"
+      }
     }
   ]
 }

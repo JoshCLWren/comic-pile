@@ -8,11 +8,16 @@
 import {readFileSync, writeFileSync, readdirSync} from 'node:fs';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
+<<<<<<< HEAD
 import {
   canonicalNativeBuild,
   canonicalNativeDestination,
   slimNativeApiRoutes,
 } from './vercel_slim_routes.mjs';
+=======
+import {withCanonicalBuilds} from './vercel_builds.mjs';
+import {slimNativeRollRoutes} from './vercel_slim_routes.mjs';
+>>>>>>> origin/main
 
 const INVENTORY_PATH = 'docs/api/v2-route-inventory.json';
 const FRAGMENT_DIR = 'docs/api/route-fragments';
@@ -20,9 +25,13 @@ const SQL_BUDGET_SOURCES_PATH = 'docs/api/sql-budget-sources.json';
 const REWRITE_FRAGMENT_PATH = path.posix.join(FRAGMENT_DIR, 'vercel-rewrites.json');
 const VERCEL_PATH = 'vercel.json';
 const AGENTS_PATH = 'AGENTS.md';
+<<<<<<< HEAD
 const NATIVE_DESTINATIONS = new Set(['/api/native_api.rs']);
 const PYTHON_DESTINATION = '/api/index.py';
 const VERCEL_DESTINATIONS = new Set([...NATIVE_DESTINATIONS, PYTHON_DESTINATION]);
+=======
+const NATIVE_DESTINATIONS = new Set(['/api/native_roll.rs']);
+>>>>>>> origin/main
 const CATCH_ALL_SRC = '/api(?:/.*)?';
 const CATCH_ALL_DEST = '/api/native_api.rs';
 const BURN_DOWN_ISSUE = 4739;
@@ -85,13 +94,18 @@ function _owner(value, context) {
 
 function _optionalDest(value, context) {
   if (value === null || value === undefined) return null;
-  if (!isString(value) || !VERCEL_DESTINATIONS.has(value)) {
-    const sorted = [...VERCEL_DESTINATIONS].sort();
+  if (!isString(value) || !NATIVE_DESTINATIONS.has(value)) {
+    const sorted = [...NATIVE_DESTINATIONS].sort();
     throw new BurndownGenerationError(
       `${context} must be one of [${sorted.map(v => `'${v}'`).join(', ')}] or null`,
     );
   }
   return value;
+}
+
+function _isApiSource(src) {
+  return src === CATCH_ALL_SRC || (isString(src)
+    && (src.startsWith('/api/') || src.startsWith('^/api/')));
 }
 
 function _optionalSrc(value, context) {
@@ -333,7 +347,7 @@ function _fragmentVercelGroups(fragments, previousRoutes) {
             `${method} ${routePath} needs dest; previous vercel.json has no matching route`,
           );
         }
-        dest = previous.dest;
+        dest = _optionalDest(previous.dest, 'previous.dest');
       }
       if (src === null) {
         if (
@@ -347,7 +361,7 @@ function _fragmentVercelGroups(fragments, previousRoutes) {
           src = routeRegexForPath(routePath);
         }
       }
-      if (!VERCEL_DESTINATIONS.has(dest)) {
+      if (!NATIVE_DESTINATIONS.has(dest)) {
         throw new BurndownGenerationError(`unknown destination '${dest}'`);
       }
       const key = `${src}\0${dest}`;
@@ -355,30 +369,13 @@ function _fragmentVercelGroups(fragments, previousRoutes) {
       grouped.get(key).methods.add(method.toUpperCase());
     }
   }
-  const routes = [];
-  for (const group of grouped.values()) {
-    const effective = new Set(group.methods);
-    if (group.dest === PYTHON_DESTINATION) effective.add('OPTIONS');
-    const ordered = METHOD_ORDER.filter(item => effective.has(item));
-    routes.push({src: group.src, methods: ordered, dest: group.dest});
-  }
-  const native = routes.filter(r => NATIVE_DESTINATIONS.has(r.dest)).sort(compareRouteKeys);
-  const python = routes.filter(r => r.dest === PYTHON_DESTINATION).sort(compareRouteKeys);
-  const ordered = [...native, ...python];
-  const seen = new Set();
-  for (const route of ordered) {
-    const src = _string(route.src, 'route.src');
-    const dest = _string(route.dest, 'route.dest');
-    const routeMethods = _consumers(route.methods, 'route.methods');
-    for (const method of routeMethods) {
-      const identity = `${src}\0${method}`;
-      if (seen.has(identity) && NATIVE_DESTINATIONS.has(dest)) {
-        throw new BurndownGenerationError(`duplicate native ingress rewrite for ${method} ${src}`);
-      }
-      seen.add(identity);
-    }
-  }
-  return ordered;
+  return [...grouped.values()]
+    .map(group => ({
+      src: group.src,
+      methods: METHOD_ORDER.filter(item => group.methods.has(item)),
+      dest: group.dest,
+    }))
+    .sort(compareRouteKeys);
 }
 
 export function pythonJsonDumps(value) {
@@ -468,7 +465,6 @@ export function _generateVercelDocument(previous, fragments, {slim = true} = {})
   const fragmentRoutes = _fragmentVercelGroups(fragments, previousRoutes);
   const fragmentSrcs = new Set(fragmentRoutes.map(r => String(r.src)));
   const baselineNatives = [];
-  const baselinePythons = [];
   const nonApi = [];
   let catchAll = null;
   for (const route of previousFull) {
@@ -481,19 +477,16 @@ export function _generateVercelDocument(previous, fragments, {slim = true} = {})
     if (NATIVE_DESTINATIONS.has(dest)) {
       if (fragmentSrcs.has(src)) continue;
       baselineNatives.push(route);
-    } else if (dest === PYTHON_DESTINATION) {
-      if (fragmentSrcs.has(src)) continue;
-      baselinePythons.push(route);
-    } else {
+    } else if (!_isApiSource(src)) {
       nonApi.push(Object.fromEntries(Object.entries(route).map(([k, v]) => [String(k), v])));
     }
+    // Any remaining API route targets a retired ingress and is dropped: the
+    // catch-all below sends it to native Rust.
   }
   if (catchAll === null || catchAll.dest !== CATCH_ALL_DEST) {
     throw new BurndownGenerationError('catch-all route missing from vercel.json');
   }
-  const nativeFragment = fragmentRoutes.filter(r => NATIVE_DESTINATIONS.has(r.dest));
-  const pythonFragment = fragmentRoutes.filter(r => r.dest === PYTHON_DESTINATION);
-  const generated = [...nativeFragment, ...pythonFragment].map(r => ({
+  const generated = fragmentRoutes.map(r => ({
     src: r.src,
     methods: r.methods,
     dest: r.dest,
@@ -501,7 +494,6 @@ export function _generateVercelDocument(previous, fragments, {slim = true} = {})
   const fullRoutes = [
     ...baselineNatives,
     ...generated,
-    ...baselinePythons,
     catchAll,
     ...nonApi,
   ];
@@ -511,6 +503,7 @@ export function _generateVercelDocument(previous, fragments, {slim = true} = {})
       new Set(generated),
     )
     : fullRoutes;
+<<<<<<< HEAD
   const nativeIndices = [];
   const pythonIndices = [];
   let catchIndex = -1;
@@ -530,6 +523,11 @@ export function _generateVercelDocument(previous, fragments, {slim = true} = {})
   if (Array.isArray(document.builds)) {
     document.builds = document.builds.map(canonicalNativeBuild);
   }
+=======
+  const document = withCanonicalBuilds(
+    Object.fromEntries(Object.entries(previous).map(([k, v]) => [String(k), v])),
+  );
+>>>>>>> origin/main
   document.routes = newRoutes;
   return document;
 }
@@ -922,7 +920,7 @@ function _renderRewriteFragment(fragments, routes) {
     if (
       route.src === null ||
       route.src === CATCH_ALL_SRC ||
-      ![...NATIVE_DESTINATIONS, '/api/index.py'].includes(route.dest)
+      !NATIVE_DESTINATIONS.has(route.dest)
     ) {
       continue;
     }
@@ -936,13 +934,14 @@ function _renderRewriteFragment(fragments, routes) {
     }
     if (matches) selected.push([index, route]);
   }
-  const native = selected.flatMap(([, route]) => (NATIVE_DESTINATIONS.has(route.dest) ? [route] : []));
-  const python = selected.flatMap(([, route]) => (route.dest === '/api/index.py' ? [route] : []));
-  const ordered = [...native, ...python];
   const payload = {
     generated_by: 'scripts/generate_route_burndown.mjs',
     source_fragments: fragments.map(fragment => fragment.name),
-    routes: ordered.map(route => ({src: route.src, methods: [...route.methods], dest: route.dest})),
+    routes: selected.map(([, route]) => ({
+      src: route.src,
+      methods: [...route.methods],
+      dest: route.dest,
+    })),
   };
   return pythonJsonDumps(payload);
 }

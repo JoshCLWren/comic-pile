@@ -10,7 +10,12 @@ import {
   routesMayOverlap,
 } from './vercel_slim_routes.mjs';
 
+<<<<<<< HEAD
 const NATIVE_API = '/api/native_api.rs';
+=======
+const ROLL = '/api/native_roll.rs';
+const SHADOW = '/api/shadow.ingress';
+>>>>>>> origin/main
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 const json = file => JSON.parse(readFileSync(file, 'utf8'));
 
@@ -88,7 +93,11 @@ test('slim vercel routes resolve identically to the full route list', () => {
   assert.equal(resolve(slim, 'GET', '/api/v2/never-registered'), NATIVE_API);
 });
 
+<<<<<<< HEAD
 test('slim list keeps python, issue, catch-all and non-api routes and every needed native_api route', () => {
+=======
+test('slim list keeps non-native, catch-all and non-api routes and every needed roll route', () => {
+>>>>>>> origin/main
   const fragments = _loadRouteFragments('docs/api/route-fragments');
   const previous = json('vercel.json');
   const full = _generateVercelDocument(previous, fragments, {slim: false}).routes;
@@ -97,6 +106,7 @@ test('slim list keeps python, issue, catch-all and non-api routes and every need
   assert.deepEqual(slim.filter(keep), full.filter(keep));
   const slimSet = new Set(slim.map(route => JSON.stringify(route)));
   for (const route of slim) assert.ok(slimSet.has(JSON.stringify(route)));
+<<<<<<< HEAD
   // A native_api route shadowed by a later python route must survive.
   const kept = slim.filter(route => route.dest === NATIVE_API && route.src !== '/api(?:/.*)?');
   assert.ok(kept.length > 0);
@@ -121,10 +131,36 @@ test('crossed-parameter routes overlap even though no template produces a shared
   assert.equal(routesMayOverlap(roll, python), true);
   const catchAll = {src: '/api(?:/.*)?', dest: NATIVE_API};
   assert.deepEqual(slimNativeApiRoutes([roll, python, catchAll], new Set([roll])), [roll, python, catchAll]);
+=======
+  // A roll route shadowed by a later non-native route must survive.
+  const kept = slim.filter(route => route.dest === ROLL && route.src !== '/api(?:/.*)?');
+  assert.ok(kept.length > 0);
+});
+
+test('synthetic: a roll route is dropped unless a later non-native route overlaps', () => {
+  const free = {src: '^/api/v2/free$', methods: ['GET'], dest: ROLL};
+  const shadowed = {src: '^/api/v1/things/summaries$', methods: ['GET'], dest: ROLL};
+  const otherMethod = {src: '^/api/v1/other$', methods: ['POST'], dest: ROLL};
+  const shadow = {src: '^/api/v1/things/[^/]+$', methods: ['GET', 'OPTIONS'], dest: SHADOW};
+  const shadowOther = {src: '^/api/v1/other$', methods: ['GET'], dest: SHADOW};
+  const catchAll = {src: '/api(?:/.*)?', dest: ROLL};
+  const spa = {src: '/(.*)', dest: '/index.html'};
+  const routes = [free, shadowed, otherMethod, shadow, shadowOther, catchAll, spa];
+  const out = slimNativeRollRoutes(routes, new Set([free, shadowed, otherMethod]));
+  assert.deepEqual(out, [shadowed, shadow, shadowOther, catchAll, spa]);
+});
+
+test('crossed-parameter routes overlap even though no template produces a shared sample', () => {
+  const roll = {src: '^/api/a/[^/]+/b$', methods: ['GET'], dest: ROLL};
+  const shadow = {src: '^/api/a/c/[^/]+$', methods: ['GET', 'OPTIONS'], dest: SHADOW};
+  assert.equal(routesMayOverlap(roll, shadow), true);
+  const catchAll = {src: '/api(?:/.*)?', dest: ROLL};
+  assert.deepEqual(slimNativeRollRoutes([roll, shadow, catchAll], new Set([roll])), [roll, shadow, catchAll]);
+>>>>>>> origin/main
 });
 
 test('segment unifier proves disjointness and treats unknown shapes as overlapping', () => {
-  const route = (src, methods = ['GET']) => ({src, methods, dest: '/api/index.py'});
+  const route = (src, methods = ['GET']) => ({src, methods, dest: SHADOW});
   assert.equal(routesMayOverlap(route('^/api/a/[0-9]+$'), route('^/api/a/x$')), false);
   assert.equal(routesMayOverlap(route('^/api/a/[0-9]+$'), route('^/api/a/12$')), true);
   assert.equal(routesMayOverlap(route('^/api/a$'), route('^/api/a/[^/]+$')), false);
@@ -135,6 +171,7 @@ test('segment unifier proves disjointness and treats unknown shapes as overlappi
   assert.equal(routesMayOverlap(route('^/api/a$', ['GET']), route('^/api/a$', ['POST'])), false);
 });
 
+<<<<<<< HEAD
 test('character-class escapes are unknown shapes, so the native_api route is kept', () => {
   const roll = {src: '^/api/a/\\d$', methods: ['GET'], dest: NATIVE_API};
   const python = {src: '^/api/a/5$', methods: ['GET', 'OPTIONS'], dest: '/api/index.py'};
@@ -142,6 +179,15 @@ test('character-class escapes are unknown shapes, so the native_api route is kep
   assert.equal(routesMayOverlap(roll, python), true);
   const catchAll = {src: '/api(?:/.*)?', dest: NATIVE_API};
   assert.deepEqual(slimNativeApiRoutes([roll, python, catchAll], new Set([roll])), [roll, python, catchAll]);
+=======
+test('character-class escapes are unknown shapes, so the roll route is kept', () => {
+  const roll = {src: '^/api/a/\\d$', methods: ['GET'], dest: ROLL};
+  const shadow = {src: '^/api/a/5$', methods: ['GET', 'OPTIONS'], dest: SHADOW};
+  assert.equal(parseSegments(roll.src), null);
+  assert.equal(routesMayOverlap(roll, shadow), true);
+  const catchAll = {src: '/api(?:/.*)?', dest: ROLL};
+  assert.deepEqual(slimNativeRollRoutes([roll, shadow, catchAll], new Set([roll])), [roll, shadow, catchAll]);
+>>>>>>> origin/main
 });
 
 test('regenerating from an already-slim vercel.json is stable and still equivalent', () => {
