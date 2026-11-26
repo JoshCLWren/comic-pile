@@ -69,6 +69,7 @@ test.describe('Desktop sidebar theme selector containment (#1941)', () => {
       const option = desktopNav.getByRole('button', { name: label, exact: true })
       await expect(option, `${label} must be visible`).toBeVisible()
       const box = await option.boundingBox()
+      console.log('DEBUG1941 option', label, JSON.stringify(box), 'group', JSON.stringify(groupBox))
       expect(box, `${label} must have a rendered bounding box`).not.toBeNull()
       expect(
         // SAFETY: the assertions above prove both bounding boxes rendered before this check
@@ -99,6 +100,7 @@ test.describe('Desktop sidebar theme selector containment (#1941)', () => {
     const logout = desktopNav.getByRole('button', { name: 'Log out' })
     await expect(logout).toBeVisible()
     const logoutBox = await logout.boundingBox()
+    console.log('DEBUG1941 logout', JSON.stringify(logoutBox), 'nav', JSON.stringify(navBox))
     expect(
       // SAFETY: the assertions above prove both bounding boxes rendered before this check
       containedBy(logoutBox as Box, navBox as Box, 1),
