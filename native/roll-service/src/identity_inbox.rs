@@ -2468,7 +2468,7 @@ mod tests {
         );
         let _env = ComicvineKeyEnv::install();
         let response = search_issues(
-            State(state),
+            State(state.clone()),
             AuthenticatedUser::for_test(1),
             Query(SearchQuery {
                 q: "https://comicvine.gamespot.com/volume/4050-31409/".to_string(),
