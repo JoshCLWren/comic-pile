@@ -105,37 +105,6 @@ WITH auth AS (
         )
     END AS needs_repair
   FROM mapped m
-), enqueue AS (
-  INSERT INTO comicvine_metadata_refresh_requests (
-    external_identity_id, state, attempts, next_attempt_at,
-    lease_expires_at, last_error, completed_at, created_at, updated_at
-  )
-  SELECT f.id, 'pending', 0, now(), NULL, NULL, NULL, now(), now()
-  FROM freshness f WHERE f.needs_repair
-  ON CONFLICT (external_identity_id) DO UPDATE
-    SET state='pending', attempts=0, next_attempt_at=now(),
-      lease_expires_at=NULL, last_error=NULL, completed_at=NULL, updated_at=now()
-    WHERE (
-      comicvine_metadata_refresh_requests.state = 'completed'
-      AND (comicvine_metadata_refresh_requests.completed_at IS NULL OR
-        comicvine_metadata_refresh_requests.completed_at <= now()-interval '30 days')
-    ) OR (
-      comicvine_metadata_refresh_requests.state = 'no_credits'
-      AND (comicvine_metadata_refresh_requests.completed_at IS NULL OR
-        comicvine_metadata_refresh_requests.completed_at <= now()-interval '7 days')
-    ) OR (
-      comicvine_metadata_refresh_requests.state='failed'
-      AND comicvine_metadata_refresh_requests.next_attempt_at <= now()
-    )
-  RETURNING external_identity_id, state, next_attempt_at
-), repair AS (
-  SELECT state, next_attempt_at FROM (
-    SELECT 0 AS priority, e.state, e.next_attempt_at FROM enqueue e
-    UNION ALL
-    SELECT 1, r.state, r.next_attempt_at
-    FROM comicvine_metadata_refresh_requests r
-    JOIN freshness f ON f.id=r.external_identity_id
-  ) states ORDER BY priority LIMIT 1
 ), arc_refs AS (
   SELECT arc_id, reference, ordinality FROM (
     SELECT DISTINCT ON ((arc.value->>'id')::int)
@@ -202,8 +171,6 @@ SELECT jsonb_build_object(
  'mapped', (SELECT jsonb_build_object(
    'external_id',external_id,'external_url',external_url,
    'metadata',metadata, 'needs_repair',needs_repair) FROM freshness),
- 'repair', (SELECT jsonb_build_object('state',state,'next_attempt_at',
-   extract(epoch FROM next_attempt_at)) FROM repair),
  'arcs', COALESCE((SELECT jsonb_agg(jsonb_build_object(
    'id',arc_id,'reference',reference,'total',(SELECT total FROM arc_totals t WHERE t.arc_id=a.arc_id))
    ORDER BY ordinality) FROM arc_refs a),'[]'::jsonb),
@@ -225,7 +192,6 @@ struct Snapshot {
     auth: Option<Auth>,
     owned: bool,
     mapped: Option<Mapped>,
-    repair: Option<Repair>,
     arcs: Vec<ArcReference>,
     related: Vec<Related>,
 }
@@ -237,11 +203,6 @@ struct Mapped {
     metadata: Value,
 }
 
-#[derive(Deserialize)]
-struct Repair {
-    state: String,
-    next_attempt_at: Option<f64>,
-}
 
 #[derive(Deserialize)]
 struct ArcReference {
