@@ -27,6 +27,10 @@ export interface RollBootstrapThread {
   format: string
   issue_id?: number | null
   issue_number?: string | null
+  /** Alternate overall/story-arc number for the same physical comic (#4652). */
+  issue_number_alias?: string | null
+  /** Provider's own issue number from confirmed identity (#4652). */
+  provider_issue_number?: string | null
   blocking_reasons?: string[]
   route_labels?: string[]
   overflow_routes_count?: number

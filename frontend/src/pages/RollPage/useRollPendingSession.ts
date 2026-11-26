@@ -58,6 +58,8 @@ export function useRollPendingSession({ state, bootstrap, rollPool }: UseRollPen
             issue_number: bootstrap.active_thread.issue_number ?? null,
             next_issue_id: bootstrap.active_thread.next_issue_id ?? null,
             next_issue_number: bootstrap.active_thread.next_issue_number ?? null,
+            issue_number_alias: bootstrap.active_thread.issue_number_alias ?? null,
+            provider_issue_number: bootstrap.active_thread.provider_issue_number ?? null,
             last_rolled_result:
               bootstrap.last_rolled_result ?? bootstrap.active_thread.last_rolled_result ?? null,
           }
@@ -89,6 +91,8 @@ export function useRollPendingSession({ state, bootstrap, rollPool }: UseRollPen
         issue_number: pendingMetadata.issue_number ?? null,
         next_issue_id: pendingMetadata.next_issue_id ?? null,
         next_issue_number: pendingMetadata.next_issue_number ?? null,
+        issue_number_alias: pendingMetadata.issue_number_alias ?? null,
+        provider_issue_number: pendingMetadata.provider_issue_number ?? null,
         last_rolled_result: pendingMetadata.last_rolled_result ?? pendingResult,
       })
     }

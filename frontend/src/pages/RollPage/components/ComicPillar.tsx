@@ -33,6 +33,10 @@ export function ComicPillar({
 
   const threadTitle = activeRatingThread?.title ?? 'Loading…'
   const issueNumber = activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number ?? null
+  // Dual numbering travels with the bootstrap payload so Roll renders the same
+  // authored/alternate/provider identity as Issue, Queue, List and Mapping (#4652).
+  const issueNumberAlias = activeRatingThread?.issue_number_alias ?? null
+  const providerIssueNumber = activeRatingThread?.provider_issue_number ?? null
   const issueId = activeRatingThread?.issue_id ?? activeRatingThread?.next_issue_id
   // Shared mapping workflow (#4450): the same hook/component every issue card
   // uses, so Roll no longer owns parallel mapping state. The identity GET is
@@ -169,6 +173,8 @@ export function ComicPillar({
               <ComicIssueIdentity
                 threadTitle={threadTitle}
                 issueNumber={issueNumber == null ? '?' : String(issueNumber)}
+                issueNumberAlias={issueNumberAlias}
+                providerIssueNumber={providerIssueNumber}
                 status="unread"
                 rating={null}
                 variant="featured"
@@ -207,6 +213,8 @@ export function ComicPillar({
                   issueId={issueId}
                   threadTitle={threadTitle}
                   issueNumber={issueNumber}
+                  issueNumberAlias={issueNumberAlias}
+                  providerIssueNumber={providerIssueNumber}
                   initialIdentity={identityState}
                   fetchEnabled={false}
                   onMapped={onRefreshThread}
@@ -282,6 +290,8 @@ export function ComicPillar({
           issueId={issueId}
           threadTitle={threadTitle}
           issueNumber={issueNumber}
+          issueNumberAlias={issueNumberAlias}
+          providerIssueNumber={providerIssueNumber}
           mode={mapping.searchMode}
           onClose={mapping.closeSearchDialog}
           onConfirmed={mapping.handleIdentityConfirmed}
