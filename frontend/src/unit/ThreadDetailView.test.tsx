@@ -1189,3 +1189,67 @@ it('loads and saves the series manual creator credits from the thread edit form 
     }),
   )
 })
+
+it('refreshes the canonical Next line after a same-tab mark-unread (#5865)', async () => {
+  let nextNumber = '4'
+  const boundary = () => ({
+    evaluator: 'enabled',
+    threads: { 1: {
+      thread_id: 1, state: 'available', summary: `Saga #${nextNumber} is available next.`,
+      blockers: [], next: { issue: {
+        issue_id: nextNumber === '4' ? 401 : 403, thread_id: 1, thread_title: 'Saga',
+        issue_number: nextNumber, label: `Saga #${nextNumber}`, volume_label: null,
+      } },
+    } },
+  })
+  vi.mocked(readingBoundariesApi.batch).mockImplementation(async () => boundary() as never)
+  // SAFETY: the stubbed thread supplies only the fields this view reads.
+  mockedThreadsApiGet.mockResolvedValue({
+    id: 1, title: 'Saga', format: 'Comics', issues_remaining: 1, queue_position: 1,
+    status: 'active', total_issues: 4, next_unread_issue_number: nextNumber, notes: null,
+  } as never)
+  mockedIssuesApiList.mockResolvedValue({
+    issues: [
+      { id: 403, thread_id: 1, issue_number: '3', status: 'read', read_at: '2026-11-26T00:00:00Z', created_at: '2026-11-25T00:00:00Z' },
+      { id: 401, thread_id: 1, issue_number: '4', status: 'unread', read_at: null, created_at: '2026-11-25T00:00:00Z' },
+    ],
+    next_page_token: null, total_count: 2, page_size: 100,
+  } as never)
+  const cards: Record<number, IssueCard> = {
+    403: {
+      issue_id: 403, thread_id: 1, thread_title: 'Saga', issue_number: '3', status: 'read',
+      rating: null, mapping_state: 'confirmed', has_confirmed_identity: true,
+      cover_image_url: 'https://comicvine.example/saga-3.jpg',
+    },
+    401: {
+      issue_id: 401, thread_id: 1, thread_title: 'Saga', issue_number: '4', status: 'unread',
+      rating: null, mapping_state: 'confirmed', has_confirmed_identity: true,
+      cover_image_url: 'https://comicvine.example/saga-4.jpg',
+    },
+  }
+  const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards').mockImplementation(
+    async (ids) => ids.flatMap((id) => cards[id] ? [cards[id]!] : []),
+  )
+  const patchIssue = vi.spyOn(issueCardsApi, 'patchIssue').mockImplementation(async (id, input) => {
+    if (id === 403 && input.status === 'unread') nextNumber = '3'
+    return {
+      issue: { ...cards[id]!, status: input.status === 'unread' ? 'unread' : 'read' },
+      thread: { thread_id: 1, status: 'active', issues_remaining: 1, next_unread_issue_id: id },
+      read_event_created: false, rating_event_created: false, replayed: false,
+    }
+  })
+  const user = userEvent.setup()
+  try {
+    renderPage()
+    expect(await screen.findByText('Saga #4 is available next.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Expand' }))
+    await user.click(await screen.findByRole('button', { name: 'Reading and mapping actions for Saga #3' }))
+    await user.click(await screen.findByRole('button', { name: 'Mark unread' }))
+    // No reload: the committed direct action must reconcile the canonical
+    // boundary projection that renders the header Next line (#5537/#5865).
+    expect(await screen.findByText('Saga #3 is available next.')).toBeInTheDocument()
+  } finally {
+    fetchCards.mockRestore()
+    patchIssue.mockRestore()
+  }
+})
