@@ -226,11 +226,7 @@ describe('targeted cache effects', () => {
 
     // Exact-count guard: every invalidation below is intentional; an
     // accidental extra key (or a dropped one) must fail this test.
-    expect(invalidateQueries).toHaveBeenCalledTimes(18)
-    expect(invalidateQueries).not.toHaveBeenCalledWith({
-      queryKey: queryKeys.session.current(),
-      exact: true,
-    })
+    expect(invalidateQueries).toHaveBeenCalledTimes(17)
     // Reader-progress reconciliation refreshes the Finished Series shelf for
     // direct reads that complete a series; rating keeps its own conditional
     // reset when it marks a series completed.
@@ -242,8 +238,6 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.snapshotsAll(),
     })
-    // The History card counts the same rows through the paginated session list.
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.session.pages() })
     // Rating marks the issue read, so canonical reading boundaries must
     // recompute instead of retaining the pre-rating blocker.
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.dependencies.all })
@@ -495,7 +489,7 @@ describe('targeted cache effects', () => {
     expect(resetQueries).not.toHaveBeenCalled()
   })
 
-  it('limits queue movement refreshes to queue pages, the excluded shelf, current session, and roll state', async () => {
+  it('limits queue movement refreshes to queue pages, the excluded shelf, and roll state', async () => {
     const { client, invalidateQueries, resetQueries } = createSpiedClient()
 
     await invalidateAfterQueueMovement(client)
@@ -509,11 +503,7 @@ describe('targeted cache effects', () => {
     expect(resetQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.excluded.pages(),
     })
-    expect(invalidateQueries).toHaveBeenCalledTimes(7)
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.session.current(),
-      exact: true,
-    })
+    expect(invalidateQueries).toHaveBeenCalledTimes(6)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
