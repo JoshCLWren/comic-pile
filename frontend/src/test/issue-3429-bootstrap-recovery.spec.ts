@@ -30,6 +30,44 @@ const ACTIVITY_PATH = '/api/v2/activity'
 
 const UNAVAILABLE_BODY = JSON.stringify({ detail: 'service_unavailable' })
 
+let fixtureUserCounter = 0
+
+/**
+ * Register a disposable real reader for this test.
+ *
+ * The bounded loading UI requires a failed request on the page's *first*
+ * resource. `rollBootstrapApi.get` resolves a session with
+ * `POST /api/v2/reading-sessions` before issuing
+ * `GET /api/v2/roll/bootstrap`; with the old fake-token mock setup that POST
+ * reached the native backend with an invalid token, entered the refresh loop
+ * and never let the bootstrap GET fire. A real token keeps every request
+ * except the one under test on the genuine backend, so recovery is proven
+ * against real data rather than a fabricated payload.
+ */
+async function registerReader(page: Page): Promise<string> {
+  fixtureUserCounter += 1
+  const username = `recovery_${Date.now()}_${fixtureUserCounter}_${process.pid}`
+  const password = 'TestPass123!'
+  const registered = await page.request.post('/api/v2/auth/register', {
+    data: { username, email: `${username}@example.com`, password },
+  })
+  expect(registered.ok(), `register failed: ${registered.status()}`).toBeTruthy()
+  const loggedIn = await page.request.post('/api/v2/auth/login', {
+    data: { username, password },
+  })
+  expect(loggedIn.ok(), `login failed: ${loggedIn.status()}`).toBeTruthy()
+  // SAFETY: the test reads only access_token from its own disposable user login.
+  const data = (await loggedIn.json()) as { access_token: string }
+  expect(data.access_token).toBeTruthy()
+  return data.access_token
+}
+
+async function installAccessToken(page: Page, token: string): Promise<void> {
+  await page.addInitScript((value: string) => {
+    localStorage.setItem('auth_token', value)
+  }, token)
+}
+
 /**
  * Fail one GET endpoint until the returned callback is invoked, then pass it
  * through to the real backend so recovery is proven against genuine data
@@ -78,11 +116,10 @@ async function recoverInPlace(page: Page, pathname: string): Promise<void> {
 test.describe('Bootstrap recovery (issue #3429)', () => {
   test('a failed roll bootstrap stays recoverable in place without a reload', async ({
     page,
-    mockApi,
   }) => {
+    await installAccessToken(page, await registerReader(page))
     const markBootstrapHealthy = await failUntilHealthy(page, ROLL_BOOTSTRAP_PATH)
 
-    await mockApi.setupAuthUser()
     await page.goto('/')
 
     // Bounded loading: progress copy plus recovery, never the bare splash.
@@ -101,11 +138,10 @@ test.describe('Bootstrap recovery (issue #3429)', () => {
 
   test('a failed history first page stays recoverable in place without a reload', async ({
     page,
-    mockApi,
   }) => {
+    await installAccessToken(page, await registerReader(page))
     const markActivityHealthy = await failUntilHealthy(page, ACTIVITY_PATH)
 
-    await mockApi.setupAuthUser()
     await page.goto('/history')
 
     await expect(page.getByText(/Still loading/)).toBeVisible({ timeout: 15_000 })
