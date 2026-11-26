@@ -1539,12 +1539,42 @@ pub async fn revert_correction(
     Ok(Json(response))
 }
 
+/// Read the currently confirmed ComicVine identity of an owned issue. Used
+/// after the awaited provider attempt so an interactive outcome never names a
+/// stale identity that a concurrent remap replaced in flight.
+async fn confirmed_comicvine_issue_id(
+    state: &Arc<AppState>,
+    user_id: i32,
+    issue_id: i32,
+) -> Result<Option<String>, ApiError> {
+    let conn = db::checkout(state).await?;
+    let row = conn
+        .query_opt(
+            "SELECT e.external_id \
+             FROM external_identities e \
+             JOIN issue_external_identity_mappings m ON m.external_identity_id = e.id \
+             JOIN issues i ON i.id = m.issue_id \
+             JOIN threads t ON t.id = i.thread_id \
+             WHERE m.issue_id = $1 AND m.status = 'confirmed' \
+               AND t.user_id = $2 \
+               AND e.provider = 'comicvine' AND e.entity_type = 'issue' \
+             ORDER BY e.id \
+             LIMIT 1",
+            &[&issue_id, &user_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(row.map(|row| row.get(0)))
+}
+
 /// `POST /api/v2/comicvine/issues/{issue_id}/metadata:refresh` — the explicit
 /// Retry for the currently confirmed identity. Performs one bounded, awaited
 /// provider attempt inside this HTTP invocation. It never enqueues a refresh
-/// row, claims one, polls, or dispatches a background worker. The reader queue
-/// lock is taken before the issue row so a concurrent remap cannot slip between
-/// identity read and hydration; the persist step rechecks identity again.
+/// row, claims one, polls, or dispatches a background worker. The queue/row
+/// locks fence the initial identity read and are released before the awaited
+/// provider call; the persist step rechecks identity, and the response re-reads
+/// the confirmed identity so it cannot name a stale `A` replaced by `B` while
+/// the provider call was in flight.
 pub async fn refresh_metadata(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1591,6 +1621,12 @@ pub async fn refresh_metadata(
             None => HydrationOutcome::NotConfigured,
         }
     };
+    // A concurrent A -> B remap can commit while the provider call is in
+    // flight. Hydration re-reads the confirmed identity before the fetch and
+    // fences its write with an identity recheck, so a late A never lands on B;
+    // the wire response must likewise name the identity that is confirmed now,
+    // not the one captured before the fetch.
+    let comicvine_issue_id = confirmed_comicvine_issue_id(&state, user.id(), issue_id).await?;
     Ok(Json(MetadataRefreshResponse {
         issue_id,
         refreshed: outcome.refreshed(),
