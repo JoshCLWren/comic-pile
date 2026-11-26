@@ -83,7 +83,10 @@ test.describe('Bootstrap recovery (issue #3429)', () => {
     const markBootstrapHealthy = await failUntilHealthy(page, ROLL_BOOTSTRAP_PATH)
 
     await mockApi.setupAuthUser()
+    page.on('response', (r) => { if (r.url().includes('bootstrap')) console.log('DEBUG BOOTSTRAP RESP', r.status(), r.url()) })
     await page.goto('/')
+    await page.waitForTimeout(6000)
+    console.log('DEBUG BODY', (await page.locator('main').innerText()).slice(0,300))
 
     // Bounded loading: progress copy plus recovery, never the bare splash.
     await expect(page.getByText(/Still loading/)).toBeVisible({ timeout: 15_000 })
