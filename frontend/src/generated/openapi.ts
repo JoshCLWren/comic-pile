@@ -6310,7 +6310,10 @@ export interface components {
              *     `provider_not_configured` or `not_confirmed`.
              */
             outcome: string;
-            /** @description True only when valid metadata was persisted by this invocation. */
+            /**
+             * @description True when a valid complete or no-credits hydration outcome was reached,
+             *     including reuse of already-complete cached metadata.
+             */
             refreshed: boolean;
             /**
              * Format: int32

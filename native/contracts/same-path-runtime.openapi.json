@@ -19143,7 +19143,7 @@
           },
           "refreshed": {
             "type": "boolean",
-            "description": "True only when valid metadata was persisted by this invocation."
+            "description": "True when a valid complete or no-credits hydration outcome was reached,\nincluding reuse of already-complete cached metadata."
           },
           "retry_after_seconds": {
             "type": [
