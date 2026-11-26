@@ -192,6 +192,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   const [isUndoing, setIsUndoing] = useState(false)
   const baseIssuesRef = useRef<Issue[]>([])
   const pendingMutationsRef = useRef<IssueMutation[]>([])
+  const failedMutationsRef = useRef<IssueMutation[]>([])
   const isProcessingMutationsRef = useRef(false)
   const nextMutationIdRef = useRef(1)
   const onPendingMutationsChangeRef = useRef(onPendingMutationsChange)
@@ -443,9 +444,9 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
           hadSuccess = true
         } catch (err: unknown) {
           // A failed mutation stops the queue and is reported to the caller.
-          // Keep it at the head of the queue so the next Save retries exactly
-          // the rejected edit (#4654); later mutations stay queued behind it.
-          failedMutation = currentMutation
+          // Park it for the next Save so the optimistic UI still rolls back,
+          // while the rejected edit remains available for an explicit retry.
+          failedMutationsRef.current.push(currentMutation)
           //
           // The base list is resynchronized with the server first. When that
           // resynchronization is itself incomplete, later mutations would be
@@ -492,9 +493,6 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
           pendingMutationsRef.current = pendingMutationsRef.current.filter(
             (mutation) => mutation.id !== currentMutation.id
           )
-          if (failedMutation) {
-            pendingMutationsRef.current = [failedMutation, ...pendingMutationsRef.current]
-          }
           syncOptimisticIssues(baseIssuesRef.current, pendingMutationsRef.current)
           notifyPendingMutations()
         }
