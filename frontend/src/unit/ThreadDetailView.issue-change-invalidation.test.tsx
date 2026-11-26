@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
 import ThreadDetailView from '../pages/ThreadDetailView'
 import { ToastProvider } from '../contexts/ToastProvider'
-import * as cacheEffects from '../query/cacheEffects'
+import { invalidateAfterIssueEdit } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 import { useUpdateThread } from '../hooks/useThread'
 import { threadsApi } from '../services/api-threads'
@@ -23,6 +23,11 @@ vi.mock('react-router-dom', async () => {
 vi.mock('../hooks/useThread', async () => {
   const actual = await vi.importActual<typeof import('../hooks/useThread')>('../hooks/useThread')
   return { ...actual, useUpdateThread: vi.fn() }
+})
+
+vi.mock('../query/cacheEffects', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../query/cacheEffects')>()
+  return { ...actual, invalidateAfterIssueEdit: vi.fn().mockResolvedValue(undefined) }
 })
 
 vi.mock('../services/api-threads', () => ({ threadsApi: { get: vi.fn(), update: vi.fn() } }))
@@ -73,6 +78,7 @@ const mockedUseUpdateThread = vi.mocked(useUpdateThread)
 const mockedThreadsApiGet = vi.mocked(threadsApi.get)
 const mockedIssuesApiList = vi.mocked(issuesApi.list)
 const mockedIssuesApiListCreators = vi.mocked(issuesApi.listCreators)
+const mockedInvalidateAfterIssueEdit = vi.mocked(invalidateAfterIssueEdit)
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -93,6 +99,7 @@ beforeEach(() => {
   } as never)
   vi.mocked(dependenciesApi.getConnectedThreads).mockResolvedValue({ thread_id: 1, connected_threads: [] } as never)
   vi.mocked(tagsApi.threadIssuesEffective).mockResolvedValue({ thread_id: 1, issues: [] } as never)
+  mockedInvalidateAfterIssueEdit.mockResolvedValue(undefined)
 })
 
 function renderPage() {
@@ -106,7 +113,6 @@ function renderPage() {
 }
 
 it('reconciles canonical reader projections after issue mutations in the edit modal (#5537)', async () => {
-  const invalidateSpy = vi.spyOn(cacheEffects, 'invalidateAfterIssueEdit').mockResolvedValue()
   const user = userEvent.setup()
   renderPage()
   await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
@@ -116,6 +122,6 @@ it('reconciles canonical reader projections after issue mutations in the edit mo
   await user.click(screen.getByRole('button', { name: 'mock-issue-change' }))
 
   await waitFor(() => {
-    expect(invalidateSpy).toHaveBeenCalledWith(queryClient, 1)
+    expect(mockedInvalidateAfterIssueEdit).toHaveBeenCalledWith(queryClient, 1)
   })
 })
