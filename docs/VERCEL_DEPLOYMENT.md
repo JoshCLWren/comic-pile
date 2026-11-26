@@ -136,28 +136,16 @@ release-source collection-exclusion guard (#3671). The scheduled run delegates t
 service, so durable collection exclusions, confirmed-volume identity checks, and
 per-owner ownership rules still apply.
 
-### ComicVine creator-repair cadence (#4623)
+### ComicVine metadata hydration (retired background repair)
 
-The native Rust `GET /api/v2/maintenance/comicvine-metadata-repairs`
-endpoint executes a bounded batch synchronously inside its authenticated HTTP
-invocation. The Vercel Hobby cron still runs **daily** at 10:00 UTC because a
-more frequent Vercel cron schedule is not supported on that plan.
-
-To recover pending and expired leases promptly, the existing free GitHub
-Actions runner invokes the same endpoint **four times per hour** in
-`.github/workflows/comicvine-metadata-repair.yml`. This schedule is enabled
-only from the protected default branch and never runs secret-bearing PR code.
-It serializes invocations, checks the HTTP status and the provider configuration
-flag, and fails visibly if credentials or the worker are unavailable.
-
-**Required activation:** configure GitHub Actions repository secret
-`CRON_SECRET` to the same value already configured in the Vercel production
-project. Do not print or commit the value. The workflow deliberately fails
-rather than skipping work if the secret is absent or mismatched. After the
-production Rust deployment, use the workflow's manual dispatch once, confirm
-a successful response and provider configuration, and verify the original
-ComicVine identity and backlog in Neon before closing #4623. The built-in
-Vercel daily recovery run remains as a fallback.
+ComicVine issue hydration is no longer a scheduled job. The Vercel cron entry,
+the `.github/workflows/comicvine-metadata-repair.yml` drain (schedule,
+repository dispatch and manual run), the maintenance drain/backfill endpoints
+and the repair-dispatch token are removed. `CRON_SECRET` is still required only
+by the unrelated release-sync cron above. Hydration happens inside the exact
+issue map/remap request or the explicit authenticated `metadata:refresh` (Retry)
+request; an incomplete confirmed identity reports `needs_hydration` and remains
+recoverable without remapping. No polling or automatic retry loop remains.
 
 ### Concurrency and retry behavior
 
