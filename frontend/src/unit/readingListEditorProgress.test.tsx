@@ -170,4 +170,43 @@ describe('Reading List editing progress', () => {
       { status: 'read', skipped: false },
     ])).toBe(1)
   })
+
+  it('reconciles the Current position banner immediately after a direct read/unread (#5865)', async () => {
+    const user = userEvent.setup()
+    const entries = detectiveEntries()
+    mocks.get.mockResolvedValue({
+      id: 2, user_id: 1, name: 'Detective Comics', description: '', mode: 'strict',
+      issue_count: entries.length, entries,
+      created_at: '2026-11-26T00:00:00Z', updated_at: '2026-11-26T00:00:00Z',
+    })
+    const statuses = new Map(entries.map((entry) => [entry.issue_id, entry.status]))
+    fetchCards.mockImplementation(async (ids) => ids.map((id) => detectiveCard(id, statuses.get(id) ?? 'read')))
+    patchIssue.mockImplementation(async (id, input) => {
+      const status = input.status === 'unread' ? 'unread' : 'read'
+      statuses.set(id, status)
+      return directReceipt(id, status)
+    })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30000 } } })
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter><CustomCBLBuilder initialListId={2} /></MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByText('Current position: all issues in this list are read or skipped.')).toBeVisible()
+    const entry = (await screen.findByText('Detective Comics #3')).closest('[data-testid="reading-list-entry"]') as HTMLElement
+    const card = within(entry).getByTestId('comic-issue-card')
+
+    await user.click(within(card).getByRole('button', { name: 'Mark unread' }))
+    expect(await screen.findByText(
+      'Current position: next unread is #1 · Detective Comics #3 (unread).',
+    )).toBeVisible()
+    expect(entry).toHaveAttribute('aria-current', 'step')
+
+    await user.click(within(card).getByRole('button', { name: 'Read now' }))
+    await user.click(within(card).getByRole('button', { name: 'Mark read & save' }))
+    expect(await screen.findByText('Current position: all issues in this list are read or skipped.')).toBeVisible()
+    expect(patchIssue).toHaveBeenCalledWith(9001, expect.objectContaining({ status: 'unread' }))
+    expect(patchIssue).toHaveBeenCalledWith(9001, expect.objectContaining({ status: 'read' }))
+  })
 })
