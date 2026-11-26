@@ -19,6 +19,7 @@ import { useThreadIssuesEffectiveTags } from '../hooks/useTags'
 import {
   applyEditedThreadToQueuePages,
   invalidateAfterDependencyChange,
+  invalidateAfterIssueEdit,
 } from '../query/cacheEffects'
 import { getApiErrorDetail } from '../utils/apiError'
 import { evaluateReadingProgress } from '../utils/readingProgress'
