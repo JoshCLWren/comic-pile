@@ -17,12 +17,11 @@
 //! queue advisory lock and ownership scoping mirror them.
 //!
 //! Scope notes:
-//! * Production runs legacy execution (`OPTION_E_ENABLED` unset). The Option E
-//!   preview is honored for the dense Queue ordinal in lifecycle responses.
-//!   `stale` and `set-pending` no longer fail closed: when the evaluated graph
-//!   is active, both resolve their candidate pool through the same canonical
-//!   eligibility authority as automatic Roll instead of the stored
-//!   `threads.is_blocked` flag (issue #5525).
+//! * `stale` and `set-pending` resolve their candidate pool through the same
+//!   canonical Reading List evaluator as automatic Roll, unconditionally: no
+//!   `OPTION_E_ENABLED` mode switch, approval gate or stored `is_blocked`
+//!   fallback (issue #5525 A7/A16/A17). The dense Queue ordinal in lifecycle
+//!   responses keeps the preview's presentation contract for wire parity.
 //! * `test-backdate` is only available when `TEST_ENVIRONMENT` is set, matching
 //!   the Python test helper's guard.
 //! * Python's in-process `slowapi` limits (30-120 requests per minute) are
