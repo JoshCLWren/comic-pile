@@ -442,6 +442,329 @@ async fn failed_resort_commit_then_safe_retry_preserves_state() {
     );
 }
 
+async fn seed_session(state: &Arc<AppState>, user_id: i32) -> i32 {
+    state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one(
+            "INSERT INTO sessions (user_id, started_at, start_die, reading_mode_suggested)
+             VALUES ($1, NOW(), 20, false) RETURNING id",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0)
+}
+
+async fn seed_mapped_issue(
+    state: &Arc<AppState>,
+    user_id: i32,
+    number: &str,
+) -> i32 {
+    let pool = state.pool.get().await.unwrap();
+    let identity_id: i32 = pool
+        .query_one(
+            "INSERT INTO external_identities
+                (provider, entity_type, external_id, metadata_json, created_at, updated_at)
+             VALUES ('comicvine', 'issue', $1, '{}'::json, NOW(), NOW()) RETURNING id",
+            &[&format!("4654-{number}-{user_id}")],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let thread_id = seed_thread(state, user_id, &format!("Mapped series {number}")).await;
+    let issue_id = seed_issue(state, thread_id, number, 1).await;
+    pool.execute(
+        "INSERT INTO issue_external_identity_mappings
+            (issue_id, external_identity_id, status, evidence_json, created_at, updated_at)
+         VALUES ($1, $2, 'confirmed', '{}'::json, NOW(), NOW())",
+        &[&issue_id, &identity_id],
+    )
+    .await
+    .unwrap();
+    issue_id
+}
+
+#[tokio::test]
+async fn preview_offers_alias_for_mapped_issue_and_create_requires_acceptance() {
+    let (state, token, csrf, user_id, _guard) = setup_user("bprd-4654-alias").await;
+    let thread_id = seed_thread(&state, user_id, "Editing series").await;
+    seed_issue(&state, thread_id, "1", 1).await;
+    let mapped_issue_id = seed_mapped_issue(&state, user_id, "101").await;
+
+    let preview = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/threads/{thread_id}/issues/preview"),
+            &token,
+            &csrf,
+            json!({"issue_range": "101-102"}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(preview.status(), StatusCode::OK);
+    let bytes = to_bytes(preview.into_body(), 256 * 1024).await.unwrap();
+    let body: Value = serde_json::from_slice(&bytes).unwrap();
+    let offers = body["alias_offers"].as_array().expect("alias offers");
+    assert_eq!(offers.len(), 1, "{body}");
+    assert_eq!(offers[0]["requested_issue_number"], "101");
+    assert_eq!(offers[0]["existing_issue_id"], mapped_issue_id);
+    assert!(offers[0]["evidence"].as_str().unwrap().contains("identity"));
+
+    let blocked = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/threads/{thread_id}/issues"),
+            &token,
+            &csrf,
+            json!({"issue_range": "101-102"}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(blocked.status(), StatusCode::CONFLICT);
+    let bytes = to_bytes(blocked.into_body(), 64 * 1024).await.unwrap();
+    let blocked_body: Value = serde_json::from_slice(&bytes).unwrap();
+    assert!(
+        blocked_body["detail"].as_str().unwrap().contains("alias mapping"),
+        "{blocked_body}"
+    );
+    assert_eq!(issue_order(&state, thread_id).await, vec!["1"]);
+
+    let accepted = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/threads/{thread_id}/issues"),
+            &token,
+            &csrf,
+            json!({
+                "issue_range": "101-102",
+                "accepted_alias_numbers": ["101"],
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(accepted.status(), StatusCode::CREATED);
+    let bytes = to_bytes(accepted.into_body(), 64 * 1024).await.unwrap();
+    let accepted_body: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(accepted_body["issues"].as_array().unwrap().len(), 1);
+    assert_eq!(accepted_body["issues"][0]["issue_number"], "102");
+    assert_eq!(issue_order(&state, thread_id).await, vec!["1", "102"]);
+}
+
+#[tokio::test]
+async fn stale_preview_is_rejected_before_any_write_and_fresh_preview_retries() {
+    let (state, token, csrf, user_id, _guard) = setup_user("bprd-4654-stale").await;
+    let thread_id = seed_thread(&state, user_id, "Stale series").await;
+    let first = seed_issue(&state, thread_id, "1", 1).await;
+    let second = seed_issue(&state, thread_id, "2", 2).await;
+
+    let stale = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/threads/{thread_id}/issues"),
+            &token,
+            &csrf,
+            json!({"issue_range": "3", "expected_issue_ids": [first, second]}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(stale.status(), StatusCode::CREATED);
+
+    // Another writer added an issue after the preview was produced. The same
+    // expected IDs must now be refused without touching any row.
+    let concurrent = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/threads/{thread_id}/issues"),
+            &token,
+            &csrf,
+            json!({"issue_range": "4", "expected_issue_ids": [first, second]}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(concurrent.status(), StatusCode::CONFLICT);
+    let bytes = to_bytes(concurrent.into_body(), 64 * 1024).await.unwrap();
+    let body: Value = serde_json::from_slice(&bytes).unwrap();
+    assert!(
+        body["detail"].as_str().unwrap().contains("preview"),
+        "{body}"
+    );
+    assert_eq!(
+        issue_order(&state, thread_id).await,
+        vec!["1", "2", "3"]
+    );
+
+    let fresh_id = state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one(
+            "SELECT id FROM issues WHERE thread_id=$1 AND issue_number='3'",
+            &[&thread_id],
+        )
+        .await
+        .unwrap()
+        .get::<_, i32>(0);
+    let retry = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/threads/{thread_id}/issues"),
+            &token,
+            &csrf,
+            json!({"issue_range": "4", "expected_issue_ids": [first, second, fresh_id]}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(retry.status(), StatusCode::CREATED);
+    assert_eq!(
+        issue_order(&state, thread_id).await,
+        vec!["1", "2", "3", "4"]
+    );
+}
+
+#[tokio::test]
+async fn committed_create_writes_undo_snapshot_that_restores_ids_order_and_history() {
+    let (state, token, csrf, user_id, _guard) = setup_user("bprd-4654-undo").await;
+    let session_id = seed_session(&state, user_id).await;
+    let thread_id = seed_thread(&state, user_id, "Undo series").await;
+    let first = seed_issue(&state, thread_id, "129", 1).await;
+    let second = seed_issue(&state, thread_id, "140", 2).await;
+    let third = seed_issue(&state, thread_id, "130", 3).await;
+    state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .execute(
+            "UPDATE issues SET status='read', read_at=NOW() WHERE id=$1",
+            &[&second],
+        )
+        .await
+        .unwrap();
+    state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .execute(
+            "INSERT INTO events (user_id, thread_id, type, issue_id, rating, timestamp)
+             VALUES ($1,$2,'rate',$3,4.5,NOW())",
+            &[&user_id, &thread_id, &second],
+        )
+        .await
+        .unwrap();
+    state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .execute(
+            "INSERT INTO dependencies (source_issue_id, target_issue_id, created_at)
+             VALUES ($1,$2,NOW())",
+            &[&first, &third],
+        )
+        .await
+        .unwrap();
+
+    let created = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/threads/{thread_id}/issues"),
+            &token,
+            &csrf,
+            json!({"issue_range": "101"}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let bytes = to_bytes(created.into_body(), 64 * 1024).await.unwrap();
+    let body: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(body["undo_session_id"], session_id);
+    let snapshot_id = body["undo_snapshot_id"].as_i64().unwrap();
+
+    let snapshot = state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one(
+            "SELECT description, snapshot_kind, schema_version FROM snapshots WHERE id=$1",
+            &[&(snapshot_id as i32)],
+        )
+        .await
+        .unwrap();
+    assert_eq!(snapshot.get::<_, String>(0), "Before Edit Series add");
+    assert_eq!(snapshot.get::<_, String>(1), "delta");
+    assert_eq!(snapshot.get::<_, i32>(2), 2);
+
+    let restored = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore"),
+            &token,
+            &csrf,
+            json!({}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(restored.status(), StatusCode::OK);
+
+    let rows = state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query(
+            "SELECT id, issue_number, status FROM issues WHERE thread_id=$1 ORDER BY position, id",
+            &[&thread_id],
+        )
+        .await
+        .unwrap();
+    let restored_ids: Vec<i32> = rows.iter().map(|row| row.get(0)).collect();
+    assert_eq!(restored_ids, vec![first, second, third]);
+    assert_eq!(
+        rows.iter()
+            .map(|row| row.get::<_, String>(1))
+            .collect::<Vec<_>>(),
+        vec!["129", "140", "130"]
+    );
+    assert_eq!(
+        rows.iter()
+            .map(|row| row.get::<_, String>(2))
+            .collect::<Vec<_>>(),
+        vec!["unread", "read", "unread"]
+    );
+    let rating_events: i64 = state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one(
+            "SELECT count(*) FROM events WHERE thread_id=$1 AND type='rate'",
+            &[&thread_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(rating_events, 1, "undo must not erase rating history");
+    let dependencies: i64 = state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one(
+            "SELECT count(*) FROM dependencies WHERE source_issue_id=$1 AND target_issue_id=$2",
+            &[&first, &third],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(dependencies, 1, "undo must preserve prerequisite edges");
+}
+
 #[tokio::test]
 async fn concurrent_sibling_previews_do_not_corrupt_thread_state() {
     let (state, token, csrf, user_id, _guard) = setup_user("bprd-4654-concurrent").await;
