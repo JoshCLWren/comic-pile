@@ -7,6 +7,10 @@
     {
       "path": "/api/v1/cron/release-sync",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/v2/maintenance/comicvine-metadata-repairs",
+      "schedule": "0 10 * * *"
     }
   ],
   "git": {
@@ -318,6 +322,13 @@
       "src": "^/api/v2/reading-graph/repairs$",
       "methods": [
         "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "/api/v2/maintenance/comicvine-metadata-repairs",
+      "methods": [
+        "GET"
       ],
       "dest": "/api/native_roll.rs"
     },

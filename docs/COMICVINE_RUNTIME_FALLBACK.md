@@ -25,7 +25,7 @@ dispatch, cron, drain or polling loop.
    reading state, ratings, order or ownership.
 
 The `comicvine_metadata_refresh_requests` ledger was retired by
-`native/migrate/migrations/V7__retire_comicvine_metadata_refresh_requests.sql`.
+`native/migrate/migrations/V8__retire_comicvine_metadata_refresh_requests.sql`.
 Pending/deferred/failed rows contained only retry scheduling state; dropping
 them did not change canonical identity metadata, mappings, credits or user data.
 Previously hydrated metadata is preserved.

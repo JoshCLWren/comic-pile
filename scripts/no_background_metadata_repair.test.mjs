@@ -78,6 +78,7 @@ test('the ledger retirement migration drops the table', () => {
   const migrations = readdirSync(new URL('native/migrate/migrations/', ROOT));
   const retirement = migrations.find(name => name.includes('retire_comicvine_metadata_refresh_requests'));
   assert.ok(retirement, 'a forward migration must retire the ledger');
+  assert.ok(retirement.startsWith('V8__'), 'the ledger retirement must not collide with main V7');
   const sql = read(`native/migrate/migrations/${retirement}`);
   assert.match(sql, /DROP TABLE IF EXISTS public\.comicvine_metadata_refresh_requests/);
 });
