@@ -115,7 +115,8 @@ def test_find_broken_anchors_accepts_same_and_cross_document_headings(tmp_path: 
     )
     source = docs / "README.md"
     source.write_text(
-        "[same](#title) [cross](target.md#status--amendments-2026-11-18) "
+        "# Own heading\n\n"
+        "[same](#own-heading) [cross](target.md#status--amendments-2026-11-18) "
         "[duplicate](target.md#duplicate-1)\n",
         encoding="utf-8",
     )
@@ -162,7 +163,9 @@ def test_find_broken_anchors_ignores_missing_files_and_code_fences(tmp_path: Pat
         encoding="utf-8",
     )
 
-    assert find_broken_anchors(tmp_path, [source]) == []
+    errors = find_broken_anchors(tmp_path, [source])
+
+    assert errors == ["README.md: broken anchor: #fenced-heading"]
     assert "README.md: missing target: gone.md" in find_broken_local_links(tmp_path, [source])
 
 
