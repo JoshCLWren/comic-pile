@@ -14,6 +14,9 @@ test('account switching isolates inbox data and stops signed-out inbox requests'
     console.log('PAGEERROR', detail)
     crashes.push(detail)
   })
+  page.on('console', message => {
+    if (message.type() === 'error') console.log('CONSOLEERR', message.text())
+  })
   await page.route('**/api/**', async route => {
     const request = route.request()
     const path = new URL(request.url()).pathname
