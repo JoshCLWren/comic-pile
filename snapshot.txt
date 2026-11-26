@@ -1,38 +1,38 @@
-utc: 2026-11-26T16:19:25Z
-uptime: 1420.94s load: 2.80 2.61 1.52
-processes: 185
+utc: 2026-11-26T16:19:42Z
+uptime: 1437.87s load: 2.18 2.48 1.50
+processes: 182
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15983        1850        6930          78        7625       14132
+Mem:           15983        1523        7315          78        7568       14459
 Swap:           3071           0        3071
 --- disk
 Filesystem      Size  Used Avail Use% Mounted on
 /dev/root       145G   63G   82G  44% /
 /dev/root       145G   63G   82G  44% /
 --- top rss (KiB, name only)
-368988 opencode.exe
-169864 MainThread
+393744 opencode.exe
 164228 Runner.Worker
-151668 provjobd2959942
+135760 provjobd2959942
 122932 Runner.Listener
-101160 MainThread
-90872 opencode
+91460 opencode
 88108 dockerd
 60248 comicpile-roll-
 56128 php-fpm8.5
-53364 MainThread
-49344 containerd
-47620 ExtHandler
+49356 containerd
+47676 ExtHandler
 38320 opencode-pty
 36992 Daemon
+36448 postgres
+35872 python3
+35044 postgres
 --- top cpu (name only)
-35.2 comicpile-roll-
+34.5 comicpile-roll-
  2.5 opencode.exe
  1.8 provjobd2959942
- 1.7 python3
+ 1.6 python3
  0.9 postgres
  0.9 postgres
- 0.9 docker-proxy
+ 0.8 docker-proxy
  0.8 postgres
 --- kernel oom/kill
 --- shutdown/session signals
