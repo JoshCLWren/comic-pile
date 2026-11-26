@@ -554,7 +554,7 @@ async fn preview_offers_alias_for_mapped_issue_and_create_requires_acceptance() 
 
 #[tokio::test]
 async fn plain_same_number_issue_is_not_offered_as_an_alias() {
-    let (state, token, csrf, user_id, _guard) = setup_user("bprd-4654-alias-no-evidence").await;
+    let (state, token, csrf, user_id, _guard) = setup_user("bprd-4654-noalias").await;
     let thread_id = seed_thread(&state, user_id, "Editing series").await;
     seed_issue(&state, thread_id, "1", 1).await;
     let other_thread = seed_thread(&state, user_id, "Other series").await;
