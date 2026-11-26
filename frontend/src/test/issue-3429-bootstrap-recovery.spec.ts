@@ -23,7 +23,7 @@
 import { expect, type Page } from '@playwright/test'
 import { test } from './auth-fixtures'
 
-const ROLL_BOOTSTRAP_PATH = '/api/v2/threads'
+const ROLL_BOOTSTRAP_PATH = '/api/v2/roll/bootstrap'
 // #4822 moved /history off the legacy session index onto the owner-scoped
 // activity resource. Exercise the real first-page request the page now makes.
 const ACTIVITY_PATH = '/api/v2/activity'
@@ -84,8 +84,6 @@ test.describe('Bootstrap recovery (issue #3429)', () => {
 
     await mockApi.setupAuthUser()
     await page.goto('/')
-    await page.waitForTimeout(6000)
-    console.log('DEBUG ROLL BODY', (await page.locator('main').innerText()).slice(0,300))
 
     // Bounded loading: progress copy plus recovery, never the bare splash.
     await expect(page.getByText(/Still loading/)).toBeVisible({ timeout: 15_000 })
@@ -109,6 +107,8 @@ test.describe('Bootstrap recovery (issue #3429)', () => {
 
     await mockApi.setupAuthUser()
     await page.goto('/history')
+    await page.waitForTimeout(5000)
+    console.log('DEBUG HIST BUTTONS', JSON.stringify(await page.getByRole('button').allTextContents()))
 
     await expect(page.getByText(/Still loading/)).toBeVisible({ timeout: 15_000 })
     await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible()
