@@ -113,6 +113,10 @@ it does not require a Python function, another service, or a long-running worker
 }
 ```
 
+This snippet shows the maintained release-sync entry only; `vercel.json` also
+still declares a stale ComicVine repair cron described below, which has no
+registered native route and must not be treated as active repair.
+
 On the Vercel Hobby tier the job may start at any point inside the `09:00` UTC
 hour. Do not add a more frequent schedule; once daily is the v1 contract.
 
@@ -138,14 +142,17 @@ per-owner ownership rules still apply.
 
 ### ComicVine metadata hydration (retired background repair)
 
-ComicVine issue hydration is no longer a scheduled job. The Vercel cron entry,
-the retired ComicVine metadata-repair GitHub Actions workflow (schedule,
-repository dispatch and manual run), the maintenance drain/backfill endpoints
-and the repair-dispatch token are removed. `CRON_SECRET` is still required only
-by the unrelated release-sync cron above. Hydration happens inside the exact
-issue map/remap request or the explicit authenticated `metadata:refresh` (Retry)
-request; an incomplete confirmed identity reports `needs_hydration` and remains
-recoverable without remapping. No polling or automatic retry loop remains.
+ComicVine issue hydration is no longer a scheduled job. The ComicVine
+metadata-repair GitHub Actions workflow (schedule, repository dispatch and
+manual run), the maintenance drain/backfill endpoints and the repair-dispatch
+token are removed. `vercel.json` still declares a legacy daily
+`/api/v2/maintenance/comicvine-metadata-repairs` cron, but no native route is
+registered for that path, so the invocation falls through to the Rust 404; it is
+inert configuration, not an active repair path. `CRON_SECRET` is still required
+only by the unrelated release-sync cron above. Hydration happens inside the
+exact issue map/remap request or the explicit authenticated `metadata:refresh`
+(Retry) request; an incomplete confirmed identity reports `needs_hydration` and
+remains recoverable without remapping. No polling or automatic retry loop remains.
 
 ### Concurrency and retry behavior
 
