@@ -129,7 +129,7 @@ def run_gh_api(cmd: Sequence[str], *, label: str) -> subprocess.CompletedProcess
             file=sys.stderr,
         )
         time.sleep(delay)
-    raise RuntimeError(f"{label}: {detail or f'exit code nonzero'}")
+    raise RuntimeError(f"{label}: {detail or 'exit code nonzero'}")
 
 
 # Match shared factory policy defaults: local leases default to 24h and are
