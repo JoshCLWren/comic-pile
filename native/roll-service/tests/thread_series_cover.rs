@@ -388,6 +388,48 @@ async fn series_cover_null_when_thread_has_no_issues() {
 }
 
 #[tokio::test]
+async fn series_cover_still_renders_for_a_blocked_series() {
+    let ctx = setup("series-cover-blocked").await;
+    let thread_id = seed_thread(&ctx, ctx.user_id, "Blocked Series", "active", 1).await;
+    let issue = seed_issue(&ctx, thread_id, "1", 1, "unread").await;
+    set_frontier(&ctx, thread_id, Some(issue)).await;
+    // A reading prerequisite blocks Roll selection, but it must not suppress
+    // an otherwise available cover. The flag is written directly because the
+    // projection reads the stored `is_blocked` value for grouping.
+    ctx.state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .execute(
+            "UPDATE threads SET is_blocked = $1 WHERE id = $2",
+            &[&true, &thread_id],
+        )
+        .await
+        .unwrap();
+    seed_confirmed_cover(
+        &ctx,
+        issue,
+        "blocked-cover-id",
+        Some("https://cv.example/blocked.jpg"),
+    )
+    .await;
+
+    let (status, body) = call(&ctx, "GET", "/api/v2/threads").await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let threads = body["threads"].as_array().unwrap();
+    let row = threads
+        .iter()
+        .find(|thread| thread["title"] == "Blocked Series")
+        .unwrap();
+    assert_eq!(row["is_blocked"].as_bool(), Some(true));
+    assert_eq!(
+        row["series_cover_image_url"].as_str(),
+        Some("https://cv.example/blocked.jpg")
+    );
+}
+
+#[tokio::test]
 async fn series_cover_is_owner_scoped() {
     let ctx = setup("series-cover-scoped").await;
     let thread_id = seed_thread(&ctx, ctx.user_id, "Owner Series", "active", 1).await;
