@@ -9,11 +9,12 @@ import {pathToFileURL} from 'node:url';
 import {
   assertSingleNativeIngress,
   canonicalNativeDest,
+  RUST_DEST,
   withCanonicalBuilds,
 } from './vercel_builds.mjs';
 import {slimNativeRollRoutes} from './vercel_slim_routes.mjs';
 
-const RUST = '/api/native_roll.rs';
+const RUST = RUST_DEST;
 const NATIVE = new Set([RUST]);
 const FALLBACK = '/api(?:/.*)?';
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
