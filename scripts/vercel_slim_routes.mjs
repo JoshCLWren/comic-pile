@@ -1,18 +1,18 @@
 /**
- * Drop `/api/native_roll.rs` rewrites that the final `/api(?:/.*)?` catch-all
+ * Drop `/api/native_api.rs` rewrites that the final `/api(?:/.*)?` catch-all
  * already provides.
  *
- * Vercel uses the first matching route. A fragment-derived native_roll route is
+ * Vercel uses the first matching route. A fragment-derived native_api route is
  * only REQUIRED when a LATER route (before the catch-all) that points at
  * `/api/index.py` could also match the same method +
  * path. Overlap is decided by unifying the two routes segment by segment, so a
  * pair is dropped only when the regexes are PROVEN disjoint. Any regex shape the
  * unifier does not understand (lookaheads, alternation, ...) is treated as
- * overlapping, i.e. the roll route is kept. scripts/generate_route_burndown.mjs
+ * overlapping, i.e. the native route is kept. scripts/generate_route_burndown.mjs
  * mirrors this algorithm exactly; keep the two in sync.
  */
 
-export const ROLL_DESTINATION = '/api/native_roll.rs';
+export const NATIVE_API_DESTINATION = '/api/native_api.rs';
 const CATCH_ALL_SRC = '/api(?:/.*)?';
 const REGEX_META = new Set(['[', ']', '(', ')', '{', '}', '|', '*', '+', '?', '.', '^', '$']);
 
@@ -94,16 +94,16 @@ export function routesMayOverlap(a, b) {
   return segmentsOverlap(left, right);
 }
 
-export function slimNativeRollRoutes(routes, removable) {
+export function slimNativeApiRoutes(routes, removable) {
   const catchIndex = routes.findIndex(
     route => route.src === CATCH_ALL_SRC && !(route.methods && route.methods.length),
   );
   const limit = catchIndex === -1 ? routes.length : catchIndex;
   return routes.filter((route, index) => {
-    if (!removable.has(route) || route.dest !== ROLL_DESTINATION) return true;
+    if (!removable.has(route) || route.dest !== NATIVE_API_DESTINATION) return true;
     for (let later = index + 1; later < limit; later++) {
       const other = routes[later];
-      if (other.dest === ROLL_DESTINATION) continue;
+      if (other.dest === NATIVE_API_DESTINATION) continue;
       if (routesMayOverlap(route, other)) return true;
     }
     return false;

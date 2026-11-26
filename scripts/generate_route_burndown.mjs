@@ -8,7 +8,7 @@
 import {readFileSync, writeFileSync, readdirSync} from 'node:fs';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {slimNativeRollRoutes} from './vercel_slim_routes.mjs';
+import {slimNativeApiRoutes} from './vercel_slim_routes.mjs';
 
 const INVENTORY_PATH = 'docs/api/v2-route-inventory.json';
 const FRAGMENT_DIR = 'docs/api/route-fragments';
@@ -16,11 +16,11 @@ const SQL_BUDGET_SOURCES_PATH = 'docs/api/sql-budget-sources.json';
 const REWRITE_FRAGMENT_PATH = path.posix.join(FRAGMENT_DIR, 'vercel-rewrites.json');
 const VERCEL_PATH = 'vercel.json';
 const AGENTS_PATH = 'AGENTS.md';
-const NATIVE_DESTINATIONS = new Set(['/api/native_roll.rs']);
+const NATIVE_DESTINATIONS = new Set(['/api/native_api.rs']);
 const PYTHON_DESTINATION = '/api/index.py';
 const VERCEL_DESTINATIONS = new Set([...NATIVE_DESTINATIONS, PYTHON_DESTINATION]);
 const CATCH_ALL_SRC = '/api(?:/.*)?';
-const CATCH_ALL_DEST = '/api/native_roll.rs';
+const CATCH_ALL_DEST = '/api/native_api.rs';
 const BURN_DOWN_ISSUE = 4739;
 const METHOD_ORDER = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 const AGENTS_BEGIN_MARKER =
@@ -500,7 +500,7 @@ export function _generateVercelDocument(previous, fragments, {slim = true} = {})
     ...nonApi,
   ];
   const newRoutes = slim
-    ? slimNativeRollRoutes(
+    ? slimNativeApiRoutes(
       fullRoutes,
       new Set(generated),
     )
@@ -825,7 +825,7 @@ function _renderAgentsBlock(enriched, fullSummary = null) {
     '> API version is not implementation language.',
     '',
     `- Live v2 operations: ${total} (${native} native-rust + ${pythonTotal} python-fastapi).`,
-    '- Native ingress: `/api/native_roll.rs` (via `vercel.json`).',
+    '- Native ingress: `/api/native_api.rs` (via `vercel.json`).',
   ];
   if (fullSummary !== null) {
     const v1Total = fullSummary.v1_total;
@@ -843,7 +843,7 @@ function _renderAgentsBlock(enriched, fullSummary = null) {
       `${unversionedLive} live Python / ${unversionedShadowed} migrated ` +
       '(shadowed by Rust); remaining declared methods use explicit Python exceptions.',
     );
-    lines.push('- Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404).');
+    lines.push('- Catch-all: `/api(?:/.*)? -> /api/native_api.rs` (Rust JSON 404).');
     lines.push(
       '- Full-surface inventory (v2 + v1 + unversioned + catch-all) and per-operation callers: see `docs/api/v2-route-inventory.json` `full_surface` (authoritative).',
     );

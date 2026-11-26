@@ -6,10 +6,10 @@
  */
 import {readFileSync, readdirSync, writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
-import {slimNativeRollRoutes} from './vercel_slim_routes.mjs';
+import {slimNativeApiRoutes} from './vercel_slim_routes.mjs';
 
 const PYTHON = '/api/index.py';
-const RUST = '/api/native_roll.rs';
+const RUST = '/api/native_api.rs';
 const NATIVE = new Set([RUST]);
 const FALLBACK = '/api(?:/.*)?';
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
@@ -210,9 +210,9 @@ export function generateVercel(config, operations, fragments = null) {
   // Deterministic native-before-Python order: baseline natives (preserved
   // order) + fragment natives (sorted) + fragment pythons (sorted) +
   // baseline exceptions (sorted by path) + catch-all + non-API tail.
-  // Fragment-derived native_roll routes are emitted only when a later Python
+  // Fragment-derived native_api routes are emitted only when a later Python
   // route could otherwise shadow them (the catch-all already
-  // sends everything else to native_roll).
+  // sends everything else to native_api).
   const fullRoutes = [
     ...baselineNatives,
     ...fragmentNatives,
@@ -223,7 +223,7 @@ export function generateVercel(config, operations, fragments = null) {
   ];
   return applyStaticCsp({
     ...config,
-    routes: slimNativeRollRoutes(
+    routes: slimNativeApiRoutes(
       fullRoutes,
       new Set(fragmentNatives),
     ),
