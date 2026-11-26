@@ -3168,6 +3168,15 @@ async fn import_series_does_not_enqueue_or_fan_out() {
         .unwrap()
         .get(0);
     assert_eq!(queued, 0, "bulk import must not enqueue per-issue work");
+    assert_eq!(
+        fake(&state)
+            .calls()
+            .iter()
+            .filter(|call| call.path.starts_with("/api/issue/4000-"))
+            .count(),
+        0,
+        "bulk import must not fan out one provider request per imported issue"
+    );
     let external_ids: Vec<String> = conn
         .query(
             "SELECT e.external_id FROM external_identities e \
@@ -3447,7 +3456,10 @@ async fn explicit_retry_reports_throttling_and_retry_after_without_enqueue() {
         .get(0);
     assert_eq!(mapping, "confirmed", "a throttle never changes the mapping");
     let queued: i64 = conn
-        .query_one("SELECT count(*) FROM comicvine_metadata_refresh_requests", &[])
+        .query_one(
+            "SELECT count(*) FROM comicvine_metadata_refresh_requests",
+            &[],
+        )
         .await
         .unwrap()
         .get(0);
