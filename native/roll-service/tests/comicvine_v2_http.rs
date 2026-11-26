@@ -3645,6 +3645,140 @@ async fn retry_targets_only_the_current_identity_after_remap() {
     );
 }
 
+/// #5847: an A -> B remap that commits while Retry's provider call is in
+/// flight must not be reported as a fresh hydration of A. Hydration re-reads
+/// the confirmed identity before the fetch and fences its write with an
+/// identity recheck, so the late A response affects zero rows; the wire result
+/// must name B, not the stale A captured before the fetch.
+#[tokio::test]
+async fn retry_during_in_flight_remap_names_current_identity_and_drops_stale_write() {
+    let (started_tx, started_rx) = tokio::sync::oneshot::channel::<()>();
+    let (release_tx, release_rx) = tokio::sync::oneshot::channel::<()>();
+    let stale_payload = json!({"results": {
+        "id": 94031,
+        "name": "Stale A",
+        "issue_number": "1",
+        "cover_date": "2020-01-01",
+        "store_date": "2020-01-02",
+        "image": {"medium_url": "https://img.example/stale-a.jpg"},
+        "volume": {"id": 5593, "name": "Series"},
+        "person_credits": [{"id": 99, "name": "Stale Writer", "role": "writer"}],
+        "character_credits": [],
+        "team_credits": [],
+        "story_arc_credits": [],
+        "date_last_updated": "2026-11-01 17:33:53"
+    }});
+    let gated = Arc::new(GatedOutbound::new(stale_payload, started_tx, release_rx));
+    let (state, token, csrf, user_id, _guard) = setup_user_with(
+        "cvv2-retry-remap-race",
+        4,
+        Some(gated.clone() as Arc<dyn OutboundHttp>),
+    )
+    .await;
+    let conn = state.pool.get().await.unwrap();
+    let t = thread(&conn, user_id, "Race").await;
+    let i = issue(&conn, t, "1", 1).await;
+    drop(conn);
+
+    // Map A with no provider key: the mapping commits, no fetch is made.
+    set_key(false);
+    let (status, _) = send(
+        &state,
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{i}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 94031})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Retry fetches A and blocks inside the provider call.
+    set_key(true);
+    let retry_state = Arc::clone(&state);
+    let retry_token = token.clone();
+    let retry_csrf = csrf.clone();
+    let retry = tokio::spawn(async move {
+        send(
+            &retry_state,
+            call(
+                "POST",
+                &format!("/api/v2/comicvine/issues/{i}/metadata:refresh"),
+                &retry_token,
+                &retry_csrf,
+                None,
+            ),
+        )
+        .await
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(5), started_rx)
+        .await
+        .expect("retry provider call must start")
+        .expect("started channel must not close");
+
+    // Remap to B while the provider call is in flight. With no key the remap
+    // commits its mapping without touching the provider.
+    set_key(false);
+    let (status, _) = send(
+        &state,
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{i}/identity:replace"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 94032, "reason": "in-flight race"})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    set_key(true);
+
+    // Release the stale A response. The persist identity fence must reject it,
+    // and the response must name the identity confirmed now (B).
+    let _ = release_tx.send(());
+    let (status, body) = tokio::time::timeout(std::time::Duration::from_secs(5), retry)
+        .await
+        .expect("retry must finish")
+        .expect("retry task must not panic");
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["comicvine_issue_id"], "94032", "{body:?}");
+    assert_eq!(body["refreshed"], false, "{body:?}");
+    assert_eq!(body["outcome"], "not_confirmed", "{body:?}");
+
+    let conn = state.pool.get().await.unwrap();
+    let confirmed: String = conn
+        .query_one(
+            "SELECT e.external_id FROM issue_external_identity_mappings m \
+             JOIN external_identities e ON e.id = m.external_identity_id \
+             WHERE m.issue_id = $1 AND m.status = 'confirmed'",
+            &[&i],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(confirmed, "94032", "the remap must stay authoritative");
+    let stale_metadata: String = conn
+        .query_one(
+            "SELECT metadata_json::text FROM external_identities WHERE external_id = '94031'",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        stale_metadata, "{}",
+        "a late A response must never write A metadata"
+    );
+    drop(conn);
+    assert_eq!(
+        gated.call_paths().len(),
+        1,
+        "only the in-flight retry called the provider"
+    );
+}
+
 #[tokio::test]
 async fn import_series_error_contract_and_reading_order() {
     let (state, token, csrf, user_id, _guard) = setup_user("cvv2-serr").await;
