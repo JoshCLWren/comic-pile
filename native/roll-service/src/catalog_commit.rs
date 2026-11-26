@@ -555,6 +555,7 @@ async fn assert_no_confirmed_mapping_conflict(
 // as Python for the same DB state. A full port is large; we implement the
 // DB-backed core and compute the digest in the same format.
 pub(crate) async fn build_plan_for_commit(
+    limits: &crate::comicvine_limits::ComicVineLimits,
     outbound: &std::sync::Arc<dyn crate::outbound::OutboundHttp>,
     conn: &tokio_postgres::Client,
     user_id: i32,
@@ -568,6 +569,7 @@ pub(crate) async fn build_plan_for_commit(
     // flows as exercised by existing tests. It queries the same tables Python queries.
     // The digest format must match _plan_state_digest exactly.
     build_plan_db(
+        limits,
         outbound,
         conn,
         user_id,
@@ -691,6 +693,7 @@ fn unavailable_plan(origin_issue_id: i32, basis: &str, scope_mode: &str) -> Valu
 // commit-time revalidation this is the same logic. We implement DB-only rebuild
 // covering the test scenarios and common cases.
 async fn build_plan_db(
+    limits: &crate::comicvine_limits::ComicVineLimits,
     outbound: &std::sync::Arc<dyn crate::outbound::OutboundHttp>,
     conn: &tokio_postgres::Client,
     user_id: i32,
@@ -735,6 +738,7 @@ async fn build_plan_db(
 
     if scope_mode == "queue_thread_bootstrap" {
         return build_queue_bootstrap_plan_db(
+            limits,
             outbound,
             conn,
             user_id,
@@ -836,6 +840,7 @@ async fn build_plan_db(
             // This lookup is best-effort only for locally confirmed series:
             // Python falls back to local rows on provider 503.
             if let Ok((provider_info, roster)) = crate::comicvine_repair::catalog_volume_roster(
+                limits,
                 outbound,
                 provider_series_external_id,
             )
