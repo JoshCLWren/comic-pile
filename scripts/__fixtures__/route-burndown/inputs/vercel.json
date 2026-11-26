@@ -1,16 +1,9 @@
 {
   "routes": [
-<<<<<<< HEAD
     {"src": "^/api/v1/legacy$", "methods": ["GET"], "dest": "/api/native_api.rs"},
     {"src": "^/api/v2/alpha$", "methods": ["GET"], "dest": "/api/native_api.rs"},
     {"src": "^/api/v2/unicode$", "methods": ["GET"], "dest": "/api/native_api.rs"},
     {"src": "/api(?:/.*)?", "dest": "/api/native_api.rs"},
-=======
-    {"src": "^/api/v1/legacy$", "methods": ["GET"], "dest": "/api/native_roll.rs"},
-    {"src": "^/api/v2/alpha$", "methods": ["GET"], "dest": "/api/native_roll.rs"},
-    {"src": "^/api/v2/unicode$", "methods": ["GET"], "dest": "/api/native_roll.rs"},
-    {"src": "/api(?:/.*)?", "dest": "/api/native_roll.rs"},
->>>>>>> origin/main
     {"src": "/(.*)", "dest": "/index.html"}
   ]
 }

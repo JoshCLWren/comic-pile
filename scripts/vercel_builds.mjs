@@ -8,11 +8,7 @@
  */
 
 export const CANONICAL_BUILDS = [
-<<<<<<< HEAD
   {src: 'api/native_api.rs', use: '@vercel/rust'},
-=======
-  {src: 'api/native_roll.rs', use: '@vercel/rust'},
->>>>>>> origin/main
   {
     src: 'package.json',
     use: '@vercel/static-build',

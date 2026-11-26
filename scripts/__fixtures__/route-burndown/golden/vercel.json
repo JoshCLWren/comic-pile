@@ -5,11 +5,7 @@
       "methods": [
         "GET"
       ],
-<<<<<<< HEAD
       "dest": "/api/native_api.rs"
-=======
-      "dest": "/api/native_roll.rs"
->>>>>>> origin/main
     },
     {
       "src": "/api(?:/.*)?",
@@ -22,11 +18,7 @@
   ],
   "builds": [
     {
-<<<<<<< HEAD
       "src": "api/native_api.rs",
-=======
-      "src": "api/native_roll.rs",
->>>>>>> origin/main
       "use": "@vercel/rust"
     },
     {

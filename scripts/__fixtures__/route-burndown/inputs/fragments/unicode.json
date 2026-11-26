@@ -8,11 +8,7 @@
       "method": "GET",
       "path": "/api/v2/unicode",
       "runtime": "python-fastapi",
-<<<<<<< HEAD
       "dest": "/api/native_api.rs",
-=======
-      "dest": "/api/native_roll.rs",
->>>>>>> origin/main
       "consumers": ["café.ts 😀"]
     }
   ]
