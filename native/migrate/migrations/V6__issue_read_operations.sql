@@ -1,4 +1,4 @@
--- Migration V4: track bulk issue read/unread operations for review and undo (#4655).
+-- Migration V6: track bulk issue read/unread operations for review and undo (#4655).
 -- Each operation records the exact affected issues and their previous read state so
 -- an undo can write compensating events without reverting unrelated later changes.
 
