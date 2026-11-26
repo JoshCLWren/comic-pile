@@ -114,7 +114,9 @@ test.describe('Issue #2544: Roll Page Back Button', () => {
         // Non-hierarchical URLs (e.g. data:) never target the roll endpoint.
         return
       }
-      if (pathname.endsWith('/v1/roll/')) {
+      // The shipped roll action posts to the v2 roll resource (offer /
+      // dice-command), not the retired bare /v1/roll/ collection.
+      if (pathname.includes('/roll/') && (pathname.endsWith('/offer') || pathname.endsWith('/dice-command') || pathname.endsWith('/roll/'))) {
         rollPosts += 1
       }
     })

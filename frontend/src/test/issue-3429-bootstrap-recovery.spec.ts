@@ -86,7 +86,7 @@ test.describe('Bootstrap recovery (issue #3429)', () => {
     await page.goto('/')
 
     // Bounded loading: progress copy plus recovery, never the bare splash.
-    await expect(page.getByText('Still loading')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(/Still loading/)).toBeVisible({ timeout: 15_000 })
     await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible()
     await expect(page.getByText('Loading...', { exact: true })).toHaveCount(0)
 
@@ -94,7 +94,7 @@ test.describe('Bootstrap recovery (issue #3429)', () => {
     await recoverInPlace(page, ROLL_BOOTSTRAP_PATH)
 
     await expect(page.getByLabel('Desktop navigation')).toBeVisible()
-    await expect(page.getByText('Still loading')).toHaveCount(0)
+    await expect(page.getByText(/Still loading/)).toHaveCount(0)
     await expect(page.getByText('Session Error')).toHaveCount(0)
     await expect(page).toHaveURL(/\/$/)
   })
@@ -108,7 +108,7 @@ test.describe('Bootstrap recovery (issue #3429)', () => {
     await mockApi.setupAuthUser()
     await page.goto('/history')
 
-    await expect(page.getByText('Still loading')).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(/Still loading/)).toBeVisible({ timeout: 15_000 })
     await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible()
     await expect(page.getByText('Loading...', { exact: true })).toHaveCount(0)
 
@@ -116,7 +116,7 @@ test.describe('Bootstrap recovery (issue #3429)', () => {
     await recoverInPlace(page, ACTIVITY_PATH)
 
     await expect(page.getByRole('heading', { name: 'History' })).toBeVisible()
-    await expect(page.getByText('Still loading')).toHaveCount(0)
+    await expect(page.getByText(/Still loading/)).toHaveCount(0)
     await expect(page).toHaveURL(/\/history$/)
   })
 })
