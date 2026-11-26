@@ -79,7 +79,7 @@ if [[ "${RUN_RUST_INGRESS}" -eq 1 ]]; then
     scripts/generate_vercel_routes.test.mjs \
     scripts/vercel_slim_routes.test.mjs \
     scripts/generate_ui_audit_ingress.test.mjs \
-    scripts/strip_python_build.test.mjs
+    scripts/vercel_builds.test.mjs
 fi
 
 if [[ "${RUN_FRONTEND}" -eq 1 ]]; then
