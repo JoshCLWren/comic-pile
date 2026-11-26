@@ -291,4 +291,43 @@ describe('History activity timeline (#4822)', () => {
 
     expect(await screen.findByText('Failed to load more activity')).toBeInTheDocument()
   })
+
+  it('links an activity row to its session detail when session_id is present (#5437)', async () => {
+    listMock.mockResolvedValue({
+      items: [
+        item({
+          event_id: 1050511,
+          type: 'roll',
+          timestamp: '2026-11-08T15:42:35.028000Z',
+          die_before: 6,
+          issue_id: 1121330,
+          thread_id: 3153,
+          thread_title: 'Saga',
+          issue_number: '4',
+          session_id: 1019132,
+        }),
+        item({
+          event_id: 1050512,
+          type: 'snooze',
+          timestamp: '2026-11-08T15:46:25.515000Z',
+          die_before: 6,
+          die_after: 8,
+          thread_id: 3153,
+          thread_title: 'Saga',
+          session_id: null,
+        }),
+      ],
+      next_page_token: null,
+    })
+
+    renderHistory()
+
+    const list = await screen.findByRole('list', { name: 'Activity history' })
+    const rows = within(list).getAllByRole('listitem')
+    expect(within(rows[0]).getByRole('link', { name: 'Session' })).toHaveAttribute(
+      'href',
+      '/sessions/1019132',
+    )
+    expect(within(rows[1]).queryByRole('link', { name: 'Session' })).not.toBeInTheDocument()
+  })
 })
