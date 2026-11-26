@@ -1596,6 +1596,12 @@
             },
             "type": "object"
           },
+          "idempotency_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "revision_sha": {
             "type": "string"
           },

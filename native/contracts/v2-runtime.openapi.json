@@ -8306,6 +8306,12 @@
               "format": "int32"
             }
           },
+          "idempotency_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "revision_sha": {
             "type": "string"
           },

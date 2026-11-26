@@ -4096,6 +4096,7 @@ export interface components {
             entry_decisions?: {
                 [key: string]: string;
             };
+            idempotency_key?: string | null;
             revision_sha: string;
             series_decisions?: components["schemas"]["CommitSeriesDecision"][];
             series_overrides?: components["schemas"]["CommitEntryOverride"][];

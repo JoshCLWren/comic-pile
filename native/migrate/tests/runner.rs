@@ -144,7 +144,7 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
     let report = run(&mut client).await.unwrap();
     assert_eq!(
         (report.applied, report.adopted),
-        (vec![1, 2, 3, 4, 5], vec![])
+        (vec![1, 2, 3, 4, 5, 6], vec![])
     );
 
     let stamp: String = client
@@ -159,7 +159,7 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
         .await
         .unwrap()
         .get(0);
-    assert_eq!(recorded, 5);
+    assert_eq!(recorded, 6);
 
     let threads: bool = client
         .query_one("SELECT to_regclass('public.threads') IS NOT NULL", &[])
@@ -237,7 +237,7 @@ async fn alembic_database_at_head_is_adopted_without_rerunning() {
     let report = run(&mut client).await.unwrap();
     assert_eq!(
         (report.applied, report.adopted),
-        (vec![3, 4, 5], vec![1, 2])
+        (vec![3, 4, 5, 6], vec![1, 2])
     );
 
     let recorded: bool = client
@@ -311,7 +311,7 @@ async fn release_list_backfill_preserves_subscriptions_and_requires_unambiguous_
     let report = run(&mut client).await.unwrap();
     assert_eq!(
         (report.applied, report.adopted),
-        (vec![3, 4, 5], vec![1, 2])
+        (vec![3, 4, 5, 6], vec![1, 2])
     );
 
     let rows = client
@@ -351,7 +351,7 @@ async fn alembic_database_at_baseline_head_adopts_baseline_and_runs_pending() {
     let report = run(&mut client).await.unwrap();
     assert_eq!(
         (report.applied, report.adopted),
-        (vec![2, 3, 4, 5], vec![1])
+        (vec![2, 3, 4, 5, 6], vec![1])
     );
 
     let queue_groups: bool = client
@@ -511,7 +511,7 @@ async fn alembic_baseline_with_stale_deferred_checks_is_repaired_before_stamp() 
     let report = run(&mut client).await.unwrap();
     assert_eq!(
         (report.applied, report.adopted),
-        (vec![2, 3, 4, 5], vec![1])
+        (vec![2, 3, 4, 5, 6], vec![1])
     );
 
     let stamp: String = client
