@@ -1973,7 +1973,7 @@ mod tests {
     }
 
     #[test]
-    fn natural_order_repairs_cbl_appended_issues_3483() {
+    fn natural_order_seats_monotonic_runs_and_preserves_authored_order_3483_4654() {
         // #3483: adopting the Ultimate Universe CBL list into a thread that
         // already held #7-#24 appended the missing low issues after #24.
         // This routine is the single ordering authority for series:import,
