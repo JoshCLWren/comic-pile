@@ -4,6 +4,8 @@ import Modal from './Modal'
 import CompactIssueCardTrigger from './CompactIssueCardTrigger'
 import { issuesApi } from '../services/api-issues'
 import type { IssueListParams } from '../services/api-issues'
+import { invalidateAfterIssueEdit } from '../query/cacheEffects'
+import { queryClient } from '../query/queryClient'
 import type { Issue, IssueListResponse } from '../types'
 
 export interface IssueCorrectionIssuesApi {
@@ -167,6 +169,7 @@ export default function IssueCorrectionDialog({
         await issuesService.markUnread(targetIssue.id)
       }
 
+      await invalidateAfterIssueEdit(queryClient, threadId)
       onSuccess()
       onClose()
     } catch (_err) {
