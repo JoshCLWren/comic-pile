@@ -1,4 +1,6 @@
 import type { ReaderContextRecentRating, ReaderContextSeries } from '../../../services/api-reader-context'
+import { ComicIssueCover } from '../../../components/ComicIssueCard'
+import { indexIssueCards, useIssueCards } from '../../../hooks/useIssueCards'
 
 interface SeriesPanelProps {
   series: ReaderContextSeries
@@ -18,6 +20,13 @@ function StarRow({ rating }: { rating: number }) {
 }
 
 export function SeriesPanel({ series }: SeriesPanelProps) {
+  const issueIds = [
+    ...(series.previous_issue ? [series.previous_issue.issue_id] : []),
+    ...series.recent_ratings.map((rating) => rating.issue_id),
+  ]
+  const cards = useIssueCards(issueIds, { enabled: series.identity_source !== 'unavailable' && issueIds.length > 0 })
+  const cardsByIssue = indexIssueCards(cards.data)
+
   if (series.identity_source === 'unavailable') {
     return (
       <section
@@ -40,6 +49,8 @@ export function SeriesPanel({ series }: SeriesPanelProps) {
       </section>
     )
   }
+
+  const seriesTitle = series.series_name ?? 'Series'
 
   return (
     <section
@@ -74,15 +85,23 @@ export function SeriesPanel({ series }: SeriesPanelProps) {
       )}
 
       {series.previous_issue ? (
-        <div className="flex items-baseline gap-1.5 text-[11px] text-stone-400">
-          <span className="font-bold">Previous:</span>
-          <span>#{series.previous_issue.issue_number}</span>
-          {series.previous_issue.rating !== null ? (
-            <>
-              <span aria-hidden="true">&middot;</span>
-              <StarRow rating={series.previous_issue.rating} />
-            </>
-          ) : null}
+        <div className="flex items-center gap-2 text-[11px] text-stone-400">
+          <ComicIssueCover
+            coverImageUrl={cardsByIssue.get(series.previous_issue.issue_id)?.cover_image_url ?? null}
+            threadTitle={seriesTitle}
+            issueNumber={series.previous_issue.issue_number}
+            variant="compact"
+          />
+          <div className="min-w-0">
+            <span className="font-bold">Previous:</span>{' '}
+            <span>#{series.previous_issue.issue_number}</span>
+            {series.previous_issue.rating !== null ? (
+              <>
+                <span aria-hidden="true"> &middot; </span>
+                <StarRow rating={series.previous_issue.rating} />
+              </>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
@@ -91,14 +110,22 @@ export function SeriesPanel({ series }: SeriesPanelProps) {
           <p className="text-[10px] font-black uppercase tracking-[0.15em] text-stone-500">
             Recent ratings
           </p>
-          <div className="flex flex-wrap gap-x-3 gap-y-1">
+          <div className="flex flex-wrap gap-x-3 gap-y-2">
             {series.recent_ratings.map((r: ReaderContextRecentRating) => (
               <div
                 key={r.issue_id}
-                className="flex items-baseline gap-1 text-[11px] text-stone-300"
+                className="flex items-center gap-1.5 text-[11px] text-stone-300"
               >
-                <span className="text-stone-500">#{r.issue_number}</span>
-                <StarRow rating={r.rating} />
+                <ComicIssueCover
+                  coverImageUrl={cardsByIssue.get(r.issue_id)?.cover_image_url ?? null}
+                  threadTitle={seriesTitle}
+                  issueNumber={r.issue_number}
+                  variant="compact"
+                />
+                <div className="min-w-0">
+                  <span className="text-stone-500">#{r.issue_number}</span>{' '}
+                  <StarRow rating={r.rating} />
+                </div>
               </div>
             ))}
           </div>
