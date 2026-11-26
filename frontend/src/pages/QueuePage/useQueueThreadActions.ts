@@ -331,9 +331,8 @@ export function useQueueThreadActions(
           showToast(`Snoozed "${thread.title}" and rolled "${offer.title}". Open Roll to read it.`, 'success')
         }
         // Native reroll/unsnooze do not own a session query refresh, so Queue must
-        // invalidate it here. Legacy unsnooze still refreshes that key in its
-        // own hook, and must not issue a duplicate GET (#4276).
-        await invalidateAfterQueueMovement(queryClient, { skipSessionCurrent: isSnoozed })
+        // invalidate it here.
+        await invalidateAfterQueueMovement(queryClient)
         // Snooze/unsnooze resets the paginated queue cache, so the row remounts; the
         // id-based restore lands on the refetched trigger (#3147).
         restoreSeriesActionsFocus(thread.id)

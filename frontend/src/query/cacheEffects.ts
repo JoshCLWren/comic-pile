@@ -782,7 +782,6 @@ export async function invalidateAfterDependencyChange(
     client.invalidateQueries({ queryKey: queryKeys.readingPlans.all }),
     client.invalidateQueries({ queryKey: queryKeys.customCBLs.all }),
     client.invalidateQueries({ queryKey: queryKeys.roll.all }),
-    client.invalidateQueries({ queryKey: queryKeys.session.current(), exact: true }),
     client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
   ])
 }
@@ -838,7 +837,6 @@ export async function invalidateSessionRecoveryCache(
   client: QueryClient,
 ): Promise<void> {
   await Promise.all([
-    client.invalidateQueries({ queryKey: queryKeys.session.current(), exact: true }),
     client.invalidateQueries({ queryKey: queryKeys.roll.bootstrap(), exact: true }),
     client.invalidateQueries({ queryKey: queryKeys.roll.eligibleIssueIdsAll() }),
     client.invalidateQueries({ queryKey: queryKeys.roll.issueCardsAll() }),
@@ -1037,10 +1035,6 @@ export async function invalidateAfterRollDieModeUpdate(
     }),
     client.invalidateQueries({
       queryKey: queryKeys.roll.issueCardsAll(),
-    }),
-    client.invalidateQueries({
-      queryKey: queryKeys.session.current(),
-      exact: true,
     }),
   ])
 }
