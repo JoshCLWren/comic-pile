@@ -125,25 +125,9 @@ WHERE e.id = $1 AND e.provider = 'comicvine' AND e.entity_type = 'issue'
   )
 "#;
 
-pub(crate) async fn hydrate_confirmed_identity_inline(
-    state: &AppState,
-    user_id: i32,
-    issue_id: i32,
-    budget: Duration,
-    api_key: &str,
-    force: bool,
-) {
-    let _ = hydrate_confirmed_identity_sync(state, user_id, issue_id, budget, api_key, force).await;
-}
-
 fn issue_id(external_id: &str) -> Option<u32> {
     let raw = external_id.strip_prefix("4000-").unwrap_or(external_id);
     raw.parse::<u32>().ok().filter(|id| *id > 0)
-}
-
-/// Extract the numeric ComicVine issue id from an external identity id.
-fn issue_id_from_external(external_id: &str) -> Option<u32> {
-    issue_id(external_id)
 }
 
 fn compact_refs(value: &Value) -> Value {
@@ -280,6 +264,11 @@ fn normalized_metadata(
     Ok((patch, present, url, updated))
 }
 
+/// Parse ComicVine's provider revision stamp.
+///
+/// ComicVine documents RFC 3339 timestamps but the live API commonly returns
+/// `YYYY-MM-DD HH:MM:SS` without an offset. Both forms are UTC-equivalent, so
+/// accept either instead of silently dropping the provider revision clock.
 fn provider_timestamp(value: &Value) -> Option<String> {
     let stamp = value.as_str()?;
     if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(stamp) {
@@ -291,26 +280,23 @@ fn provider_timestamp(value: &Value) -> Option<String> {
     )
 }
 
-fn normalize_provider_api_key(raw: &str) -> Option<String> {
-    let key = raw.trim();
-    (!key.is_empty()).then(|| key.to_owned())
-}
-
-pub(crate) fn provider_api_key() -> Option<String> {
-    std::env::var("COMICVINE_API_KEY")
-        .ok()
-        .and_then(|raw| normalize_provider_api_key(&raw))
-}
-
+/// Raw outcome of one ComicVine exchange, before a caller applies its own
+/// throttle and envelope policy (the repair worker and the browser routes
+/// mirror different retired Python clients).
 #[derive(Debug)]
 pub(crate) enum Exchange {
+    /// A decoded JSON body from a 2xx response.
     Payload(Value),
+    /// HTTP 403, 420 or 429 with the raw `Retry-After` header, if any.
     Throttled {
         status: u16,
         retry_after: Option<String>,
     },
 }
 
+/// Parse Python-compatible delta-seconds or an HTTP-date, then apply the
+/// repair worker's 60..=3600 second bound. Fractional values round up so
+/// integer persistence never retries before the provider's requested deadline.
 fn repair_retry_after_seconds(raw: Option<&str>, now: chrono::DateTime<chrono::Utc>) -> u32 {
     raw.and_then(|header| parse_retry_after(header, now))
         .filter(|seconds| seconds.is_finite())
@@ -318,6 +304,10 @@ fn repair_retry_after_seconds(raw: Option<&str>, now: chrono::DateTime<chrono::U
         .unwrap_or(60)
 }
 
+/// One provider call, matching Python `ComicVineClient`
+/// throttle rules: 420/429 are throttles whose `Retry-After` is clamped to
+/// 60..=3600 s; any other non-2xx status (403 included) is a plain provider
+/// error. Success envelopes use the same status-code rule as the Python fetch.
 pub(crate) async fn provider_response(
     outbound: &Arc<dyn OutboundHttp>,
     resource: &str,
@@ -338,6 +328,8 @@ pub(crate) async fn provider_response(
             if python_envelope_ok(&payload) {
                 Ok(payload)
             } else {
+                // Never log provider-controlled error text: it can reflect the
+                // credential-bearing request URL. Keep only typed categories.
                 tracing::warn!(
                     comicvine_status_code = ?status_code,
                     resource,
@@ -349,35 +341,64 @@ pub(crate) async fn provider_response(
     }
 }
 
+/// Normalize one configured credential value. ComicVine keys are alphanumeric
+/// and [`provider_exchange`] refuses anything else before it builds a URL, so a
+/// value pasted into a deployment dashboard with a trailing newline (or
+/// surrounding spaces) must be trimmed where it is read instead of being
+/// reported as a provider outage. An absent or all-whitespace value is "not
+/// configured", matching the Python client's empty-key check.
+fn normalize_provider_api_key(raw: &str) -> Option<String> {
+    let key = raw.trim();
+    (!key.is_empty()).then(|| key.to_owned())
+}
+
+/// The single `COMICVINE_API_KEY` read. Every provider path (catalog roster,
+/// inline hydration, search, plan sync) goes through this so
+/// they agree on one normalization and on what "configured" means. The
+/// returned value is never logged.
+pub(crate) fn provider_api_key() -> Option<String> {
+    std::env::var("COMICVINE_API_KEY")
+        .ok()
+        .and_then(|raw| normalize_provider_api_key(&raw))
+}
+
 pub(crate) async fn provider_exchange(
     outbound: &Arc<dyn OutboundHttp>,
     resource: &str,
     extra_query: &str,
     api_key: &str,
 ) -> Result<Exchange, ProviderFailure> {
+    // Callers construct only trusted resource names and numeric query values.
+    // Fail closed on unexpected credential syntax rather than sending an unescaped secret.
+    // Normalizing here as well as at the read boundary makes the invariant hold
+    // for every caller, including future ones: whitespace can never turn into
+    // `Unavailable` without a provider round trip (#5695).
     let Some(api_key) = normalize_provider_api_key(api_key) else {
         tracing::debug!("comicvine provider credential is not configured");
         return Err(ProviderFailure::Unavailable);
     };
     if !api_key.bytes().all(|c| c.is_ascii_alphanumeric()) {
+        // Never log the value, any fragment of it, or the credential-bearing URL.
         tracing::warn!("comicvine provider credential contains non-alphanumeric bytes");
         return Err(ProviderFailure::Unavailable);
     }
-    let collection_slash = if matches!(resource, "issues" | "search") {
-        "/"
-    } else {
-        ""
-    };
+    // ComicVine's API appends a slash to every resource, singular ones
+    // included: `/api/volume/4050-<id>` and `/api/issue/4000-<id>` answer 301
+    // with a `Location` that repeats the credential. The native transport never
+    // follows redirects (so a credential can never be replayed on a new URL),
+    // which turns every slash-less roster fetch into `provider_unavailable`
+    // and breaks the Queue mapping-plan preview (#5851). Request the canonical
+    // slash URL directly instead; the caller-provided `resource` never carries
+    // a query string.
+    let resource = resource.trim_end_matches('/');
     let request = OutboundRequest {
         method: http::Method::GET,
-        path: format!(
-            "/api/{resource}{collection_slash}?api_key={api_key}&format=json{extra_query}"
-        ),
+        path: format!("/api/{resource}/?api_key={api_key}&format=json{extra_query}"),
         headers: vec![
             ("accept".to_string(), "application/json".to_string()),
             (
                 "user-agent".to_string(),
-                "ComicPile/1.0 (metadata repair)".to_string(),
+                "ComicPile/1.0 (metadata hydration)".to_string(),
             ),
         ],
         body: Bytes::new(),
@@ -395,6 +416,8 @@ pub(crate) async fn provider_exchange(
             || status == StatusCode::FORBIDDEN
             || status.as_u16() == 420
         {
+            // Retain only a redacted status/resource category: never log the
+            // credential-bearing URL, response body, or provider headers.
             tracing::warn!(
                 status = status.as_u16(),
                 resource,
@@ -480,323 +503,20 @@ async fn provider_issue(
     .ok_or(ProviderFailure::InvalidPayload)
 }
 
-fn has_complete_provider_payload(metadata: &Value) -> bool {
-    let Some(raw) = metadata
-        .get("raw_provider_payload")
-        .and_then(|v| v.as_object())
-    else {
-        return false;
-    };
-    FIELDS.split(',').all(|key| raw.contains_key(key))
-}
-
-fn cached_has_credits(metadata: &Value) -> bool {
-    let creator = metadata
-        .get("creator_credits")
-        .and_then(|v| v.as_array())
-        .is_some_and(|v| !v.is_empty());
-    let raw = metadata
-        .get("raw_provider_payload")
-        .and_then(|v| v.get("person_credits"))
-        .and_then(|v| v.as_array())
-        .is_some_and(|v| !v.is_empty());
-    creator || raw
-}
-
-fn provider_newer_than_deep_fetch(metadata: &Value) -> bool {
-    let deep = metadata
-        .get("deep_metadata_refreshed_at")
-        .and_then(|v| v.as_str())
-        .and_then(|v| chrono::DateTime::parse_from_rfc3339(v).ok());
-    let Some(deep) = deep else {
-        return false;
-    };
-    let Some(last_updated) = metadata
-        .get("raw_provider_payload")
-        .and_then(|v| v.get("date_last_updated"))
-        .and_then(|v| v.as_str())
-    else {
-        return false;
-    };
-    provider_timestamp(&serde_json::Value::String(last_updated.to_owned()))
-        .and_then(|v| chrono::DateTime::parse_from_rfc3339(&v).ok())
-        .is_some_and(|provider| provider > deep)
-}
-
-pub(crate) fn needs_provider_fetch(metadata: &Value, now: chrono::DateTime<chrono::Utc>) -> bool {
-    if !has_complete_provider_payload(metadata) {
-        return true;
-    }
-    if provider_newer_than_deep_fetch(metadata) {
-        return true;
-    }
-    let Some(fetched_at) = metadata["deep_metadata_refreshed_at"]
-        .as_str()
-        .and_then(|v| chrono::DateTime::parse_from_rfc3339(v).ok())
-    else {
-        return true;
-    };
-    let age = now.signed_duration_since(fetched_at);
-    let window = if cached_has_credits(metadata) {
-        chrono::Duration::days(COMPLETE_FRESH_DAYS)
-    } else {
-        chrono::Duration::days(EMPTY_CREDIT_RECHECK_DAYS)
-    };
-    age >= window
-}
-
-/// Keep cached creator credits when a fresh fetch did not include a roster.
-fn preserve_cached_credits(patch: &mut Value, cached: Option<&Value>) {
-    let Some(existing) = cached else {
-        return;
-    };
-    if existing["creator_credits"]
-        .as_array()
-        .is_some_and(|v| !v.is_empty())
-    {
-        if let Some(obj) = patch.as_object_mut() {
-            obj.insert(
-                "creator_credits".to_owned(),
-                existing["creator_credits"].clone(),
-            );
-        }
-    } else if existing["raw_provider_payload"]["person_credits"]
-        .as_array()
-        .is_some_and(|v| !v.is_empty())
-    {
-        if let Some(obj) = patch.as_object_mut() {
-            obj.insert(
-                "creator_credits".to_owned(),
-                compact_refs(&existing["raw_provider_payload"]["person_credits"]),
-            );
-        }
-    }
-}
-
-/// Bounded synchronous hydration for a single confirmed ComicVine identity.
-/// Returns a truthful outcome; never enqueues, never mutates mapping/order/
-/// reader state, and never overwrites metadata when the confirmed identity has
-/// changed or the provider call fails.
-pub(crate) async fn hydrate_confirmed_identity_sync(
-    state: &AppState,
-    user_id: i32,
-    issue_id: i32,
-    budget: Duration,
-    api_key: &str,
-    force: bool,
-) -> HydrationOutcome {
-    let Some(api_key) = normalize_provider_api_key(api_key) else {
-        return HydrationOutcome::NotConfigured;
-    };
-    if budget.is_zero() {
-        return HydrationOutcome::Unavailable;
-    }
-
-    let run = async {
-        let conn = match db::checkout(state).await {
-            Ok(c) => c,
-            Err(_) => return HydrationOutcome::Unavailable,
-        };
-        let row = match conn
-            .query_opt(
-                "SELECT e.id, e.external_id, e.metadata_json::text
-                 FROM issue_external_identity_mappings m
-                 JOIN external_identities e ON e.id = m.external_identity_id
-                 JOIN issues i ON i.id = m.issue_id
-                 JOIN threads t ON t.id = i.thread_id
-                 WHERE m.issue_id = $1
-                   AND t.user_id = $2
-                   AND m.status = 'confirmed'
-                   AND e.provider = 'comicvine'
-                   AND e.entity_type = 'issue'
-                 ORDER BY e.id
-                 LIMIT 1",
-                &[&issue_id, &user_id],
-            )
-            .await
-        {
-            Ok(row) => row,
-            Err(_) => return HydrationOutcome::Unavailable,
-        };
-        let Some(row) = row else {
-            return HydrationOutcome::NotConfirmed;
-        };
-        let identity_id: i32 = row.get(0);
-        let external_id: String = row.get(1);
-        let cached = row
-            .get::<_, Option<String>>(2)
-            .and_then(|text| serde_json::from_str::<Value>(&text).ok());
-        let Some(comicvine_id) = issue_id_from_external(&external_id) else {
-            return HydrationOutcome::InvalidResponse;
-        };
-
-        if !force {
-            if let Some(ref meta) = cached {
-                if !needs_provider_fetch(meta, chrono::Utc::now()) {
-                    return if cached_has_credits(meta) {
-                        HydrationOutcome::Complete
-                    } else {
-                        HydrationOutcome::NoCredits
-                    };
-                }
-            }
-        }
-
-        let provider_data = match provider_issue(&state.outbound, comicvine_id, &api_key).await {
-            Ok(v) => v,
-            Err(e) => return HydrationOutcome::from(e),
-        };
-        let (mut patch, present, external_url, provider_updated_at) =
-            match normalized_metadata(&provider_data, comicvine_id) {
-                Ok(v) => v,
-                Err(e) => return HydrationOutcome::from(e),
-            };
-        if !present {
-            preserve_cached_credits(&mut patch, cached.as_ref());
-        }
-        let present = patch
-            .get("creator_credits")
-            .and_then(Value::as_array)
-            .is_some_and(|v| !v.is_empty());
-        let Ok(json_patch) = serde_json::to_string(&patch) else {
-            return HydrationOutcome::InvalidResponse;
-        };
-        let updated = match conn
-            .execute(
-                PERSIST_SYNC,
-                &[
-                    &identity_id,
-                    &json_patch,
-                    &external_url,
-                    &provider_updated_at,
-                    &issue_id,
-                    &user_id,
-                ],
-            )
-            .await
-        {
-            Ok(n) => n,
-            Err(err) => {
-                tracing::warn!(
-                    error_kind = crate::error_kind(&err),
-                    "confirmed identity hydration persist failed"
-                );
-                return HydrationOutcome::Unavailable;
-            }
-        };
-        if updated == 0 {
-            // Confirmed identity changed or ownership drifted before persist.
-            return HydrationOutcome::NotConfirmed;
-        }
-        if present {
-            HydrationOutcome::Complete
-        } else {
-            HydrationOutcome::NoCredits
-        }
-    };
-
-    match tokio::time::timeout(budget, run).await {
-        Ok(outcome) => outcome,
-        Err(_) => HydrationOutcome::Timeout,
-    }
-}
-
-pub(crate) async fn hydrate_catalog_commit(
-    state: &AppState,
-    user_id: i32,
-    committed_issue_ids: &[i32],
-    budget: Duration,
-) {
-    let Some(api_key) = provider_api_key() else {
-        return;
-    };
-    hydrate_catalog_commit_with_key(state, user_id, committed_issue_ids, budget, &api_key).await;
-}
-
-async fn hydrate_catalog_commit_with_key(
-    state: &AppState,
-    user_id: i32,
-    committed_issue_ids: &[i32],
-    budget: Duration,
-    api_key: &str,
-) {
-    if committed_issue_ids.is_empty() || budget.is_zero() || api_key.is_empty() {
-        return;
-    }
-    let run = async {
-        let conn = match db::checkout(state).await {
-            Ok(c) => c,
-            Err(_) => return,
-        };
-        let rows = match conn
-            .query(
-                "SELECT DISTINCT e.id, e.external_id
-                 FROM issue_external_identity_mappings m
-                 JOIN external_identities e ON e.id = m.external_identity_id
-                 JOIN issues i ON i.id = m.issue_id
-                 JOIN threads t ON t.id = i.thread_id
-                 WHERE m.issue_id = ANY($1::integer[])
-                   AND t.user_id = $2
-                   AND m.status = 'confirmed'
-                   AND m.evidence_source = 'user_series_confirmation'
-                   AND e.provider = 'comicvine'
-                   AND e.entity_type = 'issue'
-                 ORDER BY e.id",
-                &[&committed_issue_ids, &user_id],
-            )
-            .await
-        {
-            Ok(rows) => rows,
-            Err(_) => return,
-        };
-        for row in rows {
-            let id: i32 = row.get(0);
-            let external_id: String = row.get(1);
-            let Some(comicvine_id) = issue_id(&external_id) else {
-                continue;
-            };
-            let Ok(provider_data) = provider_issue(&state.outbound, comicvine_id, api_key).await
-            else {
-                continue;
-            };
-            let Ok((patch, _, external_url, provider_updated_at)) =
-                normalized_metadata(&provider_data, comicvine_id)
-            else {
-                continue;
-            };
-            let Ok(json_patch) = serde_json::to_string(&patch) else {
-                continue;
-            };
-            if let Err(err) = conn
-                .execute(
-                    "UPDATE external_identities
-                 SET metadata_json = (COALESCE(metadata_json::jsonb, '{}'::jsonb)
-                                      || ($2::text)::jsonb)::json,
-                     external_url = COALESCE($3, external_url),
-                     provider_updated_at = COALESCE(($4::text)::timestamptz, provider_updated_at),
-                     updated_at = now()
-                 WHERE id = $1 AND provider = 'comicvine' AND entity_type = 'issue'",
-                    &[&id, &json_patch, &external_url, &provider_updated_at],
-                )
-                .await
-            {
-                tracing::warn!(
-                    error_kind = crate::error_kind(&err),
-                    "catalog commit metadata hydration failed"
-                );
-            }
-        }
-    };
-    if tokio::time::timeout(budget, run).await.is_err() {
-        tracing::info!("catalog commit inline hydration budget exhausted");
-    }
-}
-
+/// Read the same ComicVine volume and complete, validated issue roster used
+/// by the Python preview builder. Never turn an outage or partial roster into
+/// an empty successful plan: doing so can approve a wrong comic identity.
+///
+/// Routes through the shared ComicVine limits so preview roster fetches respect
+/// rate limits, cooldowns, and cache fallback, matching the v2 series routes.
 pub(crate) async fn catalog_volume_roster(
     limits: &crate::comicvine_limits::ComicVineLimits,
     outbound: &Arc<dyn OutboundHttp>,
     external_id: &str,
 ) -> Result<(Value, Vec<Value>), ApiError> {
+    // Test scaffolding only: an installed fixture short-circuits the live
+    // provider so handler tests stay deterministic. Production never installs
+    // one, so this is an inert map lookup.
     if let Some(fixture) = crate::test_support::lookup_test_volume_roster(external_id) {
         return Ok(fixture);
     }
@@ -881,11 +601,393 @@ pub(crate) async fn catalog_volume_roster(
         if results.len() < 100 || expected_total.is_some_and(|n| offset >= n) {
             break;
         }
+        // Reject a truncated or pathological roster rather than silently
+        // authorizing false unique matches. The full provider roster is
+        // required to prove issue-number cardinality.
         if offset >= 10_000 {
             return Err(unavailable());
         }
     }
     Ok((series_info, roster))
+}
+
+fn has_complete_provider_payload(metadata: &Value) -> bool {
+    let Some(raw) = metadata
+        .get("raw_provider_payload")
+        .and_then(|v| v.as_object())
+    else {
+        return false;
+    };
+    FIELDS.split(',').all(|key| raw.contains_key(key))
+}
+
+fn cached_has_credits(metadata: &Value) -> bool {
+    let creator = metadata
+        .get("creator_credits")
+        .and_then(|v| v.as_array())
+        .is_some_and(|v| !v.is_empty());
+    let raw = metadata
+        .get("raw_provider_payload")
+        .and_then(|v| v.get("person_credits"))
+        .and_then(|v| v.as_array())
+        .is_some_and(|v| !v.is_empty());
+    creator || raw
+}
+
+fn provider_newer_than_deep_fetch(metadata: &Value) -> bool {
+    let deep = metadata
+        .get("deep_metadata_refreshed_at")
+        .and_then(|v| v.as_str())
+        .and_then(|v| chrono::DateTime::parse_from_rfc3339(v).ok());
+    let Some(deep) = deep else {
+        return false;
+    };
+    let Some(last_updated) = metadata
+        .get("raw_provider_payload")
+        .and_then(|v| v.get("date_last_updated"))
+        .and_then(|v| v.as_str())
+    else {
+        return false;
+    };
+    provider_timestamp(&serde_json::Value::String(last_updated.to_owned()))
+        .and_then(|v| chrono::DateTime::parse_from_rfc3339(&v).ok())
+        .is_some_and(|provider| provider > deep)
+}
+
+/// Whether the worker must call the provider instead of settling from cache.
+/// Must mirror comicvine_issue.rs freshness exactly: a provider revision
+/// newer than the deep fetch is always stale; complete rows use 30 days;
+/// empty-credit rows use 7 days. Malformed/absent timestamps are stale.
+pub(crate) fn needs_provider_fetch(metadata: &Value, now: chrono::DateTime<chrono::Utc>) -> bool {
+    if !has_complete_provider_payload(metadata) {
+        return true;
+    }
+    if provider_newer_than_deep_fetch(metadata) {
+        return true;
+    }
+    let Some(fetched_at) = metadata["deep_metadata_refreshed_at"]
+        .as_str()
+        .and_then(|v| chrono::DateTime::parse_from_rfc3339(v).ok())
+    else {
+        return true;
+    };
+    let age = now.signed_duration_since(fetched_at);
+    let window = if cached_has_credits(metadata) {
+        chrono::Duration::days(COMPLETE_FRESH_DAYS)
+    } else {
+        chrono::Duration::days(EMPTY_CREDIT_RECHECK_DAYS)
+    };
+    age >= window
+}
+
+/// Hydrate user-confirmed catalog identities *inline after commit*, using a
+/// single request-wide budget. A provider failure never undoes the completed
+/// identity transaction. No detached tasks are left running after the response.
+pub(crate) async fn hydrate_catalog_commit(
+    state: &AppState,
+    user_id: i32,
+    committed_issue_ids: &[i32],
+    budget: Duration,
+) {
+    let Some(api_key) = provider_api_key() else {
+        return;
+    };
+    hydrate_catalog_commit_with_key(state, user_id, committed_issue_ids, budget, &api_key).await;
+}
+
+/// Post-commit hydration with provider configuration supplied by the caller.
+/// Keeping environment lookup at the HTTP boundary lets the DB regression use
+/// the recording transport without mutating process-global environment state.
+async fn hydrate_catalog_commit_with_key(
+    state: &AppState,
+    user_id: i32,
+    committed_issue_ids: &[i32],
+    budget: Duration,
+    api_key: &str,
+) {
+    if committed_issue_ids.is_empty() || budget.is_zero() || api_key.is_empty() {
+        return;
+    }
+
+    // The timeout encloses both database queries and provider requests; it
+    // cannot become N * provider_timeout for a large sibling confirmation.
+    let run = async {
+        let conn = match db::checkout(state).await {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+        let rows = match conn
+            .query(
+                "SELECT DISTINCT e.id, e.external_id
+                 FROM issue_external_identity_mappings m
+                 JOIN external_identities e ON e.id = m.external_identity_id
+                 JOIN issues i ON i.id = m.issue_id
+                 JOIN threads t ON t.id = i.thread_id
+                 WHERE m.issue_id = ANY($1::integer[])
+                   AND t.user_id = $2
+                   AND m.status = 'confirmed'
+                   AND m.evidence_source = 'user_series_confirmation'
+                   AND e.provider = 'comicvine'
+                   AND e.entity_type = 'issue'
+                 ORDER BY e.id",
+                &[&committed_issue_ids, &user_id],
+            )
+            .await
+        {
+            Ok(rows) => rows,
+            Err(_) => return,
+        };
+        for row in rows {
+            let id: i32 = row.get(0);
+            let external_id: String = row.get(1);
+            let Some(comicvine_id) = issue_id(&external_id) else {
+                continue;
+            };
+            let Ok(provider_data) = provider_issue(&state.outbound, comicvine_id, api_key).await
+            else {
+                continue;
+            };
+            let Ok((patch, _, external_url, provider_updated_at)) =
+                normalized_metadata(&provider_data, comicvine_id)
+            else {
+                continue;
+            };
+            let Ok(json_patch) = serde_json::to_string(&patch) else {
+                continue;
+            };
+            // The identity transaction has committed; a failed metadata
+            // refresh is best-effort and must not cause a client retry.
+            if let Err(err) = conn
+                .execute(
+                    "UPDATE external_identities
+                 SET metadata_json = (COALESCE(metadata_json::jsonb, '{}'::jsonb)
+                                      || ($2::text)::jsonb)::json,
+                     external_url = COALESCE($3, external_url),
+                     provider_updated_at = COALESCE(($4::text)::timestamptz, provider_updated_at),
+                     updated_at = now()
+                 WHERE id = $1 AND provider = 'comicvine' AND entity_type = 'issue'",
+                    &[&id, &json_patch, &external_url, &provider_updated_at],
+                )
+                .await
+            {
+                tracing::warn!(
+                    error_kind = crate::error_kind(&err),
+                    "catalog commit metadata hydration failed"
+                );
+            }
+        }
+    };
+    if tokio::time::timeout(budget, run).await.is_err() {
+        tracing::info!("catalog commit inline hydration budget exhausted");
+    }
+}
+
+/// Resolve the currently confirmed ComicVine issue identity for an owned issue.
+/// Evidence provenance is not part of eligibility: imported
+/// (`comicvine_issue_adoption`) and user-confirmed identities are both
+/// recoverable through the explicit synchronous Retry path. One set-based
+/// query: no per-row round trips and no N+1. Returns the identity id, its
+/// external id and the already-cached metadata used to preserve credits when
+/// the fresh roster is empty.
+async fn confirmed_identity_for_issue(
+    conn: &deadpool_postgres::Object,
+    user_id: i32,
+    issue_id: i32,
+) -> Option<(i32, String, Option<Value>)> {
+    let row = conn
+        .query_opt(
+            "SELECT e.id, e.external_id, e.metadata_json::text
+             FROM issue_external_identity_mappings m
+             JOIN external_identities e ON e.id = m.external_identity_id
+             JOIN issues i ON i.id = m.issue_id
+             JOIN threads t ON t.id = i.thread_id
+             WHERE m.issue_id = $1
+               AND t.user_id = $2
+               AND m.status = 'confirmed'
+               AND e.provider = 'comicvine'
+               AND e.entity_type = 'issue'
+             ORDER BY e.id
+             LIMIT 1",
+            &[&issue_id, &user_id],
+        )
+        .await
+        .ok()
+        .flatten()?;
+    let id: i32 = row.get(0);
+    let external_id: String = row.get(1);
+    let metadata = row
+        .get::<_, Option<String>>(2)
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok());
+    Some((id, external_id, metadata))
+}
+
+/// Synchronous, bounded creator-credit hydration for identity confirm/replace
+/// and explicit Retry. Returns a truthful terminal outcome for the current HTTP
+/// invocation; a provider failure never rolls back the confirmed mapping and
+/// never overwrites valid same-identity metadata.
+pub(crate) async fn hydrate_confirmed_identity_sync(
+    state: &AppState,
+    user_id: i32,
+    issue_id: i32,
+    budget: Duration,
+    api_key: &str,
+    force: bool,
+) -> HydrationOutcome {
+    if budget.is_zero() {
+        return HydrationOutcome::Timeout;
+    }
+    let Some(api_key) = normalize_provider_api_key(api_key) else {
+        return HydrationOutcome::NotConfigured;
+    };
+    let run = async {
+        // Read the confirmed identity and cached metadata, then release the
+        // connection before any provider I/O (no DB lock across the fetch).
+        let (identity_id, external_id, cached) = {
+            let conn = match db::checkout(state).await {
+                Ok(conn) => conn,
+                Err(_) => return HydrationOutcome::Unavailable,
+            };
+            let found = confirmed_identity_for_issue(&conn, user_id, issue_id).await;
+            drop(conn);
+            match found {
+                Some(found) => found,
+                None => return HydrationOutcome::NotConfirmed,
+            }
+        };
+        let Some(comicvine_id) = issue_id_from_external(external_id.as_str()) else {
+            return HydrationOutcome::InvalidResponse;
+        };
+
+        // Reuse already-complete valid cached metadata. Retry (`force`) is the
+        // explicit way to spend a fresh bounded provider attempt.
+        let reusable = if force {
+            None
+        } else {
+            cached
+                .as_ref()
+                .filter(|metadata| !needs_provider_fetch(metadata, chrono::Utc::now()))
+        };
+        let has_credits = if let Some(cached) = reusable {
+            cached_has_credits(cached)
+        } else {
+            let provider_data = match provider_issue(&state.outbound, comicvine_id, &api_key).await
+            {
+                Ok(value) => value,
+                Err(error) => {
+                    tracing::info!(
+                        error_kind = ?error,
+                        "bounded identity hydration provider call failed; mapping kept"
+                    );
+                    return HydrationOutcome::from(error);
+                }
+            };
+            let (mut patch, has, url, updated) =
+                match normalized_metadata(&provider_data, comicvine_id) {
+                    Ok(ok) => ok,
+                    Err(error) => return HydrationOutcome::from(error),
+                };
+            // A sparser fresh roster must never erase cached creator credits.
+            if !has {
+                preserve_cached_credits(&mut patch, cached.as_ref());
+            }
+            let effective = has || cached_has_credits(&patch);
+            let Ok(json_patch) = serde_json::to_string(&patch) else {
+                return HydrationOutcome::InvalidResponse;
+            };
+            let conn = match db::checkout(state).await {
+                Ok(conn) => conn,
+                Err(_) => return HydrationOutcome::Unavailable,
+            };
+            // Recheck identity and ownership at persist. A concurrent remap
+            // that commits while the provider was in flight makes this UPDATE
+            // affect zero rows, so stale A metadata can never land on B.
+            let updated_rows = match conn
+                .execute(
+                    PERSIST_SYNC,
+                    &[
+                        &identity_id,
+                        &json_patch,
+                        &url,
+                        &updated,
+                        &issue_id,
+                        &user_id,
+                    ],
+                )
+                .await
+            {
+                Ok(rows) => rows,
+                Err(err) => {
+                    tracing::warn!(
+                        error_kind = crate::error_kind(&err),
+                        "bounded identity hydration metadata write failed"
+                    );
+                    return HydrationOutcome::Unavailable;
+                }
+            };
+            if updated_rows == 0 {
+                return HydrationOutcome::NotConfirmed;
+            }
+            effective
+        };
+        if has_credits {
+            HydrationOutcome::Complete
+        } else {
+            HydrationOutcome::NoCredits
+        }
+    };
+    match tokio::time::timeout(budget, run).await {
+        Ok(outcome) => outcome,
+        Err(_) => {
+            tracing::info!("bounded identity hydration request budget exhausted");
+            HydrationOutcome::Timeout
+        }
+    }
+}
+
+/// Back-compat wrapper used by confirm/replace/import handlers that do not need
+/// the terminal outcome in the wire response.
+pub(crate) async fn hydrate_confirmed_identity_inline(
+    state: &AppState,
+    user_id: i32,
+    issue_id: i32,
+    budget: Duration,
+    api_key: &str,
+    force: bool,
+) {
+    let _ = hydrate_confirmed_identity_sync(state, user_id, issue_id, budget, api_key, force).await;
+}
+
+/// Extract the numeric ComicVine issue id from an external identity id.
+fn issue_id_from_external(external_id: &str) -> Option<u32> {
+    issue_id(external_id)
+}
+
+/// Keep cached creator credits when a fresh fetch did not include a roster.
+fn preserve_cached_credits(patch: &mut Value, cached: Option<&Value>) {
+    let Some(existing) = cached else {
+        return;
+    };
+    if existing["creator_credits"]
+        .as_array()
+        .is_some_and(|v| !v.is_empty())
+    {
+        if let Some(obj) = patch.as_object_mut() {
+            obj.insert(
+                "creator_credits".to_owned(),
+                existing["creator_credits"].clone(),
+            );
+        }
+    } else if existing["raw_provider_payload"]["person_credits"]
+        .as_array()
+        .is_some_and(|v| !v.is_empty())
+    {
+        if let Some(obj) = patch.as_object_mut() {
+            obj.insert(
+                "creator_credits".to_owned(),
+                compact_refs(&existing["raw_provider_payload"]["person_credits"]),
+            );
+        }
+    }
 }
 
 #[cfg(test)]

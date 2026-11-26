@@ -339,7 +339,7 @@ same codebase.
 - The durable reading-history model is the Rust `ReadingSession` resource (`native/roll-service/src/reading_session.rs`), backed by the `sessions` table. It is never `Session`, `sessions`, or `SessionModel` in code. <!-- docs-path-check: ignore -->
 - Auth state has its own precise names: access token, refresh token, `password_changed_at` (credential epoch), `revoked_tokens`, and `password_reset_tokens`. There is no auth-session persistence model, and none may be added just to make naming symmetrical.
 - Auth modules (`native/roll-service/src/auth/`) must not import or call reading-history persistence. Revoke credentials with auth state; reading history is not a credential. <!-- docs-path-check: ignore -->
-- Storage/API edges keep the established wire names: the `sessions` table, the `session_id` path parameter in v2 reading-session URLs, and the `SessionDetails`/`SessionSnapshotsResponse` client types. Retrofitted v1 names such as `/api/session/`, `SessionListItem`, or singular `SessionDetail` are retired and must not be presented as current contracts. Ambiguity is resolved in code, not on the wire.
+- Storage/API edges may keep familiar wire names (`sessions` table, `/api/session/`, `SessionListItem`) because clients and migrations depend on them. Ambiguity is resolved in code, not on the wire.
 - A password reset must preserve populated reading history; the Rust auth module operates only on auth state.
 
 See [`docs/READING_SESSION_NAMING.md`](docs/READING_SESSION_NAMING.md) for the full convention, the

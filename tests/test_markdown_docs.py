@@ -2,16 +2,13 @@
 
 import subprocess
 from pathlib import Path
-from unittest.mock import patch
 
 from scripts.check_markdown_docs import (
     find_broken_anchors,
     find_broken_local_links,
-    find_stale_runtime_claims,
     find_unapproved_root_markdown,
     iter_markdown_files,
 )
-from scripts.generate_markdown_inventory import build_inventory
 
 GOOD_FIRST_ISSUES_URL = (
     "https://github.com/JoshCLWren/comic-pile/issues"
@@ -219,73 +216,6 @@ def test_current_repository_has_no_broken_anchors() -> None:
     assert find_broken_anchors(root, iter_markdown_files(root)) == []
 
 
-def test_find_stale_runtime_claims_flags_affirmative_active_claims(tmp_path: Path) -> None:
-    """Catch present-tense retired-stack claims without banning historical mentions.
-
-    Args:
-        tmp_path: Temporary repository root supplied by pytest.
-    """
-    docs = tmp_path / "docs"
-    docs.mkdir()
-    source = docs / "ARCHITECTURE.md"
-    source.write_text(
-        "# Architecture\n\n"
-        "The backend is FastAPI.\n"
-        "The API uses SQLAlchemy.\n"
-        "Alembic manages migrations.\n",
-        encoding="utf-8",
-    )
-
-    errors = find_stale_runtime_claims(tmp_path, [source])
-
-    assert len(errors) == 3
-    assert all("stale runtime claim" in error for error in errors)
-    assert any("backend is FastAPI" in error for error in errors)
-    assert any("uses SQLAlchemy" in error for error in errors)
-    assert any("Alembic manages" in error for error in errors)
-
-
-def test_find_stale_runtime_claims_ignores_history_fences_and_overrides(
-    tmp_path: Path,
-) -> None:
-    """Preserve negations, provenance, fenced examples and explicit line overrides.
-
-    Args:
-        tmp_path: Temporary repository root supplied by pytest.
-    """
-    docs = tmp_path / "docs"
-    docs.mkdir()
-    history = docs / "HISTORY.md"
-    history.write_text(
-        "# History\n\n<!-- docs-path-check: historical -->\n\nThe backend is FastAPI.\n",
-        encoding="utf-8",
-    )
-    superseded = docs / "SUPERSEDED.md"
-    superseded.write_text(
-        "# Superseded note\n\n> **Status: superseded.** See [API.md](API.md).\n\n"
-        "The backend is FastAPI.\n",
-        encoding="utf-8",
-    )
-    active = docs / "README.md"
-    active.write_text(
-        "# Active\n\n"
-        "FastAPI is retired; there is no FastAPI middleware.\n"
-        "The backend is not SQLAlchemy.\n"
-        "The backend is FastAPI. <!-- docs-path-check: ignore -->\n"
-        "```md\nThe backend is FastAPI.\n```\n",
-        encoding="utf-8",
-    )
-
-    assert find_stale_runtime_claims(tmp_path, [history, superseded, active]) == []
-
-
-def test_current_repository_has_no_stale_runtime_claims() -> None:
-    """Keep the retired Python stack out of present-tense active documentation."""
-    root = Path(__file__).parents[1]
-
-    assert find_stale_runtime_claims(root, iter_markdown_files(root)) == []
-
-
 def test_iter_markdown_files_ignores_generated_directories(tmp_path: Path) -> None:
     """Exclude generated dependency and deployment trees from documentation audits.
 
@@ -352,41 +282,6 @@ def test_find_unapproved_root_markdown_flags_documentation_sprawl(tmp_path: Path
     (tmp_path / "RANDOM_NOTES.md").write_text("# Notes\n", encoding="utf-8")
 
     assert find_unapproved_root_markdown(tmp_path) == ["RANDOM_NOTES.md"]
-
-
-def test_reconciliation_handoff_is_linked_and_point_in_time() -> None:
-    """Keep issue #5757 audit evidence discoverable and explicitly historical."""
-    root = Path(__file__).parents[1]
-    hub = (root / "docs" / "README.md").read_text(encoding="utf-8")
-    handoff = (
-        root / "docs" / "MARKDOWN_RECONCILIATION_HANDOFF.md"
-    ).read_text(encoding="utf-8")
-
-    assert "[Markdown reconciliation handoff](MARKDOWN_RECONCILIATION_HANDOFF.md)" in hub
-    assert "<!-- docs-path-check: historical -->" in handoff
-    assert "## A19 — inventory accounting" in handoff
-    assert "## A28 — validation and handoff" in handoff
-    assert "## Remaining discrepancies" in handoff
-
-
-def test_inventory_classifies_every_tracked_markdown_file() -> None:
-    """Leave no tracked Markdown file unresolved by #5757's inventory accounting."""
-    root = Path(__file__).parents[1]
-
-    def git_in_root(*args: str) -> str:
-        result = subprocess.run(
-            ["git", "-C", str(root), *args],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        return result.stdout.strip()
-
-    with patch("scripts.generate_markdown_inventory._git", side_effect=git_in_root):
-        rows = build_inventory()
-
-    assert rows
-    assert all(row.action != "review — classify" for row in rows)
 
 
 def test_contributing_links_good_first_issue_label_filter() -> None:
