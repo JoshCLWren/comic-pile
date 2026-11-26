@@ -23,6 +23,7 @@ import Modal from '../../components/Modal'
 import DeleteIssueDialog from './DeleteIssueDialog'
 import { PostCreateUndoBar } from './IssueEditPreviewParts'
 import { IssueCreatePreviewModal } from './IssueCreatePreviewModal'
+import { IssuePreviewErrorModal } from './IssuePreviewErrorModal'
 import { IssueStructurePreviewModal } from './IssueStructurePreviewModal'
 import { useIssueStructurePreview } from './useIssueStructurePreview'
 import type { StructuralEdit } from './useIssueStructurePreview'
@@ -1288,39 +1289,13 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         </Modal>
       )}
       {previewError && (
-        <Modal
-          isOpen
-          title="Preview unavailable"
-          onClose={() => setPreviewError(null)}
-          data-testid="edit-series-preview-error-modal"
-        >
-          <div className="space-y-4">
-            <p className="text-sm text-[var(--theme-text-muted)]" role="alert">
-              Could not preview <span className="font-bold">{addRange.trim()}</span>: {previewError}
-            </p>
-            <p className="text-xs text-stone-400">
-              Nothing was changed. You can retry the preview or cancel.
-            </p>
-            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
-              <button
-                type="button"
-                onClick={() => { setPreviewError(null); setAddError(null) }}
-                className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => { setAddError(null); void handleAddIssues() }}
-                disabled={isPreviewing || !addRange.trim()}
-                className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-xs font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60 transition-colors"
-                data-testid="retry-preview-add"
-              >
-                Retry preview
-              </button>
-            </div>
-          </div>
-        </Modal>
+        <IssuePreviewErrorModal
+          message={previewError}
+          range={addRange}
+          isPreviewing={isPreviewing}
+          onCancel={() => { setPreviewError(null); setAddError(null) }}
+          onRetry={() => { setAddError(null); void handleAddIssues() }}
+        />
       )}
       {previewState && (
         <IssueCreatePreviewModal
