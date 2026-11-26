@@ -93,25 +93,35 @@ which this PR retains solely as the A19/A28 audit evidence.
 
 ## A28 — validation and handoff
 
-Checks observed in this review runtime:
+Checks observed in this review runtime on the synchronized tree:
 
-- `node scripts/check_doc_code_paths.mjs` — fails on the bare head with exactly
-  the three #5846-only paths recorded above; green in required CI via the merge
-  tree (`Docs code-path check` at head `b963c3b`).
+- `python3 scripts/check_markdown_docs.py` — exit 0; "Validated 292 current
+  Markdown files."
+- `node scripts/check_doc_code_paths.mjs` — exit 0; "Doc code paths resolve in
+  292 Markdown files." (the three stale paths from the old base are gone).
+- `node --test scripts/check_doc_code_paths.test.mjs` — exit 0; 16 pass, 0 fail.
 - `python3 scripts/generate_markdown_inventory.py --output
   /tmp/MARKDOWN_INVENTORY_5757.md` — exit 0; counts above.
-- `gh pr checks 5835` — all required checks pass at the exact reviewed head,
-  including Markdown docs, Docs code-path check, Node script tests, Rust ingress
-  and factory guards.
+- `git write-tree` diff against `origin/main` — only this handoff, the
+  `docs/README.md` link and the `docs/VERCEL_DEPLOYMENT.md` link differ; the
+  `git merge-tree` conflict and the `CONFLICTING` merge state are resolved.
+- `python3 -m pytest` could not run: pytest is not installed in this runtime
+  (`No module named pytest`); the Documentation workflow runs
+  `tests/test_markdown_docs.py` and `tests/test_generate_markdown_inventory.py`
+  in CI. No result is claimed for those two files locally.
 - Not executed locally: `make dev` with a live PostgreSQL instance, browser E2E
   and any credentialed production request. These require services/credentials
   unavailable in this review runtime; no result is claimed for them.
 
-Remaining discrepancies: PR #5835's doc content was already delivered by merged
+At the prior bare head `24ee72c`, `gh pr checks` showed `Docs code-path check`
+and `CI Summary` failing and `mergeable: CONFLICTING`; those failures are the
+stale-base artifacts fixed by the synchronization recorded above. Remaining
+discrepancies: PR #5835's reconciled doc content was already delivered by merged
 #5846; this PR is retained only as the audit/handoff evidence required by A19 and
-A28. Delivery must follow the existing Rotisserie claim, exact-head CI,
-independent review and merge gates; no factory policy, automation schedule,
-production business logic, API contract or schema was changed here.
+A28, plus the synchronization that makes the head self-consistent. Delivery must
+follow the existing Rotisserie claim, exact-head CI, independent review and merge
+gates; no factory policy, automation schedule, production business logic, API
+contract or schema was changed here.
 
 ## A31 — maintenance rule
 
@@ -143,7 +153,7 @@ historical/superseded notices.
 | A16 | this file | Reading List described as canonical; Option E kept historical |
 | A17 | this file | Python tooling/scripts distinguished from the removed Python runtime |
 | A18 | this file | Generated contracts and tooling preferred over copied route tables |
-| A19 | this file | 291 files accounted; 83/198/8/2 dispositions; exclusions recorded |
+| A19 | this file | 292 files accounted; 83/199/8/2 dispositions; exclusions recorded |
 | A20 | this file | All seven examples reconciled on current main with paths |
 | A21 | this file | README prerequisites/ports checked against Makefile; local limits recorded |
 | A22 | `docs/MARKDOWN_RECONCILIATION_HANDOFF.md` | API doc agreement checked against generated contracts and callers |
@@ -151,7 +161,7 @@ historical/superseded notices.
 | A24 | `docs/COMICVINE_HYDRATOR.md`, `docs/COMICVINE_RUNTIME_FALLBACK.md` | Migration-era queue/cron fallback guidance removed |
 | A25 | this file | Agent guidance checked against current factory safeguards |
 | A26 | `docs/README.md`, `docs/COMICVINE_HYDRATOR.md` | Added/repaired links use existing anchors; no dangling references added |
-| A27 | this file | Local checks and exact-head required CI results recorded |
+| A27 | this file | Local doc/link/code-path/generator/unit checks pass on the synchronized head; prior-head CI failures recorded as stale-base artifacts |
 | A28 | this file | Documents, stale claims, sources, validation and discrepancies recorded |
 | A29 | this file | Documentation workflow and existing checks reused |
 | A30 | this file | Generator and code-path commands executed above |
