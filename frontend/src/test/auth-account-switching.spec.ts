@@ -9,9 +9,10 @@ test('account switching isolates inbox data and stops signed-out inbox requests'
   let unsignedInboxRequests = 0
   let refreshRequests = 0
   const crashes: string[] = []
+  let stage = 'start'
   page.on('pageerror', error => {
     crashes.push(error.message)
-    console.log('DEBUG_STACK', error.stack, 'CAUSE_VALUE', JSON.stringify((error as Error & { cause?: unknown }).cause))
+    console.log('DEBUG_STAGE', stage, error.message)
   })
   await page.route('**/api/**', async route => {
     const request = route.request()
@@ -79,29 +80,23 @@ test('account switching isolates inbox data and stops signed-out inbox requests'
   async function openInbox(username: string) {
     const nav = page.getByLabel('Desktop navigation')
     await expect(nav).toBeVisible()
-    // The nav re-renders on auth refresh: a Playwright click retries against a
-    // detached link node, and dispatching a click on that node can land while
-    // React is committing a replacement and crash the commit. Drive the router
-    // through the History API instead — same client-side route transition, no
-    // dependency on a transient nav DOM node.
-    await page.evaluate(() => {
-      window.history.pushState(null, '', '/identity-inbox')
-      window.dispatchEvent(new PopStateEvent('popstate'))
-    })
+    // The nav re-renders on auth refresh; a synthetic click avoids Playwright
+    // retrying an actionable click against a detached link node.
+    await nav.getByRole('link', { name: 'Identity Inbox page' }).first().dispatchEvent('click')
     await expect(page.getByText(username + ' private comic', { exact: true })).toBeVisible()
   }
 
   await page.goto('/login')
   await expect(page.getByLabel('Username', { exact: true })).toBeVisible()
   expect(inboxRequests).toBe(0)
-  await login('first')
-  await openInbox('first')
+  stage = 'login first'; await login('first')
+  stage = 'inbox first'; await openInbox('first')
   await page.getByRole('button', { name: 'Log out', exact: true }).click()
   await expect(page.getByLabel('Username', { exact: true })).toBeVisible()
   const beforeWrongPasswords = inboxRequests
-  await login('second', 'wrong-password')
+  stage = 'wrong password'; await login('second', 'wrong-password')
   await expect(page.getByText('Incorrect username or password', { exact: true })).toBeVisible()
-  await login('second', 'wrong-password')
+  stage = 'wrong password'; await login('second', 'wrong-password')
   await expect(page.getByText('Incorrect username or password', { exact: true })).toBeVisible()
   await page.getByRole('link', { name: 'Forgot password?' }).click()
   await page.getByLabel('Email', { exact: true }).fill('second@example.com')
@@ -111,13 +106,13 @@ test('account switching isolates inbox data and stops signed-out inbox requests'
   expect(inboxRequests).toBe(beforeWrongPasswords)
   expect(refreshRequests).toBe(0)
 
-  await login('second')
-  await openInbox('second')
+  stage = 'login second'; await login('second')
+  stage = 'inbox second'; await openInbox('second')
   await expect(page.getByText('first private comic', { exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: 'Log out', exact: true }).click()
   await expect(page.getByLabel('Username', { exact: true })).toBeVisible()
-  await login('first')
-  await openInbox('first')
+  stage = 'login first'; await login('first')
+  stage = 'inbox first'; await openInbox('first')
   await expect(page.getByText('second private comic', { exact: true })).toHaveCount(0)
   expect(unsignedInboxRequests).toBe(0)
   expect(crashes).toEqual([])
