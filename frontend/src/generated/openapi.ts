@@ -13668,7 +13668,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Confirmed identity to refresh */
+            /** @description Bounded synchronous retry outcome for the confirmed identity */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -23371,7 +23371,7 @@
                 }
               }
             },
-            "description": "Confirmed identity to refresh"
+            "description": "Bounded synchronous retry outcome for the confirmed identity"
           },
           "400": {
             "description": "Identity or correction conflict"
