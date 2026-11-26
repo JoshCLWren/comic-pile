@@ -367,7 +367,7 @@ pub async fn list_inbox(
             "SELECT COUNT(*)::bigint FROM issue_external_identity_mappings m \
              JOIN issues i ON i.id = m.issue_id \
              JOIN threads t ON t.id = i.thread_id \
-             WHERE t.user_id = $1 AND m.status IN ('unresolved','candidate','deferred')",
+             WHERE t.user_id = $1 AND m.status IN ('unresolved','candidate')",
             &[&user.id()],
         )
         .await
@@ -386,7 +386,7 @@ pub async fn list_inbox(
              JOIN issues i ON i.id = m.issue_id \
              JOIN threads t ON t.id = i.thread_id \
              JOIN external_identities e ON e.id = m.external_identity_id \
-             WHERE t.user_id = $1 AND m.status IN ('unresolved','candidate','deferred') \
+             WHERE t.user_id = $1 AND m.status IN ('unresolved','candidate') \
              ORDER BY m.created_at DESC \
              OFFSET $2 LIMIT $3",
             &[&user.id(), &offset, &limit],
@@ -1705,12 +1705,12 @@ mod tests {
         assert_eq!(list.total, 0);
     }
 
-    /// Regression for #5623: deferring an inbox item must keep showing its candidate
-    /// evidence. When an item is deferred, the candidates query should still return
-    /// the deferred mapping as a candidate so the UI shows "1 candidate found" instead
-    /// of "No candidates found" with no reason.
+    /// Regression for #5524/#5623: deferring an item removes it from the
+    /// unresolved inbox and drops the unresolved count (#5524), while the detail
+    /// endpoint still returns its candidate evidence so deferral does not erase
+    /// review evidence (#5623).
     #[tokio::test]
-    async fn deferred_item_shows_candidate_evidence() {
+    async fn defer_removes_item_from_unresolved_inbox_but_preserves_candidate_evidence() {
         let Some(state) = test_support::test_state(2).await else {
             return;
         };
@@ -1769,7 +1769,9 @@ mod tests {
         assert!(defer_response.success);
         assert_eq!(defer_response.message, "Item deferred for later review");
 
-        // Verify the deferred item still shows candidate evidence
+        // A deferred item leaves the unresolved inbox and the unresolved count
+        // drops (#5524). The candidate evidence must remain visible through the
+        // detail endpoint so deferral does not erase review evidence (#5623).
         let after_defer = list_inbox(
             State(state.clone()),
             AuthenticatedUser::for_test(1),
@@ -1781,24 +1783,17 @@ mod tests {
         .await
         .unwrap()
         .0;
-        assert_eq!(after_defer.items.len(), 1);
-        let item_after = &after_defer.items[0];
-        assert_eq!(item_after.status, "deferred");
-        // The deferred mapping should still be visible as a candidate
         assert_eq!(
-            item_after.candidates.len(),
-            1,
-            "deferred item should still show its candidate evidence; got {} candidates",
-            item_after.candidates.len()
+            after_defer.total, 0,
+            "deferred item should leave the unresolved inbox (#5524)"
         );
-        assert!(
-            !item_after.why_stopped.contains("No candidates found"),
-            "collapsed header must not claim no candidates when a candidate exists (even if deferred); got {:?}",
-            item_after.why_stopped,
+        assert_eq!(
+            after_defer.items.len(),
+            0,
+            "deferred item should not appear in the unresolved inbox list (#5524)"
         );
-        assert_eq!(item_after.why_stopped, "1 candidate found");
 
-        // Also verify get_inbox_item works correctly for deferred items
+        // Verify get_inbox_item still shows candidate evidence for deferred items (#5623).
         let detail_response = get_inbox_item(State(state), AuthenticatedUser::for_test(1), Path(1))
             .await
             .unwrap()
@@ -1812,5 +1807,11 @@ mod tests {
             "deferred item detail should show candidate evidence; got {} candidates",
             detail_item.candidates.len()
         );
+        assert!(
+            !detail_item.why_stopped.contains("No candidates found"),
+            "deferred item detail must not claim no candidates when a candidate exists; got {:?}",
+            detail_item.why_stopped,
+        );
+        assert_eq!(detail_item.why_stopped, "1 candidate found");
     }
 }
