@@ -156,13 +156,12 @@ export async function applyRatedThreadCache(
     // `session.current` is intentionally not invalidated here: the shared
     // reader-progress pass below invalidates `session.all`, which covers it.
     // A second exact invalidation re-ran the in-flight session fetch (#5264).
-    // A rating writes a new "After rating" snapshot (#3468). Both snapshot
-    // lists read the same rows, and the History card counts them through the
-    // paginated session list, so all three must stop serving the pre-rating
-    // state the moment the rating commits.
+    // A rating writes a new "After rating" snapshot (#3468). The Roll undo
+    // list and the session snapshot list read the same rows, so both must stop
+    // serving the pre-rating state the moment the rating commits. The retired
+    // paginated session index has no live cache to refresh (#4839, #4343).
     client.invalidateQueries({ queryKey: queryKeys.undo.all }),
     client.invalidateQueries({ queryKey: queryKeys.session.snapshotsAll() }),
-    client.invalidateQueries({ queryKey: queryKeys.session.pages() }),
     // A rating marks the current issue read, which can clear (or create) a
     // canonical reading blocker for any series. Every reading-boundaries read
     // lives under this prefix, so refresh it with the rest of the read state.
@@ -284,7 +283,6 @@ export async function invalidateAfterResumeRecovery(client: QueryClient): Promis
     client.invalidateQueries({ queryKey: queryKeys.queue.activeCount(), exact: true }),
     client.resetQueries({ queryKey: queryKeys.completed.pages() }),
     client.resetQueries({ queryKey: queryKeys.excluded.pages() }),
-    client.invalidateQueries({ queryKey: queryKeys.session.pages() }),
     client.invalidateQueries({ queryKey: queryKeys.session.snapshotsAll() }),
     client.invalidateQueries({ queryKey: queryKeys.activity.all }),
     client.invalidateQueries({ queryKey: queryKeys.dependencies.all }),

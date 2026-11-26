@@ -1,5 +1,3 @@
-import { isString } from '../utils/runtimeChecks'
-
 export type QueueSort = 'position' | 'alphabetical' | 'created'
 
 export interface QueuePageKeyOptions {
@@ -23,17 +21,6 @@ export interface ExcludedPageKeyOptions {
   pageSize: number
 }
 
-export interface SessionPageKeyOptions {
-  pageToken?: string | null
-  pageSize: number
-}
-
-export type SessionListParams = Record<string, string | number | boolean | null>
-
-export interface SessionListKeyOptions {
-  params?: SessionListParams
-}
-
 export interface ThreadIssuePageKeyOptions {
   pageToken?: string | null
   pageSize: number
@@ -43,20 +30,6 @@ export interface ThreadIssuePageKeyOptions {
 function normalizedSearch(search?: string): string | null {
   const value = search?.trim()
   return value ? value : null
-}
-
-function normalizedSessionParams(params?: SessionListParams) {
-  if (!params) return {}
-  const normalized: SessionListParams = {}
-  for (const key of Object.keys(params).sort()) {
-    if (key === 'page_token') continue
-    const value = params[key]
-    if (value == null) continue
-    const candidate = isString(value) ? value.trim() : value
-    if (candidate === '') continue
-    normalized[key] = candidate
-  }
-  return normalized
 }
 
 export const queryKeys = {
@@ -150,17 +123,10 @@ export const queryKeys = {
   session: {
     all: ['session'] as const,
     current: () => ['session', 'current'] as const,
-    pages: () => ['session', 'pages'] as const,
-    /**
-     * Canonical infinite Session index key. `page_token` is intentionally
-     * excluded so the key stays stable across cursor pages; the cursor lives
-     * in `pageParam`, not the key. Filter params are normalized so the same
-     * filter set always hashes to one stable key.
-     */
-    list: ({ params }: SessionListKeyOptions = {}) =>
-      ['session', 'pages', normalizedSessionParams(params)] as const,
-    page: ({ pageToken, pageSize }: SessionPageKeyOptions) =>
-      ['session', 'pages', { pageToken: pageToken ?? null, pageSize }] as const,
+    // The paginated Session index was retired with the legacy v1 session
+    // surface (#4839, #4343). History is served by `activity` and the supported
+    // Session views read the resource-shaped detail/snapshot keys below, so no
+    // `pages`/`list`/`page` builders remain here.
     detail: (sessionId: number) => ['session', 'detail', sessionId] as const,
     /**
      * Canonical session snapshot list key. The session detail page and the
