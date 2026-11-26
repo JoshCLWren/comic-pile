@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-26T19:34:33+00:00",
+  "generated_at": "2026-11-26T19:36:30.910743+00:00",
   "models": [
     {
       "health": {
@@ -2676,24 +2676,24 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 2,
+          "failed": 1,
           "failures": {
-            "agent_timeout": 2
+            "agent_timeout": 1
           },
           "idle": 0,
           "kinds": {
             "review-findings": {
               "completed": 0,
               "delivered": 0,
-              "failed": 2,
+              "failed": 1,
               "failures": {
-                "agent_timeout": 2
+                "agent_timeout": 1
               },
               "idle": 0,
-              "runs": 2
+              "runs": 1
             }
           },
-          "runs": 2
+          "runs": 1
         },
         "7d": {
           "completed": 2,
@@ -4241,12 +4241,12 @@
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 17,
-          "delivered": 12,
-          "failed": 8,
+          "completed": 14,
+          "delivered": 9,
+          "failed": 6,
           "failures": {
             "control_plane_failure": 2,
-            "work_failure": 6
+            "work_failure": 4
           },
           "idle": 6,
           "kinds": {
@@ -4269,18 +4269,18 @@
               "runs": 10
             },
             "review": {
-              "completed": 13,
-              "delivered": 8,
-              "failed": 7,
+              "completed": 10,
+              "delivered": 5,
+              "failed": 5,
               "failures": {
                 "control_plane_failure": 2,
-                "work_failure": 5
+                "work_failure": 3
               },
               "idle": 0,
-              "runs": 20
+              "runs": 15
             }
           },
-          "runs": 31
+          "runs": 26
         },
         "7d": {
           "completed": 41,
@@ -5333,39 +5333,40 @@
     {
       "health": {
         "cooldown_until": null,
-        "last_outcome": "success",
+        "last_outcome": "control_plane_failure",
         "status": "healthy"
       },
       "kept_hot": {
-        "successes": 271,
-        "trials": 371
+        "successes": 273,
+        "trials": 373
       },
       "model": "hy4-flash-free",
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 254,
+          "completed": 253,
           "delivered": 121,
-          "failed": 66,
+          "failed": 65,
           "failures": {
-            "control_plane_failure": 7,
+            "control_plane_failure": 8,
             "model_policy_violation": 2,
             "provider_failure": 2,
             "provider_throttle": 1,
             "unknown_failure": 1,
-            "work_failure": 53
+            "work_failure": 51
           },
-          "idle": 31,
+          "idle": 30,
           "kinds": {
             "implement": {
-              "completed": 33,
-              "delivered": 33,
-              "failed": 1,
+              "completed": 34,
+              "delivered": 34,
+              "failed": 2,
               "failures": {
+                "control_plane_failure": 1,
                 "work_failure": 1
               },
               "idle": 0,
-              "runs": 34
+              "runs": 36
             },
             "merge-conflict": {
               "completed": 10,
@@ -5378,18 +5379,18 @@
               "runs": 34
             },
             "review": {
-              "completed": 155,
-              "delivered": 23,
-              "failed": 52,
+              "completed": 153,
+              "delivered": 22,
+              "failed": 50,
               "failures": {
                 "control_plane_failure": 6,
                 "model_policy_violation": 2,
                 "provider_failure": 2,
                 "unknown_failure": 1,
-                "work_failure": 41
+                "work_failure": 39
               },
               "idle": 1,
-              "runs": 208
+              "runs": 204
             },
             "review-findings": {
               "completed": 56,
@@ -5400,8 +5401,8 @@
                 "provider_throttle": 1,
                 "work_failure": 4
               },
-              "idle": 12,
-              "runs": 74
+              "idle": 11,
+              "runs": 73
             },
             "split": {
               "completed": 0,
@@ -5414,14 +5415,14 @@
               "runs": 1
             }
           },
-          "runs": 351
+          "runs": 348
         },
         "7d": {
-          "completed": 271,
-          "delivered": 130,
-          "failed": 115,
+          "completed": 273,
+          "delivered": 132,
+          "failed": 116,
           "failures": {
-            "control_plane_failure": 15,
+            "control_plane_failure": 16,
             "model_policy_violation": 2,
             "provider_failure": 3,
             "provider_throttle": 1,
@@ -5431,14 +5432,15 @@
           "idle": 34,
           "kinds": {
             "implement": {
-              "completed": 33,
-              "delivered": 33,
-              "failed": 1,
+              "completed": 34,
+              "delivered": 34,
+              "failed": 2,
               "failures": {
+                "control_plane_failure": 1,
                 "work_failure": 1
               },
               "idle": 0,
-              "runs": 34
+              "runs": 36
             },
             "merge-conflict": {
               "completed": 11,
@@ -5465,8 +5467,8 @@
               "runs": 223
             },
             "review-findings": {
-              "completed": 59,
-              "delivered": 58,
+              "completed": 60,
+              "delivered": 59,
               "failed": 7,
               "failures": {
                 "control_plane_failure": 1,
@@ -5474,7 +5476,7 @@
                 "work_failure": 5
               },
               "idle": 12,
-              "runs": 78
+              "runs": 79
             },
             "split": {
               "completed": 0,
@@ -5487,21 +5489,21 @@
               "runs": 1
             }
           },
-          "runs": 420
+          "runs": 423
         }
       }
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T19:25:54+00:00",
-        "last_outcome": "model_policy_violation",
-        "status": "unavailable"
+        "cooldown_until": null,
+        "last_outcome": "success",
+        "status": "healthy"
       },
       "model": "iceman-contributor-free",
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 26,
+          "completed": 27,
           "delivered": 24,
           "failed": 11,
           "failures": {
@@ -5531,14 +5533,14 @@
               "runs": 4
             },
             "review": {
-              "completed": 3,
+              "completed": 4,
               "delivered": 1,
               "failed": 5,
               "failures": {
                 "work_failure": 5
               },
               "idle": 0,
-              "runs": 8
+              "runs": 9
             },
             "review-findings": {
               "completed": 2,
@@ -5552,10 +5554,10 @@
               "runs": 4
             }
           },
-          "runs": 37
+          "runs": 38
         },
         "7d": {
-          "completed": 65,
+          "completed": 66,
           "delivered": 63,
           "failed": 155,
           "failures": {
@@ -5589,7 +5591,7 @@
               "runs": 12
             },
             "review": {
-              "completed": 7,
+              "completed": 8,
               "delivered": 5,
               "failed": 26,
               "failures": {
@@ -5600,7 +5602,7 @@
                 "work_failure": 20
               },
               "idle": 4,
-              "runs": 37
+              "runs": 38
             },
             "review-findings": {
               "completed": 5,
@@ -5614,7 +5616,7 @@
               "runs": 11
             }
           },
-          "runs": 284
+          "runs": 285
         }
       }
     },
@@ -12041,7 +12043,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -12149,7 +12151,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -12176,7 +12178,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -12230,7 +12232,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -12284,7 +12286,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -12311,7 +12313,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -12338,7 +12340,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -12421,7 +12423,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -12558,7 +12560,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -12599,7 +12601,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -12626,7 +12628,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -12653,7 +12655,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -12680,7 +12682,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -12707,7 +12709,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -12734,7 +12736,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -12844,7 +12846,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -12871,7 +12873,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -12925,7 +12927,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -12982,7 +12984,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T16:49:08+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13011,7 +13013,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13038,7 +13040,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13092,7 +13094,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13148,7 +13150,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13206,7 +13208,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13233,7 +13235,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13260,7 +13262,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13316,7 +13318,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13345,7 +13347,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-18T19:07:47+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13455,7 +13457,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13482,7 +13484,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13509,7 +13511,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13536,7 +13538,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13563,7 +13565,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13590,7 +13592,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13617,7 +13619,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13644,7 +13646,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13671,7 +13673,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13698,7 +13700,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13725,7 +13727,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13752,7 +13754,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13779,7 +13781,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13806,7 +13808,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13833,7 +13835,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13860,7 +13862,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13887,7 +13889,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13914,7 +13916,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13941,7 +13943,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13968,7 +13970,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -13995,7 +13997,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14022,7 +14024,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14049,7 +14051,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14076,7 +14078,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14103,7 +14105,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14130,7 +14132,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14157,7 +14159,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14184,7 +14186,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14211,7 +14213,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14238,7 +14240,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14265,7 +14267,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14316,7 +14318,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14343,7 +14345,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14370,7 +14372,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14397,7 +14399,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14424,7 +14426,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14475,7 +14477,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:55:16+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14529,7 +14531,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:54:59+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14556,7 +14558,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14610,7 +14612,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14637,7 +14639,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14691,7 +14693,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14772,7 +14774,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14799,7 +14801,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14826,7 +14828,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14853,7 +14855,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-24T13:49:50+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14882,7 +14884,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:55:16+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14909,7 +14911,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14936,7 +14938,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T00:52:37+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -14992,7 +14994,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15019,7 +15021,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T02:42:24+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15073,7 +15075,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15100,7 +15102,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15156,7 +15158,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15183,7 +15185,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15210,7 +15212,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15237,7 +15239,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15264,7 +15266,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15291,7 +15293,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15318,7 +15320,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15345,7 +15347,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15372,7 +15374,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15426,7 +15428,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15453,7 +15455,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T02:27:22+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15480,7 +15482,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15507,7 +15509,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15588,7 +15590,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15615,7 +15617,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15642,7 +15644,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15671,7 +15673,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15698,7 +15700,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15725,7 +15727,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15752,7 +15754,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15779,7 +15781,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15806,7 +15808,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15860,7 +15862,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15914,7 +15916,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15941,7 +15943,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15968,7 +15970,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -15995,7 +15997,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16022,7 +16024,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16076,7 +16078,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16103,7 +16105,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16157,7 +16159,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16213,7 +16215,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16267,7 +16269,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T21:08:37+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16294,7 +16296,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16321,7 +16323,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16348,7 +16350,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16458,7 +16460,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16485,7 +16487,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T11:02:27+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16512,7 +16514,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T00:52:37+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16570,7 +16572,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16597,7 +16599,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16624,7 +16626,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16651,7 +16653,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16705,7 +16707,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16732,7 +16734,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16759,7 +16761,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16786,7 +16788,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16813,7 +16815,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16867,7 +16869,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16894,7 +16896,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16921,7 +16923,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -16948,7 +16950,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -17002,7 +17004,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -17029,7 +17031,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -17056,7 +17058,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -17110,7 +17112,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -17164,7 +17166,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -17218,7 +17220,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -17245,7 +17247,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -17272,7 +17274,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -17299,7 +17301,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:54:59+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -17326,7 +17328,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T23:53:18+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -17353,7 +17355,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -17380,7 +17382,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:55:16+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -17461,7 +17463,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -17515,7 +17517,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -17623,7 +17625,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -17650,7 +17652,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -17704,7 +17706,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -17731,7 +17733,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:54:59+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -17758,7 +17760,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -17785,7 +17787,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -17920,7 +17922,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -17974,7 +17976,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -18055,7 +18057,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -18298,7 +18300,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -18325,7 +18327,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -18352,7 +18354,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T21:08:37+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -18406,7 +18408,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -18541,7 +18543,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -18676,7 +18678,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -18730,7 +18732,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -18757,7 +18759,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -18784,7 +18786,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -18811,7 +18813,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -18865,7 +18867,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T11:02:27+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -19000,7 +19002,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -19081,7 +19083,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -19162,7 +19164,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -19189,7 +19191,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -19216,7 +19218,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -19243,7 +19245,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -19297,7 +19299,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -19351,7 +19353,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -19378,7 +19380,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -19405,7 +19407,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -19432,7 +19434,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -19596,7 +19598,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -19677,7 +19679,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -19704,7 +19706,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -19731,7 +19733,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -19758,7 +19760,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -19785,7 +19787,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -19812,7 +19814,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:54:59+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -19839,7 +19841,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -19920,7 +19922,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -19947,7 +19949,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -20003,7 +20005,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:54:59+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -20030,7 +20032,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -20084,7 +20086,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -20111,7 +20113,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -20138,7 +20140,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -20192,7 +20194,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -20219,7 +20221,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -20246,7 +20248,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -20356,7 +20358,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -20383,7 +20385,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -20437,7 +20439,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -20464,7 +20466,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -20545,7 +20547,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -20599,7 +20601,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -20734,7 +20736,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T21:08:37+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -20761,7 +20763,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -20788,7 +20790,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:54:59+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -20896,7 +20898,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -20977,7 +20979,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -21089,7 +21091,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -21116,7 +21118,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -21126,18 +21128,46 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 0,
-          "failures": {},
+          "failed": 1,
+          "failures": {
+            "provider_quota": 1
+          },
           "idle": 0,
-          "runs": 0
+          "kinds": {
+            "merge-conflict": {
+              "completed": 0,
+              "delivered": 0,
+              "failed": 1,
+              "failures": {
+                "provider_quota": 1
+              },
+              "idle": 0,
+              "runs": 1
+            }
+          },
+          "runs": 1
         },
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 0,
-          "failures": {},
+          "failed": 1,
+          "failures": {
+            "provider_quota": 1
+          },
           "idle": 0,
-          "runs": 0
+          "kinds": {
+            "merge-conflict": {
+              "completed": 0,
+              "delivered": 0,
+              "failed": 1,
+              "failures": {
+                "provider_quota": 1
+              },
+              "idle": 0,
+              "runs": 1
+            }
+          },
+          "runs": 1
         }
       }
     },
@@ -21170,7 +21200,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -21197,7 +21227,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -21224,7 +21254,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -21251,7 +21281,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -21278,7 +21308,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -21442,7 +21472,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -21525,7 +21555,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -21552,7 +21582,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -21606,7 +21636,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -21660,7 +21690,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -21687,7 +21717,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -21826,7 +21856,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22015,7 +22045,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22042,7 +22072,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22096,7 +22126,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22177,7 +22207,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22204,7 +22234,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22231,7 +22261,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22258,7 +22288,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22312,7 +22342,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22390,7 +22420,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22400,18 +22430,46 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 0,
-          "failures": {},
+          "failed": 1,
+          "failures": {
+            "provider_quota": 1
+          },
           "idle": 0,
-          "runs": 0
+          "kinds": {
+            "review-findings": {
+              "completed": 0,
+              "delivered": 0,
+              "failed": 1,
+              "failures": {
+                "provider_quota": 1
+              },
+              "idle": 0,
+              "runs": 1
+            }
+          },
+          "runs": 1
         },
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 0,
-          "failures": {},
+          "failed": 1,
+          "failures": {
+            "provider_quota": 1
+          },
           "idle": 0,
-          "runs": 0
+          "kinds": {
+            "review-findings": {
+              "completed": 0,
+              "delivered": 0,
+              "failed": 1,
+              "failures": {
+                "provider_quota": 1
+              },
+              "idle": 0,
+              "runs": 1
+            }
+          },
+          "runs": 1
         }
       }
     },
@@ -22444,7 +22502,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22471,7 +22529,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22525,7 +22583,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22552,7 +22610,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:54:29+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22579,7 +22637,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22606,7 +22664,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22633,7 +22691,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22660,7 +22718,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T00:00:00+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22687,7 +22745,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22714,7 +22772,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22741,7 +22799,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22795,7 +22853,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:58:19+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -22903,7 +22961,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-23T07:57:33+00:00",
+        "cooldown_until": "2026-11-27T00:00:00+00:00",
         "last_outcome": "provider_quota",
         "status": "cooling"
       },
@@ -23468,9 +23526,9 @@
         "24h": {
           "completed": 2,
           "delivered": 2,
-          "failed": 8,
+          "failed": 7,
           "idle": 0,
-          "runs": 10
+          "runs": 9
         },
         "7d": {
           "completed": 68,
@@ -23504,18 +23562,18 @@
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 301,
-          "delivered": 160,
-          "failed": 85,
-          "idle": 38,
-          "runs": 424
+          "completed": 298,
+          "delivered": 157,
+          "failed": 82,
+          "idle": 37,
+          "runs": 417
         },
         "7d": {
-          "completed": 412,
-          "delivered": 248,
-          "failed": 484,
+          "completed": 415,
+          "delivered": 250,
+          "failed": 485,
           "idle": 134,
-          "runs": 1030
+          "runs": 1034
         }
       }
     },
@@ -23601,16 +23659,16 @@
         "24h": {
           "completed": 0,
           "delivered": 0,
-          "failed": 0,
+          "failed": 2,
           "idle": 0,
-          "runs": 0
+          "runs": 2
         },
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 49,
+          "failed": 51,
           "idle": 0,
-          "runs": 49
+          "runs": 51
         }
       }
     },
@@ -23639,9 +23697,9 @@
     "24h": "24 hours",
     "7d": "7 days"
   },
-  "counts_generated_at": "2026-11-26T18:39:45.302203+00:00",
+  "counts_generated_at": "2026-11-26T19:36:30.910743+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-26T19:34:34Z",
+    "generated_at": "2026-11-26T19:36:32Z",
     "sources": {
       "nvidia": [
         "google/diffusiongemma-26b-a4b-it",
@@ -23916,8 +23974,8 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-26T19:34:34.355134+00:00",
-    "days_elapsed": 25.816,
+    "checked_at": "2026-11-26T19:36:32.510751+00:00",
+    "days_elapsed": 25.817,
     "days_in_month": 30.0,
     "days_left": 4.18,
     "in_use": true,
@@ -23935,31 +23993,31 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 40996654,
-        "organization": 40996654,
+        "database": 41040191,
+        "organization": 41040191,
         "owner_target": 50000000,
-        "projected_database": 47640983,
-        "projected_organization": 47640983,
-        "projected_share": 0.0953,
-        "share_used": 0.082
+        "projected_database": 47689729,
+        "projected_organization": 47689729,
+        "projected_share": 0.0954,
+        "share_used": 0.0821
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 180712,
-        "organization": 180712,
+        "database": 180834,
+        "organization": 180834,
         "owner_target": 1000000,
-        "projected_database": 210000,
-        "projected_organization": 210000,
+        "projected_database": 210134,
+        "projected_organization": 210134,
         "projected_share": 0.021,
         "share_used": 0.0181
       },
       "storage_bytes": {
         "allowance": 5000000000,
-        "database": 22081536,
-        "organization": 22081536,
+        "database": 22089728,
+        "organization": 22089728,
         "owner_target": 250000000,
-        "projected_database": 22081536,
-        "projected_organization": 22081536,
+        "projected_database": 22089728,
+        "projected_organization": 22089728,
         "projected_share": 0.0044,
         "share_used": 0.0044
       }
@@ -23973,7 +24031,7 @@
     "status": "ok"
   },
   "schema": {
-    "checked_at": "2026-11-26T19:34:37+00:00",
+    "checked_at": "2026-11-26T19:36:35+00:00",
     "code_version": 6,
     "last_upgrade": {
       "at": "2026-11-25T18:11:07+00:00",
@@ -24151,7 +24209,7 @@
     "stored_version": 6
   },
   "crashes": {
-    "generated_at": "2026-11-26T19:34:37Z",
+    "generated_at": "2026-11-26T19:36:36Z",
     "groups": [
       {
         "count": 9,
@@ -24231,52 +24289,13 @@
   },
   "ready": {
     "cycles": [],
-    "generated_at": "2026-11-26T19:33:20+00:00",
+    "generated_at": "2026-11-26T19:35:28+00:00",
     "items": []
   },
   "gh_usage": {
-    "generated_at": "2026-11-26T19:34:39Z",
+    "generated_at": "2026-11-26T19:36:38Z",
     "jobs": {
       "dispatch": [
-        {
-          "at": 1795717824,
-          "buckets": {
-            "reader": 44,
-            "workflow": 20
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 3790,
-            "reset": 1795720393
-          },
-          "cache_hits": 0,
-          "github": 64,
-          "label": "dispatch roster",
-          "paginated": 13,
-          "top": [
-            [
-              "api GET repos/R/issues",
-              12
-            ],
-            [
-              "api GET rate_limit",
-              8
-            ],
-            [
-              "api GET repos/R/pulls/N",
-              7
-            ],
-            [
-              "api GET repos/R/issues/N",
-              6
-            ],
-            [
-              "api GET repos/R/issues/comments paginate",
-              4
-            ]
-          ],
-          "writes": 3
-        },
         {
           "at": 1795718316,
           "buckets": {
@@ -24705,48 +24724,48 @@
             ]
           ],
           "writes": 19
-        }
-      ],
-      "merge": [
+        },
         {
-          "at": 1795716507,
+          "at": 1795721730,
           "buckets": {
-            "reader": 15,
-            "workflow": 6
+            "reader": 42,
+            "workflow": 15
           },
           "budget": {
             "limit": 5000,
-            "remaining": 1557,
-            "reset": 1795716792
+            "remaining": 3030,
+            "reset": 1795723994
           },
           "cache_hits": 0,
-          "github": 21,
-          "label": "merge drain",
-          "paginated": 13,
+          "github": 57,
+          "label": "dispatch schedule",
+          "paginated": 17,
           "top": [
             [
-              "api GET repos/R/issues/N/comments paginate",
-              10
-            ],
-            [
               "api GET repos/R/issues",
-              2
+              9
             ],
             [
-              "api GET repos/R/pulls paginate",
-              2
+              "api GET repos/R/issues/N/comments paginate",
+              8
             ],
             [
-              "api GET repos/R/pulls",
-              1
+              "api GET repos/R/pulls/N",
+              7
             ],
             [
-              "api GET repos/R/actions/runs",
-              1
+              "api GET rate_limit",
+              6
+            ],
+            [
+              "api GET repos/R/issues/N",
+              4
             ]
           ],
-          "writes": 0
-        },
+          "writes": 2
+        }
+      ],
+      "merge": [
         {
           "at": 1795716700,
           "buckets": {
@@ -25175,6 +25194,45 @@
             ]
           ],
           "writes": 6
+        },
+        {
+          "at": 1795721775,
+          "buckets": {
+            "reader": 58,
+            "workflow": 21
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 2887,
+            "reset": 1795723994
+          },
+          "cache_hits": 0,
+          "github": 79,
+          "label": "merge drain",
+          "paginated": 23,
+          "top": [
+            [
+              "api GET repos/R/issues/N/comments paginate",
+              14
+            ],
+            [
+              "gh pr view",
+              12
+            ],
+            [
+              "api GET repos/R/pulls/N",
+              4
+            ],
+            [
+              "api GET repos/R/pulls paginate",
+              3
+            ],
+            [
+              "api GET repos/R/commits/main",
+              3
+            ]
+          ],
+          "writes": 8
         }
       ]
     }
