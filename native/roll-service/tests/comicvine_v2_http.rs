@@ -1530,7 +1530,13 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
     .unwrap();
     let (status, body) = send(
         &state,
-        call("POST", &format!("{base}/metadata:refresh"), &token, &csrf, None),
+        call(
+            "POST",
+            &format!("{base}/metadata:refresh"),
+            &token,
+            &csrf,
+            None,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
@@ -1556,7 +1562,11 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
             .unwrap();
         (row.get(0), row.get(1))
     };
-    assert_eq!(ledger, ("failed".to_owned(), 3), "retry must not touch the ledger");
+    assert_eq!(
+        ledger,
+        ("failed".to_owned(), 3),
+        "retry must not touch the ledger"
+    );
 
     // Remove: mapping becomes unresolved with evidence and confidence cleared.
     let (status, body) = send(
@@ -2483,7 +2493,10 @@ async fn import_issue_and_roll_read_never_enqueue() {
         .await
         .unwrap()
         .get(0);
-    assert_eq!(mapping, "confirmed", "provider failure never changes the mapping");
+    assert_eq!(
+        mapping, "confirmed",
+        "provider failure never changes the mapping"
+    );
 }
 
 #[tokio::test]
@@ -3380,7 +3393,6 @@ async fn explicit_retry_hydrates_bulk_imported_issue_without_enqueue() {
         .unwrap()
         .get(0);
     assert_eq!(queued, 0, "no interactive path may enqueue a repair row");
-
 }
 
 #[tokio::test]

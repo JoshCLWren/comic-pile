@@ -1170,7 +1170,9 @@ impl HydrationOutcome {
 
     pub(crate) fn retry_after_seconds(self) -> Option<i32> {
         match self {
-            Self::RateLimited { retry_after_seconds } => Some(retry_after_seconds as i32),
+            Self::RateLimited {
+                retry_after_seconds,
+            } => Some(retry_after_seconds as i32),
             _ => None,
         }
     }
@@ -1275,17 +1277,17 @@ pub(crate) async fn hydrate_confirmed_identity_sync(
         let has_credits = if let Some(cached) = reusable {
             cached_has_credits(cached)
         } else {
-            let provider_data =
-                match provider_issue(&state.outbound, comicvine_id, &api_key).await {
-                    Ok(value) => value,
-                    Err(error) => {
-                        tracing::info!(
-                            error_kind = ?error,
-                            "bounded identity hydration provider call failed; mapping kept"
-                        );
-                        return HydrationOutcome::from(error);
-                    }
-                };
+            let provider_data = match provider_issue(&state.outbound, comicvine_id, &api_key).await
+            {
+                Ok(value) => value,
+                Err(error) => {
+                    tracing::info!(
+                        error_kind = ?error,
+                        "bounded identity hydration provider call failed; mapping kept"
+                    );
+                    return HydrationOutcome::from(error);
+                }
+            };
             let (mut patch, has, url, updated) =
                 match normalized_metadata(&provider_data, comicvine_id) {
                     Ok(ok) => ok,
@@ -1721,7 +1723,9 @@ mod tests {
             HydrationOutcome::NotConfirmed,
             HydrationOutcome::NotConfigured,
             HydrationOutcome::Unavailable,
-            HydrationOutcome::RateLimited { retry_after_seconds: 90 },
+            HydrationOutcome::RateLimited {
+                retry_after_seconds: 90,
+            },
             HydrationOutcome::Timeout,
             HydrationOutcome::InvalidResponse,
         ]
@@ -1746,7 +1750,9 @@ mod tests {
             HydrationOutcome::Complete,
             HydrationOutcome::NoCredits,
             HydrationOutcome::Unavailable,
-            HydrationOutcome::RateLimited { retry_after_seconds: 60 },
+            HydrationOutcome::RateLimited {
+                retry_after_seconds: 60,
+            },
         ]
         .iter()
         .map(|outcome| outcome.refreshed())
@@ -1757,7 +1763,10 @@ mod tests {
     #[test]
     fn retry_after_is_exposed_only_for_throttling() {
         assert_eq!(
-            HydrationOutcome::RateLimited { retry_after_seconds: 120 }.retry_after_seconds(),
+            HydrationOutcome::RateLimited {
+                retry_after_seconds: 120
+            }
+            .retry_after_seconds(),
             Some(120)
         );
         for outcome in [
@@ -2258,8 +2267,15 @@ mod tests {
         let identity_id = seed_confirmed_identity(&state, "4000-29319", &json!({})).await;
         queue_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
 
-        let outcome =
-            hydrate_confirmed_identity_sync(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", false).await;
+        let outcome = hydrate_confirmed_identity_sync(
+            &state,
+            1,
+            1,
+            Duration::from_secs(5),
+            "TESTKEY123",
+            false,
+        )
+        .await;
         assert_eq!(outcome, HydrationOutcome::Complete);
 
         let connection = db::checkout(&state).await.expect("assert connection");
@@ -2302,8 +2318,15 @@ mod tests {
         let identity_id = seed_confirmed_identity(&state, "4000-29319", &json!({})).await;
         // No canned provider response: the recording fake fails closed.
 
-        let outcome =
-        hydrate_confirmed_identity_sync(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", false).await;
+        let outcome = hydrate_confirmed_identity_sync(
+            &state,
+            1,
+            1,
+            Duration::from_secs(5),
+            "TESTKEY123",
+            false,
+        )
+        .await;
         assert_eq!(outcome, HydrationOutcome::Unavailable);
 
         let connection = db::checkout(&state).await.expect("assert connection");
@@ -2362,8 +2385,15 @@ mod tests {
             Bytes::from(body),
         );
 
-        let outcome =
-        hydrate_confirmed_identity_sync(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", false).await;
+        let outcome = hydrate_confirmed_identity_sync(
+            &state,
+            1,
+            1,
+            Duration::from_secs(5),
+            "TESTKEY123",
+            false,
+        )
+        .await;
         assert_eq!(outcome, HydrationOutcome::NoCredits);
 
         let connection = db::checkout(&state).await.expect("assert connection");
@@ -2414,8 +2444,15 @@ mod tests {
             Bytes::from(body),
         );
 
-        let outcome =
-        hydrate_confirmed_identity_sync(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", false).await;
+        let outcome = hydrate_confirmed_identity_sync(
+            &state,
+            1,
+            1,
+            Duration::from_secs(5),
+            "TESTKEY123",
+            false,
+        )
+        .await;
         assert_eq!(outcome, HydrationOutcome::Complete);
 
         let connection = db::checkout(&state).await.expect("assert connection");
@@ -2460,12 +2497,22 @@ mod tests {
             json!([{"id": 1, "name": "Old Writer", "role": "writer"}]);
         seed_confirmed_identity(&state, "4000-29319", &cached).await;
 
-        let outcome =
-            hydrate_confirmed_identity_sync(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", false)
-                .await;
+        let outcome = hydrate_confirmed_identity_sync(
+            &state,
+            1,
+            1,
+            Duration::from_secs(5),
+            "TESTKEY123",
+            false,
+        )
+        .await;
         assert_eq!(outcome, HydrationOutcome::Complete);
         assert_eq!(
-            state.recording_fake().expect("recording provider").calls().len(),
+            state
+                .recording_fake()
+                .expect("recording provider")
+                .calls()
+                .len(),
             0,
             "valid cached metadata must not spend a provider credit"
         );
@@ -2479,9 +2526,15 @@ mod tests {
             HeaderMap::new(),
             Bytes::from(body),
         );
-        let outcome =
-            hydrate_confirmed_identity_sync(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", true)
-                .await;
+        let outcome = hydrate_confirmed_identity_sync(
+            &state,
+            1,
+            1,
+            Duration::from_secs(5),
+            "TESTKEY123",
+            true,
+        )
+        .await;
         assert_eq!(outcome, HydrationOutcome::Complete);
 
         let connection = db::checkout(&state).await.expect("assert connection");
@@ -2509,7 +2562,11 @@ mod tests {
         assert_eq!(rows, 1, "hydration must settle, never enqueue a second row");
         drop(Object::take(connection));
         assert_eq!(
-            state.recording_fake().expect("recording provider").calls().len(),
+            state
+                .recording_fake()
+                .expect("recording provider")
+                .calls()
+                .len(),
             1,
             "explicit retry makes exactly one provider request"
         );
@@ -2562,7 +2619,10 @@ mod tests {
             )
             .await
             .expect("guarded persist");
-        assert_eq!(updated, 0, "stale A must be rejected by the identity recheck");
+        assert_eq!(
+            updated, 0,
+            "stale A must be rejected by the identity recheck"
+        );
 
         let metadata: Value = serde_json::from_str(
             connection
@@ -2587,7 +2647,11 @@ mod tests {
                 .get(0),
         )
         .expect("metadata JSON");
-        assert_eq!(old_metadata, json!({}), "stale A response must not be written");
+        assert_eq!(
+            old_metadata,
+            json!({}),
+            "stale A response must not be written"
+        );
         drop(Object::take(connection));
     }
 
@@ -2610,17 +2674,30 @@ mod tests {
         queue_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
 
         assert_eq!(
-            hydrate_confirmed_identity_sync(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", false)
-                .await,
+            hydrate_confirmed_identity_sync(
+                &state,
+                1,
+                1,
+                Duration::from_secs(5),
+                "TESTKEY123",
+                false
+            )
+            .await,
             HydrationOutcome::Complete
         );
         let connection = db::checkout(&state).await.expect("assert connection");
         let rows: i64 = connection
-            .query_one("SELECT count(*) FROM comicvine_metadata_refresh_requests", &[])
+            .query_one(
+                "SELECT count(*) FROM comicvine_metadata_refresh_requests",
+                &[],
+            )
             .await
             .expect("ledger count")
             .get(0);
-        assert_eq!(rows, 0, "interactive hydration must not enqueue or dispatch");
+        assert_eq!(
+            rows, 0,
+            "interactive hydration must not enqueue or dispatch"
+        );
         drop(Object::take(connection));
     }
 

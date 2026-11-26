@@ -1331,7 +1331,11 @@ pub async fn confirm_identity(
     drop(connection);
     let outcome =
         hydrate_confirmed_identity_interactive(&state, user.id(), issue_id, started).await;
-    tracing::info!(issue_id, outcome = outcome.as_str(), "map hydration outcome");
+    tracing::info!(
+        issue_id,
+        outcome = outcome.as_str(),
+        "map hydration outcome"
+    );
     Ok(Json(response))
 }
 
@@ -1399,7 +1403,11 @@ pub async fn replace_identity(
     drop(connection);
     let outcome =
         hydrate_confirmed_identity_interactive(&state, user.id(), issue_id, started).await;
-    tracing::info!(issue_id, outcome = outcome.as_str(), "remap hydration outcome");
+    tracing::info!(
+        issue_id,
+        outcome = outcome.as_str(),
+        "remap hydration outcome"
+    );
     Ok(Json(response))
 }
 
@@ -1856,7 +1864,11 @@ pub async fn import_issue(
     drop(connection);
     let outcome =
         hydrate_confirmed_identity_interactive(&state, user.id(), issue_id, started).await;
-    tracing::info!(issue_id, outcome = outcome.as_str(), "import hydration outcome");
+    tracing::info!(
+        issue_id,
+        outcome = outcome.as_str(),
+        "import hydration outcome"
+    );
     Ok((StatusCode::CREATED, Json(response)))
 }
 
