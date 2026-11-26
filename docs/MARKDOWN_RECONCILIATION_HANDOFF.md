@@ -11,7 +11,7 @@ The documentation reconciliation was delivered by two merged pull requests:
 - PR #5759 reconciled the active runtime, API, deployment, product and factory documentation, extended the inventory generator to classify historical/superseded/generated files, and repaired the documentation-validation tooling.
 - PR #5827 added local Markdown `#fragment` anchor validation to the existing `scripts/check_markdown_docs.py` guard, with focused regressions and a whole-repository no-broken-anchor check.
 
-This file is audit evidence only. It does not re-land those pull requests and changes no production business logic, API contract, database schema, factory behavior, automation schedule or generated route output. The audited tree is the current repository checkout; the handoff records what was actually observed here rather than claims about a divergent branch.
+This change adds two closure artifacts: the audit evidence below, and a small extension to the existing Markdown guard (`find_stale_runtime_claims` in `scripts/check_markdown_docs.py`) that flags affirmative present-tense claims that FastAPI, SQLAlchemy or Alembic is the current runtime. The extension ignores negations, historical/superseded notices, explicit line overrides and fenced examples, so preserved provenance stays valid. It does not re-land the merged pull requests and changes no production business logic, API contract, database schema, factory behavior, automation schedule or generated route output. The audited tree is the current repository checkout; the handoff records what was actually observed here rather than claims about a divergent branch.
 
 ## Seven confirmed examples on the current tree
 
