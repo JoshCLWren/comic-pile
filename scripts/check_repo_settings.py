@@ -23,7 +23,6 @@ import subprocess
 import sys
 import urllib.request
 from dataclasses import asdict, dataclass
-from pathlib import Path
 
 EXPECTED_REPOSITORY = "JoshCLWren/comic-pile"
 PREVIEW_WIDTH = 1280
@@ -252,7 +251,9 @@ def main(argv: list[str] | None = None) -> int:
         owner action still remains. Report mode always exits 0 so pending owner
         actions are recorded without failing an evidence-gathering job.
     """
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(
+        description="Verify issue #3887 repository-settings acceptance facts (read-only)."
+    )
     parser.add_argument("--repository", default=EXPECTED_REPOSITORY)
     parser.add_argument(
         "--strict",

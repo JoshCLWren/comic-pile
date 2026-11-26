@@ -59,3 +59,23 @@ evidence.
 `og:image` still resolves to a 1920×1080 PNG, not the approved 1280×640 asset,
 so the owner upload and GitHub display verification remain outstanding. The
 repository description and topics were not modified by this work.
+
+### Acceptance verification
+
+`scripts/check_repo_settings.py` is the read-only verifier for the three #3887
+acceptance facts. It freezes the repository description and topic list that the
+issue requires to stay unchanged, reads `has_discussions` through `gh api`, and
+reads the repository page's `og:image` together with its PNG dimensions. The
+pure evaluation is covered offline by `tests/test_repo_settings_acceptance.py`,
+which `.github/workflows/docs.yml` runs alongside the asset guard.
+
+```bash
+python3 scripts/check_repo_settings.py            # JSON evidence report, always exits 0
+python3 scripts/check_repo_settings.py --strict   # exits 1 while a criterion is unverified
+```
+
+The 2026-11-26 read-only run verified Discussions, the frozen description and
+the frozen topics, while reporting `social_preview_displayed_at_1280x640` as a
+pending owner action because `og:image` still measured 1920×1080. The verifier
+never mutates repository settings: after the owner uploads the committed PNG,
+rerun it with `--strict` to verify the final criterion before closing #3887.

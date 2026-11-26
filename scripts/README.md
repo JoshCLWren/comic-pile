@@ -8,6 +8,7 @@ This directory contains reusable development/operations tooling, Python reposito
 - OpenAPI/client generation (Node): `export_openapi_schema.mjs`, `generate_openapi_types.mjs`, `generate_native_client.mjs`
 - Route generation/burndown (Node): `generate_route_burndown.mjs`, `generate_vercel_routes.mjs`
 - Local/browser-test ingress and inventory selection: `e2e_native_ingress.py`, `e2e_regression_select.py`
+- Read-only repository-settings acceptance verification: `check_repo_settings.py`
 - Native E2E/CI, lint, monitoring, and repository-contract helpers
 
 Factory controller scripts are supplied by the Rotisserie overlay and intentionally remain untracked here. Install the overlay before using them; see `AGENTS.md` → Factory runtime.
