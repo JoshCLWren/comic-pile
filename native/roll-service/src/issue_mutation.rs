@@ -1304,18 +1304,30 @@ fn planned_merge(
     Ok((merged, preserves))
 }
 
-async fn preview_outcome(
+/// Project an arbitrary before/after issue ordering inside a savepoint and
+/// validate the resulting reading graph. Shared by the create preview and by
+/// the delete/reorder structure previews so every structural edit reports the
+/// same metadata, affected frontier and concrete conflict information (#4654).
+async fn preview_projection(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,
     thread_id: i32,
     existing: &[(i32, String, i32)],
-    new_numbers: &[String],
-    request: &PreviewIssuesRequest,
+    merged: &[(i32, String)],
     strategy: IssuePlacementStrategy,
+    preserves_existing_relative_order: bool,
+    added_issue_numbers: Vec<String>,
+    removed_issue_id: Option<i32>,
 ) -> Result<IssueEditPreviewOutcome, ApiError> {
-    let (merged, preserves) = planned_merge(existing, new_numbers, request, strategy)?;
     let (series_title, metadata) = load_preview_metadata(tx, thread_id).await?;
-    let (before, after) = build_after_items(existing, &merged, &series_title, &metadata);
+    let (mut before, after) = build_after_items(existing, merged, &series_title, &metadata);
+    if let Some(removed) = removed_issue_id {
+        for item in &mut before {
+            if item.issue_id == Some(removed) {
+                item.effect = format!("removed issue #{} from series", item.issue_number);
+            }
+        }
+    }
 
     let savepoint = format!(
         "sp_preview_{}",
@@ -1364,13 +1376,37 @@ async fn preview_outcome(
     Ok(IssueEditPreviewOutcome {
         strategy,
         can_commit,
-        preserves_existing_relative_order: preserves,
+        preserves_existing_relative_order,
         before,
         after,
-        added_issue_numbers: new_numbers.to_vec(),
+        added_issue_numbers,
         graph,
         conflict_message,
     })
+}
+
+async fn preview_outcome(
+    tx: &Transaction<'_>,
+    user: AuthenticatedUser,
+    thread_id: i32,
+    existing: &[(i32, String, i32)],
+    new_numbers: &[String],
+    request: &PreviewIssuesRequest,
+    strategy: IssuePlacementStrategy,
+) -> Result<IssueEditPreviewOutcome, ApiError> {
+    let (merged, preserves) = planned_merge(existing, new_numbers, request, strategy)?;
+    preview_projection(
+        tx,
+        user,
+        thread_id,
+        existing,
+        &merged,
+        strategy,
+        preserves,
+        new_numbers.to_vec(),
+        None,
+    )
+    .await
 }
 
 /// `POST /api/v2/threads/{thread_id}/issues:preview`
@@ -1472,6 +1508,146 @@ pub async fn preview_issue_create(
         default_outcome,
         numeric_resort_outcome,
         alias_offers,
+        expected_issue_ids,
+    }))
+}
+
+/// Body of `POST /api/v2/threads/{thread_id}/issues/structure-preview`.
+///
+/// Delete and reorder are structural issue edits too, so A4 requires the same
+/// before/after, constraint and frontier preview that create/insert receives
+/// (#4654). The operation is deliberately described by a string plus optional
+/// fields rather than a tagged enum so an unsupported shape is a plain 400 and
+/// never a deserialization-shaped 500.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PreviewIssueStructureRequest {
+    /// `delete` removes one issue; `reorder` applies a complete new order.
+    pub operation: String,
+    /// Issue to remove. Required for `delete`, ignored for `reorder`.
+    #[serde(default)]
+    pub issue_id: Option<i32>,
+    /// Every issue id in the requested order. Required for `reorder`.
+    #[serde(default)]
+    pub issue_ids: Option<Vec<i32>>,
+}
+
+/// `POST /api/v2/threads/{thread_id}/issues/structure-preview`
+pub async fn preview_issue_structure(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(thread_id): Path<i32>,
+    Json(request): Json<PreviewIssueStructureRequest>,
+) -> Result<Json<IssueEditPreviewResponse>, ApiError> {
+    let mut conn = db::checkout(&state).await?;
+    let tx = conn
+        .build_transaction()
+        .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
+        .start()
+        .await
+        .map_err(db::query_error)?;
+    // Same lock order as every other writer: reader advisory lock before the
+    // thread row lock (#5398/#5419).
+    lock_reader(&tx, user.id()).await?;
+    lock_thread(&tx, thread_id, user.id()).await?;
+
+    let thread_row = tx
+        .query_one(
+            "SELECT title FROM threads WHERE id=$1 AND user_id=$2",
+            &[&thread_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let thread_title: String = thread_row.get(0);
+
+    let rows = tx
+        .query(
+            "SELECT id, issue_number, position FROM issues
+             WHERE thread_id=$1 ORDER BY position, id",
+            &[&thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let existing: Vec<(i32, String, i32)> = rows
+        .iter()
+        .map(|row| (row.get(0), row.get(1), row.get(2)))
+        .collect();
+    let expected_issue_ids: Vec<i32> = existing.iter().map(|(id, _, _)| *id).collect();
+
+    let (merged, preserves, removed_issue_id) = match request.operation.as_str() {
+        "delete" => {
+            let issue_id = request.issue_id.ok_or_else(|| {
+                ApiError::BadRequest("issue_id is required for a delete preview".to_string())
+            })?;
+            let target = existing
+                .iter()
+                .find(|(id, _, _)| *id == issue_id)
+                .ok_or_else(|| ApiError::NotFound(format!("Issue {issue_id} not found")))?;
+            let merged = existing
+                .iter()
+                .filter(|(id, _, _)| *id != issue_id)
+                .map(|(id, number, _)| (*id, number.clone()))
+                .collect::<Vec<_>>();
+            let preserves = merged
+                .iter()
+                .map(|(id, _)| *id)
+                .eq(existing.iter().map(|(id, _, _)| *id).filter(|id| *id != target.0));
+            (merged, preserves, Some(issue_id))
+        }
+        "reorder" => {
+            let requested = request.issue_ids.clone().ok_or_else(|| {
+                ApiError::BadRequest("issue_ids is required for a reorder preview".to_string())
+            })?;
+            let mut canonical: Vec<i32> = expected_issue_ids.clone();
+            let mut candidate = requested.clone();
+            canonical.sort_unstable();
+            candidate.sort_unstable();
+            if canonical != candidate {
+                return Err(ApiError::BadRequest(
+                    "issue_ids must list every issue in the series exactly once".to_string(),
+                ));
+            }
+            let merged = requested
+                .iter()
+                .map(|id| {
+                    let (_, number, _) = existing
+                        .iter()
+                        .find(|(issue_id, _, _)| issue_id == id)
+                        .expect("validated id belongs to the series");
+                    (*id, number.clone())
+                })
+                .collect::<Vec<_>>();
+            let preserves = requested == expected_issue_ids;
+            (merged, preserves, None)
+        }
+        other => {
+            return Err(ApiError::BadRequest(format!(
+                "unsupported structure preview operation: {other}"
+            )))
+        }
+    };
+
+    let outcome = preview_projection(
+        &tx,
+        user,
+        thread_id,
+        &existing,
+        &merged,
+        IssuePlacementStrategy::SafeDefault,
+        preserves,
+        Vec::new(),
+        removed_issue_id,
+    )
+    .await?;
+
+    tx.rollback().await.map_err(db::query_error)?;
+    Ok(Json(IssueEditPreviewResponse {
+        thread_id,
+        thread_title,
+        requested_strategy: IssuePlacementStrategy::SafeDefault,
+        default_outcome: outcome,
+        numeric_resort_outcome: None,
+        alias_offers: Vec::new(),
         expected_issue_ids,
     }))
 }
