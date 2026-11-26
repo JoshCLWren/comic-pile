@@ -364,15 +364,18 @@ export default function IssueCorrectionDialog({
         const affectedIds = new Set(unreadBeforeTarget.map((i) => i.id))
         const frontier = new Set<string>()
         for (const issueDep of deps.issues ?? []) {
-          // `incoming` holds edges whose TARGET is this issue. When their source
-          // is one of the issues about to be read, this issue is the newly
-          // unblocked dependent frontier (#4655 R4). The production endpoint
-          // never sends a `dependencies` field, so reading that would silently
-          // drop every real dependency.
-          const hasAffectedSource = (issueDep.incoming ?? []).some(
-            (edge) => affectedIds.has(edge.source_issue_id ?? -1),
-          )
-          if (hasAffectedSource) frontier.add(`#${issueDep.issue_number ?? issueDep.issue_id}`)
+          if (!affectedIds.has(issueDep.issue_id)) continue
+          // Outgoing edges point at the dependent issue. Despite their legacy
+          // `source_*` wire names, those fields describe the TARGET for an
+          // outgoing edge, including targets in another series (#4655 R4).
+          for (const edge of issueDep.outgoing ?? []) {
+            const issueLabel = edge.source_issue_number ?? String(edge.source_issue_id ?? '?')
+            frontier.add(
+              edge.source_thread_title
+                ? `${edge.source_thread_title} #${issueLabel}`
+                : `#${issueLabel}`,
+            )
+          }
         }
         dependentFrontier = Array.from(frontier)
       } catch {
