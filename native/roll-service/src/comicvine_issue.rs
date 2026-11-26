@@ -206,7 +206,6 @@ struct Mapped {
     needs_repair: bool,
 }
 
-
 #[derive(Deserialize)]
 struct ArcReference {
     id: i32,
@@ -471,11 +470,7 @@ fn status(mapped: &Mapped) -> (String, Option<i64>) {
 ///
 /// Constructs the IssueIntelligence struct by processing metadata,
 /// story arcs, and related issues. Sorts and limits related issues.
-fn response(
-    mapped: Mapped,
-    arcs: Vec<ArcReference>,
-    related: Vec<Related>,
-) -> IssueIntelligence {
+fn response(mapped: Mapped, arcs: Vec<ArcReference>, related: Vec<Related>) -> IssueIntelligence {
     let mut story_arcs = Vec::new();
     for arc in arcs {
         let Some(name) = as_string(&arc.reference["name"]) else {

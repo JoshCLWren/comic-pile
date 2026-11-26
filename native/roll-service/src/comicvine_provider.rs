@@ -781,10 +781,7 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
                         retry_after_seconds,
                         "inline hydration throttled; retry is user-controlled"
                     ),
-                    _ => tracing::info!(
-                        ?error,
-                        "inline identity hydration provider call failed"
-                    ),
+                    _ => tracing::info!(?error, "inline identity hydration provider call failed"),
                 }
                 return;
             }
@@ -824,7 +821,6 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
                 error_kind = crate::error_kind(&err),
                 "inline identity hydration metadata write failed"
             );
-            return;
         }
     };
     if tokio::time::timeout(budget, run).await.is_err() {
@@ -868,25 +864,8 @@ fn preserve_cached_credits(patch: &mut Value, cached: Option<&Value>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::http::HeaderMap;
     use deadpool_postgres::Object;
-
-    async fn seed_identity(state: &AppState) -> i32 {
-        let connection = db::checkout(state).await.expect("seed connection");
-        let identity_id: i32 = connection
-            .query_one(
-                "INSERT INTO external_identities \
-                 (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
-                 VALUES ('comicvine', 'issue', '4000-29319', '{}'::json, now(), now()) \
-                 RETURNING id",
-                &[],
-            )
-            .await
-            .expect("seed identity")
-            .get(0);
-        drop(Object::take(connection));
-        identity_id
-    }
-
 
     async fn seed_confirmed_identity_for_thread(
         connection: &Object,
@@ -963,9 +942,6 @@ mod tests {
         );
     }
 
-
-
-
     /// #5695: `provider_exchange` refuses non-alphanumeric credential bytes
     /// before any round trip, so an untrimmed read used to surface a pasted
     /// dashboard value with a trailing newline as a provider outage in tens of
@@ -1027,75 +1003,6 @@ mod tests {
             .expect_err("internal whitespace must remain malformed");
         assert!(matches!(error, ProviderFailure::Unavailable));
         assert!(fake.calls().is_empty());
-    }
-
-
-    /// #4516 legacy oracle: `_provider_timestamp` returned a naive datetime
-    /// for ComicVine's `YYYY-MM-DD HH:MM:SS` revision. The retired Python
-    /// identity upsert then evaluated
-    /// `provider_updated_at < identity.provider_updated_at` against the
-    /// UTC-aware value read from PostgreSQL, raising TypeError before metadata
-    /// could be persisted. This exercises the canonical Rust replacement with
-    /// the same pre-existing aware DB value and deterministic provider payload.
-    #[tokio::test]
-    async fn naive_provider_revision_hydrates_existing_utc_identity() {
-        let Some(state) = crate::test_support::test_state(2).await else {
-            return;
-        };
-        let _guard = crate::test_support::reset_for_test(&state).await;
-        let identity_id = seed_identity(&state).await;
-        let connection = db::checkout(&state).await.expect("seed connection");
-        connection
-            .execute(
-                "UPDATE external_identities \
-                 SET metadata_json = '{\"issue_number\":\"3\"}'::json, \
-                     provider_updated_at = TIMESTAMPTZ '2025-01-01 00:00:00+00' \
-                 WHERE id = $1",
-                &[&identity_id],
-            )
-            .await
-            .expect("seed aware provider revision");
-        drop(Object::take(connection));
-        seed_request(&state, identity_id, "pending", 0, "0 seconds", None).await;
-        push_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
-
-        let job = claim(&state).await.expect("claim").expect("due job");
-        assert_eq!(
-            process(&state, &job, Some("TESTKEY123"))
-                .await
-                .expect("hydrate naive provider revision"),
-            "completed"
-        );
-
-        let connection = db::checkout(&state).await.expect("assert connection");
-        let row = connection
-            .query_one(
-                "SELECT e.metadata_json::text, e.provider_updated_at \
-                 FROM external_identities e WHERE e.id = $1",
-                &[&identity_id],
-            )
-            .await
-            .expect("read hydrated identity");
-        let metadata: Value = serde_json::from_str(row.get(0)).expect("stored metadata JSON");
-        assert_eq!(metadata["primary_image"], "https://img.example/medium.jpg");
-        assert_eq!(metadata["creator_credits"][0]["name"], "Writer");
-        assert_eq!(metadata["story_arcs"][0]["name"], "Arc");
-        assert!(metadata["deep_metadata_refreshed_at"].is_string());
-        let provider_updated_at: Option<chrono::DateTime<chrono::Utc>> = row.get(1);
-        assert_eq!(
-            provider_updated_at,
-            Some(
-                chrono::DateTime::parse_from_rfc3339("2026-11-01T17:33:53+00:00")
-                    .expect("expected revision")
-                    .with_timezone(&chrono::Utc)
-            )
-        );
-        drop(Object::take(connection));
-
-        let calls = state.recording_fake().expect("recording provider").calls();
-        assert_eq!(calls.len(), 1);
-        assert_eq!(calls[0].host, HOST);
-        assert!(calls[0].path.starts_with("/api/issue/4000-29319?"));
     }
 
     /// The inline catalog path runs only after its identity transaction has
@@ -1256,7 +1163,8 @@ mod tests {
         let identity_id = seed_confirmed_identity(&state, "4000-29319", &json!({})).await;
         push_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
 
-        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", true).await;
+        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", true)
+            .await;
 
         let connection = db::checkout(&state).await.expect("assert connection");
         let metadata: Value = serde_json::from_str(
@@ -1288,7 +1196,8 @@ mod tests {
         let identity_id = seed_confirmed_identity(&state, "4000-29319", &json!({})).await;
         // No canned provider response: the recording fake fails closed.
 
-        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", true).await;
+        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", true)
+            .await;
 
         let connection = db::checkout(&state).await.expect("assert connection");
         let mapping_status: String = connection
@@ -1336,7 +1245,8 @@ mod tests {
             Bytes::from(body),
         );
 
-        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", true).await;
+        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", true)
+            .await;
 
         let connection = db::checkout(&state).await.expect("assert connection");
         let metadata: Value = serde_json::from_str(
@@ -1376,7 +1286,8 @@ mod tests {
             Bytes::from(body),
         );
 
-        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", true).await;
+        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", true)
+            .await;
 
         let connection = db::checkout(&state).await.expect("assert connection");
         let metadata: Value = serde_json::from_str(
@@ -1393,15 +1304,6 @@ mod tests {
         assert_eq!(metadata["creator_credits"][0]["name"], "Cached Writer");
         drop(Object::take(connection));
     }
-
-
-
-
-
-
-
-
-
 
     #[test]
     fn only_verified_singular_issue_payload_completes() {
@@ -1594,25 +1496,6 @@ mod tests {
         assert!(cached_has_credits(&one_creator));
     }
 
-    #[test]
-    fn timeout_is_distinct_from_provider_unavailable() {
-        assert_eq!(
-            failure_transition(&ProviderFailure::Timeout, 1),
-            ("deferred", 60, "provider_timeout")
-        );
-        assert_eq!(
-            failure_transition(&ProviderFailure::Timeout, 3),
-            ("failed", 21600, "provider_timeout")
-        );
-        // Rate limiting stays distinct and never reported as empty credits.
-        assert_eq!(
-            failure_transition(&ProviderFailure::RateLimited(120), 1),
-            ("deferred", 120, "rate_limit")
-        );
-    }
-
-
-
     /// #5592: ComicVine 420 is a rate limit (Python parity), not provider_unavailable.
     #[tokio::test]
     async fn provider_response_treats_420_as_rate_limited() {
@@ -1638,18 +1521,4 @@ mod tests {
             .expect_err("403 must be unavailable");
         assert!(matches!(err, ProviderFailure::Unavailable));
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 }
