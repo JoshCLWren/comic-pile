@@ -131,17 +131,27 @@ Checks observed in this review runtime on the synchronized tree:
 
 At the prior bare head `24ee72c`, `gh pr checks` showed `Docs code-path check`
 and `CI Summary` failing and `mergeable: CONFLICTING`; those stale-base failures
-are fixed by the synchronization recorded above. On the current exact head
-`5e7ee6da`, `gh pr checks` reports `rotisserie / wake` and `rotisserie /
-reconcile` as successful (`claim` and CodeRabbit skipped); no Markdown-doc or
-full CI job has reported on that exact head, so exact-head CI is recorded as a
-verification gap for the delivery wrapper rather than a locally observed pass.
-Remaining discrepancies: PR #5835's reconciled doc content was already delivered
-by merged #5846; this PR is retained only as the audit/handoff evidence required
-by A19 and A28, plus the synchronization that makes the head self-consistent.
-Delivery must follow the existing Rotisserie claim, exact-head CI, independent
-review and merge gates; no factory policy, automation schedule, production
-business logic, API contract or schema was changed here.
+are fixed by the synchronization recorded above. At the exact reviewed head
+`74513e911c5828cac025bfc0392077caf67eafd2`, `gh pr checks` reports
+`Docs code-path check`, `Markdown docs`, `CI Summary`, `Conflict Marker Guard`,
+`Fragment-only guard (no generated files)`, `Native Route DB-Test Guard`,
+`Production Runtime Migrations`, `Python Lint (ruff)`, `Python Type Check (ty)`,
+`Frontend Lint + Typecheck`, `Frontend Unit Tests (vitest)`,
+`Rendered UI Audit (Chromium)` and `Rust function build and tests` as passing,
+plus `rotisserie / wake`, `rotisserie / reconcile` and `rotisserie / guard-tests`
+(`claim`, CodeRabbit and PR-Agent advisory review skipped). `rust-roll`
+(Native Rust Roll) was still `in_progress` when this record was written, so its
+final result is left to the exact-head CI gate rather than claimed here.
+Locally observed on that same head: `node scripts/check_doc_code_paths.mjs`
+exit 0, `python3 scripts/check_markdown_docs.py` exit 0, the inventory generator
+exit 0, and `git merge-tree --write-tree origin/main HEAD` exit 0 with no
+conflict sections. Remaining discrepancies: PR #5835's reconciled doc content
+was already delivered by merged #5846; this PR is retained only as the
+audit/handoff evidence required by A19 and A28, plus the synchronization that
+makes the head self-consistent. Delivery must follow the existing Rotisserie
+claim, exact-head CI, independent review and merge gates; no factory policy,
+automation schedule, production business logic, API contract or schema was
+changed here.
 
 ## A31 — maintenance rule
 
@@ -181,7 +191,7 @@ historical/superseded notices.
 | A24 | this file | Migration-era queue/cron fallback guidance removed on `main` in `docs/COMICVINE_HYDRATOR.md` and `docs/COMICVINE_RUNTIME_FALLBACK.md` |
 | A25 | this file | Agent guidance checked against current factory safeguards |
 | A26 | `docs/README.md`, this file | Added link uses an existing heading anchor; no dangling references added |
-| A27 | this file | Local doc/link/code-path/generator/unit checks pass on the synchronized head; prior-head CI failures recorded as stale-base artifacts and current exact-head CI gap recorded |
+| A27 | this file | Local doc/link/code-path/generator checks pass on the exact head `74513e9`; exact-head CI passes for docs, lint, type, unit, rendered-audit and Rust-build checks, with `rust-roll` left to the CI gate; prior-head failures recorded as stale-base artifacts |
 | A28 | this file | Documents, stale claims, sources, validation and discrepancies recorded |
 | A29 | this file | Documentation workflow and existing checks reused |
 | A30 | this file | Generator and code-path commands executed above |
