@@ -15,6 +15,7 @@ import { cast } from '../utils/cast'
 const mockedIssuesApi = {
   list: vi.fn<IssueToggleListApi['list']>(),
   create: vi.fn<IssueToggleListApi['create']>(),
+  previewCreate: vi.fn<IssueToggleListApi['previewCreate']>(),
   markRead: vi.fn<IssueToggleListApi['markRead']>(),
   markUnread: vi.fn<IssueToggleListApi['markUnread']>(),
   delete: vi.fn<IssueToggleListApi['delete']>(),
@@ -116,6 +117,22 @@ beforeEach(() => {
 
   mockedIssuesApi.list.mockResolvedValue(buildListResponse())
   mockedIssuesApi.create.mockResolvedValue(buildListResponse([]))
+  mockedIssuesApi.previewCreate.mockImplementation(async (_threadId: number, range: string) => ({
+    thread_id: 99,
+    thread_title: 'Test',
+    requested_strategy: 'safe_default',
+    default_outcome: {
+      strategy: 'safe_default',
+      can_commit: true,
+      preserves_existing_relative_order: true,
+      before: BASE_ISSUES.map((i, idx) => ({ issue_id: i.id, issue_number: i.issue_number, position: idx + 1, is_new: false })),
+      after: [...BASE_ISSUES.map((i, idx) => ({ issue_id: i.id, issue_number: i.issue_number, position: idx + 1, is_new: false })), { issue_id: null, issue_number: range, position: BASE_ISSUES.length + 1, is_new: true }],
+      added_issue_numbers: [range],
+      graph: { status: 'ok', cycles: [] },
+      conflict_message: null,
+    },
+    numeric_resort_outcome: null,
+  }))
   mockedIssuesApi.markRead.mockResolvedValue()
   mockedIssuesApi.markUnread.mockResolvedValue()
   mockedIssuesApi.reorder.mockResolvedValue()
@@ -1003,6 +1020,9 @@ describe('IssueToggleList deferred mode (#3267)', () => {
     fireEvent.change(input, { target: { value: '4-5' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
 
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
+
     // No API call yet — the create is queued as a draft.
     expect(mockedIssuesApi.create).not.toHaveBeenCalled()
     // Pending create is visible in the UI.
@@ -1012,8 +1032,156 @@ describe('IssueToggleList deferred mode (#3267)', () => {
     await act(async () => {
       await ref.current?.flush()
     })
-    expect(mockedIssuesApi.create).toHaveBeenCalledWith(99, '4-5')
+    expect(mockedIssuesApi.create).toHaveBeenCalledWith(99, '4-5', { strategy: 'safe_default' })
     expect(ref.current?.hasPendingMutations()).toBe(false)
+  })
+
+  it('shows human-readable series, list, state and frontier labels in Before/After (#4654)', async () => {
+    await renderDeferred()
+    const existing = {
+      issue_id: 1,
+      issue_number: '129',
+      position: 1,
+      is_new: false,
+      series_title: 'B.P.R.D.: Hell on Earth',
+      source_lists: ['Julix reading order'],
+      is_read: true,
+      is_mapped: true,
+      has_rating: true,
+      frontier_label: 'current unread (Queue/Roll frontier)',
+      effect: 'kept #129 at position 1',
+      is_duplicate: false,
+    }
+    const added = {
+      issue_id: null,
+      issue_number: '101',
+      position: 2,
+      is_new: true,
+      series_title: 'B.P.R.D.: Hell on Earth',
+      source_lists: [],
+      is_read: false,
+      is_mapped: false,
+      has_rating: false,
+      frontier_label: null,
+      effect: 'new issue #101 inserted at position 2',
+      is_duplicate: true,
+    }
+    mockedIssuesApi.previewCreate.mockResolvedValueOnce({
+      thread_id: 99,
+      thread_title: 'B.P.R.D.: Hell on Earth',
+      requested_strategy: 'safe_default',
+      default_outcome: {
+        strategy: 'safe_default',
+        can_commit: true,
+        preserves_existing_relative_order: true,
+        before: [existing],
+        after: [existing, added],
+        added_issue_numbers: ['101'],
+        graph: { status: 'ok', cycles: [] },
+        conflict_message: null,
+      },
+      numeric_resort_outcome: null,
+    })
+
+    fireEvent.change(screen.getByTestId('issue-add-input'), { target: { value: '101' } })
+    fireEvent.click(screen.getByTestId('issue-add-button'))
+
+    const modal = await screen.findByTestId('edit-series-preview-modal')
+    expect(screen.getByTestId('preview-before-after')).toBeInTheDocument()
+    expect(modal).toHaveTextContent('B.P.R.D.: Hell on Earth #129')
+    expect(modal).toHaveTextContent('List: Julix reading order')
+    expect(modal).toHaveTextContent('kept #129 at position 1')
+    expect(modal).toHaveTextContent('current unread (Queue/Roll frontier)')
+    expect(modal).toHaveTextContent('new issue #101 inserted at position 2')
+    expect(modal).toHaveTextContent('Possible physical duplicate')
+    expect(screen.getAllByTestId('preview-issue-row').length).toBeGreaterThanOrEqual(2)
+    expect(screen.getAllByTestId('preview-source-list').length).toBeGreaterThan(0)
+    expect(screen.getAllByTestId('preview-mapped').length).toBeGreaterThan(0)
+  })
+
+  it('surfaces a failed preview in a retryable modal (#4654)', async () => {
+    await renderDeferred()
+    mockedIssuesApi.previewCreate.mockRejectedValueOnce(new Error('preview exploded'))
+
+    fireEvent.change(screen.getByTestId('issue-add-input'), { target: { value: '4' } })
+    fireEvent.click(screen.getByTestId('issue-add-button'))
+
+    const errorModal = await screen.findByTestId('edit-series-preview-error-modal')
+    expect(errorModal).toHaveTextContent('preview exploded')
+    expect(mockedIssuesApi.create).not.toHaveBeenCalled()
+
+    mockedIssuesApi.previewCreate.mockResolvedValueOnce({
+      thread_id: 99,
+      thread_title: 'Test',
+      requested_strategy: 'safe_default',
+      default_outcome: {
+        strategy: 'safe_default',
+        can_commit: true,
+        preserves_existing_relative_order: true,
+        before: [],
+        after: [{ issue_id: null, issue_number: '4', position: 1, is_new: true }],
+        added_issue_numbers: ['4'],
+        graph: { status: 'ok', cycles: [] },
+        conflict_message: null,
+      },
+      numeric_resort_outcome: null,
+    })
+    fireEvent.click(screen.getByTestId('retry-preview-add'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+  })
+
+  it('requires an explicit numeric resort choice when safe insertion would cycle', async () => {
+    const ref = await renderDeferred()
+    const safe = {
+      strategy: 'safe_default' as const,
+      can_commit: false,
+      preserves_existing_relative_order: true,
+      before: [],
+      after: [],
+      added_issue_numbers: ['4'],
+      graph: {
+        status: 'cycle',
+        cycles: [{
+          message: 'Reading order conflict',
+          edges: [{
+            source: { issue_id: 1, issue_number: '1', series_title: 'First Series' },
+            target: { issue_id: 2, issue_number: '2', series_title: 'Second Series' },
+            origin: 'reading_list',
+          }],
+        }],
+      },
+      conflict_message: 'Reading order conflict',
+    }
+    mockedIssuesApi.previewCreate.mockResolvedValueOnce({
+      thread_id: 99,
+      thread_title: 'Test',
+      requested_strategy: 'safe_default',
+      default_outcome: safe,
+      numeric_resort_outcome: {
+        ...safe,
+        strategy: 'numeric_resort',
+        can_commit: true,
+        preserves_existing_relative_order: false,
+        graph: { status: 'ok', cycles: [] },
+        conflict_message: null,
+      },
+    })
+    fireEvent.change(screen.getByTestId('issue-add-input'), { target: { value: '4' } })
+    fireEvent.click(screen.getByTestId('issue-add-button'))
+    const confirm = await screen.findByTestId('confirm-preview-add')
+    expect(confirm).toBeDisabled()
+    expect(screen.getByTestId('safe-default-cycle-path')).toHaveTextContent('First Series #1 -> Second Series #2')
+    expect(ref.current?.hasPendingMutations()).toBe(false)
+    expect(mockedIssuesApi.create).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('radio', { name: /Numeric resort/ }))
+    expect(confirm).toBeEnabled()
+    fireEvent.click(confirm)
+    expect(mockedIssuesApi.create).not.toHaveBeenCalled()
+    await act(async () => {
+      await ref.current?.flush()
+    })
+    expect(mockedIssuesApi.create).toHaveBeenCalledWith(99, '4', { strategy: 'numeric_resort' })
   })
 
   it('discards queued mutations on unmount without flushing', async () => {
@@ -1021,6 +1189,8 @@ describe('IssueToggleList deferred mode (#3267)', () => {
     const input = screen.getByTestId('issue-add-input')
     fireEvent.change(input, { target: { value: '4-5' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
     expect(ref.current?.hasPendingMutations()).toBe(true)
 
     // Unmount without flushing (dialog X/close).
@@ -1047,16 +1217,22 @@ describe('IssueToggleList deferred mode (#3267)', () => {
     // Add first issue range
     fireEvent.change(input, { target: { value: '7' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
     expect(screen.getByTestId('pending-creates')).toHaveTextContent('7')
 
     // Add second issue range
     fireEvent.change(input, { target: { value: 'Annual 2' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
     expect(screen.getByTestId('pending-creates')).toHaveTextContent('Annual 2')
 
     // Add third issue range
     fireEvent.change(input, { target: { value: '10-12' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
     expect(screen.getByTestId('pending-creates')).toHaveTextContent('10-12')
 
     // Verify all three are queued
@@ -1070,9 +1246,9 @@ describe('IssueToggleList deferred mode (#3267)', () => {
 
     // Verify all three create calls were made
     expect(mockedIssuesApi.create).toHaveBeenCalledTimes(3)
-    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(1, 99, '7')
-    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(2, 99, 'Annual 2')
-    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(3, 99, '10-12')
+    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(1, 99, '7', { strategy: 'safe_default' })
+    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(2, 99, 'Annual 2', { strategy: 'safe_default' })
+    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(3, 99, '10-12', { strategy: 'safe_default' })
     expect(ref.current?.hasPendingMutations()).toBe(false)
   })
 
@@ -1088,10 +1264,16 @@ describe('IssueToggleList deferred mode (#3267)', () => {
 
     fireEvent.change(input, { target: { value: '7' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
     fireEvent.change(input, { target: { value: 'Annual 2' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
     fireEvent.change(input, { target: { value: '10-12' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
 
     // The failed create is reported to the caller, so the Edit Series dialog
     // stays open instead of closing over a lost create.
@@ -1102,8 +1284,8 @@ describe('IssueToggleList deferred mode (#3267)', () => {
     // The queue stops at the failed create; the create after it stays queued
     // so the reader can retry it.
     expect(mockedIssuesApi.create).toHaveBeenCalledTimes(2)
-    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(1, 99, '7')
-    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(2, 99, 'Annual 2')
+    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(1, 99, '7', { strategy: 'safe_default' })
+    expect(mockedIssuesApi.create).toHaveBeenNthCalledWith(2, 99, 'Annual 2', { strategy: 'safe_default' })
     // Error should be surfaced for the failed one
     expect(screen.getByText('Issue number already exists')).toBeInTheDocument()
     expect(ref.current?.hasPendingMutations()).toBe(true)
@@ -1168,6 +1350,8 @@ describe('IssueToggleList deferred mode (#3267)', () => {
     const input = screen.getByTestId('issue-add-input')
     fireEvent.change(input, { target: { value: '2b' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
 
     await act(async () => {
       await ref.current?.flush()

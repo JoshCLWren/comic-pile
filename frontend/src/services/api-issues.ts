@@ -38,6 +38,49 @@ interface CreateIssuesPayload {
   issue_range: string
   insert_after_issue_id?: number
   append_to_end?: boolean
+  strategy?: 'safe_default' | 'numeric_resort'
+}
+
+export interface IssuePreviewItem {
+  issue_id: number | null
+  issue_number: string
+  position: number
+  is_new: boolean
+  /** Human-readable series title so two issues sharing a number stay distinct. */
+  series_title?: string
+  /** Names of the source reading lists this issue belongs to. */
+  source_lists?: string[]
+  is_read?: boolean
+  is_mapped?: boolean
+  has_rating?: boolean
+  /** Affected Queue/Roll frontier label, e.g. the current unread issue. */
+  frontier_label?: string | null
+  /** Human-readable description of this row's order effect. */
+  effect?: string
+  /** Whether a second physical issue with the same number exists. */
+  is_duplicate?: boolean
+}
+
+export interface IssueEditPreviewOutcome {
+  strategy: 'safe_default' | 'numeric_resort'
+  can_commit: boolean
+  preserves_existing_relative_order: boolean
+  before: IssuePreviewItem[]
+  after: IssuePreviewItem[]
+  added_issue_numbers: string[]
+  graph: {
+    status: string
+    cycles: Array<{ message: string; edges: Array<{ source: { issue_id: number; issue_number: string; series_title: string }; target: { issue_id: number; issue_number: string; series_title: string }; origin: string; list_name?: string | null }> }>
+  }
+  conflict_message: string | null
+}
+
+export interface IssueEditPreviewResponse {
+  thread_id: number
+  thread_title: string
+  requested_strategy: 'safe_default' | 'numeric_resort'
+  default_outcome: IssueEditPreviewOutcome
+  numeric_resort_outcome: IssueEditPreviewOutcome | null
 }
 
 /** Query parameters accepted by the thread issue list endpoint. */
@@ -89,7 +132,7 @@ export function createIssuesApi(client: HttpClient) {
     create: async (
       threadId: number,
       issueRange: string,
-      options?: { insert_after_issue_id?: number | null }
+      options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort' }
     ): Promise<IssueListResponse> => {
       const payload: CreateIssuesPayload = {
         issue_range: issueRange,
@@ -103,8 +146,23 @@ export function createIssuesApi(client: HttpClient) {
           payload.insert_after_issue_id = options.insert_after_issue_id
         }
       }
+      if (options?.strategy) payload.strategy = options.strategy
 
       return client.post(`/v2/threads/${threadId}/issues`, payload)
+    },
+
+    previewCreate: async (
+      threadId: number,
+      issueRange: string,
+      options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort' }
+    ): Promise<IssueEditPreviewResponse> => {
+      const payload: CreateIssuesPayload = { issue_range: issueRange }
+      if (options && 'insert_after_issue_id' in options) {
+        if (options.insert_after_issue_id === null) payload.append_to_end = true
+        else payload.insert_after_issue_id = options.insert_after_issue_id
+      }
+      if (options?.strategy) payload.strategy = options.strategy
+      return client.post(`/v2/threads/${threadId}/issues/preview`, payload)
     },
 
     /**

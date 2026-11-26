@@ -3398,6 +3398,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/threads/{thread_id}/issues/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Documentation-only operation for the mounted issue-create preview resource.
+         * @description Preview an issue-create edit before commit. Returns the safe default outcome and, when relevant, a numeric-resort outcome with exact before/after order and graph validation.
+         */
+        post: operations["preview_issue_create_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/undo/{session_id}/snapshots": {
         parameters: {
             query?: never;
@@ -4710,6 +4730,8 @@ export interface components {
             insert_after_issue_id?: number | null;
             /** @description Reader-facing range, e.g. `1-3, 5` or `Annual 1`. */
             issue_range: string;
+            /** @description Placement strategy. Defaults to safe_default. */
+            strategy?: components["schemas"]["IssuePlacementStrategy"];
         };
         CreateTagRequest: {
             color?: string;
@@ -6112,6 +6134,24 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
+        IssueEditPreviewOutcome: {
+            added_issue_numbers: string[];
+            after: components["schemas"]["PreviewIssueItem"][];
+            before: components["schemas"]["PreviewIssueItem"][];
+            can_commit: boolean;
+            conflict_message?: string | null;
+            graph: components["schemas"]["ReadingGraphResponse"];
+            preserves_existing_relative_order: boolean;
+            strategy: components["schemas"]["IssuePlacementStrategy"];
+        };
+        IssueEditPreviewResponse: {
+            default_outcome: components["schemas"]["IssueEditPreviewOutcome"];
+            numeric_resort_outcome?: components["schemas"]["IssueEditPreviewOutcome"] | null;
+            requested_strategy: components["schemas"]["IssuePlacementStrategy"];
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
         IssueIdentityMapping: {
             comicvine_id: string;
             /** Format: double */
@@ -6185,6 +6225,8 @@ export interface components {
         IssueOrderValidationResponse: {
             warnings: string[];
         };
+        /** @enum {string} */
+        IssuePlacementStrategy: "safe_default" | "numeric_resort";
         IssueReadRateRequest: {
             /** @description Client-generated retry key. Same key/payload replays the same receipt. */
             idempotency_key: string;
@@ -6984,6 +7026,48 @@ export interface components {
          * @enum {string}
          */
         PotentialDuplicateMatchType: "same_comicvine_volume" | "similar_title";
+        /**
+         * @description Per-issue human-readable context carried in the preview payload so the
+         *     Before/After rows can identify a specific series, its list memberships,
+         *     identity/rating/read state and the Queue/Roll frontier it affects (#4654).
+         */
+        PreviewIssueItem: {
+            /** @description Human-readable description of the order effect on this issue. */
+            effect: string;
+            /** @description Human label for the Queue/Roll frontier affected by this issue, if any. */
+            frontier_label?: string | null;
+            /** @description Whether rating history exists for this issue. */
+            has_rating: boolean;
+            /** @description Whether a second physical issue with the same number exists in the series. */
+            is_duplicate: boolean;
+            /** @description Whether the issue has a confirmed external identity/catalog mapping. */
+            is_mapped: boolean;
+            is_new: boolean;
+            /** @description Whether the issue has already been read. */
+            is_read: boolean;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+            /** @description Title of the series (thread) this issue belongs to. */
+            series_title: string;
+            /** @description Names of every custom reading list the issue is a member of. */
+            source_lists: string[];
+        };
+        PreviewIssuesRequest: {
+            /** @description Explicit "At the end" choice. Distinct from an omitted anchor. */
+            append_to_end?: boolean;
+            /**
+             * Format: int32
+             * @description Explicit anchor. Omit for natural placement.
+             */
+            insert_after_issue_id?: number | null;
+            /** @description Reader-facing range, e.g. `1-3, 5` or `Annual 1`. */
+            issue_range: string;
+            /** @description Requested placement strategy. Defaults to safe_default. */
+            strategy?: components["schemas"]["IssuePlacementStrategy"];
+        };
         /** @description One release ledger record returned by public-facing endpoints. */
         PublicReleaseResponse: {
             body?: string | null;
@@ -18592,6 +18676,61 @@ export interface operations {
             };
             /** @description Invalid reading snapshot */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    preview_issue_create_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewIssuesRequest"];
+            };
+        };
+        responses: {
+            /** @description Preview outcomes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueEditPreviewResponse"];
+                };
+            };
+            /** @description Invalid issue range or no new issues */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
