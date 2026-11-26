@@ -6,7 +6,6 @@ import { QueueModals } from '../pages/QueuePage/QueueModals'
 import { DEFAULT_CREATE_STATE, type QueueFormState } from '../pages/QueuePage/types'
 import type { ThreadListItem } from '../types'
 import { issuesApi } from '../services/api-issues'
-import { issueDependenciesApi } from '../services/api-dependencies'
 
 /**
  * Full-draft regression for #5864 / MQA-QUEUE-008: staging an issue removal in
