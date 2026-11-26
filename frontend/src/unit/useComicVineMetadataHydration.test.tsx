@@ -37,7 +37,11 @@ function metadata(overrides: Partial<ComicVineIssueIntelligence> = {}): ComicVin
   }
 }
 
-function apiError(status: number, headers: object = {}) {
+interface TestRetryHeaders {
+  'retry-after'?: string | number
+}
+
+function apiError(status: number, headers: TestRetryHeaders = {}) {
   return Object.assign(new Error(`HTTP ${status}`), {
     response: { status, data: { detail: `HTTP ${status}` }, headers },
   })
@@ -104,9 +108,10 @@ describe('useComicVineMetadataHydration boundary decoding', () => {
 
   it('sets a cooldown from a positive response retry_after_seconds', async () => {
     refreshMetadata.mockResolvedValue(refreshed({ retry_after_seconds: 2 }))
-    const { result } = renderHydration({ issueId: 5 })
+    const { result, args } = renderHydration({ issueId: 5 })
 
-    await waitFor(() => expect(refreshMetadata).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(args.refetch).toHaveBeenCalledTimes(1))
+    expect(refreshMetadata).toHaveBeenCalledTimes(1)
     expect(result.current.retryAfterSeconds).toBeGreaterThan(0)
     expect(result.current.canRetry).toBe(false)
     expect(result.current.isHydrating).toBe(false)
