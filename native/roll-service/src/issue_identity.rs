@@ -2922,6 +2922,25 @@ async fn do_cbl_adoption_commit(
         )));
     }
 
+    let request_fingerprint = cbl_adoption_request_fingerprint(list_id, target_plan_id, &request);
+    if let Some(replayed) =
+        replay_cbl_adoption_receipt(&tx, user_id, list_id, &request_fingerprint).await?
+    {
+        tx.commit().await.map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("commit replay tx: {e}"))
+            }
+        })?;
+        let status = if target_plan_id.is_some() {
+            StatusCode::OK
+        } else {
+            StatusCode::CREATED
+        };
+        return Ok((status, replayed));
+    }
+
     let (entry_decisions_raw, series_decisions_raw, series_overrides_raw) =
         normalize_decisions(&request);
     // Convert validated decisions to include/exclude booleans (Python SourceBackedDecision).
@@ -3356,13 +3375,6 @@ async fn do_cbl_adoption_commit(
     }
 
     let prow = tx.run_query_one("SELECT id,user_id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1", &[&plan_id]).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(format!("reload plan: {e}")) })?;
-    tx.commit().await.map_err(|e| {
-        if crate::db::is_transport_failure(&e) {
-            CommitErr::Db(ApiError::database_unavailable())
-        } else {
-            CommitErr::Unexpected(e.to_string())
-        }
-    })?;
 
     let status = if requested_target_plan_id.is_some() {
         StatusCode::OK
@@ -3385,6 +3397,17 @@ async fn do_cbl_adoption_commit(
         excluded_positions: merge.2,
         unresolved_positions: merge.3,
     };
+    // Store the authoritative commit result in the same transaction as the
+    // plan/list writes. A lost response can then be recovered by fingerprint
+    // replay instead of encouraging a duplicate adoption (#5522).
+    store_cbl_adoption_receipt(&tx, user_id, list_id, plan_id, &request_fingerprint, &resp).await?;
+    tx.commit().await.map_err(|e| {
+        if crate::db::is_transport_failure(&e) {
+            CommitErr::Db(ApiError::database_unavailable())
+        } else {
+            CommitErr::Unexpected(e.to_string())
+        }
+    })?;
     Ok((status, resp))
 }
 
@@ -4057,6 +4080,7 @@ async fn merge_adoption_nodes_tx(
     let mut excluded_positions = Vec::new();
     let mut unresolved_positions = Vec::new();
     let mut adopted_order: Vec<String> = Vec::new();
+    let mut affected_threads: std::collections::HashSet<i32> = std::collections::HashSet::new();
     let mut adopted_issue_ids: Vec<i32> = Vec::new();
 
     // Index existing issue nodes by ref_id
@@ -4119,11 +4143,15 @@ async fn merge_adoption_nodes_tx(
                 v.as_i64().map(|x| x as i32)
             }
         });
-        let (issue_id, created_now) = if let Some(id) = resolved {
-            (id, false)
+        let (issue_id, created_now, materialized_thread_id) = if let Some(id) = resolved {
+            (id, false, None)
         } else {
             match materialize_missing_issue_tx(tx, user_id, entry).await {
-                Ok(MaterializeOutcome::Issue { id, created }) => (id, created),
+                Ok(MaterializeOutcome::Issue {
+                    id,
+                    thread_id,
+                    created,
+                }) => (id, created, Some(thread_id)),
                 Ok(MaterializeOutcome::Excluded { reason }) => {
                     if reason == "collection_identity_requires_review" {
                         unresolved_positions.push(pos);
@@ -4144,6 +4172,9 @@ async fn merge_adoption_nodes_tx(
         };
         if created_now {
             created_positions.push(pos);
+            if let Some(tid) = materialized_thread_id {
+                affected_threads.insert(tid);
+            }
         }
         let series_name = entry
             .get("series_name")
@@ -4240,6 +4271,17 @@ async fn merge_adoption_nodes_tx(
         *nodes_arr = reordered;
     }
 
+    // Apply tracking state once per affected thread after the whole adoption
+    // merge, so a large commit does not recompute thread counters per issue.
+    for thread_id in &affected_threads {
+        apply_thread_issue_tracking_state_tx(tx, *thread_id)
+            .await
+            .map_err(|err| match err {
+                MaterializeErr::DbUnavailable => CommitErr::Db(ApiError::database_unavailable()),
+                MaterializeErr::Unexpected(msg) => CommitErr::Unexpected(msg),
+            })?;
+    }
+
     Ok((
         reused_positions,
         created_positions,
@@ -4303,8 +4345,14 @@ fn ensure_node_provenance(
 }
 
 enum MaterializeOutcome {
-    Issue { id: i32, created: bool },
-    Excluded { reason: String },
+    Issue {
+        id: i32,
+        thread_id: i32,
+        created: bool,
+    },
+    Excluded {
+        reason: String,
+    },
     Unresolved,
 }
 
@@ -4777,6 +4825,7 @@ async fn materialize_missing_issue_tx(
             }
             return Ok(MaterializeOutcome::Issue {
                 id: issue_id,
+                thread_id,
                 created: false,
             });
         }
@@ -4850,6 +4899,7 @@ async fn materialize_missing_issue_tx(
             }
             return Ok(MaterializeOutcome::Issue {
                 id: existing_issue_id,
+                thread_id,
                 created: false,
             });
         }
