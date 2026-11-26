@@ -2119,8 +2119,6 @@ async fn stale_rejects_invalid_parameters() {
     }
 }
 
-<<<<<<< HEAD
-=======
 /// Production fixture (`OPTION_E_ENABLED` unset): `stale` must not report a
 /// canonically blocked thread just because its stored flag is false (#5525 A16).
 #[tokio::test]
@@ -2176,7 +2174,6 @@ async fn stale_uses_canonical_eligibility_with_option_e_unset() {
     );
 }
 
->>>>>>> origin/main
 #[tokio::test]
 async fn queue_list_filtered_count_covers_search_sort_and_cursor_pages() {
     let ctx = setup("lcqueuecount").await;
