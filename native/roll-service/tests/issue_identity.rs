@@ -643,6 +643,288 @@ async fn adoption_commit_creates_plan_with_valid_fingerprint() {
     assert!(body["unresolved_positions"].is_array(), "{body}");
 }
 
+#[tokio::test]
+async fn adoption_commit_persists_canonical_reading_list_and_plan_projection_issue_5523() {
+    let (state, token, csrf, _guard) = setup().await;
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/adoption-commits",
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [
+                {"cbl_position": 0, "decision": "include"},
+                {"cbl_position": 1, "decision": "exclude"}
+            ],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{status} {body}");
+    let plan_id = body["id"].as_i64().unwrap() as i32;
+    assert_eq!(body["created_positions"], json!([0]), "{body}");
+    assert_eq!(body["excluded_positions"], json!([1]), "{body}");
+
+    let conn = state.pool.get().await.unwrap();
+    let source_row = conn
+        .query_one(
+            "SELECT custom_cbl_list_id FROM reading_plan_sources
+             WHERE plan_id = $1 AND custom_cbl_list_id IS NOT NULL
+             ORDER BY id DESC LIMIT 1",
+            &[&plan_id],
+        )
+        .await
+        .unwrap();
+    let list_id: i32 = source_row.get(0);
+    assert!(list_id > 0, "canonical reading list must be created");
+
+    let entries: Vec<(i32, i32)> = conn
+        .query(
+            "SELECT issue_id, position FROM custom_cbl_entries WHERE list_id = $1 ORDER BY position, id",
+            &[&list_id],
+        )
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| (row.get(0), row.get(1)))
+        .collect();
+    assert_eq!(
+        entries.len(),
+        1,
+        "exactly the approved entry should be persisted: {entries:?}"
+    );
+
+    let (reader_status, reader_body) = get(
+        &state,
+        &token,
+        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+    )
+    .await;
+    assert_eq!(reader_status, StatusCode::OK, "{reader_body}");
+    assert_eq!(reader_body["progress"]["total_issues"], 1, "{reader_body}");
+    assert_eq!(reader_body["progress"]["read_issues"], 0, "{reader_body}");
+    let lanes = reader_body["lanes"].as_array().unwrap();
+    let issue_count: usize = lanes
+        .iter()
+        .map(|lane| lane["issues"].as_array().map(|a| a.len()).unwrap_or(0))
+        .sum();
+    assert_eq!(issue_count, 1, "{reader_body}");
+
+    // Canonical list is discoverable/reopenable by stable ID.
+    let (list_status, list_body) =
+        get(&state, &token, &format!("/api/v2/reading-lists/{list_id}")).await;
+    assert_eq!(list_status, StatusCode::OK, "{list_body}");
+    assert_eq!(list_body["id"], list_id, "{list_body}");
+    let list_entries = list_body["entries"].as_array().unwrap();
+    assert_eq!(list_entries.len(), 1, "{list_body}");
+
+    // Repeat Add/Update keeps same source-linked list ID and no duplicate unrelated legacy plan.
+    let plans_before: i64 = conn
+        .query_one("SELECT COUNT(*)::bigint FROM continuity_plans WHERE user_id = (SELECT id FROM users WHERE username LIKE 'issue-identity-%' ORDER BY id DESC LIMIT 1)", &[])
+        .await
+        .unwrap()
+        .get(0);
+    let (status2, body2) = post_json(
+        &state,
+        &token,
+        &csrf,
+        &format!("/api/v2/reading-lists/1/reading-plans/{plan_id}/adoption-commits"),
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [
+                {"cbl_position": 0, "decision": "include"},
+                {"cbl_position": 1, "decision": "exclude"}
+            ],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    assert_eq!(status2, StatusCode::OK, "{status2} {body2}");
+    let source_row2 = conn
+        .query_one(
+            "SELECT custom_cbl_list_id FROM reading_plan_sources
+             WHERE plan_id = $1 AND custom_cbl_list_id IS NOT NULL
+             ORDER BY id DESC LIMIT 1",
+            &[&plan_id],
+        )
+        .await
+        .unwrap();
+    let list_id2: i32 = source_row2.get(0);
+    assert_eq!(
+        list_id2, list_id,
+        "repeat add/update must keep same source-linked list ID"
+    );
+    let plans_after: i64 = conn
+        .query_one("SELECT COUNT(*)::bigint FROM continuity_plans WHERE user_id = (SELECT id FROM users WHERE username LIKE 'issue-identity-%' ORDER BY id DESC LIMIT 1)", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        plans_after, plans_before,
+        "repeat add/update must not create duplicate unrelated legacy plan"
+    );
+}
+
+#[tokio::test]
+async fn targeted_adoption_commit_uses_plan_lane_and_reconciles_exclusions_issue_5523() {
+    let (state, token, csrf, _guard) = setup().await;
+    let (status, me) = get(&state, &token, "/api/v1/auth/me").await;
+    assert_eq!(status, StatusCode::OK, "{me}");
+    let user_id = me["id"].as_i64().unwrap() as i32;
+    let conn = state.pool.get().await.unwrap();
+    conn.execute(
+        "INSERT INTO continuity_plans
+           (id, user_id, name, ordering_mode, lanes_json, nodes_json, created_at, updated_at)
+         VALUES
+           (552310, $1, 'Custom lane plan', 'informational',
+            '[{\"id\":\"custom-lane\",\"name\":\"Custom\",\"order\":0}]'::jsonb,
+            '[]'::jsonb, NOW(), NOW())",
+        &[&user_id],
+    )
+    .await
+    .unwrap();
+    drop(conn);
+
+    // The plan has a single non-default lane; the committed step must inherit
+    // that lane id instead of the hard-coded "default" from the repro.
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/reading-plans/552310/adoption-commits",
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [
+                {"cbl_position": 0, "decision": "include"},
+                {"cbl_position": 1, "decision": "exclude"}
+            ],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{status} {body}");
+    let nodes = body["nodes"].as_array().unwrap();
+    let issue_nodes: Vec<&Value> = nodes
+        .iter()
+        .filter(|node| node["node_type"] == "issue")
+        .collect();
+    assert_eq!(issue_nodes.len(), 1, "{body}");
+    assert_eq!(issue_nodes[0]["lane_id"], "custom-lane", "{body}");
+    let issue_id = issue_nodes[0]["ref_id"].as_i64().unwrap() as i32;
+
+    // The edit-lane projection shows the step too (not just "No steps in lane").
+    let (edit_status, edit_body) = get(&state, &token, "/api/v2/continuity-plans/552310").await;
+    assert_eq!(edit_status, StatusCode::OK, "{edit_body}");
+    let edit_nodes = edit_body["nodes"].as_array().unwrap();
+    let lane_nodes: Vec<&Value> = edit_nodes
+        .iter()
+        .filter(|node| node["node_type"] == "issue" && node["lane_id"] == "custom-lane")
+        .collect();
+    assert_eq!(lane_nodes.len(), 1, "{edit_body}");
+
+    let (reader_status, reader_body) =
+        get(&state, &token, "/api/v2/continuity-plans/552310/reader").await;
+    assert_eq!(reader_status, StatusCode::OK, "{reader_body}");
+    assert_eq!(reader_body["progress"]["total_issues"], 1, "{reader_body}");
+
+    let conn = state.pool.get().await.unwrap();
+    let list_id: i32 = conn
+        .query_one(
+            "SELECT custom_cbl_list_id FROM reading_plan_sources
+             WHERE plan_id = 552310 AND custom_cbl_list_id IS NOT NULL
+             ORDER BY id DESC LIMIT 1",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let entry_count: i64 = conn
+        .query_one(
+            "SELECT COUNT(*)::bigint FROM custom_cbl_entries WHERE list_id = $1",
+            &[&list_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(entry_count, 1, "only the approved entry may be persisted");
+
+    // A later explicit commit that excludes every source issue must remove the
+    // previously adopted entry from the canonical list and its reader projection.
+    let (status2, body2) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/reading-plans/552310/adoption-commits",
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [
+                {"cbl_position": 0, "decision": "exclude"},
+                {"cbl_position": 1, "decision": "exclude"}
+            ],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    assert_eq!(status2, StatusCode::OK, "{status2} {body2}");
+    let entry_count2: i64 = conn
+        .query_one(
+            "SELECT COUNT(*)::bigint FROM custom_cbl_entries WHERE list_id = $1",
+            &[&list_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        entry_count2, 0,
+        "excluded issue must not survive in the canonical list: {body2}"
+    );
+    let (reader_status2, reader_body2) =
+        get(&state, &token, "/api/v2/continuity-plans/552310/reader").await;
+    assert_eq!(reader_status2, StatusCode::OK, "{reader_body2}");
+    assert_eq!(
+        reader_body2["progress"]["total_issues"], 0,
+        "{reader_body2}"
+    );
+
+    // Reconciliation only removes list membership: the issue and any reading
+    // history survive, and the source-linked list ID stays stable.
+    let issue_rows: i64 = conn
+        .query_one(
+            "SELECT COUNT(*)::bigint FROM issues WHERE id = $1",
+            &[&issue_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        issue_rows, 1,
+        "adoption must not delete issues or reading history"
+    );
+    let list_id2: i32 = conn
+        .query_one(
+            "SELECT custom_cbl_list_id FROM reading_plan_sources
+             WHERE plan_id = 552310 AND custom_cbl_list_id IS NOT NULL
+             ORDER BY id DESC LIMIT 1",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        list_id2, list_id,
+        "the source-linked list ID must stay stable"
+    );
+}
+
 async fn crossover_snapshot(
     state: &Arc<AppState>,
 ) -> Vec<(
