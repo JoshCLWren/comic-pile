@@ -376,8 +376,10 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         const options: IssueCreateOptions | undefined = hasOptions
           ? {
               ...(mutation.strategy ? { strategy: mutation.strategy } : {}),
-              ...(mutation.expectedIssueIds ? { expected_issue_ids: mutation.expectedIssueIds } : {}),
-              ...(mutation.acceptedAliasNumbers
+              ...((mutation.expectedIssueIds?.length ?? 0) > 0
+                ? { expected_issue_ids: mutation.expectedIssueIds }
+                : {}),
+              ...((mutation.acceptedAliasNumbers?.length ?? 0) > 0
                 ? { accepted_alias_numbers: mutation.acceptedAliasNumbers }
                 : {}),
             }
@@ -401,7 +403,11 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
 
     isProcessingMutationsRef.current = true
     let hadSuccess = false
-    let failedMutation: IssueMutation | null = null
+    // Rejected mutations wait here (not in the optimistic queue) until the
+    // reader's next Save, so the failed edit still rolls back in the UI while
+    // remaining available for an explicit retry (#4654).
+    const retryable = failedMutationsRef.current.splice(0);
+    pendingMutationsRef.current = [...retryable, ...pendingMutationsRef.current]
 
     try {
       while (pendingMutationsRef.current.length > 0) {
