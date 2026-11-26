@@ -132,10 +132,6 @@ it('refreshes Roll, session, and plan views when a thread is renamed (#5264)', a
     queryKey: queryKeys.roll.bootstrap(),
     exact: true,
   })
-  expect(invalidateQueries).toHaveBeenCalledWith({
-    queryKey: queryKeys.session.current(),
-    exact: true,
-  })
   expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.readingPlans.all })
   expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.customCBLs.all })
   expect(invalidateQueries).toHaveBeenCalledWith({

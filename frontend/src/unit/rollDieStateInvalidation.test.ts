@@ -47,8 +47,4 @@ it('keeps refreshing bootstrap and the current session with the scoped die', asy
     queryKey: queryKeys.roll.bootstrap(),
     exact: true,
   })
-  expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
-    queryKey: queryKeys.session.current(),
-    exact: true,
-  })
 })

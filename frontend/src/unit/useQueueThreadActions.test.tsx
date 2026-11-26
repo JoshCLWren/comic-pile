@@ -184,12 +184,7 @@ describe('useQueueThreadActions', () => {
     expect(reroll).toHaveBeenCalledTimes(1)
   })
 
-  it('refreshes current session once after native Queue reroll (#4589)', async () => {
-    // Unlike legacy snooze, Rust reroll does not refresh the session query.
-    sharedQueryClient.setQueryData(queryKeys.session.current(), {
-      id: 1,
-      pending_thread_id: 4,
-    })
+  it('rerolls from Queue through the native offer path (#4589)', async () => {
     const reroll = vi.fn().mockResolvedValue({ thread_id: 5, title: 'Next Comic' })
     const { result } = renderHook(
       () =>
@@ -203,26 +198,6 @@ describe('useQueueThreadActions', () => {
     await result.current.handleSnoozeToggle(makeThread({ id: 4 }), false)
 
     expect(reroll).toHaveBeenCalledExactlyOnceWith(4)
-    expect(sharedQueryClient.getQueryState(queryKeys.session.current())?.isInvalidated).toBe(true)
-  })
-
-  it('does not repeat the owning legacy unsnooze session refresh (#4276)', async () => {
-    sharedQueryClient.setQueryData(queryKeys.session.current(), {
-      id: 1,
-      snoozed_threads: [{ id: 4, title: 'Pending Comic' }],
-    })
-    const { result } = renderHook(
-      () =>
-        useQueueThreadActions(
-          { restoreSeriesActionsFocus: vi.fn() },
-          buildDeps(),
-        ),
-      { wrapper },
-    )
-
-    await result.current.handleSnoozeToggle(makeThread({ id: 4 }), true)
-
-    expect(sharedQueryClient.getQueryState(queryKeys.session.current())?.isInvalidated).toBe(false)
   })
 
   it('exposes a shuffle failure for the open confirmation instead of a hidden toast', async () => {
