@@ -266,6 +266,33 @@ test.describe('Roll desktop layout packs regions into the viewport (issue #1943)
     expect(narrow.grid!.top).toBeGreaterThanOrEqual(0)
   })
 
+  test('no meaningful reading context keeps the optional disclosures collapsed and the layout compact', async ({
+    authenticatedPage,
+  }) => {
+    const page = authenticatedPage
+    await page.setViewportSize(DESKTOP_VIEWPORT)
+    await createThread(page, { title: 'No Context Layout Thread', format: 'Comic', issues_remaining: 3, total_issues: 3 })
+    await enterRatingView(page, 'No Context Layout Thread', RATING_STATES.noContext)
+
+    // The retired three-pillar headings must not return: reading detail now
+    // lives behind two compact disclosures inside the decision region.
+    await expect(page.getByTestId('reading-context-card')).toBeVisible()
+    await expect(page.getByTestId('reading-boundaries-card')).toBeVisible()
+    await expect(page.getByTestId('reading-context-button')).toHaveAttribute('aria-expanded', 'false')
+    await expect(page.getByTestId('reading-boundaries-button')).toHaveAttribute('aria-expanded', 'false')
+    await expect(page.getByTestId('reading-context-content')).toHaveCount(0)
+    await expect(page.getByTestId('reading-boundaries-content')).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: 'Reading Context', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: 'Your Context', exact: true })).toHaveCount(0)
+
+    const g = await readRatingGeometry(page)
+    expect(g.comic).not.toBeNull()
+    expect(g.decision).not.toBeNull()
+    expect(g.optionalCards).not.toBeNull()
+    assertActionsFitViewport(g)
+    assertNoHorizontalOverflow(g)
+  })
+
   test('a cover-heavy column cannot push the action controls below the fold', async ({
     authenticatedPage,
   }) => {
