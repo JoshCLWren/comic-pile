@@ -1505,6 +1505,82 @@ mod tests {
         );
     }
 
+    /// #5522: the reported QA shape (a 228-entry source with one position
+    /// selected) must not fan out. The full source is still reconciled so no
+    /// position is silently skipped; only the statement count is bounded.
+    #[tokio::test]
+    async fn adoption_reconcile_228_source_with_one_selected_is_bounded() {
+        let state = crate::test_support::test_state(1)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("test connection");
+        connection
+            .batch_execute(
+                r#"
+                INSERT INTO users (id, username) VALUES (9301, 'one-selected-reader');
+                INSERT INTO cbl_sources (id, repository, revision_sha, synced_at, created_at, updated_at)
+                VALUES (9301, 'cbl-one-selected', 'rev', NOW(), NOW(), NOW());
+                INSERT INTO cbl_source_lists
+                    (id, source_id, source_path, name, declared_issue_count,
+                     content_hash, revision_sha, active, created_at, updated_at)
+                VALUES (9301, 9301, 'lists/one-selected.json', 'One selected', 228,
+                        'hash', 'rev', TRUE, NOW(), NOW());
+                INSERT INTO external_identities
+                    (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                SELECT 400000 + g, 'comicvine', 'issue', format('cv-one-%s', g), '{}'::json, NOW(), NOW()
+                FROM generate_series(1, 228) g;
+                INSERT INTO cbl_source_entries
+                    (id, list_id, position, series_name, issue_number, external_issue_identity_id, created_at)
+                SELECT 500000 + g, 9301, g, 'Alpha Flight', g::text, 400000 + g, NOW()
+                FROM generate_series(1, 228) g;
+                "#,
+            )
+            .await
+            .expect("seed 228-entry source");
+        let meta = crate::issue_identity::load_active_cbl_list_meta(&connection, 9301)
+            .await
+            .expect("list meta");
+
+        // Commit reconciles the whole source even when one position is chosen.
+        let full_counter = CountingExec {
+            inner: &connection,
+            statements: std::cell::Cell::new(0),
+        };
+        let all = crate::issue_identity::reconcile_entries_for_adoption(&full_counter, 9301, &meta)
+            .await
+            .expect("full source reconcile");
+        assert_eq!(all.len(), 228);
+        assert!(
+            full_counter.statements() <= 12,
+            "full 228-entry reconcile issued {} statements",
+            full_counter.statements()
+        );
+
+        let selected_counter = CountingExec {
+            inner: &connection,
+            statements: std::cell::Cell::new(0),
+        };
+        let selected = crate::issue_identity::reconcile_entries_for_adoption_positions(
+            &selected_counter,
+            9301,
+            &meta,
+            &[7],
+        )
+        .await
+        .expect("one selected position");
+        assert_eq!(selected.len(), 1);
+        assert_eq!(
+            selected[0].get("cbl_position").and_then(Value::as_i64),
+            Some(7)
+        );
+        assert!(
+            selected_counter.statements() <= 12,
+            "one-position reconcile issued {} statements",
+            selected_counter.statements()
+        );
+    }
+
     /// #5522: the commit path reconciles inside its write transaction. The
     /// same batched resolver must keep that transactional read bounded too,
     /// while the write-side atomicity/receipt tests live in tests/issue_identity.rs.
