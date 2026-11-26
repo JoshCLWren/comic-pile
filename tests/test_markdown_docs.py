@@ -1,5 +1,6 @@
 """Tests for Markdown documentation validation helpers."""
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -14,6 +15,11 @@ GOOD_FIRST_ISSUES_URL = (
     "https://github.com/JoshCLWren/comic-pile/issues"
     "?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"
 )
+CRON_SCHEDULE_RE = re.compile(
+    r"^\s*-\s*cron:\s*['\"]?(\d{1,2})\s+(\d{1,2}(?:,\d{1,2})*)\s+\*\s+\*\s+\*\s*['\"]?",
+    re.MULTILINE,
+)
+NUMBER_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 6: "six", 12: "twelve"}
 
 
 def test_find_broken_local_links_accepts_valid_local_and_external_links(tmp_path: Path) -> None:

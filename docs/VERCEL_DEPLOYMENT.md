@@ -143,9 +143,12 @@ endpoint executes a bounded batch synchronously inside its authenticated HTTP
 invocation. The Vercel Hobby cron still runs **daily** at 10:00 UTC because a
 more frequent Vercel cron schedule is not supported on that plan.
 
-To recover pending and expired leases promptly, the existing free GitHub
-Actions runner invokes the same endpoint **four times per hour** in
-`.github/workflows/comicvine-metadata-repair.yml`. This schedule is enabled
+To recover pending and expired leases on a bounded cadence, the existing free
+GitHub Actions runner invokes the same endpoint **four times per day**, at
+03:17, 09:17, 15:17, and 21:17 UTC, in
+`.github/workflows/comicvine-metadata-repair.yml`. That sparse cadence is the
+#4748 backoff from the former 96 invocations per day and bounds fallback pickup
+at about six hours; it is not a prompt-recovery guarantee. This schedule is enabled
 only from the protected default branch and never runs secret-bearing PR code.
 It serializes invocations, checks the HTTP status and the provider configuration
 flag, and fails visibly if credentials or the worker are unavailable.
