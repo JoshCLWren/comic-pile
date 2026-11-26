@@ -224,4 +224,20 @@ describe('Roll header metadata hierarchy (#3011)', () => {
     )
     expect(screen.queryByTestId('comic-story-title')).toBeNull()
   })
+
+  it('renders the authored, alternate and provider numbers in the Roll header (#4652)', async () => {
+    getIssueIntelligenceSpy.mockResolvedValue(intelligenceMetadata({ issue_number: '101' }))
+
+    renderPillar({
+      ...linkedThread,
+      issue_number: '3',
+      next_issue_number: '3',
+      issue_number_alias: '100',
+      provider_issue_number: '101',
+    })
+
+    expect(await screen.findByTestId('comic-header-title')).toHaveTextContent('Stormwatch Vol. 1 #3 (100)')
+    expect(screen.getByTestId('comic-issue-alias-number')).toHaveTextContent('(100)')
+    expect(screen.getByTestId('comic-issue-provider-number')).toHaveTextContent('Provider #101')
+  })
 })

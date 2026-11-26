@@ -81,4 +81,30 @@ describe('native v2 Roll bootstrap compatibility', () => {
     expect(() => adaptRollV2Bootstrap(withoutTags as RollV2BootstrapResponse))
       .toThrow('Incomplete native Roll v2 candidate')
   })
+
+  it('passes the pending issue alias and provider number into Roll state (#4652)', () => {
+    const state = adaptRollV2Bootstrap({
+      ...sample,
+      active_thread: {
+        id: 101,
+        title: 'Saga',
+        format: 'Comic',
+        issues_remaining: 5,
+        queue_position: 1,
+        issues_read: 2,
+        tags: [],
+        issue_id: 404,
+        issue_number: '3',
+        issue_number_alias: '100',
+        provider_issue_number: '101',
+        next_issue_id: 404,
+        next_issue_number: '3',
+      },
+    } as RollV2BootstrapResponse)
+    expect(state.active_thread).toMatchObject({
+      issue_number: '3',
+      issue_number_alias: '100',
+      provider_issue_number: '101',
+    })
+  })
 })
