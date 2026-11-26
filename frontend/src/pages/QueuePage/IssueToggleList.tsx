@@ -401,6 +401,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
 
     isProcessingMutationsRef.current = true
     let hadSuccess = false
+    let failedMutation: IssueMutation | null = null
 
     try {
       while (pendingMutationsRef.current.length > 0) {
@@ -435,10 +436,10 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
           }
           hadSuccess = true
         } catch (err: unknown) {
-          // A failed mutation stops the queue and is reported to the caller:
-          // the mutations that were not applied stay queued so the reader can
-          // retry them, and the rejected flush keeps the Edit Series dialog
-          // open instead of closing it over a lost create.
+          // A failed mutation stops the queue and is reported to the caller.
+          // Keep it at the head of the queue so the next Save retries exactly
+          // the rejected edit (#4654); later mutations stay queued behind it.
+          failedMutation = currentMutation
           //
           // The base list is resynchronized with the server first. When that
           // resynchronization is itself incomplete, later mutations would be
@@ -485,6 +486,9 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
           pendingMutationsRef.current = pendingMutationsRef.current.filter(
             (mutation) => mutation.id !== currentMutation.id
           )
+          if (failedMutation) {
+            pendingMutationsRef.current = [failedMutation, ...pendingMutationsRef.current]
+          }
           syncOptimisticIssues(baseIssuesRef.current, pendingMutationsRef.current)
           notifyPendingMutations()
         }
@@ -658,7 +662,9 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     if (deferred) {
       setIsPreviewing(true)
       try {
-        const response = await issuesService.previewCreate(threadId, range)
+        const response = await issuesService.previewCreate(threadId, range, {
+          accepted_alias_numbers: acceptedAliasNumbers,
+        })
         setPreviewState({
           range,
           response,
@@ -697,9 +703,56 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       type: 'create',
       issueRange: previewState.range,
       strategy: previewState.selectedStrategy,
+      expectedIssueIds: previewState.response.expected_issue_ids,
+      acceptedAliasNumbers,
     })
     setAddRange('')
     setPreviewState(null)
+    setAcceptedAliasNumbers([])
+  }
+
+  function closePreview() {
+    setPreviewState(null)
+    setAcceptedAliasNumbers([])
+  }
+
+  function toggleAliasOffer(number: string) {
+    if (!previewState) return
+    const nextAccepted = acceptedAliasNumbers.includes(number)
+      ? acceptedAliasNumbers.filter((candidate) => candidate !== number)
+      : [...acceptedAliasNumbers, number]
+    setAcceptedAliasNumbers(nextAccepted)
+    setIsPreviewing(true)
+    // Accepting an alias requires a fresh preview so the Before/After rows and
+    // the exact graph outcome reflect the number no longer being created.
+    void issuesService
+      .previewCreate(threadId, previewState.range, {
+        accepted_alias_numbers: nextAccepted,
+      })
+      .then((response) => setPreviewState({ ...previewState, response }))
+      .catch((err: unknown) => {
+        console.error('[IssueToggleList] Error re-previewing aliases:', err)
+        setPreviewError(getApiErrorDetail(err))
+      })
+      .finally(() => setIsPreviewing(false))
+  }
+
+  async function handleUndoEdit() {
+    if (!undoPoint || isUndoing) return
+    setIsUndoing(true)
+    try {
+      await undoService.undo(undoPoint.sessionId, undoPoint.snapshotId)
+      setUndoPoint(null)
+      const refreshed = await fetchAllIssues()
+      baseIssuesRef.current = refreshed
+      syncOptimisticIssues(refreshed, pendingMutationsRef.current)
+      onIssueChanged?.()
+    } catch (err: unknown) {
+      console.error('[IssueToggleList] Error undoing edit:', err)
+      setActionError(getApiErrorDetail(err))
+    } finally {
+      setIsUndoing(false)
+    }
   }
 
   const handleDragStart = (issueId: number) => (event: DragEvent<HTMLButtonElement>) => {
@@ -1212,7 +1265,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         <Modal
           isOpen
           title="Preview issue changes"
-          onClose={() => setPreviewState(null)}
+          onClose={closePreview}
           data-testid="edit-series-preview-modal"
         >
           <div className="space-y-4">
