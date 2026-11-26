@@ -13532,7 +13532,8 @@
         "type": "object",
         "required": [
           "issue_id",
-          "refreshed"
+          "refreshed",
+          "outcome"
         ],
         "properties": {
           "comicvine_issue_id": {
@@ -13545,8 +13546,21 @@
             "type": "integer",
             "format": "int32"
           },
+          "outcome": {
+            "type": "string",
+            "description": "Terminal outcome of the bounded attempt: `complete`, `no_credits`,\n`provider_unavailable`, `rate_limited`, `timeout`, `invalid_response`,\n`provider_not_configured` or `not_confirmed`."
+          },
           "refreshed": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "True only when valid metadata was persisted by this invocation."
+          },
+          "retry_after_seconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Provider-requested delay before another explicit Retry, when throttled."
           }
         }
       },

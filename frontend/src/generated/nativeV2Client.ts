@@ -817,7 +817,7 @@ export interface RefreshMetadataRequest {
   }
 }
 
-export type RefreshMetadataResponse = components['schemas']['MetadataRefreshResponse']
+export type RefreshMetadataResponse = components['schemas']['NativeMetadataRefreshResponse']
 
 export interface RegisterRequest {
   body: components['schemas']['RegisterRequest']

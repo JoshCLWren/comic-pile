@@ -6457,6 +6457,24 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
+        NativeMetadataRefreshResponse: {
+            comicvine_issue_id?: string | null;
+            /** Format: int32 */
+            issue_id: number;
+            /**
+             * @description Terminal outcome of the bounded attempt: `complete`, `no_credits`,
+             *     `provider_unavailable`, `rate_limited`, `timeout`, `invalid_response`,
+             *     `provider_not_configured` or `not_confirmed`.
+             */
+            outcome: string;
+            /** @description True only when valid metadata was persisted by this invocation. */
+            refreshed: boolean;
+            /**
+             * Format: int32
+             * @description Provider-requested delay before another explicit Retry, when throttled.
+             */
+            retry_after_seconds?: number | null;
+        };
         /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssues`. */
         NativeMigrateToIssuesRequest: {
             /** Format: int32 */
@@ -13656,7 +13674,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MetadataRefreshResponse"];
+                    "application/json": components["schemas"]["NativeMetadataRefreshResponse"];
                 };
             };
             /** @description Identity or correction conflict */

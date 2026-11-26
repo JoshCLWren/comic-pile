@@ -9301,6 +9301,42 @@
         ],
         "type": "object"
       },
+      "NativeMetadataRefreshResponse": {
+        "properties": {
+          "comicvine_issue_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "outcome": {
+            "description": "Terminal outcome of the bounded attempt: `complete`, `no_credits`,\n`provider_unavailable`, `rate_limited`, `timeout`, `invalid_response`,\n`provider_not_configured` or `not_confirmed`.",
+            "type": "string"
+          },
+          "refreshed": {
+            "description": "True only when valid metadata was persisted by this invocation.",
+            "type": "boolean"
+          },
+          "retry_after_seconds": {
+            "description": "Provider-requested delay before another explicit Retry, when throttled.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "issue_id",
+          "refreshed",
+          "outcome"
+        ],
+        "type": "object"
+      },
       "NativeMigrateToIssuesRequest": {
         "description": "Request body of `POST /api/v1/threads/{thread_id}:migrateToIssues`.",
         "properties": {
@@ -23331,7 +23367,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MetadataRefreshResponse"
+                  "$ref": "#/components/schemas/NativeMetadataRefreshResponse"
                 }
               }
             },

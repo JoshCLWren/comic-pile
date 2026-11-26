@@ -1044,6 +1044,7 @@ describe('ComicIdentity creator status (issue #4149)', () => {
 
     expect(screen.getByTestId('creator-status-not-fetched')).toBeInTheDocument()
     expect(screen.getByTestId('creator-status-not-fetched')).toHaveTextContent('Creator credits not yet fetched')
+    expect(screen.getByRole('button', { name: 'Retry refresh' })).toBeInTheDocument()
   })
 
   it('says credits are queued when metadata_status is refresh_pending', async () => {
@@ -1189,8 +1190,14 @@ describe('ComicIdentity creator status (issue #4149)', () => {
           creators: [{ name: 'Recovered Writer', roles: ['writer'] }],
         }),
       )
-    // SAFETY: the mocked route returns exactly the three response fields consumed by this test.
-    refreshMetadata.mockResolvedValue({ issue_id: 1, refreshed: true, comicvine_issue_id: '601' } as never)
+    // SAFETY: the mocked route returns every response field consumed by this test.
+    refreshMetadata.mockResolvedValue({
+      issue_id: 1,
+      refreshed: true,
+      comicvine_issue_id: '601',
+      outcome: 'complete',
+      retry_after_seconds: null,
+    })
 
     renderIdentity()
     await waitForLoaded()
@@ -1221,6 +1228,34 @@ describe('ComicIdentity creator status (issue #4149)', () => {
       'Could not request a creator refresh. Try again.',
     )
     expect(screen.getByTestId('creator-status-failed')).toHaveTextContent('Refresh failed')
+    expect(screen.getByRole('button', { name: 'Retry refresh' })).toBeEnabled()
+  })
+
+  it('reports a truthful provider outcome from a synchronous retry', async () => {
+    getIntelligence.mockResolvedValue(
+      intelligenceResponse({
+        comicvine_issue_id: '603',
+        metadata_status: 'refresh_failed',
+        refresh_retry_after_seconds: null,
+      }),
+    )
+    refreshMetadata.mockResolvedValue({
+      issue_id: 1,
+      refreshed: false,
+      comicvine_issue_id: '603',
+      outcome: 'rate_limited',
+      retry_after_seconds: 90,
+    })
+
+    renderIdentity()
+    await waitForLoaded()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry refresh' }))
+
+    await waitFor(() => expect(refreshMetadata).toHaveBeenCalledWith(1))
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'ComicVine rate limited this retry. Try again in 90s.',
+    )
     expect(screen.getByRole('button', { name: 'Retry refresh' })).toBeEnabled()
   })
 
