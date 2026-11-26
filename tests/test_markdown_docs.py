@@ -118,7 +118,7 @@ def test_find_broken_anchors_accepts_same_and_cross_document_headings(tmp_path: 
         "# Own heading\n\n"
         "[same](#own-heading) [cross](target.md#status--amendments-2026-11-18) "
         "[duplicate](target.md#duplicate-1) "
-        "[encoded](target.md#status%2F%20amendments%20%282026-11-18%29)\n",
+        "[encoded](target.md#status%2D%2Damendments%2D2026%2D11%2D18)\n",
         encoding="utf-8",
     )
 
@@ -165,7 +165,8 @@ def test_find_broken_anchors_ignores_missing_files_fences_and_code_fragments(
     source = docs / "README.md"
     source.write_text(
         "[missing](gone.md#section) [code](lib.rs#helper) [real](target.md#bad)\n\n"
-        "```markdown\n## Fenced heading\n[example](target.md#nonexistent) [ref][fenced-ref]\n```\n\n"
+        "```markdown\n## Fenced heading\n"
+        "[example](target.md#nonexistent) [ref][fenced-ref]\n```\n\n"
         "[fenced-ref]: target.md#also-nonexistent\n\n"
         "[fenced](#fenced-heading)\n",
         encoding="utf-8",
@@ -173,7 +174,10 @@ def test_find_broken_anchors_ignores_missing_files_fences_and_code_fragments(
 
     errors = find_broken_anchors(tmp_path, [source])
 
-    assert errors == ["docs/README.md: broken anchor: target.md#bad"]
+    assert errors == [
+        "docs/README.md: broken anchor: target.md#bad",
+        "docs/README.md: broken anchor: #fenced-heading",
+    ]
     assert (
         "docs/README.md: missing target: gone.md#section"
         in find_broken_local_links(tmp_path, [source])
