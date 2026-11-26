@@ -441,7 +441,7 @@ describe('IssueCorrectionDialog', () => {
     expect(preview).toHaveTextContent('Marking 2 issues as read before #6.')
     expect(preview).toHaveTextContent('rated 4.5')
     expect(preview).toHaveTextContent('no rating')
-    expect(preview).toHaveTextContent('Dependent frontier: #4')
+    expect(preview).toHaveTextContent('Dependent frontier: Test Comic #4')
     expect(preview).toHaveTextContent('Series completion effect: series will remain active.')
     expect(preview).toHaveTextContent('Read states explained')
   })
