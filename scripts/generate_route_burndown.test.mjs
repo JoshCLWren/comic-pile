@@ -5,6 +5,7 @@ import {
   cpSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -111,6 +112,35 @@ test('node generator matches checked-in golden fixtures on hermetic inputs', (t)
   assert.throws(() => run([process.execPath, nodeScript], checkArgs, tmp), err => err.status === 1);
 });
 
+
+test('future native_api inputs still generate the current golden artifacts', (t) => {
+  const tmp = mkdtempSync(path.join(os.tmpdir(), 'route-burndown-alias-'));
+  t.after(() => rmSync(tmp, {recursive: true, force: true}));
+
+  const files = stageInputs(tmp);
+  const fragmentFiles = readdirSync(files.fragments)
+    .filter(name => name.endsWith('.json'))
+    .map(name => path.join(files.fragments, name));
+  // Rewrite every native destination in the staged inputs to the future
+  // spelling. Canonicalization happens at the generator input boundary, so
+  // the regenerated artifacts must remain byte-identical to the golden files.
+  for (const file of [files.vercel, ...fragmentFiles]) {
+    const text = readFileSync(file, 'utf8');
+    assert.ok(text.includes('/api/native_roll.rs'), `${file} must exercise the legacy spelling`);
+    writeFileSync(file, text.replaceAll('/api/native_roll.rs', '/api/native_api.rs'));
+  }
+  run([process.execPath, nodeScript], generatorArgs(files), tmp);
+
+  for (const [key, golden] of Object.entries(GOLDEN_BY_KEY)) {
+    assert.deepEqual(
+      readBytes(files[key]),
+      readBytes(path.join(fixtureGolden, golden)),
+      `${golden} differs after aliasing the native destination`,
+    );
+  }
+  const checkArgs = [...generatorArgs(files), '--check'];
+  run([process.execPath, nodeScript], checkArgs, tmp);
+});
 
 test('generator rejects invalid fragment input and leaves fixtures untouched', (t) => {
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'route-burndown-invalid-'));

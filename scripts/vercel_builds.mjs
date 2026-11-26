@@ -11,6 +11,35 @@ export const RUST_BUILD_SRC = 'api/native_roll.rs';
 export const RUST_DEST = '/api/native_roll.rs';
 export const STATIC_BUILD_SRC = 'package.json';
 
+// The compiled entrypoint is being renamed. Both spellings name the same
+// native ingress; the canonical value stays at the deployed spelling until the
+// rename actually ships (see #5875).
+const NATIVE_DEST_ALIASES = new Set([RUST_DEST, '/api/native_api.rs']);
+
+function isParsedString(value) {
+  return Object.prototype.toString.call(value) === '[object String]';
+}
+
+/**
+ * Normalize a parsed input destination to the one canonical native ingress.
+ *
+ * This is the single canonicalization at the route-generator input boundary:
+ * fragments and previous manifest routes may carry either the legacy or the
+ * future spelling, and every generator sees the same canonical destination.
+ * Non-native and non-string values pass through unchanged so the existing
+ * invariant checks still reject them.
+ *
+ * Args:
+ *   value: Parsed destination value from a fragment or vercel.json route.
+ *
+ * Returns:
+ *   The canonical native destination for either native spelling, otherwise the
+ *   original value.
+ */
+export function canonicalNativeDest(value) {
+  return isParsedString(value) && NATIVE_DEST_ALIASES.has(value) ? RUST_DEST : value;
+}
+
 export const CANONICAL_BUILDS = [
   {src: RUST_BUILD_SRC, use: '@vercel/rust'},
   {
@@ -54,8 +83,8 @@ export function assertSingleNativeIngress(document) {
     throw new Error(`expected exactly one ${STATIC_BUILD_SRC} static build`);
   }
   for (const route of Array.isArray(document.routes) ? document.routes : []) {
-    const dest = route?.dest;
-    if (!dest?.startsWith('/api/')) continue;
+    const dest = canonicalNativeDest(route?.dest);
+    if (!isParsedString(dest) || !dest.startsWith('/api/')) continue;
     if (dest !== RUST_DEST) {
       throw new Error(`API route ${route.src ?? '<unknown>'} targets retired ingress ${dest}`);
     }
