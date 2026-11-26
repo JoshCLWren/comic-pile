@@ -1,5 +1,10 @@
 # Step 23B — Guarded legacy Reading Order apply and rollback
 
+> **Status: historical Python migration runbook.** Do not execute these commands in
+> the native runtime; current schema procedures are in
+> [DATABASE_SAVE_LOAD.md](../DATABASE_SAVE_LOAD.md).
+<!-- docs-path-check: historical -->
+
 Guarded apply + rollback tooling for migrating the three surviving user-1
 legacy Reading Orders into informational canonical Reading Plans.
 

@@ -2,9 +2,11 @@
 
 **Entry:** `/sessions/:id` from History or other session navigation.
 
-**Owner rulings:** sessions are retired as an entity ([#4405](https://github.com/JoshCLWren/comic-pile/issues/4405), 2026-10-30/31; migration [#4839](https://github.com/JoshCLWren/comic-pile/issues/4839)); `GET /sessions/current` and Restore Session Start retired by owner directive on [#4343](https://github.com/JoshCLWren/comic-pile/issues/4343) (2026-11-18, implemented in #5442).
+**Owner rulings:** the automatic current-session lifecycle and Restore Session Start are retired ([#4405](https://github.com/JoshCLWren/comic-pile/issues/4405), [#4343](https://github.com/JoshCLWren/comic-pile/issues/4343)); durable reading-history `ReadingSession` identities, details, snapshots, and undo remain. `POST /api/v2/reading-sessions` initializes that durable history explicitly.
 
 **Amended 2026-11-18:** Roll is sessionless per [#4405](https://github.com/JoshCLWren/comic-pile/issues/4405) (no six-hour timer, session row lifecycle or automatic session resets). The detail page remains as an event-derived view of recorded activity; `GET /api/v1/sessions/current/` and Restore Session Start were retired by owner directive on #4343 / [#5442](https://github.com/JoshCLWren/comic-pile/pull/5442).
+
+**Recorded implementation discrepancy:** current native code still creates six-hour server sessions and stores pending selection in PostgreSQL. That behavior does not satisfy the sessionless/browser-owned contract above and remains owning product work; do not rewrite the expected scenarios to match it.
 
 ## MQA-SESSION-001: Session details match recorded events
 
@@ -14,7 +16,7 @@
 
 ## MQA-SESSION-002: Session boundary keeps durable progress
 
-**Status: Retired (2026-11-18)** -- owner decision [#4405](https://github.com/JoshCLWren/comic-pile/issues/4405): no reading sessions as entities, no inactivity/six-hour boundary, no automatic resets. Durable read and rating history persisting across time is covered by MQA-HISTORY-001 and MQA-HISTORY-004.
+**Status: Automatic lifecycle retired (2026-11-18)** -- owner decision [#4405](https://github.com/JoshCLWren/comic-pile/issues/4405): no inactivity/six-hour boundary or automatic resets. Durable `ReadingSession` history, details, snapshots, and read/rating progress remain and are covered by MQA-HISTORY-001 and MQA-HISTORY-004.
 
 **Original expectation (historical):** Session identity/boundaries behave as configured while persistent read and rating history survives.
 

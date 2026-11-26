@@ -6,4 +6,4 @@ A newly created confirmed series uses `CBL: <source series> (<volume year>)` whe
 
 Materialization holds the reader lock throughout title selection and creation. Collision checks are owner-scoped, so another reader's titles never affect a new series name. Existing mapped series and their reader-owned titles are preserved; this change does not rename historical imports or repair production data.
 
-PostgreSQL regressions live in `tests/test_cbl_series_naming.py` and exercise distinct years, same-year runs, unknown years, exact-identity retries, reader renames, long names, and ownership isolation. Existing adoption retry/concurrency tests cover the surrounding transaction. <!-- docs-path-check: ignore -->
+The naming and transaction behavior is implemented in `native/roll-service/src/issue_identity.rs`. Dedicated native tests for distinct years, same-year runs, unknown years, renames, long names, and ownership isolation are not claimed here; add focused coverage with any future naming change.

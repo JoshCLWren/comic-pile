@@ -28,6 +28,7 @@ interface ThreadPoolProps {
   shuffleIsPending: boolean
   eligibleThreadIds?: number[] | null
   issueCards?: IssueCardsResponse | null
+  browserSnoozedThreadIds?: number[] | null
   onResetDice?: () => void | Promise<boolean>
   resetDicePending?: boolean
   resetDiceError?: string
@@ -51,6 +52,7 @@ export function ThreadPool({
   shuffleIsPending,
   eligibleThreadIds,
   issueCards,
+  browserSnoozedThreadIds,
   onResetDice,
   resetDicePending = false,
   resetDiceError = '',
@@ -58,6 +60,11 @@ export function ThreadPool({
   const navigate = useNavigate()
   const wasRatingView = useRef(isRatingView)
   const snoozedTotal = snoozedCount ?? snoozedThreads.length
+  // The scoped eligible query applies the browser-owned snooze cookie that
+  // bootstrap cannot see. Treat either source as snooze-backed emptiness so the
+  // recovery CTA is reachable when a cookie alone removed every die face.
+  const hasBrowserSnoozes = (browserSnoozedThreadIds?.length ?? 0) > 0
+  const hasSnoozes = snoozedTotal > 0 || hasBrowserSnoozes
   const cardByIssueId = new Map((issueCards?.items ?? []).map((card) => [card.issue_id, card]))
   // An explicitly empty scoped result means zero eligible faces, not a bootstrap fallback.
   const displayPool = eligibleThreadIds != null
@@ -161,7 +168,7 @@ export function ThreadPool({
               Go to Queue
             </button>
           </div>
-        ) : displayPool.length === 0 && (snoozedTotal === 0 || emptyPoolReason === 'no_series') ? (
+        ) : displayPool.length === 0 && !hasSnoozes ? (
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🎲</div>
             <div>
@@ -183,7 +190,13 @@ export function ThreadPool({
               </ul>
             </div>
           </div>
-        ) : displayPool.length === 0 && snoozedTotal > 0 ? (
+        ) : displayPool.length === 0 && hasSnoozes ? (
+          // Only snooze-backed emptiness reaches here: authoritative blockers
+          // (all_blocked / all_out_of_pool / all_completed) resolve in
+          // the branches above and never promise that a reset clears them. A
+          // browser-only snooze can still make the pool empty even when
+          // bootstrap reports no snoozes, so it reconciles the cookie state
+          // with the server reason here.
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🔒</div>
             <div>
@@ -191,33 +204,41 @@ export function ThreadPool({
                 Every series is snoozed
               </p>
               <p className="text-xs text-stone-500 mt-1">
-                Reset Dice or visit your queue to choose what to read next.
+                Add Comics or Reset Dice when resetting would restore candidates.
               </p>
             </div>
-            {onResetDice ? (
+            <div className="flex flex-col gap-2">
               <button
-                type="button"
-                onClick={() => {
-                  void onResetDice()
-                }}
-                disabled={resetDicePending}
-                data-testid="reset-dice-zero-choice"
-                className="w-full h-11 min-h-[44px] bg-[var(--theme-comic-accent)]/10 hover:bg-[var(--theme-comic-accent)]/20 border border-[var(--theme-comic-accent)]/20 rounded-xl text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] transition-colors disabled:opacity-50"
+                onClick={() => navigate('/queue', { state: { openCreate: true } })}
+                className="w-full h-11 min-h-[44px] bg-[var(--theme-comic-accent)]/10 hover:bg-[var(--theme-comic-accent)]/20 border border-[var(--theme-comic-accent)]/20 rounded-xl text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] transition-colors"
               >
-                {resetDicePending ? 'Resetting…' : 'Reset Dice'}
+                Add Comics
               </button>
-            ) : null}
-            {resetDiceError ? (
-              <p className="text-xs font-bold text-[var(--theme-error)]" role="alert">
-                {resetDiceError}
-              </p>
-            ) : null}
-            <button
-              onClick={() => navigate('/queue')}
-              className="w-full h-11 min-h-[44px] bg-transparent hover:bg-white/5 border border-[var(--theme-border)] rounded-xl text-xs font-black uppercase tracking-widest text-stone-300 transition-colors"
-            >
-              Go to Queue
-            </button>
+              {onResetDice ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void onResetDice()
+                  }}
+                  disabled={resetDicePending}
+                  data-testid="reset-dice-zero-choice"
+                  className="w-full h-11 min-h-[44px] bg-[var(--theme-comic-accent)]/10 hover:bg-[var(--theme-comic-accent)]/20 border border-[var(--theme-comic-accent)]/20 rounded-xl text-xs font-black uppercase tracking-widest text-[var(--theme-comic-accent)] transition-colors disabled:opacity-50"
+                >
+                  {resetDicePending ? 'Resetting…' : 'Reset Dice'}
+                </button>
+              ) : null}
+              {resetDiceError ? (
+                <p className="text-xs font-bold text-[var(--theme-error)]" role="alert">
+                  {resetDiceError}
+                </p>
+              ) : null}
+              <button
+                onClick={() => navigate('/queue')}
+                className="w-full h-11 min-h-[44px] bg-transparent hover:bg-white/5 border border-[var(--theme-border)] rounded-xl text-xs font-black uppercase tracking-widest text-stone-300 transition-colors"
+              >
+                Go to Queue
+              </button>
+            </div>
           </div>
         ) : (
           displayPool.map((thread, index) => {

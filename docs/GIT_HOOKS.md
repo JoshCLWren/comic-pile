@@ -1,67 +1,53 @@
 # Git Hooks Setup
 
-This repository uses git hooks to enforce code quality checks.
+This repository uses git hooks to catch local quality problems before CI.
 
-## 🚫 CORE PRINCIPLE: NEVER SKIP TESTS
+## Never skip checks
 
-**TESTS MUST NEVER BE SKIPPED - EVER.**
+When a hook blocks a commit or push, fix the code or the test setup. Do not use
+`--no-verify`, disable the hook, or weaken a check to get past it. If a hook itself
+is wrong, repair it in a reviewed change rather than bypassing it.
 
-Git hooks that block on test failures are there for YOUR protection.
+## Available hooks
 
-When a hook blocks your commit/push:
-- ✅ Fix the failing tests
-- ✅ Fix the code that breaks the tests
-- ✅ Investigate root cause
-- ❌ **NEVER use `--no-verify` to bypass hooks**
-- ❌ **NEVER skip hooks to "save time"**
+### Pre-commit hook
 
-**Using `git commit --no-verify` or `git push --no-verify` is unacceptable.**
+Runs automatically before each commit. It:
 
-If a hook is blocking you, it's telling you something is wrong. **Fix it.**
+- Blocks staged type/linter-ignore comments (`# type: ignore`, `# noqa`,
+  `# ruff: ignore`, `# pylint: ignore`).
+- Blocks forbidden paths such as `node_modules` and `review_critique.md`.
+- Blocks backup artifacts (`*.bak`, `*.backup`, `*.orig`, `*~`). Deleting or
+  untracking an already-tracked backup is allowed.
+- Runs `bash scripts/lint.sh --staged`.
 
-## Available Hooks
+`scripts/lint.sh` performs Python compilation, prohibited-ignore/`Any` checks,
+JavaScript/frontend ESLint, and HTML lint when applicable. It does **not** invoke
+Ruff or ty.
 
-### Pre-Commit Hook
-Runs automatically before each commit.
+### Pre-push hook
 
-**What it does:**
-- Blocks staged backup artifacts (`*.bak`, `*.backup`, `*.orig`, `*~`) — these are
-  editor/LLM leftovers that never belong in version control. Deleting (untracking)
-  an already-tracked backup is still allowed.
-- Runs `bash scripts/lint.sh` to check code quality
+Runs automatically before each push. It:
 
-**What it checks:**
-- Python syntax
-- Full-repo ruff linting (`ruff check .`)
-- Any type usage (ruff ANN401)
-- Full-repo ty type checking (`ty check --error-on-warning`)
-- ESLint for JavaScript
-- htmlhint for HTML templates
+1. Runs `bash scripts/lint.sh`.
+2. Runs the frontend unit suite (`pnpm test` in `frontend/`).
+3. Runs the rendered UI audit (`pnpm run audit:ui`).
 
-Path-filtered ruff or ty is not a valid CI substitute. Cursor Cloud remaps
-`core.hooksPath`; run `bash scripts/install-git-hooks.sh` so the dispatcher can
-still chain to `.git/hooks/pre-commit`.
+The hook does not run Ruff, ty, Rust database tests, or the full Playwright product
+suite. Run the checks appropriate to your change separately.
 
-**What happens on failure:**
-- Commit is aborted
-- You'll see which linting step failed
-- Can bypass with `git commit --no-verify` (not recommended)
+## Required Python CI pair
 
-### Pre-Push Hook
-Runs automatically before each push to remote.
+CI runs these commands over the whole repository:
 
-**What it does:**
-- Runs `bash scripts/lint.sh` (full-repo ruff + ty + frontend lint)
-- Runs frontend unit tests (`pnpm test`)
-- Runs the rendered UI audit (`pnpm run audit:ui`)
+```bash
+ruff check .
+ty check --error-on-warning
+```
 
-The Python API is frozen during the Rust cutover, so backend pytest no longer
-gates pushes. Backend pytest runs are not part of the pre-push hook.
-
-**What happens on failure:**
-- Push is aborted
-- You'll see which check failed
-- Can bypass with `git push --no-verify` (not recommended)
+Path-filtered Ruff or ty is not a valid substitute. Run both after the last
+Python edit and again after any later edit. ty warnings fail CI, including
+`redundant-cast`.
 
 ## Installation
 
@@ -71,39 +57,37 @@ Clone the repository and run:
 bash scripts/install-git-hooks.sh
 ```
 
-This copies the hooks from `.githooks/` to `.git/hooks/`.
+This copies the hooks from `.githooks/` to `.git/hooks/`. Cursor and similar hosts
+may remap `core.hooksPath`; the installer chains the dispatcher to the repository
+hooks. Verify the configured path and installed hooks if a check does not run.
 
-## Manual Installation
+Python tooling and hooks need the project environment:
+
+```bash
+uv venv && uv sync --all-extras
+```
+
+`make setup` installs frontend dependencies and prepares PostgreSQL, but does not
+create this Python environment.
+
+## Manual installation
 
 If you need to install hooks manually, copy them from `.githooks/` to `.git/hooks/`:
+
 - `.githooks/pre-commit` → `.git/hooks/pre-commit`
 - `.githooks/pre-push` → `.git/hooks/pre-push`
 
 Make them executable:
+
 ```bash
 chmod +x .git/hooks/pre-commit .git/hooks/pre-push
 ```
 
-## Bypassing Hooks
+## Why hooks exist
 
-**Not recommended**, but if you need to bypass:
+Hooks provide fast local feedback and reduce avoidable CI failures. They are a
+convenience, not proof that every required check ran. A green hook does not replace
+focused tests, the full-repo Ruff/ty pair, required CI, or independent review.
 
-```bash
-# Bypass pre-commit hook
-git commit --no-verify
-
-# Bypass pre-push hook
-git push --no-verify
-```
-
-## Why Hooks Exist
-
-These hooks prevent broken code from being committed or pushed:
-- Catches linting errors locally before CI
-- Catches test failures locally before CI
-- Reduces CI/CD failures
-- Faster feedback loop (local vs remote)
-
-## Note on Hooks and Git
-
-The hooks in `.git/hooks/` are not tracked by git. When other developers clone the repository, they need to run the installation script to set up their local hooks.
+The hooks in `.git/hooks/` are not tracked by Git. After cloning, run the
+installation script to set them up.

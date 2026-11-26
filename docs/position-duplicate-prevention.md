@@ -1,5 +1,9 @@
 # Position Duplicate Prevention - Implementation Report
 
+> **Status: historical Python implementation report.** Current ordering/position
+> behavior is owned by the native service; see [ARCHITECTURE.md](ARCHITECTURE.md).
+<!-- docs-path-check: historical -->
+
 ## Executive Summary
 
 **Status**: ✅ COMPLETED - Option 2 (Application Validation with Monitoring)

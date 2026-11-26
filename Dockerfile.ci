@@ -35,30 +35,35 @@ RUN apt-get update -qq && \
 
 WORKDIR /workspace
 
-# Stage 2: Python and uv setup.
+# Stage 2: Minimal Python tooling for CI helpers and linters.
+# The Python application runtime was retired; keep only a plain interpreter
+# venv with the tools the remaining CI jobs invoke. ty checks tests/ (see
+# [tool.ty.src] in pyproject.toml), so pytest and PyYAML must be resolvable
+# there even though no application dependency set is installed. Versions are
+# pinned to the ones in uv.lock so this image stays deterministic without a
+# full `uv sync`.
 FROM base AS python-env
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/workspace/.venv/bin:$PATH"
 
-COPY --from=ghcr.io/astral-sh/uv:0.11.28 /uv /usr/local/bin/uv
-COPY uv.lock pyproject.toml ./
 RUN python -m venv .venv && \
-    .venv/bin/python -c "import sys; assert sys.version_info[:2] == (3, 14), sys.version"
+    .venv/bin/python -c "import sys; assert sys.version_info[:2] == (3, 14), sys.version" && \
+    .venv/bin/pip install --no-cache-dir --upgrade pip && \
+    .venv/bin/pip install --no-cache-dir \
+        ruff==0.17.6 \
+        ty==0.0.107 \
+        pytest==9.2.0 \
+        pyyaml==6.0.3
 
-# Stage 3: Python dependencies.
-FROM python-env AS python-deps
-COPY pyproject.toml ./
-RUN uv sync --locked --all-extras --no-install-project
-
-# Stage 4: Frontend dependencies (no Playwright browsers — installed on-demand).
-FROM python-deps AS frontend-deps
+# Stage 3: Frontend dependencies (no Playwright browsers — installed on-demand).
+FROM python-env AS frontend-deps
 RUN npm install -g pnpm@10.15.0
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY frontend/package.json frontend/
 RUN pnpm install --frozen-lockfile
 
-# Stage 5: Frontend build.
+# Stage 4: Frontend build.
 FROM frontend-deps AS frontend-build
 COPY frontend/ frontend/
 # Local API forwarding derives from production ingress, which must be present
@@ -66,7 +71,7 @@ COPY frontend/ frontend/
 COPY vercel.json ./vercel.json
 RUN pnpm --filter frontend run build
 
-# Stage 6: Final image with everything.
+# Stage 5: Final image with everything.
 FROM frontend-build AS final
 RUN .venv/bin/python -c "import sys; assert sys.version_info[:2] == (3, 14), sys.version" && \
     mkdir -p /opt/ci-assets/static

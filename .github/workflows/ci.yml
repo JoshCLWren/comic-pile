@@ -253,7 +253,7 @@ jobs:
     name: Frontend Lint + Typecheck
     runs-on: ubuntu-latest
     container:
-      image: ${{ needs.build.outputs.image-ref || 'python:3.14-trixie' }}
+      image: ${{ needs.build.outputs.image-ref || 'python:3.14-slim' }}
     needs: [build, build-fork]
     if: always() && (needs.build.result == 'success' || needs.build-fork.result == 'success')
     timeout-minutes: 15
@@ -301,7 +301,7 @@ jobs:
     name: Python Lint (ruff)
     runs-on: ubuntu-latest
     container:
-      image: ${{ needs.build.outputs.image-ref || 'python:3.14-trixie' }}
+      image: ${{ needs.build.outputs.image-ref || 'python:3.14-slim' }}
     needs: [build, build-fork]
     if: always() && (needs.build.result == 'success' || needs.build-fork.result == 'success')
     timeout-minutes: 10
@@ -324,7 +324,7 @@ jobs:
     name: Python Type Check (ty)
     runs-on: ubuntu-latest
     container:
-      image: ${{ needs.build.outputs.image-ref || 'python:3.14-trixie' }}
+      image: ${{ needs.build.outputs.image-ref || 'python:3.14-slim' }}
     needs: [build, build-fork]
     if: always() && (needs.build.result == 'success' || needs.build-fork.result == 'success')
     timeout-minutes: 15
@@ -416,7 +416,7 @@ jobs:
     name: Frontend Unit Tests (vitest)
     runs-on: ubuntu-latest
     container:
-      image: ${{ needs.build.outputs.image-ref || 'python:3.14-trixie' }}
+      image: ${{ needs.build.outputs.image-ref || 'python:3.14-slim' }}
     needs: [build, build-fork, rust-ingress]
     if: always() && needs.rust-ingress.result == 'success' && (needs.build.result == 'success' || needs.build-fork.result == 'success')
     timeout-minutes: 10

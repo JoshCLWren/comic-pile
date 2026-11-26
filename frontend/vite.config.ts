@@ -4,7 +4,6 @@ import sri from 'vite-plugin-sri'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
 import { createApiProxy } from './scripts/api-proxy.ts'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -44,15 +43,7 @@ export default defineConfig(() => ({
   server: {
     host: '0.0.0.0',
     proxy: {
-      // Match the deployed method/path split, including native v1 aliases and
-      // the remaining Python exceptions. API version does not select runtime.
-      '/api': createApiProxy(
-        JSON.parse(readFileSync(path.resolve(__dirname, '../vercel.json'), 'utf8')).routes,
-        {
-          native: process.env.VITE_NATIVE_API_URL || 'http://localhost:8010',
-          python: process.env.VITE_API_URL || 'http://localhost:8000',
-        },
-      ),
+      '/api': createApiProxy(process.env.VITE_NATIVE_API_URL || 'http://localhost:8010'),
     },
   },
   build: {

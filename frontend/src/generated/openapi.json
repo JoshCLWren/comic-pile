@@ -6819,6 +6819,231 @@
         ],
         "type": "object"
       },
+      "DuplicateCandidateGroup": {
+        "properties": {
+          "confidence": {
+            "type": "string"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/DuplicateIssueEvidence"
+            },
+            "type": "array"
+          },
+          "group_key": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "suggested_canonical_issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "suggested_duplicate_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "group_key",
+          "confidence",
+          "reason",
+          "evidence",
+          "suggested_duplicate_issue_ids"
+        ],
+        "type": "object"
+      },
+      "DuplicateDetectionResponse": {
+        "properties": {
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/DuplicateCandidateGroup"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "groups"
+        ],
+        "type": "object"
+      },
+      "DuplicateIssueEvidence": {
+        "properties": {
+          "comicvine_issue_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "comicvine_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "comicvine_story_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "comicvine_volume_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "is_synthetic_placeholder_read": {
+            "type": "boolean"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "list_memberships": {
+            "items": {
+              "$ref": "#/components/schemas/DuplicateListMembership"
+            },
+            "type": "array"
+          },
+          "merged_into_issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "rating_events": {
+            "items": {
+              "$ref": "#/components/schemas/DuplicateRatingEvent"
+            },
+            "type": "array"
+          },
+          "read_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "read_events": {
+            "items": {
+              "$ref": "#/components/schemas/DuplicateReadEvent"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status",
+          "created_at",
+          "rating_events",
+          "read_events",
+          "list_memberships",
+          "is_synthetic_placeholder_read"
+        ],
+        "type": "object"
+      },
+      "DuplicateListMembership": {
+        "properties": {
+          "entry_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "list_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "list_name": {
+            "type": "string"
+          },
+          "position": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "list_id",
+          "list_name",
+          "position",
+          "entry_id"
+        ],
+        "type": "object"
+      },
+      "DuplicateRatingEvent": {
+        "properties": {
+          "event_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "rating": {
+            "format": "double",
+            "type": "number"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id",
+          "rating",
+          "timestamp"
+        ],
+        "type": "object"
+      },
+      "DuplicateReadEvent": {
+        "properties": {
+          "event_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_synthetic": {
+            "description": "Per-event synthetic flag: true when the read timestamp predates its issue's creation.",
+            "type": "boolean"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id",
+          "timestamp",
+          "is_synthetic"
+        ],
+        "type": "object"
+      },
       "EditorKind": {
         "enum": [
           "reading_list",
@@ -12976,6 +13201,13 @@
               "null"
             ]
           },
+          "expected_updated_at": {
+            "description": "Optimistic concurrency token. When present on update, the write is\nrejected if the list changed since the client last read it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "issue_ids": {
             "items": {
               "format": "int32",
@@ -13864,6 +14096,252 @@
         "required": [
           "session_id",
           "created"
+        ],
+        "type": "object"
+      },
+      "ReconcileApplyRequest": {
+        "properties": {
+          "canonical_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "decisions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "duplicate_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "preview_token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "canonical_issue_id",
+          "duplicate_issue_ids",
+          "preview_token"
+        ],
+        "type": "object"
+      },
+      "ReconcileApplyResponse": {
+        "properties": {
+          "canonical_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "merged_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "moved_event_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "moved_list_entry_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "moved_mapping_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "suppressed_duplicate_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "undo_snapshot_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "canonical_issue_id",
+          "merged_issue_ids",
+          "moved_event_ids",
+          "moved_mapping_ids",
+          "moved_list_entry_ids",
+          "suppressed_duplicate_issue_ids",
+          "warnings"
+        ],
+        "type": "object"
+      },
+      "ReconcilePreviewAction": {
+        "properties": {
+          "decision_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "requires_decision": {
+            "type": "boolean"
+          },
+          "safe": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "description",
+          "safe",
+          "requires_decision"
+        ],
+        "type": "object"
+      },
+      "ReconcilePreviewRequest": {
+        "properties": {
+          "canonical_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "decisions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Explicit choices for ambiguous actions: \"merge\" (default) or \"keep_distinct\"",
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "duplicate_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "canonical_issue_id",
+          "duplicate_issue_ids"
+        ],
+        "type": "object"
+      },
+      "ReconcilePreviewResponse": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/ReconcilePreviewAction"
+            },
+            "type": "array"
+          },
+          "can_apply": {
+            "type": "boolean"
+          },
+          "canonical": {
+            "$ref": "#/components/schemas/DuplicateIssueEvidence"
+          },
+          "canonical_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "duplicate_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "duplicates": {
+            "items": {
+              "$ref": "#/components/schemas/DuplicateIssueEvidence"
+            },
+            "type": "array"
+          },
+          "preview_token": {
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "canonical_issue_id",
+          "duplicate_issue_ids",
+          "canonical",
+          "duplicates",
+          "actions",
+          "warnings",
+          "can_apply",
+          "preview_token"
+        ],
+        "type": "object"
+      },
+      "ReconcileUndoRequest": {
+        "properties": {
+          "reconciliation_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "reconciliation_id"
+        ],
+        "type": "object"
+      },
+      "ReconcileUndoResponse": {
+        "properties": {
+          "reconciliation_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "undone": {
+            "type": "boolean"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "reconciliation_id",
+          "undone",
+          "warnings"
         ],
         "type": "object"
       },
@@ -17920,6 +18398,17 @@
           }
         },
         "summary": "Serve Root"
+      }
+    },
+    "/__docs__/issue-duplicate-reconciliation": {
+      "get": {
+        "operationId": "documentation",
+        "responses": {
+          "200": {}
+        },
+        "tags": [
+          "crate::issue_duplicate_reconciliation"
+        ]
       }
     },
     "/api/metrics": {
@@ -25089,6 +25578,158 @@
         "tags": [
           "identity-inbox"
         ]
+      }
+    },
+    "/api/v2/issue-duplicate-reconciliation/apply": {
+      "post": {
+        "operationId": "issue_duplicate_reconciliation_apply",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReconcileApplyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconcileApplyResponse"
+                }
+              }
+            },
+            "description": "Apply reconciliation"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Conflict"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": []
+      }
+    },
+    "/api/v2/issue-duplicate-reconciliation/detect": {
+      "get": {
+        "operationId": "issue_duplicate_reconciliation_detect",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DuplicateDetectionResponse"
+                }
+              }
+            },
+            "description": "Detected duplicate groups"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": []
+      }
+    },
+    "/api/v2/issue-duplicate-reconciliation/preview": {
+      "post": {
+        "operationId": "issue_duplicate_reconciliation_preview",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReconcilePreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconcilePreviewResponse"
+                }
+              }
+            },
+            "description": "Preview reconciliation"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": []
+      }
+    },
+    "/api/v2/issue-duplicate-reconciliation/undo": {
+      "post": {
+        "operationId": "issue_duplicate_reconciliation_undo",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReconcileUndoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconcileUndoResponse"
+                }
+              }
+            },
+            "description": "Undo reconciliation"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": []
       }
     },
     "/api/v2/issue-read-marker-removals": {

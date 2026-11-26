@@ -1,5 +1,10 @@
 # Roll eligibility serving options
 
+> **Status: historical pre-Rust serving review.** The Python implementation options
+> are not current instructions. See [Reading List runtime](READING_LIST_RUNTIME.md)
+> and the [Reading List ADR amendments](READING_LIST_EXECUTION_ADR.md#status--amendments-2026-11-18).
+<!-- docs-path-check: historical -->
+
 **Status:** Independent review. Not an accepted decision, migration, or implementation specification.  
 **Date:** 2026-10-25  
 **Does not supersede:** [Reading List execution ADR](READING_LIST_EXECUTION_ADR.md). That document remains the authority for reading-order rules and forbids a stored frontier or cached `is_blocked` flag from becoming a second authority.  

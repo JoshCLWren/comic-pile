@@ -1,5 +1,11 @@
 # Production profile
 
+> **Status: partially historical.** The `test:e2e:prod-profile`, `prod-smoke`, and
+> `prod-all` scripts reference Playwright configs that are not currently tracked.
+> Only the tracked production-performance config is runnable; see
+> [PLAYWRIGHT_VERSION_POLICY.md](PLAYWRIGHT_VERSION_POLICY.md).
+<!-- docs-path-check: historical -->
+
 The production profile is a full-account browser workload derived from the original Chrome HAR captured on July 30, 2026 after the Vercel, Neon, and Upstash migration.
 
 The source HAR contained 198 API requests across roughly 201 seconds. It exercised authenticated startup, queue/history/analytics navigation, rating, rolling, snoozing, manual thread selection, queue movement, a large issue editor, dependency management, stale-thread reactivation, manual die changes, and a final rating.

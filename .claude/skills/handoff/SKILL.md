@@ -49,8 +49,8 @@ Be thorough. The opencode agent will have zero conversation context — the hand
 Construct a self-contained prompt string. It should:
 - Tell the agent to read the handoff file first: `Read .opencode_handoff/<filename>.md`
 - State the primary task clearly (from the task description in $ARGUMENTS if provided, otherwise from the pending work in the handoff)
-- Reference the CLAUDE.md and relevant project docs
-- Remind the agent to commit its work with conventional commits and run `make lint` before committing
+- Reference `AGENTS.md` and the relevant canonical project docs
+- Remind the agent to follow the required focused lint/type/test checks in `AGENTS.md` before any commit
 - End with: "When you are done, write a brief completion summary to `.opencode_handoff/<filename>_done.md`"
 
 ## Step 4 — Launch opencode
@@ -64,7 +64,5 @@ Stream the output. When it finishes, check if a `_done.md` file was written and 
 
 ## Notes
 - The pipeline infrastructure lives in [scripts/opencode_pipeline.sh](https://github.com/JoshCLWren/rotisserie/blob/main/factory/scripts/opencode_pipeline.sh) — if the task involves the pipeline, include relevant sections from that file in the context
-- Model pool files: `.opencode_logs/model_test_results.txt` (Tier 2) and `.opencode_logs/model_tool_test_results.txt` (Tier 1 / tool-use verified)
-- Timesheet: `.opencode_logs/timesheet.jsonl` — useful for understanding what models have worked recently
-- Worktrees: `~/.opencode-worktrees/comic-pile/issue_N` — one per open issue
-- If the model name is a z.ai / zai model, note in the handoff that zai-coding-plan has a ~$6/mo plan with ~2hr heavy-use window before hitting a 3hr rate limit
+- Resolve models from the runtime catalog (`opencode models`, or `scripts/factory-run --providers` / `--models <provider>` for factory work). Do not treat old log files as a current model pool or timesheet.
+- Never request paid or unconfigured capacity. Provider/model routing must stay within the configured factory policy.

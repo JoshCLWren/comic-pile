@@ -1009,9 +1009,11 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   await waitFor(() =>
     expect(screen.getByTestId('create-thread-error')).toHaveTextContent(/create failed/i),
   )
-  // The Add Series dialog is still open; cancelling must clear the failure so
-  // it does not leak onto the next attempt.
+  // The Add Series dialog is still open with a dirty draft (#5612), so closing
+  // asks first; confirming the discard must clear the failure so it does not
+  // leak onto the next attempt.
   await user.keyboard('{Escape}')
+  await user.click(screen.getByRole('button', { name: 'Discard changes' }))
   expect(screen.queryByTestId('create-thread-error')).not.toBeInTheDocument()
 })
 

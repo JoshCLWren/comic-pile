@@ -34,6 +34,7 @@ pub mod factory_github_oauth;
 pub mod factory_github_runs;
 pub mod frontier_audit;
 pub mod identity_inbox;
+pub mod issue_duplicate_reconciliation;
 pub mod issue_handler;
 pub mod issue_identity;
 pub mod issue_identity_adoption_preview;
@@ -1197,6 +1198,22 @@ pub fn router(state: Arc<AppState>) -> Router {
             delete(issue_mutation::delete_issue),
         )
         .route("/api/v2/issues/cards", post(issue_handler::issue_cards))
+        .route(
+            "/api/v2/issue-duplicate-reconciliation/detect",
+            get(issue_duplicate_reconciliation::detect_duplicates),
+        )
+        .route(
+            "/api/v2/issue-duplicate-reconciliation/preview",
+            post(issue_duplicate_reconciliation::preview_reconciliation),
+        )
+        .route(
+            "/api/v2/issue-duplicate-reconciliation/apply",
+            post(issue_duplicate_reconciliation::apply_reconciliation),
+        )
+        .route(
+            "/api/v2/issue-duplicate-reconciliation/undo",
+            post(issue_duplicate_reconciliation::undo_reconciliation),
+        )
         .route(
             "/api/v2/threads/{thread_id}/issues",
             post(issue_mutation::create_issues),

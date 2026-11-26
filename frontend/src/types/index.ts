@@ -965,3 +965,109 @@ export interface CreatorSeriesDrilldown extends CreatorMetricDrilldown {
   series_rated_issue_count: number
   series_average_rating: number | null
 }
+
+// Issue duplicate reconciliation (#4653)
+export interface DuplicateRatingEvent {
+  event_id: number
+  rating: number
+  timestamp: string
+}
+
+export interface DuplicateReadEvent {
+  event_id: number
+  timestamp: string
+  issue_number: string | null
+  is_synthetic: boolean
+}
+
+export interface DuplicateListMembership {
+  list_id: number
+  list_name: string
+  position: number
+  entry_id: number
+}
+
+export interface DuplicateIssueEvidence {
+  issue_id: number
+  thread_id: number
+  thread_title: string
+  issue_number: string
+  status: string
+  read_at: string | null
+  created_at: string
+  merged_into_issue_id: number | null
+  comicvine_issue_id: string | null
+  comicvine_volume_id: number | null
+  comicvine_issue_number: string | null
+  comicvine_story_number: string | null
+  rating_events: DuplicateRatingEvent[]
+  read_events: DuplicateReadEvent[]
+  list_memberships: DuplicateListMembership[]
+  is_synthetic_placeholder_read: boolean
+}
+
+export interface DuplicateCandidateGroup {
+  group_key: string
+  confidence: string
+  reason: string
+  evidence: DuplicateIssueEvidence[]
+  suggested_canonical_issue_id: number | null
+  suggested_duplicate_issue_ids: number[]
+}
+
+export interface DuplicateDetectionResponse {
+  groups: DuplicateCandidateGroup[]
+}
+
+export interface ReconcilePreviewAction {
+  kind: string
+  description: string
+  safe: boolean
+  requires_decision: boolean
+  decision_key: string | null
+}
+
+export interface ReconcilePreviewRequest {
+  canonical_issue_id: number
+  duplicate_issue_ids: number[]
+  decisions?: Record<string, string>
+}
+
+export interface ReconcilePreviewResponse {
+  canonical_issue_id: number
+  duplicate_issue_ids: number[]
+  canonical: DuplicateIssueEvidence
+  duplicates: DuplicateIssueEvidence[]
+  actions: ReconcilePreviewAction[]
+  warnings: string[]
+  can_apply: boolean
+  preview_token: string
+}
+
+export interface ReconcileApplyRequest {
+  canonical_issue_id: number
+  duplicate_issue_ids: number[]
+  decisions?: Record<string, string>
+  preview_token: string
+}
+
+export interface ReconcileApplyResponse {
+  canonical_issue_id: number
+  merged_issue_ids: number[]
+  moved_event_ids: number[]
+  moved_mapping_ids: number[]
+  moved_list_entry_ids: number[]
+  suppressed_duplicate_issue_ids: number[]
+  undo_snapshot_id: number | null
+  warnings: string[]
+}
+
+export interface ReconcileUndoRequest {
+  reconciliation_id: number
+}
+
+export interface ReconcileUndoResponse {
+  reconciliation_id: number
+  undone: boolean
+  warnings: string[]
+}

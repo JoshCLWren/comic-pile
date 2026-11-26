@@ -1,5 +1,11 @@
 # Repository Structure Decision: Monorepo vs Split Repo
 
+> **Current interpretation:** the monorepo decision remains active. The dated
+> Python/`app/` examples below are historical; current backend code is under
+> `native/roll-service/`, ingress is `api/native_roll.rs`, and production is
+> Vercel static frontend plus native Rust and Neon. See
+> [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ## Date: 2026-08-13
 
 ## Context
@@ -11,7 +17,7 @@ Issue #640 asks to evaluate whether ComicPile should keep a frontend/API monorep
 
 Analysis of recent commits shows significant coupling between frontend and backend:
 
-When backend API changes are made (e.g., adding/modifying endpoints in `app/api/` or `app/services/`):
+When backend API changes are made (for example in `native/roll-service/src/` or `api/native_roll.rs`):
 - Frontend OpenAPI types must be regenerated (`frontend/src/generated/openapi.json` and `.ts`)
 - Sometimes frontend services or components that use those APIs need updates
 
@@ -29,7 +35,7 @@ This indicates **moderate to high coupling** - backend API changes frequently re
 **CI Complexity:**
 - Single CI pipeline that builds, tests, and validates both frontend and backend together
 - Atomic validation of frontend-backend compatibility
-- Shared Docker image build for consistent environment
+- Shared CI/audit container tooling; production itself uses Vercel rather than an application container
 - Simplified dependency management between frontend and backend
 
 **Release Complexity:**

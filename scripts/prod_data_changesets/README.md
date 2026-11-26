@@ -1,5 +1,10 @@
 # User 1 X-Men / Fantastic Four reconciliation
 
+> **Status: historical production-data change record (2026-10-12).** The SQL and
+> environment identifiers below are provenance, not an active runbook. Do not run
+> them without a new explicit operational authorization.
+<!-- docs-path-check: historical -->
+
 Read-only Neon (project `delicate-sea-51036121`, branch `br-silent-violet-ayobfez5`,
 database `neondb`) on 2026-10-12. **Production was not mutated. Both prod changes
 are held.** No Neon clones or branches: production read-only preflight only, with

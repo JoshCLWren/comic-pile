@@ -1,5 +1,10 @@
 # Reader-owned CBL source links
 
+> **Status: historical implementation note.** Alembic apply/downgrade commands are
+> retired; the schema is now in the refinery baseline and later migrations are
+> append-only Rust SQL. See [DATABASE_SAVE_LOAD.md](DATABASE_SAVE_LOAD.md).
+<!-- docs-path-check: historical -->
+
 PR #4052 implements #4021's source-link scaffolding. Selected-comic persistence
 and the adoption API cutover belong to the dependent #4022.
 

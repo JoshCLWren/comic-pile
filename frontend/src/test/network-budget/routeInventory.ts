@@ -55,12 +55,14 @@ export const AUDITED_ROUTES: AuditedRoute[] = [
   { path: '/continuity-plans/events', auth: 'protected', spec: 'unit/continuityIdentityRequestBudget.test.tsx' },
   { path: '/continuity-plans/:id/edit', auth: 'protected', spec: 'unit/continuityIdentityRequestBudget.test.tsx' },
   { path: '/continuity-plans/:id', auth: 'protected', spec: 'unit/continuityIdentityRequestBudget.test.tsx' },
+  { path: '/reading-lists', auth: 'protected', spec: 'unit/continuityIdentityRequestBudget.test.tsx' },
   { path: '/reading-lists/:id', auth: 'protected', spec: 'unit/continuityIdentityRequestBudget.test.tsx' },
   { path: '/cbl-sources', auth: 'protected', spec: 'unit/creatorDiscoveryRequestBudget.test.tsx' },
   { path: '/whats-new', auth: 'protected', spec: 'test/network-budget/auxiliaryRoutes.network.test.tsx' },
   { path: '/glossary', auth: 'protected', spec: 'test/network-budget/auxiliaryRoutes.network.test.tsx' },
   { path: '/help', auth: 'redirect', redirectTo: '/glossary', spec: 'test/network-budget/auxiliaryRoutes.network.test.tsx' },
   { path: '/identity-inbox', auth: 'protected', spec: 'unit/continuityIdentityRequestBudget.test.tsx' },
+  { path: '/duplicate-reconciliation', auth: 'protected', spec: 'unit/DuplicateReconciliationRequestBudget.test.tsx' },
   { path: '*', auth: 'unknown', spec: 'test/network-budget/publicRoutes.network.test.tsx' },
 ]
 

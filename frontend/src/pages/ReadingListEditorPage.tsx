@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import ContainerQueueActions from '../components/ContainerQueueActions'
 import CustomCBLBuilder from '../components/CustomCBLBuilder'
@@ -9,6 +9,8 @@ import { queryKeys } from '../query/queryKeys'
 /** Route an owned rule's editor target into the existing Reading List authoring UI. */
 export default function ReadingListEditorPage() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const openList = (nextId: number) => navigate(`/reading-lists/${nextId}`)
   const listId = Number(id)
   const valid = Boolean(id && /^\d+$/.test(id) && Number.isSafeInteger(listId) && listId > 0)
   const listQuery = useQuery({
@@ -27,12 +29,23 @@ export default function ReadingListEditorPage() {
     return Array.from(byId.values())
   }, [listQuery.data])
 
+  if (id === undefined) {
+    return (
+      <div className="space-y-4 p-3 md:p-4">
+        <h1 className="text-2xl font-bold text-[var(--theme-text-primary)]">Reading Lists</h1>
+        <p className="text-sm text-[var(--theme-text-muted)]">Find, create, or reopen your saved Reading Lists, including lists not attached to a plan.</p>
+        <CustomCBLBuilder key="index" initiallyOpen onListSelected={openList} />
+      </div>
+    )
+  }
+
   if (!valid) {
     return <p role="alert">Reading List not found.</p>
   }
 
   return (
     <div className="space-y-4 p-3 md:p-4">
+      <Link to="/reading-lists" className="text-sm font-bold text-[var(--theme-text-primary)] underline">All Reading Lists</Link>
       <h1 className="text-2xl font-bold text-[var(--theme-text-primary)]">Edit Reading List</h1>
       {listQuery.data && (
         <ContainerQueueActions
@@ -42,7 +55,7 @@ export default function ReadingListEditorPage() {
           memberThreads={memberThreads}
         />
       )}
-      <CustomCBLBuilder key={listId} initialListId={listId} lockListSelection />
+      <CustomCBLBuilder key={listId} initialListId={listId} lockListSelection onListSelected={openList} />
     </div>
   )
 }

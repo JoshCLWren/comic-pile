@@ -165,10 +165,13 @@ export function useComicIssueMapping({
     async (selected?: ComicVineIssueCandidate | null) => {
       removalIdentityRef.current = null
       if (issueId) {
+        // Clear stale A-identity creators/cover before refetching B so a late
+        // in-flight response or React Query's retained previous data cannot
+        // resurrect the previous mapping during remap (#5695).
+        await clearComicVineIssueIntelligence(queryClient, issueId)
         if (selected && selected.image_url !== undefined) {
           applyComicVineCorrectionOptimistically(queryClient, issueId, selected.image_url)
         }
-        await invalidateComicVineIssueIntelligenceMany(queryClient, [issueId])
         await invalidateComicVineIssueIdentity(queryClient, issueId)
       }
       await fetchIdentity()

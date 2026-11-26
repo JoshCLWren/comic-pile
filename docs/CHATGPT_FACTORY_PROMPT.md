@@ -1,4 +1,9 @@
-# ChatGPT Scheduled Factory Prompt
+# ChatGPT Scheduled Factory Prompt (historical disabled schedules)
+
+> **Status: historical.** The five legacy ChatGPT schedules are disabled. This
+> template is retained as provenance and is not an active worker prompt. Current
+> workers follow `docs/AUTONOMOUS_FACTORY_POLICY.md`, their trusted wrapper
+> mission, and `AGENTS.md`; never revive these schedules or their heartbeat writes.
 
 Version: 28
 

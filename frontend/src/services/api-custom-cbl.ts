@@ -85,6 +85,7 @@ export interface CustomCBLWrite {
   checkpoint_issue_ids?: number[]
   checkpoint_targets?: Record<number, number[]>
   confirmed_predecessor_changes?: ReadingListPredecessorChange[]
+  expected_updated_at?: string | null
 }
 
 export interface CustomCBLApplyResult extends ContinuityPlan {

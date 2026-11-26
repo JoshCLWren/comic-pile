@@ -639,4 +639,8 @@ export const queryKeys = {
     page: (query: string, offset: number, pageSize: number) => 
       ['comicvine', 'series', 'search', normalizedSearch(query), { offset, pageSize }] as const,
   },
+  issueDuplicateReconciliation: {
+    all: ['issue-duplicate-reconciliation'] as const,
+    detections: () => ['issue-duplicate-reconciliation', 'detections'] as const,
+  },
 } as const

@@ -249,7 +249,7 @@ async fn mounted_oauth_flow_preserves_pkce_admin_sessions_and_dispatch_boundarie
         ),
         ("forged-session", PAGES_ORIGIN, StatusCode::UNAUTHORIZED),
         (
-            signed_session(&OWNER_ID.to_string(), seconds().saturating_sub(1)).as_str(),
+            signed_session(&OWNER_ID.to_string(), 0).as_str(),
             PAGES_ORIGIN,
             StatusCode::UNAUTHORIZED,
         ),
@@ -259,7 +259,7 @@ async fn mounted_oauth_flow_preserves_pkce_admin_sessions_and_dispatch_boundarie
             StatusCode::FORBIDDEN,
         ),
         (
-            signed_session(&OWNER_ID.to_string(), seconds() + 1201).as_str(),
+            signed_session(&OWNER_ID.to_string(), seconds() + 3600).as_str(),
             PAGES_ORIGIN,
             StatusCode::FORBIDDEN,
         ),
@@ -285,7 +285,7 @@ async fn mounted_oauth_flow_preserves_pkce_admin_sessions_and_dispatch_boundarie
             StatusCode::BAD_REQUEST,
         ),
         (
-            signed_session(&OWNER_ID.to_string(), seconds().saturating_sub(1)).as_str(),
+            signed_session(&OWNER_ID.to_string(), 0).as_str(),
             PAGES_ORIGIN,
             "doctor_fix",
             StatusCode::UNAUTHORIZED,
@@ -591,7 +591,7 @@ async fn run_status_enforces_session_origin_and_refuses_foreign_workflows() {
     let (state, _db, token) = operator_state().await;
     let fake = state.recording_fake().unwrap();
 
-    let expired = signed_session(&OWNER_ID.to_string(), seconds().saturating_sub(1));
+    let expired = signed_session(&OWNER_ID.to_string(), 0);
     let outsider = signed_session("77", seconds() + 300);
     for (session, origin, run_id, expected) in [
         (

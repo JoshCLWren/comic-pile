@@ -1,5 +1,9 @@
 # Issue Implementation Gantt Chart
 
+> **Status: historical planning artifact (April 2026).** This timeline for
+> issues #483–#494 is retained for provenance. It is not an active task queue or
+> execution instruction; use GitHub Issues and the current autonomous policy.
+
 ## Overview
 This Gantt chart visualizes the implementation timeline for issues #483-#494 on JoshCLWren/comic-pile. Issues are grouped into waves based on complexity and dependencies.
 

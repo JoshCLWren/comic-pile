@@ -1,9 +1,11 @@
 # Vercel production architecture
 
-ComicPile deploys a static React frontend, native Rust API handlers, and a
-transitional Python/FastAPI function from the same repository. The Rust-only
-`/api/v2` cutover is tracked by #4335; this document describes deployed ingress,
-not a claim that every route has already migrated.
+ComicPile deploys a static React frontend and a single native Rust API handler
+from the same repository. `vercel.json` is generated from the route fragments
+and the inventory. The production workflow regenerates it and strips retired
+function entries before deployment; the checked-in generated file can briefly
+retain those entries until the bot-owned regeneration lands. API version is not
+implementation language.
 
 ## Production request boundary
 
@@ -11,19 +13,20 @@ Vercel builds the React application from the root `package.json` and publishes
 `static/react` as static output. Requests for `/` and client-side application
 routes are served without starting an API runtime.
 
-In `vercel.json`, explicit native routes, including
-`GET /api/v2/health`, `POST /api/v2/auth/login`, and supported Rust Roll,
-issue, queue, and reading resources, route to the single `api/native_roll.rs` function. Remaining transitional `/api/*` requests still fall
-through to `api/index.py` until their own cutover steps ship. A URL's v1/v2 <!-- docs-path-check: ignore -->
-segment does not by itself prove the executing language.
+In `vercel.json`, explicit native routes — including `GET /api/v2/health`,
+`POST /api/v2/auth/login`, and the Roll, issue, queue, and reading resources —
+route to the single `api/native_roll.rs` function. A catch-all routes every
+other `/api/*` request there as well, where it answers with a Rust JSON 404.
+No Python function is deployed. A URL's v1/v2 segment does not by itself prove
+the executing language; check the inventory in
+[`api/v2-route-inventory.json`](api/v2-route-inventory.json).
 
 The public bare `/health`, `/docs`, `/redoc`, and `/openapi.json` URLs
-return **404 at Vercel ingress**. They neither start Python nor return
+return **404 at Vercel ingress**. They neither start a runtime nor return
 `index.html` from the SPA fallback. Use `/api/v2/health` for production
-liveness, and read the checked-in generated OpenAPI schema at
-`native/contracts/v2-runtime.openapi.json` or the merged contract at
-`frontend/src/generated/openapi.json`. Local FastAPI still exposes Swagger
-and ReDoc for development.
+liveness, and read the checked-in generated OpenAPI schemas at
+`native/contracts/v2-runtime.openapi.json` and the merged contract at
+`frontend/src/generated/openapi.json`.
 
 Backend routes precede filesystem and SPA fallback rules, so unknown API
 paths never return `index.html`. Static assets use Vercel's filesystem
@@ -42,15 +45,15 @@ cached independently.
 
 ## Local development
 
-Local development is unchanged:
-
 ```bash
 make dev
 ```
 
-Vite proxies `/api` to local FastAPI; `app.main:app` may serve built SPA
-files and the local `/health` and documentation surfaces. These local
-endpoints are not the production ingress contract.
+Vite serves the frontend on `:5173` and proxies `/api` to the native Rust
+service on `:8010`, resolving each request against the same ingress rules
+derived from `vercel.json`. The native service serves `GET /health` and
+`GET /api/v2/health` locally; there is no local FastAPI app or Swagger surface.
+These local endpoints are not the production ingress contract.
 
 ## Verification
 
@@ -65,7 +68,8 @@ curl --silent --show-error --location --dump-header - \
 ```
 
 The first response must include `X-ComicPile-Frontend: vercel-static`.
-The second must return HTTP 200, `{"status":"ok"}`, and
-`X-ComicPile-API-Runtime: rust`. The production deploy workflow independently
-checks the rejected-login contract and Rust marker. Bare legacy health/docs
-paths must return HTTP 404 without invoking either API runtime.
+The second must return HTTP 200 with `status: "ok"`, build/process identity fields,
+and `X-ComicPile-API-Runtime: rust`. The production deploy workflow checks the
+revision, package and compiler identity as well as the status. Bare legacy
+health/docs paths must return HTTP 404 from Vercel's explicit legacy-path rule,
+before the SPA fallback, without starting a database-backed runtime.

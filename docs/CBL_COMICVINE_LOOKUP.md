@@ -78,8 +78,9 @@ matching comic gets the same answer as a reader who does not.
 
 ## Layers
 
-The Python router, service and repository were removed (#4843); the Rust v2 handlers in
-`native/roll-service/src/issue_identity.rs` serve these routes natively.
+The Python router, service and repository were removed (#4843); native Rust handlers in
+`native/roll-service/src/issue_identity.rs` serve these retained v1 paths. The URL version
+does not identify the implementation language.
 
 The reverse lookup is a read path. It performs no writes, triggers no GitHub fetch, and does not
 depend on the reading-plan sync, so a lookup never causes per-CBL network work.
