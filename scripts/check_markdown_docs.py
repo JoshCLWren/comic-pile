@@ -23,6 +23,13 @@ ALLOWED_ROOT_MARKDOWN = {
     "TECH_DEBT.md",
 }
 IGNORED_DIRECTORIES = {".git", ".venv", ".vercel", "node_modules", "archive"}
+HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$")
+SETEXT_UNDERLINE_RE = re.compile(r"^\s{0,3}(=+|-+)\s*$")
+HTML_ANCHOR_RE = re.compile(
+    r"""<(?:a|h[1-6])\b[^>]*\b(?:id|name)\s*=\s*["']([^"']+)["']""",
+    re.IGNORECASE,
+)
+FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
 
 
 def _tracked_markdown_files(root: Path) -> list[Path] | None:
@@ -172,6 +179,128 @@ def find_broken_local_links(root: Path, markdown_files: list[Path]) -> list[str]
     return broken
 
 
+def _visible_markdown(text: str) -> str:
+    """Blank fenced code blocks so illustrative links and headings are ignored.
+
+    Args:
+        text: Markdown source as written.
+
+    Returns:
+        The same lines with fenced-block content replaced by blank lines.
+    """
+    visible: list[str] = []
+    fence: str | None = None
+    for line in text.splitlines():
+        fence_match = FENCE_RE.match(line)
+        if fence_match is not None:
+            marker = fence_match.group(1)[0]
+            if fence is None:
+                fence = marker
+            elif marker == fence and line.strip().startswith(fence_match.group(1)):
+                fence = None
+            visible.append("")
+            continue
+        visible.append("" if fence is not None else line)
+    return "\n".join(visible)
+
+
+def _heading_anchor(heading: str) -> str:
+    """Convert a heading to the GitHub-style fragment it publishes.
+
+    Args:
+        heading: Heading text without the leading hash marks.
+
+    Returns:
+        The lowercase, punctuation-stripped anchor with spaces replaced by hyphens.
+    """
+    value = re.sub(r"`([^`]+)`", r"\1", heading.strip())
+    value = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", value)
+    value = re.sub(r"[*_~]", "", value)
+    value = re.sub(r"[^\w\s-]", "", value, flags=re.UNICODE)
+    return value.strip().lower().replace(" ", "-")
+
+
+def _document_anchors(path: Path) -> set[str]:
+    """Collect real fragment targets published by a Markdown document.
+
+    Args:
+        path: Markdown file whose anchors should be collected.
+
+    Returns:
+        ATX, setext, and explicit HTML heading anchors, including duplicate suffixes.
+    """
+    anchors: set[str] = set()
+    seen: dict[str, int] = {}
+    text = _visible_markdown(path.read_text(encoding="utf-8"))
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        heading_match = HEADING_RE.match(line)
+        if heading_match is not None:
+            heading = heading_match.group(1)
+        elif SETEXT_UNDERLINE_RE.match(line) and index > 0:
+            previous = lines[index - 1].strip()
+            if not previous or HEADING_RE.match(previous) is not None:
+                continue
+            heading = previous
+        else:
+            continue
+        base = _heading_anchor(heading)
+        if not base:
+            continue
+        duplicate_index = seen.get(base, 0)
+        seen[base] = duplicate_index + 1
+        anchors.add(base if duplicate_index == 0 else f"{base}-{duplicate_index}")
+    anchors.update(name.lower() for name in HTML_ANCHOR_RE.findall(text))
+    return anchors
+
+
+def find_broken_anchors(root: Path, markdown_files: list[Path]) -> list[str]:
+    """Find Markdown fragment links that do not resolve in the target document.
+
+    Missing files are already reported by ``find_broken_local_links``; this check
+    reports only fragments that point at an existing Markdown file but no published
+    heading or anchor. Links inside fenced code blocks are illustrative and do not
+    participate in validation. Fragments on non-Markdown files are code or line
+    references that this heading-based check cannot validate, so they are skipped.
+
+    Args:
+        root: Repository root used for containment and relative paths.
+        markdown_files: Markdown files to inspect.
+
+    Returns:
+        Validation errors for unresolved local Markdown fragments.
+    """
+    errors: list[str] = []
+    anchor_cache: dict[Path, set[str]] = {}
+    for markdown_file in markdown_files:
+        text = _visible_markdown(markdown_file.read_text(encoding="utf-8"))
+        reference_targets, _ = _reference_targets(text)
+        for raw_target in [*INLINE_LINK_RE.findall(text), *reference_targets]:
+            target = raw_target.strip().split(maxsplit=1)[0].strip("<>")
+            parsed = urlsplit(target)
+            if parsed.scheme or parsed.netloc or not parsed.fragment:
+                continue
+            relative = unquote(parsed.path)
+            candidate = (
+                (markdown_file.parent / relative).resolve()
+                if relative
+                else markdown_file.resolve()
+            )
+            if candidate.suffix.casefold() != ".md":
+                continue
+            try:
+                candidate.relative_to(root.resolve())
+            except ValueError:
+                continue
+            if not candidate.is_file():
+                continue
+            if candidate not in anchor_cache:
+                anchor_cache[candidate] = _document_anchors(candidate)
+            if unquote(parsed.fragment).casefold() not in anchor_cache[candidate]:
+                errors.append(f"{markdown_file.relative_to(root)}: broken anchor: {target}")
+    return errors
+
+
 def find_unapproved_root_markdown(root: Path) -> list[str]:
     """Find tracked root Markdown files that bypass the documentation ownership model.
 
@@ -208,6 +337,7 @@ def main() -> int:
 
     errors = [
         *find_broken_local_links(root, markdown_files),
+        *find_broken_anchors(root, markdown_files),
         *(
             f"root Markdown is not documented in the allowlist: {filename}"
             for filename in find_unapproved_root_markdown(root)
