@@ -152,4 +152,18 @@ describe('IssueToggleList staged removal dirtiness (#5864)', () => {
     expect(onPending).not.toHaveBeenCalledWith(true)
     expect(mockedIssuesApi.previewDelete).not.toHaveBeenCalled()
   })
+
+  it('marks the draft dirty as soon as a reorder is staged, before preview confirmation', async () => {
+    mockedIssuesApi.previewReorder.mockImplementation(
+      () => new Promise<IssueEditPreviewResponse>(() => undefined),
+    )
+    const onPending = vi.fn()
+    const ref = await renderList(onPending)
+
+    fireEvent.click(screen.getByTestId('issue-move-down-1'))
+    expect(screen.getByTestId('pending-reorder-preview')).toBeInTheDocument()
+    expect(onPending).toHaveBeenLastCalledWith(true)
+    expect(ref.current?.hasPendingMutations()).toBe(false)
+    expect(mockedIssuesApi.reorder).not.toHaveBeenCalled()
+  })
 })
