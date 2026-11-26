@@ -1,38 +1,38 @@
-utc: 2026-11-26T16:26:07Z
-uptime: 1822.89s load: 2.99 2.45 1.71
+utc: 2026-11-26T16:26:23Z
+uptime: 1839.54s load: 3.28 2.55 1.76
 processes: 202
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15983        2694        6014         133        7751       13288
+Mem:           15983        2754        5941         112        7744       13228
 Swap:           3071           0        3071
 --- disk
 Filesystem      Size  Used Avail Use% Mounted on
 /dev/root       145G   63G   82G  44% /
 /dev/root       145G   63G   82G  44% /
 --- top rss (KiB, name only)
-381504 opencode.exe
-371640 MainThread
-337044 MainThread
+380796 opencode.exe
+369848 MainThread
+346548 MainThread
+220800 chrome-headless
 206212 MainThread
-199084 chrome-headless
-168060 chrome-headless
 164360 Runner.Worker
-149256 provjobd2959942
-128172 chrome-headless
-127844 chrome-headless
-122968 Runner.Listener
-102312 chrome-headless
+150576 provjobd2959942
+134840 chrome-headless
+128736 chrome-headless
+126144 chrome-headless
+123004 Runner.Listener
+101544 chrome-headless
+101372 chrome-headless
 101128 MainThread
-100836 chrome-headless
-99212 chrome-headless
+98536 chrome-headless
 --- top cpu (name only)
-35.2 comicpile-roll-
-23.0 chrome-headless
-20.5 chrome-headless
-20.1 chrome-headless
- 9.2 chrome-headless
- 8.7 MainThread
- 8.5 chrome-headless
- 8.1 MainThread
+35.3 comicpile-roll-
+23.8 chrome-headless
+23.5 chrome-headless
+21.7 chrome-headless
+ 9.1 chrome-headless
+ 8.6 chrome-headless
+ 8.5 MainThread
+ 8.2 MainThread
 --- kernel oom/kill
 --- shutdown/session signals
