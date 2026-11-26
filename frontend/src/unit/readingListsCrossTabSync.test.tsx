@@ -7,7 +7,8 @@ import CustomCBLBuilder from '../components/CustomCBLBuilder'
 import { useUpdateThread } from '../hooks/useThread'
 import { notifyThreadMetadataChanged, subscribeToCrossTabChanges } from '../query/crossTabDataSync'
 import { queryClient } from '../query/queryClient'
-import { issueCardsApi } from '../services/issueCardsApi'
+import { queryKeys } from '../query/queryKeys'
+import { issueCardsApi, type IssueCard } from '../services/issueCardsApi'
 import { cast } from '../utils/cast'
 import { isObject } from '../utils/runtimeChecks'
 import { existingList } from './fixtures/customCblFixture'
@@ -118,9 +119,9 @@ function newClient(): QueryClient {
   })
 }
 
-function renderBuilder() {
+function renderBuilder(client: QueryClient = newClient()) {
   render(
-    <QueryClientProvider client={newClient()}>
+    <QueryClientProvider client={client}>
       <MemoryRouter>
         <CustomCBLBuilder initialListId={9} lockListSelection />
       </MemoryRouter>
@@ -174,6 +175,40 @@ it('refreshes Reading List titles when another tab renames a Thread (#5862)', as
   expect(screen.getAllByText(/Renamed 20261126 #13/).length).toBeGreaterThan(0)
   expect(screen.getByText(/Current position: next unread is #1 · .*Renamed 20261126 #13/)).toBeInTheDocument()
   expect(mocks.get).toHaveBeenCalledTimes(2)
+})
+
+it('refreshes cached issue-card titles when another tab renames a Thread (#5862)', async () => {
+  const client = newClient()
+  const oldCard: IssueCard = {
+    issue_id: 26360,
+    thread_id: 10008446,
+    thread_title: OLD_TITLE,
+    issue_number: '13',
+    status: 'unread',
+    mapping_state: 'unmapped',
+    has_confirmed_identity: false,
+  }
+  // Issue rows prefer the cached card's thread_title over the list entry's
+  // series_name, so this stale card is what keeps the old title visible even
+  // after the Reading List itself is refreshed (#5862).
+  client.setQueryData(queryKeys.issueCards.list([26360]), [oldCard])
+  vi.mocked(issueCardsApi.fetchCards).mockResolvedValue([
+    { ...oldCard, thread_title: NEW_TITLE },
+  ])
+  mocks.get.mockResolvedValueOnce(listWithTitle(OLD_TITLE))
+  mocks.get.mockResolvedValue(listWithTitle(NEW_TITLE))
+
+  renderBuilder(client)
+  expect(
+    await screen.findByRole('article', { name: `Issue ${OLD_TITLE} #13` }),
+  ).toBeInTheDocument()
+
+  await announceOtherTab()
+
+  expect(
+    await screen.findByRole('article', { name: `Issue ${NEW_TITLE} #13` }),
+  ).toBeInTheDocument()
+  expect(issueCardsApi.fetchCards).toHaveBeenCalledWith([26360])
 })
 
 it('refreshes when the Reading List tab regains focus without BroadcastChannel (#5862)', async () => {
