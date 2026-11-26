@@ -159,13 +159,6 @@ export function generateVercel(config, fragments) {
     throw new Error('Cannot generate without route fragments');
   }
   const {crons, retiredRewriteSrcs} = fragmentVercelConfig(fragments);
-<<<<<<< HEAD
-  // An explicit fragment declaration is authoritative. Fragments that do not
-  // own crons keep the previous document's list, so unrelated cron cleanup is
-  // never an accidental side effect of route regeneration.
-  const nextCrons = crons.length ? crons : config.crons;
-  const previousRoutes = config.routes.filter(route => !retiredRewriteSrcs.has(route.src));
-=======
   // Normalize native destinations once at the input boundary. The legacy and
   // future entrypoint spellings are one ingress, and unchanged routes keep
   // their identity so regeneration stays byte-identical for current fragments.
@@ -183,7 +176,6 @@ export function generateVercel(config, fragments) {
   const previousRoutes = inputConfig.routes.filter(
     route => !retiredRewriteSrcs.has(route.src),
   );
->>>>>>> origin/main
   const native = previousRoutes.filter(
     route => NATIVE.has(route.dest) && route.src !== FALLBACK,
   );
@@ -209,11 +201,7 @@ export function generateVercel(config, fragments) {
   // The deployed manifest must keep the single-function invariant (#5733):
   // one Rust compilation target and no retired API destination.
   return assertSingleNativeIngress(withCanonicalBuilds(applyStaticCsp({
-<<<<<<< HEAD
-    ...config,
-=======
     ...inputConfig,
->>>>>>> origin/main
     crons: nextCrons,
     routes: slimNativeRollRoutes(fullRoutes, new Set(fragmentRoutes)),
   })));
