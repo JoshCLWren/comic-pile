@@ -219,7 +219,10 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
         .await
         .unwrap()
         .get(0);
-    assert!(!repair_ledger, "V7 must retire the background repair ledger");
+    assert!(
+        !repair_ledger,
+        "V7 must retire the background repair ledger"
+    );
 
     let again = run(&mut client).await.unwrap();
     assert_eq!((again.applied, again.adopted), (vec![], vec![]));
