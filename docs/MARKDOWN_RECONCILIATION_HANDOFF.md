@@ -11,7 +11,7 @@ The documentation reconciliation was delivered by two merged pull requests:
 - PR #5759 reconciled the active runtime, API, deployment, product and factory documentation, extended the inventory generator to classify historical/superseded/generated files, and repaired the documentation-validation tooling.
 - PR #5827 added local Markdown `#fragment` anchor validation to the existing `scripts/check_markdown_docs.py` guard, with focused regressions and a whole-repository no-broken-anchor check.
 
-This change adds two closure artifacts: the audit evidence below, and a small extension to the existing Markdown guard (`find_stale_runtime_claims` in `scripts/check_markdown_docs.py`) that flags affirmative present-tense claims that FastAPI, SQLAlchemy or Alembic is the current runtime. The extension ignores negations, historical/superseded notices, explicit line overrides and fenced examples, so preserved provenance stays valid. It does not re-land the merged pull requests and changes no production business logic, API contract, database schema, factory behavior, automation schedule or generated route output. The audited tree is the current repository checkout; the handoff records what was actually observed here rather than claims about a divergent branch.
+This change adds three closure artifacts: the audit evidence below, corrections for six residual active-document inaccuracies verified against checked-in sources, and a small extension to the existing Markdown guard (`find_stale_runtime_claims` in `scripts/check_markdown_docs.py`) that flags affirmative present-tense claims that FastAPI, SQLAlchemy or Alembic is the current runtime. The extension ignores negations, historical/superseded notices, explicit line overrides and fenced examples, so preserved provenance stays valid. It does not re-land the merged pull requests and changes no production business logic, API contract, database schema, factory behavior, automation schedule or generated route output. The audited tree is the current repository checkout; the handoff records what was actually observed here rather than claims about a divergent branch.
 
 ## Seven confirmed examples on the current tree
 
@@ -26,6 +26,19 @@ This change adds two closure artifacts: the audit evidence below, and a small ex
 | `AGENTS.md` | Dated cutover notes and remaining-Python-handler observations presented as active rules | Active engineering rules separated from explicitly historical cutover context; generated route burndown marked bot-owned | `AGENTS.md`; `scripts/generate_route_burndown.mjs`; `vercel.json` |
 
 No active document directs a contributor to a retired Python API handler or a deleted source path. The repository guards for local links, heading fragments and code paths are described in `docs/README.md`.
+
+## Residual drift corrected in this change
+
+These active-document inaccuracies remained after the two merged pull requests and were verified against checked-in sources before correction:
+
+| Document | Stale claim | Corrected claim and evidence |
+| --- | --- | --- |
+| `README.md` | `.env.example` default database URL used `postgresql+asyncpg://` | Checked-in default is plain `postgresql://`; `.env.example:12-15`, `native/migrate/src/main.rs:21-26` |
+| `docs/API.md` | `api-sessions.ts` still called retired v1 session list/get paths | Only v2 details/snapshots reads remain; `frontend/src/services/api-sessions.ts:5-21` |
+| `docs/VERCEL_DEPLOYMENT.md` | The ComicVine Vercel cron entry was removed | A legacy cron entry is still declared but has no registered native route and falls through to the Rust 404; `vercel.json:6-15,329-334`, `api/native_roll.rs` |
+| `docs/FACTORY_GITHUB_VISIBILITY.md` | Dispatcher recovery ran every 15 minutes | Installed workflow runs hourly at minute 37; `.github/workflows/fixed-model-factory-dispatch-recovery.yml:2-5` |
+| `AGENTS.md`, `docs/READING_SESSION_NAMING.md` | `/api/session/`, `SessionListItem`, `SessionDetail` described as retained wire names | Those v1-era names are retired; current names are the `sessions` table, `session_id` path parameter, `SessionDetails`/`SessionSnapshotsResponse`; `frontend/src/types`, `frontend/src/services/api-sessions.ts` |
+| `docs/ARCHITECTURE.md` | Tailwind configured by `frontend/tailwind.config.ts` | Tailwind 4 is CSS-first via `frontend/src/index.css` and `frontend/postcss.config.ts`; `frontend/package.json` |
 
 ## Sources of truth consulted
 
@@ -64,7 +77,7 @@ Checks actually run in this checkout:
 - `python3 scripts/generate_markdown_inventory.py --output /tmp/MARKDOWN_INVENTORY_5757.md` — exit 0.
 - Focused documentation tests in `tests/test_markdown_docs.py` and `tests/test_generate_markdown_inventory.py` — pass through a stdlib harness; `pytest` is not installed in this worker runtime, so no `pytest` result is claimed locally.
 - `git diff --check` — clean.
-- Tree scope: this handoff, its `docs/README.md` navigation link, and focused documentation tests are the only files changed relative to the audited head. A temporary-index `git write-tree` plus `git merge-tree --write-tree` against that head exits 0 with no conflict sections, because the changes are documentation and test files only.
+- Tree scope: this handoff, the seven corrected active documents, the `docs/README.md` navigation link, the Markdown guard extension, and focused documentation tests are the only files changed relative to the audited head. A temporary-index `git write-tree` plus `git merge-tree --write-tree` against that head exits 0 with no conflict sections, because the changes are documentation, validation and test files only.
 
 Not executed locally: `uv`-driven pytest, Ruff, ty, pnpm, a clean-checkout `make dev`/browser flow, and any credentialed production request. Exact-head CI and independent review remain required before delivery; this record does not claim either as complete.
 
@@ -76,7 +89,7 @@ Carried forward from the PR #5759 handoff; these are outside the documentation-o
 - Roll offer/bootstrap evaluates canonical inputs even while the rollout setting is off.
 - Native server sessions/pending state conflict with #4405's sessionless/browser-owned target.
 - A one-candidate pool shows Begin instead of Read Now; post-rate Roll does not auto-roll the next comic.
-- `frontend/src/services/api-sessions.ts` still calls retired v1 session list/get paths.
+- ~~`frontend/src/services/api-sessions.ts` still calls retired v1 session list/get paths.~~ Resolved in `docs/API.md` and verified against `frontend/src/services/api-sessions.ts`; recorded here only as corrected provenance.
 - `make verify` invokes a nonexistent `pytest` target; phase/Docker targets retain retired or unsafe behavior.
 - `Production Deploy Wakeup` omits `source=factory-merge`.
 - The installed state reconciler is hourly while policy requires a 15-minute sweep.
