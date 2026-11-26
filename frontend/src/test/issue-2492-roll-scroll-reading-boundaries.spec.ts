@@ -73,10 +73,13 @@ test.describe('issue #2492: fresh roll keeps the rating start at the top when re
       // The rating surface start must still be at the top of the viewport with
       // the cover art and decisions visible, never the middle of the reading
       // boundaries that mounted during the transition.
+      // The live shell keeps the roll header above the rating surface, so the
+      // anchor invariant is a top-of-scroller offset, not a zero box offset.
       await page.waitForFunction(() => {
+        const root = document.getElementById('root')
         const top = document.querySelector('[data-testid="rating-view-top"]')
-        if (!top || top.getBoundingClientRect().height === 0) return false
-        return Math.abs(top.getBoundingClientRect().top) < 8
+        if (!root || !top || top.getBoundingClientRect().height === 0) return false
+        return root.scrollTop <= 8
       }, undefined, { timeout: 10000 })
 
       const comicRegion = page.getByTestId('rating-region-comic')
