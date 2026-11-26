@@ -182,7 +182,9 @@ async fn send(state: &Arc<AppState>, request: Request<Body>) -> (StatusCode, Val
     let status = response.status();
     // Large adoption responses carry a node per issue (#5522); allow enough
     // body room to assert the full atomic result instead of truncating it.
-    let bytes = to_bytes(response.into_body(), 4 * 1024 * 1024).await.unwrap();
+    let bytes = to_bytes(response.into_body(), 4 * 1024 * 1024)
+        .await
+        .unwrap();
     (
         status,
         serde_json::from_slice(&bytes).unwrap_or(Value::Null),
@@ -1277,10 +1279,17 @@ async fn adoption_commit_large_source_commits_and_replays_receipt_5522() {
     assert_eq!(body["unresolved_positions"], json!([]), "{body}");
 
     let plan_id = body["id"].as_i64().unwrap() as i32;
-    let (reader_status, reader_body) =
-        get(&state, &token, &format!("/api/v2/continuity-plans/{plan_id}/reader")).await;
+    let (reader_status, reader_body) = get(
+        &state,
+        &token,
+        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+    )
+    .await;
     assert_eq!(reader_status, StatusCode::OK, "{reader_body}");
-    assert_eq!(reader_body["progress"]["total_issues"], 228, "{reader_body}");
+    assert_eq!(
+        reader_body["progress"]["total_issues"], 228,
+        "{reader_body}"
+    );
 
     let list_id: i32 = conn
         .query_one(
@@ -1315,7 +1324,11 @@ async fn adoption_commit_large_source_commits_and_replays_receipt_5522() {
         payload,
     )
     .await;
-    assert_eq!(replay_status, StatusCode::CREATED, "{replay_status} {replay_body}");
+    assert_eq!(
+        replay_status,
+        StatusCode::CREATED,
+        "{replay_status} {replay_body}"
+    );
     assert_eq!(replay_body, body, "receipt replay must be byte-identical");
     let plan_count: i64 = conn
         .query_one(
