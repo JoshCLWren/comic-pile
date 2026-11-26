@@ -322,19 +322,15 @@ describe('targeted cache effects', () => {
     expect(client.getQueryData(queryKeys.roll.lastRead())).toEqual(existing)
   })
 
-  it('updates a thread and narrowly refreshes queue, current session, and roll state', async () => {
+  it('updates a thread and narrowly refreshes queue and roll state', async () => {
     const { client, setQueryData, invalidateQueries, resetQueries } = createSpiedClient()
 
     await applyUpdatedThreadCache(client, thread)
 
     expect(setQueryData).toHaveBeenCalledTimes(2)
-    expect(invalidateQueries).toHaveBeenCalledTimes(5)
+    expect(invalidateQueries).toHaveBeenCalledTimes(4)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.queue.pages(),
-    })
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.session.current(),
-      exact: true,
     })
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.roll.bootstrap(),
@@ -476,16 +472,12 @@ describe('targeted cache effects', () => {
     expect(resetQueries).not.toHaveBeenCalled()
   })
 
-  it('limits snooze reconciliation to the exact current session key', async () => {
+  it('treats snooze session reconciliation as a no-op after session.current retirement (#4839)', async () => {
     const { client, invalidateQueries, resetQueries } = createSpiedClient()
 
     await invalidateCurrentSessionAfterSnooze(client)
 
-    expect(invalidateQueries).toHaveBeenCalledOnce()
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.session.current(),
-      exact: true,
-    })
+    expect(invalidateQueries).not.toHaveBeenCalled()
     expect(resetQueries).not.toHaveBeenCalled()
   })
 
@@ -528,46 +520,7 @@ describe('targeted cache effects', () => {
     })
   })
 
-  it('skips only the session refresh when the owning mutation already refreshed it (#4276)', async () => {
-    // The queue-row snooze/unsnooze mutation hooks refresh `session.current`
-    // inside their own success path, so the row-action pass must not
-    // re-invalidate that key: a second invalidation re-ran the session fetch
-    // the mutation just settled. Every other movement surface still refreshes.
-    const { client, invalidateQueries, resetQueries } = createSpiedClient()
 
-    await invalidateAfterQueueMovement(client, { skipSessionCurrent: true })
-
-    expect(resetQueries).toHaveBeenCalledTimes(2)
-    expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
-    expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.excluded.pages() })
-    expect(invalidateQueries).toHaveBeenCalledTimes(6)
-    expect(invalidateQueries).not.toHaveBeenCalledWith({
-      queryKey: queryKeys.session.current(),
-      exact: true,
-    })
-    // Roll state still goes stale so the next bootstrap mount refetches.
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.roll.bootstrap(),
-      exact: true,
-    })
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.roll.dieState(),
-      exact: true,
-    })
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.roll.eligibleIssueIdsAll(),
-    })
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.roll.issueCardsAll(),
-    })
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.queue.activeCount(),
-      exact: true,
-    })
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.excluded.memberStatusAll(),
-    })
-  })
 
   it('refreshes Roll, session, plan, and issue-card views after a thread rename without resetting queue pages (#5264)', async () => {
     const { client, invalidateQueries, resetQueries, setQueryData } = createSpiedClient()
@@ -576,7 +529,7 @@ describe('targeted cache effects', () => {
 
     expect(setQueryData).not.toHaveBeenCalled()
     expect(resetQueries).not.toHaveBeenCalled()
-    expect(invalidateQueries).toHaveBeenCalledTimes(9)
+    expect(invalidateQueries).toHaveBeenCalledTimes(8)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
@@ -588,10 +541,6 @@ describe('targeted cache effects', () => {
       queryKey: queryKeys.roll.issueCardsAll(),
     })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.issueCards.all })
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.session.current(),
-      exact: true,
-    })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.readingPlans.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.customCBLs.all })
     // #5486: the thread page Next-issue line reads these projections.
