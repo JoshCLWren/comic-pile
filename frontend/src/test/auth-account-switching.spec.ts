@@ -9,11 +9,7 @@ test('account switching isolates inbox data and stops signed-out inbox requests'
   let unsignedInboxRequests = 0
   let refreshRequests = 0
   const crashes: string[] = []
-  let stage = 'start'
-  page.on('pageerror', error => {
-    crashes.push(error.message)
-    console.log('DEBUG_STAGE', stage, error.message)
-  })
+  page.on('pageerror', error => crashes.push(error.message))
   await page.route('**/api/**', async route => {
     const request = route.request()
     const path = new URL(request.url()).pathname
@@ -89,14 +85,14 @@ test('account switching isolates inbox data and stops signed-out inbox requests'
   await page.goto('/login')
   await expect(page.getByLabel('Username', { exact: true })).toBeVisible()
   expect(inboxRequests).toBe(0)
-  stage = 'login first'; await login('first')
-  stage = 'inbox first'; await openInbox('first')
+  await login('first')
+  await openInbox('first')
   await page.getByRole('button', { name: 'Log out', exact: true }).click()
   await expect(page.getByLabel('Username', { exact: true })).toBeVisible()
   const beforeWrongPasswords = inboxRequests
-  stage = 'wrong password'; await login('second', 'wrong-password')
+  await login('second', 'wrong-password')
   await expect(page.getByText('Incorrect username or password', { exact: true })).toBeVisible()
-  stage = 'wrong password'; await login('second', 'wrong-password')
+  await login('second', 'wrong-password')
   await expect(page.getByText('Incorrect username or password', { exact: true })).toBeVisible()
   await page.getByRole('link', { name: 'Forgot password?' }).click()
   await page.getByLabel('Email', { exact: true }).fill('second@example.com')
@@ -106,13 +102,13 @@ test('account switching isolates inbox data and stops signed-out inbox requests'
   expect(inboxRequests).toBe(beforeWrongPasswords)
   expect(refreshRequests).toBe(0)
 
-  stage = 'login second'; await login('second')
-  stage = 'inbox second'; await openInbox('second')
+  await login('second')
+  await openInbox('second')
   await expect(page.getByText('first private comic', { exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: 'Log out', exact: true }).click()
   await expect(page.getByLabel('Username', { exact: true })).toBeVisible()
-  stage = 'login first'; await login('first')
-  stage = 'inbox first'; await openInbox('first')
+  await login('first')
+  await openInbox('first')
   await expect(page.getByText('second private comic', { exact: true })).toHaveCount(0)
   expect(unsignedInboxRequests).toBe(0)
   expect(crashes).toEqual([])
