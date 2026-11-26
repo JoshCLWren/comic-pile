@@ -149,10 +149,10 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   const notifyPendingMutations = useCallback(() => {
     onPendingMutationsChangeRef.current?.(pendingMutationsRef.current.length > 0)
   }, [])
-  const recordUndoAction = useCallback((action: UndoAction, prepend = false) => {
-    const next = prepend
-      ? [action, ...undoActionsRef.current]
-      : [...undoActionsRef.current, action]
+  const recordUndoAction = useCallback((action: UndoAction) => {
+    // handleUndoEdit replays this array, so keep it strictly newest-first:
+    // every committed action is prepended, never appended (#5852).
+    const next = [action, ...undoActionsRef.current]
     undoActionsRef.current = next
     setUndoActions(next)
   }, [])
