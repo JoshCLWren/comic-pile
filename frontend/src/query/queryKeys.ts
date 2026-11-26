@@ -124,26 +124,11 @@ export const queryKeys = {
   },
   session: {
     all: ['session'] as const,
-    current: () => ['session', 'current'] as const,
-    pages: () => ['session', 'pages'] as const,
-    /**
-     * Canonical infinite Session index key. `page_token` is intentionally
-     * excluded so the key stays stable across cursor pages; the cursor lives
-     * in `pageParam`, not the key. Filter params are normalized so the same
-     * filter set always hashes to one stable key.
-     */
-    list: ({ params }: SessionListKeyOptions = {}) =>
-      ['session', 'pages', normalizedSessionParams(params)] as const,
-    page: ({ pageToken, pageSize }: SessionPageKeyOptions) =>
-      ['session', 'pages', { pageToken: pageToken ?? null, pageSize }] as const,
     detail: (sessionId: number) => ['session', 'detail', sessionId] as const,
     /**
      * Canonical session snapshot list key. The session detail page and the
-     * History card count read the same `snapshots` rows, so every
-     * snapshot-changing mutation invalidates this space (and `undo.all`, the
-     * Roll undo list over the same rows) together. Without that, the session
-     * view could keep serving a pre-change list — even an empty one — while
-     * History showed the new count (#3468).
+     * Roll undo list read the same snapshot rows, so every snapshot-changing
+     * mutation invalidates this space and `undo.all` together.
      */
     snapshots: (sessionId: number | string) =>
       ['session', 'snapshots', sessionId] as const,

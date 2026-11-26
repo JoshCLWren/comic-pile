@@ -153,16 +153,11 @@ export async function applyRatedThreadCache(
   }
 
   await Promise.all([
-    // `session.current` is intentionally not invalidated here: the shared
-    // reader-progress pass below invalidates `session.all`, which covers it.
-    // A second exact invalidation re-ran the in-flight session fetch (#5264).
     // A rating writes a new "After rating" snapshot (#3468). Both snapshot
-    // lists read the same rows, and the History card counts them through the
-    // paginated session list, so all three must stop serving the pre-rating
+    // lists read the same rows, so they must stop serving the pre-rating
     // state the moment the rating commits.
     client.invalidateQueries({ queryKey: queryKeys.undo.all }),
     client.invalidateQueries({ queryKey: queryKeys.session.snapshotsAll() }),
-    client.invalidateQueries({ queryKey: queryKeys.session.pages() }),
     // A rating marks the current issue read, which can clear (or create) a
     // canonical reading blocker for any series. Every reading-boundaries read
     // lives under this prefix, so refresh it with the rest of the read state.
@@ -193,10 +188,6 @@ export async function applyUpdatedThreadCache(
     ...(thread.status === 'completed'
       ? [client.resetQueries({ queryKey: queryKeys.completed.pages() })]
       : []),
-    client.invalidateQueries({
-      queryKey: queryKeys.session.current(),
-      exact: true,
-    }),
     client.invalidateQueries({
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
@@ -249,27 +240,21 @@ export async function invalidateAfterIssueEdit(
 }
 
 export async function invalidateCurrentSessionAfterSnooze(
-  client: QueryClient,
+  _client: QueryClient,
 ): Promise<void> {
-  await client.invalidateQueries({
-    queryKey: queryKeys.session.current(),
-    exact: true,
-  })
+  // The legacy session.current read was retired under #4343/#4839. Snooze
+  // callers refresh authoritative state through roll bootstrap reconciliation.
 }
 
 /**
  * Refresh the minimal auth-resume set after a bfcache/visibility resume
  * recovery (`ResumeRecovery`, #2582). Scoped to the retained resume
- * resources — current session, roll bootstrap, and queue pages — so recovery
- * reconciles data without the unscoped `invalidateQueries()` blast that used
- * to churn deferred layout underneath an in-progress scroll restore.
+ * resources — roll bootstrap and queue pages — so recovery reconciles data
+ * without the unscoped `invalidateQueries()` blast that used to churn
+ * deferred layout underneath an in-progress scroll restore.
  */
 export async function invalidateAfterResumeRecovery(client: QueryClient): Promise<void> {
   await Promise.all([
-    client.invalidateQueries({
-      queryKey: queryKeys.session.current(),
-      exact: true,
-    }),
     client.invalidateQueries({
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
@@ -284,7 +269,6 @@ export async function invalidateAfterResumeRecovery(client: QueryClient): Promis
     client.invalidateQueries({ queryKey: queryKeys.queue.activeCount(), exact: true }),
     client.resetQueries({ queryKey: queryKeys.completed.pages() }),
     client.resetQueries({ queryKey: queryKeys.excluded.pages() }),
-    client.invalidateQueries({ queryKey: queryKeys.session.pages() }),
     client.invalidateQueries({ queryKey: queryKeys.session.snapshotsAll() }),
     client.invalidateQueries({ queryKey: queryKeys.activity.all }),
     client.invalidateQueries({ queryKey: queryKeys.dependencies.all }),
