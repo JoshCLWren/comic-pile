@@ -1,9 +1,9 @@
-utc: 2026-11-26T09:01:56Z
-uptime: 981.04s load: 12.51 8.68 4.20
-processes: 202
+utc: 2026-11-26T09:02:16Z
+uptime: 1000.62s load: 11.28 8.64 4.29
+processes: 199
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15983        2292        5772         117        8379       13690
+Mem:           15983        2025        6041         118        8379       13957
 Swap:           3071           0        3071
 --- disk
 Filesystem      Size  Used Avail Use% Mounted on
@@ -11,28 +11,28 @@ Filesystem      Size  Used Avail Use% Mounted on
 /dev/root       145G   64G   81G  45% /
 --- top rss (KiB, name only)
 449076 MainThread
-417764 opencode.exe
-165136 rustc
+422792 opencode.exe
 159500 Runner.Worker
-140584 provjobd2783799
-114824 Runner.Listener
+141176 provjobd2783799
+119400 Runner.Listener
 100736 MainThread
-89896 opencode
+90460 opencode
 81500 dockerd
-66960 cargo
+58288 cargo
 55784 php-fpm8.5
 53068 vitest-watchdog
 51896 postgres
 45604 containerd
-45352 ExtHandler
+45408 ExtHandler
+44704 opencode-pty
 --- top cpu (name only)
-23.0 rust-lld
- 8.8 rustc
- 4.5 MainThread
- 3.7 opencode.exe
+ 4.3 MainThread
+ 3.6 opencode.exe
  1.9 provjobd2783799
- 1.2 cargo
  0.9 Runner.Worker
+ 0.7 postgres
+ 0.5 cargo
+ 0.4 python3
  0.2 systemd
 --- kernel oom/kill
 --- shutdown/session signals
