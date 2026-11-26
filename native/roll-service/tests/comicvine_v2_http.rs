@@ -3396,6 +3396,174 @@ async fn explicit_retry_hydrates_bulk_imported_issue_without_enqueue() {
 }
 
 #[tokio::test]
+async fn explicit_retry_reports_throttling_and_retry_after_without_enqueue() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-retry-throttle").await;
+    set_key(true);
+    let conn = state.pool.get().await.unwrap();
+    let t = thread(&conn, user_id, "Throttle").await;
+    let i = issue(&conn, t, "1", 1).await;
+    drop(conn);
+    let (status, _) = send(
+        &state,
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{i}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 93011})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    provider_throttled(&state, "120");
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{i}/metadata:refresh"),
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["refreshed"], false);
+    assert_eq!(body["outcome"], "rate_limited");
+    assert_eq!(body["retry_after_seconds"], 120);
+    assert_eq!(body["comicvine_issue_id"], "93011");
+
+    let conn = state.pool.get().await.unwrap();
+    let mapping: String = conn
+        .query_one(
+            "SELECT status FROM issue_external_identity_mappings \
+             JOIN external_identities e ON e.id = external_identity_id \
+             WHERE issue_id = $1 AND e.external_id = '93011'",
+            &[&i],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(mapping, "confirmed", "a throttle never changes the mapping");
+    let queued: i64 = conn
+        .query_one("SELECT count(*) FROM comicvine_metadata_refresh_requests", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(queued, 0, "a throttle must not schedule background work");
+}
+
+#[tokio::test]
+async fn retry_targets_only_the_current_identity_after_remap() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-retry-remap").await;
+    let conn = state.pool.get().await.unwrap();
+    let t = thread(&conn, user_id, "Remap").await;
+    let i = issue(&conn, t, "1", 1).await;
+    drop(conn);
+
+    // Map A with no provider key: the mapping commits even though hydration
+    // cannot run. Remap to B, then enable the key and click Retry.
+    set_key(false);
+    let (status, _) = send(
+        &state,
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{i}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 93021})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = send(
+        &state,
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{i}/identity:replace"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 93022, "reason": "wrong issue"})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    set_key(true);
+    provider_ok(
+        &state,
+        json!({"results": {
+            "id": 93022,
+            "name": "B Issue",
+            "issue_number": "2",
+            "cover_date": "2020-01-01",
+            "store_date": "2020-01-02",
+            "image": {"medium_url": "https://img.example/b.jpg"},
+            "volume": {"id": 5593, "name": "Series"},
+            "person_credits": [{"id": 88, "name": "B Writer", "role": "writer"}],
+            "character_credits": [],
+            "team_credits": [],
+            "story_arc_credits": [],
+            "date_last_updated": "2026-11-01 17:33:53"
+        }}),
+    );
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            &format!("/api/v2/comicvine/issues/{i}/metadata:refresh"),
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["outcome"], "complete");
+    assert_eq!(body["comicvine_issue_id"], "93022");
+
+    let conn = state.pool.get().await.unwrap();
+    let confirmed: String = conn
+        .query_one(
+            "SELECT e.external_id FROM issue_external_identity_mappings m \
+             JOIN external_identities e ON e.id = m.external_identity_id \
+             WHERE m.issue_id = $1 AND m.status = 'confirmed'",
+            &[&i],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(confirmed, "93022", "retry must not remap the issue");
+    let old_metadata: String = conn
+        .query_one(
+            "SELECT metadata_json::text FROM external_identities WHERE external_id = '93021'",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(old_metadata, "{}", "stale A metadata must stay untouched");
+    let calls = fake(&state).calls();
+    assert_eq!(
+        calls
+            .iter()
+            .filter(|call| call.path.starts_with("/api/issue/4000-93021?"))
+            .count(),
+        0,
+        "retry must never fetch the old identity"
+    );
+    assert_eq!(
+        calls
+            .iter()
+            .filter(|call| call.path.starts_with("/api/issue/4000-93022?"))
+            .count(),
+        1,
+        "retry fetches only the current confirmed identity"
+    );
+}
+
+#[tokio::test]
 async fn import_series_error_contract_and_reading_order() {
     let (state, token, csrf, user_id, _guard) = setup_user("cvv2-serr").await;
     let conn = state.pool.get().await.unwrap();
