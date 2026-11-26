@@ -8016,6 +8016,10 @@
               "null"
             ]
           },
+          "display_issue_number": {
+            "description": "Display number combining authored and alias when present.",
+            "type": "string"
+          },
           "has_confirmed_identity": {
             "description": "Whether a confirmed ComicVine issue mapping exists.",
             "type": "boolean"
@@ -8026,12 +8030,26 @@
             "type": "integer"
           },
           "issue_number": {
-            "description": "Exact issue number within the run.",
+            "description": "Authored issue number within the run (reader's label).",
             "type": "string"
+          },
+          "issue_number_alias": {
+            "description": "Alternate overall/story-arc number when the physical comic has dual numbering.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "mapping_state": {
             "description": "Stored mapping state (``confirmed``, ``candidate``, ...).",
             "type": "string"
+          },
+          "provider_issue_number": {
+            "description": "Provider's own issue number from confirmed identity metadata, when known.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "rating": {
             "description": "Effective per-issue saved rating.",
@@ -8217,6 +8235,12 @@
           },
           "issue_number": {
             "type": "string"
+          },
+          "issue_number_alias": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "position": {
             "format": "int32",
@@ -8540,6 +8564,13 @@
           "idempotency_key": {
             "description": "Client-generated retry key. Same key/payload replays the same receipt.",
             "type": "string"
+          },
+          "issue_number_alias": {
+            "description": "Alternate overall/story number for the same physical comic (#4652).\nSet to a string to assign, empty string or null to clear. Omit to leave unchanged.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "rating": {
             "description": "Effective issue rating in 0.5-point steps. Omit to keep the stored rating.",

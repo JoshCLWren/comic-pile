@@ -12852,6 +12852,10 @@
             ],
             "description": "Exact provider-supplied CDN URL. Null when unmapped; never image bytes."
           },
+          "display_issue_number": {
+            "type": "string",
+            "description": "Display number combining authored and alias when present."
+          },
           "has_confirmed_identity": {
             "type": "boolean",
             "description": "Whether a confirmed ComicVine issue mapping exists."
@@ -12863,11 +12867,25 @@
           },
           "issue_number": {
             "type": "string",
-            "description": "Exact issue number within the run."
+            "description": "Authored issue number within the run (reader's label)."
+          },
+          "issue_number_alias": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Alternate overall/story-arc number when the physical comic has dual numbering."
           },
           "mapping_state": {
             "type": "string",
             "description": "Stored mapping state (``confirmed``, ``candidate``, ...)."
+          },
+          "provider_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Provider's own issue number from confirmed identity metadata, when known."
           },
           "rating": {
             "type": [
@@ -13010,6 +13028,12 @@
           },
           "issue_number": {
             "type": "string"
+          },
+          "issue_number_alias": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "position": {
             "type": "integer",
@@ -13312,6 +13336,13 @@
           "idempotency_key": {
             "type": "string",
             "description": "Client-generated retry key. Same key/payload replays the same receipt."
+          },
+          "issue_number_alias": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Alternate overall/story number for the same physical comic (#4652).\nSet to a string to assign, empty string or null to clear. Omit to leave unchanged."
           },
           "rating": {
             "type": [
