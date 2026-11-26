@@ -138,6 +138,32 @@ const defaultProps = (overrides = {}) => ({
 const SEARCH_DEBOUNCE_MS = 350
 
 describe('ComicVineSearchDialog mode branching', () => {
+  it('shows the authored, alternate and provider numbers in the search target (#4652)', () => {
+    const view = render(
+      <ComicVineSearchDialog
+        {...defaultProps({
+          issueNumber: '3',
+          issueNumberAlias: '100',
+          providerIssueNumber: '101',
+        })}
+      />,
+    )
+    expect(screen.getByText(/Stormwatch Vol\. 1 #3 \(100\) \[CV #101\]/)).toBeInTheDocument()
+    view.rerender(
+      <ComicVineSearchDialog
+        {...defaultProps({ issueNumber: '3', issueNumberAlias: '3', providerIssueNumber: '3' })}
+      />,
+    )
+    expect(screen.getByText(/Stormwatch Vol\. 1 #3/)).toBeInTheDocument()
+    expect(screen.queryByText(/\[CV #/)).not.toBeInTheDocument()
+    view.rerender(
+      <ComicVineSearchDialog
+        {...defaultProps({ issueNumber: '3', issueNumberAlias: '  ', providerIssueNumber: '101' })}
+      />,
+    )
+    expect(screen.getByText(/Stormwatch Vol\. 1 #3 \[CV #101\]/)).toBeInTheDocument()
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     searchSeriesSpy.mockResolvedValue({ query: '', results: [mockSeries], total_available: 1, offset: 0, limit: 10, has_more: false, next_offset: null })
