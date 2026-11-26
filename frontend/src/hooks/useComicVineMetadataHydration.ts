@@ -266,7 +266,7 @@ export function useComicVineMetadataHydration({
     if (statusFromMetadata(metadata) !== 'not-hydrated') return
     autoHydratedIdentityRef.current = identityKey
     void retry()
-  }, [autoHydrate, identityKey, isError, isLoading, metadata, retry])
+  }, [autoHydrate, identityKey, isError, isLoading, issueId, metadata, retry])
 
   const remainingSeconds = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000))
   const state: ComicVineHydrationState | null = isLoading
