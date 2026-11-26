@@ -208,7 +208,8 @@ pub struct MetadataCorrectionsResponse {
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct MetadataRefreshResponse {
     pub issue_id: i32,
-    /// True only when valid metadata was persisted by this invocation.
+    /// True when a valid complete or no-credits hydration outcome was reached,
+    /// including reuse of already-complete cached metadata.
     pub refreshed: bool,
     pub comicvine_issue_id: Option<String>,
     /// Terminal outcome of the bounded attempt: `complete`, `no_credits`,

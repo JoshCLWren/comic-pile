@@ -1163,7 +1163,8 @@ impl HydrationOutcome {
         }
     }
 
-    /// True only when valid provider data was actually persisted.
+    /// True for a terminal complete/no-credits outcome, including reuse of
+    /// already-complete cached metadata.
     pub(crate) fn refreshed(self) -> bool {
         matches!(self, Self::Complete | Self::NoCredits)
     }
