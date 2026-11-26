@@ -2851,7 +2851,7 @@ async fn do_cbl_adoption_commit(
         _created_new,
         _plan_name,
         _ordering_mode,
-        _lanes_json,
+        lanes_json,
         mut nodes_json,
         _created_at,
         _updated_at,
@@ -3649,6 +3649,7 @@ struct MergeAdoptionCtx<'a> {
     source_path: &'a str,
     series_overrides: &'a std::collections::HashMap<String, bool>,
     preserve_existing_order: bool,
+    target_lane_id: &'a str,
 }
 
 async fn merge_adoption_nodes_tx(
@@ -3661,6 +3662,7 @@ async fn merge_adoption_nodes_tx(
     let source_path = ctx.source_path;
     let series_overrides = ctx.series_overrides;
     let preserve_existing_order = ctx.preserve_existing_order;
+    let target_lane_id = ctx.target_lane_id;
     let nodes_arr = nodes_json
         .as_array_mut()
         .ok_or_else(|| CommitErr::Unexpected("invalid nodes_json".to_string()))?;
@@ -3795,7 +3797,7 @@ async fn merge_adoption_nodes_tx(
                 "id": node_id,
                 "node_type": "issue",
                 "ref_id": issue_id,
-                "lane_id": "default",
+                "lane_id": target_lane_id,
                 "position": next_pos,
                 "is_checkpoint": false,
                 "convergence_gate": [],
