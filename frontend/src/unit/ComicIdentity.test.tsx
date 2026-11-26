@@ -1133,8 +1133,6 @@ describe('ComicIdentity creator metadata contract (#5841)', () => {
   })
 
   it('honors a provider Retry-After and does not issue a duplicate request', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
     getIntelligence.mockResolvedValue(intelligenceResponse({ metadata_status: 'needs_hydration' }))
     refreshMetadata.mockResolvedValue(refreshResult('rate_limited', { retryAfter: 30 }))
 
@@ -1146,11 +1144,8 @@ describe('ComicIdentity creator metadata contract (#5841)', () => {
     await waitFor(() => expect(screen.getByTestId('creator-status-rate_limited')).toHaveTextContent('in 30s'))
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry refresh' }))
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1)
-    })
-    expect(refreshMetadata).toHaveBeenCalledTimes(1)
-    vi.useRealTimers()
+    await waitFor(() => expect(refreshMetadata).toHaveBeenCalledTimes(1))
+    expect(screen.getByTestId('creator-status-rate_limited')).toHaveTextContent('in 30s')
   })
 
   it('disables the Retry action while the request is in flight', async () => {

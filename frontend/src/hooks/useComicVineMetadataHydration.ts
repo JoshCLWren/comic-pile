@@ -128,9 +128,11 @@ interface OutcomeState {
 }
 
 function messageWithDelay(base: string, retryAfterSeconds: number | null): string {
-  return retryAfterSeconds != null && retryAfterSeconds > 0
-    ? `${base} in ${retryAfterSeconds}s.`
-    : base.endsWith('.') ? base : `${base}.`
+  if (retryAfterSeconds == null || retryAfterSeconds <= 0) {
+    return base.endsWith('.') ? base : `${base}.`
+  }
+  const withoutPeriod = base.endsWith('.') ? base.slice(0, -1) : base
+  return `${withoutPeriod} in ${retryAfterSeconds}s.`
 }
 
 export interface UseComicVineMetadataHydrationOptions {
@@ -290,10 +292,11 @@ export function useComicVineMetadataHydration({
 
   const hasCredits = (metadata?.creators.length ?? 0) > 0
   const storedDetails = hasCredits ? null : detailsForStoredStatus(metadata?.metadata_status)
+  const storedRetryAfter = metadata?.refresh_retry_after_seconds ?? null
   const active = outcomeState ?? (storedDetails ? {
     details: storedDetails,
-    message: storedDetails.message,
-    retryAfterSeconds: metadata?.refresh_retry_after_seconds ?? null,
+    message: messageWithDelay(storedDetails.message, storedRetryAfter),
+    retryAfterSeconds: storedRetryAfter,
   } : null)
 
   return {
