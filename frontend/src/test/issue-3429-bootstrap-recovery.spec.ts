@@ -40,7 +40,6 @@ async function failUntilHealthy(page: Page, pathname: string): Promise<() => voi
   await page.route(
     (url) => url.pathname === pathname,
     async (route) => {
-      console.log('DEBUG ROUTE HIT', route.request().url())
       if (healthy) {
         await route.fallback()
         return
