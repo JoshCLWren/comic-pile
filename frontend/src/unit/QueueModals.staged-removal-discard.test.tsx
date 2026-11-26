@@ -1,13 +1,19 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueueModals } from '../pages/QueuePage/QueueModals'
 import { DEFAULT_CREATE_STATE, type QueueFormState } from '../pages/QueuePage/types'
 import type { ThreadListItem } from '../types'
 import { issuesApi } from '../services/api-issues'
 import { issueDependenciesApi } from '../services/api-dependencies'
-import { undoApi } from '../services/api-undo'
+
+/**
+ * Full-draft regression for #5864 / MQA-QUEUE-008: staging an issue removal in
+ * the Queue page Edit Series dialog must make the close control ask before
+ * discarding. The structure preview is deliberately left unresolved to cover
+ * the window where the staged removal is not yet a queued mutation.
+ */
 
 vi.mock('../components/PositionSlider', () => ({ default: () => null }))
 vi.mock('../components/DependencyBuilder', () => ({ default: () => null }))
@@ -30,10 +36,10 @@ vi.mock('../services/api-dependencies', async (importOriginal) => {
     dependenciesApi: { getIssueDependencies: vi.fn(), getConnectedThreads: vi.fn() },
   }
 })
-vi.mock('../services/api-undo', () => ({ undoApi: { undo: vi.fn().mockResolvedValue(undefined) } }))
 
 const mockedIssuesApiList = vi.mocked(issuesApi.list)
 const mockedPreviewDelete = vi.mocked(issuesApi.previewDelete)
+const mockedDelete = vi.mocked(issuesApi.delete)
 
 const EDITING_THREAD = {
   id: 99,
@@ -50,7 +56,7 @@ const EDITING_THREAD = {
   status: 'active',
 } as ThreadListItem
 
-function Harness({ onCloseEdit }: { onCloseEdit?: () => void }) {
+function Harness({ onCloseEdit }: { onCloseEdit: () => void }) {
   const [editForm, setEditForm] = useState<QueueFormState>({ ...DEFAULT_CREATE_STATE, title: 'Detective Comics' })
   return (
     <QueueModals
@@ -81,7 +87,7 @@ function Harness({ onCloseEdit }: { onCloseEdit?: () => void }) {
       onRepositionConfirm={vi.fn()}
       onDependencyChanged={vi.fn(async () => undefined)}
       onCloseCreate={vi.fn()}
-      onCloseEdit={onCloseEdit ?? vi.fn()}
+      onCloseEdit={onCloseEdit}
       onCloseReactivate={vi.fn()}
       onCloseReposition={vi.fn()}
       onCloseDependency={vi.fn()}
@@ -105,25 +111,59 @@ beforeEach(() => {
     issues: [{ id: 2, thread_id: 99, issue_number: '4', status: 'unread', read_at: null, created_at: 'now' }],
     total_count: 1, page_size: 100, next_page_token: null,
   })
-  mockedPreviewDelete.mockResolvedValue({
-    thread_id: 99, thread_title: 'Detective Comics', requested_strategy: 'safe_default',
-    default_outcome: { strategy: 'safe_default', can_commit: true, preserves_existing_relative_order: true, before: [], after: [], added_issue_numbers: [], graph: { status: 'ok', cycles: [] }, conflict_message: null },
-    numeric_resort_outcome: null,
-  } as never)
+  // Leave the preview in flight: the reader staged the removal but has not
+  // confirmed the projected before/after rows yet.
+  mockedPreviewDelete.mockImplementation(() => new Promise(() => undefined))
+  mockedDelete.mockResolvedValue()
 })
 
-it('#5864: Queue Edit Series prompts on close after a staged removal', async () => {
-  const user = userEvent.setup()
-  const close = vi.fn()
-  render(<Harness onCloseEdit={close} />)
-  await waitFor(() => expect(screen.getByTestId('issue-delete-2')).toBeInTheDocument())
-  await user.click(screen.getByTestId('issue-delete-2'))
-  await screen.findByTestId('delete-issue-dialog')
-  await user.click(screen.getByTestId('confirm-delete-issue'))
-  await screen.findByTestId('edit-series-structure-preview-modal')
-  await user.click(screen.getByTestId('confirm-structure-preview'))
-  await user.click(screen.getAllByRole('button', { name: 'Close modal' })[0])
-  const prompt = await screen.findByRole('dialog', { name: 'Discard changes?' })
-  expect(prompt).toBeInTheDocument()
-  expect(close).not.toHaveBeenCalled()
+describe('Queue Edit Series staged removal discard (#5864)', () => {
+  it('asks before discarding a draft whose only change is a staged issue removal', async () => {
+    const user = userEvent.setup()
+    const close = vi.fn()
+    render(<Harness onCloseEdit={close} />)
+    await waitFor(() => expect(screen.getByTestId('issue-delete-2')).toBeInTheDocument())
+
+    await user.click(screen.getByTestId('issue-delete-2'))
+    await screen.findByTestId('delete-issue-dialog')
+    await user.click(screen.getByTestId('confirm-delete-issue'))
+
+    await user.click(screen.getByRole('button', { name: 'Close modal' }))
+    const prompt = await screen.findByRole('dialog', { name: 'Discard changes?' })
+    expect(prompt).toBeInTheDocument()
+    expect(close).not.toHaveBeenCalled()
+
+    await user.click(within(prompt).getByRole('button', { name: 'Keep editing' }))
+    expect(screen.queryByRole('dialog', { name: 'Discard changes?' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Edit Series' })).toBeInTheDocument()
+    expect(close).not.toHaveBeenCalled()
+  })
+
+  it('discards only after confirmation and never deletes the issue on close', async () => {
+    const user = userEvent.setup()
+    const close = vi.fn()
+    render(<Harness onCloseEdit={close} />)
+    await waitFor(() => expect(screen.getByTestId('issue-delete-2')).toBeInTheDocument())
+
+    await user.click(screen.getByTestId('issue-delete-2'))
+    await screen.findByTestId('delete-issue-dialog')
+    await user.click(screen.getByTestId('confirm-delete-issue'))
+    await user.click(screen.getByRole('button', { name: 'Close modal' }))
+
+    const prompt = await screen.findByRole('dialog', { name: 'Discard changes?' })
+    await user.click(within(prompt).getByRole('button', { name: 'Discard changes' }))
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(mockedDelete).not.toHaveBeenCalled()
+  })
+
+  it('closes an unchanged draft without prompting', async () => {
+    const user = userEvent.setup()
+    const close = vi.fn()
+    render(<Harness onCloseEdit={close} />)
+    await waitFor(() => expect(screen.getByTestId('issue-delete-2')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: 'Close modal' }))
+    expect(screen.queryByRole('dialog', { name: 'Discard changes?' })).not.toBeInTheDocument()
+    expect(close).toHaveBeenCalledTimes(1)
+  })
 })
