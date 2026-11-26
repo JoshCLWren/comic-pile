@@ -246,6 +246,332 @@ fn parse_json_text(text: Option<String>) -> Value {
         .unwrap_or_else(|| serde_json::json!({}))
 }
 
+/// Local discovery context for #5434, assembled from data the app already
+/// owns. No provider I/O here: these are the hints that make provider searches
+/// find volumes even when the local series name differs from ComicVine's.
+#[derive(Debug, Default)]
+struct MatchContext {
+    issue: crate::comicvine_matching::MatchIssue,
+}
+
+impl MatchContext {
+    fn new(issue_id: i32, thread_title: &str, issue_number: &str) -> Self {
+        Self {
+            issue: crate::comicvine_matching::MatchIssue {
+                issue_id,
+                series_name: thread_title.to_string(),
+                issue_number: issue_number.to_string(),
+                publisher: None,
+                start_year: None,
+                volume_hint_ids: Vec::new(),
+                aliases: Vec::new(),
+                source_volume_ids: Vec::new(),
+            },
+        }
+    }
+
+    fn apply_series_hint(&mut self, publisher: Option<String>, start_year: Option<i32>, volume_id: Option<i32>, alias: Option<String>) {
+        if self.issue.publisher.is_none() {
+            self.issue.publisher = publisher;
+        }
+        if self.issue.start_year.is_none() {
+            self.issue.start_year = start_year;
+        }
+        if let Some(id) = volume_id {
+            if !self.issue.source_volume_ids.contains(&id) {
+                self.issue.source_volume_ids.push(id);
+            }
+        }
+        if let Some(name) = alias {
+            if !name.trim().is_empty() && !self.issue.aliases.contains(&name) {
+                self.issue.aliases.push(name);
+            }
+        }
+    }
+
+    fn finish(mut self) -> crate::comicvine_matching::MatchIssue {
+        self.issue.volume_hint_ids.sort_unstable();
+        self.issue.volume_hint_ids.dedup();
+        self.issue.source_volume_ids.sort_unstable();
+        self.issue.source_volume_ids.dedup();
+        self.issue.aliases.sort();
+        self.issue.aliases.dedup();
+        self.issue
+    }
+}
+
+/// Load the discovery hints for one issue with three bounded, set-based
+/// queries (sibling volumes, confirmed series hints, CBL source labels).
+async fn load_match_context(
+    conn: &deadpool_postgres::Object,
+    thread_id: i32,
+    issue_id: i32,
+    thread_title: &str,
+    issue_number: &str,
+) -> Result<crate::comicvine_matching::MatchIssue, ApiError> {
+    let mut context = MatchContext::new(issue_id, thread_title, issue_number);
+
+    let sibling_rows = conn
+        .query(
+            "SELECT DISTINCT (e.metadata_json::jsonb->'volume'->>'id')::int AS volume_id \
+             FROM issue_external_identity_mappings m \
+             JOIN issues s ON s.id = m.issue_id \
+             JOIN external_identities e ON e.id = m.external_identity_id \
+             WHERE s.thread_id = $1 AND m.status = 'confirmed' \
+               AND e.provider = 'comicvine' AND e.entity_type = 'issue' \
+               AND (e.metadata_json::jsonb->'volume'->>'id') ~ '^[0-9]+$'",
+            &[&thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    for row in &sibling_rows {
+        context.issue.volume_hint_ids.push(row.get(0));
+    }
+
+    let series_rows = conn
+        .query(
+            "SELECT COALESCE(NULLIF(e.metadata_json::jsonb->>'publisher', ''), \
+                             NULLIF(e.metadata_json::jsonb->'publisher'->>'name', '')) AS publisher, \
+                    CASE WHEN (e.metadata_json::jsonb->>'start_year') ~ '^[0-9]+$' \
+                         THEN (e.metadata_json::jsonb->>'start_year')::int END AS start_year, \
+                    CASE WHEN e.external_id ~ '^[0-9]+$' THEN e.external_id::int END AS volume_id, \
+                    NULLIF(e.metadata_json::jsonb->>'name', '') AS alias \
+             FROM thread_external_series_mappings tm \
+             JOIN external_identities e ON e.id = tm.external_identity_id \
+             WHERE tm.thread_id = $1 AND tm.status = 'confirmed' \
+               AND e.provider = 'comicvine' AND e.entity_type = 'series' \
+             ORDER BY tm.id LIMIT 8",
+            &[&thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    for row in &series_rows {
+        context.apply_series_hint(row.get(0), row.get(1), row.get(2), row.get(3));
+    }
+
+    let cbl_rows = conn
+        .query(
+            "SELECT cse.series_name, \
+                    CASE WHEN ev.external_id ~ '^[0-9]+$' THEN ev.external_id::int END AS volume_id \
+             FROM issue_external_identity_mappings m \
+             JOIN external_identities e ON e.id = m.external_identity_id \
+             JOIN cbl_source_entries cse ON cse.external_issue_identity_id = e.id \
+             LEFT JOIN external_identities ev ON ev.id = cse.external_series_identity_id \
+               AND ev.provider = 'comicvine' AND ev.entity_type = 'series' \
+             WHERE m.issue_id = $1 AND m.status = 'confirmed' \
+               AND e.provider = 'comicvine' AND e.entity_type = 'issue' \
+               AND btrim(cse.series_name) <> '' \
+             ORDER BY cse.id LIMIT 20",
+            &[&issue_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    for row in &cbl_rows {
+        context.apply_series_hint(None, None, row.get(1), row.get(0));
+    }
+
+    Ok(context.finish())
+}
+
+/// Batch variant of [`load_match_context`] for a page of inbox items. Three
+/// set-based queries cover the whole page instead of three per item.
+async fn load_match_contexts(
+    conn: &deadpool_postgres::Object,
+    rows: &[(i32, i32, String, String)],
+) -> Result<std::collections::HashMap<i32, crate::comicvine_matching::MatchIssue>, ApiError> {
+    if rows.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+    let thread_ids: Vec<i32> = rows.iter().map(|row| row.0).collect();
+    let issue_ids: Vec<i32> = rows.iter().map(|row| row.1).collect();
+    let mut contexts: std::collections::HashMap<i32, MatchContext> = rows
+        .iter()
+        .map(|(thread_id, issue_id, title, number)| {
+            (*issue_id, MatchContext::new(*issue_id, title, number))
+        })
+        .collect();
+    let mut issues_by_thread: std::collections::HashMap<i32, Vec<i32>> =
+        std::collections::HashMap::new();
+    for (thread_id, issue_id, _, _) in rows {
+        issues_by_thread
+            .entry(*thread_id)
+            .or_default()
+            .push(*issue_id);
+    }
+
+    let sibling_rows = conn
+        .query(
+            "SELECT DISTINCT s.thread_id, (e.metadata_json::jsonb->'volume'->>'id')::int AS volume_id \
+             FROM issue_external_identity_mappings m \
+             JOIN issues s ON s.id = m.issue_id \
+             JOIN external_identities e ON e.id = m.external_identity_id \
+             WHERE s.thread_id = ANY($1) AND m.status = 'confirmed' \
+               AND e.provider = 'comicvine' AND e.entity_type = 'issue' \
+               AND (e.metadata_json::jsonb->'volume'->>'id') ~ '^[0-9]+$'",
+            &[&thread_ids],
+        )
+        .await
+        .map_err(db::query_error)?;
+    for row in &sibling_rows {
+        let thread_id: i32 = row.get(0);
+        let volume_id: i32 = row.get(1);
+        if let Some(issue_ids) = issues_by_thread.get(&thread_id) {
+            for issue_id in issue_ids {
+                if let Some(context) = contexts.get_mut(issue_id) {
+                    context.issue.volume_hint_ids.push(volume_id);
+                }
+            }
+        }
+    }
+
+    let series_rows = conn
+        .query(
+            "SELECT tm.thread_id, \
+                    COALESCE(NULLIF(e.metadata_json::jsonb->>'publisher', ''), \
+                             NULLIF(e.metadata_json::jsonb->'publisher'->>'name', '')) AS publisher, \
+                    CASE WHEN (e.metadata_json::jsonb->>'start_year') ~ '^[0-9]+$' \
+                         THEN (e.metadata_json::jsonb->>'start_year')::int END AS start_year, \
+                    CASE WHEN e.external_id ~ '^[0-9]+$' THEN e.external_id::int END AS volume_id, \
+                    NULLIF(e.metadata_json::jsonb->>'name', '') AS alias \
+             FROM thread_external_series_mappings tm \
+             JOIN external_identities e ON e.id = tm.external_identity_id \
+             WHERE tm.thread_id = ANY($1) AND tm.status = 'confirmed' \
+               AND e.provider = 'comicvine' AND e.entity_type = 'series' \
+             ORDER BY tm.id",
+            &[&thread_ids],
+        )
+        .await
+        .map_err(db::query_error)?;
+    for row in &series_rows {
+        let thread_id: i32 = row.get(0);
+        if let Some(issue_ids) = issues_by_thread.get(&thread_id) {
+            for issue_id in issue_ids {
+                if let Some(context) = contexts.get_mut(issue_id) {
+                    context.apply_series_hint(row.get(1), row.get(2), row.get(3), row.get(4));
+                }
+            }
+        }
+    }
+
+    let cbl_rows = conn
+        .query(
+            "SELECT s.id AS issue_id, cse.series_name, \
+                    CASE WHEN ev.external_id ~ '^[0-9]+$' THEN ev.external_id::int END AS volume_id \
+             FROM issue_external_identity_mappings m \
+             JOIN external_identities e ON e.id = m.external_identity_id \
+             JOIN issues s ON s.id = m.issue_id \
+             JOIN cbl_source_entries cse ON cse.external_issue_identity_id = e.id \
+             LEFT JOIN external_identities ev ON ev.id = cse.external_series_identity_id \
+               AND ev.provider = 'comicvine' AND ev.entity_type = 'series' \
+             WHERE s.id = ANY($1) AND m.status = 'confirmed' \
+               AND e.provider = 'comicvine' AND e.entity_type = 'issue' \
+               AND btrim(cse.series_name) <> '' \
+             ORDER BY cse.id",
+            &[&issue_ids],
+        )
+        .await
+        .map_err(db::query_error)?;
+    for row in &cbl_rows {
+        let issue_id: i32 = row.get(0);
+        if let Some(context) = contexts.get_mut(&issue_id) {
+            context.apply_series_hint(None, None, row.get(2), row.get(1));
+        }
+    }
+
+    Ok(contexts
+        .into_iter()
+        .map(|(issue_id, context)| (issue_id, context.finish()))
+        .collect())
+}
+
+/// The same explanation contract is used by the list and the detail handler,
+/// so the collapsed header and the expanded item never disagree.
+fn explain_item(
+    status: &str,
+    evidence: &Value,
+    candidate_count: usize,
+    hints: &crate::comicvine_matching::MatchIssue,
+) -> (String, Vec<String>) {
+    let reason = why_stopped(status, evidence, candidate_count);
+    let steps = next_steps_for(status, evidence, candidate_count);
+    if candidate_count > 0 {
+        return (reason, steps);
+    }
+    // No stored candidate: say what discovery actually checked. This uses
+    // the real hint roster rather than a fixed placeholder, and never
+    // auto-confirms anything.
+    let mut detail = reason;
+    if !hints.volume_hint_ids.is_empty() || !hints.source_volume_ids.is_empty() {
+        detail.push_str(&format!(
+            " Checked the volume(s) already used by this series: {}.",
+            hints
+                .volume_hint_ids
+                .iter()
+                .chain(hints.source_volume_ids.iter())
+                .map(|id| format!("4050-{id}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    if !hints.aliases.is_empty() {
+        detail.push_str(&format!(
+            " Also tried alternate names: {}.",
+            hints.aliases.join(", ")
+        ));
+    }
+    (detail, steps)
+}
+
+/// Convert one ComicVine search row into the provider view the pure matcher
+/// consumes. Missing optional fields stay `None`; the matcher never assumes a
+/// label is present on the provider side.
+fn provider_issue_from_search(obj: &Value) -> Option<crate::comicvine_matching::ProviderIssue> {
+    let issue_id = obj.get("id")?.as_i64()? as i32;
+    let volume = obj.get("volume").and_then(|v| v.as_object());
+    let volume_id = volume
+        .and_then(|v| v.get("id"))
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    if volume_id <= 0 {
+        return None;
+    }
+    let volume_name = volume
+        .and_then(|v| v.get("name"))
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let publisher = match obj.get("publisher") {
+        Some(Value::Object(o)) => o.get("name").and_then(|v| v.as_str()).map(str::to_string),
+        Some(Value::String(s)) => Some(s.clone()),
+        _ => None,
+    };
+    let start_year = obj
+        .get("cover_date")
+        .and_then(|v| v.as_str())
+        .and_then(|s| s.get(..4))
+        .and_then(|s| s.parse::<i32>().ok());
+    let issue_number = obj.get("issue_number").and_then(|v| {
+        if v.is_null() {
+            None
+        } else {
+            Some(v.to_string().trim_matches('"').to_string())
+        }
+    });
+    Some(crate::comicvine_matching::ProviderIssue {
+        comicvine_issue_id: issue_id,
+        comicvine_volume_id: volume_id,
+        volume_name,
+        publisher,
+        start_year,
+        issue_number,
+        issue_name: obj
+            .get("name")
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
+        aliases: Vec::new(),
+    })
+}
+
 async fn fetch_item(
     state: &Arc<AppState>,
     user_id: i32,
@@ -361,43 +687,13 @@ async fn fetch_item(
         });
     }
 
-    // Wire the #5434 matching heuristics into the live inbox path: when no
-    // candidate mapping exists, derive an explainable non-match reason and
-    // actionable next steps from the matching module instead of a generic
-    // placeholder. This keeps the inbox's collapsed header honest and
-    // surfaces the specific reason (e.g. "no volume found for this title").
-    let (why_stopped_value, next_steps_value) = if candidates.is_empty() {
-        let match_issue = crate::comicvine_matching::MatchIssue {
-            issue_id,
-            series_name: thread_title.clone(),
-            issue_number: issue_number.clone(),
-            publisher: None,
-            start_year: None,
-            volume_hint_ids: Vec::new(),
-            aliases: Vec::new(),
-            source_volume_ids: Vec::new(),
-        };
-        // Exercise the partial-series planner on the same input so the live
-        // path exercises multi-issue planning even when only one issue is
-        // in scope; its result augments the reason when available.
-        let plans = crate::comicvine_matching::plan_partial_series_match(
-            std::slice::from_ref(&match_issue),
-            &[],
-        );
-        let unmatched = crate::comicvine_matching::explain_no_match(&match_issue, &[]);
-        let mut reason = unmatched.reason.clone();
-        if let Some(plan) = plans.first() {
-            if !plan.actionable_reason.is_empty() && plan.matched.is_empty() {
-                reason = plan.actionable_reason.clone();
-            }
-        }
-        (reason, unmatched.next_steps)
-    } else {
-        (
-            why_stopped(&status, &evidence, candidates.len()),
-            next_steps_for(&status, &evidence, candidates.len()),
-        )
-    };
+    // #5434: the detail and list handlers share one explanation contract.
+    // Hints are loaded from real owned data (confirmed sibling volumes,
+    // series publisher/year, aliases and CBL source volumes), not injected
+    // fixture values.
+    let hints = load_match_context(&conn, thread_id, issue_id, &thread_title, &issue_number).await?;
+    let (why_stopped_value, next_steps_value) =
+        explain_item(&status, &evidence, candidates.len(), &hints);
 
     let item = IdentityInboxItem {
         mapping_id: mid,
@@ -520,6 +816,12 @@ pub async fn list_inbox(
             });
     }
 
+    let context_rows: Vec<(i32, i32, String, String)> = rows
+        .iter()
+        .map(|r| (r.get(6), r.get(4), r.get::<_, String>(7), r.get::<_, String>(5)))
+        .collect();
+    let contexts = load_match_contexts(&conn, &context_rows).await?;
+
     let mut items = Vec::new();
     for r in rows {
         let mapping_id: i32 = r.get(0);
@@ -542,6 +844,20 @@ pub async fn list_inbox(
             .get(&issue_id)
             .cloned()
             .unwrap_or_default();
+        let hints = contexts
+            .get(&issue_id)
+            .cloned()
+            .unwrap_or_else(|| crate::comicvine_matching::MatchIssue {
+                issue_id,
+                series_name: thread_title.clone(),
+                issue_number: issue_number.clone(),
+                publisher: None,
+                start_year: None,
+                volume_hint_ids: Vec::new(),
+                aliases: Vec::new(),
+                source_volume_ids: Vec::new(),
+            });
+        let (why, steps) = explain_item(&status, &evidence, candidates.len(), &hints);
         items.push(IdentityInboxItem {
             mapping_id,
             issue_id,
@@ -551,8 +867,8 @@ pub async fn list_inbox(
             status: status.clone(),
             provider: Some(provider),
             source_entry_summary: source_entry_summary(&thread_title, &issue_number, &metadata),
-            why_stopped: why_stopped(&status, &evidence, candidates.len()),
-            next_steps: next_steps_for(&status, &evidence, candidates.len()),
+            why_stopped: why,
+            next_steps: steps,
             candidates,
             created_at,
             updated_at,
@@ -610,7 +926,62 @@ pub async fn search_issues(
         }));
     }
 
-    let url = build_search_url(&api_key, &q.q, clamped);
+    // #5434: build the local side of the match from real owned data when the
+    // caller supplies an issue. This loads sibling volumes, publisher/year,
+    // aliases and CBL source volumes instead of relying on the title alone.
+    let local = if issue_id > 0 {
+        let conn = db::checkout(&state).await?;
+        let row = conn
+            .query_opt(
+                "SELECT i.issue_number, i.thread_id, t.title \
+                 FROM issues i JOIN threads t ON t.id = i.thread_id \
+                 WHERE i.id = $1 AND t.user_id = $2",
+                &[&issue_id, &user.id()],
+            )
+            .await
+            .map_err(db::query_error)?;
+        match row {
+            Some(row) => {
+                let number: String = row.get(0);
+                let thread_id: i32 = row.get(1);
+                let title: String = row.get(2);
+                load_match_context(&conn, thread_id, issue_id, &title, &number).await?
+            }
+            None => crate::comicvine_matching::MatchIssue {
+                issue_id,
+                series_name: q.q.clone(),
+                issue_number: String::new(),
+                publisher: None,
+                start_year: None,
+                volume_hint_ids: Vec::new(),
+                aliases: Vec::new(),
+                source_volume_ids: Vec::new(),
+            },
+        }
+    } else {
+        crate::comicvine_matching::MatchIssue {
+            issue_id: 0,
+            series_name: q.q.clone(),
+            issue_number: String::new(),
+            publisher: None,
+            start_year: None,
+            volume_hint_ids: Vec::new(),
+            aliases: Vec::new(),
+            source_volume_ids: Vec::new(),
+        }
+    };
+
+    // A pasted ComicVine volume/issue URL is a first-class discovery input.
+    // It is resolved directly instead of being sent to the text search.
+    let url = match crate::comicvine_v2::parse_comicvine_url(&q.q) {
+        Some(crate::comicvine_v2::ParsedResource::Issue(id)) => build_resource_url(
+            &api_key,
+            &format!("issue/4000-{id}"),
+            &format!("id,issue_number,name,cover_date,volume,publisher,site_detail_url,image"),
+        ),
+        Some(crate::comicvine_v2::ParsedResource::Volume(id)) => build_volume_issues_url(&api_key, id, clamped),
+        None => build_search_url(&api_key, &q.q, clamped),
+    };
     let payload = fetch_comicvine(&state.outbound, url).await;
 
     let mut results = Vec::new();
