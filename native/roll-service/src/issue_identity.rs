@@ -2668,10 +2668,7 @@ fn map_commit_error(e: CommitErr) -> (StatusCode, Json<JsonValue>) {
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({"detail": msg})),
         ),
-        CommitErr::Unexpected(ref msg) => {
-            eprintln!("DEBUG adoption unexpected: {msg}");
-            adoption_unexpected()
-        }
+        CommitErr::Unexpected(_) => adoption_unexpected(),
         CommitErr::Db(api) => {
             if api.is_database_unavailable() {
                 (
@@ -2790,7 +2787,6 @@ async fn replay_cbl_adoption_receipt(
         )
         .await
         .map_err(|e| {
-            eprintln!("DEBUG receipt lookup raw error: {e:?}");
             if crate::db::is_transport_failure(&e) {
                 CommitErr::Db(ApiError::database_unavailable())
             } else {

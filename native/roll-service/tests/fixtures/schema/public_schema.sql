@@ -226,7 +226,8 @@ CREATE TABLE public.cbl_adoption_receipts (
     cbl_source_list_id integer NOT NULL,
     plan_id integer NOT NULL,
     request_fingerprint character varying(64) NOT NULL,
-    created_at timestamp with time zone NOT NULL
+    created_at timestamp with time zone NOT NULL,
+    response_json jsonb
 );
 
 
