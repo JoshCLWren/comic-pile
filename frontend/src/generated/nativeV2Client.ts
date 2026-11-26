@@ -128,7 +128,7 @@ export interface ConfirmRequest {
   body: components['schemas']['IdentityInboxConfirmRequest']
 }
 
-export type ConfirmResponse = components['schemas']['NativeIdentityInboxActionResponse']
+export type ConfirmResponse = components['schemas']['IdentityInboxActionResponse']
 
 export interface ConfirmIdentityRequest {
   path: {
@@ -300,7 +300,7 @@ export interface DeferRequest {
   }
 }
 
-export type DeferResponse = components['schemas']['NativeIdentityInboxActionResponse']
+export type DeferResponse = components['schemas']['IdentityInboxActionResponse']
 
 export interface DeleteDependencyRequest {
   path: {
@@ -426,7 +426,7 @@ export interface GetRequest {
   }
 }
 
-export type GetResponse = components['schemas']['NativeIdentityInboxResponse']
+export type GetResponse = components['schemas']['IdentityInboxResponse']
 
 export interface GetIssueRequest {
   path: {
@@ -624,7 +624,7 @@ export interface ListRequest {
   }
 }
 
-export type ListResponse = components['schemas']['NativeIdentityInboxResponse']
+export type ListResponse = components['schemas']['IdentityInboxResponse']
 
 export interface ListActivityRequest {
   query?: {
@@ -832,7 +832,7 @@ export interface RejectRequest {
   body: components['schemas']['IdentityInboxRejectRequest']
 }
 
-export type RejectResponse = components['schemas']['NativeIdentityInboxActionResponse']
+export type RejectResponse = components['schemas']['IdentityInboxActionResponse']
 
 export interface ReleaseSourcesCreateRequest {
   body: components['schemas']['ReleaseSourceCreate']
@@ -1089,7 +1089,7 @@ export interface SkipRequest {
   }
 }
 
-export type SkipResponse = components['schemas']['NativeIdentityInboxActionResponse']
+export type SkipResponse = components['schemas']['IdentityInboxActionResponse']
 
 export type SuggestReadingModeResponse = components['schemas']['ReadingModeResponse']
 
