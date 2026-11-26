@@ -421,6 +421,10 @@ export type IssueListResponse = Omit<
   issues: Issue[];
   /** Token for fetching next page (null if no more pages) */
   next_page_token: string | null;
+  /** Session holding the pre-edit undo point for a committed create (#4654). */
+  undo_session_id?: number | null;
+  /** Snapshot that reverses a committed create through the undo API (#4654). */
+  undo_snapshot_id?: number | null;
 };
 
 export type Dependency = components['schemas']['DependencyResponse']

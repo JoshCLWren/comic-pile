@@ -39,6 +39,25 @@ interface CreateIssuesPayload {
   insert_after_issue_id?: number
   append_to_end?: boolean
   strategy?: 'safe_default' | 'numeric_resort'
+  expected_issue_ids?: number[]
+  accepted_alias_numbers?: string[]
+}
+
+/** Options shared by the create and preview create calls (#4654). */
+export interface IssueCreateOptions {
+  insert_after_issue_id?: number | null
+  strategy?: 'safe_default' | 'numeric_resort'
+  expected_issue_ids?: number[]
+  accepted_alias_numbers?: string[]
+}
+
+/** A source-preserving alternative to creating a physical duplicate. */
+export interface IssueEditAliasOffer {
+  requested_issue_number: string
+  existing_issue_id: number
+  existing_issue_number: string
+  series_title: string
+  evidence: string
 }
 
 export interface IssuePreviewItem {
@@ -81,6 +100,8 @@ export interface IssueEditPreviewResponse {
   requested_strategy: 'safe_default' | 'numeric_resort'
   default_outcome: IssueEditPreviewOutcome
   numeric_resort_outcome: IssueEditPreviewOutcome | null
+  alias_offers?: IssueEditAliasOffer[]
+  expected_issue_ids?: number[]
 }
 
 /** Query parameters accepted by the thread issue list endpoint. */
@@ -132,7 +153,7 @@ export function createIssuesApi(client: HttpClient) {
     create: async (
       threadId: number,
       issueRange: string,
-      options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort' }
+      options?: IssueCreateOptions
     ): Promise<IssueListResponse> => {
       const payload: CreateIssuesPayload = {
         issue_range: issueRange,
@@ -147,6 +168,10 @@ export function createIssuesApi(client: HttpClient) {
         }
       }
       if (options?.strategy) payload.strategy = options.strategy
+      if (options?.expected_issue_ids) payload.expected_issue_ids = options.expected_issue_ids
+      if (options?.accepted_alias_numbers) {
+        payload.accepted_alias_numbers = options.accepted_alias_numbers
+      }
 
       return client.post(`/v2/threads/${threadId}/issues`, payload)
     },
@@ -154,7 +179,7 @@ export function createIssuesApi(client: HttpClient) {
     previewCreate: async (
       threadId: number,
       issueRange: string,
-      options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort' }
+      options?: IssueCreateOptions
     ): Promise<IssueEditPreviewResponse> => {
       const payload: CreateIssuesPayload = { issue_range: issueRange }
       if (options && 'insert_after_issue_id' in options) {
@@ -162,6 +187,10 @@ export function createIssuesApi(client: HttpClient) {
         else payload.insert_after_issue_id = options.insert_after_issue_id
       }
       if (options?.strategy) payload.strategy = options.strategy
+      if (options?.expected_issue_ids) payload.expected_issue_ids = options.expected_issue_ids
+      if (options?.accepted_alias_numbers) {
+        payload.accepted_alias_numbers = options.accepted_alias_numbers
+      }
       return client.post(`/v2/threads/${threadId}/issues/preview`, payload)
     },
 
