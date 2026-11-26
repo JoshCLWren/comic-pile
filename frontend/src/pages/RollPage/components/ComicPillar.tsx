@@ -169,6 +169,8 @@ export function ComicPillar({
               <ComicIssueIdentity
                 threadTitle={threadTitle}
                 issueNumber={issueNumber == null ? '?' : String(issueNumber)}
+                issueNumberAlias={activeRatingThread?.issue_number_alias}
+                providerIssueNumber={activeRatingThread?.provider_issue_number}
                 status="unread"
                 rating={null}
                 variant="featured"
