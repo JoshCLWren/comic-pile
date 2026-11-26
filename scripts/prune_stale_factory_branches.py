@@ -920,7 +920,9 @@ def apply_batch(
         later run.
     """
     eligible = [d for d in decisions if d.eligible]
-    limit = max(1, max_deletions)
+    # A zero or negative bound must never authorize a deletion: an operator who
+    # pins the batch to zero gets an empty batch and a fully deferred inventory.
+    limit = max(0, max_deletions)
     return eligible[:limit], eligible[limit:]
 
 

@@ -1,0 +1,149 @@
+# Scheduled, report-first hygiene for stale factory/local/backup branches (#4749).
+#
+# The dry-run report is always produced first and uploaded as an artifact so the
+# candidate refs are visible before any deletion. Only the scheduled run, or an
+# explicit workflow_dispatch opt-in, enters the bounded --apply path. The prune
+# script re-checks open PRs, factory leases, handoffs, protected refs and live
+# worktrees immediately before every delete and fails closed when safety cannot
+# be proven. Each run deletes at most PRUNE_MAX_DELETIONS refs; the next run
+# re-evaluates the remainder, which keeps the job idempotent and rate-limit safe.
+
+name: Stale Branch Prune
+
+on:
+  schedule:
+    - cron: '23 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Run the bounded --apply batch after the dry-run report'
+        type: boolean
+        required: false
+        default: false
+      max_deletions:
+        description: 'Maximum refs to delete in an apply run (bounded, default 20)'
+        type: string
+        required: false
+        default: '20'
+      age_days:
+        description: 'Conservative minimum age in days (default 14)'
+        type: string
+        required: false
+        default: '14'
+
+# Least privilege by default: every job starts read-only and only the prune job
+# receives the single write scope needed to delete remote heads.
+permissions:
+  contents: read
+
+concurrency:
+  group: stale-branch-prune
+  cancel-in-progress: false
+
+env:
+  PRUNE_AGE_DAYS: ${{ github.event.inputs.age_days || '14' }}
+  PRUNE_MAX_DELETIONS: ${{ github.event.inputs.max_deletions || '20' }}
+  # Bounded retry policy used by scripts/prune_stale_factory_branches.py:
+  # three attempts, two-second base backoff, Retry-After capped in the script.
+  FACTORY_PRUNE_API_ATTEMPTS: '3'
+  FACTORY_PRUNE_RETRY_SECONDS: '2'
+
+jobs:
+  prune:
+    name: Report, then bounded apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+      issues: read
+      pull-requests: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      - name: Prepare report directory
+        run: mkdir -p prune-reports
+
+      - name: Dry-run report (candidates shown before deleting)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python3 scripts/prune_stale_factory_branches.py \
+            --repo "${{ github.repository }}" \
+            --age-days "$PRUNE_AGE_DAYS" \
+            --format text \
+            --report-file prune-reports/dry-run.txt
+
+      - name: Bounded apply (scheduled or explicit dispatch opt-in)
+        if: ${{ github.event_name == 'schedule' || inputs.apply }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python3 scripts/prune_stale_factory_branches.py \
+            --repo "${{ github.repository }}" \
+            --age-days "$PRUNE_AGE_DAYS" \
+            --apply \
+            --max-deletions "$PRUNE_MAX_DELETIONS" \
+            --format json \
+            --report-file prune-reports/apply.json
+
+      - name: Render machine-readable apply summary
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = Path("prune-reports/apply.json")
+          destination = Path("prune-reports/apply-summary.txt")
+          if not report.exists():
+              destination.write_text("Apply report was not produced.\n", encoding="utf-8")
+          else:
+              summary = json.loads(report.read_text(encoding="utf-8"))["summary"]
+              lines = [
+                  f"Mode: {summary['mode']}",
+                  f"Branches before: {summary['branch_count_before']}",
+                  f"Branches after: {summary['branch_count_after']}",
+                  f"Deleted: {summary['deleted_count']}",
+                  f"Deleted refs: {', '.join(summary['deleted_refs']) or '(none)'}",
+                  f"Deferred to later runs: {summary['deferred_count']}",
+                  f"Failures: {summary['failure_count']}",
+                  "Protected by active lease: "
+                  + (', '.join(summary['protected_by_active_lease']) or '(none)'),
+                  "Protected by open PR: "
+                  + (', '.join(summary['protected_by_open_pr']) or '(none)'),
+              ]
+              destination.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+
+      - name: Publish deleted/skipped refs to the job summary
+        if: always()
+        run: |
+          {
+            echo '## Stale branch prune'
+            for report in prune-reports/dry-run.txt prune-reports/apply-summary.txt; do
+              if [ -f "$report" ]; then
+                echo "### ${report##*/}"
+                cat "$report"
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload prune reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: stale-branch-prune-reports-${{ github.run_attempt }}
+          path: prune-reports/
+          retention-days: 30
+          if-no-files-found: warn
