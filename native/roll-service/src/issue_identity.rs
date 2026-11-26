@@ -3076,25 +3076,42 @@ async fn do_cbl_adoption_commit(
         row.get::<_, i32>(0)
     };
 
-    // Replace list entries with the committed adopted issue set.
-    tx.run_execute(
-        "DELETE FROM custom_cbl_entries WHERE list_id = $1",
-        &[&canonical_list_id],
-    )
-    .await
-    .map_err(|e| {
-        if crate::db::is_transport_failure(&e) {
-            CommitErr::Db(ApiError::database_unavailable())
-        } else {
-            CommitErr::Unexpected(format!("clear reading list entries: {e}"))
+    // Merge committed adopted issue set into the canonical list, preserving existing entries.
+    let existing_entries: Vec<(i32, i32)> = tx
+        .run_query(
+            "SELECT issue_id, position FROM custom_cbl_entries WHERE list_id = $1 ORDER BY position, id",
+            &[&canonical_list_id],
+        )
+        .await
+        .map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("load reading list entries: {e}"))
+            }
+        })?
+        .into_iter()
+        .map(|row| (row.get::<_, i32>(0), row.get::<_, i32>(1)))
+        .collect();
+    let mut existing_issue_positions: std::collections::HashMap<i32, i32> = existing_entries
+        .iter()
+        .map(|(issue_id, position)| (*issue_id, *position))
+        .collect();
+    let mut next_position: i32 = existing_entries
+        .iter()
+        .map(|(_, position)| *position)
+        .max()
+        .map(|m| m + 1)
+        .unwrap_or(0);
+    for issue_id in adopted_issue_ids.iter() {
+        if existing_issue_positions.contains_key(issue_id) {
+            continue;
         }
-    })?;
-    for (position, issue_id) in adopted_issue_ids.iter().enumerate() {
         tx.run_execute(
             "INSERT INTO custom_cbl_entries
                (list_id, issue_id, position, created_at, is_checkpoint, checkpoint_target_issue_ids, gate, skipped)
              VALUES ($1, $2, $3, NOW(), false, '[]'::json, 'none', false)",
-            &[&canonical_list_id, issue_id, &(position as i32)],
+            &[&canonical_list_id, issue_id, &next_position],
         )
         .await
         .map_err(|e| {
@@ -3104,6 +3121,8 @@ async fn do_cbl_adoption_commit(
                 CommitErr::Unexpected(format!("insert reading list entry: {e}"))
             }
         })?;
+        existing_issue_positions.insert(*issue_id, next_position);
+        next_position += 1;
     }
 
     // Link plan to authoritative reading list via reading_plan_sources.
