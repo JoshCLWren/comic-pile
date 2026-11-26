@@ -960,7 +960,10 @@ mod tests {
         // #5434 safety rule: two equally plausible provider issues must stay
         // in the review bucket instead of being auto-confirmed.
         let local = issue(1, "Saga", "1");
-        let providers = vec![provider(101, 30, "Saga", "1"), provider(102, 30, "Saga", "1")];
+        let providers = vec![
+            provider(101, 30, "Saga", "1"),
+            provider(102, 30, "Saga", "1"),
+        ];
 
         let unmatched = match_issue_in_volume(&local, 30, &providers)
             .expect_err("equal-label candidates must stay ambiguous");
