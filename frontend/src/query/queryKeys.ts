@@ -476,6 +476,8 @@ export const queryKeys = {
     all: ['identityInbox'] as const,
     list: ({ offset, limit }: { offset: number; limit: number }) =>
       ['identityInbox', 'list', { offset, limit }] as const,
+    search: (query: string, issueId: number) =>
+      ['identityInbox', 'search', { query: query.trim(), issueId }] as const,
   },
   crossover: {
     all: ['crossover'] as const,
