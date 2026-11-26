@@ -28,7 +28,7 @@ The application runtime is native Rust. Python is used only for repository tooli
 6. Start `scripts/e2e_native_ingress.py` on the slot's browser origin. It proxies every `/api/*` request to native Rust and serves `static/react` for other paths.
 7. Point `BASE_URL` at that ingress. Check native `/api/v2/health` directly and require an unauthenticated `/api/v2/threads` request through the ingress to return 401; ingress `/health` alone proves only static serving.
 
-Pin `DATABASE_URL` (migration runner), `TEST_DATABASE_URL` (repository tooling), and `RUST_ROLL_DATABASE_URL` (native service) to the same disposable database. The exact slot-safe commands are in `.agents/skills/e2e-chromium-regression/SKILL.md`. Never point a test run at production or a shared reader database, and never pass Redis configuration; Redis is unused.
+Pin only `RUST_ROLL_DATABASE_URL` to the disposable database using a plain `postgresql://` URL. Invoke the migration runner with `MIGRATE_DATABASE_URL="$RUST_ROLL_DATABASE_URL"`; do not maintain independent `DATABASE_URL` or `TEST_DATABASE_URL` pins for this lane. The exact slot-safe commands are in `.agents/skills/e2e-chromium-regression/SKILL.md`. Never point a test run at production or a shared reader database, and never pass Redis configuration; Redis is unused.
 
 ## Run a scope
 
