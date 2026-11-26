@@ -11,7 +11,7 @@ points for pages that are not direct nav items.
 | `/crossovers/:group` | `/continuity-plans/events` (Crossover events) and continuity/crossover detail links | Detail deep links stay routable; the list view above is the discovery surface. |
 | `/cbl-sources` | The CBL browser button on the Reading Plans index (`ContinuityPlansIndexPage`) and links in the CBL comparison/source panels | CBL sources are a Reading Plans authoring tool, not a top-level browse destination. The page is reachable from that flow; no separate primary nav item. |
 | `/analytics` | Redirect to `/` only | The orphaned Analytics page was deleted in #5446 and its uncalled `GET /api/v2/analytics/metrics` endpoint was retired in this slice. Old bookmarks still land on Roll. |
-| `/sessions/:id` | Session detail links from History | The timeline was fixed in #5416; reachability from History is tracked in #5387. Session detail may be retired with sessionless Roll (#4405). |
+| `/sessions/:id` | `History` → per-event `Session` link | Activity rows with a session id link directly to session detail. The timeline was fixed in #5416 and History reachability was closed out in #5437; session detail may be retired with sessionless Roll (#4405). |
 
 ## Tags
 
