@@ -573,7 +573,6 @@ mod tests {
     }
 
     const QUEUE_MAPPING_USER_ID: i32 = 9001;
-    const QUEUE_MAPPING_THREAD_ID: i32 = 561077;
     const QUEUE_MAPPING_VOLUME_ID: &str = "5610777";
     const QUEUE_MAPPING_API_KEY: &str = "TESTKEY123";
 
