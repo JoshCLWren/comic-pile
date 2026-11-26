@@ -504,11 +504,26 @@ async fn current_active_thread(
         "SELECT t.id,t.title,t.format,t.issues_remaining,t.queue_position,
                t.total_issues,t.reading_progress,t.last_rating,t.next_unread_issue_id,
                i.issue_number,
+               NULLIF(BTRIM(i.issue_number_alias), '') AS issue_number_alias,
+               provider.provider_issue_number,
                (SELECT count(*)::int FROM issues read WHERE read.thread_id=t.id AND read.status='read' AND read.merged_into_issue_id IS NULL),
                (SELECT e.result FROM events e WHERE e.session_id=$2 AND e.selected_thread_id=t.id
                  AND e.type='roll' ORDER BY e.timestamp DESC,e.id DESC LIMIT 1),
                {position} AS computed_position
          FROM threads t LEFT JOIN issues i ON i.id=t.next_unread_issue_id AND i.thread_id=t.id AND i.merged_into_issue_id IS NULL
+         LEFT JOIN LATERAL (
+             SELECT CASE WHEN m.status='confirmed' THEN
+                        NULLIF(BTRIM(COALESCE(
+                            x.metadata_json->>'issue_number',
+                            x.metadata_json#>>'{raw_provider_payload,issue_number}'
+                        )), '')
+                    ELSE NULL END AS provider_issue_number
+             FROM issue_external_identity_mappings m
+             JOIN external_identities x ON x.id=m.external_identity_id
+             WHERE m.issue_id=i.id AND m.status='confirmed'
+             ORDER BY m.confidence DESC NULLS LAST, m.id DESC
+             LIMIT 1
+         ) provider ON true
          WHERE t.id=$1 AND t.user_id=$3",
     );
     let row = conn
@@ -525,7 +540,7 @@ async fn current_active_thread(
     let issues_remaining: i32 = row.try_get(3).map_err(db::query_error)?;
     // SQL NULL means the thread is outside the active queue; fall back to the
     // stored value instead of panicking on a NULL -> i32 read.
-    let computed_position: Option<i32> = row.try_get(12).map_err(db::query_error)?;
+    let computed_position: Option<i32> = row.try_get(14).map_err(db::query_error)?;
     let stored_position: i32 = row.try_get(4).map_err(db::query_error)?;
     let queue_position = computed_position.unwrap_or(stored_position);
     let total_issues: Option<i32> = row.try_get(5).map_err(db::query_error)?;
@@ -533,8 +548,10 @@ async fn current_active_thread(
     let last_rating: Option<f64> = row.try_get(7).map_err(db::query_error)?;
     let next_issue_id: Option<i32> = row.try_get(8).map_err(db::query_error)?;
     let next_issue_number: Option<String> = row.try_get(9).map_err(db::query_error)?;
-    let issues_read: i32 = row.try_get(10).map_err(db::query_error)?;
-    let last_rolled_result: Option<i32> = row.try_get(11).map_err(db::query_error)?;
+    let issue_number_alias: Option<String> = row.try_get(10).map_err(db::query_error)?;
+    let provider_issue_number: Option<String> = row.try_get(11).map_err(db::query_error)?;
+    let issues_read: i32 = row.try_get(12).map_err(db::query_error)?;
+    let last_rolled_result: Option<i32> = row.try_get(13).map_err(db::query_error)?;
     let tag_rows = conn
         .query(
             "SELECT row_to_json(tag)::text FROM tag_assignments assignment
@@ -573,6 +590,8 @@ async fn current_active_thread(
         tags,
         issue_id: next_issue_id,
         issue_number: next_issue_number.clone(),
+        issue_number_alias,
+        provider_issue_number,
         next_issue_id,
         next_issue_number,
     }))
