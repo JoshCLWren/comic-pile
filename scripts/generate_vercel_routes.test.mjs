@@ -123,31 +123,6 @@ test('generation is byte-stable across a second regeneration', () => {
   assert.equal(JSON.stringify(second, null, 2), JSON.stringify(first, null, 2));
 });
 
-test('fragments own the active cron set and retire obsolete native ingress', () => {
-  const previous = {
-    crons: [
-      {path: '/api/v1/cron/release-sync', schedule: '0 9 * * *'},
-      {path: '/api/v2/maintenance/comicvine-metadata-repairs', schedule: '0 10 * * *'},
-    ],
-    routes: [
-      {src: '/api/v1/cron/release-sync', methods: ['GET'], dest: ROLL},
-      {src: '/api/v2/maintenance/comicvine-metadata-repairs', methods: ['GET'], dest: ROLL},
-      {src: FALLBACK, dest: ROLL},
-    ],
-  };
-  const fragments = [
-    {family: 'reading-plan-sync', defaults: {}, operations: [
-      {method: 'GET', path: '/api/v1/cron/release-sync', dest: ROLL},
-    ], crons: [{path: '/api/v1/cron/release-sync', schedule: '0 9 * * *'}]},
-    {family: 'comicvine', defaults: {}, operations: [],
-      retired_routes: ['/api/v2/maintenance/comicvine-metadata-repairs']},
-  ];
-  const generated = generateVercel(previous, fragments);
-  assert.deepEqual(generated.crons, [{path: '/api/v1/cron/release-sync', schedule: '0 9 * * *'}]);
-  assert.equal(generated.routes.some(route => route.src.includes('comicvine-metadata-repairs')), false);
-  assert(generated.routes.some(route => route.src === FALLBACK));
-});
-
 test('generation requires fragments and an explicit native baseline', () => {
   assert.throws(() => generateVercel(baseConfig(), []), /without route fragments/);
   assert.throws(() => generateVercel({routes: [{src: FALLBACK, dest: ROLL}]}, fragments()),

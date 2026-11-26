@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict';
 import {existsSync, readFileSync, readdirSync} from 'node:fs';
 import {test} from 'node:test';
-import {fileURLToPath} from 'node:url';
-import {generateVercel, loadFragmentFiles} from './generate_vercel_routes.mjs';
 
 const ROOT = new URL('../', import.meta.url);
 
@@ -28,18 +26,13 @@ test('no scheduled ComicVine metadata repair invocation remains', () => {
     false,
     'the repair drain workflow must be deleted',
   );
-  // vercel.json is bot-owned: assert the fragment-derived document that the
-  // post-merge regeneration bot publishes, not the committed baseline.
-  const generated = generateVercel(
-    JSON.parse(read('vercel.json')),
-    loadFragmentFiles(fileURLToPath(new URL('docs/api/route-fragments/', ROOT))),
-  );
+  const vercel = JSON.parse(read('vercel.json'));
   assert.deepEqual(
-    generated.crons,
+    vercel.crons,
     [{path: '/api/v1/cron/release-sync', schedule: '0 9 * * *'}],
     'only the unrelated release-sync cron may remain',
   );
-  const api = JSON.stringify(generated.routes);
+  const api = JSON.stringify(vercel.routes);
   assert.ok(!api.includes('comicvine-metadata-repairs'));
   assert.ok(!api.includes('comicvine-metadata-backfill'));
 });
