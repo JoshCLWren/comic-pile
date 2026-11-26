@@ -2092,6 +2092,11 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&token).expect("parse");
         eprintln!("DEBUG_CANONICAL={}", canonical_json(&parsed));
         eprintln!("DEBUG_F64_DISPLAY={}", parsed["t"].as_f64().expect("f64"));
+        eprintln!(
+            "DEBUG_SERDE_JSON={}",
+            serde_json::to_string(&parsed["t"]).expect("serde number")
+        );
+        eprintln!("DEBUG_DEBUG_FMT={:?}", parsed["t"].as_f64().expect("f64"));
     }
 
     #[test]
