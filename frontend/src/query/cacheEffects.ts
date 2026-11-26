@@ -652,19 +652,6 @@ export async function clearComicVineIssueIntelligence(
 }
 
 /**
- * Drop identity-bound provider details before refetching committed ComicVine
- * confirmations/replacements. Keeping the previous identity's cache visible
- * during the refetch would show the wrong creators (and other metadata) for an
- * unchanged canonical Issue id.
- */
-export async function clearComicVineIssueIntelligenceMany(
-  client: QueryClient,
-  issueIds: readonly number[],
-): Promise<void> {
-  await Promise.all(issueIds.map((issueId) => clearComicVineIssueIntelligence(client, issueId)))
-}
-
-/**
  * Invalidate the `comicVine.issueIntelligence(issueId)` cache bucket for every
  * issue a series-mapping commit confirmed. The sibling mapping offer confirms
  * several issues in one request, so each confirmed issue needs its own bucket
@@ -675,6 +662,19 @@ export async function invalidateComicVineIssueIntelligenceMany(
   issueIds: readonly number[],
 ): Promise<void> {
   await Promise.all(issueIds.map((issueId) => invalidateComicVineIssueIntelligence(client, issueId)))
+}
+
+/**
+ * Drop identity-bound provider details before refetching committed ComicVine
+ * confirmations/replacements. Keeping the previous identity's cache visible
+ * during the refetch would show the wrong creators (and other metadata) for an
+ * unchanged canonical Issue id.
+ */
+export async function clearComicVineIssueIntelligenceMany(
+  client: QueryClient,
+  issueIds: readonly number[],
+): Promise<void> {
+  await Promise.all(issueIds.map((issueId) => clearComicVineIssueIntelligence(client, issueId)))
 }
 
 /**
