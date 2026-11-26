@@ -144,7 +144,7 @@ invocation. The Vercel Hobby cron still runs **daily** at 10:00 UTC because a
 more frequent Vercel cron schedule is not supported on that plan.
 
 To recover pending and expired leases promptly, the existing free GitHub
-Actions runner invokes the same endpoint **four times per hour** at
+Actions runner invokes the same endpoint **four times per day** at
 03:17, 09:17, 15:17, and 21:17 UTC in
 `.github/workflows/comicvine-metadata-repair.yml`. This schedule is enabled
 only from the protected default branch and never runs secret-bearing PR code.
