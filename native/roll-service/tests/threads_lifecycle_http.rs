@@ -73,15 +73,27 @@ async fn setup(prefix: &str) -> Ctx {
     setup_with_pool(prefix, "2").await
 }
 
+/// Fixture with the canonical reading-list evaluator effective. The setting is
+/// injected through config; no test mutates the process environment (#5525).
+async fn setup_with_option_e(prefix: &str, option_e: bool) -> Ctx {
+    setup_with_pool_and_option_e(prefix, "2", option_e).await
+}
+
 /// Same fixture as `setup`, with a larger pool for deterministic multi-writer
 /// lock tests (a lock holder plus two in-flight requests need three sockets).
 async fn setup_with_pool(prefix: &str, pool_size: &str) -> Ctx {
+    setup_with_pool_and_option_e(prefix, pool_size, false).await
+}
+
+async fn setup_with_pool_and_option_e(prefix: &str, pool_size: &str, option_e: bool) -> Ctx {
     let url = comicpile_roll_service::test_support::database_url().await;
     let state = Arc::new(test_support::test_app_state(
         Config::from_lookup(|key| match key {
             "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-thread-lifecycle-secret".into()),
             "RUST_ROLL_POOL_SIZE" => Some(pool_size.to_owned()),
+            "OPTION_E_ENABLED" if option_e => Some("true".into()),
+            "OPTION_E_APPROVED_PREVIEW" if option_e => Some("injected-by-test".into()),
             _ => None,
         })
         .unwrap(),
@@ -1854,6 +1866,77 @@ async fn set_pending_is_owner_scoped() {
     assert_eq!(pending, 0);
 }
 
+/// With the evaluated graph active, `set-pending` is authorized by canonical
+/// Reading List eligibility, never by the stored `is_blocked` flag and never
+/// by the retired Option E 503 guard (#5525 A16/A17).
+#[tokio::test]
+async fn set_pending_uses_canonical_eligibility_when_option_e_is_active() {
+    let ctx = setup_with_option_e("lcpendoptE", true).await;
+    let source = seed_thread(&ctx, ctx.user_id, "Prerequisite Series", "active", 1, 0).await;
+    let source_issues = track(&ctx, source, &["unread"]).await;
+    let blocked = seed_thread(&ctx, ctx.user_id, "Blocked Target", "active", 2, 0).await;
+    let blocked_issues = track(&ctx, blocked, &["unread"]).await;
+    let free = seed_thread(&ctx, ctx.user_id, "Free Series", "active", 3, 0).await;
+    let free_issues = track(&ctx, free, &["unread"]).await;
+
+    let pool = ctx.state.pool.get().await.unwrap();
+    pool.execute(
+        "INSERT INTO dependencies
+            (source_issue_id, target_issue_id, origin, classification, provenance, created_at)
+         VALUES ($1, $2, 'reader', 'A', 'Reader-authored through Dependency Builder', NOW())",
+        &[&source_issues[0], &blocked_issues[0]],
+    )
+    .await
+    .unwrap();
+    let stored_blocked: bool = pool
+        .query_one("SELECT is_blocked FROM threads WHERE id = $1", &[&blocked])
+        .await
+        .unwrap()
+        .get(0);
+    assert!(!stored_blocked, "the stale flag must not be the authority");
+    drop(pool);
+
+    let (status, body) = call(
+        &ctx,
+        "POST",
+        &format!("/api/v1/threads/{blocked}/set-pending"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
+    assert!(
+        body["detail"]
+            .as_str()
+            .unwrap()
+            .contains("Prerequisite Series"),
+        "the authentic canonical blocker must be named: {body:?}"
+    );
+    let sessions: i64 = ctx
+        .state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one(
+            "SELECT count(*) FROM sessions WHERE user_id = $1",
+            &[&ctx.user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(sessions, 0, "a rejected selection must not open a session");
+
+    let (status, body) = call(
+        &ctx,
+        "POST",
+        &format!("/api/v1/threads/{free}/set-pending"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["issue_id"], free_issues[0]);
+}
+
 // ---------------------------------------------------------------------------
 // stale
 // ---------------------------------------------------------------------------
@@ -1947,6 +2030,61 @@ async fn stale_rejects_invalid_parameters() {
         );
         assert_eq!(body["detail"], "Validation failed");
     }
+}
+
+/// `stale` must not report a stale stored `is_blocked=false` thread as a
+/// candidate once the canonical evaluator marks it ineligible (#5525 A16).
+#[tokio::test]
+async fn stale_uses_canonical_eligibility_when_option_e_is_active() {
+    let ctx = setup_with_option_e("lcstaleoptE", true).await;
+    let source = seed_thread(&ctx, ctx.user_id, "Prerequisite Series", "active", 1, 0).await;
+    let source_issues = track(&ctx, source, &["unread"]).await;
+    let blocked = seed_thread(&ctx, ctx.user_id, "Canonically Blocked", "active", 2, 0).await;
+    let blocked_issues = track(&ctx, blocked, &["unread"]).await;
+    let allowed = seed_thread(&ctx, ctx.user_id, "Canonically Eligible", "active", 3, 0).await;
+    track(&ctx, allowed, &["unread"]).await;
+
+    let pool = ctx.state.pool.get().await.unwrap();
+    pool.execute(
+        "INSERT INTO dependencies
+            (source_issue_id, target_issue_id, origin, classification, provenance, created_at)
+         VALUES ($1, $2, 'reader', 'A', 'Reader-authored through Dependency Builder', NOW())",
+        &[&source_issues[0], &blocked_issues[0]],
+    )
+    .await
+    .unwrap();
+    for id in [source, blocked, allowed] {
+        pool.execute(
+            "UPDATE threads SET last_activity_at = NOW() - interval '60 days' WHERE id = $1",
+            &[&id],
+        )
+        .await
+        .unwrap();
+    }
+    let stored_blocked: bool = pool
+        .query_one("SELECT is_blocked FROM threads WHERE id = $1", &[&blocked])
+        .await
+        .unwrap()
+        .get(0);
+    assert!(!stored_blocked, "the stale flag must not be the authority");
+    drop(pool);
+
+    let (status, body) = call(&ctx, "GET", "/api/v1/threads/stale", None).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let ids: Vec<i64> = body
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|thread| thread["id"].as_i64().unwrap())
+        .collect();
+    assert!(
+        ids.contains(&(allowed as i64)),
+        "eligible stale thread must be listed: {body:?}"
+    );
+    assert!(
+        !ids.contains(&(blocked as i64)),
+        "canonically ineligible thread must not be listed: {body:?}"
+    );
 }
 
 #[tokio::test]
