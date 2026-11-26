@@ -683,3 +683,131 @@ async fn series_cover_finds_raw_provider_payload_image() {
         Some("https://comicvine.gamespot.com/a/uploads/scale_avatar/0/4/5677-5.jpg".to_owned())
     );
 }
+
+/// The default (Option E disabled) deployment derives `is_blocked` from the
+/// stored flag. The prerequisite-based regression above proves the evaluated
+/// path; this one proves the same cover guarantee on the default path, so a
+/// blocked row never loses its available artwork because of how it was blocked.
+#[tokio::test]
+async fn series_cover_renders_for_a_stored_blocked_series() {
+    let ctx = setup("sc-stored-blocked").await;
+    let thread_id = seed_thread(&ctx, ctx.user_id, "Stored Blocked", "active", 1).await;
+    let issue = seed_issue(&ctx, thread_id, "12", 1, "unread").await;
+    set_frontier(&ctx, thread_id, Some(issue)).await;
+    ctx.state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .execute(
+            "UPDATE threads SET is_blocked = $1 WHERE id = $2",
+            &[&true, &thread_id],
+        )
+        .await
+        .unwrap();
+    seed_confirmed_cover(
+        &ctx,
+        issue,
+        "stored-blocked-cover-id",
+        Some("https://cv.example/stored-blocked.jpg"),
+    )
+    .await;
+
+    let (status, body) = call(&ctx, "GET", "/api/v2/threads").await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let row = body["threads"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|thread| thread["title"] == "Stored Blocked")
+        .unwrap();
+    assert_eq!(row["is_blocked"].as_bool(), Some(true), "{row:?}");
+    assert_eq!(
+        row["series_cover_image_url"].as_str(),
+        Some("https://cv.example/stored-blocked.jpg"),
+        "{row:?}"
+    );
+}
+
+/// A series with no usable confirmed cover must resolve to null (the shared
+/// No cover placeholder) even when another series in the same response has a
+/// confirmed cover. The set-based projection must not borrow art across rows.
+#[tokio::test]
+async fn series_cover_never_borrows_art_from_another_series() {
+    let ctx = setup("sc-no-borrow").await;
+    let uncovered_thread = seed_thread(&ctx, ctx.user_id, "Uncovered Series", "active", 1).await;
+    let uncovered_issue = seed_issue(&ctx, uncovered_thread, "1", 1, "unread").await;
+    set_frontier(&ctx, uncovered_thread, Some(uncovered_issue)).await;
+    seed_confirmed_cover(&ctx, uncovered_issue, "uncovered-id", None).await;
+
+    let covered_thread = seed_thread(&ctx, ctx.user_id, "Covered Series", "active", 2).await;
+    let covered_issue = seed_issue(&ctx, covered_thread, "1", 1, "unread").await;
+    set_frontier(&ctx, covered_thread, Some(covered_issue)).await;
+    seed_confirmed_cover(
+        &ctx,
+        covered_issue,
+        "covered-id",
+        Some("https://cv.example/only-this-series.jpg"),
+    )
+    .await;
+
+    let (status, body) = call(&ctx, "GET", "/api/v2/threads").await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(thread_cover(&body, "Uncovered Series"), None);
+    assert_eq!(
+        thread_cover(&body, "Covered Series"),
+        Some("https://cv.example/only-this-series.jpg".to_owned())
+    );
+}
+
+/// Rows well below the initial viewport arrive through cursor pages. The cover
+/// projection is derived per page, so a covered series on a later page must
+/// keep its own URL rather than going blank once the first page scrolls away.
+#[tokio::test]
+async fn series_cover_is_present_on_later_cursor_pages() {
+    let ctx = setup("sc-paged").await;
+    let fixtures = [
+        ("Near Row", 1, "https://cv.example/near.jpg"),
+        ("Middle Row", 2, "https://cv.example/middle.jpg"),
+        ("Far Row", 3, "https://cv.example/far.jpg"),
+    ];
+    for (title, position, cover_url) in fixtures {
+        let thread_id = seed_thread(&ctx, ctx.user_id, title, "active", position).await;
+        let issue = seed_issue(&ctx, thread_id, "1", 1, "unread").await;
+        set_frontier(&ctx, thread_id, Some(issue)).await;
+        seed_confirmed_cover(&ctx, issue, title, Some(cover_url)).await;
+    }
+
+    let (status, first_page) = call(&ctx, "GET", "/api/v2/threads?page_size=1").await;
+    assert_eq!(status, StatusCode::OK, "{first_page:?}");
+    assert_eq!(
+        thread_cover(&first_page, "Near Row"),
+        Some("https://cv.example/near.jpg".to_owned())
+    );
+    let first_token = first_page["next_page_token"].as_str().unwrap();
+    assert!(!first_token.is_empty(), "{first_page:?}");
+
+    let (status, second_page) = call(
+        &ctx,
+        &format!("/api/v2/threads?page_size=1&page_token={first_token}"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{second_page:?}");
+    assert_eq!(
+        thread_cover(&second_page, "Middle Row"),
+        Some("https://cv.example/middle.jpg".to_owned())
+    );
+    let second_token = second_page["next_page_token"].as_str().unwrap();
+    assert!(!second_token.is_empty(), "{second_page:?}");
+
+    let (status, far_page) = call(
+        &ctx,
+        &format!("/api/v2/threads?page_size=1&page_token={second_token}"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{far_page:?}");
+    assert_eq!(
+        thread_cover(&far_page, "Far Row"),
+        Some("https://cv.example/far.jpg".to_owned())
+    );
+}
