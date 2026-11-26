@@ -88,7 +88,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   dependenciesApi?: IssueToggleListDependenciesApi
   /** Injectable undo API; defaults to the shared #4026/#4027 undo service. */
   undoApi?: {
-    undo: (sessionId: number | string, snapshotId: number | string) => Promise<unknown>
+    undo: (sessionId: number | string, snapshotId: number | string) => Promise<void>
   }
   /**
    * When true, mutations queue locally without hitting the server until
@@ -320,20 +320,16 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         await issuesService.reorder(threadId, normalizeIssueOrder(baseIssuesRef.current, mutation.issueIds))
         return
       case 'create': {
-        const hasOptions = mutation.strategy
-          || (mutation.expectedIssueIds && mutation.expectedIssueIds.length > 0)
-          || (mutation.acceptedAliasNumbers && mutation.acceptedAliasNumbers.length > 0)
-        const options: IssueCreateOptions | undefined = hasOptions
-          ? {
-              ...(mutation.strategy ? { strategy: mutation.strategy } : {}),
-              ...((mutation.expectedIssueIds?.length ?? 0) > 0
-                ? { expected_issue_ids: mutation.expectedIssueIds }
-                : {}),
-              ...((mutation.acceptedAliasNumbers?.length ?? 0) > 0
-                ? { accepted_alias_numbers: mutation.acceptedAliasNumbers }
-                : {}),
-            }
-          : undefined
+        const options: IssueCreateOptions = {}
+        if (mutation.strategy) {
+          options.strategy = mutation.strategy
+        }
+        if (mutation.expectedIssueIds && mutation.expectedIssueIds.length > 0) {
+          options.expected_issue_ids = mutation.expectedIssueIds
+        }
+        if (mutation.acceptedAliasNumbers && mutation.acceptedAliasNumbers.length > 0) {
+          options.accepted_alias_numbers = mutation.acceptedAliasNumbers
+        }
         const response = await issuesService.create(threadId, mutation.issueRange, options)
         if (response.undo_session_id != null && response.undo_snapshot_id != null) {
           setUndoPoint({
