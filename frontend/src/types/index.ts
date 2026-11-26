@@ -367,7 +367,7 @@ export type ThreadListResponse = components['schemas']['QueueThreadListResponse'
 
 // The session index and current-session wire types were retired with the
 // `/api/v1/sessions/*` surface (#4839, #4343); supported reads use the
-// resource-shaped v2 details/snapshot contracts below.
+// resource-shaped v2 details/snapshot contracts above.
 
 export type BlockingDependency = components['schemas']['BlockingDependency']
 
