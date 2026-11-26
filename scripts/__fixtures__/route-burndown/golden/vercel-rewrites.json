@@ -4,14 +4,5 @@
     "alpha",
     "unicode"
   ],
-  "routes": [
-    {
-      "src": "^/api/v2/unicode$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    }
-  ]
+  "routes": []
 }

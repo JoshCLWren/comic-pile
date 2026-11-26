@@ -8,12 +8,8 @@
 import {readFileSync, writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
 
-// Any native Rust function destination: the retired native_issue.rs build is
-// still present in vercel.json until the generated-artifact strip step runs.
-const RUST = {has: dest => /^\/api\/native_[a-z]+\.rs$/.test(dest)};
-// main's bot-owned vercel.json can still carry stale Python exceptions until
-// regenerate-routes.yml lands; they must be exercised as Rust 404s now.
-const RETIRED_PYTHON = '/api/index.py';
+// The whole /api surface is served by the single native Rust ingress.
+const RUST = {has: dest => dest === '/api/native_roll.rs'};
 const FALLBACK = '/api(?:/.*)?';
 const ALL_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 
@@ -29,7 +25,7 @@ export function renderAuditIngress(config) {
       continue;
     }
     if (!route.src?.startsWith('/api/') && !route.src?.startsWith('^/api/')) continue;
-    if (!RUST.has(route.dest) && route.dest !== RETIRED_PYTHON) {
+    if (!RUST.has(route.dest)) {
       throw new Error(`Unknown API destination ${route.dest} for ${route.src}`);
     }
     if (/[\r\n;]/.test(route.src)) throw new Error('Unsafe nginx ingress expression');
