@@ -469,10 +469,7 @@ pub(crate) fn natural_issue_order(existing: &[String], incoming: &[String]) -> O
         // silently repair while inserting another issue. #4654: fall back to
         // the caller's append/accepted-anchor path so every existing Issue ID
         // keeps its relative order. Numeric resort stays a previewed choice.
-        if existing_keyed
-            .windows(2)
-            .any(|pair| pair[0].0 >= pair[1].0)
-        {
+        if existing_keyed.windows(2).any(|pair| pair[0].0 >= pair[1].0) {
             return None;
         }
         let mut merged: Vec<((usize, &str), &String)> = existing_keyed;

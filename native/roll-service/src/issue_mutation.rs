@@ -371,7 +371,10 @@ async fn detect_alias_offers(
     let mut offers: Vec<IssueEditAliasOffer> = Vec::new();
     for row in &rows {
         let number: String = row.get(1);
-        if offers.iter().any(|offer| offer.requested_issue_number == number) {
+        if offers
+            .iter()
+            .any(|offer| offer.requested_issue_number == number)
+        {
             continue;
         }
         let catalog_evidence: bool = row.get(3);
@@ -431,11 +434,23 @@ async fn insert_edit_undo_snapshot(
     state.insert("issue_changes".into(), Value::Array(issue_changes));
     state.insert(
         "created_issues".into(),
-        json!(created_ids.iter().map(|id| json!({"id": id})).collect::<Vec<_>>()),
+        json!(created_ids
+            .iter()
+            .map(|id| json!({"id": id}))
+            .collect::<Vec<_>>()),
     );
-    state.insert("total_issues".into(), json!(thread.get::<_, Option<i32>>(0)));
-    state.insert("next_unread_issue_id".into(), json!(thread.get::<_, Option<i32>>(1)));
-    state.insert("reading_progress".into(), json!(thread.get::<_, Option<String>>(2)));
+    state.insert(
+        "total_issues".into(),
+        json!(thread.get::<_, Option<i32>>(0)),
+    );
+    state.insert(
+        "next_unread_issue_id".into(),
+        json!(thread.get::<_, Option<i32>>(1)),
+    );
+    state.insert(
+        "reading_progress".into(),
+        json!(thread.get::<_, Option<String>>(2)),
+    );
     state.insert("issues_remaining".into(), json!(thread.get::<_, i32>(3)));
     state.insert("last_rating".into(), json!(thread.get::<_, Option<f64>>(4)));
     let mut thread_states = Map::new();
@@ -481,7 +496,10 @@ pub async fn create_issues(
     // fresh preview instead of silently committing a different edit (#4654).
     if let Some(expected) = request.expected_issue_ids.as_ref() {
         let current_rows = tx
-            .query("SELECT id FROM issues WHERE thread_id=$1 ORDER BY id", &[&thread_id])
+            .query(
+                "SELECT id FROM issues WHERE thread_id=$1 ORDER BY id",
+                &[&thread_id],
+            )
             .await
             .map_err(db::query_error)?;
         let mut current: Vec<i32> = current_rows.iter().map(|row| row.get(0)).collect();
@@ -519,7 +537,11 @@ pub async fn create_issues(
     let alias_offers = detect_alias_offers(&tx, user.id(), thread_id, &candidates).await?;
     let unaccepted: Vec<&IssueEditAliasOffer> = alias_offers
         .iter()
-        .filter(|offer| !request.accepted_alias_numbers.contains(&offer.requested_issue_number))
+        .filter(|offer| {
+            !request
+                .accepted_alias_numbers
+                .contains(&offer.requested_issue_number)
+        })
         .collect();
     if !unaccepted.is_empty() {
         let details = unaccepted

@@ -458,11 +458,7 @@ async fn seed_session(state: &Arc<AppState>, user_id: i32) -> i32 {
         .get(0)
 }
 
-async fn seed_mapped_issue(
-    state: &Arc<AppState>,
-    user_id: i32,
-    number: &str,
-) -> i32 {
+async fn seed_mapped_issue(state: &Arc<AppState>, user_id: i32, number: &str) -> i32 {
     let pool = state.pool.get().await.unwrap();
     let identity_id: i32 = pool
         .query_one(
@@ -527,7 +523,10 @@ async fn preview_offers_alias_for_mapped_issue_and_create_requires_acceptance() 
     let bytes = to_bytes(blocked.into_body(), 64 * 1024).await.unwrap();
     let blocked_body: Value = serde_json::from_slice(&bytes).unwrap();
     assert!(
-        blocked_body["detail"].as_str().unwrap().contains("alias mapping"),
+        blocked_body["detail"]
+            .as_str()
+            .unwrap()
+            .contains("alias mapping"),
         "{blocked_body}"
     );
     assert_eq!(issue_order(&state, thread_id).await, vec!["1"]);
@@ -591,10 +590,7 @@ async fn stale_preview_is_rejected_before_any_write_and_fresh_preview_retries() 
         body["detail"].as_str().unwrap().contains("preview"),
         "{body}"
     );
-    assert_eq!(
-        issue_order(&state, thread_id).await,
-        vec!["1", "2", "3"]
-    );
+    assert_eq!(issue_order(&state, thread_id).await, vec!["1", "2", "3"]);
 
     let fresh_id = state
         .pool
