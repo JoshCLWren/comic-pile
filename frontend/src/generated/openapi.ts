@@ -4721,8 +4721,18 @@ export interface components {
             type: string;
         };
         CreateIssuesRequest: {
+            /**
+             * @description Requested numbers the reader explicitly accepted as aliases of already
+             *     mapped issues instead of creating physical duplicates (#4654).
+             */
+            accepted_alias_numbers?: string[];
             /** @description Explicit "At the end" choice. Distinct from an omitted anchor. */
             append_to_end?: boolean;
+            /**
+             * @description Issue IDs observed in the accepted preview. A changed set means the
+             *     preview is stale; the edit is refused before any write (#4654).
+             */
+            expected_issue_ids?: number[] | null;
             /**
              * Format: int32
              * @description Explicit anchor. Omit for natural placement.
@@ -6134,6 +6144,21 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
+        /** @description A source-preserving alternative to creating a new physical issue (#4654). */
+        IssueEditAliasOffer: {
+            /** @description Concrete identity evidence, not a generic duplicate warning. */
+            evidence: string;
+            /**
+             * Format: int32
+             * @description Existing identity-mapped issue that can be aliased instead.
+             */
+            existing_issue_id: number;
+            existing_issue_number: string;
+            /** @description Issue number the reader asked to add. */
+            requested_issue_number: string;
+            /** @description Human-readable series the existing issue belongs to. */
+            series_title: string;
+        };
         IssueEditPreviewOutcome: {
             added_issue_numbers: string[];
             after: components["schemas"]["PreviewIssueItem"][];
@@ -6145,7 +6170,14 @@ export interface components {
             strategy: components["schemas"]["IssuePlacementStrategy"];
         };
         IssueEditPreviewResponse: {
+            /**
+             * @description Source-preserving alternatives for numbers that already exist as
+             *     identity-mapped issues in another owned series (#4654).
+             */
+            alias_offers: components["schemas"]["IssueEditAliasOffer"][];
             default_outcome: components["schemas"]["IssueEditPreviewOutcome"];
+            /** @description IDs shown in Before, echoed so the commit can reject a stale preview. */
+            expected_issue_ids: number[];
             numeric_resort_outcome?: components["schemas"]["IssueEditPreviewOutcome"] | null;
             requested_strategy: components["schemas"]["IssuePlacementStrategy"];
             /** Format: int32 */
@@ -6201,6 +6233,16 @@ export interface components {
             page_size: number;
             /** Format: int32 */
             total_count: number;
+            /**
+             * Format: int32
+             * @description Reading session that received the pre-edit undo point, if one is active.
+             */
+            undo_session_id?: number | null;
+            /**
+             * Format: int32
+             * @description Snapshot a reader can restore to reverse this committed edit (#4654).
+             */
+            undo_snapshot_id?: number | null;
         };
         /** @description Request body for `PUT /api/v2/issues/{issue_id}/position`. */
         IssueMoveRequest: {
@@ -7056,8 +7098,15 @@ export interface components {
             source_lists: string[];
         };
         PreviewIssuesRequest: {
+            /** @description Numbers the reader explicitly chose to alias instead of duplicating. */
+            accepted_alias_numbers?: string[];
             /** @description Explicit "At the end" choice. Distinct from an omitted anchor. */
             append_to_end?: boolean;
+            /**
+             * @description Issue IDs shown in the preview's Before rows. Used at commit time to
+             *     reject a stale preview (#4654).
+             */
+            expected_issue_ids?: number[] | null;
             /**
              * Format: int32
              * @description Explicit anchor. Omit for natural placement.

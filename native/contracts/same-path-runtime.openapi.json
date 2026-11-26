@@ -14220,9 +14220,27 @@
           "issue_range"
         ],
         "properties": {
+          "accepted_alias_numbers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Requested numbers the reader explicitly accepted as aliases of already\nmapped issues instead of creating physical duplicates (#4654)."
+          },
           "append_to_end": {
             "type": "boolean",
             "description": "Explicit \"At the end\" choice. Distinct from an omitted anchor."
+          },
+          "expected_issue_ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "Issue IDs observed in the accepted preview. A changed set means the\npreview is stale; the edit is refused before any write (#4654)."
           },
           "insert_after_issue_id": {
             "type": [
@@ -18614,6 +18632,39 @@
           }
         }
       },
+      "IssueEditAliasOffer": {
+        "type": "object",
+        "description": "A source-preserving alternative to creating a new physical issue (#4654).",
+        "required": [
+          "requested_issue_number",
+          "existing_issue_id",
+          "existing_issue_number",
+          "series_title",
+          "evidence"
+        ],
+        "properties": {
+          "evidence": {
+            "type": "string",
+            "description": "Concrete identity evidence, not a generic duplicate warning."
+          },
+          "existing_issue_id": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Existing identity-mapped issue that can be aliased instead."
+          },
+          "existing_issue_number": {
+            "type": "string"
+          },
+          "requested_issue_number": {
+            "type": "string",
+            "description": "Issue number the reader asked to add."
+          },
+          "series_title": {
+            "type": "string",
+            "description": "Human-readable series the existing issue belongs to."
+          }
+        }
+      },
       "IssueEditPreviewOutcome": {
         "type": "object",
         "required": [
@@ -18670,11 +18721,28 @@
           "thread_id",
           "thread_title",
           "requested_strategy",
-          "default_outcome"
+          "default_outcome",
+          "alias_offers",
+          "expected_issue_ids"
         ],
         "properties": {
+          "alias_offers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueEditAliasOffer"
+            },
+            "description": "Source-preserving alternatives for numbers that already exist as\nidentity-mapped issues in another owned series (#4654)."
+          },
           "default_outcome": {
             "$ref": "#/components/schemas/IssueEditPreviewOutcome"
+          },
+          "expected_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "IDs shown in Before, echoed so the commit can reject a stale preview."
           },
           "numeric_resort_outcome": {
             "oneOf": [
@@ -18909,6 +18977,22 @@
           "total_count": {
             "type": "integer",
             "format": "int32"
+          },
+          "undo_session_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Reading session that received the pre-edit undo point, if one is active."
+          },
+          "undo_snapshot_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Snapshot a reader can restore to reverse this committed edit (#4654)."
           }
         }
       },
@@ -20086,9 +20170,27 @@
           "issue_range"
         ],
         "properties": {
+          "accepted_alias_numbers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Numbers the reader explicitly chose to alias instead of duplicating."
+          },
           "append_to_end": {
             "type": "boolean",
             "description": "Explicit \"At the end\" choice. Distinct from an omitted anchor."
+          },
+          "expected_issue_ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "Issue IDs shown in the preview's Before rows. Used at commit time to\nreject a stale preview (#4654)."
           },
           "insert_after_issue_id": {
             "type": [
