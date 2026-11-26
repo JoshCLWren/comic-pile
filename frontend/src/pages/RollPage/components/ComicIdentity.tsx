@@ -393,6 +393,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
             <ComicVineCreatorStatus
               state={hydration.state}
               isHydrating={hydration.isHydrating}
+              showRetry={hydration.showRetry}
               canRetry={hydration.canRetry}
               retryAfterSeconds={hydration.retryAfterSeconds}
               onRetry={() => void hydration.retry()}

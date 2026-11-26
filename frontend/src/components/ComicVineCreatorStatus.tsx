@@ -99,12 +99,12 @@ export function ComicVineCreatorStatus({
       >
         {presentation.message}
       </p>
-      {canRetry && (
+      {showRetry && (
         <button
           type="button"
           data-testid="creator-retry"
           onClick={onRetry}
-          disabled={isHydrating}
+          disabled={!canRetry}
           aria-label="Retry creator credits"
           className="inline-flex min-h-6 items-center rounded font-bold text-[var(--theme-primary-action)] hover:underline disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
         >
