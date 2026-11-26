@@ -2316,7 +2316,6 @@ async fn correction_provider_values_use_python_str() {
 // Chunk D: single-issue import.
 // ---------------------------------------------------------------------------
 
-
 #[tokio::test]
 async fn import_issue_creates_thread_identity_and_reading_order_slot() {
     let (state, token, csrf, user_id, _guard) = setup_user("cvv2-impissue").await;
@@ -2651,7 +2650,6 @@ async fn imports_serialize_with_sibling_queue_writers() {
     );
 }
 
-
 // ---------------------------------------------------------------------------
 // Chunk E: series import and v2 import status.
 // ---------------------------------------------------------------------------
@@ -2836,7 +2834,6 @@ async fn import_series_adopts_roster_and_reuses_on_retry() {
         format!("ComicVine issue 2001 is already confirmed on issue {elsewhere} of thread {other}")
     );
 }
-
 
 /// Imported issues report `needs_hydration` and recover through the explicit
 /// synchronous `metadata:refresh` (Retry) path. No drain, enqueue, dispatch or
