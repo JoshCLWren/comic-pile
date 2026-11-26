@@ -1,5 +1,9 @@
 import { useCallback, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useMutation } from '@tanstack/react-query'
+import { comicVineApi } from '../services/api-comicvine'
+import { invalidateIdentityInbox } from '../query/cacheEffects'
+import { queryClient } from '../query/queryClient'
 import { isObject, isNonEmptyString, isString } from '../utils/runtimeChecks'
 import {
   useIdentityInbox,
@@ -169,20 +173,22 @@ function CandidateCard({
 /** #5434: reviewer-driven discovery with explainable scores and a partial
  * series plan. Unambiguous candidates are confirmed through the existing
  * confirmation endpoint; ambiguous or missing issues stay in the inbox. */
-function MatchSearchPanel({
-  item,
-  onConfirm,
-}: {
-  item: InboxItem
-  onConfirm: (mappingId: number, identityId: number) => void
-}) {
+function MatchSearchPanel({ item }: { item: InboxItem }) {
   const [input, setInput] = useState('')
   const [query, setQuery] = useState('')
-  const { data, isPending, isError } = useIdentityInboxSearch(
+  const { data, isPending, isError, refetch } = useIdentityInboxSearch(
     query,
     item.issue_id,
     query.length > 0,
   )
+  const confirmMatch = useMutation({
+    mutationFn: ({ issueId, comicvineIssueId }: { issueId: number; comicvineIssueId: number }) =>
+      comicVineApi.confirmIdentity(issueId, comicvineIssueId),
+    onSuccess: async () => {
+      await invalidateIdentityInbox(queryClient)
+      await refetch()
+    },
+  })
 
   return (
     <div className="mt-3 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-page)] p-3">
@@ -221,6 +227,11 @@ function MatchSearchPanel({
           Search is unavailable right now. You can defer or map this issue manually.
         </p>
       )}
+      {confirmMatch.isError && (
+        <p className="mt-2 text-xs text-[var(--theme-error)]">
+          Confirmation failed. The issue is unchanged; try again from its inbox card.
+        </p>
+      )}
 
       {data && (
         <div className="mt-3 space-y-3">
@@ -235,15 +246,19 @@ function MatchSearchPanel({
                     <span>
                       #{match.issue_number} → ComicVine #{match.comicvine_issue_id}
                     </span>
-                    {match.mapping_id !== null && match.external_identity_id !== null && (
-                      <button
-                        type="button"
-                        onClick={() => onConfirm(match.mapping_id!, match.external_identity_id!)}
-                        className="px-2 py-0.5 text-xs font-medium rounded bg-[var(--theme-primary-action)] text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)]"
-                      >
-                        Confirm
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      disabled={confirmMatch.isPending}
+                      onClick={() =>
+                        confirmMatch.mutate({
+                          issueId: match.issue_id,
+                          comicvineIssueId: match.comicvine_issue_id,
+                        })
+                      }
+                      className="px-2 py-0.5 text-xs font-medium rounded bg-[var(--theme-primary-action)] text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60"
+                    >
+                      Confirm
+                    </button>
                   </li>
                 ))}
                 {plan.unmatched.map((unmatched) => (
@@ -423,9 +438,7 @@ function InboxItemCard({
               </div>
             )}
 
-            {showSearch && (
-              <MatchSearchPanel item={item} onConfirm={onConfirm} />
-            )}
+            {showSearch && <MatchSearchPanel item={item} />}
 
             <div className="flex gap-2 mt-3 pt-3 border-t border-[var(--theme-border)]">
               <button
