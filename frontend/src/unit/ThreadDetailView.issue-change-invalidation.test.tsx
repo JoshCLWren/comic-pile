@@ -86,19 +86,21 @@ beforeEach(() => {
   vi.mocked(readingBoundariesApi.batch).mockResolvedValue({
     evaluator: 'enabled',
     threads: { 1: { thread_id: 1, state: 'available', summary: 'Available now', blockers: [] } },
-  } as never)
+  })
+  // SAFETY: the hook mock returns only the fields the component under test reads
   mockedUseUpdateThread.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+  // SAFETY: the stubbed thread supplies only the fields this view reads
   mockedThreadsApiGet.mockResolvedValue({
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: 5, queue_position: 1,
     status: 'active', total_issues: 10, next_unread_issue_number: '1', notes: null,
   } as never)
-  mockedIssuesApiList.mockResolvedValue({ issues: [], next_page_token: null, total_count: 0, page_size: 100 } as never)
-  mockedIssuesApiListCreators.mockResolvedValue({ thread_id: 1, issues: [] } as never)
+  mockedIssuesApiList.mockResolvedValue({ issues: [], next_page_token: null, total_count: 0, page_size: 100 })
+  mockedIssuesApiListCreators.mockResolvedValue({ thread_id: 1, issues: [] })
   vi.mocked(dependenciesApi.getBatchBlockingInfo).mockResolvedValue({
     threads: { 1: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] } },
-  } as never)
-  vi.mocked(dependenciesApi.getConnectedThreads).mockResolvedValue({ thread_id: 1, connected_threads: [] } as never)
-  vi.mocked(tagsApi.threadIssuesEffective).mockResolvedValue({ thread_id: 1, issues: [] } as never)
+  })
+  vi.mocked(dependenciesApi.getConnectedThreads).mockResolvedValue({ thread_id: 1, connected_threads: [] })
+  vi.mocked(tagsApi.threadIssuesEffective).mockResolvedValue({ thread_id: 1, issues: [] })
   mockedInvalidateAfterIssueEdit.mockResolvedValue(undefined)
 })
 
