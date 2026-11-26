@@ -49,8 +49,6 @@ async function getSessionMode(page: Page): Promise<SessionMode> {
 }
 
 async function mockRustRollReadApi(page: Page): Promise<void> {
-  page.on('pageerror', (e) => console.log('DEBUG PAGEERROR', e.message))
-  page.on('console', (m) => { if (m.type() === 'error') console.log('DEBUG CONSOLE', m.text().slice(0, 200)) })
   const sessionMode: SessionMode = {
     active_bandwidth: 'balanced',
     active_intent: 'explore',
@@ -117,6 +115,12 @@ async function mockRustRollReadApi(page: Page): Promise<void> {
     }
     if (path === '/api/v2/threads') {
       return route.fulfill({ json: { threads: [], next_page_token: null, active_count: 0 } })
+    }
+    if (path === '/api/v2/reading-graph') {
+      return route.fulfill({ json: { status: 'ok', cycles: [], invalid_edges: [] } })
+    }
+    if (path === '/api/v2/reading-mode') {
+      return route.fulfill({ json: { bandwidth: 'balanced', intent: 'explore', source: 'manual', suggested: false } })
     }
     return route.fulfill({ json: [] })
   })
