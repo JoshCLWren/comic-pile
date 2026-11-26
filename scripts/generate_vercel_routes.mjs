@@ -7,15 +7,9 @@
 import {readFileSync, readdirSync, writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
 import {withCanonicalBuilds} from './vercel_builds.mjs';
-<<<<<<< HEAD
 import {canonicalNativeDestination, slimNativeApiRoutes} from './vercel_slim_routes.mjs';
 
 const RUST = '/api/native_api.rs';
-=======
-import {slimNativeRollRoutes} from './vercel_slim_routes.mjs';
-
-const RUST = '/api/native_roll.rs';
->>>>>>> origin/main
 const NATIVE = new Set([RUST]);
 const FALLBACK = '/api(?:/.*)?';
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
@@ -148,11 +142,7 @@ export function generateVercel(config, fragments) {
   ];
   return withCanonicalBuilds(applyStaticCsp({
     ...config,
-<<<<<<< HEAD
     routes: slimNativeApiRoutes(fullRoutes, new Set(fragmentRoutes)),
-=======
-    routes: slimNativeRollRoutes(fullRoutes, new Set(fragmentRoutes)),
->>>>>>> origin/main
   }));
 }
 export function loadFragmentFiles(directory = 'docs/api/route-fragments') {
@@ -164,7 +154,6 @@ export function loadFragmentFiles(directory = 'docs/api/route-fragments') {
 
 function run() {
   const check = process.argv.includes('--check');
-<<<<<<< HEAD
   const committed = JSON.parse(readFileSync('vercel.json', 'utf8'));
   // A fragment-only PR cannot commit the bot-owned vercel.json until the
   // post-merge regeneration lands. Normalize the previous native entrypoint
@@ -176,9 +165,6 @@ function run() {
       return dest === route.dest ? route : {...route, dest};
     }),
   };
-=======
-  const original = JSON.parse(readFileSync('vercel.json', 'utf8'));
->>>>>>> origin/main
   // Route fragments are the sole source of explicit /api rewrites; there is
   // no Python operation registry to sync into the inventory any longer.
   const fragments = loadFragmentFiles();

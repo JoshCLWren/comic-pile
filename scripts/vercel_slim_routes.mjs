@@ -2,11 +2,7 @@
  * Drop `/api/native_api.rs` rewrites that the final `/api(?:/.*)?` catch-all
  * already provides.
  *
-<<<<<<< HEAD
  * Vercel uses the first matching route. A fragment-derived native_api route is
-=======
- * Vercel uses the first matching route. A fragment-derived native_roll route is
->>>>>>> origin/main
  * only REQUIRED when a LATER non-native route (before the catch-all) could also
  * match the same method and path. Overlap is decided by unifying the two routes
  * segment by segment, so a pair is dropped only when the regexes are PROVEN
