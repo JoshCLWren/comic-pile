@@ -738,7 +738,11 @@ mod tests {
         assert_eq!(response.rows.len(), 6);
         assert!(response.rows.iter().all(|row| row.default_selected));
         assert!(
-            state.recording_fake().expect("recording provider fake").calls().is_empty(),
+            state
+                .recording_fake()
+                .expect("recording provider fake")
+                .calls()
+                .is_empty(),
             "preview must not bypass the shared cache with a raw provider call"
         );
     }
@@ -780,7 +784,11 @@ mod tests {
             .collect();
         assert_eq!(approved_row_ids.len(), 5);
         assert!(
-            state.recording_fake().expect("recording provider fake").calls().is_empty(),
+            state
+                .recording_fake()
+                .expect("recording provider fake")
+                .calls()
+                .is_empty(),
             "preview must reuse the shared provider cache"
         );
 
@@ -795,7 +803,10 @@ mod tests {
         )
         .await
         .expect("safe rows should commit in one operation");
-        assert_eq!(committed.confirmed_issue_ids, (5610002..=5610006).collect::<Vec<_>>());
+        assert_eq!(
+            committed.confirmed_issue_ids,
+            (5610002..=5610006).collect::<Vec<_>>()
+        );
         assert_eq!(committed.already_confirmed_issue_ids, vec![5610001]);
         assert!(committed.needs_review_issue_ids.is_empty());
         assert_eq!(committed.series_mapping.status, "confirmed");
