@@ -142,7 +142,7 @@ limited to repository tooling and the hand-run QA mirror refresh script.
 ### Styling
 
 - **Framework**: Tailwind CSS 4.x (utility-first, PostCSS integration)
-- **Configuration**: CSS-first via `frontend/src/index.css` (`@import "tailwindcss"`) with the PostCSS plugin in `frontend/postcss.config.ts`; the unused `frontend/tailwind.config.ts` is not the configuration source
+- **Configuration**: `frontend/tailwind.config.ts` with content scanning
 
 ### Type Safety
 
