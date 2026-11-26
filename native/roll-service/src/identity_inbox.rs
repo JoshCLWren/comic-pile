@@ -130,12 +130,37 @@ pub struct IdentityInboxSearchResult {
     pub evidence: Vec<String>,
 }
 
+/// One issue in an explainable partial series match. When a stored candidate
+/// exists, `mapping_id`/`external_identity_id` let the UI confirm it through
+/// the existing confirmation endpoint; otherwise the issue stays for review.
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct IdentityInboxPartialMatchIssue {
+    pub issue_id: i32,
+    pub issue_number: String,
+    pub comicvine_issue_id: i32,
+    pub mapping_id: Option<i32>,
+    pub external_identity_id: Option<i32>,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct IdentityInboxPartialMatch {
+    pub comicvine_volume_id: i32,
+    pub volume_name: String,
+    pub actionable_reason: String,
+    pub matched: Vec<IdentityInboxPartialMatchIssue>,
+    pub unmatched: Vec<IdentityInboxPartialMatchIssue>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct IdentityInboxSearchResponse {
     pub issue_id: i32,
     pub query: String,
     pub results: Vec<IdentityInboxSearchResult>,
     pub total_available: Option<i64>,
+    /// Series-level partial matches derived from the same provider response.
+    /// Always emitted (empty when no volume resolves) for wire stability.
+    pub partial_matches: Vec<IdentityInboxPartialMatch>,
 }
 
 fn bad_request(detail: &str) -> ApiError {
@@ -371,6 +396,112 @@ async fn load_match_context(
     }
 
     Ok(context.finish())
+}
+
+/// Derive series-level partial matches from the provider rows already fetched
+/// for a search. This is the production caller of `plan_partial_series_match`:
+/// it uses the owned sibling issues of the thread and never auto-confirms.
+async fn build_partial_matches(
+    state: &Arc<AppState>,
+    local: &crate::comicvine_matching::MatchIssue,
+    thread_id: i32,
+    user_id: i32,
+    provider_issues: &[crate::comicvine_matching::ProviderIssue],
+) -> Result<Vec<IdentityInboxPartialMatch>, ApiError> {
+    if thread_id <= 0 || provider_issues.is_empty() {
+        return Ok(Vec::new());
+    }
+    let conn = db::checkout(state).await?;
+    let rows = conn
+        .query(
+            "SELECT i.id, i.issue_number, m.id, e.id, e.external_id \
+             FROM issues i \
+             JOIN threads t ON t.id = i.thread_id AND t.user_id = $2 \
+             LEFT JOIN issue_external_identity_mappings m \
+               ON m.issue_id = i.id AND m.status IN ('unresolved','candidate','deferred') \
+             LEFT JOIN external_identities e \
+               ON e.id = m.external_identity_id AND e.provider = 'comicvine' AND e.entity_type = 'issue' \
+             WHERE i.thread_id = $1 \
+             ORDER BY i.position NULLS LAST, i.id \
+             LIMIT 30",
+            &[&thread_id, &user_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+    let mut siblings = Vec::with_capacity(rows.len());
+    let mut candidates: std::collections::HashMap<i32, Vec<(i32, i32, String)>> =
+        std::collections::HashMap::new();
+    for row in &rows {
+        let issue_id: i32 = row.get(0);
+        let number: String = row.get(1);
+        let mapping_id: Option<i32> = row.get(2);
+        let external_id: Option<i32> = row.get(3);
+        let cv_id: Option<String> = row.get(4);
+        if let (Some(mid), Some(eid), Some(cv)) = (mapping_id, external_id, cv_id) {
+            candidates.entry(issue_id).or_default().push((mid, eid, cv));
+        }
+        let mut sibling = local.clone();
+        sibling.issue_id = issue_id;
+        sibling.issue_number = number;
+        siblings.push(sibling);
+    }
+    if siblings.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let plans = crate::comicvine_matching::plan_partial_series_match(&siblings, provider_issues);
+    let mut out = Vec::with_capacity(plans.len().min(5));
+    for plan in plans.into_iter().take(5) {
+        let to_issue = |issue_id: i32, number: String, cv_id: i32, reason: String| {
+            let stored = candidates
+                .get(&issue_id)
+                .and_then(|rows| {
+                    rows.iter()
+                        .find(|(_, _, external)| external.parse::<i32>().ok() == Some(cv_id))
+                })
+                .map(|(mid, eid, _)| (*mid, *eid));
+            IdentityInboxPartialMatchIssue {
+                issue_id,
+                issue_number: number,
+                comicvine_issue_id: cv_id,
+                mapping_id: stored.map(|(mid, _)| mid),
+                external_identity_id: stored.map(|(_, eid)| eid),
+                reason,
+            }
+        };
+        let matched = plan
+            .matched
+            .into_iter()
+            .map(|m| {
+                let sibling = siblings.iter().find(|s| s.issue_id == m.issue_id);
+                let number = sibling
+                    .map(|s| s.issue_number.clone())
+                    .unwrap_or_default();
+                to_issue(m.issue_id, number, m.comicvine_issue_id, m.evidence.join("; "))
+            })
+            .collect();
+        let unmatched = plan
+            .unmatched
+            .into_iter()
+            .map(|u| {
+                to_issue(
+                    u.issue_id,
+                    u.issue_number,
+                    0,
+                    format!("{} {}", u.reason, u.next_steps.join("; ")),
+                )
+            })
+            .collect();
+        out.push(IdentityInboxPartialMatch {
+            comicvine_volume_id: plan.volume.comicvine_volume_id,
+            volume_name: plan.volume.volume_name,
+            actionable_reason: plan.actionable_reason,
+            matched,
+            unmatched,
+        });
+    }
+    Ok(out)
 }
 
 /// Batch variant of [`load_match_context`] for a page of inbox items. Three
@@ -925,12 +1056,14 @@ pub async fn search_issues(
             query: q.q.clone(),
             results: vec![],
             total_available: Some(0),
+            partial_matches: vec![],
         }));
     }
 
     // #5434: build the local side of the match from real owned data when the
     // caller supplies an issue. This loads sibling volumes, publisher/year,
     // aliases and CBL source volumes instead of relying on the title alone.
+    let mut search_thread_id = 0;
     let local = if issue_id > 0 {
         let conn = db::checkout(&state).await?;
         let row = conn
@@ -947,6 +1080,7 @@ pub async fn search_issues(
                 let number: String = row.get(0);
                 let thread_id: i32 = row.get(1);
                 let title: String = row.get(2);
+                search_thread_id = thread_id;
                 load_match_context(&conn, thread_id, issue_id, &title, &number).await?
             }
             None => crate::comicvine_matching::MatchIssue {
@@ -987,6 +1121,7 @@ pub async fn search_issues(
     let payload = fetch_comicvine(&state.outbound, url).await;
 
     let mut results = Vec::new();
+    let mut provider_issues = Vec::new();
     let mut total_available = Some(0i64);
     if let Some(p) = payload {
         // Search and volume lookups return an array; a pasted issue URL
@@ -1072,6 +1207,7 @@ pub async fn search_issues(
                 // not an injected fixture.
                 let mut score = None;
                 if let Some(provider_issue) = provider_issue_from_search(obj) {
+                    provider_issues.push(provider_issue.clone());
                     let volumes = crate::comicvine_matching::discover_volume_candidates(
                         &local,
                         std::slice::from_ref(&provider_issue),
@@ -1139,11 +1275,14 @@ pub async fn search_issues(
     // Python sets issue_id=0 then caller sets issue_id if provided. Keep issue_id if provided else 0.
     let _ = issue_id_final;
 
+    let partial_matches =
+        build_partial_matches(&state, &local, search_thread_id, user.id(), &provider_issues).await?;
     Ok(Json(IdentityInboxSearchResponse {
         issue_id: q.issue_id.unwrap_or(0),
         query: q.q.clone(),
         results,
         total_available,
+        partial_matches,
     }))
 }
 
