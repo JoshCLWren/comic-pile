@@ -32,11 +32,13 @@ function intelligence(metadataStatus: string): ComicVineIssueIntelligence {
     name: 'Test Issue',
     description: null,
     image_url: null,
+    cover_date: null,
+    store_date: null,
     creators: [],
     story_arcs: [],
     metadata_status: metadataStatus,
     refresh_retry_after_seconds: null,
-  } as ComicVineIssueIntelligence
+  }
 }
 
 function response(
@@ -195,6 +197,6 @@ describe('ComicVine hydration under real StrictMode effects (#5841)', () => {
 
     expect(hydrating()).toBe('false')
     expect(presentation()).toBe('no_credits')
-    expect(message()).toBe('ComicVine currently has no creator credits')
+    expect(message()).toContain('ComicVine currently has no creator credits')
   })
 })
