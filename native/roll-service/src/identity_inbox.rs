@@ -2592,6 +2592,13 @@ mod tests {
             "evidence must explain the flexible label match: {:?}",
             result.evidence
         );
+        assert_eq!(response.partial_matches.len(), 1);
+        let plan = &response.partial_matches[0];
+        assert_eq!(plan.comicvine_volume_id, 405031409);
+        assert_eq!(plan.matched.len(), 1, "unambiguous issue must be offered");
+        assert_eq!(plan.unmatched.len(), 1, "missing sibling stays for review");
+        assert!(plan.actionable_reason.contains("Partial match"));
+        assert!(plan.unmatched[0].reason.contains("not on it"));
     }
 
     #[tokio::test]
