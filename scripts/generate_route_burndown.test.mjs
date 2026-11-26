@@ -184,6 +184,21 @@ function liveOperation(fragment, method, route) {
   return op;
 }
 
+test('every contributor-owned route fragment points at the future native_api ingress', () => {
+  const fragmentsDir = path.join(repoRoot, 'docs', 'api', 'route-fragments');
+  const names = readdirSync(fragmentsDir)
+    .filter(name => name.endsWith('.json') && name !== 'vercel-rewrites.json')
+    .sort();
+  assert.ok(names.length > 0, 'expected contributor-owned route fragments');
+  for (const name of names) {
+    const fragment = JSON.parse(readFileSync(path.join(fragmentsDir, name), 'utf8'));
+    assert.ok(fragment.operations.length > 0, `${name} must declare operations`);
+    for (const op of fragment.operations) {
+      assert.equal(op.dest, '/api/native_api.rs', `${name} ${op.method} ${op.path} dest`);
+    }
+  }
+});
+
 test('real creator source retains all eleven native v2 browser routes', () => {
   const fragment = liveFragment('creators');
   const routes = fragment.operations.filter(op => op.path.startsWith('/api/v2/creators'));
@@ -356,6 +371,6 @@ test('identity-inbox v2 resources retain all seven native contracts and Rust ing
     const op = native.paths[route]?.[method.toLowerCase()];
     assert.ok(op?.operationId, 'missing native operationId for ' + method + ' ' + route);
     assert.ok(Object.keys(op.responses).some(code => code.startsWith('2')), route);
-    assert.equal(liveOperation(fragment, method, route).dest, '/api/native_roll.rs', route);
+    assert.equal(liveOperation(fragment, method, route).dest, '/api/native_api.rs', route);
   }
 });
