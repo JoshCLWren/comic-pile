@@ -324,3 +324,22 @@ def test_documentation_workflow_cannot_rewrite_pull_request_heads() -> None:
     assert "contents: write" not in workflow
     assert "persist-credentials: false" in workflow
     assert "git push" not in workflow
+
+
+def test_comicvine_repair_cadence_matches_workflow_schedule() -> None:
+    """Keep the documented GitHub Actions repair cadence tied to the real cron."""
+    root = Path(__file__).parents[1]
+    workflow = (root / ".github/workflows/comicvine-metadata-repair.yml").read_text(
+        encoding="utf-8"
+    )
+    deployment = (root / "docs/VERCEL_DEPLOYMENT.md").read_text(encoding="utf-8")
+
+    schedule = CRON_SCHEDULE_RE.search(workflow)
+    assert schedule is not None
+    minute, hours = schedule.group(1), schedule.group(2).split(",")
+
+    assert "times per hour" not in deployment
+    assert f"{NUMBER_WORDS.get(len(hours), len(hours))} times per day" in deployment
+    assert "UTC" in deployment
+    for hour in hours:
+        assert f"{int(hour):02d}:{int(minute):02d}" in deployment
