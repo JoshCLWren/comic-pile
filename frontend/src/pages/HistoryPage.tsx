@@ -190,6 +190,14 @@ export default function HistoryPage() {
                 <div className="mt-1 text-[10px] font-bold uppercase tracking-widest leading-none text-stone-500">
                   {formatTime(item.timestamp)}
                 </div>
+                {item.session_id != null && (
+                  <Link
+                    to={`/sessions/${item.session_id}`}
+                    className="mt-2 inline-block text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-muted)] underline decoration-dotted underline-offset-2 hover:text-[var(--theme-text-primary)]"
+                  >
+                    Session
+                  </Link>
+                )}
               </div>
 
               <div className="min-w-0 flex-1 space-y-1.5">

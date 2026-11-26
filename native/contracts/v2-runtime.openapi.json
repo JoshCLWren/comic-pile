@@ -7192,6 +7192,13 @@
             ],
             "format": "double"
           },
+          "session_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
           "thread_id": {
             "type": [
               "integer",

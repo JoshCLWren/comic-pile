@@ -6,10 +6,10 @@
     "generated_by": "scripts/generate_route_burndown.mjs",
     "issue": 4739,
     "ingress_source": "vercel.json",
-    "total_live_operations": 146,
-    "native_rust": 146,
+    "total_live_operations": 150,
+    "native_rust": 150,
     "python_fastapi": 0,
-    "native_rust_status": 146,
+    "native_rust_status": 150,
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 0
@@ -1068,6 +1068,58 @@
       ],
       "method": "POST",
       "path": "/api/v2/identity-inbox/{mapping_id}/skips",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4653,
+      "consumers": [
+        "frontend/src/services/api-issue-duplicate-reconciliation.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/issue-duplicate-reconciliation/apply",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4653,
+      "consumers": [
+        "frontend/src/services/api-issue-duplicate-reconciliation.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/issue-duplicate-reconciliation/detect",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4653,
+      "consumers": [
+        "frontend/src/services/api-issue-duplicate-reconciliation.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/issue-duplicate-reconciliation/preview",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4653,
+      "consumers": [
+        "frontend/src/services/api-issue-duplicate-reconciliation.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/issue-duplicate-reconciliation/undo",
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
       "verified_against": "vercel.json"

@@ -792,7 +792,8 @@ async fn load_coverage(
          rated AS (
              SELECT DISTINCT ev.issue_id
              FROM events ev JOIN owned o ON o.id = ev.issue_id
-             WHERE ev.type = 'rate' AND ev.rating IS NOT NULL),
+             WHERE ev.type = 'rate' AND ev.rating IS NOT NULL
+                   AND ev.context->>'undone_by_snapshot_id' IS NULL),
          cv AS (
              SELECT DISTINCT m.issue_id
              FROM issue_external_identity_mappings m
@@ -1039,6 +1040,7 @@ async fn load_library(
              JOIN threads t ON t.id = i.thread_id
              WHERE t.user_id = $1 AND ev.type = 'rate' AND ev.issue_id IS NOT NULL
                    AND ev.rating IS NOT NULL
+                   AND ev.context->>'undone_by_snapshot_id' IS NULL
                    AND ($2::bigint[] IS NULL OR ev.issue_id = ANY($2::bigint[]))
              ORDER BY ev.issue_id, ev.timestamp DESC, ev.id DESC",
             &[&user_id, &issue_filter],
@@ -1095,6 +1097,7 @@ async fn load_library(
                      JOIN threads t ON t.id = ev.thread_id
                      WHERE t.user_id = $1 AND ev.type = 'rate'
                            AND ev.rating IS NOT NULL AND ev.issue_id IS NULL
+                           AND ev.context->>'undone_by_snapshot_id' IS NULL
                            AND ev.thread_id = ANY($2::bigint[])
                      ORDER BY ev.thread_id, ev.timestamp ASC, ev.id ASC",
                     &[&user_id, &thread_ids],

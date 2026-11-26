@@ -41,6 +41,13 @@
               "null"
             ]
           },
+          "session_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "thread_id": {
             "format": "int32",
             "type": [
