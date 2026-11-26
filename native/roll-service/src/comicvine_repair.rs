@@ -20,6 +20,10 @@ use std::{sync::Arc, time::Duration};
 const HOST: &str = "comicvine.gamespot.com";
 const MAX_BODY: usize = 2_000_000;
 const BATCH_LIMIT: usize = 8;
+/// Upper bound on confirmed identities inspected per drain pass when reconciling
+/// the orphan gap (#5695). Only the first `BATCH_LIMIT` candidates are enqueued,
+/// so this keeps the scan bounded while the ledger advances across drains.
+const RECONCILE_SCAN_LIMIT: i64 = 200;
 const PROVIDER_TIMEOUT: Duration = Duration::from_secs(5);
 // Shared with comicvine_issue.rs READ_SQL: complete rows stay fresh 30 days;
 // a deep response with empty credits is rechecked after 7 days. The two
@@ -44,6 +48,35 @@ WITH candidate AS (
 SELECT c.id, c.external_identity_id, c.attempts, e.external_id,
        e.provider, e.entity_type, e.metadata_json::text
 FROM claimed c LEFT JOIN external_identities e ON e.id=c.external_identity_id
+"#;
+/// Confirmed ComicVine issue identities with no durable refresh-request row.
+/// Freshness is deliberately *not* filtered in SQL: a complete 12-key payload
+/// can still be stale (missing deep-fetch stamp, older provider revision, or an
+/// expired empty-credit recheck). `process()` applies the canonical
+/// `needs_provider_fetch` predicate after claim and settles fresh rows from
+/// cache without a provider call, which advances this scan past them (#5695).
+const RECONCILE_ORPHANED: &str = r#"
+SELECT e.id
+FROM external_identities e
+WHERE e.provider = 'comicvine'
+  AND e.entity_type = 'issue'
+  AND EXISTS (
+    SELECT 1 FROM issue_external_identity_mappings m
+    WHERE m.external_identity_id = e.id AND m.status = 'confirmed'
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM comicvine_metadata_refresh_requests r
+    WHERE r.external_identity_id = e.id
+  )
+ORDER BY e.updated_at, e.id
+LIMIT $1
+"#;
+const RECONCILE_INSERT: &str = r#"
+INSERT INTO comicvine_metadata_refresh_requests
+  (external_identity_id, state, attempts, next_attempt_at, created_at, updated_at)
+SELECT v, 'pending', 0, now(), now(), now()
+FROM unnest($1::int[]) AS v
+ON CONFLICT ON CONSTRAINT uq_comicvine_metadata_refresh_identity DO NOTHING
 "#;
 const SETTLE: &str = r#"
 UPDATE comicvine_metadata_refresh_requests
@@ -91,7 +124,7 @@ struct Job {
     metadata: Option<String>,
 }
 
-#[derive(Default, Serialize)]
+#[derive(Debug, Default, Serialize)]
 pub struct DrainReport {
     claimed: u32,
     completed: u32,
@@ -707,6 +740,39 @@ async fn persist(
     row.try_get(0).map_err(db::query_error)
 }
 
+/// Discover confirmed ComicVine identities that never received a refresh row
+/// and enqueue them on the same durable ledger used by map/remap (#5695).
+///
+/// The per-issue read and the operator backfill repair one identity at a time;
+/// the scheduled drain must also reconcile the durable backlog so an unopened
+/// issue cannot remain empty forever. The scan and insert are bounded,
+/// set-based and idempotent: concurrent drains may select the same identities,
+/// but the unique identity constraint makes the inserts safe. No remote wake is
+/// dispatched here because the drain is already executing the work it enqueues.
+async fn reconcile_orphaned_refresh_requests(state: &AppState) -> Result<(), ApiError> {
+    let connection = db::checkout(state).await?;
+    let rows = connection
+        .query(RECONCILE_ORPHANED, &[&RECONCILE_SCAN_LIMIT])
+        .await
+        .map_err(db::query_error)?;
+    // Enqueue at most one worker batch per pass. Fresh candidates settle from
+    // cache after claim and leave the scan, so successive drains advance across
+    // the backlog instead of reselecting the same page forever.
+    let missing: Vec<i32> = rows
+        .iter()
+        .take(BATCH_LIMIT)
+        .map(|row| row.get::<_, i32>(0))
+        .collect();
+    if missing.is_empty() {
+        return Ok(());
+    }
+    connection
+        .execute(RECONCILE_INSERT, &[&missing])
+        .await
+        .map_err(db::query_error)?;
+    Ok(())
+}
+
 fn failure_transition(error: &ProviderFailure, attempt: i32) -> (&'static str, i32, &'static str) {
     match error {
         ProviderFailure::RateLimited(_) if attempt >= 3 => ("failed", 21600, "rate_limit"),
@@ -1301,6 +1367,10 @@ async fn drain_authorized(
         provider_configured: key.is_some(),
         ..Default::default()
     };
+    // Recover already-confirmed identities that have empty metadata but no
+    // refresh row before claiming, so a single bounded pass can hydrate them
+    // without remapping (#5695).
+    reconcile_orphaned_refresh_requests(state).await?;
     for index in 0..BATCH_LIMIT {
         let Some(job) = claim(state).await? else {
             break;
