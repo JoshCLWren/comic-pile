@@ -134,10 +134,12 @@ export function ComicIssueCover({
   )
 }
 
-/** Canonical identity line: series, exact issue number, read/rating state. */
+/** Canonical identity line: series, authored/alternate numbers, read/rating state. */
 export function ComicIssueIdentity({
   threadTitle,
   issueNumber,
+  issueNumberAlias,
+  providerIssueNumber,
   status,
   rating,
   variant = 'standard',
@@ -147,6 +149,8 @@ export function ComicIssueIdentity({
 }: {
   threadTitle: string
   issueNumber: string
+  issueNumberAlias?: string | null
+  providerIssueNumber?: string | null
   status: 'read' | 'unread'
   rating: number | null
   variant?: ComicIssueCardVariant
@@ -157,11 +161,29 @@ export function ComicIssueIdentity({
 }) {
   const titleClass = variant === 'featured' ? 'text-xl' : 'text-sm'
   const Title = heading ? 'h2' : 'p'
+  const alias = issueNumberAlias?.trim()
+  const providerNumber = providerIssueNumber?.trim()
+  const showAlias = alias && alias.toLowerCase() !== issueNumber.trim().toLowerCase()
+  const showProvider = providerNumber && providerNumber.toLowerCase() !== issueNumber.trim().toLowerCase() && (!showAlias || providerNumber.toLowerCase() !== alias!.toLowerCase())
   return (
     <div className="min-w-0">
       <Title data-testid={headingTestId} className={`break-words ${heading ? 'font-black' : 'font-bold'} leading-snug text-[var(--theme-text-primary)] ${titleClass}`}>
-        {threadTitle} <span className="text-[var(--theme-comic-accent)]">#{issueNumber}</span>
+        {threadTitle}{' '}
+        <span className="text-[var(--theme-comic-accent)]">#{issueNumber}</span>
+        {showAlias && (
+          <>
+            {' '}
+            <span className="text-[var(--theme-text-muted)]" data-testid="comic-issue-alias-number">
+              ({alias})
+            </span>
+          </>
+        )}
       </Title>
+      {showProvider && (
+        <p className="mt-0.5 text-[11px] text-[var(--theme-text-dim)]" data-testid="comic-issue-provider-number">
+          Provider #{providerNumber}
+        </p>
+      )}
       {showStatus && <p className="mt-1 text-xs text-[var(--theme-text-muted)]">
         {status === 'read' ? (
           <>
@@ -250,6 +272,8 @@ export interface ComicIssueCardProps {
   /** Fallbacks from the owning list/thread payload while the batch loads. */
   threadTitle: string
   issueNumber: string
+  /** Alternate overall/story number (#4652) when known outside the card batch. */
+  issueNumberAlias?: string | null
   status: 'read' | 'unread'
   rating?: number | null
   variant?: ComicIssueCardVariant
@@ -305,6 +329,7 @@ export function ComicIssueCard({
   card,
   threadTitle,
   issueNumber,
+  issueNumberAlias,
   status,
   rating,
   variant = 'standard',
@@ -325,18 +350,23 @@ export function ComicIssueCard({
   const ratingValueId = `${baseId}-value`
   const actions = useComicIssueActions(issueId, { onMutated })
   const [editor, setEditor] = useState<{ mode: 'read' | 'edit'; draftRating: number } | null>(null)
+  const [aliasEditor, setAliasEditor] = useState<{ draft: string } | null>(null)
 
   const resolvedTitle = card?.thread_title || threadTitle
   const resolvedNumber = card?.issue_number || issueNumber
+  const resolvedAlias = card?.issue_number_alias ?? issueNumberAlias ?? null
+  const resolvedProviderNumber = card?.provider_issue_number ?? null
   const resolvedStatus = (card?.status ?? status) === 'read' ? 'read' : 'unread'
   const resolvedRating = card?.rating ?? rating ?? null
   const coverImageUrl = card?.cover_image_url ?? null
-  const issueLabel = `${resolvedTitle} #${resolvedNumber}`
+  const aliasLabel = resolvedAlias && resolvedAlias.toLowerCase() !== resolvedNumber.toLowerCase() ? ` (${resolvedAlias})` : ''
+  const issueLabel = `${resolvedTitle} #${resolvedNumber}${aliasLabel}`
 
   /** Open the in-card rating editor without writing anything. */
   function openEditor(mode: 'read' | 'edit') {
     actions.reset()
     onReadingDetailsRequest?.()
+    setAliasEditor(null)
     setEditor({ mode, draftRating: resolvedRating ?? DIRECT_RATING_DEFAULT })
   }
 
@@ -360,6 +390,17 @@ export function ComicIssueCard({
     if (actions.isPending) return
     try {
       await actions.markUnread()
+    } catch {
+      // Error renders below.
+    }
+  }
+
+  async function handleSaveAlias() {
+    if (!aliasEditor || actions.isPending) return
+    const trimmed = aliasEditor.draft.trim()
+    try {
+      await actions.updateIssueNumberAlias(trimmed === '' ? null : trimmed)
+      setAliasEditor(null)
     } catch {
       // Error renders below.
     }
@@ -394,17 +435,50 @@ export function ComicIssueCard({
             <ComicIssueIdentity
               threadTitle={resolvedTitle}
               issueNumber={resolvedNumber}
+              issueNumberAlias={resolvedAlias}
+              providerIssueNumber={resolvedProviderNumber}
               status={resolvedStatus}
               rating={resolvedRating}
               variant={variant}
             />
             <ComicIssueAvailability advisory={advisory} />
+            {card?.has_confirmed_identity && card.comicvine_issue_id && (
+              <p className="text-[11px] text-[var(--theme-text-muted)]" data-testid="comic-issue-provider-identity">
+                ComicVine #{card.comicvine_issue_id}
+                {card.provider_issue_number ? ` · provider issue #${card.provider_issue_number}` : ''}
+              </p>
+            )}
             {children}
           </div>
         </div>
       </div>
 
-      {!editor ? (
+      {aliasEditor ? (
+        <div className="mt-2 space-y-2 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-hover)] p-3" data-testid="comic-issue-alias-editor">
+          <p className="text-sm font-bold text-[var(--theme-text-primary)]">Alternate number for {issueLabel}</p>
+          <label className="block text-xs text-[var(--theme-text-muted)]" htmlFor={`${baseId}-alias`}>
+            Story-arc or overall number (leave blank to clear)
+          </label>
+          <input
+            id={`${baseId}-alias`}
+            type="text"
+            maxLength={50}
+            value={aliasEditor.draft}
+            onChange={(event) => setAliasEditor({ draft: event.target.value })}
+            disabled={actions.isPending}
+            className="min-h-11 w-full rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-2 text-sm text-[var(--theme-text-primary)]"
+            placeholder="e.g. 100"
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => void handleSaveAlias()} disabled={actions.isPending} className={primaryClass}>
+              {actions.isPending ? 'Saving…' : 'Save alias'}
+            </button>
+            <button type="button" onClick={() => setAliasEditor(null)} disabled={actions.isPending} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-muted)] transition-colors hover:text-[var(--theme-text-primary)] disabled:opacity-50">
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : !editor ? (
         <div className="mt-2 flex flex-wrap items-start gap-1" data-testid="comic-issue-actions">
           {!isOwned ? null : resolvedStatus !== 'read' ? (
             <>
@@ -444,6 +518,21 @@ export function ComicIssueCard({
                 {actions.isPending ? 'Saving…' : 'Mark unread'}
               </button>
             </>
+          )}
+          {isOwned && (
+            <button
+              type="button"
+              onClick={() => {
+                actions.reset()
+                setAliasEditor({ draft: resolvedAlias ?? '' })
+                setEditor(null)
+              }}
+              disabled={actions.isPending}
+              className={secondaryClass}
+              data-testid="comic-issue-edit-alias"
+            >
+              {resolvedAlias ? 'Edit alias' : 'Add alias'}
+            </button>
           )}
         </div>
       ) : (
@@ -491,6 +580,8 @@ export function ComicIssueCard({
             issueId={isOwned ? issueId : null}
             threadTitle={resolvedTitle}
             issueNumber={resolvedNumber}
+            issueNumberAlias={resolvedAlias}
+            providerIssueNumber={resolvedProviderNumber}
             initialIdentity={identityForMapping}
             fetchEnabled={card != null}
             isOwned={isOwned}
@@ -503,10 +594,17 @@ export function ComicIssueCard({
 
       {actions.isError && (
         <p role="alert" className="mt-2 text-sm text-[var(--theme-error)]">
-          {getApiErrorDetail(actions.error) || 'Could not save. Your rating was not recorded — try again.'}
+          {getApiErrorDetail(actions.error)
+            || (aliasEditor
+              ? 'Could not save the alternate number — try again.'
+              : 'Could not save. Your rating was not recorded — try again.')}
           <button
             type="button"
-            onClick={() => (editor ? void handleSave() : void handleMarkUnread())}
+            onClick={() => {
+              if (aliasEditor) void handleSaveAlias()
+              else if (editor) void handleSave()
+              else void handleMarkUnread()
+            }}
             className="ml-2 font-bold underline"
           >
             Retry

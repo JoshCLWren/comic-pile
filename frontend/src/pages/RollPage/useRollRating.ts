@@ -337,6 +337,8 @@ export function useRollRating({
           reading_progress: refreshedThread.reading_progress ?? null,
           issue_id: refreshedThread.issue_id ?? null,
           issue_number: refreshedThread.issue_number ?? null,
+          issue_number_alias: refreshedThread.issue_number_alias ?? null,
+          provider_issue_number: refreshedThread.provider_issue_number ?? null,
           next_issue_id: refreshedThread.next_issue_id ?? null,
           next_issue_number: refreshedThread.next_issue_number ?? null,
           last_rolled_result:

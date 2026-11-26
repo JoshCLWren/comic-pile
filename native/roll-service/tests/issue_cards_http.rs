@@ -387,6 +387,7 @@ async fn authenticated_issue_cards_are_owner_scoped_and_bounded() {
                 "thread_id": hellboy_id,
                 "thread_title": "Hellboy in Hell",
                 "issue_number": "10",
+                "display_issue_number": "10",
                 "status": "read",
                 "read_at": "2026-01-02T03:04:05.123Z",
                 "rating": 4.5,
@@ -400,6 +401,7 @@ async fn authenticated_issue_cards_are_owner_scoped_and_bounded() {
                 "thread_id": hellboy_id,
                 "thread_title": "Hellboy in Hell",
                 "issue_number": "2",
+                "display_issue_number": "2",
                 "status": "unread",
                 "read_at": null,
                 "rating": null,
@@ -413,6 +415,7 @@ async fn authenticated_issue_cards_are_owner_scoped_and_bounded() {
                 "thread_id": hellboy_id,
                 "thread_title": "Hellboy in Hell",
                 "issue_number": "1",
+                "display_issue_number": "1",
                 "status": "unread",
                 "read_at": null,
                 "rating": null,
@@ -426,6 +429,7 @@ async fn authenticated_issue_cards_are_owner_scoped_and_bounded() {
                 "thread_id": bprd_id,
                 "thread_title": "B.P.R.D.",
                 "issue_number": "1",
+                "display_issue_number": "1",
                 "status": "unread",
                 "read_at": null,
                 "rating": null,
@@ -521,5 +525,402 @@ async fn issue_cards_find_cover_in_raw_provider_payload_image() {
     assert_eq!(
         body["items"][0]["cover_image_url"],
         "https://comicvine.gamespot.com/a/uploads/scale_avatar/0/4/5677-5.jpg"
+    );
+}
+
+#[tokio::test]
+async fn issue_cards_expose_alias_and_provider_issue_number() {
+    let (state, token, csrf, owner_id, _guard) = setup_user("alias-cards").await;
+    let conn = state.pool.get().await.unwrap();
+
+    let thread_id: i32 = conn
+        .query_one(
+            "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status, created_at, total_issues, reading_progress)
+             VALUES ($1, 'Saga', 'Comic', 1, 1, 'active', NOW(), 1, 'in_progress') RETURNING id",
+            &[&owner_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let issue_id: i32 = conn
+        .query_one(
+            "INSERT INTO issues (thread_id, issue_number, issue_number_alias, position, status, created_at)
+             VALUES ($1, '3', '100', 1, 'unread', NOW()) RETURNING id",
+            &[&thread_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+
+    let identity_id: i32 = conn
+        .query_one(
+            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, created_at, updated_at)
+             VALUES ('comicvine', 'issue', '4000-999', $1, NOW(), NOW()) RETURNING id",
+            &[&json!({
+                "issue_number": "100",
+                "image_url": "https://example.test/cover.jpg"
+            })],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    conn.execute(
+        "INSERT INTO issue_external_identity_mappings
+            (issue_id, external_identity_id, status, confidence, evidence_json, created_at, updated_at)
+         VALUES ($1, $2, 'confirmed', 1.0, '{}'::jsonb, NOW(), NOW())",
+        &[&issue_id, &identity_id],
+    )
+    .await
+    .unwrap();
+
+    let (status, body) = send(
+        &state,
+        authed(
+            "POST",
+            "/api/v2/issues/cards",
+            &token,
+            &csrf,
+            Some(json!({ "issue_ids": [issue_id] })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let card = &body["items"][0];
+    assert_eq!(card["issue_number"], "3");
+    assert_eq!(card["issue_number_alias"], "100");
+    assert_eq!(card["display_issue_number"], "3 (100)");
+    assert_eq!(card["comicvine_issue_id"], "4000-999");
+    assert_eq!(card["provider_issue_number"], "100");
+    assert_eq!(card["cover_image_url"], "https://example.test/cover.jpg");
+}
+
+#[tokio::test]
+async fn issue_patch_can_set_and_clear_alias() {
+    let (state, token, csrf, owner_id, _guard) = setup_user("alias-patch").await;
+    let conn = state.pool.get().await.unwrap();
+
+    let thread_id: i32 = conn
+        .query_one(
+            "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status, created_at, total_issues, reading_progress)
+             VALUES ($1, 'Saga', 'Comic', 1, 1, 'active', NOW(), 1, 'in_progress') RETURNING id",
+            &[&owner_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let issue_id: i32 = conn
+        .query_one(
+            "INSERT INTO issues (thread_id, issue_number, position, status, created_at)
+             VALUES ($1, '3', 1, 'unread', NOW()) RETURNING id",
+            &[&thread_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+
+    let (status, body) = send(
+        &state,
+        authed(
+            "PATCH",
+            &format!("/api/v2/issues/{issue_id}"),
+            &token,
+            &csrf,
+            Some(json!({
+                "idempotency_key": "alias-set-0001",
+                "source": "direct",
+                "issue_number_alias": "100"
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["issue"]["issue_number_alias"], "100");
+    assert_eq!(body["issue"]["display_issue_number"], "3 (100)");
+
+    let (status, body) = send(
+        &state,
+        authed(
+            "PATCH",
+            &format!("/api/v2/issues/{issue_id}"),
+            &token,
+            &csrf,
+            Some(json!({
+                "idempotency_key": "alias-clear-0001",
+                "source": "direct",
+                "issue_number_alias": null
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert!(body["issue"]["issue_number_alias"].is_null());
+    assert_eq!(body["issue"]["display_issue_number"], "3");
+}
+
+/// A7 synthetic fixture (#4652): a five-part series whose provider numbers are
+/// 1, 2, 100, 101, 102, plus an adjacent arc in a different provider volume.
+/// Authored labels, order, read/rating history and exact provider art must
+/// survive mapping; no extra physical/rollable rows may appear.
+#[tokio::test]
+async fn issue_cards_preserve_mixed_numbering_series_and_adjacent_volume() {
+    let (state, token, csrf, owner_id, _guard) = setup_user("mixed-numbering").await;
+    let conn = state.pool.get().await.unwrap();
+
+    let thread_id: i32 = conn
+        .query_one(
+            "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status, created_at, total_issues, reading_progress)
+             VALUES ($1, 'Saga', 'Comic', 5, 1, 'active', NOW(), 5, 'in_progress') RETURNING id",
+            &[&owner_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let arc_thread_id: i32 = conn
+        .query_one(
+            "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status, created_at, total_issues, reading_progress)
+             VALUES ($1, 'Adjacent arc', 'Comic', 1, 2, 'active', NOW(), 1, 'in_progress') RETURNING id",
+            &[&owner_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+
+    // Set-based fixture: authored numbers stay 1..5 (plus the adjacent 6);
+    // aliases carry the provider's overall numbering 1,2,100,101,102,6.
+    let rows = conn
+        .query(
+            "INSERT INTO issues
+                (thread_id, issue_number, issue_number_alias, position, status, read_at, created_at)
+             SELECT tid, authored, provider, pos,
+                    CASE WHEN provider = '100' THEN 'read' ELSE 'unread' END,
+                    CASE WHEN provider = '100' THEN '2026-01-02T03:04:05.123456Z'::timestamptz ELSE NULL END,
+                    NOW()
+             FROM unnest($1::int[], $2::text[], $3::text[], $4::int[])
+                  AS u(tid, authored, provider, pos)
+             RETURNING id, issue_number, issue_number_alias, position",
+            &[
+                &vec![thread_id, thread_id, thread_id, thread_id, thread_id, arc_thread_id],
+                &vec!["1", "2", "3", "4", "5", "6"],
+                &vec!["1", "2", "100", "101", "102", "6"],
+                &vec![1, 2, 3, 4, 5, 6],
+            ],
+        )
+        .await
+        .unwrap();
+    assert_eq!(rows.len(), 6, "six physical comics must stay six rows");
+
+    // Confirm one exact provider identity per physical issue. The adjacent arc
+    // lives in a different provider volume even though its number (6) is next
+    // to the ongoing series. Never infer a volume from the issue number.
+    conn.execute(
+        "WITH provider AS (
+             SELECT external_id, split_part(external_id, '-', 2) AS provider_number
+             FROM unnest($1::text[]) AS u(external_id)
+         ), identities AS (
+             INSERT INTO external_identities
+                 (provider, entity_type, external_id, metadata_json, created_at, updated_at)
+             SELECT 'comicvine', 'issue', p.external_id,
+                    jsonb_build_object(
+                        'issue_number', p.provider_number,
+                        'image_url', 'https://comicvine.test/' || p.external_id || '.jpg'
+                    ), NOW(), NOW()
+             FROM provider p
+             RETURNING id, external_id
+         )
+         INSERT INTO issue_external_identity_mappings
+             (issue_id, external_identity_id, status, confidence, evidence_json, created_at, updated_at)
+         SELECT i.id, identities.id, 'confirmed', 1.0, '{}'::jsonb, NOW(), NOW()
+         FROM identities
+         JOIN provider p ON p.external_id = identities.external_id
+         JOIN issues i ON i.issue_number_alias = p.provider_number
+           AND i.thread_id IN ($2, $3)",
+        &[
+            &vec![
+                "4050-1", "4050-2", "4050-100", "4050-101", "4050-102", "9000-6",
+            ],
+            &thread_id,
+            &arc_thread_id,
+        ],
+    )
+    .await
+    .unwrap();
+
+    // A preserved rating/read history for the third physical comic.
+    conn.execute(
+        "INSERT INTO events (type, timestamp, rating, issue_id, issue_number, user_id, context)
+         SELECT 'rate', NOW(), 4.5, id, issue_number, $1, '{}'::json
+         FROM issues WHERE thread_id = $2 AND issue_number_alias = '100'",
+        &[&owner_id, &thread_id],
+    )
+    .await
+    .unwrap();
+
+    let requested: Vec<i32> = rows.iter().map(|row| row.get::<_, i32>(0)).rev().collect();
+    let volumes = ["4050", "4050", "4050", "4050", "4050", "9000"];
+    let expected: Vec<(i32, String, String, String, i32)> = rows
+        .iter()
+        .rev()
+        .enumerate()
+        .map(|(index, row)| {
+            let provider = row.get::<_, Option<String>>(2).expect("fixture alias");
+            let external_id = format!("{}-{}", volumes[volumes.len() - 1 - index], provider);
+            (
+                row.get::<_, i32>(0),
+                row.get::<_, String>(1),
+                provider,
+                external_id,
+                row.get::<_, i32>(3),
+            )
+        })
+        .collect();
+    let (status, body) = send(
+        &state,
+        authed(
+            "POST",
+            "/api/v2/issues/cards",
+            &token,
+            &csrf,
+            Some(json!({ "issue_ids": requested })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let items = body["items"].as_array().expect("cards items");
+    assert_eq!(
+        items.len(),
+        6,
+        "every requested physical comic has one card"
+    );
+
+    for (index, (id, authored, provider, external_id, position)) in expected.iter().enumerate() {
+        let card = &items[index];
+        assert_eq!(card["issue_id"], *id);
+        assert_eq!(
+            card["issue_number"].as_str(),
+            Some(authored.as_str()),
+            "authored label must not be renumbered"
+        );
+        assert_eq!(card["issue_number_alias"].as_str(), Some(provider.as_str()));
+        let expected_display = if provider == authored {
+            authored.clone()
+        } else {
+            format!("{authored} ({provider})")
+        };
+        assert_eq!(
+            card["display_issue_number"].as_str(),
+            Some(expected_display.as_str())
+        );
+        assert!(*position > 0, "authored order is preserved");
+        assert_eq!(card["has_confirmed_identity"], true);
+        assert_eq!(card["mapping_state"].as_str(), Some("confirmed"));
+        assert_eq!(
+            card["comicvine_issue_id"].as_str(),
+            Some(external_id.as_str())
+        );
+        assert_eq!(
+            card["provider_issue_number"].as_str(),
+            Some(provider.as_str())
+        );
+        assert_eq!(
+            card["cover_image_url"],
+            format!("https://comicvine.test/{external_id}.jpg"),
+            "exact provider art must be preserved"
+        );
+        if provider == "100" {
+            assert_eq!(card["status"], "read");
+            assert_eq!(card["rating"], 4.5);
+        }
+    }
+    assert_eq!(
+        card_count(&conn, &[thread_id, arc_thread_id]).await,
+        6,
+        "mapping must not create another rollable row"
+    );
+}
+
+async fn card_count(conn: &tokio_postgres::Client, threads: &[i32]) -> i64 {
+    conn.query_one(
+        "SELECT count(*) FROM issues WHERE thread_id = ANY($1)",
+        &[&threads],
+    )
+    .await
+    .unwrap()
+    .get(0)
+}
+
+#[tokio::test]
+async fn alias_only_patch_replays_identical_key_and_rejects_a_changed_payload() {
+    let (state, token, csrf, owner_id, _guard) = setup_user("alias-retry").await;
+    let conn = state.pool.get().await.unwrap();
+    let thread_id: i32 = conn
+        .query_one(
+            "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status, created_at, total_issues, reading_progress)
+             VALUES ($1, 'Saga', 'Comic', 1, 1, 'active', NOW(), 1, 'in_progress') RETURNING id",
+            &[&owner_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let issue_id: i32 = conn
+        .query_one(
+            "INSERT INTO issues (thread_id, issue_number, position, status, created_at)
+             VALUES ($1, '3', 1, 'unread', NOW()) RETURNING id",
+            &[&thread_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let body = json!({
+        "idempotency_key": "alias-retry-0001",
+        "source": "direct",
+        "issue_number_alias": "100"
+    });
+    let (status, first) = send(
+        &state,
+        authed(
+            "PATCH",
+            &format!("/api/v2/issues/{issue_id}"),
+            &token,
+            &csrf,
+            Some(body.clone()),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{first:?}");
+    assert_eq!(first["replayed"], false);
+
+    let (status, replay) = send(
+        &state,
+        authed(
+            "PATCH",
+            &format!("/api/v2/issues/{issue_id}"),
+            &token,
+            &csrf,
+            Some(body),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{replay:?}");
+    assert_eq!(replay["replayed"], true, "an ambiguous retry is idempotent");
+
+    let (status, conflict) = send(
+        &state,
+        authed(
+            "PATCH",
+            &format!("/api/v2/issues/{issue_id}"),
+            &token,
+            &csrf,
+            Some(json!({
+                "idempotency_key": "alias-retry-0001",
+                "source": "direct",
+                "issue_number_alias": "101"
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{conflict:?}");
+    assert_eq!(
+        first["issue"]["issue_number_alias"], "100",
+        "a conflicting stale write must not change the stored alias"
     );
 }

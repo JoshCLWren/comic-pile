@@ -2330,3 +2330,66 @@ async fn roll_unsnooze_of_a_removed_series_removes_only_the_snooze() {
     assert!(snoozed_ids.is_empty());
     assert_eq!(die, die_before);
 }
+
+#[tokio::test]
+async fn bootstrap_active_thread_exposes_authored_alias_and_confirmed_provider_number() {
+    let (state, token, csrf, user_id, _guard) = setup_user("tord-alias").await;
+    let conn = state.pool.get().await.unwrap();
+    conn.execute(
+        "INSERT INTO sessions (user_id, started_at, start_die) VALUES ($1, NOW(), 6)",
+        &[&user_id],
+    )
+    .await
+    .unwrap();
+
+    let pick = thread(&conn, user_id, "Mixed numbering").await;
+    let issue_id = issue(&conn, pick, "3", 1, "unread").await;
+    conn.execute(
+        "UPDATE issues SET issue_number_alias = '100' WHERE id = $1",
+        &[&issue_id],
+    )
+    .await
+    .unwrap();
+    frontier(&conn, pick, issue_id).await;
+    let identity_id: i32 = conn
+        .query_one(
+            "INSERT INTO external_identities
+                (provider, entity_type, external_id, metadata_json, created_at, updated_at)
+             VALUES ('comicvine', 'issue', '4050-101',
+                     '{\"issue_number\": \"101\", \"image_url\": \"https://comicvine.test/4050-101.jpg\"}'::jsonb,
+                     NOW(), NOW()) RETURNING id",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    conn.execute(
+        "INSERT INTO issue_external_identity_mappings
+            (issue_id, external_identity_id, status, confidence, evidence_json, created_at, updated_at)
+         VALUES ($1, $2, 'confirmed', 1.0, '{}'::jsonb, NOW(), NOW())",
+        &[&issue_id, &identity_id],
+    )
+    .await
+    .unwrap();
+
+    let (offer_status, offer_body) = send(
+        &state,
+        authed(
+            "POST",
+            "/api/v2/roll/offer",
+            &token,
+            &csrf,
+            Some(json!({ "idempotency_key": "roll-offer-alias-001", "snoozed_thread_ids": [] })),
+        ),
+    )
+    .await;
+    assert_eq!(offer_status, StatusCode::OK, "{offer_body:?}");
+
+    let (status, body) = send(&state, get("/api/v2/roll/bootstrap", &token, &csrf)).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let active = body["active_thread"].as_object().expect("pending thread");
+    assert_eq!(active["id"].as_i64(), Some(pick as i64), "{body:?}");
+    assert_eq!(active["issue_number"].as_str(), Some("3"));
+    assert_eq!(active["issue_number_alias"].as_str(), Some("100"));
+    assert_eq!(active["provider_issue_number"].as_str(), Some("101"));
+}

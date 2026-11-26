@@ -410,6 +410,19 @@ describe('ComicVineSearchDialog issue #1695 fixes', () => {
     )
   })
 
+  it('shows authored, alternate and provider numbers in the search target (#4652)', () => {
+    render(
+      <ComicVineSearchDialog
+        {...defaultProps({ issueNumber: '3', issueNumberAlias: '100', providerIssueNumber: '101' })}
+      />,
+    )
+    expect(
+      screen.getByText((_, element) =>
+        element?.tagName === 'SPAN'
+        && element.textContent === 'Stormwatch Vol. 1 #3 (100) [CV #101]'),
+    ).toBeInTheDocument()
+  })
+
   it('shows error when loading series issues fails', async () => {
     getSeriesIssuesSpy.mockRejectedValue(new Error('Network error'))
     render(<ComicVineSearchDialog {...defaultProps()} />)

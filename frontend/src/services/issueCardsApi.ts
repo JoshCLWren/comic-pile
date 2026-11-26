@@ -1,7 +1,14 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
 import type { components } from '../generated/openapi'
 
-export type IssueCard = components['schemas']['IssueCard']
+export type IssueCard = components['schemas']['IssueCard'] & {
+  /** Alternate overall/story number for the same physical comic (#4652). */
+  issue_number_alias?: string | null
+  /** Authored number with alias when distinct, e.g. "23 (#2)". */
+  display_issue_number?: string
+  /** Provider's issue number from the confirmed identity, when known. */
+  provider_issue_number?: string | null
+}
 export type IssueReadRateResponse = components['schemas']['IssueReadRateResponse']
 
 /** Server-bound batch ceiling for one `POST /v2/issues/cards` call (#4443). */
@@ -25,6 +32,10 @@ export interface DirectIssueMutation {
   status?: 'read' | 'unread' | null
   /** Effective rating in 0.5-point steps. Omit to keep the stored rating. */
   rating?: number | null
+  /** Alternate overall/story number (#4652). Omit to leave unchanged; null/empty to clear. */
+  issueNumberAlias?: string | null
+  /** True when issueNumberAlias is intentionally being set/cleared. */
+  issueNumberAliasProvided?: boolean
   /** Client-generated retry key; required by the native contract. */
   idempotencyKey: string
 }
@@ -72,12 +83,13 @@ export function createIssueCardsApi(client: HttpClient) {
      * out-of-Roll issues remain writable by their owner.
      */
     patchIssue: async (issueId: number, mutation: DirectIssueMutation): Promise<IssueReadRateResponse> => {
-      const body: components['schemas']['IssueReadRateRequest'] = {
+      const body: components['schemas']['IssueReadRateRequest'] & { issue_number_alias?: string | null } = {
         idempotency_key: mutation.idempotencyKey,
         source: 'direct',
       }
       if (mutation.status != null) body.status = mutation.status
       if (mutation.rating != null) body.rating = mutation.rating
+      if (mutation.issueNumberAliasProvided) body.issue_number_alias = mutation.issueNumberAlias ?? null
       return client.patch<IssueReadRateResponse, typeof body>(
         `/v2/issues/${encodeURIComponent(String(issueId))}`,
         body,

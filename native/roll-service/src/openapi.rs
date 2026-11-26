@@ -714,6 +714,8 @@ mod tests {
                 "tags",
                 "issue_id",
                 "issue_number",
+                "issue_number_alias",
+                "provider_issue_number",
                 "next_issue_id",
                 "next_issue_number",
             ],
