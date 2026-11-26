@@ -1,10 +1,11 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const srcRoot = resolve(__dirname, '..')
 
-// Only shipped source is scanned. Unit tests and E2E specs intentionally name
+// Only shipped source is scanned, recursively: nested page/component folders
+// are where most callers live. Unit tests and E2E specs intentionally name
 // retired paths to assert their absence; generated artifacts are validated by
 // generated-v1-only-paths.test.ts.
 const LIVE_SOURCE_DIRS = [
