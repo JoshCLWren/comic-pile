@@ -339,18 +339,27 @@ pub(crate) async fn cards(
     }
     let rows = connection
         .query(
-            "SELECT i.id, i.thread_id, t.title, i.issue_number, i.status,
+            "SELECT i.id, i.thread_id, t.title, i.issue_number,
+                NULLIF(BTRIM(i.issue_number_alias), '') AS issue_number_alias,
+                i.status,
                 to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'),
                 (SELECT e.rating FROM events e WHERE e.user_id=$1 AND e.issue_id=i.id
                     AND e.type='rate' AND e.rating IS NOT NULL
                     AND e.context->>'undone_by_snapshot_id' IS NULL
                     ORDER BY e.timestamp DESC, e.id DESC LIMIT 1),
                 COALESCE(mapping.status, 'unmapped'), mapping.external_id,
+                mapping.provider_issue_number,
                 mapping.cover_url
          FROM issues i
          JOIN threads t ON t.id=i.thread_id
          LEFT JOIN LATERAL (
              SELECT m.status, x.external_id,
+                 CASE WHEN m.status='confirmed' THEN
+                     NULLIF(BTRIM(COALESCE(
+                         x.metadata_json->>'issue_number',
+                         x.metadata_json#>>'{raw_provider_payload,issue_number}'
+                     )), '')
+                 ELSE NULL END AS provider_issue_number,
                  CASE WHEN m.status='confirmed' THEN
                      COALESCE(
                          NULLIF(BTRIM(x.metadata_json->>'image_url'), ''),
@@ -842,10 +851,23 @@ pub(crate) async fn persist(
     .await
     .map_err(db::query_error)?;
 
+    let requested_alias = match &request.issue_number_alias {
+        Some(Some(value)) => {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                Some(None)
+            } else {
+                Some(Some(trimmed.to_string()))
+            }
+        }
+        Some(None) => Some(None),
+        None => None,
+    };
     let payload = json!({
         "issue_id": issue_id,
         "status": request.status,
         "rating": request.rating,
+        "issue_number_alias": requested_alias,
         "source": source,
     });
     // Lock the owner thread before the issue; owner transfers and concurrent
@@ -922,7 +944,8 @@ pub(crate) async fn persist(
 
     let issue = tx
         .query_one(
-            "SELECT status, issue_number, position, read_at::text, catalog_issue_id
+            "SELECT status, issue_number, position, read_at::text, catalog_issue_id,
+                    NULLIF(BTRIM(issue_number_alias), '')
              FROM issues
              WHERE id=$1 AND thread_id=$2 FOR UPDATE",
             &[&issue_id, &thread_id],
@@ -931,9 +954,11 @@ pub(crate) async fn persist(
         .map_err(db::query_error)?;
     let old_status: String = issue.get(0);
     let issue_number: String = issue.get(1);
+    let old_alias: Option<String> = issue.get(5);
     let issue_state = json!({
         "id": issue_id,
         "number": issue_number,
+        "issue_number_alias": old_alias,
         "status": old_status,
         "read_at": issue.get::<_, Option<String>>(3),
         "position": issue.get::<_, i32>(2),
