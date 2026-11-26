@@ -9,10 +9,7 @@ test('account switching isolates inbox data and stops signed-out inbox requests'
   let unsignedInboxRequests = 0
   let refreshRequests = 0
   const crashes: string[] = []
-  page.on('pageerror', error => {
-    crashes.push(error.message)
-    console.log('DEBUG_PAGEERROR', error.message, 'CAUSE', (error as Error & { cause?: unknown }).cause)
-  })
+  page.on('pageerror', error => crashes.push(error.message))
   await page.route('**/api/**', async route => {
     const request = route.request()
     const path = new URL(request.url()).pathname
@@ -77,12 +74,11 @@ test('account switching isolates inbox data and stops signed-out inbox requests'
     await page.getByRole('button', { name: 'Sign In', exact: true }).click()
   }
   async function openInbox(username: string) {
-    // The nav re-renders on auth refresh, so a click on its link races node
-    // replacement (Playwright click times out on a detached node; a synthetic
-    // click can land on a node React is about to unmount and crash the commit).
-    // Route-level navigation keeps the session boundary assertions intact
-    // without depending on the transient nav DOM node.
-    await page.goto('/identity-inbox', { waitUntil: 'domcontentloaded' })
+    const nav = page.getByLabel('Desktop navigation')
+    await expect(nav).toBeVisible()
+    // The nav re-renders on auth refresh; a synthetic click avoids Playwright
+    // retrying an actionable click against a detached link node.
+    await nav.getByRole('link', { name: 'Identity Inbox page' }).first().click()
     await expect(page.getByText(username + ' private comic', { exact: true })).toBeVisible()
   }
 
