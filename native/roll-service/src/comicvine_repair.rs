@@ -1321,8 +1321,23 @@ async fn drain_authorized(
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
     }
-    report.queue_empty =
-        report.claimed < BATCH_LIMIT as u32 && !queue_has_non_terminal_work(state).await?;
+    // Bounded orphan reconciliation (#5695): confirmed identities with missing
+    // or stale refresh rows are discovered and enqueued so recovery does not
+    // depend on remapping or a manual per-issue refresh. Keep this small so the
+    // drain's primary claim/process budget stays predictable.
+    let reconcile = run_backfill(
+        state,
+        BackfillQuery {
+            dry_run: false,
+            limit: 100,
+            after_id: 0,
+        },
+    )
+    .await?;
+    report.reconciled = reconcile.enqueued;
+    report.queue_empty = report.claimed < BATCH_LIMIT as u32
+        && report.reconciled == 0
+        && !queue_has_non_terminal_work(state).await?;
     Ok(Json(report))
 }
 
@@ -1375,6 +1390,15 @@ async fn backfill_authorized(
     query: BackfillQuery,
 ) -> Result<Json<BackfillReport>, ApiError> {
     authorize(headers, expected)?;
+    Ok(Json(run_backfill(state, query).await?))
+}
+
+/// Bounded reconciliation for confirmed ComicVine identities that need deep
+/// metadata but have no durable refresh row, or whose terminal row is stale.
+/// Used by the CRON-authenticated backfill endpoint and, in a small bounded
+/// pass, by drain so orphaned confirmed identities recover without remapping
+/// (#5695).
+async fn run_backfill(state: &AppState, query: BackfillQuery) -> Result<BackfillReport, ApiError> {
     let limit = query.limit.clamp(1, 2000);
     let mut connection = db::checkout(state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
@@ -1509,7 +1533,7 @@ async fn backfill_authorized(
     if report.enqueued > 0 {
         notify_repair_enqueued(state).await;
     }
-    Ok(Json(report))
+    Ok(report)
 }
 
 #[cfg(test)]
