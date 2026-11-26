@@ -652,3 +652,181 @@ async fn issue_patch_can_set_and_clear_alias() {
     assert!(body["issue"]["issue_number_alias"].is_null());
     assert_eq!(body["issue"]["display_issue_number"], "3");
 }
+
+/// A7 synthetic fixture (#4652): a five-part series whose provider numbers are
+/// 1, 2, 100, 101, 102, plus an adjacent arc in a different provider volume.
+/// Authored labels, order, read/rating history and exact provider art must
+/// survive mapping; no extra physical/rollable rows may appear.
+#[tokio::test]
+async fn issue_cards_preserve_mixed_numbering_series_and_adjacent_volume() {
+    let (state, token, csrf, owner_id, _guard) = setup_user("mixed-numbering").await;
+    let conn = state.pool.get().await.unwrap();
+
+    let thread_id: i32 = conn
+        .query_one(
+            "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status, created_at, total_issues, reading_progress)
+             VALUES ($1, 'Saga', 'Comic', 5, 1, 'active', NOW(), 5, 'in_progress') RETURNING id",
+            &[&owner_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let arc_thread_id: i32 = conn
+        .query_one(
+            "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status, created_at, total_issues, reading_progress)
+             VALUES ($1, 'Adjacent arc', 'Comic', 1, 2, 'active', NOW(), 1, 'in_progress') RETURNING id",
+            &[&owner_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+
+    // Set-based fixture: authored numbers stay 1..5 (plus the adjacent 6);
+    // aliases carry the provider's overall numbering 1,2,100,101,102,6.
+    let rows = conn
+        .query(
+            "INSERT INTO issues
+                (thread_id, issue_number, issue_number_alias, position, status, read_at, created_at)
+             SELECT tid, authored, provider, pos,
+                    CASE WHEN provider = '100' THEN 'read' ELSE 'unread' END,
+                    CASE WHEN provider = '100' THEN '2026-01-02T03:04:05.123456Z'::timestamptz ELSE NULL END,
+                    NOW()
+             FROM unnest($1::int[], $2::text[], $3::text[], $4::int[])
+                  AS u(tid, authored, provider, pos)
+             RETURNING id, issue_number, issue_number_alias, position",
+            &[
+                &vec![thread_id, thread_id, thread_id, thread_id, thread_id, arc_thread_id],
+                &vec!["1", "2", "3", "4", "5", "6"],
+                &vec!["1", "2", "100", "101", "102", "6"],
+                &vec![1, 2, 3, 4, 5, 6],
+            ],
+        )
+        .await
+        .unwrap();
+    assert_eq!(rows.len(), 6, "six physical comics must stay six rows");
+
+    // Confirm one exact provider identity per physical issue. The adjacent arc
+    // lives in a different provider volume even though its number (6) is next
+    // to the ongoing series. Never infer a volume from the issue number.
+    conn.execute(
+        "WITH provider AS (
+             SELECT external_id, split_part(external_id, '-', 2) AS provider_number
+             FROM unnest($1::text[]) AS u(external_id)
+         ), identities AS (
+             INSERT INTO external_identities
+                 (provider, entity_type, external_id, metadata_json, created_at, updated_at)
+             SELECT 'comicvine', 'issue', p.external_id,
+                    jsonb_build_object(
+                        'issue_number', p.provider_number,
+                        'image_url', 'https://comicvine.test/' || p.external_id || '.jpg'
+                    ), NOW(), NOW()
+             FROM provider p
+             RETURNING id, external_id
+         )
+         INSERT INTO issue_external_identity_mappings
+             (issue_id, external_identity_id, status, confidence, evidence_json, created_at, updated_at)
+         SELECT i.id, identities.id, 'confirmed', 1.0, '{}'::jsonb, NOW(), NOW()
+         FROM identities
+         JOIN provider p ON p.external_id = identities.external_id
+         JOIN issues i ON i.issue_number_alias = p.provider_number
+           AND i.thread_id IN ($2, $3)",
+        &[
+            &vec![
+                "4050-1", "4050-2", "4050-100", "4050-101", "4050-102", "9000-6",
+            ],
+            &thread_id,
+            &arc_thread_id,
+        ],
+    )
+    .await
+    .unwrap();
+
+    // A preserved rating/read history for the third physical comic.
+    conn.execute(
+        "INSERT INTO events (type, timestamp, rating, issue_id, issue_number, user_id, context)
+         SELECT 'rate', NOW(), 4.5, id, issue_number, $1, '{}'::json
+         FROM issues WHERE thread_id = $2 AND issue_number_alias = '100'",
+        &[&owner_id, &thread_id],
+    )
+    .await
+    .unwrap();
+
+    let requested: Vec<i32> = rows
+        .iter()
+        .map(|row| row.get::<_, i32>(0))
+        .rev()
+        .collect();
+    let volumes = ["4050", "4050", "4050", "4050", "4050", "9000"];
+    let expected: Vec<(i32, String, String, String, i32)> = rows
+        .iter()
+        .rev()
+        .enumerate()
+        .map(|(index, row)| {
+            let provider = row.get::<_, Option<String>>(2).expect("fixture alias");
+            let external_id = format!("{}-{}", volumes[volumes.len() - 1 - index], provider);
+            (
+                row.get::<_, i32>(0),
+                row.get::<_, String>(1),
+                provider,
+                external_id,
+                row.get::<_, i32>(3),
+            )
+        })
+        .collect();
+    let (status, body) = send(
+        &state,
+        authed(
+            "POST",
+            "/api/v2/issues/cards",
+            &token,
+            &csrf,
+            Some(json!({ "issue_ids": requested })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let items = body["items"].as_array().expect("cards items");
+    assert_eq!(items.len(), 6, "every requested physical comic has one card");
+
+    for (index, (id, authored, provider, external_id, position)) in expected.iter().enumerate() {
+        let card = &items[index];
+        assert_eq!(card["issue_id"], *id);
+        assert_eq!(card["issue_number"], authored, "authored label must not be renumbered");
+        assert_eq!(card["issue_number_alias"], *provider);
+        let expected_display = if provider == authored {
+            authored.clone()
+        } else {
+            format!("{authored} ({provider})")
+        };
+        assert_eq!(card["display_issue_number"], expected_display);
+        assert!(*position > 0, "authored order is preserved");
+        assert_eq!(card["has_confirmed_identity"], true);
+        assert_eq!(card["mapping_state"], "confirmed");
+        assert_eq!(card["comicvine_issue_id"], *external_id);
+        assert_eq!(card["provider_issue_number"], *provider);
+        assert_eq!(
+            card["cover_image_url"],
+            format!("https://comicvine.test/{external_id}.jpg"),
+            "exact provider art must be preserved"
+        );
+        if provider == "100" {
+            assert_eq!(card["status"], "read");
+            assert_eq!(card["rating"], 4.5);
+        }
+    }
+    assert_eq!(
+        card_count(&conn, &[thread_id, arc_thread_id]).await,
+        6,
+        "mapping must not create another rollable row"
+    );
+}
+
+async fn card_count(conn: &tokio_postgres::Client, threads: &[i32]) -> i64 {
+    conn.query_one(
+        "SELECT count(*) FROM issues WHERE thread_id = ANY($1)",
+        &[&threads],
+    )
+    .await
+    .unwrap()
+    .get(0)
+}
