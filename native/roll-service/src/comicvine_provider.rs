@@ -787,10 +787,6 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
         if !has {
             preserve_cached_credits(&mut patch, cached.as_ref());
         }
-        let effective = has
-            || patch["creator_credits"]
-                .as_array()
-                .is_some_and(|v| !v.is_empty());
         let Ok(json_patch) = serde_json::to_string(&patch) else {
             return;
         };
@@ -1230,7 +1226,6 @@ mod tests {
             )
             .await
             .expect("seed mapping");
-        connection
         drop(Object::take(connection));
         identity_id
     }
