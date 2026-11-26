@@ -1513,8 +1513,9 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
         ("rejected".to_owned(), Some("wrong volume".to_owned()))
     );
 
-    // Manual refresh recovers an already-confirmed identity without remapping:
-    // a failed job becomes immediately due with a fresh bounded attempt budget.
+    // Explicit Retry is a bounded synchronous attempt for the currently
+    // confirmed identity. Without a provider key it returns a truthful outcome
+    // and never reopens, enqueues, claims or dispatches a background repair row.
     conn.execute(
         "UPDATE comicvine_metadata_refresh_requests r \
          SET state = 'failed', attempts = 3, next_attempt_at = now() + interval '1 day', \
@@ -1528,74 +1529,33 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
     .unwrap();
     let (status, body) = send(
         &state,
-        call(
-            "POST",
-            &format!("{base}/metadata:refresh"),
-            &token,
-            &csrf,
-            None,
-        ),
+        call("POST", &format!("{base}/metadata:refresh"), &token, &csrf, None),
     )
     .await;
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(
         body,
-        json!({"issue_id": i, "refreshed": true, "comicvine_issue_id": "2222"})
+        json!({
+            "issue_id": i,
+            "refreshed": false,
+            "comicvine_issue_id": "2222",
+            "outcome": "provider_not_configured",
+            "retry_after_seconds": null,
+        })
     );
-    let recovered = conn
-        .query_one(
-            "SELECT r.state, r.attempts, r.last_error, r.lease_expires_at, \
-                    r.completed_at, r.next_attempt_at <= now() \
-             FROM comicvine_metadata_refresh_requests r \
-             JOIN external_identities e ON e.id = r.external_identity_id \
-             WHERE e.external_id = '2222'",
-            &[],
-        )
-        .await
-        .unwrap();
-    assert_eq!(recovered.get::<_, String>(0), "pending");
-    assert_eq!(recovered.get::<_, i32>(1), 0);
-    assert_eq!(recovered.get::<_, Option<String>>(2), None);
-    assert!(recovered
-        .get::<_, Option<chrono::DateTime<chrono::Utc>>>(3)
-        .is_none());
-    assert!(recovered
-        .get::<_, Option<chrono::DateTime<chrono::Utc>>>(4)
-        .is_none());
-    assert!(recovered.get::<_, bool>(5));
-
-    // The same recovery inserts durable work if an old identity has no row.
-    conn.execute(
-        "DELETE FROM comicvine_metadata_refresh_requests r \
-         USING external_identities e \
-         WHERE e.id = r.external_identity_id AND e.external_id = '2222'",
-        &[],
-    )
-    .await
-    .unwrap();
-    let (status, _) = send(
-        &state,
-        call(
-            "POST",
-            &format!("{base}/metadata:refresh"),
-            &token,
-            &csrf,
-            None,
-        ),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
-    let reinserted: i64 = conn
-        .query_one(
-            "SELECT count(*) FROM comicvine_metadata_refresh_requests r \
-             JOIN external_identities e ON e.id = r.external_identity_id \
-             WHERE e.external_id = '2222' AND r.state = 'pending' AND r.attempts = 0",
-            &[],
-        )
-        .await
-        .unwrap()
-        .get(0);
-    assert_eq!(reinserted, 1);
+    let ledger: (String, i32) = {
+        let row = conn
+            .query_one(
+                "SELECT r.state, r.attempts FROM comicvine_metadata_refresh_requests r \
+                 JOIN external_identities e ON e.id = r.external_identity_id \
+                 WHERE e.external_id = '2222'",
+                &[],
+            )
+            .await
+            .unwrap();
+        (row.get(0), row.get(1))
+    };
+    assert_eq!(ledger, ("failed".to_owned(), 3), "retry must not touch the ledger");
 
     // Remove: mapping becomes unresolved with evidence and confidence cleared.
     let (status, body) = send(
@@ -1620,7 +1580,13 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         body,
-        json!({"issue_id": i, "refreshed": false, "comicvine_issue_id": null})
+        json!({
+            "issue_id": i,
+            "refreshed": false,
+            "comicvine_issue_id": null,
+            "outcome": "not_confirmed",
+            "retry_after_seconds": null,
+        })
     );
 
     // Replace with the default reason when none is supplied.
@@ -2162,7 +2128,7 @@ async fn identity_writers_take_the_queue_lock_before_row_locks() {
     assert_eq!(body["has_confirmed_identity"], false);
 }
 #[tokio::test]
-async fn confirmation_reopens_finished_refresh_jobs_instead_of_failing() {
+async fn confirmation_does_not_reopen_finished_refresh_jobs() {
     let (state, token, csrf, user_id, _guard) = setup_user("cvv2-refresh").await;
     set_key(false);
     for (n, finished) in ["failed", "completed", "no_credits"]
@@ -2216,10 +2182,12 @@ async fn confirmation_reopens_finished_refresh_jobs_instead_of_failing() {
             )
             .await
             .unwrap();
-        assert_eq!(row.get::<_, String>(0), "pending", "{finished}");
-        assert_eq!(row.get::<_, i32>(1), 0);
-        assert_eq!(row.get::<_, Option<String>>(2), None);
-        assert!(row.get::<_, bool>(3));
+        // A synchronous map never enqueues or reopens ledger work, even when a
+        // terminal row from an earlier drain still exists for this identity.
+        assert_eq!(row.get::<_, String>(0), finished, "{finished}");
+        assert_eq!(row.get::<_, i32>(1), 4);
+        assert_eq!(row.get::<_, Option<String>>(2), Some("old".to_owned()));
+        assert!(!row.get::<_, bool>(3));
     }
 }
 
