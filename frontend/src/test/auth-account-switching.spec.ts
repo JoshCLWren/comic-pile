@@ -76,6 +76,9 @@ test('account switching isolates inbox data and stops signed-out inbox requests'
   async function openInbox(username: string) {
     const nav = page.getByLabel('Desktop navigation')
     await expect(nav).toBeVisible()
+    // Let the post-login shell (auth validation and deferred queries) settle
+    // before routing; navigating mid-commit races the nav replacement.
+    await page.waitForLoadState('networkidle')
     // The nav re-renders on auth refresh; a synthetic click avoids Playwright
     // retrying an actionable click against a detached link node.
     await nav.getByRole('link', { name: 'Identity Inbox page' }).first().dispatchEvent('click')
