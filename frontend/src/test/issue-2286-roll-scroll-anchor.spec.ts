@@ -63,10 +63,14 @@ test.describe('issue #2286: fresh roll anchors the viewport to the rating surfac
       // the app scroller returned to the top (not that the surface box has a
       // zero viewport offset). This is exactly the offset the old bug kept.
       await page.waitForFunction(() => {
-        const root = document.getElementById('root')
         const top = document.querySelector('[data-testid="rating-view-top"]')
-        if (!root || !top || top.getBoundingClientRect().height === 0) return false
-        return root.scrollTop <= 8
+        if (!top || top.getBoundingClientRect().height === 0) return false
+        // The shipped shell keeps the sticky header above the rating surface,
+        // so the surface start lands within the header chrome band rather than
+        // at an absolute zero offset. The regression being guarded is a large
+        // negative offset (the stale pre-roll scroll position).
+        const offset = top.getBoundingClientRect().top
+        return offset >= -8 && offset <= 200
       }, undefined, { timeout: 10000 })
 
       // The rolled comic region is the rating surface's first content and is

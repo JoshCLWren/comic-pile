@@ -217,6 +217,11 @@ test.describe('Roll pointer target sizes (#1885)', () => {
     await page.goto('/', { waitUntil: 'domcontentloaded' })
     await expect(page.locator('#rating-input')).toBeVisible()
 
+    // Connected-series edge endpoints live behind the Reading Context
+    // disclosure; open it before measuring the live targets.
+    await page.getByTestId('reading-context-button').click()
+    await expect(page.getByTestId('reading-context-content')).toBeVisible()
+
     // Edge endpoint buttons previously rendered as bare ~12px text strips.
     expectMinimumTargets(
       await measureVisibleBoxes(page, 'button[aria-label^="Open series for"]'),

@@ -168,7 +168,7 @@ async function assertExactlyOneInstancePerRegion(page: Page): Promise<void> {
 
   // The active regions must keep their accessible names and remain reachable
   // in the focus order rather than hiding behind inert duplicates.
-  await expect(page.locator('#rating-heading')).toHaveCount(1);
+  await expect(page.getByTestId('decision-card')).toHaveCount(1);
   await expect(page.locator('#rating-input')).toBeVisible();
   await page.locator('#rating-input').focus();
   await expect(page.locator('#rating-input')).toBeFocused();
