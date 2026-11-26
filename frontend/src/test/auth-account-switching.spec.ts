@@ -77,9 +77,12 @@ test('account switching isolates inbox data and stops signed-out inbox requests'
     await page.getByRole('button', { name: 'Sign In', exact: true }).click()
   }
   async function openInbox(username: string) {
-    const nav = page.getByLabel('Desktop navigation')
-    await expect(nav).toBeVisible()
-    await nav.getByRole('link', { name: 'Identity Inbox page' }).first().click()
+    // The nav re-renders on auth refresh, so a click on its link races node
+    // replacement (Playwright click times out on a detached node; a synthetic
+    // click can land on a node React is about to unmount and crash the commit).
+    // Route-level navigation keeps the session boundary assertions intact
+    // without depending on the transient nav DOM node.
+    await page.goto('/identity-inbox', { waitUntil: 'domcontentloaded' })
     await expect(page.getByText(username + ' private comic', { exact: true })).toBeVisible()
   }
 
