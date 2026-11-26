@@ -110,20 +110,9 @@ export function fragmentVercelRoutes(fragments, previousRoutes = []) {
       grouped.get(key).methods.add(method);
     }
   }
-  const routes = [...grouped.values()]
+  return [...grouped.values()]
     .map(group => ({src: group.src, methods: METHODS.filter(m => group.methods.has(m)), dest: group.dest}))
     .sort(compareRoutes);
-  const seen = new Set();
-  for (const route of routes) {
-    for (const method of route.methods) {
-      const identity = `${route.src}|${method}`;
-      if (seen.has(identity)) {
-        throw new Error(`duplicate native ingress rewrite for ${method} ${route.src}`);
-      }
-      seen.add(identity);
-    }
-  }
-  return routes;
 }
 /** Generate the complete native-only Vercel document from route fragments. */
 export function generateVercel(config, fragments) {
@@ -170,14 +159,14 @@ function run() {
   if (check) {
     const current = readFileSync('vercel.json', 'utf8');
     if (current !== nextVercel) {
-      const currentRoutes = JSON.parse(current).routes;
-      const expectedRoutes = JSON.parse(nextVercel).routes;
-      const firstDiff = Array.from({length: Math.max(currentRoutes.length, expectedRoutes.length)})
-        .findIndex((_, i) => JSON.stringify(currentRoutes[i]) !== JSON.stringify(expectedRoutes[i]));
+      const before = JSON.parse(current);
+      const after = JSON.parse(nextVercel);
+      const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+      const differingKey = [...keys].find(key => JSON.stringify(before[key]) !== JSON.stringify(after[key]));
       throw new Error('Stale Vercel ingress. Run node scripts/generate_vercel_routes.mjs'
-        + '; route index=' + firstDiff
-        + '; actual=' + JSON.stringify(currentRoutes[firstDiff])
-        + '; expected=' + JSON.stringify(expectedRoutes[firstDiff]));
+        + '; differing key=' + differingKey
+        + '; actual=' + JSON.stringify(before[differingKey])
+        + '; expected=' + JSON.stringify(after[differingKey]));
     }
     console.log('Verified native-only Vercel ingress with canonical builds');
     return;

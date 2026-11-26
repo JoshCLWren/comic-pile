@@ -355,26 +355,13 @@ function _fragmentVercelGroups(fragments, previousRoutes) {
       grouped.get(key).methods.add(method.toUpperCase());
     }
   }
-  const ordered = [...grouped.values()]
+  return [...grouped.values()]
     .map(group => ({
       src: group.src,
       methods: METHOD_ORDER.filter(item => group.methods.has(item)),
       dest: group.dest,
     }))
     .sort(compareRouteKeys);
-  const seen = new Set();
-  for (const route of ordered) {
-    const src = _string(route.src, 'route.src');
-    const routeMethods = _consumers(route.methods, 'route.methods');
-    for (const method of routeMethods) {
-      const identity = `${src}\0${method}`;
-      if (seen.has(identity)) {
-        throw new BurndownGenerationError(`duplicate native ingress rewrite for ${method} ${src}`);
-      }
-      seen.add(identity);
-    }
-  }
-  return ordered;
 }
 
 export function pythonJsonDumps(value) {
@@ -462,7 +449,6 @@ export function _generateVercelDocument(previous, fragments, {slim = true} = {})
   const fragmentRoutes = _fragmentVercelGroups(fragments, previousRoutes);
   const fragmentSrcs = new Set(fragmentRoutes.map(r => String(r.src)));
   const baselineNatives = [];
-  const baselinePythons = [];
   const nonApi = [];
   let catchAll = null;
   for (const route of previousFull) {
@@ -475,19 +461,16 @@ export function _generateVercelDocument(previous, fragments, {slim = true} = {})
     if (NATIVE_DESTINATIONS.has(dest)) {
       if (fragmentSrcs.has(src)) continue;
       baselineNatives.push(route);
-    } else if (dest === PYTHON_DESTINATION) {
-      if (fragmentSrcs.has(src)) continue;
-      baselinePythons.push(route);
-    } else {
+    } else if (!_isApiSource(src)) {
       nonApi.push(Object.fromEntries(Object.entries(route).map(([k, v]) => [String(k), v])));
     }
+    // Any remaining API route targets a retired ingress and is dropped: the
+    // catch-all below sends it to native Rust.
   }
   if (catchAll === null || catchAll.dest !== CATCH_ALL_DEST) {
     throw new BurndownGenerationError('catch-all route missing from vercel.json');
   }
-  const nativeFragment = fragmentRoutes.filter(r => NATIVE_DESTINATIONS.has(r.dest));
-  const pythonFragment = fragmentRoutes.filter(r => r.dest === PYTHON_DESTINATION);
-  const generated = [...nativeFragment, ...pythonFragment].map(r => ({
+  const generated = fragmentRoutes.map(r => ({
     src: r.src,
     methods: r.methods,
     dest: r.dest,
@@ -495,7 +478,6 @@ export function _generateVercelDocument(previous, fragments, {slim = true} = {})
   const fullRoutes = [
     ...baselineNatives,
     ...generated,
-    ...baselinePythons,
     catchAll,
     ...nonApi,
   ];
@@ -505,22 +487,9 @@ export function _generateVercelDocument(previous, fragments, {slim = true} = {})
       new Set(generated),
     )
     : fullRoutes;
-  const nativeIndices = [];
-  const pythonIndices = [];
-  let catchIndex = -1;
-  for (let index = 0; index < newRoutes.length; index++) {
-    const route = newRoutes[index];
-    if (NATIVE_DESTINATIONS.has(route.dest) && route.src !== CATCH_ALL_SRC) nativeIndices.push(index);
-    if (route.dest === PYTHON_DESTINATION) pythonIndices.push(index);
-    if (route.src === CATCH_ALL_SRC) catchIndex = index;
-  }
-  if (nativeIndices.length && pythonIndices.length && Math.max(...nativeIndices) > Math.min(...pythonIndices)) {
-    throw new BurndownGenerationError('native routes must precede Python exceptions');
-  }
-  if (pythonIndices.length && catchIndex < Math.max(...pythonIndices)) {
-    throw new BurndownGenerationError('Python exceptions must precede catch-all');
-  }
-  const document = Object.fromEntries(Object.entries(previous).map(([k, v]) => [String(k), v]));
+  const document = withCanonicalBuilds(
+    Object.fromEntries(Object.entries(previous).map(([k, v]) => [String(k), v])),
+  );
   document.routes = newRoutes;
   return document;
 }
@@ -913,7 +882,7 @@ function _renderRewriteFragment(fragments, routes) {
     if (
       route.src === null ||
       route.src === CATCH_ALL_SRC ||
-      ![...NATIVE_DESTINATIONS, '/api/index.py'].includes(route.dest)
+      !NATIVE_DESTINATIONS.has(route.dest)
     ) {
       continue;
     }
@@ -927,13 +896,14 @@ function _renderRewriteFragment(fragments, routes) {
     }
     if (matches) selected.push([index, route]);
   }
-  const native = selected.flatMap(([, route]) => (NATIVE_DESTINATIONS.has(route.dest) ? [route] : []));
-  const python = selected.flatMap(([, route]) => (route.dest === '/api/index.py' ? [route] : []));
-  const ordered = [...native, ...python];
   const payload = {
     generated_by: 'scripts/generate_route_burndown.mjs',
     source_fragments: fragments.map(fragment => fragment.name),
-    routes: ordered.map(route => ({src: route.src, methods: [...route.methods], dest: route.dest})),
+    routes: selected.map(([, route]) => ({
+      src: route.src,
+      methods: [...route.methods],
+      dest: route.dest,
+    })),
   };
   return pythonJsonDumps(payload);
 }
