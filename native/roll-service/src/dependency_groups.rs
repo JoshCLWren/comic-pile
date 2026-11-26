@@ -86,7 +86,8 @@ const THREADS_DETAIL_SQL: &str = "SELECT t.id, t.title, t.format, t.issues_remai
      FROM threads t WHERE t.id = ANY($1::int[])";
 const ISSUES_DETAIL_SQL: &str = "SELECT i.id, i.thread_id, i.issue_number, i.position, i.status, \
      to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS read_at, \
-     to_char(i.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS created_at \
+     to_char(i.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') AS created_at, \
+     NULLIF(BTRIM(i.issue_number_alias), '') AS issue_number_alias \
      FROM issues i WHERE i.id = ANY($1::int[])";
 const OTHER_COUPLERS_SQL: &str =
     "SELECT DISTINCT m.group_id, g.name, COALESCE(m.thread_id, i.thread_id) \
@@ -688,6 +689,7 @@ async fn issues_by_ids(
                 status: row.get(4),
                 read_at: row.get(5),
                 created_at: row.get(6),
+                issue_number_alias: row.get(7),
             }),
         );
     }
