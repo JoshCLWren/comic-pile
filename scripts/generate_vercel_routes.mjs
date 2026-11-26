@@ -122,18 +122,26 @@ export function generateVercel(config, fragments) {
   if (!fragments || fragments.length === 0) {
     throw new Error('Cannot generate without route fragments');
   }
-  const native = config.routes.filter(route => NATIVE.has(route.dest) && route.src !== FALLBACK);
+  // Source fragments own the active cron set and any retired ingress. Without
+  // this, a hand-edited generated document would be the only way to stop a
+  // scheduled job or drop an obsolete rewrite (#5842).
+  const retiredSrcs = new Set(fragments.flatMap(fragment => fragment.retired_routes || []));
+  const configuredRoutes = config.routes.filter(route => !retiredSrcs.has(route.src));
+  const cronOwners = fragments.filter(fragment => Array.isArray(fragment.crons));
+  const crons = cronOwners.length ? cronOwners.flatMap(fragment => fragment.crons) : undefined;
+
+  const native = configuredRoutes.filter(route => NATIVE.has(route.dest) && route.src !== FALLBACK);
   if (!native.length) throw new Error('Cannot generate without explicit native Rust routes');
 
-  const fragmentRoutes = fragmentVercelRoutes(fragments, config.routes);
+  const fragmentRoutes = fragmentVercelRoutes(fragments, configuredRoutes);
   const fragmentSrcs = new Set(fragmentRoutes.map(r => r.src));
-  const baselineNatives = config.routes.filter(
+  const baselineNatives = configuredRoutes.filter(
     route => NATIVE.has(route.dest) && route.src !== FALLBACK && !fragmentSrcs.has(route.src),
   );
   // Only non-API routes survive from the previous document. Every API route
   // is either fragment-derived or the native catch-all below, so a retired
   // Python exception can never be carried forward.
-  const rest = config.routes.filter(route => !native.includes(route) && !isApiSource(route.src));
+  const rest = configuredRoutes.filter(route => !native.includes(route) && !isApiSource(route.src));
   const fullRoutes = [
     ...baselineNatives,
     ...fragmentRoutes,
@@ -142,10 +150,9 @@ export function generateVercel(config, fragments) {
   ];
   // The deployed manifest must keep the single-function invariant (#5733):
   // one Rust compilation target and no retired API destination.
-  return assertSingleNativeIngress(withCanonicalBuilds(applyStaticCsp({
-    ...config,
-    routes: slimNativeRollRoutes(fullRoutes, new Set(fragmentRoutes)),
-  })));
+  const next = {...config, routes: slimNativeRollRoutes(fullRoutes, new Set(fragmentRoutes))};
+  if (crons !== undefined) next.crons = crons;
+  return assertSingleNativeIngress(withCanonicalBuilds(applyStaticCsp(next)));
 }
 export function loadFragmentFiles(directory = 'docs/api/route-fragments') {
   return readdirSync(directory)

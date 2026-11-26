@@ -5,6 +5,12 @@
     "^/api/v2/reading-plan-sync/status$",
     "^/api/v2/reading-plan-sync/runs$"
   ],
+  "crons": [
+    {
+      "path": "/api/v1/cron/release-sync",
+      "schedule": "0 9 * * *"
+    }
+  ],
   "defaults": {
     "runtime": "native-rust",
     "status": "native Rust",
