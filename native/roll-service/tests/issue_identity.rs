@@ -643,6 +643,77 @@ async fn adoption_commit_creates_plan_with_valid_fingerprint() {
     assert!(body["unresolved_positions"].is_array(), "{body}");
 }
 
+#[tokio::test]
+async fn adoption_commit_persists_canonical_reading_list_and_plan_projection_issue_5523() {
+    let (state, token, csrf, _guard) = setup().await;
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/adoption-commits",
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [
+                {"cbl_position": 0, "decision": "include"},
+                {"cbl_position": 1, "decision": "exclude"}
+            ],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{status} {body}");
+    let plan_id = body["id"].as_i64().unwrap() as i32;
+    assert_eq!(body["created_positions"], json!([0]), "{body}");
+    assert_eq!(body["excluded_positions"], json!([1]), "{body}");
+
+    let conn = state.pool.get().await.unwrap();
+    let source_row = conn
+        .query_one(
+            "SELECT custom_cbl_list_id FROM reading_plan_sources
+             WHERE plan_id = $1 AND custom_cbl_list_id IS NOT NULL
+             ORDER BY id DESC LIMIT 1",
+            &[&plan_id],
+        )
+        .await
+        .unwrap();
+    let list_id: i32 = source_row.get(0);
+    assert!(list_id > 0, "canonical reading list must be created");
+
+    let entries: Vec<(i32, i32)> = conn
+        .query(
+            "SELECT issue_id, position FROM custom_cbl_entries WHERE list_id = $1 ORDER BY position, id",
+            &[&list_id],
+        )
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| (row.get(0), row.get(1)))
+        .collect();
+    assert_eq!(
+        entries.len(),
+        1,
+        "exactly the approved entry should be persisted: {entries:?}"
+    );
+
+    let (reader_status, reader_body) = get(
+        &state,
+        &token,
+        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+    )
+    .await;
+    assert_eq!(reader_status, StatusCode::OK, "{reader_body}");
+    assert_eq!(reader_body["progress"]["total_issues"], 1, "{reader_body}");
+    assert_eq!(reader_body["progress"]["read_issues"], 0, "{reader_body}");
+    let lanes = reader_body["lanes"].as_array().unwrap();
+    let issue_count: usize = lanes
+        .iter()
+        .map(|lane| lane["issues"].as_array().map(|a| a.len()).unwrap_or(0))
+        .sum();
+    assert_eq!(issue_count, 1, "{reader_body}");
+}
+
 async fn crossover_snapshot(
     state: &Arc<AppState>,
 ) -> Vec<(
