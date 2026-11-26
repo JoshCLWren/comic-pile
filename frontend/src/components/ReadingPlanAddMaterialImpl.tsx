@@ -3,6 +3,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { applyCommittedReadingPlan } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
+import { isAmbiguousNetworkFailure } from '../hooks/rollMutationReconciliation'
 import { isObject, isString } from '../utils/runtimeChecks'
 import {
   cblSourcesApi,
@@ -80,6 +81,7 @@ export default function ReadingPlanAddMaterial({
   const [entryDecisions, setEntryDecisions] = useState<Record<string, boolean>>({})
   const [hasSearched, setHasSearched] = useState(defaultOpen)
   const [staleReview, setStaleReview] = useState(false)
+  const [ambiguousCommit, setAmbiguousCommit] = useState(false)
   const sourcesQuery = useQuery({
     queryKey: queryKeys.cblSources.search(submittedQuery),
     queryFn: () => cblSourcesApi.discover(submittedQuery),
@@ -108,11 +110,16 @@ export default function ReadingPlanAddMaterial({
     }),
     onSuccess: async (committed) => {
       await applyCommittedReadingPlan(queryClient, committed)
+      setAmbiguousCommit(false)
       onCommitted?.(committed)
     },
     onError: (commitError) => {
       if (axios.isAxiosError(commitError) && commitError.response?.status === 409) {
         setStaleReview(true)
+        return
+      }
+      if (isAmbiguousNetworkFailure(commitError)) {
+        setAmbiguousCommit(true)
       }
     },
   })
