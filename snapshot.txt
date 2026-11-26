@@ -1,38 +1,38 @@
-utc: 2026-11-26T09:13:42Z
-uptime: 1686.89s load: 17.16 14.24 9.15
-processes: 211
+utc: 2026-11-26T09:13:59Z
+uptime: 1704.12s load: 15.95 14.12 9.19
+processes: 212
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15983        5233        2238         118        8974       10749
+Mem:           15983        2542        4890         118        9012       13440
 Swap:           3071           0        3071
 --- disk
 Filesystem      Size  Used Avail Use% Mounted on
 /dev/root       145G   65G   81G  45% /
 /dev/root       145G   65G   81G  45% /
 --- top rss (KiB, name only)
-1715228 clippy-driver
-1615768 clippy-driver
-427436 opencode.exe
-261824 MainThread
+395600 opencode.exe
+264060 MainThread
+224308 clippy-driver
 159592 Runner.Worker
-147208 MainThread
-144092 provjobd2783799
-121700 Runner.Listener
-116932 MainThread
+147492 MainThread
+144084 provjobd2783799
+121696 Runner.Listener
 100720 MainThread
-90592 opencode
-82568 cargo
+90016 opencode
+89204 MainThread
+86544 MainThread
+82836 cargo
 81500 dockerd
-75196 MainThread
-70872 MainThread
+66676 cargo
+62012 clippy-driver
 --- top cpu (name only)
  300 ps
- 117 MainThread
-70.1 MainThread
-66.9 clippy-driver
-66.2 MainThread
-56.2 MainThread
-20.5 clippy-driver
- 2.8 opencode.exe
+90.9 MainThread
+92.8 MainThread
+86.6 MainThread
+42.8 clippy-driver
+25.7 clippy-driver
+12.6 MainThread
+ 2.7 opencode.exe
 --- kernel oom/kill
 --- shutdown/session signals
