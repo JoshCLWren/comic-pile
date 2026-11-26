@@ -76,9 +76,15 @@ test('account switching isolates inbox data and stops signed-out inbox requests'
   async function openInbox(username: string) {
     const nav = page.getByLabel('Desktop navigation')
     await expect(nav).toBeVisible()
-    // The nav re-renders on auth refresh; a synthetic click avoids Playwright
-    // retrying an actionable click against a detached link node.
-    await nav.getByRole('link', { name: 'Identity Inbox page' }).first().click()
+    // The nav re-renders on auth refresh: a Playwright click retries against a
+    // detached link node, and dispatching a click on that node can land while
+    // React is committing a replacement and crash the commit. Drive the router
+    // through the History API instead — same client-side route transition, no
+    // dependency on a transient nav DOM node.
+    await page.evaluate(() => {
+      window.history.pushState(null, '', '/identity-inbox')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
     await expect(page.getByText(username + ' private comic', { exact: true })).toBeVisible()
   }
 
