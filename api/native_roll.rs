@@ -2820,6 +2820,20 @@ mod issue_ingress_tests {
             .scope(test_state(&url), async {
                 let username = format!("issue-cards-ingress-{}", std::process::id());
                 let (access, csrf) = registered_session(&username, "198.51.100.22", 50, 501).await;
+                let connection = TEST_ROLL_STATE
+                    .try_with(Clone::clone)
+                    .expect("test state")
+                    .pool
+                    .get()
+                    .await
+                    .expect("alias seed connection");
+                connection
+                    .execute(
+                        "UPDATE issues SET issue_number_alias='100' WHERE id=501",
+                        &[],
+                    )
+                    .await
+                    .expect("alias seed");
                 let (status, body, _, text) = call_app(authed(
                     "POST",
                     "/api/v2/issues/cards",
@@ -2834,6 +2848,8 @@ mod issue_ingress_tests {
                 assert_eq!(items.len(), 1, "foreign or missing ids are omitted: {text}");
                 assert_eq!(items[0]["issue_id"], 501);
                 assert_eq!(items[0]["thread_id"], 50);
+                assert_eq!(items[0]["issue_number_alias"], "100");
+                assert_eq!(items[0]["display_issue_number"], "1 (100)");
             })
             .await;
     }
