@@ -241,7 +241,7 @@ def test_find_stale_runtime_claims_flags_affirmative_active_claims(tmp_path: Pat
     assert len(errors) == 3
     assert all("stale runtime claim" in error for error in errors)
     assert any("backend is FastAPI" in error for error in errors)
-    assert any("served by SQLAlchemy" in error for error in errors)
+    assert any("uses SQLAlchemy" in error for error in errors)
     assert any("Alembic manages" in error for error in errors)
 
 
