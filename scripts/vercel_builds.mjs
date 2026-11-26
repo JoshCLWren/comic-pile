@@ -55,7 +55,7 @@ export function assertSingleNativeIngress(document) {
   }
   for (const route of Array.isArray(document.routes) ? document.routes : []) {
     const dest = route?.dest;
-    if (typeof dest !== 'string' || !dest.startsWith('/api/')) continue;
+    if (!dest?.startsWith('/api/')) continue;
     if (dest !== RUST_DEST) {
       throw new Error(`API route ${route.src ?? '<unknown>'} targets retired ingress ${dest}`);
     }
