@@ -209,6 +209,8 @@ export function ComicPillar({
                   issueId={issueId}
                   threadTitle={threadTitle}
                   issueNumber={issueNumber}
+                  issueNumberAlias={activeRatingThread?.issue_number_alias}
+                  providerIssueNumber={activeRatingThread?.provider_issue_number}
                   initialIdentity={identityState}
                   fetchEnabled={false}
                   onMapped={onRefreshThread}
@@ -284,6 +286,8 @@ export function ComicPillar({
           issueId={issueId}
           threadTitle={threadTitle}
           issueNumber={issueNumber}
+          issueNumberAlias={activeRatingThread?.issue_number_alias}
+          providerIssueNumber={activeRatingThread?.provider_issue_number}
           mode={mapping.searchMode}
           onClose={mapping.closeSearchDialog}
           onConfirmed={mapping.handleIdentityConfirmed}
