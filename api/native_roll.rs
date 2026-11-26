@@ -384,6 +384,20 @@ fn app() -> Router {
                 .delete(native_dispatch),
         )
         .route("/api/v2/threads/{thread_id}/issues", post(native_dispatch))
+        // Edit Series previews (#5863). The inner router registers these
+        // handlers, but the Vercel entry owns a separate route table: without
+        // matching routes here the fallback returns the Rust JSON 404
+        // ("Not Found") before the preview handler runs, so no new issue can
+        // be previewed or added. Keep this table in sync with the inner
+        // comicpile_roll_service::router() routes.
+        .route(
+            "/api/v2/threads/{thread_id}/issues/preview",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/threads/{thread_id}/issues/structure-preview",
+            post(native_dispatch),
+        )
         .route(
             "/api/v2/threads/{thread_id}/issue-order",
             put(native_dispatch),
