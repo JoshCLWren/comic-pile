@@ -579,7 +579,9 @@ mod tests {
     /// present.
     #[tokio::test]
     async fn queue_bootstrap_preview_returns_available_plan() {
-        let state = crate::test_support::test_state(1)
+        // Two pooled connections: one seeds the fixture rows, the other serves
+        // the handler's checkout while the seeding connection is still alive.
+        let state = crate::test_support::test_state(2)
             .await
             .expect("disposable PostgreSQL required");
         let _guard = crate::test_support::reset_for_test(&state).await;
