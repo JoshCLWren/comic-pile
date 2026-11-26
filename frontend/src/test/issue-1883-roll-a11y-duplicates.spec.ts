@@ -20,15 +20,16 @@ const DESKTOP_VIEWPORT = { width: 1920, height: 1080 };
 const MOBILE_VIEWPORT = { width: 390, height: 844 };
 
 /**
- * Region names that the Open Design dogfood audit saw exposed multiple times
- * in the post-roll view (issue #1883). Each must resolve to exactly one
- * accessible instance per viewport.
+ * Live Roll regions that must expose exactly one accessible instance per
+ * viewport. The old pillar headings (Crossovers, Continuity Correction,
+ * Your Reading Boundaries) were retired with the optional-cards refactor;
+ * the live contract is DecisionCard "Your rating" plus the two optional
+ * disclosure cards (#2764).
  */
 const REGION_NAMES = [
-  'Crossovers',
   'Your rating',
-  'Continuity Correction',
-  'Your Reading Boundaries',
+  'Reading Context (optional)',
+  'Reading Boundaries (optional)',
 ] as const;
 
 async function getCsrfToken(request: APIRequestContext, token: string): Promise<string> {
