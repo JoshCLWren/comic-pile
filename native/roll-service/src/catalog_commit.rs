@@ -320,6 +320,7 @@ pub async fn commit_series_mapping_handler(
 
     // Rebuild plan and validate digest - delegate to plan builder
     let plan = build_plan_for_commit(
+        &state.comicvine_limits,
         &state.outbound,
         &conn,
         user.id(),
@@ -554,7 +555,9 @@ async fn assert_no_confirmed_mapping_conflict(
 // Plan building - compatibility layer. This must produce the same state_digest
 // as Python for the same DB state. A full port is large; we implement the
 // DB-backed core and compute the digest in the same format.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn build_plan_for_commit(
+    limits: &crate::comicvine_limits::ComicVineLimits,
     outbound: &std::sync::Arc<dyn crate::outbound::OutboundHttp>,
     conn: &tokio_postgres::Client,
     user_id: i32,
@@ -568,6 +571,7 @@ pub(crate) async fn build_plan_for_commit(
     // flows as exercised by existing tests. It queries the same tables Python queries.
     // The digest format must match _plan_state_digest exactly.
     build_plan_db(
+        limits,
         outbound,
         conn,
         user_id,
@@ -690,7 +694,9 @@ fn unavailable_plan(origin_issue_id: i32, basis: &str, scope_mode: &str) -> Valu
 // Python's build_series_mapping_plan can call ComicVine for rosters - for
 // commit-time revalidation this is the same logic. We implement DB-only rebuild
 // covering the test scenarios and common cases.
+#[allow(clippy::too_many_arguments)]
 async fn build_plan_db(
+    limits: &crate::comicvine_limits::ComicVineLimits,
     outbound: &std::sync::Arc<dyn crate::outbound::OutboundHttp>,
     conn: &tokio_postgres::Client,
     user_id: i32,
@@ -735,6 +741,7 @@ async fn build_plan_db(
 
     if scope_mode == "queue_thread_bootstrap" {
         return build_queue_bootstrap_plan_db(
+            limits,
             outbound,
             conn,
             user_id,
@@ -836,6 +843,7 @@ async fn build_plan_db(
             // This lookup is best-effort only for locally confirmed series:
             // Python falls back to local rows on provider 503.
             if let Ok((provider_info, roster)) = crate::comicvine_repair::catalog_volume_roster(
+                limits,
                 outbound,
                 provider_series_external_id,
             )
@@ -897,9 +905,12 @@ async fn build_plan_db(
     } else {
         // A brand-new provider volume is a normal valid preview. Rebuild its
         // complete roster instead of turning every signed preview into a 409.
-        let (provider_series, fetched_roster) =
-            crate::comicvine_repair::catalog_volume_roster(outbound, provider_series_external_id)
-                .await?;
+        let (provider_series, fetched_roster) = crate::comicvine_repair::catalog_volume_roster(
+            limits,
+            outbound,
+            provider_series_external_id,
+        )
+        .await?;
         series_info = Some(provider_series);
         issues_with_mappings = fetched_roster.clone();
         roster_rows = fetched_roster;
@@ -1381,6 +1392,7 @@ fn derive_scope_key_str(rows: &[Value], origin_issue_id: i32) -> String {
 
 #[allow(clippy::too_many_arguments)]
 async fn build_queue_bootstrap_plan_db(
+    limits: &crate::comicvine_limits::ComicVineLimits,
     outbound: &std::sync::Arc<dyn crate::outbound::OutboundHttp>,
     conn: &tokio_postgres::Client,
     user_id: i32,
@@ -1401,9 +1413,12 @@ async fn build_queue_bootstrap_plan_db(
     };
     // The Queue preview relies on an actual, complete provider roster to
     // prove cardinality. Do not replace that evidence with local guesses.
-    let (series_info, roster) =
-        crate::comicvine_repair::catalog_volume_roster(outbound, provider_series_external_id)
-            .await?;
+    let (series_info, roster) = crate::comicvine_repair::catalog_volume_roster(
+        limits,
+        outbound,
+        provider_series_external_id,
+    )
+    .await?;
     if roster.is_empty() {
         return Ok(unavailable_plan(
             origin_issue_id,
@@ -2261,7 +2276,9 @@ mod tests {
             .expect("seed second valid mapping for origin issue");
         let fake_outbound: std::sync::Arc<dyn crate::outbound::OutboundHttp> =
             std::sync::Arc::new(crate::outbound::RecordingFakeOutbound::new());
+        let limits = crate::comicvine_limits::ComicVineLimits::default();
         let plan = build_plan_db(
+            &limits,
             &fake_outbound,
             &connection,
             1,
