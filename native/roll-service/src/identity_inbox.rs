@@ -295,7 +295,13 @@ impl MatchContext {
         }
     }
 
-    fn apply_series_hint(&mut self, publisher: Option<String>, start_year: Option<i32>, volume_id: Option<i32>, alias: Option<String>) {
+    fn apply_series_hint(
+        &mut self,
+        publisher: Option<String>,
+        start_year: Option<i32>,
+        volume_id: Option<i32>,
+        alias: Option<String>,
+    ) {
         if self.issue.publisher.is_none() {
             self.issue.publisher = publisher;
         }
@@ -475,10 +481,13 @@ async fn build_partial_matches(
             .into_iter()
             .map(|m| {
                 let sibling = siblings.iter().find(|s| s.issue_id == m.issue_id);
-                let number = sibling
-                    .map(|s| s.issue_number.clone())
-                    .unwrap_or_default();
-                to_issue(m.issue_id, number, m.comicvine_issue_id, m.evidence.join("; "))
+                let number = sibling.map(|s| s.issue_number.clone()).unwrap_or_default();
+                to_issue(
+                    m.issue_id,
+                    number,
+                    m.comicvine_issue_id,
+                    m.evidence.join("; "),
+                )
             })
             .collect();
         let unmatched = plan
@@ -697,10 +706,7 @@ fn provider_issue_from_search(
         publisher,
         start_year,
         issue_number,
-        issue_name: obj
-            .get("name")
-            .and_then(|v| v.as_str())
-            .map(str::to_string),
+        issue_name: obj.get("name").and_then(|v| v.as_str()).map(str::to_string),
         aliases: Vec::new(),
     })
 }
@@ -824,7 +830,8 @@ async fn fetch_item(
     // Hints are loaded from real owned data (confirmed sibling volumes,
     // series publisher/year, aliases and CBL source volumes), not injected
     // fixture values.
-    let hints = load_match_context(&conn, thread_id, issue_id, &thread_title, &issue_number).await?;
+    let hints =
+        load_match_context(&conn, thread_id, issue_id, &thread_title, &issue_number).await?;
     let (why_stopped_value, next_steps_value) =
         explain_item(&status, &evidence, candidates.len(), &hints);
 
@@ -951,7 +958,14 @@ pub async fn list_inbox(
 
     let context_rows: Vec<(i32, i32, String, String)> = rows
         .iter()
-        .map(|r| (r.get(6), r.get(4), r.get::<_, String>(7), r.get::<_, String>(5)))
+        .map(|r| {
+            (
+                r.get(6),
+                r.get(4),
+                r.get::<_, String>(7),
+                r.get::<_, String>(5),
+            )
+        })
         .collect();
     let contexts = load_match_contexts(&conn, &context_rows).await?;
 
@@ -977,10 +991,8 @@ pub async fn list_inbox(
             .get(&issue_id)
             .cloned()
             .unwrap_or_default();
-        let hints = contexts
-            .get(&issue_id)
-            .cloned()
-            .unwrap_or_else(|| crate::comicvine_matching::MatchIssue {
+        let hints = contexts.get(&issue_id).cloned().unwrap_or_else(|| {
+            crate::comicvine_matching::MatchIssue {
                 issue_id,
                 series_name: thread_title.clone(),
                 issue_number: issue_number.clone(),
@@ -989,7 +1001,8 @@ pub async fn list_inbox(
                 volume_hint_ids: Vec::new(),
                 aliases: Vec::new(),
                 source_volume_ids: Vec::new(),
-            });
+            }
+        });
         let (why, steps) = explain_item(&status, &evidence, candidates.len(), &hints);
         items.push(IdentityInboxItem {
             mapping_id,
@@ -1115,7 +1128,9 @@ pub async fn search_issues(
             &format!("issue/4000-{id}"),
             &format!("id,issue_number,name,cover_date,volume,publisher,site_detail_url,image"),
         ),
-        Some(crate::comicvine_v2::ParsedResource::Volume(id)) => build_volume_issues_url(&api_key, id, clamped),
+        Some(crate::comicvine_v2::ParsedResource::Volume(id)) => {
+            build_volume_issues_url(&api_key, id, clamped)
+        }
         None => build_search_url(&api_key, &q.q, clamped),
     };
     let payload = fetch_comicvine(&state.outbound, url).await;
@@ -1275,8 +1290,14 @@ pub async fn search_issues(
     // Python sets issue_id=0 then caller sets issue_id if provided. Keep issue_id if provided else 0.
     let _ = issue_id_final;
 
-    let partial_matches =
-        build_partial_matches(&state, &local, search_thread_id, user.id(), &provider_issues).await?;
+    let partial_matches = build_partial_matches(
+        &state,
+        &local,
+        search_thread_id,
+        user.id(),
+        &provider_issues,
+    )
+    .await?;
     Ok(Json(IdentityInboxSearchResponse {
         issue_id: q.issue_id.unwrap_or(0),
         query: q.q.clone(),
@@ -2658,7 +2679,10 @@ mod tests {
         .await
         .expect("list must succeed")
         .0;
-        let detail = fetch_item(&state, 1, 1).await.expect("detail").expect("item");
+        let detail = fetch_item(&state, 1, 1)
+            .await
+            .expect("detail")
+            .expect("item");
         let listed = list.items.iter().find(|item| item.mapping_id == 1).unwrap();
         assert_eq!(listed.why_stopped, detail.why_stopped);
         assert_eq!(listed.next_steps, detail.next_steps);
