@@ -8,6 +8,7 @@ import {
   invalidateAfterThreadMetadataEdit,
   invalidatePotentialDuplicates,
 } from '../query/cacheEffects';
+import { notifyThreadMetadataChanged } from '../query/crossTabDataSync';
 import { queryClient } from '../query/queryClient';
 import { queryKeys } from '../query/queryKeys';
 
@@ -75,6 +76,10 @@ export function useUpdateThread() {
       // in place above, so Roll, session, and plan views still need to
       // reconcile the new metadata without a hard reload (#5264).
       if (variables.data.title !== undefined || variables.data.format !== undefined) {
+        // Announce before awaiting this tab's refetches: an already-open Reading
+        // List in another tab must reconcile the canonical title now, not after
+        // this mutation's own invalidation work finishes (#5862).
+        notifyThreadMetadataChanged();
         await Promise.all([
           invalidatePotentialDuplicates(queryClient),
           invalidateAfterThreadMetadataEdit(queryClient),

@@ -53,6 +53,30 @@ export function sameEntries(left: CustomCBLEntry[], right: CustomCBLEntry[]): bo
   )
 }
 
+/**
+ * Reconcile server-owned series titles into an in-progress draft (#5862).
+ *
+ * A Thread rename committed in another tab changes `series_name` on the
+ * Reading List's entries. Draft order, gates, and skips are local edits, so
+ * only the display title is replaced from fresh server data; returning the
+ * original array when nothing changed avoids needless re-renders.
+ */
+export function reconcileEntryTitles(
+  local: CustomCBLEntry[],
+  server: readonly CustomCBLEntry[],
+): CustomCBLEntry[] {
+  const titles = new Map<number, string>()
+  for (const entry of server) titles.set(entry.issue_id, entry.series_name)
+  let changed = false
+  const next = local.map((entry) => {
+    const title = titles.get(entry.issue_id)
+    if (title === undefined || title === entry.series_name) return entry
+    changed = true
+    return { ...entry, series_name: title }
+  })
+  return changed ? next : local
+}
+
 export function checkpointTargetsFor(entries: readonly CustomCBLEntry[]): Record<number, number[]> | null {
   const targets: Record<number, number[]> = {}
   for (const entry of entries) {
