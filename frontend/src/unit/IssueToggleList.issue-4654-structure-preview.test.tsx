@@ -232,6 +232,21 @@ describe('IssueToggleList #4654 delete/reorder structure preview', () => {
     expect(mockedIssuesApi.delete).not.toHaveBeenCalled()
   })
 
+  it('a drag that resolves to the same order opens no preview and queues nothing', async () => {
+    const ref = await renderList()
+    const dragData = { effectAllowed: '', dropEffect: '', setData: vi.fn() }
+    const dragButton = screen.getByTestId('issue-pill-2').querySelector('button')
+    expect(dragButton).not.toBeNull()
+    fireEvent.dragStart(dragButton as HTMLButtonElement, { dataTransfer: dragData })
+    const earlierPill = screen.getByTestId('issue-pill-1')
+    fireEvent.dragOver(earlierPill, { dataTransfer: dragData })
+    fireEvent.drop(earlierPill, { dataTransfer: dragData })
+
+    expect(screen.queryByTestId('edit-series-structure-preview-modal')).not.toBeInTheDocument()
+    expect(mockedIssuesApi.previewReorder).not.toHaveBeenCalled()
+    expect(ref.current?.hasPendingMutations()).toBe(false)
+  })
+
   it('keeps the immediate-mode direct path when no Save boundary exists', async () => {
     await renderList(false)
     fireEvent.click(screen.getByTestId('issue-delete-1'))
