@@ -22,7 +22,7 @@ const api = vi.hoisted(() => ({
   rollApi: { roll: vi.fn(), override: vi.fn(), dismissPending: vi.fn(), setDie: vi.fn(), reroll: vi.fn(), unsnooze: vi.fn() },
   undoApi: { listSnapshots: vi.fn(), undo: vi.fn() },
   threadsApi: { listStale: vi.fn() },
-  sessionApi: { list: vi.fn(), getDetails: vi.fn(), getSnapshots: vi.fn() },
+  sessionApi: { getDetails: vi.fn(), getSnapshots: vi.fn() },
   migrationApi: { migrateThread: vi.fn() },
   bugReportsApi: { create: vi.fn() },
 }))
@@ -43,7 +43,7 @@ const toast = createToastSpy()
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks/useRate'
 import { useDismissPending, useOverrideRoll, useReroll, useRoll, useSetDie, useUnsnooze } from '../hooks/useRoll'
-import { useSessions, useSessionDetails, useSessionSnapshots } from '../hooks/useSession'
+import { useSessionDetails, useSessionSnapshots } from '../hooks/useSession'
 import { useSnapshots, useUndo } from '../hooks/useUndo'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { useStaleThreads } from '../hooks/useThread'
@@ -147,36 +147,17 @@ describe('data hooks', () => {
     await waitFor(() => expect(failedSnapshots.result.current.isError).toBe(true))
   })
 
-  it('loads sessions through pagination and details', async () => {
-    api.sessionApi.list.mockResolvedValueOnce({ sessions: [{ id: 1 }], next_page_token: 'next' }).mockResolvedValueOnce({ sessions: [{ id: 2 }], next_page_token: null })
-    const sessions = renderHook(() => useSessions(), { wrapper: createWrapper() })
-    await waitFor(() => expect(sessions.result.current.data).toHaveLength(1))
-    expect(sessions.result.current.hasMore).toBe(true)
-    await act(async () => { sessions.result.current.loadMore() })
-    await waitFor(() => expect(sessions.result.current.data).toHaveLength(2))
+  it('loads session details from the v2 resource', async () => {
     api.sessionApi.getDetails.mockResolvedValue({ session_id: 1 })
     const details = renderHook(() => useSessionDetails(1), { wrapper: createWrapper() })
     await waitFor(() => expect(details.result.current.data).toEqual({ session_id: 1 }))
+    expect(api.sessionApi.getDetails).toHaveBeenCalledWith(1)
+    api.sessionApi.getDetails.mockRejectedValueOnce('details failed')
+    const failed = renderHook(() => useSessionDetails(2), { wrapper: createWrapper() })
+    await waitFor(() => expect(failed.result.current.isError).toBe(true))
+    expect(failed.result.current.error?.message).toBe('Failed to fetch session details')
     const noDetails = renderHook(() => useSessionDetails(null), { wrapper: createWrapper() })
     expect(noDetails.result.current.isPending).toBe(false)
-  })
-
-  it('handles loadMore failure with Error and non-Error types', async () => {
-    api.sessionApi.list.mockResolvedValueOnce({ sessions: [{ id: 1 }], next_page_token: 'next' })
-    const sessions = renderHook(() => useSessions(), { wrapper: createWrapper() })
-    await waitFor(() => expect(sessions.result.current.data).toHaveLength(1))
-    api.sessionApi.list.mockRejectedValueOnce(new Error('loadMore failed'))
-    await act(async () => { sessions.result.current.loadMore() })
-    await waitFor(() => expect(sessions.result.current.isError).toBe(true))
-    expect(sessions.result.current.error?.message).toBe('loadMore failed')
-
-    api.sessionApi.list.mockResolvedValueOnce({ sessions: [{ id: 2 }], next_page_token: 'next' })
-    const sessions2 = renderHook(() => useSessions(), { wrapper: createWrapper() })
-    await waitFor(() => expect(sessions2.result.current.data).toHaveLength(1))
-    api.sessionApi.list.mockRejectedValueOnce('plain string error')
-    await act(async () => { sessions2.result.current.loadMore() })
-    await waitFor(() => expect(sessions2.result.current.isError).toBe(true))
-    expect(sessions2.result.current.error?.message).toBe('Failed to load more sessions')
   })
 
   it('loads session snapshots and handles undo', async () => {
@@ -193,14 +174,6 @@ describe('data hooks', () => {
   })
 
   it('covers session error and empty-id branches', async () => {
-    api.sessionApi.list.mockRejectedValueOnce(new Error('list failed'))
-    // SAFETY: a null id disables the query, which is the pending case under test
-    const sessions = renderHook(() => useSessions(null as never), { wrapper: createWrapper() })
-    await waitFor(() => expect(sessions.result.current.isError).toBe(true))
-    api.sessionApi.list.mockRejectedValueOnce('string list failed')
-    const sessionsStr = renderHook(() => useSessions(), { wrapper: createWrapper() })
-    await waitFor(() => expect(sessionsStr.result.current.isError).toBe(true))
-    expect(sessionsStr.result.current.error?.message).toBe('Failed to fetch sessions')
     api.sessionApi.getDetails.mockRejectedValueOnce('details failed')
     const details = renderHook(() => useSessionDetails(9), { wrapper: createWrapper() })
     await waitFor(() => expect(details.result.current.isError).toBe(true))

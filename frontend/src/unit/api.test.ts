@@ -156,8 +156,6 @@ it('calls every remaining API resource endpoint', async () => {
   await rollApi.dismissPending()
   await rollApi.reroll()
   await rollApi.setDie(6)
-  await sessionApi.list({ status: 'complete' }, 'page')
-  await sessionApi.get(1)
   await sessionApi.getDetails('2')
   await sessionApi.getSnapshots(2)
   await undoApi.undo(1, 'snap')
@@ -179,23 +177,22 @@ it('calls every remaining API resource endpoint', async () => {
 })
 
 
-it('uses migrated v2 session detail/snapshot paths and v2 undo paths', async () => {
-  await sessionApi.list()
-  await sessionApi.get(7)
+it('uses only v2 session detail/snapshot paths and v2 undo paths', async () => {
   await sessionApi.getDetails(7)
   await sessionApi.getSnapshots(7)
   await undoApi.undo(7, 3)
   await undoApi.listSnapshots(7)
 
-  expect(get).toHaveBeenCalledWith('/v1/sessions/', { params: undefined })
-  expect(get).toHaveBeenCalledWith('/v1/sessions/7')
   expect(get).toHaveBeenCalledWith('/v2/reading-sessions/7/details')
   expect(get).toHaveBeenCalledWith('/v2/reading-sessions/7/snapshots')
   expect(post).toHaveBeenCalledWith('/v2/undo/7/snapshots/3/restore')
   expect(get).toHaveBeenCalledWith('/v2/undo/7/snapshots')
+  expect(get.mock.calls.map(([url]) => String(url)).join(' ')).not.toContain('/v1/sessions')
 })
 
-it('keeps the retired session lifecycle methods off the session service (#4343)', () => {
+it('keeps retired session list/single/lifecycle methods off the session service (#4839, #4343)', () => {
+  expect(sessionApi).not.toHaveProperty('list')
+  expect(sessionApi).not.toHaveProperty('get')
   expect(sessionApi).not.toHaveProperty('getCurrent')
   expect(sessionApi).not.toHaveProperty('restoreSessionStart')
 })
@@ -226,8 +223,8 @@ it('handles request defaults and issue dependency payloads', async () => {
   expect(post).toHaveBeenCalledWith('/v2/dependencies/', {
     source_type: 'issue', source_id: 8, target_type: 'issue', target_id: 9,
   })
-  await sessionApi.list()
-  expect(get).toHaveBeenCalledWith('/v1/sessions/', { params: undefined })
+  await sessionApi.getDetails(7)
+  expect(get).toHaveBeenCalledWith('/v2/reading-sessions/7/details')
 })
 
 it('handles missing request URLs and cookies while sharing csrf bootstrap work', async () => {
