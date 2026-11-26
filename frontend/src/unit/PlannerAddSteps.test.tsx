@@ -132,7 +132,7 @@ describe('PlannerAddSteps', () => {
   it('treats a series with issues remaining but no issue records as empty (#4119)', () => {
     // The remaining count is deliberately independent of the issue records:
     // this series reports one issue left but has zero issue records to plan.
-    const emptySeries = { ...threads[0], issues_remaining: 1 } as ThreadListItem
+    const emptySeries = { ...threads[0], issues_remaining: 1 }
     const editor = makeEditor({
       selectedThread: emptySeries,
       selectedThreadId: emptySeries.id,
@@ -160,7 +160,7 @@ describe('PlannerAddSteps', () => {
   })
 
   it('does not add a stale issue for a series with no issue records (#4119)', () => {
-    const emptySeries = { ...threads[0], issues_remaining: 1 } as ThreadListItem
+    const emptySeries = { ...threads[0], issues_remaining: 1 }
     const editor = makeEditor({
       selectedThread: emptySeries,
       selectedThreadId: emptySeries.id,
