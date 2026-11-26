@@ -34,7 +34,6 @@ pub(crate) enum ProviderFailure {
     InvalidPayload,
 }
 
-<<<<<<< HEAD
 /// Truthful outcome of one bounded, awaited ComicVine metadata hydration.
 /// These are terminal results of the current HTTP invocation, not queue states:
 /// an interactive caller can distinguish success from a legitimate empty roster
@@ -126,8 +125,6 @@ WHERE e.id = $1 AND e.provider = 'comicvine' AND e.entity_type = 'issue'
   )
 "#;
 
-=======
->>>>>>> origin/main
 fn issue_id(external_id: &str) -> Option<u32> {
     let raw = external_id.strip_prefix("4000-").unwrap_or(external_id);
     raw.parse::<u32>().ok().filter(|id| *id > 0)
