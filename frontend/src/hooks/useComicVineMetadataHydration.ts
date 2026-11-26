@@ -236,7 +236,13 @@ export function useComicVineMetadataHydration({
       const outcome = result.outcome
       const refreshed = result.refreshed === true
 
-      if (outcome === 'no_credits' || (refreshed && outcome === 'complete')) {
+      if (outcome === 'no_credits') {
+        setOutcomeState({
+          details: NO_CREDITS,
+          message: NO_CREDITS.message,
+          retryAfterSeconds: null,
+        })
+      } else if (refreshed && outcome === 'complete') {
         setOutcomeState(null)
       } else if (outcome != null) {
         const details = OUTCOME_DETAILS[outcome] ?? FAILED

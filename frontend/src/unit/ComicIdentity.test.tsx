@@ -1060,9 +1060,8 @@ describe('ComicIdentity creator metadata contract (#5841)', () => {
     await waitForLoaded()
 
     expect(screen.getByTestId('creator-status-unavailable')).toHaveTextContent(
-      'ComicVine is unavailable right now. Your mapping is safe — try again.',
+      'ComicVine is unavailable right now. Your mapping is safe — try again in 60s.',
     )
-    expect(screen.getByTestId('creator-status-unavailable')).toHaveTextContent('in 60s')
     expect(screen.getByRole('button', { name: 'Retry refresh' })).toBeEnabled()
   })
 
