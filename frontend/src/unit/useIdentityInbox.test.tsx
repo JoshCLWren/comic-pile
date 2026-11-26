@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   useIdentityInbox,
   useIdentityInboxStatus,
+  useIdentityInboxSearch,
   useConfirmInboxCandidate,
   useRejectInboxCandidate,
   useDeferInboxItem,
@@ -18,6 +19,7 @@ import { queryKeys } from '../query/queryKeys'
 vi.mock('../services/api-identity', () => ({
   identityInboxApi: {
     list: vi.fn(),
+    searchMatches: vi.fn(),
     confirm: vi.fn(),
     reject: vi.fn(),
     defer: vi.fn(),
@@ -64,6 +66,15 @@ beforeEach(() => {
   vi.clearAllMocks()
   // SAFETY: mock payload supplies only the fields this test asserts
   mockedInboxApi.list.mockResolvedValue(inboxResponse as never)
+  // SAFETY: mock payload supplies only the fields this test asserts
+  mockedInboxApi.searchMatches.mockResolvedValue({
+    issue_id: 10,
+    query: 'B.P.R.D.',
+    results: [],
+    total_available: 0,
+    partial_matches: [],
+    no_match_reason: null,
+  } as never)
   // SAFETY: the endpoint returns no body, so the mock resolves to undefined
   mockedInboxApi.confirm.mockResolvedValue(undefined as never)
   // SAFETY: the endpoint returns no body, so the mock resolves to undefined
@@ -96,6 +107,40 @@ describe('useIdentityInbox', () => {
     const key1 = queryKeys.identityInbox.list({ offset: 0, limit: 20 })
     const key2 = queryKeys.identityInbox.list({ offset: 20, limit: 20 })
     expect(key1).not.toEqual(key2)
+  })
+})
+
+describe('useIdentityInboxSearch', () => {
+  it('fetches provider matches only when enabled with a non-blank query', async () => {
+    const wrapper = createWrapper()
+    const { result } = renderHook(
+      () => useIdentityInboxSearch('  B.P.R.D.  ', 10, true),
+      { wrapper },
+    )
+
+    await waitFor(() => expect(result.current.data).toBeDefined())
+    expect(mockedInboxApi.searchMatches).toHaveBeenCalledWith('B.P.R.D.', 10)
+    expect(queryKeys.identityInbox.search('  B.P.R.D.  ', 10)).toEqual([
+      'identityInbox',
+      'search',
+      { query: 'B.P.R.D.', issueId: 10 },
+    ])
+  })
+
+  it('stays idle when discovery is disabled or the query is blank', () => {
+    const wrapper = createWrapper()
+    const { result: disabled } = renderHook(
+      () => useIdentityInboxSearch('B.P.R.D.', 10, false),
+      { wrapper },
+    )
+    const { result: blank } = renderHook(
+      () => useIdentityInboxSearch('   ', 10, true),
+      { wrapper },
+    )
+
+    expect(disabled.current.fetchStatus).toBe('idle')
+    expect(blank.current.fetchStatus).toBe('idle')
+    expect(mockedInboxApi.searchMatches).not.toHaveBeenCalled()
   })
 })
 
