@@ -229,8 +229,9 @@ export interface MetadataRefreshResponse {
   refreshed: boolean
   comicvine_issue_id: string | null
   /**
-   * Absent on an older deployment; callers must fall back to the truthful
-   * generic failure copy rather than treating the response as success.
+   * Absent on an older deployment. A response that still reports
+   * `refreshed: true` is a completed attempt whose truthful state comes from
+   * the scoped re-read; otherwise callers fall back to generic failure copy.
    */
   outcome?: ComicVineHydrationOutcome
   /** Provider-requested delay before another explicit Retry, when throttled. */

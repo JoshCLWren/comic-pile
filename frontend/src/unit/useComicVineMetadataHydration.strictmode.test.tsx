@@ -85,6 +85,7 @@ function HydrationHarness({ initialMetadata, refetchIntelligence }: HarnessProps
 
 let liveRoot: Root | null = null
 let liveContainer: HTMLElement | null = null
+let priorActEnvironment: boolean | undefined
 
 /**
  * Mount with createRoot rather than RTL's render: RTL wraps the initial render
@@ -143,6 +144,8 @@ async function clickRetry() {
 describe('ComicVine hydration under real StrictMode effects (#5841)', () => {
   beforeEach(() => {
     refreshMetadata.mockReset()
+    priorActEnvironment = (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   })
 
   afterEach(() => {
@@ -153,6 +156,7 @@ describe('ComicVine hydration under real StrictMode effects (#5841)', () => {
     }
     liveContainer?.remove()
     liveContainer = null
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = priorActEnvironment
   })
 
   it('settles the automatic hydration instead of leaving a permanent hydrating state', async () => {

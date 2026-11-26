@@ -191,8 +191,15 @@ export function useComicVineMetadataHydration({
     autoHydrationKeyRef.current = null
   }, [issueId, identity])
 
-  useEffect(() => () => {
-    mountedRef.current = false
+  // The setup must remount the flag: React StrictMode runs setup -> cleanup ->
+  // setup in development. A cleanup with no matching setup would leave the
+  // flag false forever, discarding every later response and skipping the
+  // isHydrating reset in `finally` (permanent "Hydrating creator credits").
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
   }, [])
 
   const runHydration = useCallback(async (respectRetryAfter: boolean) => {
@@ -243,7 +250,11 @@ export function useComicVineMetadataHydration({
           message: NO_CREDITS.message,
           retryAfterSeconds: null,
         })
-      } else if (refreshed && outcome === 'complete') {
+      } else if (refreshed && (outcome === 'complete' || outcome == null)) {
+        // An older deployment may report refreshed=true without an outcome
+        // field. Do not invent a failure: the scoped re-read below decides the
+        // truthful presentation, so a stored no-credits result stays an empty
+        // result rather than becoming a bogus retryable failure (#5841).
         setOutcomeState(null)
       } else if (outcome != null) {
         const details = OUTCOME_DETAILS[outcome] ?? FAILED
