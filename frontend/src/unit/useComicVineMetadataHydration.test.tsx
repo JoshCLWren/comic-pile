@@ -71,8 +71,8 @@ describe('useComicVineMetadataHydration boundary decoding', () => {
     expect(loading.result.current.showRetry).toBe(false)
     expect(loading.result.current.canRetry).toBe(false)
 
+    loading.args.isLoading = false
     loading.rerender()
-    loading.result.current.isLoading === false
     expect(loading.result.current.state).toBeNull()
     expect(refreshMetadata).not.toHaveBeenCalled()
   })
@@ -115,8 +115,8 @@ describe('useComicVineMetadataHydration boundary decoding', () => {
   it('ignores zero, negative and malformed response retry_after_seconds', async () => {
     for (const [index, retryAfter] of [0, -5, Number.NaN].entries()) {
       refreshMetadata.mockResolvedValueOnce(refreshed({ retry_after_seconds: retryAfter }))
-      const { result } = renderHydration({ issueId: 10 + index })
-      await waitFor(() => expect(refreshMetadata).toHaveBeenCalled())
+      const { result, args } = renderHydration({ issueId: 10 + index })
+      await waitFor(() => expect(args.refetch).toHaveBeenCalledTimes(1))
       expect(result.current.retryAfterSeconds).toBe(0)
       expect(result.current.canRetry).toBe(true)
     }
@@ -155,7 +155,7 @@ describe('useComicVineMetadataHydration boundary decoding', () => {
     expect(withHeader.result.current.retryAfterSeconds).toBeGreaterThan(0)
 
     // SAFETY: the test intentionally supplies a hostile non-string header value.
-    refreshMetadata.mockRejectedValueOnce(apiError(429, { 'retry-after': 3 } as object))
+    refreshMetadata.mockRejectedValueOnce(apiError(429, { 'retry-after': 3 }))
     const nonString = renderHydration({
       issueId: 31,
       metadata: metadata({ metadata_status: 'refresh_failed' }),
@@ -218,26 +218,19 @@ describe('useComicVineMetadataHydration boundary decoding', () => {
       resolveRefresh = resolve
     }))
     const refetch = vi.fn().mockResolvedValue(metadata())
-    const { result, rerender } = renderHydration({ issueId: 50, refetch })
+    const { result, args, rerender } = renderHydration({ issueId: 50, refetch })
     await waitFor(() => expect(refreshMetadata).toHaveBeenCalledTimes(1))
     const beforeRemap = refetch.mock.calls.length
 
+    args.issueId = 51
+    args.metadata = metadata({ comicvine_issue_id: '999', metadata_status: 'not_deep_fetched' })
+    args.autoHydrate = false
     rerender()
-    const remapped = metadata({ comicvine_issue_id: '999', metadata_status: 'not_deep_fetched' })
-    result.current // keep the hook mounted before the identity change
-    const next = renderHook(() => useComicVineMetadataHydration({
-      issueId: 51,
-      metadata: remapped,
-      isLoading: false,
-      isError: false,
-      refetch,
-      autoHydrate: false,
-    }))
     await act(async () => {
       resolveRefresh?.(refreshed({ outcome: 'unavailable' }))
     })
     expect(refetch).toHaveBeenCalledTimes(beforeRemap)
-    expect(next.result.current.state).toBe('not-hydrated')
+    expect(result.current.state).toBe('not-hydrated')
   })
 
   it('deduplicates concurrent Retry calls for the same identity', async () => {
