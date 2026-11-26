@@ -1517,12 +1517,13 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
     // confirmed identity. Without a provider key it returns a truthful outcome
     // and never reopens, enqueues, claims or dispatches a background repair row.
     conn.execute(
-        "UPDATE comicvine_metadata_refresh_requests r \
-         SET state = 'failed', attempts = 3, next_attempt_at = now() + interval '1 day', \
-             lease_expires_at = now() + interval '1 day', last_error = 'provider_unavailable', \
-             completed_at = now() \
-         FROM external_identities e \
-         WHERE e.id = r.external_identity_id AND e.external_id = '2222'",
+        "INSERT INTO comicvine_metadata_refresh_requests \
+             (external_identity_id, state, attempts, next_attempt_at, \
+              lease_expires_at, last_error, completed_at, created_at, updated_at) \
+         SELECT e.id, 'failed', 3, now() + interval '1 day', \
+                now() + interval '1 day', 'provider_unavailable', now(), now(), now() \
+         FROM external_identities e WHERE e.external_id = '2222' \
+         ON CONFLICT ON CONSTRAINT uq_comicvine_metadata_refresh_identity DO NOTHING",
         &[],
     )
     .await
