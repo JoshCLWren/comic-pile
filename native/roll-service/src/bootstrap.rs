@@ -654,6 +654,7 @@ async fn canonical_series_stats(
           FROM mapped LEFT JOIN LATERAL (
             SELECT ev.rating,ev.timestamp FROM events ev
             WHERE ev.issue_id=mapped.id AND ev.type='rate' AND ev.rating IS NOT NULL
+               AND ev.context->>'undone_by_snapshot_id' IS NULL
             ORDER BY ev.timestamp DESC,ev.id DESC LIMIT 1
           ) rating ON TRUE
           WHERE mapped.volume_id=ANY($2::text[])

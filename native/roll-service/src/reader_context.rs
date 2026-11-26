@@ -293,6 +293,7 @@ async fn effective_ratings(
         .query(
             "SELECT issue_id, rating, \"timestamp\" FROM events
              WHERE type = 'rate' AND issue_id = ANY($1) AND rating IS NOT NULL
+               AND context->>'undone_by_snapshot_id' IS NULL
              ORDER BY issue_id, \"timestamp\" DESC, id DESC",
             &[&ids],
         )

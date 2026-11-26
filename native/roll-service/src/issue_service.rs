@@ -207,6 +207,7 @@ async fn card(
                 to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'),
                 (SELECT e.rating FROM events e WHERE e.user_id=$2 AND e.issue_id=i.id
                     AND e.type='rate' AND e.rating IS NOT NULL
+                    AND e.context->>'undone_by_snapshot_id' IS NULL
                     ORDER BY e.timestamp DESC, e.id DESC LIMIT 1),
                 COALESCE(mapping.status, 'unmapped'), mapping.external_id,
                 mapping.cover_url
@@ -263,6 +264,7 @@ pub(crate) async fn cards(
                 to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'),
                 (SELECT e.rating FROM events e WHERE e.user_id=$1 AND e.issue_id=i.id
                     AND e.type='rate' AND e.rating IS NOT NULL
+                    AND e.context->>'undone_by_snapshot_id' IS NULL
                     ORDER BY e.timestamp DESC, e.id DESC LIMIT 1),
                 COALESCE(mapping.status, 'unmapped'), mapping.external_id,
                 mapping.cover_url
@@ -868,6 +870,7 @@ pub(crate) async fn persist(
         .query_opt(
             "SELECT rating FROM events
          WHERE user_id=$1 AND issue_id=$2 AND type='rate' AND rating IS NOT NULL
+           AND context->>'undone_by_snapshot_id' IS NULL
          ORDER BY timestamp DESC,id DESC LIMIT 1",
             &[&user.id(), &issue_id],
         )
