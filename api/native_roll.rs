@@ -1414,6 +1414,61 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn edit_series_preview_ingress_reaches_rust_and_never_hits_json_404() {
+        // #5863: Edit Series Add posted to the inner-router-only preview paths,
+        // so the Vercel ingress returned its JSON 404 ("Not Found") instead of
+        // previewing Annual/Special/fractional input. An unauthenticated request
+        // must now reach the dispatched handler (401) or a cold-start 503; it
+        // must never fall through to native_not_found.
+        for (uri, body) in [
+            (
+                "/api/v2/threads/1019229/issues/preview",
+                r#"{"issue_range":"Annual 1, Special 1, 0.5, 0, Annual 3"}"#,
+            ),
+            (
+                "/api/v2/threads/1019229/issues/structure-preview",
+                r#"{"operation":"delete","issue_id":7}"#,
+            ),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method("POST")
+                        .uri(uri)
+                        .header("content-type", "application/json")
+                        .body(Body::from(body))
+                        .unwrap(),
+                )
+                .await
+                .expect("preview ingress response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{uri} must reach Rust dispatch, not the 404 fallback, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{uri} must be served by the native ingress"
+            );
+            let bytes = to_bytes(response.into_body(), 8192)
+                .await
+                .expect("body bytes");
+            let text = String::from_utf8_lossy(&bytes);
+            assert_ne!(
+                text, r#"{"detail":"Not Found"}"#,
+                "{uri} must not hit native_not_found: {text}"
+            );
+            assert!(
+                !text.contains("Wrong number of path arguments"),
+                "numeric thread ids must not fail Path extraction for {uri}: {text}"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn unknown_api_route_returns_rust_json_404_without_database() {
         let mut router = app();
         let response = router
