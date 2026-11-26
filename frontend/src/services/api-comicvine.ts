@@ -14,6 +14,13 @@ export const SERIES_IMPORT_TIMEOUT_MS = 120_000
 // keep above the server-side 50s roster deadline so the browser does not cancel early.
 export const COMICVINE_ROSTER_TIMEOUT_MS = 60_000
 
+/**
+ * One deliberate exact-issue hydration is request/response work, so it gets a
+ * bounded budget above the shared 10s read default. The browser must not cancel
+ * an awaited provider fetch that the server is still legitimately completing.
+ */
+export const COMICVINE_HYDRATION_TIMEOUT_MS = 30_000
+
 export interface ComicVineCreator {
   creator_id?: number | null
   name: string
@@ -130,6 +137,22 @@ export interface ComicVineIssueIntelligence {
   refresh_retry_after_seconds?: number | null
 }
 
+/**
+ * Truthful terminal outcome of one bounded synchronous ComicVine metadata
+ * hydration (#5840, #5841). The wire value is intentionally permissive: older
+ * repair-ledger statuses are normalized by the hydration hook, so a deployed
+ * frontend can read both generations during the backend rollout.
+ */
+export type ComicVineHydrationOutcome =
+  | 'complete'
+  | 'no_credits'
+  | 'not_deep_fetched'
+  | 'unavailable'
+  | 'rate_limited'
+  | 'timeout'
+  | 'invalid_response'
+  | (string & {})
+
 export interface ComicVineSeriesResult {
   comicvine_volume_id: number
   name: string
@@ -214,6 +237,13 @@ export interface MetadataRefreshResponse {
   issue_id: number
   refreshed: boolean
   comicvine_issue_id: string | null
+  /**
+   * Optional synchronous-hydration result added by the #5840 contract. When
+   * absent, the canonical issue-intelligence read after this request is the
+   * source of truth.
+   */
+  outcome?: ComicVineHydrationOutcome | null
+  retry_after_seconds?: number | null
 }
 
 export interface CanonicalCorrection {
@@ -265,7 +295,11 @@ export const comicVineApi = {
   replaceIdentity: (issueId: number, comicvineIssueId: number, reason?: string) =>
     api.post<IssueIdentityResponse>(`/v2/comicvine/issues/${issueId}/identity:replace`, { comicvine_issue_id: comicvineIssueId, reason }),
   refreshMetadata: (issueId: number) =>
-    api.post<MetadataRefreshResponse>(`/v2/comicvine/issues/${issueId}/metadata:refresh`),
+    api.post<MetadataRefreshResponse>(
+      `/v2/comicvine/issues/${issueId}/metadata:refresh`,
+      undefined,
+      { timeout: COMICVINE_HYDRATION_TIMEOUT_MS },
+    ),
   applyCorrection: (issueId: number, fieldName: string, canonicalValue: string, reason?: string) =>
     api.post<MetadataCorrectionsResponse>(`/v2/comicvine/issues/${issueId}/metadata:correct`, { field_name: fieldName, canonical_value: canonicalValue, reason }),
   listCorrections: (issueId: number) =>
