@@ -780,7 +780,10 @@ async fn a7_five_part_series_keeps_authored_identity_and_exact_provider_links() 
             .unwrap_or_else(|| panic!("missing authored issue {number}: {body:?}"));
         assert_eq!(card["issue_number"], *number, "authored label is immutable");
         assert_eq!(card["issue_number_alias"], *provider);
-        assert_eq!(card["display_issue_number"], format!("{number} ({provider})"));
+        assert_eq!(
+            card["display_issue_number"],
+            format!("{number} ({provider})")
+        );
         assert_eq!(card["comicvine_issue_id"], format!("4050-{provider}"));
         assert_eq!(card["provider_issue_number"], *provider);
         assert_eq!(
@@ -800,8 +803,14 @@ async fn a7_five_part_series_keeps_authored_identity_and_exact_provider_links() 
             .iter()
             .find(|item| item["issue_id"] == requested_ids[index])
             .unwrap_or_else(|| panic!("missing adjacent issue: {body:?}"));
-        assert!(card["comicvine_issue_id"].is_null(), "candidate is not identity");
-        assert!(card["provider_issue_number"].is_null(), "no fabricated number");
+        assert!(
+            card["comicvine_issue_id"].is_null(),
+            "candidate is not identity"
+        );
+        assert!(
+            card["provider_issue_number"].is_null(),
+            "no fabricated number"
+        );
         assert!(card["cover_image_url"].is_null(), "no fabricated cover");
     }
 
@@ -824,7 +833,11 @@ async fn a7_five_part_series_keeps_authored_identity_and_exact_provider_links() 
         .into_iter()
         .map(|row| row.get(0))
         .collect();
-    assert_eq!(positions, vec![1, 2, 3, 4, 5], "authored order is preserved");
+    assert_eq!(
+        positions,
+        vec![1, 2, 3, 4, 5],
+        "authored order is preserved"
+    );
 }
 
 /// An alias-only edit is a real write, replays its idempotency key, and never
