@@ -571,4 +571,93 @@ mod tests {
             Some("digest")
         );
     }
+
+    /// Regression for #5610: Queue "Map series" preview must load a plan for a
+    /// selected volume. The preview handler must route roster fetches through the
+    /// shared ComicVine limits (cache/rate-limit coordination) rather than raw
+    /// provider calls, and return an available bootstrap plan when roster data is
+    /// present.
+    #[tokio::test]
+    async fn queue_bootstrap_preview_returns_available_plan() {
+        let state = crate::test_support::test_state(1)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let connection = state.pool.get().await.expect("connection");
+        connection
+            .batch_execute(
+                r#"
+                INSERT INTO users (id, username, created_at, is_admin)
+                VALUES (9001, 'map-series-preview', now(), false);
+                INSERT INTO threads
+                    (id, user_id, title, format, issues_remaining, queue_position, status,
+                     total_issues, created_at, is_blocked, is_test, manual_creator_credits,
+                     queue_position_is_manual)
+                VALUES (561077, 9001, 'Terra Obscura', 'Comic', 0, 1, 'active', 6, now(),
+                        false, false, '[]', false);
+                "#,
+            )
+            .await
+            .expect("seed thread");
+        for n in 1..=6_i32 {
+            connection
+                .execute(
+                    "INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+                     VALUES ($1, 561077, $2, 'unread', now(), $3)",
+                    &[&(5610000 + n), &n.to_string(), &n],
+                )
+                .await
+                .expect("seed issue");
+        }
+
+        let volume_id = "5610777";
+        crate::test_support::install_test_volume_roster(
+            volume_id,
+            serde_json::json!({
+                "id": volume_id,
+                "name": "Terra Obscura",
+                "publisher": "DC Comics",
+                "start_year": 2003,
+                "count_of_issues": 6,
+                "site_detail_url": "https://comicvine.gamespot.com/volume/4050-5610777/",
+                "image": null,
+            }),
+            (1..=6_i32)
+                .map(|n| {
+                    serde_json::json!({
+                        "issue_id": 5610500 + n,
+                        "issue_number": n.to_string(),
+                        "title": format!("Issue {n}"),
+                        "thread_id": null,
+                        "thread_title": null,
+                        "current_mapping_status": "unresolved",
+                        "provider": "comicvine",
+                        "external_id": (5610500 + n).to_string(),
+                        "classification": "unresolved",
+                        "_roster_only": true,
+                        "_provider_metadata": {"name": format!("Issue {n}"), "issue_number": n.to_string()},
+                    })
+                })
+                .collect(),
+        );
+
+        let body = Bytes::from_static(
+            br#"{"origin_issue_id":5610001,"provider":"comicvine","provider_series_external_id":"5610777","scope_mode":"queue_thread_bootstrap"}"#,
+        );
+        let result = preview_series_mapping_handler(
+            State(state),
+            crate::auth::AuthenticatedUser::for_test(9001),
+            body,
+        )
+        .await;
+
+        crate::test_support::clear_test_volume_roster(volume_id);
+
+        let response = result.expect("preview should load, not return an error");
+        assert_eq!(response.scope.status, "available");
+        assert!(response.preview_token.is_some());
+        assert_eq!(response.counts.safe_exact_match, 6);
+        assert_eq!(response.rows.len(), 6);
+        assert!(response.rows.iter().all(|row| row.default_selected));
+    }
 }
