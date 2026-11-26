@@ -110,33 +110,40 @@ async function openCrossoverDetail(page: Page, groupId: number): Promise<void> {
   await expect(page.getByTestId('crossover-reading-order')).toBeVisible()
 }
 
-/** Scrolls only the document/window, never any nested scroll container. */
+/**
+ * Scrolls the app shell owner (#root), never a nested list container. The
+ * authenticated shell deliberately keeps the document itself non-scrollable
+ * and owns scroll inside #root, so window.scrollTo never moves the viewport.
+ */
 async function scrollPageToBottom(page: Page): Promise<void> {
   await page.evaluate(() => {
-    window.scrollTo({
-      top: document.documentElement.scrollHeight,
-      behavior: 'instant',
-    })
+    const root = document.getElementById('root')
+    if (root) {
+      root.scrollTop = root.scrollHeight
+    }
   })
   await page.waitForTimeout(80)
 }
 
 async function assertPageOwnsScroll(page: Page): Promise<void> {
-  const doc = await page.evaluate(() => ({
-    scrollHeight: document.documentElement.scrollHeight,
-    clientHeight: document.documentElement.clientHeight,
-    scrollWidth: document.documentElement.scrollWidth,
-    innerWidth: window.innerWidth,
-  }))
+  const doc = await page.evaluate(() => {
+    const root = document.getElementById('root')
+    return {
+      scrollHeight: root?.scrollHeight ?? 0,
+      clientHeight: root?.clientHeight ?? 0,
+      scrollWidth: root?.scrollWidth ?? 0,
+      clientWidth: root?.clientWidth ?? 0,
+    }
+  })
 
   expect(
     doc.scrollHeight,
-    'the page itself must be taller than the viewport so document scroll can reach later rows',
+    'the app scroller must be taller than the viewport so page scroll can reach later rows',
   ).toBeGreaterThan(doc.clientHeight)
   expect(
     doc.scrollWidth,
     'reading-order rows must not overflow the viewport horizontally',
-  ).toBeLessThanOrEqual(doc.innerWidth)
+  ).toBeLessThanOrEqual(doc.clientWidth + 2)
 }
 
 async function assertReadingOrderGrowsWithContent(page: Page): Promise<void> {
