@@ -3,12 +3,16 @@ import { Link } from 'react-router-dom'
 import { isObject, isNonEmptyString, isString } from '../utils/runtimeChecks'
 import {
   useIdentityInbox,
+  useIdentityInboxSearch,
   useConfirmInboxCandidate,
   useRejectInboxCandidate,
   useDeferInboxItem,
   useSkipInboxItem,
 } from '../hooks/useIdentityInbox'
-import type { IdentityInboxCandidate as InboxCandidate, IdentityInboxItem as InboxItem } from '../services/api-identity'
+import type {
+  IdentityInboxCandidate as InboxCandidate,
+  IdentityInboxItem as InboxItem,
+} from '../services/api-identity'
 import { ComicIssueCover } from '../components/ComicIssueCard'
 
 type MetadataValue = string | Record<string, string> | null
@@ -162,6 +166,133 @@ function CandidateCard({
   )
 }
 
+/** #5434: reviewer-driven discovery with explainable scores and a partial
+ * series plan. Unambiguous candidates are confirmed through the existing
+ * confirmation endpoint; ambiguous or missing issues stay in the inbox. */
+function MatchSearchPanel({
+  item,
+  onConfirm,
+}: {
+  item: InboxItem
+  onConfirm: (mappingId: number, identityId: number) => void
+}) {
+  const [input, setInput] = useState('')
+  const [query, setQuery] = useState('')
+  const { data, isPending, isError } = useIdentityInboxSearch(
+    query,
+    item.issue_id,
+    query.length > 0,
+  )
+
+  return (
+    <div className="mt-3 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-page)] p-3">
+      <div className="text-xs font-semibold text-[var(--theme-text-primary)]">
+        Find a ComicVine match
+      </div>
+      <p className="mt-1 text-xs text-[var(--theme-text-muted)]">
+        Search by a different name or paste a ComicVine volume or issue URL.
+      </p>
+      <form
+        className="mt-2 flex gap-2"
+        onSubmit={(event) => {
+          event.preventDefault()
+          setQuery(input.trim())
+        }}
+      >
+        <input
+          type="text"
+          value={input}
+          onChange={(event) => setInput(event.target.value)}
+          placeholder="Series name or ComicVine URL"
+          aria-label="ComicVine search query"
+          className="min-w-0 flex-1 px-2 py-1 text-xs border border-[var(--theme-border)] rounded bg-[var(--theme-bg-panel)] text-[var(--theme-text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--theme-focus-ring)]"
+        />
+        <button
+          type="submit"
+          className="px-3 py-1 text-xs font-medium rounded bg-[var(--theme-primary-action)] text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)]"
+        >
+          Search
+        </button>
+      </form>
+
+      {isPending && <p className="mt-2 text-xs text-[var(--theme-text-muted)]">Searching…</p>}
+      {isError && (
+        <p className="mt-2 text-xs text-[var(--theme-error)]">
+          Search is unavailable right now. You can defer or map this issue manually.
+        </p>
+      )}
+
+      {data && (
+        <div className="mt-3 space-y-3">
+          {data.partial_matches.map((plan) => (
+            <div key={plan.comicvine_volume_id} className="rounded-lg border border-[var(--theme-border)] p-2">
+              <div className="text-xs font-medium text-[var(--theme-text-primary)]">
+                {plan.actionable_reason}
+              </div>
+              <ul className="mt-1 space-y-1">
+                {plan.matched.map((match) => (
+                  <li key={`matched-${match.issue_id}`} className="flex items-center justify-between gap-2 text-xs text-[var(--theme-text-muted)]">
+                    <span>
+                      #{match.issue_number} → ComicVine #{match.comicvine_issue_id}
+                    </span>
+                    {match.mapping_id !== null && match.external_identity_id !== null && (
+                      <button
+                        type="button"
+                        onClick={() => onConfirm(match.mapping_id!, match.external_identity_id!)}
+                        className="px-2 py-0.5 text-xs font-medium rounded bg-[var(--theme-primary-action)] text-[var(--theme-primary-action-text)] hover:bg-[var(--theme-primary-action-hover)]"
+                      >
+                        Confirm
+                      </button>
+                    )}
+                  </li>
+                ))}
+                {plan.unmatched.map((unmatched) => (
+                  <li key={`unmatched-${unmatched.issue_id}`} className="text-xs text-[var(--theme-text-muted)]">
+                    #{unmatched.issue_number}: {unmatched.reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+
+          {data.results.map((result) => (
+            <div key={result.comicvine_issue_id} className="rounded-lg border border-[var(--theme-border)] p-2">
+              <div className="flex items-center justify-between gap-2 text-xs text-[var(--theme-text-primary)]">
+                <span>
+                  #{result.issue_number ?? '?'} {result.volume_name ? `(${result.volume_name})` : ''}
+                </span>
+                {result.score !== null && (
+                  <span className="text-[var(--theme-text-dim)]">
+                    {Math.round(result.score * 100)}% match
+                  </span>
+                )}
+              </div>
+              {result.evidence.length > 0 && (
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {result.evidence.map((evidence, index) => (
+                    <span
+                      key={`${evidence}-${index}`}
+                      className="text-[11px] text-[var(--theme-text-muted)] px-2 py-0.5 rounded border border-[var(--theme-border)]"
+                    >
+                      {evidence}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {data.partial_matches.length === 0 && data.results.length === 0 && (
+            <p className="text-xs text-[var(--theme-text-muted)]">
+              No matches found. Try another name, paste a URL, or map manually.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function InboxItemCard({
   item,
   onConfirm,
@@ -184,6 +315,7 @@ function InboxItemCard({
   const isExpanded = expandedId === item.mapping_id
   const [rejectReason, setRejectReason] = useState('')
   const [showRejectForm, setShowRejectForm] = useState(false)
+  const [showSearch, setShowSearch] = useState(false)
 
   const handleReject = async (identityId: number) => {
     if (!rejectReason.trim()) {
@@ -290,7 +422,18 @@ function InboxItemCard({
               </div>
             )}
 
+            {showSearch && (
+              <MatchSearchPanel item={item} onConfirm={onConfirm} />
+            )}
+
             <div className="flex gap-2 mt-3 pt-3 border-t border-[var(--theme-border)]">
+              <button
+                type="button"
+                onClick={() => setShowSearch((visible) => !visible)}
+                className="px-3 py-1.5 text-xs font-medium rounded-md bg-[var(--theme-bg-panel)] text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
+              >
+                {showSearch ? 'Hide search' : 'Find match'}
+              </button>
               <button
                 type="button"
                 onClick={() => onDefer(item.mapping_id)}
