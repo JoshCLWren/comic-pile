@@ -249,7 +249,7 @@ fn parse_json_text(text: Option<String>) -> Value {
 /// Local discovery context for #5434, assembled from data the app already
 /// owns. No provider I/O here: these are the hints that make provider searches
 /// find volumes even when the local series name differs from ComicVine's.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct MatchContext {
     issue: crate::comicvine_matching::MatchIssue,
 }
@@ -987,7 +987,14 @@ pub async fn search_issues(
     let mut results = Vec::new();
     let mut total_available = Some(0i64);
     if let Some(p) = payload {
-        if let Some(rows) = p.get("results").and_then(|v| v.as_array()) {
+        // Search and volume lookups return an array; a pasted issue URL
+        // returns a single object. Both feed the same matching pipeline.
+        let rows: Vec<&Value> = match p.get("results") {
+            Some(Value::Array(values)) => values.iter().collect(),
+            Some(object @ Value::Object(_)) => vec![object],
+            _ => Vec::new(),
+        };
+        {
             for row in rows {
                 let Some(obj) = row.as_object() else {
                     continue;
@@ -1057,6 +1064,53 @@ pub async fn search_issues(
                     evidence.push(format!("Publisher: {pubn}"));
                 }
 
+                // #5434: score the provider row with the same explainable
+                // heuristics the pure matching module uses. This is real
+                // production data (the provider response plus owned hints),
+                // not an injected fixture.
+                let mut score = None;
+                if let Some(provider_issue) = provider_issue_from_search(obj) {
+                    let volumes = crate::comicvine_matching::discover_volume_candidates(
+                        &local,
+                        std::slice::from_ref(&provider_issue),
+                    );
+                    if let Some(best) = volumes.first() {
+                        score = Some(best.score);
+                        evidence.extend(best.evidence.iter().cloned());
+                    } else if let Some(provider_label) = provider_issue
+                        .issue_number
+                        .as_deref()
+                        .or(provider_issue.issue_name.as_deref())
+                    {
+                        let label_match = crate::comicvine_matching::compare_issue_labels(
+                            &local.issue_number,
+                            provider_label,
+                        );
+                        if label_match != crate::comicvine_matching::LabelMatch::None {
+                            evidence.push(format!(
+                                "issue label {} matches provider {}",
+                                local.issue_number, provider_label
+                            ));
+                            score = Some(match label_match {
+                                crate::comicvine_matching::LabelMatch::Exact => 0.34,
+                                crate::comicvine_matching::LabelMatch::Equivalent => 0.28,
+                                crate::comicvine_matching::LabelMatch::None => 0.0,
+                            });
+                        }
+                    }
+                    let similarity = crate::comicvine_matching::title_similarity(
+                        &local.series_name,
+                        &provider_issue.volume_name,
+                    );
+                    if similarity >= 0.45 {
+                        evidence.push(format!(
+                            "fuzzy title match {:.0}%: {}",
+                            similarity * 100.0,
+                            provider_issue.volume_name
+                        ));
+                    }
+                }
+
                 results.push(IdentityInboxSearchResult {
                     comicvine_issue_id,
                     comicvine_volume_id,
@@ -1112,6 +1166,25 @@ fn build_search_url(api_key: &str, query: &str, limit: i64) -> String {
         percent_encode(api_key),
         percent_encode(query),
         limit,
+        percent_encode(field_list)
+    )
+}
+
+/// Resolve a pasted issue URL to its canonical provider resource.
+fn build_resource_url(api_key: &str, resource: &str, field_list: &str) -> String {
+    format!(
+        "https://comicvine.gamespot.com/api/{resource}/?api_key={}&format=json&field_list={}",
+        percent_encode(api_key),
+        percent_encode(field_list)
+    )
+}
+
+/// Resolve a pasted volume URL to the issues on that volume (bounded page).
+fn build_volume_issues_url(api_key: &str, volume_id: i32, limit: i64) -> String {
+    let field_list = "id,name,issue_number,cover_date,volume,publisher,site_detail_url,image";
+    format!(
+        "https://comicvine.gamespot.com/api/issues/?api_key={}&format=json&filter=volume%3A{volume_id}&limit={limit}&field_list={}",
+        percent_encode(api_key),
         percent_encode(field_list)
     )
 }
