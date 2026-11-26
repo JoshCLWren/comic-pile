@@ -2498,6 +2498,8 @@ pub struct CblAdoptionCommitRequest {
     pub series_decisions: Vec<CommitSeriesDecision>,
     #[serde(default)]
     pub series_overrides: Vec<CommitEntryOverride>,
+    #[serde(default)]
+    pub idempotency_key: Option<String>,
     pub content_hash: String,
     pub revision_sha: String,
 }
@@ -2516,7 +2518,7 @@ pub struct ContinuityPlanResponseWire {
     pub updated_at: String,
 }
 
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct CblAdoptionCommitResponseWire {
     pub id: i32,
     pub user_id: i32,
@@ -2735,6 +2737,134 @@ fn unique_adoption_plan_name(
     format!("{base_name} (dedupe exhausted)")
 }
 
+fn cbl_adoption_request_fingerprint(
+    list_id: i32,
+    target_plan_id: Option<i32>,
+    request: &CblAdoptionCommitRequest,
+) -> String {
+    let mut entry_decisions: Vec<(i32, &str)> = request
+        .entry_decisions
+        .iter()
+        .map(|(k, v)| (*k, v.as_str()))
+        .collect();
+    entry_decisions.sort_by_key(|(k, _)| *k);
+    let mut series_decisions: Vec<(&str, &str)> = request
+        .series_decisions
+        .iter()
+        .map(|s| (s.series_name.as_str(), s.decision.as_str()))
+        .collect();
+    series_decisions.sort_by(|a, b| a.0.cmp(b.0).then(a.1.cmp(b.1)));
+    let mut series_overrides: Vec<(i32, &str)> = request
+        .series_overrides
+        .iter()
+        .map(|s| (s.cbl_position, s.decision.as_str()))
+        .collect();
+    series_overrides.sort_by_key(|(k, _)| *k);
+    let payload = serde_json::json!({
+        "list_id": list_id,
+        "target_plan_id": target_plan_id,
+        "content_hash": request.content_hash,
+        "revision_sha": request.revision_sha,
+        "entry_decisions": entry_decisions,
+        "series_decisions": series_decisions,
+        "series_overrides": series_overrides,
+        "idempotency_key": request.idempotency_key.as_deref(),
+    });
+    let serialized = serde_json::to_vec(&payload).unwrap_or_default();
+    sha256_hex(&serialized)
+}
+
+async fn replay_cbl_adoption_receipt(
+    tx: &tokio_postgres::Transaction<'_>,
+    user_id: i32,
+    list_id: i32,
+    fingerprint: &str,
+) -> Result<Option<CblAdoptionCommitResponseWire>, CommitErr> {
+    let row = tx
+        .run_query_opt(
+            "SELECT request_fingerprint, response_json::text, plan_id FROM cbl_adoption_receipts WHERE user_id = $1 AND cbl_source_list_id = $2",
+            &[&user_id, &list_id],
+        )
+        .await
+        .map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("lookup adoption receipt: {e}"))
+            }
+        })?;
+    let Some(row) = row else { return Ok(None) };
+    let stored_fingerprint: String = row.get(0);
+    if stored_fingerprint != fingerprint {
+        return Ok(None);
+    }
+    let response_json: Option<String> = row.get(1);
+    if let Some(json_text) = response_json {
+        if let Ok(resp) = serde_json::from_str::<CblAdoptionCommitResponseWire>(&json_text) {
+            return Ok(Some(resp));
+        }
+    }
+    let plan_id: i32 = row.get(2);
+    let prow = tx
+        .run_query_opt(
+            "SELECT id,user_id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1 AND user_id=$2",
+            &[&plan_id, &user_id],
+        )
+        .await
+        .map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("load replay plan: {e}"))
+            }
+        })?;
+    let Some(prow) = prow else { return Ok(None) };
+    Ok(Some(CblAdoptionCommitResponseWire {
+        id: prow.get(0),
+        user_id: prow.get(1),
+        name: prow.get(2),
+        ordering_mode: prow.get(3),
+        lanes: serde_json::from_str::<JsonValue>(&prow.get::<_, String>(4))
+            .unwrap_or(serde_json::json!([])),
+        nodes: serde_json::from_str::<JsonValue>(&prow.get::<_, String>(5))
+            .unwrap_or(serde_json::json!([])),
+        created_at: prow.get(6),
+        updated_at: prow.get(7),
+        reused_positions: Vec::new(),
+        created_positions: Vec::new(),
+        excluded_positions: Vec::new(),
+        unresolved_positions: Vec::new(),
+    }))
+}
+
+async fn store_cbl_adoption_receipt(
+    tx: &tokio_postgres::Transaction<'_>,
+    user_id: i32,
+    list_id: i32,
+    plan_id: i32,
+    fingerprint: &str,
+    response: &CblAdoptionCommitResponseWire,
+) -> Result<(), CommitErr> {
+    let response_json =
+        serde_json::to_value(response).map_err(|e| CommitErr::Unexpected(e.to_string()))?;
+    tx.run_execute(
+        "INSERT INTO cbl_adoption_receipts (user_id, cbl_source_list_id, plan_id, request_fingerprint, created_at, response_json)
+         VALUES ($1,$2,$3,$4,NOW(),$5)
+         ON CONFLICT (user_id, cbl_source_list_id)
+         DO UPDATE SET plan_id = EXCLUDED.plan_id, request_fingerprint = EXCLUDED.request_fingerprint, response_json = EXCLUDED.response_json, created_at = NOW()",
+        &[&user_id, &list_id, &plan_id, &fingerprint, &response_json],
+    )
+    .await
+    .map_err(|e| {
+        if crate::db::is_transport_failure(&e) {
+            CommitErr::Db(ApiError::database_unavailable())
+        } else {
+            CommitErr::Unexpected(format!("store adoption receipt: {e}"))
+        }
+    })?;
+    Ok(())
+}
+
 async fn do_cbl_adoption_commit(
     state: &Arc<AppState>,
     user_id: i32,
@@ -2790,6 +2920,25 @@ async fn do_cbl_adoption_commit(
             "Revision mismatch: expected {revision_sha}, got {}",
             request.revision_sha
         )));
+    }
+
+    let request_fingerprint = cbl_adoption_request_fingerprint(list_id, target_plan_id, &request);
+    if let Some(replayed) =
+        replay_cbl_adoption_receipt(&tx, user_id, list_id, &request_fingerprint).await?
+    {
+        tx.commit().await.map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("commit replay tx: {e}"))
+            }
+        })?;
+        let status = if target_plan_id.is_some() {
+            StatusCode::OK
+        } else {
+            StatusCode::CREATED
+        };
+        return Ok((status, replayed));
     }
 
     let (entry_decisions_raw, series_decisions_raw, series_overrides_raw) =
@@ -3226,14 +3375,6 @@ async fn do_cbl_adoption_commit(
     }
 
     let prow = tx.run_query_one("SELECT id,user_id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1", &[&plan_id]).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(format!("reload plan: {e}")) })?;
-    tx.commit().await.map_err(|e| {
-        if crate::db::is_transport_failure(&e) {
-            CommitErr::Db(ApiError::database_unavailable())
-        } else {
-            CommitErr::Unexpected(e.to_string())
-        }
-    })?;
-
     let status = if requested_target_plan_id.is_some() {
         StatusCode::OK
     } else {
@@ -3255,6 +3396,14 @@ async fn do_cbl_adoption_commit(
         excluded_positions: merge.2,
         unresolved_positions: merge.3,
     };
+    store_cbl_adoption_receipt(&tx, user_id, list_id, plan_id, &request_fingerprint, &resp).await?;
+    tx.commit().await.map_err(|e| {
+        if crate::db::is_transport_failure(&e) {
+            CommitErr::Db(ApiError::database_unavailable())
+        } else {
+            CommitErr::Unexpected(e.to_string())
+        }
+    })?;
     Ok((status, resp))
 }
 
@@ -3285,6 +3434,352 @@ pub(crate) async fn reconcile_entries_for_adoption_positions<E: DbExec>(
         return Ok(Vec::new());
     }
     reconcile_entries_impl(tx, user_id, list_meta, Some(&positions)).await
+}
+
+/// One owned issue confirmed against a ComicVine issue identity.
+#[derive(Clone)]
+struct ConfirmedOwnedIssue {
+    id: i32,
+    status: Option<String>,
+    read_at: Option<String>,
+}
+
+/// Owner-scoped identity lookups for a whole source list, loaded in a fixed
+/// number of `= ANY($1)` statements.
+///
+/// The original reconciler issued an `external_identities` lookup, a confirmed
+/// mapping lookup and (for fallback matches) two more lookups *per source
+/// entry*. A 228-position Alpha Flight import therefore issued hundreds of
+/// statements inside the adoption transaction and lost the client's HTTP
+/// budget (#5522). Every field below is populated with one bounded query over
+/// the whole list, so preview and commit share a statement count that does not
+/// grow with the number of positions.
+#[derive(Default)]
+struct AdoptionIdentityIndex {
+    /// ComicVine issue external id -> `external_identities.id`.
+    cvid_identity_ids: std::collections::HashMap<String, i32>,
+    /// Identity id -> this reader's confirmed issues (ordered by id).
+    confirmed_owned_by_identity: std::collections::HashMap<i32, Vec<ConfirmedOwnedIssue>>,
+    /// Issue id -> confirmed ComicVine external ids (title/number guard).
+    confirmed_cvids_by_issue: std::collections::HashMap<i32, std::collections::HashSet<String>>,
+    /// Thread id -> confirmed ComicVine series external ids (series guard).
+    confirmed_series_by_thread: std::collections::HashMap<i32, std::collections::HashSet<String>>,
+}
+
+async fn load_adoption_identity_index<E: DbExec>(
+    tx: &E,
+    user_id: i32,
+    cvids: &[String],
+    candidate_issue_ids: &[i32],
+    candidate_thread_ids: &[i32],
+) -> Result<AdoptionIdentityIndex, ApiError> {
+    let mut index = AdoptionIdentityIndex::default();
+    if !cvids.is_empty() {
+        let rows = tx
+            .run_query(
+                "SELECT external_id, id FROM external_identities WHERE provider='comicvine' AND entity_type='issue' AND external_id = ANY($1)",
+                &[&cvids],
+            )
+            .await
+            .map_err(|e| tx_db_error(e, ""))?;
+        for row in rows {
+            index.cvid_identity_ids.insert(row.get(0), row.get(1));
+        }
+        let identity_ids: Vec<i32> = index.cvid_identity_ids.values().copied().collect();
+        if !identity_ids.is_empty() {
+            let rows = tx
+                .run_query(
+                    r#"
+            SELECT m.external_identity_id, i.id, i.status::text, i.read_at::text
+            FROM issue_external_identity_mappings m
+            JOIN issues i ON i.id = m.issue_id
+            JOIN threads t ON t.id = i.thread_id
+            WHERE m.external_identity_id = ANY($1) AND m.status = 'confirmed' AND t.user_id = $2
+            ORDER BY i.id
+            "#,
+                    &[&identity_ids, &user_id],
+                )
+                .await
+                .map_err(|e| tx_db_error(e, ""))?;
+            for row in rows {
+                index
+                    .confirmed_owned_by_identity
+                    .entry(row.get(0))
+                    .or_default()
+                    .push(ConfirmedOwnedIssue {
+                        id: row.get(1),
+                        status: row.get(2),
+                        read_at: row.get(3),
+                    });
+            }
+        }
+    }
+    if !candidate_issue_ids.is_empty() {
+        let rows = tx
+            .run_query(
+                r#"
+            SELECT m.issue_id, ei.external_id
+            FROM issue_external_identity_mappings m
+            JOIN external_identities ei ON ei.id = m.external_identity_id
+            WHERE m.issue_id = ANY($1) AND m.status = 'confirmed'
+              AND ei.provider = 'comicvine' AND ei.entity_type = 'issue'
+            "#,
+                &[&candidate_issue_ids],
+            )
+            .await
+            .map_err(|e| tx_db_error(e, ""))?;
+        for row in rows {
+            index
+                .confirmed_cvids_by_issue
+                .entry(row.get(0))
+                .or_default()
+                .insert(row.get(1));
+        }
+    }
+    if !candidate_thread_ids.is_empty() {
+        let rows = tx
+            .run_query(
+                r#"
+            SELECT tesm.thread_id, ei.external_id
+            FROM thread_external_series_mappings tesm
+            JOIN external_identities ei ON ei.id = tesm.external_identity_id
+            WHERE tesm.thread_id = ANY($1) AND tesm.status = 'confirmed'
+              AND ei.provider = 'comicvine' AND ei.entity_type = 'series'
+            "#,
+                &[&candidate_thread_ids],
+            )
+            .await
+            .map_err(|e| tx_db_error(e, ""))?;
+        for row in rows {
+            index
+                .confirmed_series_by_thread
+                .entry(row.get(0))
+                .or_default()
+                .insert(row.get(1));
+        }
+    }
+    Ok(index)
+}
+
+fn no_owned_issue_resolution() -> (
+    Option<i32>,
+    Option<i32>,
+    String,
+    bool,
+    Option<String>,
+    Option<String>,
+) {
+    (
+        None,
+        None,
+        "no_owned_issue_for_comicvine_id".to_string(),
+        false,
+        None,
+        None,
+    )
+}
+
+/// Pure (no SQL) title/number fallback using the preloaded guard indexes.
+fn title_number_fallback_batched(
+    series_name: &str,
+    issue_number: &str,
+    series_external_id: Option<&str>,
+    fallback_index: &OwnedIssueFallbackIndex,
+    identity_index: &AdoptionIdentityIndex,
+) -> (
+    Option<i32>,
+    Option<i32>,
+    String,
+    bool,
+    Option<String>,
+    Option<String>,
+) {
+    let want_series = normalize_title_number(series_name);
+    let want_issue = normalize_title_number(issue_number);
+    if want_series.is_empty() || want_issue.is_empty() {
+        return no_owned_issue_resolution();
+    }
+    let mut matches: Vec<(i32, Option<String>, Option<String>, i32)> = fallback_index
+        .rows
+        .iter()
+        .filter(|row| row.series_norm == want_series && row.issue_norm == want_issue)
+        .map(|row| {
+            (
+                row.id,
+                row.status.clone(),
+                row.read_at.clone(),
+                row.thread_id,
+            )
+        })
+        .collect();
+    // An issue already confirmed against ComicVine would have been resolved by
+    // the identity path; keeping it here would create a duplicate.
+    matches.retain(|m| {
+        identity_index
+            .confirmed_cvids_by_issue
+            .get(&m.0)
+            .map(|ids| ids.is_empty())
+            .unwrap_or(true)
+    });
+    if matches.is_empty() {
+        return no_owned_issue_resolution();
+    }
+    if let Some(series_id) = series_external_id.map(str::trim).filter(|s| !s.is_empty()) {
+        let mut verified = Vec::new();
+        let mut unverifiable = Vec::new();
+        for m in &matches {
+            match identity_index.confirmed_series_by_thread.get(&m.3) {
+                None => unverifiable.push(m.clone()),
+                Some(ids) if ids.is_empty() => unverifiable.push(m.clone()),
+                Some(ids) if ids.contains(series_id) => verified.push(m.clone()),
+                // A thread confirmed to a different series is not a match.
+                Some(_) => {}
+            }
+        }
+        if !unverifiable.is_empty() {
+            return (
+                None,
+                None,
+                "ambiguous_title_number_unverifiable_series".to_string(),
+                false,
+                None,
+                None,
+            );
+        }
+        matches = verified;
+        if matches.is_empty() {
+            return no_owned_issue_resolution();
+        }
+    }
+    if matches.len() == 1 {
+        let m = &matches[0];
+        return (
+            Some(m.0),
+            Some(m.0),
+            "resolved_via_title_number_fallback".to_string(),
+            false,
+            m.1.clone(),
+            m.2.clone(),
+        );
+    }
+    (
+        None,
+        None,
+        "ambiguous_title_number_multiple_matches".to_string(),
+        false,
+        None,
+        None,
+    )
+}
+
+/// Pure canonical resolution against the preloaded indexes. Mirrors the old
+/// per-entry resolver exactly (including duplicate/read-status semantics) but
+/// performs zero database round trips per entry.
+fn resolve_canonical_for_entry_batched(
+    comicvine_issue_id: Option<&str>,
+    series_name: &str,
+    issue_number: &str,
+    series_external_id: Option<&str>,
+    fallback_index: &OwnedIssueFallbackIndex,
+    identity_index: &AdoptionIdentityIndex,
+) -> (
+    Option<i32>,
+    Option<i32>,
+    String,
+    bool,
+    Option<String>,
+    Option<String>,
+) {
+    let Some(cvid) = comicvine_issue_id.map(str::trim).filter(|s| !s.is_empty()) else {
+        return (
+            None,
+            None,
+            "ambiguous_no_comicvine_id".to_string(),
+            false,
+            None,
+            None,
+        );
+    };
+    let Some(&eid) = identity_index.cvid_identity_ids.get(cvid) else {
+        return (
+            None,
+            None,
+            "comicvine_identity_not_known".to_string(),
+            false,
+            None,
+            None,
+        );
+    };
+    let Some(issues) = identity_index
+        .confirmed_owned_by_identity
+        .get(&eid)
+        .filter(|issues| !issues.is_empty())
+    else {
+        return title_number_fallback_batched(
+            series_name,
+            issue_number,
+            series_external_id,
+            fallback_index,
+            identity_index,
+        );
+    };
+    if issues.len() == 1 {
+        let issue = &issues[0];
+        return (
+            Some(issue.id),
+            Some(issue.id),
+            "resolved_via_comicvine_canonical".to_string(),
+            false,
+            issue.status.clone(),
+            issue.read_at.clone(),
+        );
+    }
+    let mut read_rows: Vec<(i32, Option<String>, Option<String>)> = Vec::new();
+    let mut all_unread = true;
+    for issue in issues {
+        if issue.status.as_deref() == Some("read") {
+            all_unread = false;
+            read_rows.push((issue.id, issue.status.clone(), issue.read_at.clone()));
+        }
+    }
+    let canonical = if !all_unread {
+        read_rows.sort_by(|a, b| {
+            a.2.as_deref()
+                .unwrap_or("9999")
+                .cmp(b.2.as_deref().unwrap_or("9999"))
+                .then(a.0.cmp(&b.0))
+        });
+        read_rows.first().map(|row| row.0).unwrap_or(issues[0].id)
+    } else {
+        issues
+            .iter()
+            .map(|issue| issue.id)
+            .min()
+            .unwrap_or(issues[0].id)
+    };
+    let canon_row = issues
+        .iter()
+        .find(|issue| issue.id == canonical)
+        .unwrap_or(&issues[0]);
+    let has_read = issues
+        .iter()
+        .any(|issue| issue.status.as_deref() == Some("read"));
+    let has_unread = issues
+        .iter()
+        .any(|issue| issue.status.as_deref() != Some("read"));
+    let status = if has_read && has_unread {
+        "resolved_via_comicvine_canonical_ambiguous"
+    } else {
+        "resolved_via_comicvine_canonical"
+    };
+    (
+        Some(canonical),
+        Some(canonical),
+        status.to_string(),
+        true,
+        canon_row.status.clone(),
+        canon_row.read_at.clone(),
+    )
 }
 
 async fn reconcile_entries_impl<E: DbExec>(
@@ -3332,8 +3827,63 @@ async fn reconcile_entries_impl<E: DbExec>(
             .map_err(|e| tx_db_error(e, ""))?,
     };
     let fallback_index = load_owned_issue_fallback_index(tx, user_id).await?;
+
+    // Gather every lookup key once, then issue one bounded query per index.
+    // A long list no longer produces a query per source entry.
+    let mut cvids: Vec<String> = Vec::new();
+    let mut candidate_issue_ids: Vec<i32> = Vec::new();
+    let mut candidate_thread_ids: Vec<i32> = Vec::new();
+    for row in &rows {
+        let comicvine_issue_id: Option<String> = row.get(4);
+        if let Some(cvid) = comicvine_issue_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            cvids.push(cvid.to_string());
+        }
+        let series_name: String = row.get(2);
+        let issue_number: String = row.get(3);
+        let want_series = normalize_title_number(&series_name);
+        let want_issue = normalize_title_number(&issue_number);
+        let matches: Vec<(i32, Option<String>, Option<String>, i32)> = if want_series.is_empty()
+            || want_issue.is_empty()
+        {
+            Vec::new()
+        } else {
+            fallback_index
+                .rows
+                .iter()
+                .filter(|owned| owned.series_norm == want_series && owned.issue_norm == want_issue)
+                .map(|owned| {
+                    (
+                        owned.id,
+                        owned.status.clone(),
+                        owned.read_at.clone(),
+                        owned.thread_id,
+                    )
+                })
+                .collect()
+        };
+        for m in &matches {
+            candidate_issue_ids.push(m.0);
+            candidate_thread_ids.push(m.3);
+        }
+    }
+    sort_dedup(&mut cvids);
+    sort_dedup(&mut candidate_issue_ids);
+    sort_dedup(&mut candidate_thread_ids);
+    let identity_index = load_adoption_identity_index(
+        tx,
+        user_id,
+        &cvids,
+        &candidate_issue_ids,
+        &candidate_thread_ids,
+    )
+    .await?;
+
     let mut out = Vec::with_capacity(rows.len());
-    for row in rows {
+    for row in &rows {
         let cse_id: i32 = row.get(0);
         let position: i32 = row.get(1);
         let series_name: String = row.get(2);
@@ -3345,7 +3895,16 @@ async fn reconcile_entries_impl<E: DbExec>(
         let series_external_id: Option<String> = row.get(8);
         let volume_year: Option<i32> = row.get(9);
         let publication_year: Option<i32> = row.get(10);
-        let series_provider_for_resolution = series_provider.as_deref();
+        // Only a ComicVine series identity may verify a title/number fallback.
+        let series_external_id_for_resolution = if series_provider
+            .as_deref()
+            .map(|p| p.eq_ignore_ascii_case("comicvine"))
+            .unwrap_or(false)
+        {
+            series_external_id.as_deref()
+        } else {
+            None
+        };
         let (
             resolved_issue_id,
             canonical_issue_id,
@@ -3353,23 +3912,14 @@ async fn reconcile_entries_impl<E: DbExec>(
             is_duplicate_identity,
             read_status,
             read_at,
-        ) = resolve_canonical_for_entry(
-            tx,
-            user_id,
+        ) = resolve_canonical_for_entry_batched(
             comicvine_issue_id.as_deref(),
             &series_name,
             &issue_number,
-            if series_provider_for_resolution
-                .map(|p| p.eq_ignore_ascii_case("comicvine"))
-                .unwrap_or(false)
-            {
-                series_external_id.as_deref()
-            } else {
-                None
-            },
+            series_external_id_for_resolution,
             &fallback_index,
-        )
-        .await?;
+            &identity_index,
+        );
         let mut entry = serde_json::Map::new();
         entry.insert("cbl_position".into(), JsonValue::Number(position.into()));
         entry.insert("cbl_entry_id".into(), JsonValue::Number(cse_id.into()));
@@ -3472,6 +4022,11 @@ async fn reconcile_entries_impl<E: DbExec>(
     Ok(out)
 }
 
+fn sort_dedup<T: Ord + Clone>(values: &mut Vec<T>) {
+    values.sort_unstable();
+    values.dedup();
+}
+
 #[derive(Clone)]
 struct OwnedIssueFallbackRow {
     id: i32,
@@ -3519,318 +4074,6 @@ async fn load_owned_issue_fallback_index<E: DbExec>(
         });
     }
     Ok(OwnedIssueFallbackIndex { rows: out })
-}
-
-#[allow(clippy::too_many_arguments)]
-async fn title_number_fallback<E: DbExec>(
-    tx: &E,
-    _user_id: i32,
-    _cvid: &str,
-    series_name: &str,
-    issue_number: &str,
-    series_provider: Option<&str>,
-    series_external_id: Option<&str>,
-    fallback_index: &OwnedIssueFallbackIndex,
-) -> Result<
-    (
-        Option<i32>,
-        Option<i32>,
-        String,
-        bool,
-        Option<String>,
-        Option<String>,
-    ),
-    ApiError,
-> {
-    let want_series = normalize_title_number(series_name);
-    let want_issue = normalize_title_number(issue_number);
-    if want_series.is_empty() || want_issue.is_empty() {
-        return Ok((
-            None,
-            None,
-            "no_owned_issue_for_comicvine_id".to_string(),
-            false,
-            None,
-            None,
-        ));
-    }
-
-    let mut matches: Vec<(i32, Option<String>, Option<String>, i32)> = Vec::new();
-    for row in &fallback_index.rows {
-        if row.series_norm == want_series && row.issue_norm == want_issue {
-            matches.push((
-                row.id,
-                row.status.clone(),
-                row.read_at.clone(),
-                row.thread_id,
-            ));
-        }
-    }
-    if matches.is_empty() {
-        return Ok((
-            None,
-            None,
-            "no_owned_issue_for_comicvine_id".to_string(),
-            false,
-            None,
-            None,
-        ));
-    }
-
-    let candidate_issue_ids: Vec<i32> = matches.iter().map(|m| m.0).collect();
-    let confirmed_rows = tx
-        .run_query(
-            r#"
-        SELECT m.issue_id
-        FROM issue_external_identity_mappings m
-        JOIN external_identities ei ON ei.id = m.external_identity_id
-        WHERE m.issue_id = ANY($1::int[])
-          AND m.status = 'confirmed'
-          AND ei.provider = 'comicvine'
-          AND ei.entity_type = 'issue'
-        "#,
-            &[&candidate_issue_ids],
-        )
-        .await
-        .map_err(|e| tx_db_error(e, ""))?;
-    let mut has_confirmed: std::collections::HashSet<i32> = std::collections::HashSet::new();
-    for row in confirmed_rows {
-        has_confirmed.insert(row.get(0));
-    }
-    matches.retain(|m| !has_confirmed.contains(&m.0));
-    if matches.is_empty() {
-        return Ok((
-            None,
-            None,
-            "no_owned_issue_for_comicvine_id".to_string(),
-            false,
-            None,
-            None,
-        ));
-    }
-
-    let cbl_series_is_comicvine = series_provider
-        .map(|p| p.eq_ignore_ascii_case("comicvine"))
-        .unwrap_or(false);
-    if cbl_series_is_comicvine {
-        if let Some(series_id) = series_external_id.map(str::trim).filter(|s| !s.is_empty()) {
-            let thread_ids: Vec<i32> = matches.iter().map(|m| m.3).collect();
-            let series_rows = tx
-                .run_query(
-                    r#"
-                SELECT tesm.thread_id, ei.external_id
-                FROM thread_external_series_mappings tesm
-                JOIN external_identities ei ON ei.id = tesm.external_identity_id
-                WHERE tesm.thread_id = ANY($1::int[])
-                  AND tesm.status = 'confirmed'
-                  AND ei.provider = 'comicvine'
-                  AND ei.entity_type = 'series'
-                "#,
-                    &[&thread_ids],
-                )
-                .await
-                .map_err(|e| tx_db_error(e, ""))?;
-            let mut by_thread: std::collections::HashMap<i32, std::collections::HashSet<String>> =
-                std::collections::HashMap::new();
-            for row in series_rows {
-                by_thread
-                    .entry(row.get(0))
-                    .or_default()
-                    .insert(row.get::<_, String>(1));
-            }
-            let mut verified = Vec::new();
-            let mut unverifiable = Vec::new();
-            for m in &matches {
-                let Some(set) = by_thread.get(&m.3) else {
-                    unverifiable.push(m.clone());
-                    continue;
-                };
-                if set.is_empty() {
-                    unverifiable.push(m.clone());
-                } else if set.contains(series_id) {
-                    verified.push(m.clone());
-                }
-            }
-            if !unverifiable.is_empty() {
-                return Ok((
-                    None,
-                    None,
-                    "ambiguous_title_number_unverifiable_series".to_string(),
-                    false,
-                    None,
-                    None,
-                ));
-            }
-            matches = verified;
-            if matches.is_empty() {
-                return Ok((
-                    None,
-                    None,
-                    "no_owned_issue_for_comicvine_id".to_string(),
-                    false,
-                    None,
-                    None,
-                ));
-            }
-        }
-    }
-
-    if matches.len() == 1 {
-        let m = &matches[0];
-        return Ok((
-            Some(m.0),
-            Some(m.0),
-            "resolved_via_title_number_fallback".to_string(),
-            false,
-            m.1.clone(),
-            m.2.clone(),
-        ));
-    }
-
-    Ok((
-        None,
-        None,
-        "ambiguous_title_number_multiple_matches".to_string(),
-        false,
-        None,
-        None,
-    ))
-}
-
-async fn resolve_canonical_for_entry<E: DbExec>(
-    tx: &E,
-    user_id: i32,
-    comicvine_issue_id: Option<&str>,
-    series_name: &str,
-    issue_number: &str,
-    series_external_id: Option<&str>,
-    fallback_index: &OwnedIssueFallbackIndex,
-) -> Result<
-    (
-        Option<i32>,
-        Option<i32>,
-        String,
-        bool,
-        Option<String>,
-        Option<String>,
-    ),
-    ApiError,
-> {
-    if let Some(cvid) = comicvine_issue_id.map(str::trim).filter(|s| !s.is_empty()) {
-        let eid = tx.run_query_opt(
-            "SELECT id FROM external_identities WHERE provider='comicvine' AND entity_type='issue' AND external_id=$1",
-            &[&cvid]
-        ).await.map_err(|e| tx_db_error(e, ""))?;
-        if let Some(eid_row) = eid {
-            let eid: i32 = eid_row.get(0);
-            let issues = tx
-                .run_query(
-                    r#"
-                SELECT i.id, i.status::text, i.read_at::text
-                FROM issue_external_identity_mappings m
-                JOIN issues i ON i.id = m.issue_id
-                JOIN threads t ON t.id = i.thread_id
-                WHERE m.external_identity_id = $1 AND m.status = 'confirmed' AND t.user_id = $2
-                ORDER BY i.id
-                "#,
-                    &[&eid, &user_id],
-                )
-                .await
-                .map_err(|e| tx_db_error(e, ""))?;
-            if issues.is_empty() {
-                return title_number_fallback(
-                    tx,
-                    user_id,
-                    cvid,
-                    series_name,
-                    issue_number,
-                    Some("comicvine"),
-                    series_external_id,
-                    fallback_index,
-                )
-                .await;
-            }
-            if issues.len() == 1 {
-                let r = &issues[0];
-                return Ok((
-                    Some(r.get(0)),
-                    Some(r.get(0)),
-                    "resolved_via_comicvine_canonical".to_string(),
-                    false,
-                    r.get(1),
-                    r.get(2),
-                ));
-            }
-            let mut read_rows: Vec<(i32, Option<String>, Option<String>)> = Vec::new();
-            let mut all_unread = true;
-            for r in &issues {
-                let st: Option<String> = r.get(1);
-                if st.as_deref() == Some("read") {
-                    all_unread = false;
-                    read_rows.push((r.get(0), st, r.get(2)));
-                }
-            }
-            let canonical = if !all_unread {
-                read_rows.sort_by(|a, b| {
-                    a.2.as_deref()
-                        .unwrap_or("9999")
-                        .cmp(b.2.as_deref().unwrap_or("9999"))
-                        .then(a.0.cmp(&b.0))
-                });
-                read_rows
-                    .first()
-                    .map(|r| r.0)
-                    .unwrap_or_else(|| issues[0].get(0))
-            } else {
-                issues
-                    .iter()
-                    .map(|r| r.get::<_, i32>(0))
-                    .min()
-                    .unwrap_or_else(|| issues[0].get(0))
-            };
-            let canon_row = issues
-                .iter()
-                .find(|r| r.get::<_, i32>(0) == canonical)
-                .unwrap_or(&issues[0]);
-            let has_read = issues
-                .iter()
-                .any(|r| r.get::<_, Option<String>>(1).as_deref() == Some("read"));
-            let has_unread = issues
-                .iter()
-                .any(|r| r.get::<_, Option<String>>(1).as_deref() != Some("read"));
-            let ambiguous_div = has_read && has_unread;
-            let status_str = if ambiguous_div {
-                "resolved_via_comicvine_canonical_ambiguous"
-            } else {
-                "resolved_via_comicvine_canonical"
-            };
-            return Ok((
-                Some(canonical),
-                Some(canonical),
-                status_str.to_string(),
-                true,
-                canon_row.get(1),
-                canon_row.get(2),
-            ));
-        } else {
-            return Ok((
-                None,
-                None,
-                "comicvine_identity_not_known".to_string(),
-                false,
-                None,
-                None,
-            ));
-        }
-    }
-    Ok((
-        None,
-        None,
-        "ambiguous_no_comicvine_id".to_string(),
-        false,
-        None,
-        None,
-    ))
 }
 
 /// Return Plans whose former authoritative Reading List no longer exists.
@@ -3927,6 +4170,7 @@ async fn merge_adoption_nodes_tx(
     let mut excluded_positions = Vec::new();
     let mut unresolved_positions = Vec::new();
     let mut adopted_order: Vec<String> = Vec::new();
+    let mut affected_threads: std::collections::HashSet<i32> = std::collections::HashSet::new();
     let mut adopted_issue_ids: Vec<i32> = Vec::new();
 
     // Index existing issue nodes by ref_id
@@ -3989,11 +4233,15 @@ async fn merge_adoption_nodes_tx(
                 v.as_i64().map(|x| x as i32)
             }
         });
-        let (issue_id, created_now) = if let Some(id) = resolved {
-            (id, false)
+        let (issue_id, created_now, materialized_thread_id) = if let Some(id) = resolved {
+            (id, false, None)
         } else {
             match materialize_missing_issue_tx(tx, user_id, entry).await {
-                Ok(MaterializeOutcome::Issue { id, created }) => (id, created),
+                Ok(MaterializeOutcome::Issue {
+                    id,
+                    thread_id,
+                    created,
+                }) => (id, created, Some(thread_id)),
                 Ok(MaterializeOutcome::Excluded { reason }) => {
                     if reason == "collection_identity_requires_review" {
                         unresolved_positions.push(pos);
@@ -4014,6 +4262,9 @@ async fn merge_adoption_nodes_tx(
         };
         if created_now {
             created_positions.push(pos);
+            if let Some(tid) = materialized_thread_id {
+                affected_threads.insert(tid);
+            }
         }
         let series_name = entry
             .get("series_name")
@@ -4110,6 +4361,15 @@ async fn merge_adoption_nodes_tx(
         *nodes_arr = reordered;
     }
 
+    for thread_id in &affected_threads {
+        apply_thread_issue_tracking_state_tx(tx, *thread_id)
+            .await
+            .map_err(|err| match err {
+                MaterializeErr::DbUnavailable => CommitErr::Db(ApiError::database_unavailable()),
+                MaterializeErr::Unexpected(msg) => CommitErr::Unexpected(msg),
+            })?;
+    }
+
     Ok((
         reused_positions,
         created_positions,
@@ -4173,8 +4433,14 @@ fn ensure_node_provenance(
 }
 
 enum MaterializeOutcome {
-    Issue { id: i32, created: bool },
-    Excluded { reason: String },
+    Issue {
+        id: i32,
+        thread_id: i32,
+        created: bool,
+    },
+    Excluded {
+        reason: String,
+    },
     Unresolved,
 }
 
@@ -4647,6 +4913,7 @@ async fn materialize_missing_issue_tx(
             }
             return Ok(MaterializeOutcome::Issue {
                 id: issue_id,
+                thread_id,
                 created: false,
             });
         }
@@ -4720,6 +4987,7 @@ async fn materialize_missing_issue_tx(
             }
             return Ok(MaterializeOutcome::Issue {
                 id: existing_issue_id,
+                thread_id,
                 created: false,
             });
         }
@@ -4731,14 +4999,13 @@ async fn materialize_missing_issue_tx(
             comicvine_id.as_deref(),
         )
         .await?;
-        // Python applies tracking state only for a genuinely inserted issue;
-        // the IntegrityError reuse path returns the existing row untouched.
-        if created {
-            apply_thread_issue_tracking_state_tx(&sp, thread_id).await?;
-        }
+        // Tracking state is applied once per affected thread after the full
+        // adoption merge so a large commit does not recompute thread counters
+        // after every inserted issue.
 
         Ok(MaterializeOutcome::Issue {
             id: issue_id,
+            thread_id,
             created,
         })
     }

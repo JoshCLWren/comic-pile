@@ -223,6 +223,11 @@ interface QueueModalsProps {
   queueSize: number
   onCreateSubmit: (event: FormEvent) => Promise<void>
   onEditSubmit: (event: FormEvent) => Promise<void>
+  /**
+   * Reports whether the just-flushed edit created an undo point. The dialog
+   * stays open in that case so its Undo bar is not unmounted (#4654).
+   */
+  onEditUndoAvailable?: (available: boolean) => void
   onReactivateSubmit: (event: FormEvent) => Promise<void>
   onRepositionConfirm: (targetPosition: number) => Promise<void> | void
   onDependencyChanged: () => Promise<void>
@@ -280,6 +285,7 @@ export function QueueModals({
   queueSize,
   onCreateSubmit,
   onEditSubmit,
+  onEditUndoAvailable,
   onReactivateSubmit,
   onRepositionConfirm,
   onDependencyChanged,
@@ -381,6 +387,9 @@ export function QueueModals({
       console.error('Failed to flush issue mutations:', error)
       return
     }
+    // The parent owns dialog lifecycle; tell it when a committed create left
+    // an undo point so it does not close the dialog and unmount the undo bar.
+    onEditUndoAvailable?.(Boolean(editIssueListRef.current?.hasUndoPoint()))
     await onEditSubmit(event)
   }
 

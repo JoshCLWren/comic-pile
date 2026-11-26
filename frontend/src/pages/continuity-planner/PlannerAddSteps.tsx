@@ -34,8 +34,22 @@ export default function PlannerAddSteps({
     editor.orderedLanes[0]?.name ??
     'lane'
 
+  // A series can report issues remaining while having no issue records at all
+  // (Greptile PR #3963 comment 4323288984, __scratch3607probe.spec.ts:78; #4119).
+  // Treat the actual records, never the remaining count, as the source of truth
+  // for the empty state, and say what is absent once loading settles.
+  const selectedSeriesHasNoIssues =
+    editor.selectedThread != null &&
+    !issuesLoading &&
+    issueLoadError == null &&
+    issues.length === 0
+
   const submitIssue = (event: FormEvent) => {
     event.preventDefault()
+    // A stale selection must never add a phantom step for a series that has no
+    // issue records. Only an issue present in the loaded set may be planned.
+    const selected = editor.selectedIssue
+    if (!selected || !issues.some((issue) => issue.id === selected.id)) return
     editor.addIssue()
   }
 
@@ -82,6 +96,11 @@ export default function PlannerAddSteps({
           >
             Add issue
           </button>
+          {selectedSeriesHasNoIssues && (
+            <p role="status" className="text-xs text-[var(--theme-text-muted)]">
+              No issues in this series yet. Add issues to the series before adding them to a plan.
+            </p>
+          )}
           {lanesEmpty && (
             <p className="text-xs text-[var(--theme-text-muted)]">Add a lane first to add issues.</p>
           )}

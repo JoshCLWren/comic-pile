@@ -4,12 +4,45 @@
 //! `MIGRATE_TEST_DATABASE_URL`.
 
 use comicpile_migrate::{
-    connect, needs_work, run, BASELINE_ALEMBIC_HEAD, BASELINE_SCHEMA_ALEMBIC_HEAD,
+    connect, embedded_versions, needs_work, run, BASELINE_ALEMBIC_HEAD,
+    BASELINE_SCHEMA_ALEMBIC_HEAD,
 };
 use std::sync::atomic::{AtomicU32, Ordering};
 use tokio_postgres::Client;
 
 static NEXT: AtomicU32 = AtomicU32::new(0);
+
+/// Migration versions at or below `through`, adopted from Alembic-managed DBs.
+fn versions_through(through: i32) -> Vec<i32> {
+    embedded_versions()
+        .into_iter()
+        .filter(|version| *version <= through)
+        .collect()
+}
+
+/// Migration versions above `after`, applied by the Rust runner.
+fn versions_after(after: i32) -> Vec<i32> {
+    embedded_versions()
+        .into_iter()
+        .filter(|version| *version > after)
+        .collect()
+}
+
+#[test]
+fn embedded_migration_versions_are_unique_and_ordered() {
+    let versions = embedded_versions();
+    let mut unique = versions.clone();
+    unique.sort_unstable();
+    assert_eq!(
+        versions, unique,
+        "embedded migrations must be in version order"
+    );
+    unique.dedup();
+    assert_eq!(
+        versions, unique,
+        "two migrations sharing a version fail at apply time on the PR merge ref"
+    );
+}
 
 /// P0 guard (2026-11-18 production wipe): this harness creates and drops
 /// databases, so the server must be local. It connects to a server-level
@@ -144,7 +177,7 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
     let report = run(&mut client).await.unwrap();
     assert_eq!(
         (report.applied, report.adopted),
-        (vec![1, 2, 3, 4, 5], vec![])
+        (versions_after(0), vec![])
     );
 
     let stamp: String = client
@@ -159,7 +192,7 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
         .await
         .unwrap()
         .get(0);
-    assert_eq!(recorded, 5);
+    assert_eq!(recorded, embedded_versions().len() as i64);
 
     let threads: bool = client
         .query_one("SELECT to_regclass('public.threads') IS NOT NULL", &[])
@@ -211,6 +244,19 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
         .get(0);
     assert!(alias_col, "V5 must add issue_number_alias to issues");
 
+    let repair_ledger: bool = client
+        .query_one(
+            "SELECT to_regclass('public.comicvine_metadata_refresh_requests') IS NOT NULL",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert!(
+        !repair_ledger,
+        "the ComicVine background repair ledger must be retired"
+    );
+
     let again = run(&mut client).await.unwrap();
     assert_eq!((again.applied, again.adopted), (vec![], vec![]));
     drop(client);
@@ -237,7 +283,7 @@ async fn alembic_database_at_head_is_adopted_without_rerunning() {
     let report = run(&mut client).await.unwrap();
     assert_eq!(
         (report.applied, report.adopted),
-        (vec![3, 4, 5], vec![1, 2])
+        (versions_after(2), versions_through(2))
     );
 
     let recorded: bool = client
@@ -311,7 +357,7 @@ async fn release_list_backfill_preserves_subscriptions_and_requires_unambiguous_
     let report = run(&mut client).await.unwrap();
     assert_eq!(
         (report.applied, report.adopted),
-        (vec![3, 4, 5], vec![1, 2])
+        (versions_after(2), versions_through(2))
     );
 
     let rows = client
@@ -351,7 +397,7 @@ async fn alembic_database_at_baseline_head_adopts_baseline_and_runs_pending() {
     let report = run(&mut client).await.unwrap();
     assert_eq!(
         (report.applied, report.adopted),
-        (vec![2, 3, 4, 5], vec![1])
+        (versions_after(1), versions_through(1))
     );
 
     let queue_groups: bool = client
@@ -511,7 +557,7 @@ async fn alembic_baseline_with_stale_deferred_checks_is_repaired_before_stamp() 
     let report = run(&mut client).await.unwrap();
     assert_eq!(
         (report.applied, report.adopted),
-        (vec![2, 3, 4, 5], vec![1])
+        (versions_after(1), versions_through(1))
     );
 
     let stamp: String = client

@@ -5,8 +5,8 @@ import type { SeriesMappingCommitResponse } from '../services/api-series-mapping
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import {
+  clearComicVineIssueIntelligenceMany,
   invalidateAfterQueueMutation,
-  invalidateComicVineIssueIntelligenceMany,
 } from '../query/cacheEffects'
 import { isIndeterminateApiOutcome } from '../utils/apiError'
 
@@ -92,7 +92,9 @@ export function useQueueSeriesMappingCommit() {
     // mapping. A definitive 4xx refusal is surfaced immediately.
     retry: (failureCount, error) => failureCount < 3 && isIndeterminateApiOutcome(error),
     onSuccess: async (result) => {
-      await invalidateComicVineIssueIntelligenceMany(queryClient, result.confirmed_issue_ids)
+      // Cancel and drop the previous identity before refetching: an in-flight
+      // response for A must not repaint B after a series remap (#5841).
+      await clearComicVineIssueIntelligenceMany(queryClient, result.confirmed_issue_ids)
       await invalidateAfterQueueMutation(queryClient)
     },
   })

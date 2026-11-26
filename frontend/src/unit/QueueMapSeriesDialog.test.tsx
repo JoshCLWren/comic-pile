@@ -18,9 +18,9 @@ import type { IssueListResponse } from '../services/api-issues'
 const { searchSeriesSpy } = vi.hoisted(() => ({ searchSeriesSpy: vi.fn() }))
 const { listIssuesSpy } = vi.hoisted(() => ({ listIssuesSpy: vi.fn() }))
 const { previewSpy, commitSpy } = vi.hoisted(() => ({ previewSpy: vi.fn(), commitSpy: vi.fn() }))
-const { invalidateQueueSpy, invalidateIntelligenceManySpy } = vi.hoisted(() => ({
+const { invalidateQueueSpy, clearIntelligenceManySpy } = vi.hoisted(() => ({
   invalidateQueueSpy: vi.fn(),
-  invalidateIntelligenceManySpy: vi.fn(),
+  clearIntelligenceManySpy: vi.fn(),
 }))
 
 vi.mock('../services/api-comicvine', () => ({
@@ -44,7 +44,7 @@ vi.mock('../query/cacheEffects', async (importOriginal) => {
   return {
     ...actual,
     invalidateAfterQueueMutation: invalidateQueueSpy,
-    invalidateComicVineIssueIntelligenceMany: invalidateIntelligenceManySpy,
+    clearComicVineIssueIntelligenceMany: clearIntelligenceManySpy,
   }
 })
 
@@ -370,7 +370,7 @@ describe('QueueMapSeriesDialog', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('1 issue mapped to Saga')
     expect(onMapped).toHaveBeenCalledWith([2])
     expect(invalidateQueueSpy).toHaveBeenCalledTimes(1)
-    expect(invalidateIntelligenceManySpy).toHaveBeenCalledWith(expect.anything(), [2])
+    expect(clearIntelligenceManySpy).toHaveBeenCalledWith(expect.anything(), [2])
   })
 
   it('cancels without committing when the reader dismisses the preview', async () => {

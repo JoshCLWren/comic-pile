@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRef } from 'react'
 import { IssueToggleList } from '../pages/QueuePage/IssueToggleList'
@@ -26,6 +26,7 @@ import type { Issue, IssueListResponse } from '../types'
 const mockedIssuesApi = {
   list: vi.fn<IssueToggleListApi['list']>(),
   create: vi.fn<IssueToggleListApi['create']>(),
+  previewCreate: vi.fn<IssueToggleListApi['previewCreate']>(),
   markRead: vi.fn<IssueToggleListApi['markRead']>(),
   markUnread: vi.fn<IssueToggleListApi['markUnread']>(),
   delete: vi.fn<IssueToggleListApi['delete']>(),
@@ -80,6 +81,14 @@ function renderDeferredToggleList() {
 beforeEach(() => {
   vi.resetAllMocks()
   mockedIssuesApi.create.mockResolvedValue(buildListResponse([], 0))
+  mockedIssuesApi.previewCreate.mockImplementation(async (_threadId: number, range: string) => ({
+    thread_id: 99, thread_title: 'Test', requested_strategy: 'safe_default',
+    default_outcome: { strategy: 'safe_default', can_commit: true, preserves_existing_relative_order: true,
+      before: FULL_ISSUES.map((i, idx) => ({ issue_id: i.id, issue_number: i.issue_number, position: idx + 1, is_new: false })),
+      after: [...FULL_ISSUES.map((i, idx) => ({ issue_id: i.id, issue_number: i.issue_number, position: idx + 1, is_new: false })), { issue_id: null, issue_number: range, position: FULL_ISSUES.length + 1, is_new: true }],
+      added_issue_numbers: [range], graph: { status: 'ok', cycles: [] }, conflict_message: null },
+    numeric_resort_outcome: null,
+  }))
   mockedIssuesApi.markRead.mockResolvedValue()
   mockedIssuesApi.markUnread.mockResolvedValue()
   mockedIssuesApi.delete.mockResolvedValue()
@@ -103,6 +112,8 @@ describe('IssueToggleList retried Save after incomplete create refresh (#4113)',
     // Queue a create, then a reorder of the existing issues.
     fireEvent.change(screen.getByTestId('issue-add-input'), { target: { value: '4' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
     fireEvent.click(screen.getByTestId('issue-reorder-toggle'))
     fireEvent.click(screen.getByTestId('issue-move-down-1'))
 
@@ -178,6 +189,8 @@ describe('IssueToggleList retried Save after incomplete create refresh (#4113)',
 
     fireEvent.change(screen.getByTestId('issue-add-input'), { target: { value: '4' } })
     fireEvent.click(screen.getByTestId('issue-add-button'))
+    await waitFor(() => expect(screen.getByTestId('edit-series-preview-modal')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('confirm-preview-add'))
     fireEvent.click(screen.getByTestId('issue-reorder-toggle'))
     fireEvent.click(screen.getByTestId('issue-move-down-1'))
 

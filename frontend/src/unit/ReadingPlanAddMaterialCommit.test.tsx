@@ -290,6 +290,30 @@ describe('ReadingPlanAddMaterial canonical commit', () => {
     await waitFor(() => expect(mocks.preview).toHaveBeenCalledTimes(2))
   })
 
+  it('reports a truthful retryable failure when a large commit times out (#5522)', async () => {
+    const onCommitted = vi.fn()
+    mocks.commit.mockRejectedValueOnce({ code: 'ECONNABORTED' })
+    render(
+      <ReadingPlanAddMaterialImpl
+        planId={77}
+        planName="B.P.R.D."
+        onCommitted={onCommitted}
+      />,
+    )
+    await openSource()
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Include B.P.R.D.: The Universal Machine #1' }),
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Add selected material' }))
+
+    expect(
+      await screen.findByText(
+        'ComicPile did not confirm the material in time. Check this Reading Plan before adding again.',
+      ),
+    ).toBeVisible()
+    expect(onCommitted).not.toHaveBeenCalled()
+  })
+
   it('shows collection exclusion and disables the Include checkbox', async () => {
   mocks.discover.mockResolvedValue([source])
   mocks.preview.mockResolvedValue(preview([

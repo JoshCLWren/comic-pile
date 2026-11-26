@@ -417,7 +417,12 @@ export default function ThreadDetailView() {
       })
 
       applyEditedThreadToQueuePages(client, updatedThread)
-      setIsEditOpen(false)
+      // Keep the editor mounted while its Undo affordance is live. Closing the
+      // dialog here would unmount IssueToggleList and the undo bar with it,
+      // leaving the reader no way to reverse the just-committed edit (#4654).
+      if (!issueToggleListRef.current?.hasUndoPoint()) {
+        setIsEditOpen(false)
+      }
 
       if (updatedThread.total_issues !== null && issuesLoaded) {
         await issuesQuery.refetch()

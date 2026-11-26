@@ -4,6 +4,17 @@
     "^/api/v1/comicvine(?:/.*)?$",
     "^/api/v2/comicvine(?:/.*)?$"
   ],
+  "vercel_generation": {
+    "crons": [
+      {
+        "path": "/api/v1/cron/release-sync",
+        "schedule": "0 9 * * *"
+      }
+    ],
+    "retired_rewrite_srcs": [
+      "/api/v2/maintenance/comicvine-metadata-repairs"
+    ]
+  },
   "defaults": {
     "runtime": "python-fastapi",
     "status": "transitional",

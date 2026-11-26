@@ -1224,7 +1224,7 @@ async fn sync_released_issues_for_user_with_rosters(
 
     // Match Python: missing API key fails all enabled sources with the
     // client-construction error message (unless test mocks are injected).
-    let api_key = match crate::comicvine_repair::provider_api_key() {
+    let api_key = match crate::comicvine_provider::provider_api_key() {
         Some(key) => key,
         None if mock_rosters.is_some() => String::new(),
         None => {

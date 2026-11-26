@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, useMemo } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, useMemo } from 'react'
 import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueIntelligence'
+import { useComicVineMetadataHydration } from '../../../hooks/useComicVineMetadataHydration'
+import ComicVineMetadataStatus from '../../../components/ComicVineMetadataStatus'
 import { canonicalCreatorKey, useCreatorSummaries } from '../../../hooks/useCreatorSummaries'
-import { comicVineApi, type ComicVineRelatedIssue } from '../../../services/api-comicvine'
+import { type ComicVineRelatedIssue } from '../../../services/api-comicvine'
 import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName, computeArcNeighborAnchors } from '../../../utils/comicIdentity'
 import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
 import { ComicIssueCover } from '../../../components/ComicIssueCard'
@@ -34,8 +36,6 @@ const RELATED_ISSUES_PER_ARC_LIMIT = 5
 const COVER_HEIGHT_CAP_VH = 45
 const COVER_RATIO_FALLBACK = 2 / 3
 const SUMMARY_LONG_THRESHOLD = 280
-const METADATA_REFRESH_FALLBACK_SECONDS = 10
-const METADATA_REFRESH_MAX_POLLS = 30
 
 function formatRating(value: number): string {
   const normalized = parseFloat(value.toFixed(2))
@@ -69,14 +69,16 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
   const [showAllRelatedIssues, setShowAllRelatedIssues] = useState<Record<number, boolean>>({})
   const [summaryExpanded, setSummaryExpanded] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [isRetryingRefresh, setIsRetryingRefresh] = useState(false)
-  const [refreshRecoveryError, setRefreshRecoveryError] = useState<string | null>(null)
-  const [isRefreshPollingExhausted, setIsRefreshPollingExhausted] = useState(false)
-  const refreshPollCountRef = useRef(0)
-  const refreshPollingKeyRef = useRef<string | null>(null)
   const creatorsDetailsRef = useRef<HTMLDetailsElement>(null)
   const storyArcsDetailsRef = useRef<HTMLDetailsElement>(null)
   const { isDesktop } = useResponsive()
+  // One shared presentation/action contract for this exact owned issue. No
+  // per-page retry, no timers and no polling (#5841).
+  const metadataHydration = useComicVineMetadataHydration({
+    issueId,
+    metadata,
+    refetchIntelligence: refetch,
+  })
 
   useEffect(() => {
     setSummaryExpanded(false)
@@ -90,90 +92,6 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
       storyArcsDetailsRef.current.open = true
     }
   }, [metadata])
-
-  const refreshPollingKey = issueId && metadata ? `${issueId}:${metadata.comicvine_issue_id}` : null
-  useEffect(() => {
-    if (refreshPollingKeyRef.current === refreshPollingKey) return
-    refreshPollingKeyRef.current = refreshPollingKey
-    refreshPollCountRef.current = 0
-    setIsRefreshPollingExhausted(false)
-    setRefreshRecoveryError(null)
-  }, [refreshPollingKey])
-
-  // Bounded refetch while metadata repair is in progress. Re-arm after every
-  // refetch, including structurally unchanged pending responses, but stop after
-  // a fixed attempt budget and expose manual recovery instead of polling forever.
-  // The timer is cancelled on unmount, identity replacement, and terminal states.
-  useEffect(() => {
-    if (!issueId || !metadata || isRefreshPollingExhausted) return
-
-    const status = metadata.metadata_status
-    const retryAfter = metadata.refresh_retry_after_seconds
-
-    if (status !== 'refresh_pending' && status !== 'refresh_running') return
-
-    const delaySeconds = retryAfter != null && retryAfter > 0
-      ? retryAfter
-      : METADATA_REFRESH_FALLBACK_SECONDS
-    let cancelled = false
-    let timeoutId: ReturnType<typeof setTimeout>
-
-    // Wait for each refetch to settle before arming the next one so a provider
-    // response slower than the delay cannot overlap (and cancel) the next poll.
-    const arm = () => {
-      timeoutId = setTimeout(() => {
-        if (cancelled) return
-        if (refreshPollCountRef.current >= METADATA_REFRESH_MAX_POLLS) {
-          setIsRefreshPollingExhausted(true)
-          return
-        }
-        refreshPollCountRef.current += 1
-        void refetch().then((refreshed) => {
-          if (cancelled) return
-          const refreshedStatus = refreshed?.metadata_status
-          if (refreshedStatus !== 'refresh_pending' && refreshedStatus !== 'refresh_running') {
-            refreshPollCountRef.current = 0
-            return
-          }
-          arm()
-        })
-      }, delaySeconds * 1000)
-    }
-
-    arm()
-
-    return () => {
-      cancelled = true
-      clearTimeout(timeoutId)
-    }
-  }, [issueId, metadata, refetch, isRefreshPollingExhausted])
-
-  const handleRetryRefresh = useCallback(async () => {
-    if (!issueId || isRetryingRefresh) return
-    setIsRetryingRefresh(true)
-    setRefreshRecoveryError(null)
-    refreshPollCountRef.current = 0
-    setIsRefreshPollingExhausted(false)
-    try {
-      await comicVineApi.refreshMetadata(issueId)
-    } catch {
-      setRefreshRecoveryError('Could not request a creator refresh. Try again.')
-    } finally {
-      await refetch()
-      setIsRetryingRefresh(false)
-    }
-  }, [issueId, isRetryingRefresh, refetch])
-
-  const retryRefreshButton = (
-    <button
-      type="button"
-      onClick={() => void handleRetryRefresh()}
-      disabled={isRetryingRefresh}
-      className="inline-flex min-h-6 items-center text-[10px] font-bold text-amber-500 hover:text-amber-400 disabled:opacity-50 focus:ring-2 focus:ring-amber-500 rounded"
-    >
-      {isRetryingRefresh ? 'Retrying…' : 'Retry refresh'}
-    </button>
-  )
 
   const imageUrl = metadata?.image_url ?? null
   const coverRatio = imageUrl ? coverRatios[imageUrl] ?? null : null
@@ -467,74 +385,11 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
           </>
         )}
 
-        {/* Creator credits status when no creators are available */}
-        {metadata.creators.length === 0 && metadata.metadata_status && (
+        {/* Shared exact-issue presentation/action contract: truthful state and
+            one explicit Retry, never a queued spinner or a polling loop. */}
+        {metadata.creators.length === 0 && (
           <div className="pl-6 pr-2 pb-2 border-l border-[var(--theme-border)]">
-            {(() => {
-              const status = metadata.metadata_status
-              const retryAfter = metadata.refresh_retry_after_seconds
-
-              switch (status) {
-                case 'not_deep_fetched':
-                  return (
-                    <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-not-fetched">
-                      Creator credits not yet fetched
-                    </p>
-                  );
-                case 'refresh_pending':
-                case 'refresh_running':
-                  if (isRefreshPollingExhausted) {
-                    return (
-                      <div className="space-y-1">
-                        <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-delayed">
-                          Creator credits are still waiting for ComicVine. Retry refresh or check again later.
-                        </p>
-                        {retryRefreshButton}
-                      </div>
-                    )
-                  }
-                  return (
-                    <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-fetching">
-                      {status === 'refresh_pending'
-                        ? 'Creator credits queued for fetch…'
-                        : 'Creator credits being fetched…'}
-                    </p>
-                  );
-                case 'refresh_deferred':
-                  return (
-                    <div className="space-y-1">
-                      <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-deferred">
-                        {retryAfter != null && retryAfter > 0
-                          ? `Refresh deferred — retry in ${retryAfter}s`
-                          : 'Refresh deferred'}
-                      </p>
-                      {retryRefreshButton}
-                    </div>
-                  );
-                case 'refresh_failed':
-                  return (
-                    <div className="space-y-1">
-                      <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-failed">
-                        Refresh failed
-                      </p>
-                      {retryRefreshButton}
-                    </div>
-                  );
-                case 'deep_fetched_no_credits':
-                  return (
-                    <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-no-credits">
-                      ComicVine currently has no creator credits
-                    </p>
-                  );
-                default:
-                  return null;
-              }
-            })()}
-            {refreshRecoveryError && (
-              <p role="alert" data-testid="creator-refresh-error" className="mt-1 text-[11px] text-[var(--theme-error)]">
-                {refreshRecoveryError}
-              </p>
-            )}
+            <ComicVineMetadataStatus state={metadataHydration} />
           </div>
         )}
 

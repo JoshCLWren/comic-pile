@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import IssueCorrectionDialog, {
   type IssueCorrectionIssuesApi,
 } from '../components/IssueCorrectionDialog'
+import { bulkReadReceiptKey, writeBulkReadReceipt } from '../hooks/useBulkReadOperations'
 import type { Issue, IssueListResponse } from '../types'
 
 // Injectable fakes passed through the real component props — no module mocking of the API.
@@ -55,6 +56,7 @@ const renderDialog = (props: Partial<Parameters<typeof IssueCorrectionDialog>[0]
       onClose={onClose}
       onSuccess={onSuccess}
       issuesApi={issuesApi}
+      dependenciesApi={{ listForThread: vi.fn().mockResolvedValue({ issues: [] }) }}
       {...props}
     />
   )
@@ -65,10 +67,11 @@ const renderDialog = (props: Partial<Parameters<typeof IssueCorrectionDialog>[0]
 describe('IssueCorrectionDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    window.localStorage.clear()
     markRead.mockResolvedValue(undefined)
     markUnread.mockResolvedValue(undefined)
-    bulkMarkRead.mockResolvedValue(undefined)
-    bulkMarkUnread.mockResolvedValue(undefined)
+    bulkMarkRead.mockResolvedValue({ id: 1, operation_type: 'bulk_mark_read', created_at: '', items: [] })
+    bulkMarkUnread.mockResolvedValue({ id: 2, operation_type: 'bulk_mark_unread', created_at: '', items: [] })
     move.mockResolvedValue(undefined)
   })
 
@@ -81,13 +84,16 @@ describe('IssueCorrectionDialog', () => {
     list
       .mockResolvedValueOnce(listResponse(issues))
       .mockResolvedValueOnce(listResponse(issues))
+      .mockResolvedValueOnce(listResponse(issues))
 
     const { onClose, onSuccess } = renderDialog()
 
     const input = await screen.findByLabelText(/what issue are you currently on/i)
     await userEvent.clear(input)
     await userEvent.type(input, 'Annual 1')
-    await userEvent.click(screen.getByRole('button', { name: 'Update' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+    await screen.findByTestId('bulk-read-preview')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
 
     await waitFor(() => {
       expect(bulkMarkRead).toHaveBeenCalledWith([1])
@@ -95,6 +101,8 @@ describe('IssueCorrectionDialog', () => {
     expect(markUnread).toHaveBeenCalledWith(2)
     expect(create).not.toHaveBeenCalled()
     expect(onSuccess).toHaveBeenCalledOnce()
+    await screen.findByTestId('bulk-read-review')
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }))
     expect(onClose).toHaveBeenCalledOnce()
   })
 
@@ -104,11 +112,10 @@ describe('IssueCorrectionDialog', () => {
       issue({ id: 2, issue_number: '2' }),
     ]
     const createdIssue = issue({ id: 3, issue_number: 'Annual 1' })
-    const updatedIssues = [initialIssues[0], createdIssue, initialIssues[1]]
 
-    list
-      .mockResolvedValueOnce(listResponse(initialIssues))
-      .mockResolvedValueOnce(listResponse(updatedIssues))
+    // The stale-review check runs against pre-mutation state, so every load
+    // before confirmation still sees the original list.
+    list.mockResolvedValue(listResponse(initialIssues))
     create.mockResolvedValueOnce(listResponse([createdIssue]))
 
     const { onSuccess } = renderDialog()
@@ -117,7 +124,9 @@ describe('IssueCorrectionDialog', () => {
     await userEvent.clear(input)
     await userEvent.type(input, 'Annual 1')
     await userEvent.selectOptions(screen.getByLabelText(/place new issue/i), '1')
-    await userEvent.click(screen.getByRole('button', { name: 'Update' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+    await screen.findByTestId('bulk-read-preview')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
 
     await waitFor(() => {
       expect(create).toHaveBeenCalledWith(42, 'Annual 1', {
@@ -126,6 +135,77 @@ describe('IssueCorrectionDialog', () => {
     })
     expect(move).not.toHaveBeenCalled()
     expect(onSuccess).toHaveBeenCalledOnce()
+  })
+
+  it('rejects a confirmation when the reviewed issue set changed since preview', async () => {
+    const reviewed = [issue({ id: 1, issue_number: '1' }), issue({ id: 2, issue_number: '2', status: 'read' })]
+    const changed = [issue({ id: 1, issue_number: '1', status: 'read' }), issue({ id: 2, issue_number: '2', status: 'read' })]
+    list
+      .mockResolvedValueOnce(listResponse(reviewed))
+      .mockResolvedValueOnce(listResponse(reviewed))
+      .mockResolvedValueOnce(listResponse(changed))
+
+    renderDialog()
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, '2')
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+    await screen.findByTestId('bulk-read-preview')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
+
+    expect(await screen.findByText(/issues changed since review/i)).toBeInTheDocument()
+    expect(bulkMarkRead).not.toHaveBeenCalled()
+  })
+
+  it('rejects a stale review before creating a new issue', async () => {
+    // The reviewed set was correct, but an issue changed before confirmation.
+    // No create, move, or bulk write may happen after a stale review (#4655 F3).
+    const reviewed = [issue({ id: 1, issue_number: '1' }), issue({ id: 2, issue_number: '2' })]
+    const changed = [issue({ id: 1, issue_number: '1', status: 'read' }), issue({ id: 2, issue_number: '2' })]
+    list
+      .mockResolvedValueOnce(listResponse(reviewed))
+      .mockResolvedValueOnce(listResponse(reviewed))
+      .mockResolvedValueOnce(listResponse(changed))
+
+    renderDialog()
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, 'Annual 1')
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+    await screen.findByTestId('bulk-read-preview')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
+
+    expect(await screen.findByText(/issues changed since review/i)).toBeInTheDocument()
+    expect(create).not.toHaveBeenCalled()
+    expect(move).not.toHaveBeenCalled()
+    expect(bulkMarkRead).not.toHaveBeenCalled()
+  })
+
+  it('binds confirmation to the reviewed version when ids alone are unchanged', async () => {
+    const reviewed = [
+      issue({ id: 1, issue_number: '1' }),
+      issue({ id: 2, issue_number: '2', status: 'read' }),
+    ]
+    const changed = [
+      issue({ id: 1, issue_number: '1' }),
+      issue({ id: 2, issue_number: '2', status: 'unread' }),
+    ]
+    list
+      .mockResolvedValueOnce(listResponse(reviewed))
+      .mockResolvedValueOnce(listResponse(reviewed))
+      .mockResolvedValueOnce(listResponse(changed))
+
+    renderDialog()
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, '2')
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+    await screen.findByTestId('bulk-read-preview')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
+
+    expect(await screen.findByText(/issues changed since review/i)).toBeInTheDocument()
+    expect(bulkMarkRead).not.toHaveBeenCalled()
+    expect(markUnread).not.toHaveBeenCalled()
   })
 
   it('retries failed loads and reports update failures', async () => {
@@ -140,37 +220,42 @@ describe('IssueCorrectionDialog', () => {
 
   it('inserts a numeric issue at the beginning and handles missing API results', async () => {
     const existing = [issue({ id: 1, issue_number: '1', status: 'read' })]
-    list.mockResolvedValueOnce(listResponse(existing)).mockResolvedValueOnce(listResponse(existing))
+    list.mockResolvedValue(listResponse(existing))
     create.mockResolvedValueOnce(listResponse([]))
     const { onSuccess } = renderDialog()
     const input = await screen.findByLabelText(/what issue are you currently on/i)
     await userEvent.clear(input)
     await userEvent.type(input, '2')
     await userEvent.selectOptions(screen.getByLabelText(/place new issue/i), 'start')
-    await userEvent.click(screen.getByRole('button', { name: 'Update' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+    await screen.findByTestId('bulk-read-preview')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
     await waitFor(() => expect(screen.getByText(/failed to update issue/i)).toBeInTheDocument())
     expect(onSuccess).not.toHaveBeenCalled()
   })
 
-  it('moves a newly created issue to the beginning and marks prior unread issues read', async () => {
+  it('moves a newly created issue to the beginning without bulk-reading later issues', async () => {
+    // The projected insertion order is authoritative for both preview and
+    // confirmation (#4655 review R3): inserting at the start leaves no issue
+    // before the target, so there is nothing to bulk read.
     const existing = [issue({ id: 1, issue_number: '1', status: 'unread' })]
     const created = issue({ id: 2, issue_number: '2', status: 'unread' })
-    let listCalls = 0
-    list.mockImplementation(async () => {
-      listCalls += 1
-      return listResponse(listCalls === 1 ? existing : [existing[0]!, created])
-    })
+    list.mockResolvedValue(listResponse(existing))
     create.mockResolvedValueOnce(listResponse([created]))
 
-    renderDialog()
+    const { onSuccess } = renderDialog()
     const input = await screen.findByLabelText(/what issue are you currently on/i)
     await userEvent.clear(input)
     await userEvent.type(input, '2')
     await userEvent.selectOptions(screen.getByLabelText(/place new issue/i), 'start')
-    await userEvent.click(screen.getByRole('button', { name: 'Update' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+    await screen.findByTestId('bulk-read-preview')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
 
+    await waitFor(() => expect(create).toHaveBeenCalledWith(42, '2', { insert_after_issue_id: null }))
     await waitFor(() => expect(move).toHaveBeenCalledWith(2, null))
-    expect(screen.getByText(/failed to update issue/i)).toBeInTheDocument()
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce())
+    expect(bulkMarkRead).not.toHaveBeenCalled()
   })
 
   it('supports the numeric stepper boundaries and rejects blank submissions', async () => {
@@ -178,7 +263,7 @@ describe('IssueCorrectionDialog', () => {
     renderDialog({ currentIssueNumber: null, totalIssues: 1 })
     const input = await screen.findByLabelText(/what issue are you currently on/i)
     await userEvent.clear(input)
-    await userEvent.click(screen.getByRole('button', { name: 'Update' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
     expect(screen.getByText(/please enter an issue identifier/i)).toBeInTheDocument()
 
     await userEvent.type(input, '1')
@@ -210,7 +295,9 @@ describe('IssueCorrectionDialog', () => {
     const input = await screen.findByLabelText(/what issue are you currently on/i)
     await userEvent.clear(input)
     await userEvent.type(input, 'Missing')
-    await userEvent.click(screen.getByRole('button', { name: 'Update' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+    await screen.findByTestId('bulk-read-preview')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
     await waitFor(() => expect(screen.getByText(/failed to update issue/i)).toBeInTheDocument())
     fireEvent.click(screen.getByText('Fix Issue Number'))
     expect(onClose).not.toHaveBeenCalled()
@@ -224,7 +311,7 @@ describe('IssueCorrectionDialog', () => {
     await screen.findByLabelText(/what issue are you currently on/i)
     expect(screen.queryByTestId('issue-card-trigger-10')).not.toBeInTheDocument()
     expect(screen.queryByTestId('issue-card-trigger-11')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Update' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Review changes' })).toBeEnabled()
   })
 
   it('keeps an exact issue direct read independent of the correction form and refreshes on commit', async () => {
@@ -269,6 +356,202 @@ describe('IssueCorrectionDialog', () => {
     expect(list).toHaveBeenCalledTimes(2)
     fetchCards.mockRestore()
     patchIssue.mockRestore()
+  })
+
+  it('previews and confirms a new issue appended at the end', async () => {
+    const existing = [issue({ id: 1, issue_number: '1' }), issue({ id: 2, issue_number: '2' })]
+    const created = issue({ id: 3, issue_number: 'Annual 1' })
+    list.mockResolvedValue(listResponse(existing))
+    create.mockResolvedValueOnce(listResponse([created]))
+
+    renderDialog()
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, 'Annual 1')
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+
+    expect(await screen.findByTestId('bulk-read-preview')).toHaveTextContent('Marking 2 issues')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
+
+    await waitFor(() => expect(create).toHaveBeenCalledWith(42, 'Annual 1', { insert_after_issue_id: null }))
+    await waitFor(() => expect(bulkMarkRead).toHaveBeenCalledWith([1, 2]))
+  })
+
+  it('projects an end insertion when the selected anchor is no longer present', async () => {
+    const existing = [issue({ id: 1, issue_number: '1' }), issue({ id: 2, issue_number: '2' })]
+    const created = issue({ id: 3, issue_number: 'Annual 1' })
+    list.mockResolvedValue(listResponse(existing))
+    create.mockResolvedValueOnce(listResponse([created]))
+
+    renderDialog()
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, 'Annual 1')
+    fireEvent.change(screen.getByLabelText(/place new issue/i), { target: { value: '999' } })
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+
+    expect(await screen.findByTestId('bulk-read-preview')).toHaveTextContent('Marking 2 issues')
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm bulk read' }))
+
+    // A stale/missing anchor is projected to the end in the preview AND in the
+    // create request; the reviewed affected set is what gets written (#4655 F2).
+    await waitFor(() => expect(create).toHaveBeenCalledWith(42, 'Annual 1', { insert_after_issue_id: null }))
+    await waitFor(() => expect(bulkMarkRead).toHaveBeenCalledWith([1, 2]))
+  })
+
+  it('previews ratings, the dependent frontier and the projected final state', async () => {
+    list.mockResolvedValue(listResponse([
+      issue({ id: 1, issue_number: '1', status: 'read' }),
+      issue({ id: 2, issue_number: '2', status: 'unread' }),
+      issue({ id: 3, issue_number: '3', status: 'unread' }),
+    ]))
+    const cardsApi = {
+      fetchCards: vi.fn().mockResolvedValue([
+        { issue_id: 2, rating: 4.5 },
+        { issue_id: 3, rating: null },
+      ]),
+    }
+    const dependenciesApi = {
+      listForThread: vi.fn().mockResolvedValue({
+        issues: [
+          // Outgoing edge fields describe the dependent target on the real wire.
+          {
+            issue_id: 2,
+            incoming: [],
+            outgoing: [{
+              source_issue_id: 4,
+              source_issue_number: '4',
+              source_thread_title: 'Test Comic',
+            }],
+          },
+          { issue_id: 3, incoming: [], outgoing: [] },
+        ],
+      }),
+    }
+
+    // The target (#6) is created but deliberately left unread, so the series
+    // cannot be reported as completed even though every older issue is read.
+    renderDialog({ cardsApi, dependenciesApi })
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, '6')
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+
+    const preview = await screen.findByTestId('bulk-read-preview')
+    expect(preview).toHaveTextContent('Marking 2 issues as read before #6.')
+    expect(preview).toHaveTextContent('rated 4.5')
+    expect(preview).toHaveTextContent('no rating')
+    expect(preview).toHaveTextContent('Dependent frontier: Test Comic #4')
+    expect(preview).toHaveTextContent('Series completion effect: series will remain active.')
+    expect(preview).toHaveTextContent('Read states explained')
+  })
+
+  it('previews a dependent issue in another series from the real outgoing-edge shape', async () => {
+    list.mockResolvedValue(listResponse([
+      issue({ id: 1, issue_number: '1', status: 'read' }),
+      issue({ id: 2, issue_number: '2', status: 'read' }),
+      issue({ id: 3, issue_number: '3', status: 'read' }),
+      issue({ id: 4, issue_number: '4' }),
+      issue({ id: 5, issue_number: '5' }),
+    ]))
+    const dependenciesApi = {
+      listForThread: vi.fn().mockResolvedValue({
+        issues: [
+          { issue_id: 4, incoming: [], outgoing: [] },
+          {
+            issue_id: 5,
+            incoming: [],
+            outgoing: [{
+              source_issue_id: 900,
+              source_issue_number: '1',
+              source_thread_title: 'Dependent Series',
+            }],
+          },
+        ],
+      }),
+    }
+
+    renderDialog({ dependenciesApi })
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, '6')
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+
+    const preview = await screen.findByTestId('bulk-read-preview')
+    expect(preview).toHaveTextContent('Marking 2 issues as read before #6.')
+    expect(preview).toHaveTextContent('Dependent frontier: Dependent Series #1')
+    expect(preview).not.toHaveTextContent('no direct dependent issues detected')
+  })
+
+  it('keeps a best-effort preview when dependency data is absent', async () => {
+    list.mockResolvedValue(listResponse([issue({ id: 2, issue_number: '2' })]))
+    const dependenciesApi = { listForThread: vi.fn().mockResolvedValue({}) }
+    renderDialog({ dependenciesApi })
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, '2')
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+
+    expect(await screen.findByTestId('bulk-read-preview')).toHaveTextContent(
+      'no direct dependent issues detected in this series.',
+    )
+  })
+
+  it('returns from the preview to the form before any write', async () => {
+    list.mockResolvedValue(listResponse([issue({ id: 1, issue_number: '1' })]))
+    renderDialog()
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, '1')
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+    await screen.findByTestId('bulk-read-preview')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(screen.queryByTestId('bulk-read-preview')).not.toBeInTheDocument()
+    expect(bulkMarkRead).not.toHaveBeenCalled()
+  })
+
+  it('keeps the undo receipt when a discovery read fails with a retryable error', async () => {
+    writeBulkReadReceipt(42, 78)
+    const getReadOperation = vi.fn().mockRejectedValue({ response: { status: 503 } })
+    list.mockResolvedValue(listResponse([issue({ id: 2, issue_number: '2' })]))
+    renderDialog({ issuesApi: { ...issuesApi, getReadOperation } })
+
+    expect(await screen.findByText(/its undo receipt was kept for retry/i)).toBeInTheDocument()
+    expect(window.localStorage.getItem(bulkReadReceiptKey(42, 78))).toBe('1')
+  })
+
+  it('undoes the exact persisted operation and reports partial skips', async () => {
+    writeBulkReadReceipt(42, 77)
+    const getReadOperation = vi.fn().mockResolvedValue({
+      id: 77,
+      operation_type: 'bulk_mark_read',
+      created_at: '2026-01-02T03:04:05Z',
+      items: [{ issue_id: 2, thread_id: 42, issue_number: '2', previous_status: 'unread' }],
+    })
+    const undoReadOperation = vi.fn().mockResolvedValue({ skipped_issue_ids: [99] })
+    list.mockResolvedValue(listResponse([issue({ id: 2, issue_number: '2' })]))
+    const { onClose } = renderDialog({
+      issuesApi: { ...issuesApi, getReadOperation, undoReadOperation },
+    })
+
+    expect(await screen.findByTestId('bulk-read-review')).toHaveTextContent('Operation #77 recorded 1 issue changes')
+    await userEvent.click(screen.getByRole('button', { name: 'Undo' }))
+
+    await waitFor(() => expect(undoReadOperation).toHaveBeenCalledWith(77))
+    expect(await screen.findByText(/undo skipped 1 issue\(s\) changed later/i)).toBeInTheDocument()
+    expect(window.localStorage.getItem(bulkReadReceiptKey(42, 77))).toBeNull()
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('uses the bounded fallback maximum when the series total is unknown', async () => {
+    list.mockResolvedValue(listResponse([issue({ id: 1, issue_number: '1' })]))
+    renderDialog({ currentIssueNumber: null, totalIssues: null })
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, '999')
+    await userEvent.click(screen.getByRole('button', { name: 'Increase issue number' }))
+    expect(input).toHaveValue('999')
   })
 
 })

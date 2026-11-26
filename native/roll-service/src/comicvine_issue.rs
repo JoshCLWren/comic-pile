@@ -51,7 +51,7 @@ WITH auth AS (
       -- late-arriving or repaired provider roster is picked up without a
       -- hot loop. Malformed/absent credit arrays count as empty (safe: a
       -- repair is enqueued rather than suppressing it). Mirrors
-      -- comicvine_repair::needs_provider_fetch exactly.
+      -- comicvine_provider::needs_provider_fetch exactly.
       WHEN m.provider_updated_at IS NOT NULL THEN
         (m.metadata->'raw_provider_payload'->>'date_last_updated' IS NOT NULL
           AND LEFT(replace(
@@ -105,37 +105,6 @@ WITH auth AS (
         )
     END AS needs_repair
   FROM mapped m
-), enqueue AS (
-  INSERT INTO comicvine_metadata_refresh_requests (
-    external_identity_id, state, attempts, next_attempt_at,
-    lease_expires_at, last_error, completed_at, created_at, updated_at
-  )
-  SELECT f.id, 'pending', 0, now(), NULL, NULL, NULL, now(), now()
-  FROM freshness f WHERE f.needs_repair
-  ON CONFLICT (external_identity_id) DO UPDATE
-    SET state='pending', attempts=0, next_attempt_at=now(),
-      lease_expires_at=NULL, last_error=NULL, completed_at=NULL, updated_at=now()
-    WHERE (
-      comicvine_metadata_refresh_requests.state = 'completed'
-      AND (comicvine_metadata_refresh_requests.completed_at IS NULL OR
-        comicvine_metadata_refresh_requests.completed_at <= now()-interval '30 days')
-    ) OR (
-      comicvine_metadata_refresh_requests.state = 'no_credits'
-      AND (comicvine_metadata_refresh_requests.completed_at IS NULL OR
-        comicvine_metadata_refresh_requests.completed_at <= now()-interval '7 days')
-    ) OR (
-      comicvine_metadata_refresh_requests.state='failed'
-      AND comicvine_metadata_refresh_requests.next_attempt_at <= now()
-    )
-  RETURNING external_identity_id, state, next_attempt_at
-), repair AS (
-  SELECT state, next_attempt_at FROM (
-    SELECT 0 AS priority, e.state, e.next_attempt_at FROM enqueue e
-    UNION ALL
-    SELECT 1, r.state, r.next_attempt_at
-    FROM comicvine_metadata_refresh_requests r
-    JOIN freshness f ON f.id=r.external_identity_id
-  ) states ORDER BY priority LIMIT 1
 ), arc_refs AS (
   SELECT arc_id, reference, ordinality FROM (
     SELECT DISTINCT ON ((arc.value->>'id')::int)
@@ -202,8 +171,6 @@ SELECT jsonb_build_object(
  'mapped', (SELECT jsonb_build_object(
    'external_id',external_id,'external_url',external_url,
    'metadata',metadata, 'needs_repair',needs_repair) FROM freshness),
- 'repair', (SELECT jsonb_build_object('state',state,'next_attempt_at',
-   extract(epoch FROM next_attempt_at)) FROM repair),
  'arcs', COALESCE((SELECT jsonb_agg(jsonb_build_object(
    'id',arc_id,'reference',reference,'total',(SELECT total FROM arc_totals t WHERE t.arc_id=a.arc_id))
    ORDER BY ordinality) FROM arc_refs a),'[]'::jsonb),
@@ -225,7 +192,6 @@ struct Snapshot {
     auth: Option<Auth>,
     owned: bool,
     mapped: Option<Mapped>,
-    repair: Option<Repair>,
     arcs: Vec<ArcReference>,
     related: Vec<Related>,
 }
@@ -235,12 +201,9 @@ struct Mapped {
     external_id: String,
     external_url: Option<String>,
     metadata: Value,
-}
-
-#[derive(Deserialize)]
-struct Repair {
-    state: String,
-    next_attempt_at: Option<f64>,
+    /// Derived from metadata freshness only. No ledger row is read or written
+    /// by this path: hydration is request-driven (explicit Retry), never queued.
+    needs_repair: bool,
 }
 
 #[derive(Deserialize)]
@@ -468,29 +431,14 @@ fn plain_text(value: &Value) -> Option<String> {
     }
 }
 
-/// Determine the metadata status based on repair state and content.
+/// Determine the metadata status from freshness and content only.
 ///
-/// Returns a status string and optional retry delay in seconds.
-/// Priority order: repair state > deep fetch status > credit availability.
-fn status(mapped: &Mapped, repair: Option<&Repair>) -> (String, Option<i64>) {
-    if let Some(repair) = repair {
-        let active = match repair.state.as_str() {
-            "pending" => Some("refresh_pending"),
-            "running" => Some("refresh_running"),
-            "deferred" => Some("refresh_deferred"),
-            "failed" => Some("refresh_failed"),
-            _ => None,
-        };
-        if let Some(state) = active {
-            let retry = if state == "refresh_deferred" || state == "refresh_failed" {
-                repair
-                    .next_attempt_at
-                    .map(|stamp| (stamp - chrono::Utc::now().timestamp() as f64).max(0.0) as i64)
-            } else {
-                None
-            };
-            return (state.to_string(), retry);
-        }
+/// There is no queue state to report: a confirmed issue whose stored metadata
+/// is stale is `needs_hydration`, which is the explicit, user-driven Retry
+/// signal. No retry delay is emitted because nothing retries automatically.
+fn status(mapped: &Mapped) -> (String, Option<i64>) {
+    if mapped.needs_repair {
+        return ("needs_hydration".into(), None);
     }
     let raw = &mapped.metadata["raw_provider_payload"];
     let deep = [
@@ -522,12 +470,7 @@ fn status(mapped: &Mapped, repair: Option<&Repair>) -> (String, Option<i64>) {
 ///
 /// Constructs the IssueIntelligence struct by processing metadata,
 /// story arcs, and related issues. Sorts and limits related issues.
-fn response(
-    mapped: Mapped,
-    repair: Option<Repair>,
-    arcs: Vec<ArcReference>,
-    related: Vec<Related>,
-) -> IssueIntelligence {
+fn response(mapped: Mapped, arcs: Vec<ArcReference>, related: Vec<Related>) -> IssueIntelligence {
     let mut story_arcs = Vec::new();
     for arc in arcs {
         let Some(name) = as_string(&arc.reference["name"]) else {
@@ -579,7 +522,7 @@ fn response(
         });
     }
     let (series_id, series_name) = series(&mapped.metadata);
-    let (metadata_status, refresh_retry_after_seconds) = status(&mapped, repair.as_ref());
+    let (metadata_status, refresh_retry_after_seconds) = status(&mapped);
     IssueIntelligence {
         comicvine_issue_id: mapped.external_id,
         comicvine_url: mapped
@@ -643,7 +586,7 @@ pub async fn issue_intelligence(
         return Err(ApiError::NotFound("Issue not found".into()));
     }
     Ok(Json(snapshot.mapped.map(|metadata| {
-        response(metadata, snapshot.repair, snapshot.arcs, snapshot.related)
+        response(metadata, snapshot.arcs, snapshot.related)
     })))
 }
 
@@ -731,11 +674,12 @@ mod tests {
         assert_eq!(people[1].creator_id, None);
     }
     #[test]
-    fn queue_is_owner_scoped_and_single_statement() {
+    fn read_is_owner_scoped_and_never_enqueues_background_work() {
         assert!(READ_SQL.contains("JOIN me ON me.user_id=t.user_id"));
-        assert!(READ_SQL.contains("ON CONFLICT (external_identity_id) DO UPDATE"));
-        assert!(READ_SQL.contains("WHERE f.needs_repair"));
-        assert!(!READ_SQL.contains("FOR UPDATE SKIP LOCKED"));
+        assert!(READ_SQL.contains("'needs_repair',needs_repair"));
+        assert!(!READ_SQL.contains("INSERT INTO comicvine_metadata_refresh_requests"));
+        assert!(!READ_SQL.contains("ON CONFLICT (external_identity_id) DO UPDATE"));
+        assert!(!READ_SQL.contains("comicvine_metadata_refresh_requests"));
         assert_eq!(as_id(&json!("29319")), Some(29319));
     }
     #[test]
@@ -781,16 +725,16 @@ mod tests {
 
     #[test]
     fn empty_credits_use_seven_day_recheck_and_provider_revision() {
-        // Reader policy must mirror comicvine_repair::needs_provider_fetch.
+        // Reader policy must mirror comicvine_provider::needs_provider_fetch.
         assert!(
             READ_SQL.contains("interval '7 days'"),
             "empty credits need a 7-day recheck, not a 30-day lock"
         );
-        assert!(READ_SQL.contains("state = 'no_credits'"));
         assert!(
-            READ_SQL.contains("state = 'completed'"),
-            "completed rows keep the 30-day window"
+            READ_SQL.contains("interval '30 days'"),
+            "complete rows keep the 30-day window"
         );
+        assert!(!READ_SQL.contains("comicvine_metadata_refresh_requests"));
         assert!(
             READ_SQL.contains("date_last_updated"),
             "provider revision must be compared against the deep fetch"
@@ -854,8 +798,9 @@ mod tests {
                     "person_credits": seven, "character_credits": [], "team_credits": [],
                     "story_arc_credits": [], "date_last_updated": "2026-01-01T00:00:00+00:00"}
             }),
+            needs_repair: false,
         };
-        let wire = serde_json::to_value(response(mapped, None, vec![], vec![])).unwrap();
+        let wire = serde_json::to_value(response(mapped, vec![], vec![])).unwrap();
         assert_eq!(wire["creators"].as_array().unwrap().len(), 7);
         assert_eq!(wire["metadata_status"], "complete");
     }
@@ -867,19 +812,11 @@ mod tests {
             metadata: json!({"name":"Going For It","volume":{"id":1,"name":"Hellblazer"},
                 "creator_credits":[{"id":1,"name":"Jamie Delano"}],
                 "cover_date":"1988-03-01","store_date":"1988-03-24"}),
+            needs_repair: true,
         };
-        let wire = serde_json::to_value(response(
-            mapped,
-            Some(Repair {
-                state: "pending".into(),
-                next_attempt_at: None,
-            }),
-            vec![],
-            vec![],
-        ))
-        .unwrap();
+        let wire = serde_json::to_value(response(mapped, vec![], vec![])).unwrap();
         assert_eq!(wire["creators"][0]["name"], "Jamie Delano");
-        assert_eq!(wire["metadata_status"], "refresh_pending");
+        assert_eq!(wire["metadata_status"], "needs_hydration");
         assert!(wire["story_arcs"].is_array());
         assert_eq!(wire["series_name"], "Hellblazer");
     }
