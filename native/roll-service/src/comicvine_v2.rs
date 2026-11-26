@@ -2909,7 +2909,7 @@ pub fn revert_correction_documentation() {}
     params(("issue_id" = i32, Path, description = "ComicPile issue ID")),
     tag = "comicvine-v2",
     responses(
-        (status = 200, description = "Confirmed identity to refresh", body = MetadataRefreshResponse),
+        (status = 200, description = "Bounded synchronous retry outcome for the confirmed identity", body = MetadataRefreshResponse),
         (status = 400, description = "Identity or correction conflict"),
         (status = 401, description = "Invalid or revoked access token"),
         (status = 403, description = "CSRF validation failed"),
