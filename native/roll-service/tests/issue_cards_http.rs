@@ -972,11 +972,16 @@ async fn issue_cards_use_verified_identity_when_candidates_conflict() {
          VALUES (700, 'comicvine', 'issue', '4050-100',
                  '{\"issue_number\":\"100\",\"image_url\":\"https://comicvine.test/confirmed.jpg\"}'::json, NOW(), NOW()),
                 (701, 'comicvine', 'issue', '4050-999',
-                 '{\"issue_number\":\"999\",\"image_url\":\"https://comicvine.test/candidate.jpg\"}'::json, NOW(), NOW());
-         INSERT INTO issue_external_identity_mappings
-             (issue_id, external_identity_id, status, confidence, evidence_json, created_at, updated_at)
-         VALUES (700, 700, 'candidate', 0.99, '{}'::json, NOW(), NOW()),
-                (701, 701, 'confirmed', 0.80, '{}'::json, NOW(), NOW());",
+                 '{\"issue_number\":\"999\",\"image_url\":\"https://comicvine.test/candidate.jpg\"}'::json, NOW(), NOW());",
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        "INSERT INTO issue_external_identity_mappings
+             (id, issue_id, external_identity_id, status, confidence, evidence_json, created_at, updated_at)
+         VALUES (800, $1, 700, 'candidate', 0.99, '{}'::json, NOW(), NOW()),
+                (801, $1, 701, 'confirmed', 0.80, '{}'::json, NOW(), NOW())",
+        &[&issue_id],
     )
     .await
     .unwrap();
