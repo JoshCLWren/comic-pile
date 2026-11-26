@@ -179,6 +179,9 @@ fn verify_preview_token(
     let payload_json = canonical_json(&payload);
     let expected_sig = hmac_sha256_hex(secret, &payload_json)?;
     if !constant_time_eq(expected_sig.as_bytes(), signature.as_bytes()) {
+        eprintln!(
+            "DEBUG_VERIFY sig_mismatch expected={expected_sig} given={signature} secret={secret} canonical={payload_json}"
+        );
         return Err(unauthorized("invalid_preview_token"));
     }
     let expires_at = payload
