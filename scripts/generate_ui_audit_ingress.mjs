@@ -7,9 +7,11 @@
  */
 import {readFileSync, writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
+import {canonicalNativeDest, RUST_DEST} from './vercel_builds.mjs';
 
-// The whole /api surface is served by the single native Rust ingress.
-const RUST = {has: dest => dest === '/api/native_roll.rs'};
+// The whole /api surface is served by the single native Rust ingress, whether
+// the manifest spells it with the legacy or the future entrypoint name.
+const RUST = {has: dest => canonicalNativeDest(dest) === RUST_DEST};
 const FALLBACK = '/api(?:/.*)?';
 const ALL_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 

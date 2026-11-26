@@ -20,6 +20,18 @@ test('audit ingress preserves production method/path routing and native priority
   assert.match(nginx, /root \/usr\/share\/nginx\/html;/);
 });
 
+test('the future native_api spelling renders the identical audit ingress', () => {
+  const legacy = {routes: [
+    {src: '^/api/v2/ping$', methods: ['GET'], dest: '/api/native_roll.rs'},
+    {src: '/api(?:/.*)?', dest: '/api/native_roll.rs'},
+  ]};
+  const future = {routes: legacy.routes.map(route => ({
+    ...route,
+    dest: '/api/native_api.rs',
+  }))};
+  assert.equal(renderAuditIngress(future), renderAuditIngress(legacy));
+});
+
 test('audit ingress rejects retired API destinations instead of routing them to Rust', () => {
   assert.throws(() => renderAuditIngress({routes: [
     {src: '^/api/v1/legacy$', methods: ['GET'], dest: '/api/retired.ingress'},
