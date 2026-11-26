@@ -86,25 +86,6 @@ test('synthetic: a roll route is dropped unless a later non-native route overlap
   assert.deepEqual(out, [shadowed, shadow, shadowOther, catchAll, spa]);
 });
 
-test('the future native_api spelling is slimmed exactly like the canonical destination', () => {
-  const future = '/api/native_api.rs';
-  const free = {src: '^/api/v2/free$', methods: ['GET'], dest: future};
-  const needed = {src: '^/api/v2/needed$', methods: ['GET'], dest: future};
-  const shadow = {src: '^/api/v2/needed$', methods: ['GET'], dest: SHADOW};
-  const catchAll = {src: '/api(?:/.*)?', dest: future};
-  const routes = [free, needed, shadow, catchAll];
-  assert.deepEqual(
-    slimNativeRollRoutes(routes, new Set([free, needed])),
-    [needed, shadow, catchAll],
-  );
-  // Non-native routes are never treated as the native ingress.
-  const shadowOnly = {src: '^/api/v2/only-shadow$', methods: ['GET'], dest: SHADOW};
-  assert.deepEqual(
-    slimNativeRollRoutes([shadowOnly, catchAll], new Set([shadowOnly])),
-    [shadowOnly, catchAll],
-  );
-});
-
 test('crossed-parameter routes overlap even though no template produces a shared sample', () => {
   const roll = {src: '^/api/a/[^/]+/b$', methods: ['GET'], dest: ROLL};
   const shadow = {src: '^/api/a/c/[^/]+$', methods: ['GET', 'OPTIONS'], dest: SHADOW};

@@ -65,7 +65,7 @@ async fn response(app: Router, authorization: Option<&str>) -> (u16, Value, Opti
 }
 
 #[tokio::test]
-async fn shared_auth_claims_and_ownership_matrix_for_threads_and_reading_sessions() {
+async fn shared_python_rust_auth_and_ownership_matrix() {
     let url = comicpile_roll_service::test_support::database_url().await;
     let state = state(&url);
     let connection = state.pool.get().await.unwrap();

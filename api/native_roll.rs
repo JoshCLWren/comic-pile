@@ -485,13 +485,13 @@ fn app() -> Router {
             "/api/v1/issue-identity/cbl-sources/folders",
             get(native_dispatch),
         )
-        // Issue Identity / CBL Adoption ingress (#5484). These native-rust
-        // paths are registered explicitly in this Vercel entry alongside the
-        // discover/browse/folders/adoption-preview siblings, so source detail,
-        // list candidates and adoption commit reach the dispatched handler
-        // instead of falling through to native_not_found's 404. Keep this
-        // route table in sync with the inner
-        // comicpile_roll_service::router() table.
+        // Issue Identity / CBL Adoption ingress (#5484). PR #5451 cut these
+        // paths over to native-rust and removed the Python handlers, but only
+        // registered the discover/browse/folders/adoption-preview siblings in
+        // this Vercel entry. Unregistered paths fell through to
+        // native_not_found, so production source detail, list candidates and
+        // adoption commit returned 404 "Not Found". Keep this table in sync
+        // with the inner comicpile_roll_service::router() route table.
         .route(
             "/api/v1/issue-identity/cbl-sources/{list_id}",
             get(native_dispatch),
@@ -1075,13 +1075,14 @@ mod tests {
 
     #[tokio::test]
     async fn cbl_adoption_paths_reach_rust_ingress_and_never_hit_json_404() {
-        // Regression for #5484: this Vercel entry registers the source-detail,
-        // list-candidates and adoption-commit paths in addition to the
-        // discover/browse/folders/adoption-preview siblings. Unregistered paths
-        // fall through to native_not_found's "Unable to load this CBL source" /
-        // 404 on source detail, list candidates and adoption commit. An
-        // authenticated-rust path must reach the dispatched handler's 401/503
-        // (no DB state here), never the Rust JSON 404 fallback.
+        // Regression for #5484: PR #5451 cut these adoption-path operations to
+        // native-rust and removed their Python handlers, but this Vercel entry
+        // only registered the discover/browse/folders/adoption-preview paths.
+        // Every unregistered path fell through to native_not_found, which is
+        // the production "Unable to load this CBL source" / 404 seen on source
+        // detail, list candidates and adoption commit. An authenticated-rust
+        // path must reach the dispatched handler's 401/503 (no DB state here),
+        // never the Rust JSON 404 fallback.
         let cases = [
             ("GET", "/api/v1/issue-identity/cbl-sources/26"),
             (
@@ -1929,7 +1930,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn thread_issue_list_validation_errors_use_422_envelope_in_both_routers() {
+    async fn two_router_thread_issue_list_validation_matches_python_contract() {
         let url = disposable_schema_url().await;
         let state = test_state(&url);
         TEST_ROLL_STATE

@@ -124,6 +124,7 @@ WHERE e.id = $1 AND e.provider = 'comicvine' AND e.entity_type = 'issue'
       AND t.user_id = $6
   )
 "#;
+
 fn issue_id(external_id: &str) -> Option<u32> {
     let raw = external_id.strip_prefix("4000-").unwrap_or(external_id);
     raw.parse::<u32>().ok().filter(|id| *id > 0)

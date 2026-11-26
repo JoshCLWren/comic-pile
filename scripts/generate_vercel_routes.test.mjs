@@ -1,11 +1,9 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
 import {
   applyStaticCsp,
   fragmentVercelRoutes,
   generateVercel,
-  loadFragmentFiles,
   routeRegex,
   STATIC_CSP,
 } from './generate_vercel_routes.mjs';
@@ -116,48 +114,6 @@ test('generation emits canonical builds, drops retired API ingress and keeps sta
   // Every retired path still resolves to the Rust catch-all.
   assert.equal(resolve(generated, 'GET', '/api/v1/stale'), ROLL);
   assert.equal(resolve(generated, 'POST', '/api/v1/tags/7'), ROLL);
-});
-
-test('future native_api fragments and previous routes normalize to the legacy artifact', () => {
-  const config = baseConfig();
-  const legacy = generateVercel(config, fragments());
-  const aliasFragments = fragments().map(fragment => ({
-    ...fragment,
-    operations: fragment.operations.map(operation => ({
-      ...operation,
-      dest: '/api/native_api.rs',
-    })),
-  }));
-  const fromFutureFragments = generateVercel(config, aliasFragments);
-  assert.deepEqual(fromFutureFragments, legacy);
-  assert.equal(JSON.stringify(fromFutureFragments, null, 2), JSON.stringify(legacy, null, 2));
-  assert.equal(fromFutureFragments.routes.some(route => route.dest === '/api/native_api.rs'), false);
-
-  const aliasConfig = {
-    ...config,
-    routes: config.routes.map(route => (
-      route.dest === ROLL ? {...route, dest: '/api/native_api.rs'} : route
-    )),
-  };
-  const fromFutureDocument = generateVercel(aliasConfig, fragments());
-  assert.deepEqual(fromFutureDocument, legacy);
-  assert.equal(JSON.stringify(fromFutureDocument, null, 2), JSON.stringify(legacy, null, 2));
-});
-
-test('current fragments regenerate their own artifact byte-for-byte with canonical ingress', () => {
-  const deployed = JSON.parse(readFileSync('vercel.json', 'utf8'));
-  const first = generateVercel(deployed, loadFragmentFiles());
-  const second = generateVercel(first, loadFragmentFiles());
-  assert.equal(
-    JSON.stringify(second, null, 2) + '\n',
-    JSON.stringify(first, null, 2) + '\n',
-  );
-  assert.equal(first.routes.some(route => route.dest === '/api/native_api.rs'), false);
-  for (const route of first.routes) {
-    if ((route.src ?? '').startsWith('/api') || (route.src ?? '').startsWith('^/api/')) {
-      assert.equal(route.dest, ROLL, `${route.src} resolves to the canonical ingress`);
-    }
-  }
 });
 
 test('fragment config derives active crons and drops retired rewrites', () => {

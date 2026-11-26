@@ -12,9 +12,7 @@
  * mirrors this algorithm exactly; keep the two in sync.
  */
 
-import {canonicalNativeDest, RUST_DEST} from './vercel_builds.mjs';
-
-export const ROLL_DESTINATION = RUST_DEST;
+export const ROLL_DESTINATION = '/api/native_roll.rs';
 const CATCH_ALL_SRC = '/api(?:/.*)?';
 const REGEX_META = new Set(['[', ']', '(', ')', '{', '}', '|', '*', '+', '?', '.', '^', '$']);
 
@@ -102,10 +100,10 @@ export function slimNativeRollRoutes(routes, removable) {
   );
   const limit = catchIndex === -1 ? routes.length : catchIndex;
   return routes.filter((route, index) => {
-    if (!removable.has(route) || canonicalNativeDest(route.dest) !== ROLL_DESTINATION) return true;
+    if (!removable.has(route) || route.dest !== ROLL_DESTINATION) return true;
     for (let later = index + 1; later < limit; later++) {
       const other = routes[later];
-      if (canonicalNativeDest(other.dest) === ROLL_DESTINATION) continue;
+      if (other.dest === ROLL_DESTINATION) continue;
       if (routesMayOverlap(route, other)) return true;
     }
     return false;

@@ -3,7 +3,6 @@ import {readFileSync} from 'node:fs';
 import {test} from 'node:test';
 import {
   assertSingleNativeIngress,
-  canonicalNativeDest,
   CANONICAL_BUILDS,
   RUST_BUILD_SRC,
   RUST_DEST,
@@ -16,26 +15,6 @@ test('canonical builds declare one native Rust function and one static build', (
     ['package.json', '@vercel/static-build'],
   ]);
   const document = withCanonicalBuilds({routes: [{src: '/api(?:/.*)?', dest: RUST_DEST}]});
-  assert.equal(assertSingleNativeIngress(document), document);
-});
-
-test('both native entrypoint spellings normalize to the current canonical destination', () => {
-  assert.equal(canonicalNativeDest('/api/native_roll.rs'), RUST_DEST);
-  assert.equal(canonicalNativeDest('/api/native_api.rs'), RUST_DEST);
-  // Non-native and non-string inputs pass through for the invariant checks.
-  assert.equal(canonicalNativeDest('/api/retired.ingress'), '/api/retired.ingress');
-  assert.equal(canonicalNativeDest(undefined), undefined);
-  assert.equal(canonicalNativeDest(null), null);
-  assert.equal(canonicalNativeDest(42), 42);
-  assert.equal(RUST_DEST, '/api/native_roll.rs', 'canonical value stays at the deployed spelling');
-  assert.equal(RUST_BUILD_SRC, 'api/native_roll.rs', 'build source is unchanged');
-});
-
-test('the future native_api destination still satisfies the single-ingress invariant', () => {
-  const document = withCanonicalBuilds({routes: [
-    {src: '^/api/v2/ping$', methods: ['GET'], dest: '/api/native_api.rs'},
-    {src: '/api(?:/.*)?', dest: '/api/native_api.rs'},
-  ]});
   assert.equal(assertSingleNativeIngress(document), document);
 });
 
