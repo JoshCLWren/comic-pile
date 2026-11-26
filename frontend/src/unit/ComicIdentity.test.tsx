@@ -1046,6 +1046,36 @@ describe('ComicIdentity creator status (issue #4149)', () => {
     expect(screen.getByTestId('creator-status-not-fetched')).toHaveTextContent('Creator credits not yet fetched')
   })
 
+  it('offers a synchronous Retry for needs_hydration confirmed identities', async () => {
+    getIntelligence
+      .mockResolvedValueOnce(
+        intelligenceResponse({
+          comicvine_issue_id: '101',
+          metadata_status: 'needs_hydration',
+        }),
+      )
+      .mockResolvedValueOnce(
+        intelligenceResponse({
+          comicvine_issue_id: '101',
+          metadata_status: 'complete',
+          creators: [{ name: 'Recovered Writer', roles: ['writer'] }],
+        }),
+      )
+    // SAFETY: the mocked route returns exactly the fields consumed by this test.
+    refreshMetadata.mockResolvedValue({ issue_id: 1, refreshed: true, comicvine_issue_id: '101' } as never)
+
+    renderIdentity()
+    await waitForLoaded()
+
+    expect(screen.getByTestId('creator-status-needs-hydration')).toHaveTextContent(
+      'Creator credits not yet hydrated',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Retry refresh' }))
+
+    await waitFor(() => expect(refreshMetadata).toHaveBeenCalledWith(1))
+    await waitFor(() => expect(screen.getByText('Recovered Writer')).toBeInTheDocument())
+  })
+
   it('says credits are queued when metadata_status is refresh_pending', async () => {
     getIntelligence.mockResolvedValue({
       comicvine_issue_id: '200',
