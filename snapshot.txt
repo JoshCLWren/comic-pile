@@ -1,9 +1,9 @@
-utc: 2026-11-26T04:57:50Z
-uptime: 1936.23s load: 0.00 0.03 0.21
+utc: 2026-11-26T04:58:06Z
+uptime: 1952.59s load: 0.00 0.03 0.21
 processes: 198
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15700        1047        9274          74        5789       14653
+Mem:           15700        1044        9277          74        5789       14656
 Swap:              0           0           0
 --- disk
 Filesystem            Size  Used Avail Use% Mounted on
@@ -26,6 +26,7 @@ Filesystem            Size  Used Avail Use% Mounted on
 16204 systemd
 15544 hosted-compute-
 --- top cpu (name only)
+75.0 git
  0.7 provjobd2349642
  0.4 Runner.Worker
  0.2 containerd
@@ -33,6 +34,5 @@ Filesystem            Size  Used Avail Use% Mounted on
  0.0 systemd
  0.0 Runner.Listener
  0.0 containerd-shim
- 0.0 kworker/u16:0-writeback
 --- kernel oom/kill
 --- shutdown/session signals
