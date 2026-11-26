@@ -208,8 +208,15 @@ pub struct MetadataCorrectionsResponse {
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct MetadataRefreshResponse {
     pub issue_id: i32,
+    /// True only when valid metadata was persisted by this invocation.
     pub refreshed: bool,
     pub comicvine_issue_id: Option<String>,
+    /// Terminal outcome of the bounded attempt: `complete`, `no_credits`,
+    /// `provider_unavailable`, `rate_limited`, `timeout`, `invalid_response`,
+    /// `provider_not_configured` or `not_confirmed`.
+    pub outcome: String,
+    /// Provider-requested delay before another explicit Retry, when throttled.
+    pub retry_after_seconds: Option<i32>,
 }
 
 /// Python `ConfirmIdentityRequest` (lax `int`).
@@ -1316,39 +1323,40 @@ pub async fn confirm_identity(
     let tx = connection.transaction().await.map_err(db::query_error)?;
     crate::queue::lock_queue(&tx, user.id()).await?;
     lock_owned_issue(&tx, user.id(), issue_id).await?;
-    let enqueued_repair = link_confirmed(&tx, issue_id, request.comicvine_issue_id).await?;
+    link_confirmed(&tx, issue_id, request.comicvine_issue_id).await?;
     let response = identity_state(&tx, user.id(), issue_id).await?;
     tx.commit().await.map_err(db::query_error)?;
-    if enqueued_repair {
-        crate::comicvine_repair::notify_repair_enqueued(&state).await;
-    }
-    // Release the pooled connection before inline hydration checks one out;
-    // on a small pool the handler holding it would starve the hydrator.
+    // Release the pooled connection before hydration checks one out; on a
+    // small pool the handler holding it would starve the hydrator.
     drop(connection);
-    hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started).await;
+    let outcome =
+        hydrate_confirmed_identity_interactive(&state, user.id(), issue_id, started).await;
+    tracing::info!(issue_id, outcome = outcome.as_str(), "map hydration outcome");
     Ok(Json(response))
 }
 
-/// Best-effort synchronous creator-credit hydration after a confirmed mapping
-/// commits. The provider key lookup stays at the mutation boundary; the
-/// enqueued refresh row remains the fallback when this cannot complete.
-async fn hydrate_confirmed_identity_if_configured(
+/// Await one bounded hydration attempt for an interactive mapping write. The
+/// mapping transaction has already committed: a provider failure is reported
+/// through the outcome and never rolls back the confirmation. No repair row is
+/// enqueued and no background wake-up is dispatched.
+async fn hydrate_confirmed_identity_interactive(
     state: &AppState,
     user_id: i32,
     issue_id: i32,
     started: Instant,
-) {
+) -> HydrationOutcome {
     let Some(api_key) = crate::comicvine_repair::provider_api_key() else {
-        return;
+        return HydrationOutcome::NotConfigured;
     };
-    hydrate_confirmed_identity_inline(
+    hydrate_confirmed_identity_sync(
         state,
         user_id,
         issue_id,
         inline_hydration_budget(started.elapsed()),
         &api_key,
+        false,
     )
-    .await;
+    .await
 }
 
 /// `POST /api/v2/comicvine/issues/{issue_id}/identity:replace` (Python
@@ -1385,14 +1393,13 @@ pub async fn replace_identity(
     )
     .await
     .map_err(db::query_error)?;
-    let enqueued_repair = link_confirmed(&tx, issue_id, request.comicvine_issue_id).await?;
+    link_confirmed(&tx, issue_id, request.comicvine_issue_id).await?;
     let response = identity_state(&tx, user.id(), issue_id).await?;
     tx.commit().await.map_err(db::query_error)?;
-    if enqueued_repair {
-        crate::comicvine_repair::notify_repair_enqueued(&state).await;
-    }
     drop(connection);
-    hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started).await;
+    let outcome =
+        hydrate_confirmed_identity_interactive(&state, user.id(), issue_id, started).await;
+    tracing::info!(issue_id, outcome = outcome.as_str(), "remap hydration outcome");
     Ok(Json(response))
 }
 
@@ -1524,23 +1531,26 @@ pub async fn revert_correction(
     Ok(Json(response))
 }
 
-/// `POST /api/v2/comicvine/issues/{issue_id}/metadata:refresh` (Python
-/// `request_provider_refresh`): reports the confirmed ComicVine id and
-/// durably re-enqueues provider refresh when a confirmed identity exists so an
-/// already-confirmed issue can recover without remapping (#5695).
+/// `POST /api/v2/comicvine/issues/{issue_id}/metadata:refresh` — the explicit
+/// Retry for the currently confirmed identity. Performs one bounded, awaited
+/// provider attempt inside this HTTP invocation. It never enqueues a refresh
+/// row, claims one, polls, or dispatches a background worker. The reader queue
+/// lock is taken before the issue row so a concurrent remap cannot slip between
+/// identity read and hydration; the persist step rechecks identity again.
 pub async fn refresh_metadata(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     issue_id: Result<Path<String>, PathRejection>,
 ) -> Result<Json<MetadataRefreshResponse>, ApiError> {
+    let started = Instant::now();
     let issue_id = path_int(issue_id)?;
     let mut connection = db::checkout(&state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
     crate::queue::lock_queue(&tx, user.id()).await?;
     lock_owned_issue(&tx, user.id(), issue_id).await?;
-    let identity_row = tx
+    let comicvine_issue_id: Option<String> = tx
         .query_opt(
-            "SELECT e.id, e.external_id \
+            "SELECT e.external_id \
              FROM external_identities e \
              JOIN issue_external_identity_mappings m ON m.external_identity_id = e.id \
              WHERE m.issue_id = $1 AND m.status = 'confirmed' \
@@ -1549,50 +1559,34 @@ pub async fn refresh_metadata(
             &[&issue_id],
         )
         .await
-        .map_err(db::query_error)?;
-    let (identity_id, comicvine_issue_id): (Option<i32>, Option<String>) = identity_row
-        .map(|row| (Some(row.get::<_, i32>(0)), Some(row.get::<_, String>(1))))
-        .unwrap_or((None, None));
-
-    if let Some(identity_id) = identity_id {
-        // Manual recovery: reopen any non-actively-leased repair row so a stuck
-        // pending/deferred/failed/completed/no_credits identity can be retried
-        // without remapping (#5695). Running rows with a live lease are left to
-        // the worker that owns them. Persistence failures fail the request: a
-        // successful HTTP response must never claim recovery was scheduled when
-        // no durable work was written.
-        tx.execute(
-            "UPDATE comicvine_metadata_refresh_requests \
-             SET state = 'pending', attempts = 0, next_attempt_at = now(), \
-                 lease_expires_at = NULL, last_error = NULL, completed_at = NULL, \
-                 updated_at = now() \
-             WHERE external_identity_id = $1 \
-               AND NOT (state = 'running' AND lease_expires_at > now())",
-            &[&identity_id],
-        )
-        .await
-        .map_err(db::query_error)?;
-        // Ensure a row exists when none was present. The update above covers
-        // existing rows; this insert covers the missing-row case.
-        tx.execute(
-            "INSERT INTO comicvine_metadata_refresh_requests \
-                (external_identity_id, state, attempts, next_attempt_at, \
-                 lease_expires_at, last_error, completed_at, created_at, updated_at) \
-             VALUES ($1, 'pending', 0, now(), NULL, NULL, NULL, now(), now()) \
-             ON CONFLICT ON CONSTRAINT uq_comicvine_metadata_refresh_identity DO NOTHING",
-            &[&identity_id],
-        )
-        .await
-        .map_err(db::query_error)?;
-    }
+        .map_err(db::query_error)?
+        .map(|row| row.get(0));
     tx.commit().await.map_err(db::query_error)?;
-    if comicvine_issue_id.is_some() {
-        crate::comicvine_repair::notify_repair_enqueued(&state).await;
-    }
+    // Release the pooled connection before the awaited provider call.
+    drop(connection);
+
+    let outcome = if comicvine_issue_id.is_none() {
+        HydrationOutcome::NotConfirmed
+    } else {
+        let Some(api_key) = crate::comicvine_repair::provider_api_key() else {
+            HydrationOutcome::NotConfigured
+        };
+        hydrate_confirmed_identity_sync(
+            &state,
+            user.id(),
+            issue_id,
+            inline_hydration_budget(started.elapsed()),
+            &api_key,
+            true,
+        )
+        .await
+    };
     Ok(Json(MetadataRefreshResponse {
         issue_id,
-        refreshed: comicvine_issue_id.is_some(),
+        refreshed: outcome.refreshed(),
         comicvine_issue_id,
+        outcome: outcome.as_str().to_owned(),
+        retry_after_seconds: outcome.retry_after_seconds(),
     }))
 }
 
