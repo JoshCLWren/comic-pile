@@ -195,6 +195,33 @@ export function createIssuesApi(client: HttpClient) {
     },
 
     /**
+     * Preview a delete before the queued mutation is accepted (#4654). The
+     * server projects the series without the issue inside a rolled-back
+     * savepoint, so no row is changed by the preview.
+     */
+    previewDelete: async (
+      threadId: number,
+      issueId: number,
+    ): Promise<IssueEditPreviewResponse> =>
+      client.post(`/v2/threads/${threadId}/issues/structure-preview`, {
+        operation: 'delete',
+        issue_id: issueId,
+      }),
+
+    /**
+     * Preview a reorder before the queued mutation is accepted (#4654).
+     * `issueIds` must list every issue in the series exactly once.
+     */
+    previewReorder: async (
+      threadId: number,
+      issueIds: number[],
+    ): Promise<IssueEditPreviewResponse> =>
+      client.post(`/v2/threads/${threadId}/issues/structure-preview`, {
+        operation: 'reorder',
+        issue_ids: issueIds,
+      }),
+
+    /**
      * Get a single issue by ID
      * @param issueId - The issue ID to retrieve
      * @returns The issue details
