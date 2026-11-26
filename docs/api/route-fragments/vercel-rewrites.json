@@ -13,7 +13,6 @@
     "demo",
     "dependencies",
     "identity-inbox",
-    "issue-duplicate-reconciliation",
     "issue-identity-cbl-catalog",
     "issue-identity",
     "issues",
