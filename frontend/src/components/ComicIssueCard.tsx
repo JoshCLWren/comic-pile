@@ -591,10 +591,17 @@ export function ComicIssueCard({
 
       {actions.isError && (
         <p role="alert" className="mt-2 text-sm text-[var(--theme-error)]">
-          {getApiErrorDetail(actions.error) || 'Could not save. Your rating was not recorded — try again.'}
+          {getApiErrorDetail(actions.error)
+            || (aliasEditor
+              ? 'Could not save the alternate number — try again.'
+              : 'Could not save. Your rating was not recorded — try again.')}
           <button
             type="button"
-            onClick={() => (editor ? void handleSave() : void handleMarkUnread())}
+            onClick={() => {
+              if (aliasEditor) void handleSaveAlias()
+              else if (editor) void handleSave()
+              else void handleMarkUnread()
+            }}
             className="ml-2 font-bold underline"
           >
             Retry

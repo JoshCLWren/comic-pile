@@ -591,3 +591,118 @@ describe('shared comic mapping integration', () => {
     expect(patch).not.toHaveBeenCalled()
   })
 })
+
+describe('dual issue numbering (#4652)', () => {
+  it('renders authored, alternate and provider numbers distinctly', () => {
+    render(
+      <ComicIssueIdentity
+        threadTitle="Saga"
+        issueNumber="3"
+        issueNumberAlias="100"
+        providerIssueNumber="101"
+        status="unread"
+        rating={null}
+      />,
+    )
+    expect(screen.getByTestId('comic-issue-alias-number')).toHaveTextContent('(100)')
+    expect(screen.getByTestId('comic-issue-provider-number')).toHaveTextContent('Provider #101')
+  })
+
+  it('hides alias and provider numbers that duplicate the authored number or are blank', () => {
+    const { rerender } = render(
+      <ComicIssueIdentity
+        threadTitle="Saga"
+        issueNumber="3"
+        issueNumberAlias=" 3 "
+        providerIssueNumber="3"
+        status="unread"
+        rating={null}
+      />,
+    )
+    expect(screen.queryByTestId('comic-issue-alias-number')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('comic-issue-provider-number')).not.toBeInTheDocument()
+    rerender(
+      <ComicIssueIdentity
+        threadTitle="Saga"
+        issueNumber="3"
+        issueNumberAlias="   "
+        providerIssueNumber="  "
+        status="unread"
+        rating={null}
+      />,
+    )
+    expect(screen.queryByTestId('comic-issue-alias-number')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('comic-issue-provider-number')).not.toBeInTheDocument()
+  })
+
+  it('shows the exact provider identity line only for a confirmed mapping', () => {
+    render(
+      <ComicIssueCard
+        issueId={75}
+        card={{ ...card, issue_number: '3', issue_number_alias: '100', has_confirmed_identity: true, comicvine_issue_id: '4000-999', provider_issue_number: '100' }}
+        threadTitle="Saga"
+        issueNumber="3"
+        status="read"
+      />,
+      { wrapper },
+    )
+    expect(screen.getByTestId('comic-issue-provider-identity')).toHaveTextContent('ComicVine #4000-999 · provider issue #100')
+    expect(screen.getByRole('article', { name: 'Issue Saga #3 (100)' })).toBeVisible()
+  })
+
+  it('saves a new alias and clears an existing one without a rating or status write', async () => {
+    render(
+      <ComicIssueCard issueId={75} card={{ ...card, issue_number: '3' }} threadTitle="Saga" issueNumber="3" status="read" />,
+      { wrapper },
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Add alias' }))
+    const input = screen.getByLabelText(/Story-arc or overall number/)
+    await userEvent.type(input, '100')
+    await userEvent.click(screen.getByRole('button', { name: 'Save alias' }))
+    await waitFor(() => expect(screen.queryByTestId('comic-issue-alias-editor')).not.toBeInTheDocument())
+    expect(patch).toHaveBeenCalledExactlyOnceWith(75, expect.objectContaining({
+      issueNumberAlias: '100', issueNumberAliasProvided: true, rating: undefined, status: undefined,
+    }))
+
+    patch.mockClear()
+    render(
+      <ComicIssueCard issueId={75} card={{ ...card, issue_number: '3', issue_number_alias: '100' }} threadTitle="Saga" issueNumber="3" status="read" />,
+      { wrapper },
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Edit alias' }))
+    await userEvent.clear(screen.getByLabelText(/Story-arc or overall number/))
+    await userEvent.click(screen.getByRole('button', { name: 'Save alias' }))
+    await waitFor(() => expect(patch).toHaveBeenCalledExactlyOnceWith(75, expect.objectContaining({
+      issueNumberAlias: null, issueNumberAliasProvided: true,
+    })))
+  })
+
+  it('cancels an alias edit without writing', async () => {
+    render(
+      <ComicIssueCard issueId={75} card={{ ...card, issue_number: '3', issue_number_alias: '100' }} threadTitle="Saga" issueNumber="3" status="read" />,
+      { wrapper },
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Edit alias' }))
+    await userEvent.clear(screen.getByLabelText(/Story-arc or overall number/))
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByTestId('comic-issue-alias-editor')).not.toBeInTheDocument()
+    expect(patch).not.toHaveBeenCalled()
+  })
+
+  it('retries a failed alias-only write with the same idempotency key', async () => {
+    patch.mockRejectedValueOnce(new Error('alias offline'))
+    render(
+      <ComicIssueCard issueId={75} card={{ ...card, issue_number: '3' }} threadTitle="Saga" issueNumber="3" status="read" />,
+      { wrapper },
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Add alias' }))
+    await userEvent.type(screen.getByLabelText(/Story-arc or overall number/), '100')
+    await userEvent.click(screen.getByRole('button', { name: 'Save alias' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('alias offline')
+    await userEvent.click(within(screen.getByRole('alert')).getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+    expect(patch).toHaveBeenCalledTimes(2)
+    expect(patch.mock.calls[1]).toEqual(patch.mock.calls[0])
+    expect(patch.mock.calls[1]?.[1].issueNumberAlias).toBe('100')
+  })
+})
