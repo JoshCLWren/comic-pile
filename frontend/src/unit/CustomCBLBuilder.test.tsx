@@ -205,7 +205,7 @@ describe('CustomCBLBuilder', () => {
     expect(screen.getByText('Mobile Reading Series #1')).toBeInTheDocument()
     expect(screen.queryByText('Mobile Reading Series #31')).not.toBeInTheDocument()
   })
-  it('labels same-named series with their series ID only when results are ambiguous', async () => {
+  it('shows Series ID label on every search result and keeps same-named series distinct', async () => {
     const user = userEvent.setup()
     mocks.searchIssues.mockResolvedValue([
       { issue_id: 40001, thread_id: 9101, series_name: 'Mutant X', issue_number: '1', status: 'unread' },
@@ -220,7 +220,7 @@ describe('CustomCBLBuilder', () => {
     await user.type(await screen.findByLabelText('Search issues for custom CBL'), 'Mutant X #1{Enter}')
     expect(await screen.findByRole('button', { name: /Mutant X #1\s*Series ID 9101/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Mutant X #1\s*Series ID 9102/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^Starman #1\s*Add$/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Starman #1\s*Series ID 9103/ })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByRole('button', { name: /Mutant X #1\s*Series ID 9101/ }).querySelector('[data-testid="comic-issue-cover"] img')).toHaveAttribute('src', 'https://example.test/mutant-x.jpg'))
   })
   it('navigates issue results with arrows and adds only the focused canonical issue with Enter', async () => {
