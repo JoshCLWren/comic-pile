@@ -1,10 +1,14 @@
 import { Link } from 'react-router-dom'
-import { useMemo } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import { useActivity } from '../hooks/useActivity'
 import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 import CompactIssueCardTrigger from '../components/CompactIssueCardTrigger'
 import type { ActivityItem } from '../services/api-activity'
 import { formatDate, formatTime } from '../utils/dateFormat'
+import { issuesApi } from '../services/api-issues'
+import { queryClient } from '../query/queryClient'
+import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../query/cacheEffects'
+import { useBulkReadOperations } from '../hooks/useBulkReadOperations'
 
 /**
  * Shared recovery action for the bounded-loading and load-failure states.
@@ -111,6 +115,13 @@ export default function HistoryPage() {
     isRetrying,
     refetch,
   } = useActivity()
+  const [restoringThreadId, setRestoringThreadId] = useState<number | null>(null)
+  const [restoreMessage, setRestoreMessage] = useState<string | null>(null)
+  const {
+    operations: bulkReadOperations,
+    message: bulkUndoMessage,
+    undo: undoBulkRead,
+  } = useBulkReadOperations(issuesApi)
   // One bounded batch projection for the visible page of exact owned issues;
   // never one request per rendered row.
   const visibleIssueIds = useMemo(
@@ -119,6 +130,32 @@ export default function HistoryPage() {
   )
   const cardsQuery = useIssueCards(visibleIssueIds)
   const cardsByIssue = useMemo(() => indexIssueCards(cardsQuery.data), [cardsQuery.data])
+
+  const handleRestoreUnread = useCallback(async (threadId: number) => {
+    setRestoringThreadId(threadId)
+    setRestoreMessage(null)
+    try {
+      const ids: number[] = []
+      let pageToken: string | undefined
+      do {
+        const page = await issuesApi.list(threadId, { status: 'read', page_size: 100, page_token: pageToken })
+        ids.push(...page.issues.map((i) => i.id))
+        pageToken = page.next_page_token ?? undefined
+      } while (pageToken)
+      if (ids.length === 0) {
+        setRestoreMessage('No read issues to restore.')
+        return
+      }
+      await issuesApi.bulkMarkUnread(ids)
+      await invalidateAfterQueueMutation(queryClient)
+      await invalidateAfterIssueEdit(queryClient, threadId)
+      setRestoreMessage('Restored read issues to unread.')
+    } catch {
+      setRestoreMessage('Failed to restore unread issues.')
+    } finally {
+      setRestoringThreadId(null)
+    }
+  }, [])
 
   if (isPending) {
     // A timed-out first page stays pending through the shared retry policy
@@ -170,8 +207,41 @@ export default function HistoryPage() {
         <div>
           <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow uppercase leading-none">History</h1>
           <p className="mt-2 text-base font-semibold text-stone-500">Your reading activity</p>
+          {restoreMessage && <p className="mt-2 text-sm text-stone-400">{restoreMessage}</p>}
+          {bulkUndoMessage && (
+            <p className="mt-2 text-sm text-stone-400" role="status">{bulkUndoMessage}</p>
+          )}
         </div>
       </header>
+
+      {bulkReadOperations.length > 0 && (
+        <section
+          className="surface-panel rounded-lg border border-[var(--theme-border)] p-3 md:p-4 space-y-2"
+          data-testid="bulk-read-operations"
+          aria-label="Reviewable bulk reads"
+        >
+          <h2 className="text-sm font-black uppercase tracking-wider text-[var(--theme-text-primary)]">
+            Reviewable bulk reads
+          </h2>
+          <ul className="divide-y divide-[var(--theme-border)]">
+            {bulkReadOperations.map(({ threadId, operation }) => (
+              <li key={operation.id} className="flex flex-wrap items-center justify-between gap-3 py-2">
+                <span className="text-xs text-[var(--theme-text-muted)]">
+                  Operation #{operation.id} · {operation.items.length} issue
+                  {operation.items.length === 1 ? '' : 's'} · series {threadId}
+                </span>
+                <button
+                  type="button"
+                  className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-primary)] underline disabled:opacity-50"
+                  onClick={() => void undoBulkRead(threadId, operation.id)}
+                >
+                  Undo
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <div
         id="activity-list"
@@ -222,6 +292,24 @@ export default function HistoryPage() {
                       card={cardsByIssue.get(item.issue_id) ?? null}
                       hideTitle
                     />
+                  </div>
+                )}
+                {item.thread_id != null && (
+                  <div className="flex gap-3 pt-1">
+                    <Link
+                      to={`/thread/${item.thread_id}`}
+                      className="text-[10px] font-bold uppercase tracking-widest text-stone-500 hover:text-stone-300 underline"
+                    >
+                      Open series
+                    </Link>
+                    <button
+                      type="button"
+                      className="text-[10px] font-bold uppercase tracking-widest text-stone-500 hover:text-stone-300 underline disabled:opacity-50"
+                      disabled={restoringThreadId === item.thread_id}
+                      onClick={() => void handleRestoreUnread(item.thread_id!)}
+                    >
+                      {restoringThreadId === item.thread_id ? 'Restoring…' : 'Restore unread'}
+                    </button>
                   </div>
                 )}
               </div>
