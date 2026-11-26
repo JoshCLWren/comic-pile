@@ -2445,6 +2445,186 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn explicit_retry_spends_a_fresh_attempt_and_persists_new_credits() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        // Seed a complete, fresh deep payload with an older creator. A normal
+        // map/remap must reuse it without any provider call.
+        let fresh = deep_provider_result(29319, "2026-11-25 17:33:53");
+        let (patch, _, _, _) = normalized_metadata(&fresh, 29319).expect("normalize cached");
+        let mut cached = patch;
+        cached["creator_credits"] = json!([{"id": 1, "name": "Old Writer", "role": "writer"}]);
+        cached["raw_provider_payload"]["person_credits"] =
+            json!([{"id": 1, "name": "Old Writer", "role": "writer"}]);
+        seed_confirmed_identity(&state, "4000-29319", &cached).await;
+
+        let outcome =
+            hydrate_confirmed_identity_sync(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", false)
+                .await;
+        assert_eq!(outcome, HydrationOutcome::Complete);
+        assert_eq!(
+            state.recording_fake().expect("recording provider").calls().len(),
+            0,
+            "valid cached metadata must not spend a provider credit"
+        );
+
+        // Explicit Retry forces one new bounded attempt for the same identity.
+        let mut refreshed = deep_provider_result(29319, "2026-11-26 17:33:53");
+        refreshed["person_credits"] = json!([{"id": 2, "name": "New Writer", "role": "writer"}]);
+        let body = json!({"status_code": 1, "results": refreshed}).to_string();
+        state.recording_fake().expect("recording provider").push_ok(
+            StatusCode::OK,
+            HeaderMap::new(),
+            Bytes::from(body),
+        );
+        let outcome =
+            hydrate_confirmed_identity_sync(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", true)
+                .await;
+        assert_eq!(outcome, HydrationOutcome::Complete);
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let metadata: Value = serde_json::from_str(
+            connection
+                .query_one(
+                    "SELECT metadata_json::text FROM external_identities \
+                     WHERE external_id = '4000-29319'",
+                    &[],
+                )
+                .await
+                .expect("read hydrated metadata")
+                .get(0),
+        )
+        .expect("metadata JSON");
+        assert_eq!(metadata["creator_credits"][0]["name"], "New Writer");
+        let rows: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM comicvine_metadata_refresh_requests",
+                &[],
+            )
+            .await
+            .expect("ledger count")
+            .get(0);
+        assert_eq!(rows, 1, "hydration must settle, never enqueue a second row");
+        drop(Object::take(connection));
+        assert_eq!(
+            state.recording_fake().expect("recording provider").calls().len(),
+            1,
+            "explicit retry makes exactly one provider request"
+        );
+    }
+
+    #[tokio::test]
+    async fn late_provider_result_cannot_overwrite_a_concurrent_remap() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let old_id = seed_confirmed_identity(&state, "4000-29319", &json!({})).await;
+        let connection = db::checkout(&state).await.expect("seed connection");
+        let new_id: i32 = connection
+            .query_one(
+                "INSERT INTO external_identities \
+                    (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
+                 VALUES ('comicvine', 'issue', '4000-55555', \
+                         '{\"creator_credits\":[{\"id\":9,\"name\":\"B Writer\",\"role\":\"writer\"}]}'::json, \
+                         now(), now()) \
+                 RETURNING id",
+                &[],
+            )
+            .await
+            .expect("seed identity B")
+            .get(0);
+        // The user remapped A -> B while A's provider call was in flight.
+        connection
+            .execute(
+                "UPDATE issue_external_identity_mappings \
+                 SET external_identity_id = $1, updated_at = now() WHERE issue_id = 1",
+                &[&new_id],
+            )
+            .await
+            .expect("remap to B");
+
+        let patch = json!({"creator_credits":[{"id":1,"name":"A Writer","role":"writer"}]});
+        let json_patch = patch.to_string();
+        let updated = connection
+            .execute(
+                PERSIST_SYNC,
+                &[
+                    &old_id,
+                    &json_patch,
+                    &Option::<String>::None,
+                    &Option::<String>::None,
+                    &1i32,
+                    &1i32,
+                ],
+            )
+            .await
+            .expect("guarded persist");
+        assert_eq!(updated, 0, "stale A must be rejected by the identity recheck");
+
+        let metadata: Value = serde_json::from_str(
+            connection
+                .query_one(
+                    "SELECT metadata_json::text FROM external_identities WHERE id = $1",
+                    &[&new_id],
+                )
+                .await
+                .expect("read B metadata")
+                .get(0),
+        )
+        .expect("metadata JSON");
+        assert_eq!(metadata["creator_credits"][0]["name"], "B Writer");
+        let old_metadata: Value = serde_json::from_str(
+            connection
+                .query_one(
+                    "SELECT metadata_json::text FROM external_identities WHERE id = $1",
+                    &[&old_id],
+                )
+                .await
+                .expect("read A metadata")
+                .get(0),
+        )
+        .expect("metadata JSON");
+        assert_eq!(old_metadata, json!({}), "stale A response must not be written");
+        drop(Object::take(connection));
+    }
+
+    #[tokio::test]
+    async fn synchronous_hydration_does_not_create_a_refresh_row() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_confirmed_identity(&state, "4000-29319", &json!({})).await;
+        let connection = db::checkout(&state).await.expect("cleanup connection");
+        connection
+            .execute(
+                "DELETE FROM comicvine_metadata_refresh_requests WHERE external_identity_id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("remove seeded row");
+        drop(Object::take(connection));
+        queue_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
+
+        assert_eq!(
+            hydrate_confirmed_identity_sync(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", false)
+                .await,
+            HydrationOutcome::Complete
+        );
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let rows: i64 = connection
+            .query_one("SELECT count(*) FROM comicvine_metadata_refresh_requests", &[])
+            .await
+            .expect("ledger count")
+            .get(0);
+        assert_eq!(rows, 0, "interactive hydration must not enqueue or dispatch");
+        drop(Object::take(connection));
+    }
+
+    #[tokio::test]
     async fn deferred_provider_failure_retries_then_completes() {
         let Some(state) = crate::test_support::test_state(2).await else {
             return;
