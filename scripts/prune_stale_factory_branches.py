@@ -6,6 +6,11 @@ This script never deletes branches with open PRs or live local worktrees, and it
 protects default/protected/release refs, active factory leases, checkpoint
 handoff branches, and branches whose safety cannot be proven. It defaults to
 dry-run/report mode and only deletes when --apply is explicitly requested.
+
+Issue #4749 runs this script from .github/workflows/stale-branch-prune.yml.
+Scheduled runs apply a bounded batch; manual dispatch stays dry-run unless
+explicitly opted in. Transient GitHub API failures are retried with bounded
+backoff, while terminal failures (auth, missing issue) fail closed.
 """
 
 from __future__ import annotations
@@ -16,6 +21,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -26,6 +32,18 @@ STALE_BRANCH_PREFIXES = ("factory/", "local-factory/", "local/", "backup/")
 RELEASE_PREFIX = "release/"
 CHECKPOINT_PREFIX = "factory/work-checkpoints/"
 DEFAULT_AGE_DAYS = 14
+# A scheduled run deletes at most this many refs. The next run picks up the
+# next batch, which keeps the job idempotent and inside secondary rate limits.
+DEFAULT_MAX_DELETIONS = 20
+DEFAULT_API_ATTEMPTS = 3
+DEFAULT_RETRY_DELAY_SECONDS = 2.0
+MAX_RETRY_DELAY_SECONDS = 60.0
+TERMINAL_API_ERRORS = ("http 400", "http 401", "http 403", "http 404", "http 410", "not found")
+TRANSIENT_API_ERRORS = (
+    "429", "rate limit", "abuse detection", "500", "502", "503", "504",
+    "bad gateway", "service unavailable", "timed out", "timeout", "tls handshake",
+    "connection reset", "connection refused", "temporarily unavailable", "unexpected eof",
+)
 # Written by .github/scripts/factory_no_progress_retirement.py onto the linked
 # issue when an attempt is retired. Policy says "Never delete the branch" for
 # retired work, so a branch linked to such an issue is kept out of cleanup.
@@ -42,6 +60,76 @@ def _positive_int_env(name: str, default: int) -> int:
     except ValueError:
         return default
     return value if value > 0 else default
+
+
+def _positive_float_env(name: str, default: float) -> float:
+    """Return a positive float env setting or a safe default."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+def _is_retryable_api_error(detail: str) -> bool:
+    """Return whether a GitHub API error is transient and safe to retry."""
+    lowered = detail.lower()
+    if any(marker in lowered for marker in TERMINAL_API_ERRORS):
+        return False
+    return any(marker in lowered for marker in TRANSIENT_API_ERRORS)
+
+
+def _retry_after_seconds(detail: str) -> float | None:
+    """Return a bounded Retry-After delay advertised by GitHub, when present."""
+    match = re.search(
+        r"retry[- ]after\D{0,4}(\d+(?:\.\d+)?)\s*(minutes?|secs?|seconds?|s)?",
+        detail,
+        re.IGNORECASE,
+    )
+    if match is None:
+        return None
+    value = float(match.group(1))
+    unit = (match.group(2) or "s").lower()
+    if unit.startswith("m"):
+        value *= 60
+    return min(value, MAX_RETRY_DELAY_SECONDS)
+
+
+def run_gh_api(cmd: Sequence[str], *, label: str) -> subprocess.CompletedProcess[str]:
+    """Run a GitHub API command, retrying only transient failures with backoff.
+
+    Args:
+        cmd: Command arguments passed to the subprocess runner.
+        label: Human-readable operation name used in error and retry logs.
+
+    Returns:
+        The successful completed process.
+
+    Raises:
+        RuntimeError: If the lookup fails terminally or after all attempts.
+    """
+    attempts = _positive_int_env("FACTORY_PRUNE_API_ATTEMPTS", DEFAULT_API_ATTEMPTS)
+    base_delay = _positive_float_env("FACTORY_PRUNE_RETRY_SECONDS", DEFAULT_RETRY_DELAY_SECONDS)
+    detail = ""
+    for attempt in range(attempts):
+        proc = run(cmd, check=False)
+        if proc.returncode == 0:
+            return proc
+        detail = (proc.stderr or proc.stdout or "").strip()
+        if not _is_retryable_api_error(detail) or attempt + 1 >= attempts:
+            break
+        delay = _retry_after_seconds(detail)
+        if delay is None:
+            delay = min(base_delay * (2**attempt), MAX_RETRY_DELAY_SECONDS)
+        print(
+            f"RETRY {label} in {delay:.1f}s: {detail[:200]}",
+            file=sys.stderr,
+        )
+        time.sleep(delay)
+    raise RuntimeError(f"{label}: {detail or f'exit code nonzero'}")
 
 
 # Match shared factory policy defaults: local leases default to 24h and are
@@ -329,12 +417,10 @@ def fetch_pr_records(repo: str) -> dict[str, list[dict[str, object]]]:
     carry ``state``, ``mergedAt`` and ``closedAt`` so the post-merge/abandonment
     wait is measured from the real event rather than from the last commit.
     """
-    proc = run([
+    proc = run_gh_api([
         "gh", "api", "--paginate", "--slurp",
         f"repos/{repo}/pulls?state=all&per_page=100",
-    ], check=False)
-    if proc.returncode != 0:
-        raise RuntimeError(f"unable to list PRs: {proc.stderr.strip() or proc.stdout.strip()}")
+    ], label="unable to list PRs")
     by_head: dict[str, list[dict[str, object]]] = {}
     for record in _parse_pr_pages(proc.stdout, repo):
         head = record["headRefName"]
@@ -367,14 +453,10 @@ def fetch_branch_pr_records(repo: str, branch: str) -> list[dict[str, object]]:
     owner = repo.split("/", 1)[0]
     head = f"{owner}:{branch}"
     query = urlencode({"state": "all", "head": head, "per_page": 100})
-    proc = run([
+    proc = run_gh_api([
         "gh", "api", "--paginate", "--slurp",
         f"repos/{repo}/pulls?{query}",
-    ], check=False)
-    if proc.returncode != 0:
-        raise RuntimeError(
-            f"unable to list PRs for {head}: {proc.stderr.strip() or proc.stdout.strip()}"
-        )
+    ], label=f"unable to list PRs for {head}")
     return _parse_pr_pages(proc.stdout, head)
 
 
@@ -383,13 +465,10 @@ def fetch_protected_branches(repo: str) -> set[str]:
 
     Raises on lookup failure so cleanup cannot proceed with incomplete safety data.
     """
-    proc = run([
-        "gh", "api", f"repos/{repo}/branches?protected=true&per_page=100", "--paginate", "--slurp",
-    ], check=False)
-    if proc.returncode != 0:
-        raise RuntimeError(
-            f"unable to list protected branches: {proc.stderr.strip() or proc.stdout.strip()}"
-        )
+    proc = run_gh_api([
+        "gh", "api", f"repos/{repo}/branches?protected=true&per_page=100",
+        "--paginate", "--slurp",
+    ], label="unable to list protected branches")
     try:
         pages = json.loads(proc.stdout or "[]")
     except json.JSONDecodeError as exc:
@@ -414,12 +493,16 @@ def fetch_issue_signal(repo: str, issue_number: int) -> LeaseSignal | None:
 
     Returns None for a missing issue. Raises on other lookup failures.
     """
-    proc = run(["gh", "api", f"repos/{repo}/issues/{issue_number}"], check=False)
-    if proc.returncode != 0:
-        detail = (proc.stderr or proc.stdout or "").strip()
+    try:
+        proc = run_gh_api(
+            ["gh", "api", f"repos/{repo}/issues/{issue_number}"],
+            label=f"unable to fetch issue #{issue_number}",
+        )
+    except RuntimeError as exc:
+        detail = str(exc)
         if "404" in detail or "Not Found" in detail:
             return None
-        raise RuntimeError(f"unable to fetch issue #{issue_number}: {detail}")
+        raise
     try:
         issue = json.loads(proc.stdout or "{}")
     except json.JSONDecodeError as exc:
