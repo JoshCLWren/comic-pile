@@ -2115,6 +2115,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn undo_rating_restores_a_pre_alias_edit() {
+        let (state, user, _guard) = rating_undo_fixture().await;
+        let connection = db::checkout(&state).await.expect("fixture connection");
+        // The reader edited the alias during the session; the delta snapshot
+        // captured the pre-edit value (#4652).
+        connection
+            .batch_execute(
+                "UPDATE issues SET issue_number_alias='101' WHERE id=9501;
+                 UPDATE snapshots
+                    SET thread_states = jsonb_set(
+                        thread_states::jsonb,
+                        '{\"9201\",\"issue_changes\",0,\"issue_number_alias\"}',
+                        '\"100\"'::jsonb)::json
+                  WHERE id=9401;",
+            )
+            .await
+            .expect("seed pre-edit alias snapshot");
+
+        let Json(_) = undo_to_snapshot(Path((9301, 9401)), user, State(state.clone()))
+            .await
+            .expect("undo applies the alias-bearing rating delta");
+
+        let alias: Option<String> = connection
+            .query_one(
+                "SELECT issue_number_alias FROM issues WHERE id=9501",
+                &[],
+            )
+            .await
+            .expect("issue row after undo")
+            .get(0);
+        assert_eq!(alias.as_deref(), Some("100"), "undo restores the authored alias");
+    }
+
+    #[tokio::test]
     async fn undo_rating_preserves_previous_rating_and_invalidates_companion() {
         let (state, user, _guard) = rating_undo_fixture().await;
         let connection = db::checkout(&state).await.expect("fixture connection");

@@ -56,6 +56,8 @@ export function useRollPendingSession({ state, bootstrap, rollPool }: UseRollPen
             reading_progress: bootstrap.active_thread.reading_progress ?? null,
             issue_id: bootstrap.active_thread.issue_id ?? null,
             issue_number: bootstrap.active_thread.issue_number ?? null,
+            issue_number_alias: bootstrap.active_thread.issue_number_alias ?? null,
+            provider_issue_number: bootstrap.active_thread.provider_issue_number ?? null,
             next_issue_id: bootstrap.active_thread.next_issue_id ?? null,
             next_issue_number: bootstrap.active_thread.next_issue_number ?? null,
             last_rolled_result:
