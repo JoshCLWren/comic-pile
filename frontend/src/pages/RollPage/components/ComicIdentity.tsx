@@ -7,6 +7,7 @@ import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
 import { ComicIssueCover } from '../../../components/ComicIssueCard'
 import CompactIssueCardTrigger from '../../../components/CompactIssueCardTrigger'
 import { useIssueCards, indexIssueCards } from '../../../hooks/useIssueCards'
+import ImageWithLoading from '../../../components/ImageWithLoading'
 import Modal from '../../../components/Modal'
 import { CreatorName } from './CreatorName'
 import { useResponsive } from '../../../utils/responsive'
@@ -686,7 +687,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
       size="large"
     >
       {metadata.image_url && (
-        <img
+        <ImageWithLoading
           src={metadata.image_url}
           alt={metadata.name ?? 'Comic cover'}
           className="w-full rounded-lg"
