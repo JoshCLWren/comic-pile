@@ -386,7 +386,7 @@ async fn load_match_contexts(
     let issue_ids: Vec<i32> = rows.iter().map(|row| row.1).collect();
     let mut contexts: std::collections::HashMap<i32, MatchContext> = rows
         .iter()
-        .map(|(thread_id, issue_id, title, number)| {
+        .map(|(_thread_id, issue_id, title, number)| {
             (*issue_id, MatchContext::new(*issue_id, title, number))
         })
         .collect();
@@ -525,7 +525,9 @@ fn explain_item(
 /// Convert one ComicVine search row into the provider view the pure matcher
 /// consumes. Missing optional fields stay `None`; the matcher never assumes a
 /// label is present on the provider side.
-fn provider_issue_from_search(obj: &Value) -> Option<crate::comicvine_matching::ProviderIssue> {
+fn provider_issue_from_search(
+    obj: &serde_json::Map<String, Value>,
+) -> Option<crate::comicvine_matching::ProviderIssue> {
     let issue_id = obj.get("id")?.as_i64()? as i32;
     let volume = obj.get("volume").and_then(|v| v.as_object());
     let volume_id = volume
@@ -1121,7 +1123,7 @@ pub async fn search_issues(
                     start_year,
                     site_detail_url,
                     image_url,
-                    score: None,
+                    score,
                     evidence,
                 });
             }
