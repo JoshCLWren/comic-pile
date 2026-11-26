@@ -2474,6 +2474,32 @@ mod tests {
         );
     }
 
+    /// #5851: a preview token carries float timestamps. Without serde_json's
+    /// `float_roundtrip`, parsing the token truncates the last decimal digit,
+    /// so the commit re-signs a different payload and rejects a valid preview
+    /// as `invalid_preview_token` for a real reader.
+    #[test]
+    fn canonical_json_preserves_float_timestamps_through_token_round_trip() {
+        let payload = serde_json::json!({
+            "issued_at": 1_795_710_842.8638973_f64,
+            "expires_at": 1_795_711_442.8638973_f64,
+            "user_id": 9001,
+        });
+        let wire = serde_json::to_string(&payload).expect("token payload JSON");
+        let parsed: Value = serde_json::from_str(&wire).expect("parse token payload");
+        assert_eq!(canonical_json(&payload), canonical_json(&parsed));
+        let signature_at_issue =
+            hmac_sha256_hex("synthetic-native-test", &canonical_json(&payload))
+                .expect("sign issued payload");
+        let signature_at_verify =
+            hmac_sha256_hex("synthetic-native-test", &canonical_json(&parsed))
+                .expect("sign parsed payload");
+        assert_eq!(
+            signature_at_issue, signature_at_verify,
+            "a signed preview must survive the token's JSON round trip"
+        );
+    }
+
     #[test]
     fn metadata_merge_preserves_populated_and_fills_nested_references() {
         let old = serde_json::json!({"name":"Trusted","volume":{"id":10,"name":""},

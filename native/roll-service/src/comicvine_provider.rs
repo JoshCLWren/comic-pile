@@ -291,19 +291,18 @@ pub(crate) async fn provider_exchange(
         tracing::warn!("comicvine provider credential contains non-alphanumeric bytes");
         return Err(ProviderFailure::Unavailable);
     }
-    // Python `_provider_url`: only collection endpoints use a trailing slash.
-    // Singular issue/volume requests must not redirect with credentials in the
-    // URL; the native transport intentionally does not follow redirects.
-    let collection_slash = if matches!(resource, "issues" | "search") {
-        "/"
-    } else {
-        ""
-    };
+    // ComicVine's API appends a slash to every resource, singular ones
+    // included: `/api/volume/4050-<id>` and `/api/issue/4000-<id>` answer 301
+    // with a `Location` that repeats the credential. The native transport never
+    // follows redirects (so a credential can never be replayed on a new URL),
+    // which turns every slash-less roster fetch into `provider_unavailable`
+    // and breaks the Queue mapping-plan preview (#5851). Request the canonical
+    // slash URL directly instead; the caller-provided `resource` never carries
+    // a query string.
+    let resource = resource.trim_end_matches('/');
     let request = OutboundRequest {
         method: http::Method::GET,
-        path: format!(
-            "/api/{resource}{collection_slash}?api_key={api_key}&format=json{extra_query}"
-        ),
+        path: format!("/api/{resource}/?api_key={api_key}&format=json{extra_query}"),
         headers: vec![
             ("accept".to_string(), "application/json".to_string()),
             (
@@ -866,8 +865,10 @@ fn preserve_cached_credits(patch: &mut Value, cached: Option<&Value>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::http::HeaderMap;
+    use crate::outbound::{OutboundFuture, OutboundResponse};
+    use axum::{body::Body, http::HeaderMap};
     use deadpool_postgres::Object;
+    use std::{any::Any, sync::Mutex};
 
     fn deep_provider_result(issue_id: u32, date_last_updated: &str) -> Value {
         json!({
@@ -946,7 +947,7 @@ mod tests {
         assert_eq!(calls[0].host, HOST);
         assert_eq!(
             calls[0].path,
-            "/api/issue/4000-1?api_key=TESTKEY123&format=json"
+            "/api/issue/4000-1/?api_key=TESTKEY123&format=json"
         );
 
         fake.clear();
@@ -1068,7 +1069,7 @@ mod tests {
 
         let calls = state.recording_fake().expect("recording provider").calls();
         assert_eq!(calls.len(), 1, "cross-owner ids must not be fetched");
-        assert!(calls[0].path.starts_with("/api/issue/4000-29319?"));
+        assert!(calls[0].path.starts_with("/api/issue/4000-29319/?"));
     }
 
     /// Seed an owned issue with a freshly `user_confirmed` ComicVine identity
@@ -1142,7 +1143,7 @@ mod tests {
         drop(Object::take(connection));
         let calls = state.recording_fake().expect("recording provider").calls();
         assert_eq!(calls.len(), 1);
-        assert!(calls[0].path.starts_with("/api/issue/4000-29319?"));
+        assert!(calls[0].path.starts_with("/api/issue/4000-29319/?"));
     }
 
     #[tokio::test]
@@ -1478,5 +1479,140 @@ mod tests {
             .await
             .expect_err("403 must be unavailable");
         assert!(matches!(err, ProviderFailure::Unavailable));
+    }
+
+    /// Minimal ComicVine stand-in: a missing trailing slash on any resource
+    /// produces the same 301 the real API returns, and the native transport
+    /// never follows it.
+    #[derive(Default)]
+    struct SlashEnforcingOutbound {
+        calls: Mutex<Vec<String>>,
+    }
+
+    impl SlashEnforcingOutbound {
+        fn paths(&self) -> Vec<String> {
+            self.calls
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .clone()
+        }
+    }
+
+    impl OutboundHttp for SlashEnforcingOutbound {
+        fn send(&self, _host: &str, request: OutboundRequest) -> OutboundFuture {
+            let path = request.path.clone();
+            self.calls
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .push(path.clone());
+            let redirect = path
+                .split('?')
+                .next()
+                .is_some_and(|resource| !resource.ends_with('/'));
+            let (status, body) = if redirect {
+                (StatusCode::MOVED_PERMANENTLY, Bytes::new())
+            } else if path.starts_with("/api/issues/") {
+                (
+                    StatusCode::OK,
+                    Bytes::from(
+                        r#"{"status_code":1,"number_of_total_results":2,"results":[
+                            {"id":5851000,"issue_number":"1","name":"One","volume":{"id":5851001}},
+                            {"id":5851001,"issue_number":"2","name":"Two","volume":{"id":5851001}}
+                        ]}"#
+                        .to_string(),
+                    ),
+                )
+            } else {
+                (
+                    StatusCode::OK,
+                    Bytes::from(
+                        r#"{"status_code":1,"results":{"id":5851001,"name":"Nova (2007)",
+                            "publisher":{"name":"Marvel"},"start_year":2007,
+                            "count_of_issues":2,"site_detail_url":"https://example.test/volume",
+                            "image":null}}"#,
+                    ),
+                )
+            };
+            Box::pin(async move {
+                Ok(OutboundResponse {
+                    status,
+                    headers: HeaderMap::new(),
+                    body: Body::from(body),
+                })
+            })
+        }
+
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+    }
+
+    /// #5851: ComicVine 301s slash-less singular resources. The preview's
+    /// volume/issue roster fetch must request the canonical slash URL on the
+    /// first round trip: the native transport never replays a credential on a
+    /// redirect.
+    #[tokio::test]
+    async fn provider_requests_canonical_slash_urls_without_following_redirects() {
+        let outbound: Arc<dyn OutboundHttp> = Arc::new(SlashEnforcingOutbound::default());
+        let fake = outbound
+            .as_any()
+            .downcast_ref::<SlashEnforcingOutbound>()
+            .expect("slash-enforcing fake");
+
+        for resource in [
+            "volume/4050-5851001",
+            "issue/4000-5851000",
+            "issues",
+            "search",
+        ] {
+            let exchange = provider_exchange(&outbound, resource, "", "TESTKEY123")
+                .await
+                .expect("canonical URL must not be redirected");
+            assert!(matches!(exchange, Exchange::Payload(_)), "{resource}");
+        }
+
+        let paths = fake.paths();
+        assert_eq!(paths.len(), 4);
+        for (path, resource) in paths.iter().zip([
+            "volume/4050-5851001",
+            "issue/4000-5851000",
+            "issues",
+            "search",
+        ]) {
+            assert!(
+                path.starts_with(&format!("/api/{resource}/?")),
+                "ComicVine requires a trailing slash: {path}"
+            );
+        }
+    }
+
+    /// #5851: the Queue mapping-plan builder must load a real roster through
+    /// the canonical provider URLs, with no warm in-process cache to hide the
+    /// slash-less redirect.
+    #[tokio::test]
+    async fn catalog_volume_roster_loads_without_following_provider_redirects() {
+        let outbound: Arc<dyn OutboundHttp> = Arc::new(SlashEnforcingOutbound::default());
+        let fake = outbound
+            .as_any()
+            .downcast_ref::<SlashEnforcingOutbound>()
+            .expect("slash-enforcing fake");
+        let mut previous = std::env::var("COMICVINE_API_KEY").ok();
+        std::env::set_var("COMICVINE_API_KEY", "TESTKEY123");
+
+        let limits = crate::comicvine_limits::ComicVineLimits::default();
+        let result = catalog_volume_roster(&limits, &outbound, "5851001").await;
+
+        match previous.take() {
+            Some(value) => std::env::set_var("COMICVINE_API_KEY", value),
+            None => std::env::remove_var("COMICVINE_API_KEY"),
+        }
+        let (series, roster) = result.expect("roster must load without a redirect");
+        assert_eq!(series["id"], "5851001");
+        assert_eq!(series["name"], "Nova (2007)");
+        assert_eq!(roster.len(), 2);
+        let paths = fake.paths();
+        assert_eq!(paths.len(), 2, "one volume read and one roster page");
+        assert!(paths[0].starts_with("/api/volume/4050-5851001/?"));
+        assert!(paths[1].starts_with("/api/issues/?"));
     }
 }

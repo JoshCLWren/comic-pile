@@ -641,8 +641,7 @@ mod tests {
         }
     }
 
-    async fn prime_queue_mapping_provider_cache(state: &AppState) {
-        let fake = state.recording_fake().expect("recording provider fake");
+    fn queue_mapping_provider_payloads() -> (Value, Value) {
         let volume = serde_json::json!({
             "status_code": 1,
             "results": {
@@ -667,6 +666,12 @@ mod tests {
                 }))
                 .collect::<Vec<_>>(),
         });
+        (volume, issues)
+    }
+
+    async fn prime_queue_mapping_provider_cache(state: &AppState) {
+        let fake = state.recording_fake().expect("recording provider fake");
+        let (volume, issues) = queue_mapping_provider_payloads();
         for payload in [volume, issues] {
             fake.push_ok(
                 StatusCode::OK,
@@ -833,5 +838,54 @@ mod tests {
             .expect("reload existing mapping");
         assert_eq!(existing.get::<_, String>(0), "5610501");
         assert_eq!(existing.get::<_, String>(1), "seed");
+    }
+
+    /// #5851: production starts each serverless invocation with a cold
+    /// in-process provider cache, so a preview must load from live provider
+    /// responses. ComicVine 301s slash-less singular URLs and the native
+    /// transport never follows redirects, so the canonical `volume/.../` path
+    /// is part of this acceptance contract.
+    #[tokio::test]
+    async fn cold_cache_queue_preview_loads_from_canonical_provider_urls() {
+        let state = crate::test_support::test_state(2)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        {
+            let connection = state.pool.get().await.expect("connection");
+            seed_queue_mapping_thread(&connection, false).await;
+        }
+        let _env = ComicVineKeyEnv::install();
+        let fake = state.recording_fake().expect("recording provider fake");
+        fake.clear();
+        let (volume, issues) = queue_mapping_provider_payloads();
+        for payload in [volume, issues] {
+            fake.push_ok(
+                StatusCode::OK,
+                axum::http::HeaderMap::new(),
+                Bytes::from(serde_json::to_vec(&payload).expect("provider payload JSON")),
+            );
+        }
+
+        let Json(response) = load_queue_mapping_preview(state.clone())
+            .await
+            .expect("cold-cache preview must load the mapping plan");
+
+        assert_eq!(response.scope.status, "available");
+        assert!(response.preview_token.is_some());
+        assert_eq!(response.counts.safe_exact_match, 6);
+        assert_eq!(response.rows.len(), 6);
+        let calls = fake.calls();
+        assert_eq!(
+            calls.len(),
+            2,
+            "a cold cache makes one volume and one roster read"
+        );
+        assert!(
+            calls[0].path.starts_with("/api/volume/4050-5610777/?"),
+            "ComicVine redirects the slash-less volume URL: {}",
+            calls[0].path
+        );
+        assert!(calls[1].path.starts_with("/api/issues/?"));
     }
 }
