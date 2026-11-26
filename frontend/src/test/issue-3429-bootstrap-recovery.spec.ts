@@ -107,8 +107,6 @@ test.describe('Bootstrap recovery (issue #3429)', () => {
 
     await mockApi.setupAuthUser()
     await page.goto('/history')
-    await page.waitForTimeout(5000)
-    console.log('DEBUG HIST BUTTONS', JSON.stringify(await page.getByRole('button').allTextContents()))
 
     await expect(page.getByText(/Still loading/)).toBeVisible({ timeout: 15_000 })
     await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible()
