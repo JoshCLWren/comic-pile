@@ -23,7 +23,6 @@ import {
   gotoQueue,
   gotoRollPage,
   openThreadActions,
-  rollPoolThreadByTitle,
   startRequestLedger,
   waitForRollPageReady,
 } from './helpers'
@@ -38,13 +37,13 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
     authenticatedPage,
   }) => {
     const page = authenticatedPage
-    const snoozed = await createThread(page, {
+    const primary = await createThread(page, {
       title: 'Snooze Me Thread',
       format: 'Issue',
       issues_remaining: 3,
       total_issues: 3,
     })
-    await createThread(page, {
+    const replacement = await createThread(page, {
       title: 'Snooze Replacement Thread',
       format: 'Issue',
       issues_remaining: 3,
@@ -53,37 +52,33 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
     await gotoRollPage(page)
     await waitForRollPageReady(page)
 
-    await page.locator('#main-die-3d').click()
-    await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 15000 })
-    await rollPoolThreadByTitle(page, 'Snooze Me Thread').click()
+    // The die can pick either fixture. Wait for the actual initial offer
+    // instead of clicking a pool row while the die animation is in flight.
+    const initial = await offerFromClick(page, page.locator('#main-die-3d'))
+    expect(initial.snoozed_thread_id).toBeNull()
+    expect([primary.id, replacement.id]).toContain(initial.thread_id)
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
-    const offer = page.waitForResponse(
-      (response) =>
-        response.request().method() === 'POST'
-        && response.url().includes('/api/v2/roll/offer')
-        && response.status() === 200,
+    const body = await offerFromClick(page, page.getByTestId('reroll-offer'))
+    expect(body.snoozed_thread_id).toBe(initial.thread_id)
+    expect(body.thread_id).toBe(
+      initial.thread_id === primary.id ? replacement.id : primary.id,
     )
-    await page.getByTestId('reroll-offer').click()
-    // SAFETY: the response is the native offer handler's JSON for this test request.
-    const body = (await (await offer).json()) as { thread_id: number; snoozed_thread_id: number | null }
-    expect(body.snoozed_thread_id).toBe(snoozed.id)
-    expect(body.thread_id).not.toBe(snoozed.id)
 
-    await expect.poll(() => cookieSnoozes(page)).toContain(snoozed.id)
+    await expect.poll(() => cookieSnoozes(page)).toContain(initial.thread_id)
     // The replacement is pending, so the rating view stays up for it.
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
   })
 
   test('snoozed thread stays listed in the queue', async ({ authenticatedPage }) => {
     const page = authenticatedPage
-    const snoozed = await createThread(page, {
+    const primary = await createThread(page, {
       title: 'Queue Snooze Thread',
       format: 'Issue',
       issues_remaining: 3,
       total_issues: 3,
     })
-    await createThread(page, {
+    const replacement = await createThread(page, {
       title: 'Queue Snooze Replacement',
       format: 'Issue',
       issues_remaining: 3,
@@ -92,16 +87,23 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
     await gotoRollPage(page)
     await waitForRollPageReady(page)
 
-    await page.locator('#main-die-3d').click()
-    await expect(page.locator('[data-roll-pool]')).toBeVisible({ timeout: 15000 })
-    await rollPoolThreadByTitle(page, 'Queue Snooze Thread').click()
+    const initial = await offerFromClick(page, page.locator('#main-die-3d'))
+    expect(initial.snoozed_thread_id).toBeNull()
+    expect([primary.id, replacement.id]).toContain(initial.thread_id)
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
-    await page.getByTestId('reroll-offer').click()
-    await expect.poll(() => cookieSnoozes(page)).toContain(snoozed.id)
+    const body = await offerFromClick(page, page.getByTestId('reroll-offer'))
+    expect(body.snoozed_thread_id).toBe(initial.thread_id)
+    expect(body.thread_id).toBe(
+      initial.thread_id === primary.id ? replacement.id : primary.id,
+    )
+    await expect.poll(() => cookieSnoozes(page)).toContain(initial.thread_id)
 
+    const snoozedTitle = initial.thread_id === primary.id
+      ? 'Queue Snooze Thread'
+      : 'Queue Snooze Replacement'
     await gotoQueue(page)
-    const threadItem = page.getByTestId('queue-thread-item').filter({ hasText: 'Queue Snooze Thread' })
+    const threadItem = page.getByTestId('queue-thread-item').filter({ hasText: snoozedTitle })
     await expect(threadItem).toBeVisible({ timeout: 10000 })
   })
 
@@ -196,6 +198,36 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
     await expect(page.getByText(/failed to snooze thread/i).first()).not.toBeVisible()
   })
 })
+
+/**
+ * Observe the request started by this click, not a response from a previous
+ * offer that may still be in flight. Assert the HTTP status separately so a
+ * failed mutation cannot be hidden by waiting for a later successful one.
+ */
+async function offerFromClick(page: Page, button: Locator): Promise<{
+  thread_id: number
+  snoozed_thread_id: number | null
+}> {
+  const pending = page.waitForRequest((request) =>
+    request.method() === 'POST'
+    && new URL(request.url()).pathname === '/api/v2/roll/offer',
+  )
+  await button.click()
+  const response = await (await pending).response()
+  if (!response) throw new Error('Roll offer did not receive an HTTP response')
+  expect(response.status()).toBe(200)
+  const body: unknown = await response.json()
+  if (
+    !isObject(body)
+    || !hasProperty(body, 'thread_id')
+    || !isNumber(body.thread_id)
+    || !hasProperty(body, 'snoozed_thread_id')
+    || (body.snoozed_thread_id !== null && !isNumber(body.snoozed_thread_id))
+  ) {
+    throw new Error('Roll offer returned an unexpected response')
+  }
+  return { thread_id: body.thread_id, snoozed_thread_id: body.snoozed_thread_id }
+}
 
 /** Thread ids held in the browser snooze cookie (client-only snoozes). */
 async function cookieSnoozes(page: Page): Promise<number[]> {
