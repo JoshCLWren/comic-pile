@@ -146,7 +146,9 @@ async function clickRetry() {
 describe('ComicVine hydration under real StrictMode effects (#5841)', () => {
   beforeEach(() => {
     refreshMetadata.mockReset()
+    // SAFETY: React declares IS_REACT_ACT_ENVIRONMENT as an optional boolean on globalThis; this reads that declared flag.
     priorActEnvironment = (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT
+    // SAFETY: globalThis is a writable record for React's optional IS_REACT_ACT_ENVIRONMENT flag, so assigning a boolean is valid.
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   })
 
@@ -158,6 +160,7 @@ describe('ComicVine hydration under real StrictMode effects (#5841)', () => {
     }
     liveContainer?.remove()
     liveContainer = null
+    // SAFETY: priorActEnvironment is the boolean|undefined value captured in beforeEach; restoring it preserves the ambient flag type.
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = priorActEnvironment
   })
 
