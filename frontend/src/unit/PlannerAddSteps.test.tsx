@@ -140,6 +140,7 @@ describe('PlannerAddSteps', () => {
       />,
     )
 
+    expect(screen.getByTestId('selected-thread-title')).toHaveTextContent('Series With No Issues')
     const issueSelect = screen.getByLabelText('Issue')
     expect(issueSelect).toBeDisabled()
     const options = within(issueSelect).getAllByRole('option')
