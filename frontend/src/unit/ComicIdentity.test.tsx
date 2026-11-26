@@ -1280,6 +1280,32 @@ describe('ComicIdentity deep-metadata hydration (issue #5841)', () => {
     expect(getIntelligence).toHaveBeenCalledTimes(callsBefore)
   })
 
+  it('reuses the canonical cached result when the issue is reopened', async () => {
+    getIntelligence
+      .mockResolvedValueOnce(intelligenceResponse({ metadata_status: 'not_deep_fetched' }))
+      .mockResolvedValueOnce(intelligenceResponse({
+        metadata_status: 'complete',
+        creators: [{ name: 'Cached Writer', roles: ['writer'] }],
+      }))
+    refreshMetadata.mockResolvedValue({
+      issue_id: 1,
+      refreshed: true,
+      comicvine_issue_id: '100',
+      outcome: 'complete',
+    })
+
+    const first = renderIdentity()
+    expect(await screen.findByText('Cached Writer')).toBeInTheDocument()
+    const intelligenceCalls = getIntelligence.mock.calls.length
+    first.unmount()
+
+    renderIdentity()
+    await waitForLoaded()
+    expect(screen.getByText('Cached Writer')).toBeInTheDocument()
+    expect(getIntelligence).toHaveBeenCalledTimes(intelligenceCalls)
+    expect(refreshMetadata).toHaveBeenCalledTimes(1)
+  })
+
   it('does not hydrate when no exact issue is selected', () => {
     renderIdentity(null)
     expect(getIntelligence).not.toHaveBeenCalled()
