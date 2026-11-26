@@ -712,6 +712,55 @@ async fn adoption_commit_persists_canonical_reading_list_and_plan_projection_iss
         .map(|lane| lane["issues"].as_array().map(|a| a.len()).unwrap_or(0))
         .sum();
     assert_eq!(issue_count, 1, "{reader_body}");
+
+    // Canonical list is discoverable/reopenable by stable ID.
+    let (list_status, list_body) = get(&state, &token, &format!("/api/v2/reading-lists/{list_id}")).await;
+    assert_eq!(list_status, StatusCode::OK, "{list_body}");
+    assert_eq!(list_body["id"], list_id, "{list_body}");
+    let list_entries = list_body["entries"].as_array().unwrap();
+    assert_eq!(list_entries.len(), 1, "{list_body}");
+
+    // Repeat Add/Update keeps same source-linked list ID and no duplicate unrelated legacy plan.
+    let plans_before: i64 = conn
+        .query_one("SELECT COUNT(*)::bigint FROM continuity_plans WHERE user_id = (SELECT id FROM users WHERE username LIKE 'issue-identity-%' ORDER BY id DESC LIMIT 1)", &[])
+        .await
+        .unwrap()
+        .get(0);
+    let (status2, body2) = post_json(
+        &state,
+        &token,
+        &csrf,
+        &format!("/api/v2/reading-lists/1/reading-plans/{plan_id}/adoption-commits"),
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [
+                {"cbl_position": 0, "decision": "include"},
+                {"cbl_position": 1, "decision": "exclude"}
+            ],
+            "content_hash": "h-mm",
+            "revision_sha": "rev-1"
+        }),
+    )
+    .await;
+    assert_eq!(status2, StatusCode::OK, "{status2} {body2}");
+    let source_row2 = conn
+        .query_one(
+            "SELECT custom_cbl_list_id FROM reading_plan_sources
+             WHERE plan_id = $1 AND custom_cbl_list_id IS NOT NULL
+             ORDER BY id DESC LIMIT 1",
+            &[&plan_id],
+        )
+        .await
+        .unwrap();
+    let list_id2: i32 = source_row2.get(0);
+    assert_eq!(list_id2, list_id, "repeat add/update must keep same source-linked list ID");
+    let plans_after: i64 = conn
+        .query_one("SELECT COUNT(*)::bigint FROM continuity_plans WHERE user_id = (SELECT id FROM users WHERE username LIKE 'issue-identity-%' ORDER BY id DESC LIMIT 1)", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(plans_after, plans_before, "repeat add/update must not create duplicate unrelated legacy plan");
 }
 
 async fn crossover_snapshot(
