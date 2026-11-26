@@ -86,6 +86,14 @@ jobs:
           python3 -m compileall -q .github/scripts
           python3 -m unittest discover -s scripts -p test_factory_ci_scope.py
 
+  # Keep the product Rust suite in this required workflow so a red Rust run
+  # cannot be ignored while CI Summary stays green. Factory-only infrastructure
+  # changes keep the genuinely fast path and do not run the Rust suite.
+  native-rust-roll:
+    needs: [factory-scope]
+    if: needs.factory-scope.outputs.fast_only != 'true'
+    uses: ./.github/workflows/rust-roll.yml
+
   rust-ingress:
     needs: [factory-scope]
     if: needs.factory-scope.outputs.fast_only != 'true'
@@ -680,7 +688,7 @@ jobs:
   check-all-jobs:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [factory-scope, factory-fast-contracts, build, build-fork, rust-ingress, route-fragment-guard, conflict-markers, dependency-integrity, docs-code-paths, script-checks, factory-actionlint, factory-shellcheck, native-route-db-test-guard, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health]
+    needs: [factory-scope, factory-fast-contracts, build, build-fork, native-rust-roll, rust-ingress, route-fragment-guard, conflict-markers, dependency-integrity, docs-code-paths, script-checks, factory-actionlint, factory-shellcheck, native-route-db-test-guard, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health]
     if: always()
     steps:
       - name: Check job results
@@ -708,6 +716,7 @@ jobs:
           fi
           echo "Build: ${{ needs.build.result }}"
           echo "Fork build: ${{ needs.build-fork.result }}"
+          echo "Native Rust Roll: ${{ needs.native-rust-roll.result }}"
           echo "Rust default route discovery: ${{ needs.rust-ingress.result }}"
           echo "Route fragment guard: ${{ needs.route-fragment-guard.result }}"
           echo "Conflict markers: ${{ needs.conflict-markers.result }}"
@@ -725,6 +734,7 @@ jobs:
           echo "Production Runtime Migrations: ${{ needs.production-runtime-migrations.result }}"
           echo "Migration Health: ${{ needs.migration-health.result }}"
           if { [ "${{ needs.build.result }}" != "success" ] && [ "${{ needs.build-fork.result }}" != "success" ]; } || \
+             [ "${{ needs.native-rust-roll.result }}" != "success" ] || \
              [ "${{ needs.rust-ingress.result }}" != "success" ] || \
              [ "${{ needs.route-fragment-guard.result }}" != "success" ] || \
              [ "${{ needs.conflict-markers.result }}" != "success" ] || \

@@ -1,35 +1,10 @@
 name: Native Rust Roll
 
+# Invoked by CI so the required CI Summary cannot ignore this suite. A separate
+# pull_request/push trigger would leave an optional shadow check that a green
+# CI Summary can silently disregard (the #5617 merge leak).
 on:
-  pull_request:
-    paths:
-      - 'native/roll-service/**'
-      - 'native/migrate/**'
-      - 'build.rs'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'build.sh'
-      - 'check-rust-workspace-lock.mjs'
-      - 'rust-toolchain.toml'
-      - 'api/native_roll.rs'
-      - '.vercelignore'
-      - '.github/workflows/rust-roll.yml'
-      - 'tests/fixtures/roll-v2/auth-matrix.json'
-  push:
-    branches: [main]
-    paths:
-      - 'native/roll-service/**'
-      - 'native/migrate/**'
-      - 'build.rs'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'build.sh'
-      - 'check-rust-workspace-lock.mjs'
-      - 'rust-toolchain.toml'
-      - 'api/native_roll.rs'
-      - '.vercelignore'
-      - '.github/workflows/rust-roll.yml'
-      - 'tests/fixtures/roll-v2/auth-matrix.json'
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -68,6 +43,12 @@ jobs:
         working-directory: native/roll-service
     steps:
       - uses: actions/checkout@v7
+        with:
+          # A reusable workflow is checked out at the caller's pull_request
+          # merge commit by default. Pin the exact PR head so the required
+          # evidence belongs to the candidate that will actually be merged.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
       - name: Reject any database-test skip setting
         run: |
           if [[ -n "${RUST_ROLL_ALLOW_DB_SKIP+x}" ]]; then
@@ -156,7 +137,7 @@ jobs:
           test ! -e "$bundle/native/migrate/migrations"
           (
             cd "$bundle"
-            COMICPILE_BUILD_SHA="$GITHUB_SHA" \
+            COMICPILE_BUILD_SHA="$(git -C "$GITHUB_WORKSPACE" rev-parse HEAD)" \
             COMICPILE_EXPECTED_LOCK_SHA256="$COMICPILE_EXPECTED_LOCK_SHA256" \
             CARGO_TARGET_DIR="$GITHUB_WORKSPACE/native/roll-service/target" \
               cargo build --release --locked --bin native_roll

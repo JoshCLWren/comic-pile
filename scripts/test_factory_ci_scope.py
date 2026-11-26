@@ -1,4 +1,5 @@
 """Factory-only CI may not skip application or pipeline changes."""
+import re
 import subprocess
 import sys
 import tempfile
@@ -66,6 +67,105 @@ class FactoryScopeTests(unittest.TestCase):
         self.assertFalse(factory_only([]))
         self.assertFalse(factory_only(["../.github/scripts/factory_a.py"]))
         self.assertFalse(factory_only(["/.github/scripts/factory_a.py"]))
+
+
+def _ci_summary_script() -> str:
+    """Return the runnable bash body of the real CI Summary step."""
+    ci = (Path(__file__).resolve().parents[1] / ".github/workflows/ci.yml").read_text()
+    body = ci.split("  check-all-jobs:\n", 1)[1].split("        run: |\n", 1)[1]
+    lines: list[str] = []
+    for line in body.splitlines():
+        if line.strip() and not line.startswith("          "):
+            break
+        lines.append(line[10:] if line.startswith("          ") else "")
+    return "\n".join(lines)
+
+
+def _render_summary(script: str, fast_only: str, rust_result: str) -> str:
+    """Render GitHub expression placeholders in the summary script for a test case."""
+    values = {
+        "needs.factory-scope.outputs.fast_only": fast_only,
+        "needs.native-rust-roll.result": rust_result,
+    }
+    return re.sub(
+        r"\$\{\{\s*([^}]+?)\s*\}\}",
+        lambda match: values.get(match.group(1), "success"),
+        script,
+    )
+
+
+class RequiredRustGateTests(unittest.TestCase):
+    """Regression for #5617: red Native Rust Roll with green CI Summary.
+
+    #5617 merged because Native Rust Roll was a separate optional workflow while
+    CI Summary only aggregated its own needs. Rust evidence now runs inside the
+    required workflow, so a red suite can no longer be silently ignored.
+    """
+
+    def test_native_suite_is_a_required_same_run_dependency(self) -> None:
+        """CI Summary must require this run's exact-head Rust suite."""
+        # Editing the Rust suite itself must force full CI, not the fast path.
+        self.assertFalse(factory_only([".github/workflows/rust-roll.yml"]))
+        workflows = Path(__file__).resolve().parents[1] / ".github/workflows"
+        ci = (workflows / "ci.yml").read_text()
+        rust = (workflows / "rust-roll.yml").read_text()
+
+        caller = ci.split("  native-rust-roll:\n", 1)[1].split("\n  rust-ingress:\n", 1)[0]
+        self.assertIn("needs: [factory-scope]", caller)
+        self.assertIn("if: needs.factory-scope.outputs.fast_only != 'true'", caller)
+        self.assertIn("uses: ./.github/workflows/rust-roll.yml", caller)
+
+        summary = ci.split("  check-all-jobs:\n", 1)[1]
+        needs = summary.split("needs: [", 1)[1].split("]", 1)[0]
+        self.assertIn("native-rust-roll", needs)
+        # A result that is failed, cancelled, skipped, empty (never reported)
+        # or from a superseded head is not success and must fail the summary.
+        self.assertIn(
+            '[ "${{ needs.native-rust-roll.result }}" != "success" ]',
+            summary,
+        )
+
+        # A reusable same-run call with an exact-head checkout prevents an
+        # earlier green run at another SHA from authorizing this candidate.
+        self.assertIn("workflow_call:", rust)
+        self.assertIn("github.event.pull_request.head.sha || github.sha", rust)
+        self.assertIn('git -C "$GITHUB_WORKSPACE" rev-parse HEAD', rust)
+        self.assertIn("cargo test --workspace --locked --all-targets", rust)
+        # Without this, a standalone pull_request trigger is an optional shadow
+        # check that CI Summary can ignore even when it fails.
+        self.assertNotIn("  pull_request:\n    paths:", rust)
+
+        # Criterion 5 of #5678: the obsolete Python parity oracle deleted by
+        # #5641 must stay gone. Restoring it would mask a real Rust regression
+        # behind a stale cross-language comparison.
+        parity_oracle = (
+            Path(__file__).resolve().parents[1]
+            / "native/roll-service/parity/test_http_roll_resources.py"
+        )
+        self.assertFalse(parity_oracle.exists(), "obsolete parity oracle must not return")
+
+    def test_actual_summary_fails_closed_on_missing_or_red_rust(self) -> None:
+        """The real summary shell blocks red, cancelled, skipped and missing Rust."""
+        script = _ci_summary_script()
+        cases = (
+            ("false", "success", 0),
+            ("false", "failure", 1),
+            ("false", "cancelled", 1),
+            ("false", "skipped", 1),
+            ("false", "", 1),
+            ("true", "skipped", 0),
+            ("true", "failure", 0),
+        )
+        for fast_only, rust_result, expected in cases:
+            with self.subTest(fast_only=fast_only, rust_result=rust_result):
+                rendered = _render_summary(script, fast_only, rust_result)
+                result = subprocess.run(
+                    ["bash", "-c", rendered],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":
