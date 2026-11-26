@@ -4,10 +4,10 @@ import {renderAuditIngress} from './generate_ui_audit_ingress.mjs';
 
 test('audit ingress preserves production method/path routing and native priority', () => {
   const config = {routes: [
-    {src: '^/api/v1/auth/login$', methods: ['POST'], dest: '/api/native_roll.rs'},
-    {src: '^/api/v1/threads/[^/]+/restore$', methods: ['POST', 'OPTIONS'], dest: '/api/native_roll.rs'},
-    {src: '^/api/v1/threads/[^/]+/issues$', methods: ['GET'], dest: '/api/native_roll.rs'},
-    {src: '/api(?:/.*)?', dest: '/api/native_roll.rs'},
+    {src: '^/api/v1/auth/login$', methods: ['POST'], dest: '/api/native_api.rs'},
+    {src: '^/api/v1/threads/[^/]+/restore$', methods: ['POST', 'OPTIONS'], dest: '/api/native_api.rs'},
+    {src: '^/api/v1/threads/[^/]+/issues$', methods: ['GET'], dest: '/api/native_api.rs'},
+    {src: '/api(?:/.*)?', dest: '/api/native_api.rs'},
   ]};
   const nginx = renderAuditIngress(config);
   assert.match(nginx, /default rust;/);
@@ -23,17 +23,17 @@ test('audit ingress preserves production method/path routing and native priority
 test('audit ingress rejects retired API destinations instead of routing them to Rust', () => {
   assert.throws(() => renderAuditIngress({routes: [
     {src: '^/api/v1/legacy$', methods: ['GET'], dest: '/api/retired.ingress'},
-    {src: '/api(?:/.*)?', dest: '/api/native_roll.rs'},
+    {src: '/api(?:/.*)?', dest: '/api/native_api.rs'},
   ]}), /Unknown API destination/);
 });
 
 test('audit ingress rejects a non-Rust catch-all or unknown API runtime', () => {
   assert.throws(() => renderAuditIngress({routes: [
-    {src: '^/api/v2/ping$', methods: ['GET'], dest: '/api/native_roll.rs'},
+    {src: '^/api/v2/ping$', methods: ['GET'], dest: '/api/native_api.rs'},
     {src: '/api(?:/.*)?', dest: '/api/retired.ingress'},
   ]}), /fallback must use Rust/);
   assert.throws(() => renderAuditIngress({routes: [
     {src: '^/api/v2/ping$', methods: ['GET'], dest: '/api/unknown.py'},
-    {src: '/api(?:/.*)?', dest: '/api/native_roll.rs'},
+    {src: '/api(?:/.*)?', dest: '/api/native_api.rs'},
   ]}), /Unknown API destination/);
 });

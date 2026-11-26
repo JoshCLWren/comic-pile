@@ -22,7 +22,7 @@ ReDoc page, or runtime `/openapi.json` endpoint.
 Use these generated and code-coupled sources instead of a hand-maintained route
 table:
 
-1. `native/roll-service/src/lib.rs` and `api/native_roll.rs` — the actual Axum
+1. `native/roll-service/src/lib.rs` and `api/native_api.rs` — the actual Axum
    route registries and Vercel entrypoint.
 2. `native/contracts/v2-runtime.openapi.json` — the native runtime contract.
 3. `native/contracts/same-path-runtime.openapi.json` — native operations that
@@ -188,5 +188,5 @@ These are known discrepancies, not supported API guidance:
   list/get paths. The v2 details/snapshots calls are current; the list/get caller
   drift requires a focused repair.
 - Earlier documentation referred to a separate `api/native_issue.rs` ingress. <!-- docs-path-check: ignore -->
-  Current `main` builds only `api/native_roll.rs`; bot-owned route outputs are
+  Current `main` builds only `api/native_api.rs`; bot-owned route outputs are
   regenerated from the route fragments. Do not hand-edit generated route outputs.

@@ -96,7 +96,7 @@ The report is evidence, not a synthetic pass badge. A large drop in request coun
 
 ## Production deployment is native Rust; Python middleware headers are absent
 
-Production traffic is served by the native Rust ingress (`/api/native_roll.rs`
+Production traffic is served by the native Rust ingress (`/api/native_api.rs`
 via Vercel). That binary emits only `X-ComicPile-API-Runtime: rust` and the
 JSON body's `build`/`process` identity; it does not run the Python
 `PerformanceMiddleware`, so none of `X-Request-ID`, `X-App-Cache`,

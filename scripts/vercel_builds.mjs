@@ -7,8 +7,8 @@
  * post-generation strip step and keeps generation order-independent.
  */
 
-export const RUST_BUILD_SRC = 'api/native_roll.rs';
-export const RUST_DEST = '/api/native_roll.rs';
+export const RUST_BUILD_SRC = 'api/native_api.rs';
+export const RUST_DEST = '/api/native_api.rs';
 export const STATIC_BUILD_SRC = 'package.json';
 
 export const CANONICAL_BUILDS = [

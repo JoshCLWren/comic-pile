@@ -4,7 +4,7 @@
 
 Comic Pile is a dice-driven comic reading tracker built with:
 
-- **Backend**: native Rust (`native/roll-service`, axum, `tokio-postgres`), deployed through the Vercel function `api/native_roll.rs`
+- **Backend**: native Rust (`native/roll-service`, axum, `tokio-postgres`), deployed through the Vercel function `api/native_api.rs`
 - **Frontend**: React 19, Vite, Tailwind CSS
 - **Database**: PostgreSQL; migrations run with the Rust refinery runner (`native/migrate`)
 - **Package managers**: `cargo`, `pnpm` (frontend), `uv` (Python tooling scripts and checks only)
@@ -75,7 +75,7 @@ limited to repository tooling and the hand-run QA mirror refresh script.
 **Key Points**:
 
 - Frontend built as static output served from `/static/react/`
-- The production workflow generates Rust-only ingress for `api/native_roll.rs`; unknown API paths return a Rust JSON 404. The checked-in generated `vercel.json` can retain retired function entries until bot-owned regeneration lands
+- The production workflow generates Rust-only ingress for `api/native_api.rs`; unknown API paths return a Rust JSON 404. The checked-in generated `vercel.json` can retain retired function entries until bot-owned regeneration lands
 - Production deployments from `main` branch only
 - Vercel Preview environments intentionally unsupported
 - Database hosted externally (Neon PostgreSQL)
@@ -179,7 +179,7 @@ limited to repository tooling and the hand-run QA mirror refresh script.
 
 1. Code pushed to `main`
 2. The production workflow applies migrations to Neon with `comicpile-migrate`
-3. Vercel builds the static frontend and the `api/native_roll.rs` function
+3. Vercel builds the static frontend and the `api/native_api.rs` function
 4. Traffic routes to the new deployment
 5. Rollback is achieved by promoting a previous deployment
 

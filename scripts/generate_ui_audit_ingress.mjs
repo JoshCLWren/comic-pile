@@ -7,9 +7,10 @@
  */
 import {readFileSync, writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
+import {canonicalNativeDestination} from './vercel_slim_routes.mjs';
 
 // The whole /api surface is served by the single native Rust ingress.
-const RUST = {has: dest => dest === '/api/native_roll.rs'};
+const RUST = {has: dest => dest === '/api/native_api.rs'};
 const FALLBACK = '/api(?:/.*)?';
 const ALL_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 
@@ -89,6 +90,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (!configFile || !outputFile) {
     throw new Error('Usage: node generate_ui_audit_ingress.mjs vercel.json output.conf');
   }
-  writeFileSync(outputFile, renderAuditIngress(JSON.parse(readFileSync(configFile, 'utf8'))));
+  const committed = JSON.parse(readFileSync(configFile, 'utf8'));
+  // Decode any stale native entrypoint from the bot-owned vercel.json before
+  // validating the ingress, so the rename works before post-merge regeneration.
+  const config = {
+    ...committed,
+    routes: committed.routes.map(route => {
+      const dest = canonicalNativeDestination(route.dest);
+      return dest === route.dest ? route : {...route, dest};
+    }),
+  };
+  writeFileSync(outputFile, renderAuditIngress(config));
   console.log(`Generated Rust-default UI audit ingress: ${outputFile}`);
 }

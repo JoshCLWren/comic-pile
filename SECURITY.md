@@ -1,6 +1,6 @@
 # Security Documentation
 
-Comic Pile's maintained production deployment is Vercel static frontend output plus the native Rust API (`api/native_roll.rs`) and Neon PostgreSQL. Python is not an application runtime. The repository's Docker Compose files are for local development, disposable tests, CI, or rendered audits; they are not the production hosting architecture.
+Comic Pile's maintained production deployment is Vercel static frontend output plus the native Rust API (`api/native_api.rs`) and Neon PostgreSQL. Python is not an application runtime. The repository's Docker Compose files are for local development, disposable tests, CI, or rendered audits; they are not the production hosting architecture.
 
 ## Production trust boundaries
 

@@ -195,7 +195,7 @@ Neon setup path.
 ## Stack
 
 - **Frontend:** React, Vite, Tailwind CSS
-- **API:** native Rust (axum) in a single Cargo workspace, deployed through `api/native_roll.rs`
+- **API:** native Rust (axum) in a single Cargo workspace, deployed through `api/native_api.rs`
 - **Database:** PostgreSQL via `tokio-postgres`/`deadpool-postgres`
 - **Migrations:** refinery runner (`native/migrate`), append-only SQL under `native/migrate/migrations/`
 - **Production database:** Neon
@@ -229,7 +229,7 @@ Vercel Preview environments are intentionally unsupported. Fly.io and Railway ar
 
 ## Repository map
 
-- `api/`: the Vercel entrypoint, `native_roll.rs`
+- `api/`: the Vercel entrypoint, `native_api.rs`
 - `native/`: the Rust Cargo workspace — `roll-service` (API) and `migrate` (migration runner)
 - `frontend/`: React/Vite frontend
 - `static/`: built frontend assets served by Vercel

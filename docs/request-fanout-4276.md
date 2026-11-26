@@ -6,7 +6,7 @@
 
 Scope: frontend/transport fan-out for Queue, Roll, and the Read/Rate → next Roll
 loop. Traced against the actual TanStack callers in `frontend/src` and the Rust
-ingress in `api/native_roll.rs` / `native/roll-service/src`.
+ingress in `api/native_api.rs` / `native/roll-service/src`.
 
 ## Transport trace
 
@@ -14,7 +14,7 @@ ingress in `api/native_roll.rs` / `native/roll-service/src`.
   `rollBootstrapApi.get(timezone)` (`frontend/src/services/rollBootstrapApi.ts`),
   which resolves the reading session with `POST /v2/reading-sessions` and then
   reads the projection with `GET /v2/roll/bootstrap` (both Rust,
-  `api/native_roll.rs` routes). Since #4719, the page also reads the scoped
+  `api/native_api.rs` routes). Since #4719, the page also reads the scoped
   `GET /v2/roll/die-state`, `GET /v2/roll/eligible-issue-ids` (with the
   browser snooze cookie as `snoozed`), and one bounded
   `POST /v2/issues/cards` for that visible eligible batch.

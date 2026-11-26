@@ -113,7 +113,7 @@ application runtime to install.
 
 - HTTP handlers live in `native/roll-service/src/`, registered in
   `native/roll-service/src/lib.rs` and reached through the Vercel entrypoint
-  `api/native_roll.rs`.
+  `api/native_api.rs`.
 - Request/response types are Rust `serde`/`utoipa` DTOs. Generated native contracts
   are checked in under `native/contracts/`; the merged client contract is
   `frontend/src/generated/openapi.json`.

@@ -30,8 +30,8 @@ tokio-postgres = "0.7.18"
 sha2 = "0.11"
 
 [[bin]]
-name = "native_roll"
-path = "api/native_roll.rs"
+name = "native_api"
+path = "api/native_api.rs"
 
 [profile.release]
 codegen-units = 1

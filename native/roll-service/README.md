@@ -2,7 +2,7 @@
 
 This is the deployed native Rust/Axum API service. It owns authentication, Roll,
 Queue, Reading List, ComicVine, and the other product routes registered in
-`native/roll-service/src/lib.rs`. The Vercel entrypoint `api/native_roll.rs` and
+`native/roll-service/src/lib.rs`. The Vercel entrypoint `api/native_api.rs` and
 the standalone binary use the same service/router.
 
 See [docs/API.md](../../docs/API.md),
@@ -68,7 +68,7 @@ Configuration and credential-bearing state do not derive `Debug`.
 ## Routing and authentication
 
 The standalone service mounts the same native router used by
-`api/native_roll.rs`. Production Vercel ingress sends `/api/*` to the Rust
+`api/native_api.rs`. Production Vercel ingress sends `/api/*` to the Rust
 entrypoint; there is no Python fallback. Current auth routes publish v2,
 retained v1, and unversioned aliases. Registration/login issue bearer access
 tokens and refresh cookies; refresh rotates credentials, logout revokes them,

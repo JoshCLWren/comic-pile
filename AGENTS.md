@@ -217,7 +217,7 @@ Never skip meaningful tests or use CI as a substitute for debugging a locally re
 ## Project Overview
 
 Comic Pile is a dice-driven comic reading tracker built with:
-- **Backend**: native Rust (`native/roll-service`, axum, `tokio-postgres`), deployed through `api/native_roll.rs`; no Python application code remains
+- **Backend**: native Rust (`native/roll-service`, axum, `tokio-postgres`), deployed through `api/native_api.rs`; no Python application code remains
 - **Frontend**: React 19, Vite, Tailwind CSS
 - **Database**: PostgreSQL, migrated by the Rust refinery runner (`native/migrate`); Alembic is retired
 - **Package managers**: `cargo`, `pnpm` (frontend), `uv` (Python tooling scripts and repository checks only)

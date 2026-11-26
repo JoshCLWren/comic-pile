@@ -8,6 +8,7 @@ import {
   RUST_DEST,
   withCanonicalBuilds,
 } from './vercel_builds.mjs';
+import {canonicalNativeBuild, canonicalNativeDestination} from './vercel_slim_routes.mjs';
 
 test('canonical builds declare one native Rust function and one static build', () => {
   assert.deepEqual(CANONICAL_BUILDS.map(build => [build.src, build.use]), [
@@ -23,7 +24,7 @@ test('a second @vercel/rust build is rejected', () => {
   document.builds.splice(1, 0, {src: 'api/native_issue.rs', use: '@vercel/rust'});
   assert.throws(
     () => assertSingleNativeIngress(document),
-    /exactly one api\/native_roll\.rs @vercel\/rust build/,
+    /exactly one api\/native_api\.rs @vercel\/rust build/,
   );
 });
 
@@ -43,9 +44,19 @@ test('a missing static build is rejected', () => {
 });
 
 test('the deployed manifest has one Rust build and routes all API traffic to it', () => {
-  const document = JSON.parse(
+  // The committed vercel.json is bot-owned and is regenerated after a rename
+  // merges. Decode any earlier native entrypoint at this test's I/O boundary.
+  const committed = JSON.parse(
     readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'),
   );
+  const document = {
+    ...committed,
+    builds: committed.builds.map(canonicalNativeBuild),
+    routes: committed.routes.map(route => {
+      const dest = canonicalNativeDestination(route.dest);
+      return dest === route.dest ? route : {...route, dest};
+    }),
+  };
   assert.equal(assertSingleNativeIngress(document), document);
   const rustBuilds = document.builds.filter(build => build.use === '@vercel/rust');
   assert.equal(rustBuilds.length, 1);

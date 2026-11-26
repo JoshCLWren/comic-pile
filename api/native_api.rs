@@ -52,7 +52,7 @@ async fn native_demo() -> Response {
     response
         .headers_mut()
         .insert("x-comicpile-api-runtime", HeaderValue::from_static("rust"));
-    eprintln!("native_roll route=/api/v2/demo-roll runtime=rust status=200");
+    eprintln!("native_api route=/api/v2/demo-roll runtime=rust status=200");
     response
 }
 
@@ -66,7 +66,7 @@ async fn native_metrics(method: Method, OriginalUri(uri): OriginalUri) -> Respon
         .headers_mut()
         .insert("x-comicpile-api-runtime", HeaderValue::from_static("rust"));
     if method == Method::GET {
-        eprintln!("native_roll route={} runtime=rust status=200", path);
+        eprintln!("native_api route={} runtime=rust status=200", path);
     }
     response
 }
@@ -122,7 +122,7 @@ fn resolve_roll_state() -> Result<Arc<AppState>, &'static str> {
                 .map(Arc::new)
                 .map_err(|err| {
                     // ConfigError is a static, credential-free message.
-                    eprintln!("native_roll initialisation failed: {err}");
+                    eprintln!("native_api initialisation failed: {err}");
                     err.0
                 })
         })
@@ -156,7 +156,7 @@ async fn native_dispatch(request: Request) -> Response {
         .headers_mut()
         .insert("x-comicpile-api-runtime", HeaderValue::from_static("rust"));
     eprintln!(
-        "native_roll route={} runtime=rust status={} elapsed_ms={}",
+        "native_api route={} runtime=rust status={} elapsed_ms={}",
         ingress_path,
         result.status().as_u16(),
         started.elapsed().as_millis()
@@ -1917,7 +1917,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn two_router_thread_issue_list_validation_matches_python_contract() {
+    async fn two_router_thread_issue_list_validation_matches_api_contract() {
         let url = disposable_schema_url().await;
         let state = test_state(&url);
         TEST_ROLL_STATE
@@ -2441,7 +2441,7 @@ mod tests {
     #[tokio::test]
     async fn custom_cbl_overlap_decisions_ingress_reaches_rust_dispatch() {
         // Both overlap-decision path shapes must be registered in the Vercel
-        // native_roll ingress (not just the inner service) so production
+        // native_api ingress (not just the inner service) so production
         // requests do not fall through to the Rust JSON 404 fallback.
         let cases = [
             ("GET", "/api/v2/reading-lists/26/overlap-decisions"),

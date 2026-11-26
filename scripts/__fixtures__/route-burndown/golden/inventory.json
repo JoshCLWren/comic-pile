@@ -27,7 +27,7 @@
       "sql_budget": {
         "max_statements": 3
       },
-      "ingress_destination": "/api/native_roll.rs",
+      "ingress_destination": "/api/native_api.rs",
       "burndown_status": "native Rust",
       "verified_against": "vercel.json"
     },
@@ -40,7 +40,7 @@
       "consumers": [
         "caf\u00e9.ts \ud83d\ude00"
       ],
-      "ingress_destination": "/api/native_roll.rs",
+      "ingress_destination": "/api/native_api.rs",
       "burndown_status": "shadowed by Rust",
       "verified_against": "vercel.json"
     }
@@ -54,7 +54,7 @@
       "issue": 4739,
       "ingress_source": "vercel.json",
       "catch_all_src": "/api(?:/.*)?",
-      "catch_all_dest": "/api/native_roll.rs",
+      "catch_all_dest": "/api/native_api.rs",
       "v1_total": 1,
       "v1_shadowed_by_rust": 1,
       "v1_live_python": 0,
@@ -70,7 +70,7 @@
     },
     "catch_all": {
       "src": "/api(?:/.*)?",
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     "v1_operations": [
       {
@@ -80,7 +80,7 @@
         "status": "shadowed",
         "owning_issue": 1,
         "consumers": [],
-        "ingress_destination": "/api/native_roll.rs",
+        "ingress_destination": "/api/native_api.rs",
         "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       }

@@ -2,7 +2,7 @@
 
 > **Current interpretation:** the monorepo decision remains active. The dated
 > Python/`app/` examples below are historical; current backend code is under
-> `native/roll-service/`, ingress is `api/native_roll.rs`, and production is
+> `native/roll-service/`, ingress is `api/native_api.rs`, and production is
 > Vercel static frontend plus native Rust and Neon. See
 > [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -17,7 +17,7 @@ Issue #640 asks to evaluate whether ComicPile should keep a frontend/API monorep
 
 Analysis of recent commits shows significant coupling between frontend and backend:
 
-When backend API changes are made (for example in `native/roll-service/src/` or `api/native_roll.rs`):
+When backend API changes are made (for example in `native/roll-service/src/` or `api/native_api.rs`):
 - Frontend OpenAPI types must be regenerated (`frontend/src/generated/openapi.json` and `.ts`)
 - Sometimes frontend services or components that use those APIs need updates
 

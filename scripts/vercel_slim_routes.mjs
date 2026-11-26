@@ -1,8 +1,8 @@
 /**
- * Drop `/api/native_roll.rs` rewrites that the final `/api(?:/.*)?` catch-all
+ * Drop `/api/native_api.rs` rewrites that the final `/api(?:/.*)?` catch-all
  * already provides.
  *
- * Vercel uses the first matching route. A fragment-derived native_roll route is
+ * Vercel uses the first matching route. A fragment-derived native_api route is
  * only REQUIRED when a LATER non-native route (before the catch-all) could also
  * match the same method and path. Overlap is decided by unifying the two routes
  * segment by segment, so a pair is dropped only when the regexes are PROVEN
@@ -12,9 +12,32 @@
  * mirrors this algorithm exactly; keep the two in sync.
  */
 
-export const ROLL_DESTINATION = '/api/native_roll.rs';
+export const NATIVE_API_DESTINATION = '/api/native_api.rs';
+export const NATIVE_API_BUILD_SRC = 'api/native_api.rs';
 const CATCH_ALL_SRC = '/api(?:/.*)?';
 const REGEX_META = new Set(['[', ']', '(', ')', '{', '}', '|', '*', '+', '?', '.', '^', '$']);
+
+// A fragment-only PR changes the generators and fragments but cannot commit the
+// bot-owned vercel.json until post-merge regeneration lands. Treat any earlier
+// native entrypoint in that stale artifact as the canonical one so generation
+// stays deterministic across the rename boundary. Decoding with a pattern at
+// the I/O boundary keeps untyped inputs out of the domain logic.
+const NATIVE_DESTINATION_PATTERN = /^\/api\/native_[^/]+\.rs$/;
+const NATIVE_BUILD_SRC_PATTERN = /^api\/native_[^/]+\.rs$/;
+
+/** Normalize a legacy native rewrite destination to the canonical one. */
+export function canonicalNativeDestination(dest) {
+  return NATIVE_DESTINATION_PATTERN.test(String(dest)) ? NATIVE_API_DESTINATION : dest;
+}
+
+/** Normalize a legacy native function build to the canonical entrypoint. */
+export function canonicalNativeBuild(build) {
+  const src = build?.src;
+  if (src === undefined || src === NATIVE_API_BUILD_SRC) return build;
+  return NATIVE_BUILD_SRC_PATTERN.test(String(src))
+    ? {...build, src: NATIVE_API_BUILD_SRC}
+    : build;
+}
 
 /** Parse a route regex into segments, or null when it is not a simple path. */
 export function parseSegments(src) {
@@ -94,16 +117,16 @@ export function routesMayOverlap(a, b) {
   return segmentsOverlap(left, right);
 }
 
-export function slimNativeRollRoutes(routes, removable) {
+export function slimNativeApiRoutes(routes, removable) {
   const catchIndex = routes.findIndex(
     route => route.src === CATCH_ALL_SRC && !(route.methods && route.methods.length),
   );
   const limit = catchIndex === -1 ? routes.length : catchIndex;
   return routes.filter((route, index) => {
-    if (!removable.has(route) || route.dest !== ROLL_DESTINATION) return true;
+    if (!removable.has(route) || route.dest !== NATIVE_API_DESTINATION) return true;
     for (let later = index + 1; later < limit; later++) {
       const other = routes[later];
-      if (other.dest === ROLL_DESTINATION) continue;
+      if (other.dest === NATIVE_API_DESTINATION) continue;
       if (routesMayOverlap(route, other)) return true;
     }
     return false;

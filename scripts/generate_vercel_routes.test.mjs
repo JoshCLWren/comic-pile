@@ -9,14 +9,14 @@ import {
 } from './generate_vercel_routes.mjs';
 import {CANONICAL_BUILDS} from './vercel_builds.mjs';
 
-const ROLL = '/api/native_roll.rs';
+const NATIVE_API = '/api/native_api.rs';
 const FALLBACK = '/api(?:/.*)?';
 
 function baseConfig() {
   return {routes: [
-    {src: '/api/v2/health', methods: ['GET'], dest: ROLL},
+    {src: '/api/v2/health', methods: ['GET'], dest: NATIVE_API},
     {src: '/api/v1/stale', methods: ['GET'], dest: '/api/retired.ingress'},
-    {src: FALLBACK, dest: ROLL},
+    {src: FALLBACK, dest: NATIVE_API},
     {src: '^/(?:openapi\\.json|docs|redoc|health)$', status: 404},
     {
       src: '/(.*)',
@@ -32,11 +32,11 @@ function baseConfig() {
 function fragments() {
   return [
     {family: 'tags', defaults: {}, operations: [
-      {method: 'GET', path: '/api/v1/tags/', dest: ROLL, src: '^/api/v1/tags/$'},
-      {method: 'POST', path: '/api/v1/tags/', dest: ROLL, src: '^/api/v1/tags/$'},
+      {method: 'GET', path: '/api/v1/tags/', dest: NATIVE_API, src: '^/api/v1/tags/$'},
+      {method: 'POST', path: '/api/v1/tags/', dest: NATIVE_API, src: '^/api/v1/tags/$'},
     ]},
     {family: 'creators', defaults: {}, operations: [
-      {method: 'GET', path: '/api/v1/creators', dest: ROLL, src: '^/api/v1/creators$'},
+      {method: 'GET', path: '/api/v1/creators', dest: NATIVE_API, src: '^/api/v1/creators$'},
     ]},
   ];
 }
@@ -80,19 +80,19 @@ test('routeRegex is anchored and treats parameters as single path segments', () 
 test('fragment grouping is native-only, method-aware and deterministic', () => {
   const routes = fragmentVercelRoutes(fragments(), baseConfig().routes);
   assert.deepEqual(routes, [
-    {src: '^/api/v1/creators$', methods: ['GET'], dest: ROLL},
-    {src: '^/api/v1/tags/$', methods: ['GET', 'POST'], dest: ROLL},
+    {src: '^/api/v1/creators$', methods: ['GET'], dest: NATIVE_API},
+    {src: '^/api/v1/tags/$', methods: ['GET', 'POST'], dest: NATIVE_API},
   ]);
   assert.equal(routes.some(route => route.methods.includes('OPTIONS')), false);
   assert.deepEqual(fragmentVercelRoutes(fragments(), baseConfig().routes), routes);
 });
 
 test('fragment operations may inherit their native destination and source from the previous document', () => {
-  const previous = [{src: '^/api/v1/tags/$', methods: ['GET'], dest: ROLL}];
+  const previous = [{src: '^/api/v1/tags/$', methods: ['GET'], dest: NATIVE_API}];
   const inherited = fragmentVercelRoutes([{family: 'tags', defaults: {}, operations: [
     {method: 'GET', path: '/api/v1/tags/'},
   ]}], previous);
-  assert.deepEqual(inherited, [{src: '^/api/v1/tags/$', methods: ['GET'], dest: ROLL}]);
+  assert.deepEqual(inherited, [{src: '^/api/v1/tags/$', methods: ['GET'], dest: NATIVE_API}]);
 });
 
 test('non-native fragment destinations are rejected', () => {
@@ -106,14 +106,14 @@ test('generation emits canonical builds, drops retired API ingress and keeps sta
   assert.deepEqual(generated.builds, CANONICAL_BUILDS);
   assert.equal(generated.routes.some(route => route.dest === '/api/retired.ingress'), false);
   assert.equal(generated.routes.some(route => route.src === '/api/v1/stale'), false);
-  assert.deepEqual(generated.routes.find(route => route.src === FALLBACK), {src: FALLBACK, dest: ROLL});
+  assert.deepEqual(generated.routes.find(route => route.src === FALLBACK), {src: FALLBACK, dest: NATIVE_API});
   assert.deepEqual(generated.routes.find(route => route.src === '^/(?:openapi\\.json|docs|redoc|health)$'),
     {src: '^/(?:openapi\\.json|docs|redoc|health)$', status: 404});
   assert.equal(generated.routes.at(-1).headers['X-ComicPile-Frontend'], 'vercel-static');
   assert.equal(generated.routes.at(-1).headers['Content-Security-Policy'], STATIC_CSP);
   // Every retired path still resolves to the Rust catch-all.
-  assert.equal(resolve(generated, 'GET', '/api/v1/stale'), ROLL);
-  assert.equal(resolve(generated, 'POST', '/api/v1/tags/7'), ROLL);
+  assert.equal(resolve(generated, 'GET', '/api/v1/stale'), NATIVE_API);
+  assert.equal(resolve(generated, 'POST', '/api/v1/tags/7'), NATIVE_API);
 });
 
 test('generation is byte-stable across a second regeneration', () => {
@@ -125,6 +125,6 @@ test('generation is byte-stable across a second regeneration', () => {
 
 test('generation requires fragments and an explicit native baseline', () => {
   assert.throws(() => generateVercel(baseConfig(), []), /without route fragments/);
-  assert.throws(() => generateVercel({routes: [{src: FALLBACK, dest: ROLL}]}, fragments()),
+  assert.throws(() => generateVercel({routes: [{src: FALLBACK, dest: NATIVE_API}]}, fragments()),
     /without explicit native Rust routes/);
 });

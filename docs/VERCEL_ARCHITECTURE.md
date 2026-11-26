@@ -15,7 +15,7 @@ routes are served without starting an API runtime.
 
 In `vercel.json`, explicit native routes — including `GET /api/v2/health`,
 `POST /api/v2/auth/login`, and the Roll, issue, queue, and reading resources —
-route to the single `api/native_roll.rs` function. A catch-all routes every
+route to the single `api/native_api.rs` function. A catch-all routes every
 other `/api/*` request there as well, where it answers with a Rust JSON 404.
 No Python function is deployed. A URL's v1/v2 segment does not by itself prove
 the executing language; check the inventory in

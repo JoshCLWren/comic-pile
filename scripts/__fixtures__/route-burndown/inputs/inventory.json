@@ -4,7 +4,7 @@
   "operations": [],
   "full_surface": {
     "summary": {},
-    "catch_all": {"src": "/api(?:/.*)?", "dest": "/api/native_roll.rs"},
+    "catch_all": {"src": "/api(?:/.*)?", "dest": "/api/native_api.rs"},
     "v1_operations": [
       {
         "method": "GET",
