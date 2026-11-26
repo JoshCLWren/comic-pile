@@ -23,7 +23,9 @@ const mockedIssuesApi = {
 const mockedDependenciesApi = {
   listForThread: vi.fn<IssueToggleListDependenciesApi['listForThread']>(),
 }
-const mockedUndo = vi.fn<(sessionId: number, snapshotId: number) => Promise<void>>()
+const mockedUndo = vi.fn<
+  (sessionId: string | number, snapshotId: string | number) => Promise<unknown>
+>()
 
 const ISSUES: Issue[] = [
   {
@@ -136,7 +138,7 @@ beforeEach(() => {
   mockedIssuesApi.delete.mockResolvedValue()
   mockedIssuesApi.reorder.mockResolvedValue()
   mockedDependenciesApi.listForThread.mockResolvedValue({ thread_id: 99, issues: [] })
-  mockedUndo.mockResolvedValue()
+  mockedUndo.mockResolvedValue(undefined)
 })
 
 describe('IssueToggleList #4654 alias and Undo contract', () => {
