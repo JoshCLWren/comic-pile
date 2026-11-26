@@ -22,7 +22,13 @@ export type QueuedIssueMutation =
   | { type: 'delete'; issueId: number }
   | { type: 'reorder'; issueIds: number[] }
   | { type: 'toggle'; issueId: number; nextStatus: Issue['status'] }
-  | { type: 'create'; issueRange: string; strategy?: 'safe_default' | 'numeric_resort' }
+  | {
+      type: 'create'
+      issueRange: string
+      strategy?: 'safe_default' | 'numeric_resort'
+      expectedIssueIds?: number[]
+      acceptedAliasNumbers?: string[]
+    }
 
 export type QueueFormState = {
   title: string

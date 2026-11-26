@@ -11,7 +11,13 @@ import {
 import type { DragEvent } from 'react'
 import type { Issue, IssueDependenciesResponse, IssueListResponse } from '../../types'
 import { issuesApi } from '../../services/api-issues'
-import type { IssueListParams, IssuePreviewItem } from '../../services/api-issues'
+import type {
+  IssueCreateOptions,
+  IssueEditAliasOffer,
+  IssueListParams,
+  IssuePreviewItem,
+} from '../../services/api-issues'
+import { undoApi as defaultUndoApi } from '../../services/api-undo'
 import { issueDependenciesApi } from '../../services/api-dependencies'
 import type { ThreadIssueDependenciesResponse } from '../../services/api-dependencies'
 import { getApiErrorDetail } from '../../utils/apiError'
@@ -44,12 +50,12 @@ export interface IssueToggleListApi {
   create: (
     threadId: number,
     issueRange: string,
-    options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort' },
+    options?: IssueCreateOptions,
   ) => Promise<IssueListResponse>
   previewCreate: (
     threadId: number,
     issueRange: string,
-    options?: { insert_after_issue_id?: number | null; strategy?: 'safe_default' | 'numeric_resort' },
+    options?: IssueCreateOptions,
   ) => Promise<import('../../services/api-issues').IssueEditPreviewResponse>
   markRead: (issueId: number) => Promise<void>
   markUnread: (issueId: number) => Promise<void>
@@ -130,6 +136,10 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   issuesApi?: IssueToggleListApi
   /** Injectable dependency API; defaults to the production issueDependenciesApi. */
   dependenciesApi?: IssueToggleListDependenciesApi
+  /** Injectable undo API; defaults to the shared #4026/#4027 undo service. */
+  undoApi?: {
+    undo: (sessionId: number | string, snapshotId: number | string) => Promise<unknown>
+  }
   /**
    * When true, mutations queue locally without hitting the server until
    * flush() is called. Closing without flushing discards the draft.
@@ -144,6 +154,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   onPendingMutationsChange,
   issuesApi: issuesService = issuesApi,
   dependenciesApi = issueDependenciesApi,
+  undoApi: undoService = defaultUndoApi,
   deferred = false,
 }, ref) {
   const [issues, setIssues] = useState<Issue[]>([])
@@ -171,6 +182,14 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   const [isPreviewing, setIsPreviewing] = useState(false)
   /** Preview fetch failure, surfaced in a retryable modal (#4654). */
   const [previewError, setPreviewError] = useState<string | null>(null)
+  /** Numbers the reader explicitly accepted as aliases, not duplicates (#4654). */
+  const [acceptedAliasNumbers, setAcceptedAliasNumbers] = useState<string[]>([])
+  /** Undo point returned by the last committed create (#4654). */
+  const [undoPoint, setUndoPoint] = useState<{
+    sessionId: number
+    snapshotId: number
+  } | null>(null)
+  const [isUndoing, setIsUndoing] = useState(false)
   const baseIssuesRef = useRef<Issue[]>([])
   const pendingMutationsRef = useRef<IssueMutation[]>([])
   const isProcessingMutationsRef = useRef(false)
@@ -350,13 +369,28 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       case 'reorder':
         await issuesService.reorder(threadId, normalizeIssueOrder(baseIssuesRef.current, mutation.issueIds))
         return
-      case 'create':
-        await issuesService.create(
-          threadId,
-          mutation.issueRange,
-          mutation.strategy ? { strategy: mutation.strategy } : undefined,
-        )
+      case 'create': {
+        const hasOptions = mutation.strategy
+          || (mutation.expectedIssueIds && mutation.expectedIssueIds.length > 0)
+          || (mutation.acceptedAliasNumbers && mutation.acceptedAliasNumbers.length > 0)
+        const options: IssueCreateOptions | undefined = hasOptions
+          ? {
+              ...(mutation.strategy ? { strategy: mutation.strategy } : {}),
+              ...(mutation.expectedIssueIds ? { expected_issue_ids: mutation.expectedIssueIds } : {}),
+              ...(mutation.acceptedAliasNumbers
+                ? { accepted_alias_numbers: mutation.acceptedAliasNumbers }
+                : {}),
+            }
+          : undefined
+        const response = await issuesService.create(threadId, mutation.issueRange, options)
+        if (response.undo_session_id != null && response.undo_snapshot_id != null) {
+          setUndoPoint({
+            sessionId: response.undo_session_id,
+            snapshotId: response.undo_snapshot_id,
+          })
+        }
         return
+      }
     }
   }, [issuesService, threadId])
 
