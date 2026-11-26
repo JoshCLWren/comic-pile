@@ -4,7 +4,7 @@ import type { ReactElement, ReactNode } from 'react'
 import { createToastSpy } from './toastSpy'
 import { ToastContextSpy } from './toastTestHarness'
 import { comicVineApi } from '../services/api-comicvine'
-import type { ComicVineIssueIntelligence } from '../services/api-comicvine'
+import type { ComicVineIssueIntelligence, MetadataRefreshResponse } from '../services/api-comicvine'
 import { ComicIdentity } from '../pages/RollPage/components/ComicIdentity'
 
 const toast = createToastSpy()
@@ -968,7 +968,7 @@ describe('ComicIdentity deep-metadata hydration (issue #5841)', () => {
     refreshMetadata.mockReset()
   })
 
-  function renderIdentity(issueId = 1) {
+  function renderIdentity(issueId: number | null = 1) {
     return renderWithToast(<ComicIdentity issueId={issueId} />)
   }
 
@@ -1047,7 +1047,7 @@ describe('ComicIdentity deep-metadata hydration (issue #5841)', () => {
   })
 
   it('shows loading only while the awaited request is in flight', async () => {
-    let resolveRefresh: ((value: unknown) => void) | undefined
+    let resolveRefresh: ((value: MetadataRefreshResponse) => void) | undefined
     refreshMetadata.mockImplementation(() => new Promise((resolve) => {
       resolveRefresh = resolve
     }))
@@ -1224,7 +1224,7 @@ describe('ComicIdentity deep-metadata hydration (issue #5841)', () => {
   })
 
   it('disables duplicate concurrent Retry clicks while a request is in flight', async () => {
-    let resolveRefresh: ((value: unknown) => void) | undefined
+    let resolveRefresh: ((value: MetadataRefreshResponse) => void) | undefined
     getIntelligence.mockResolvedValue(intelligenceResponse({ metadata_status: 'refresh_failed' }))
     refreshMetadata.mockImplementation(() => new Promise((resolve) => {
       resolveRefresh = resolve
@@ -1245,7 +1245,7 @@ describe('ComicIdentity deep-metadata hydration (issue #5841)', () => {
   })
 
   it('does not refetch or update state from an in-flight request after unmount', async () => {
-    let resolveRefresh: ((value: unknown) => void) | undefined
+    let resolveRefresh: ((value: MetadataRefreshResponse) => void) | undefined
     getIntelligence.mockResolvedValue(intelligenceResponse({ metadata_status: 'not_deep_fetched' }))
     refreshMetadata.mockImplementation(() => new Promise((resolve) => {
       resolveRefresh = resolve

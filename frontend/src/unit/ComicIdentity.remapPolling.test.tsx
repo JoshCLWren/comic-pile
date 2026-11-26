@@ -4,7 +4,7 @@ import type { ReactElement, ReactNode } from 'react'
 import { createToastSpy } from './toastSpy'
 import { ToastContextSpy } from './toastTestHarness'
 import { comicVineApi } from '../services/api-comicvine'
-import type { ComicVineIssueIntelligence } from '../services/api-comicvine'
+import type { ComicVineIssueIntelligence, MetadataRefreshResponse } from '../services/api-comicvine'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import { ComicIdentity } from '../pages/RollPage/components/ComicIdentity'
@@ -59,8 +59,8 @@ describe('ComicIdentity remap races (issue #5841)', () => {
   })
 
   it('a late hydration for identity A cannot overwrite remapped identity B', async () => {
-    let resolveA: ((value: unknown) => void) | undefined
-    const pendingA = new Promise((resolve) => {
+    let resolveA: ((value: MetadataRefreshResponse) => void) | undefined
+    const pendingA = new Promise<MetadataRefreshResponse>((resolve) => {
       resolveA = resolve
     })
     getIntelligence
@@ -113,8 +113,8 @@ describe('ComicIdentity remap races (issue #5841)', () => {
   })
 
   it('navigation to another issue cancels the previous hydration', async () => {
-    let resolveA: ((value: unknown) => void) | undefined
-    refreshMetadata.mockImplementationOnce(() => new Promise((resolve) => {
+    let resolveA: ((value: MetadataRefreshResponse) => void) | undefined
+    refreshMetadata.mockImplementationOnce(() => new Promise<MetadataRefreshResponse>((resolve) => {
       resolveA = resolve
     }))
     getIntelligence
