@@ -1067,7 +1067,8 @@ CREATE TABLE public.issues (
     "position" integer NOT NULL,
     catalog_issue_id bigint,
     merged_into_issue_id integer,
-    merged_at timestamp with time zone
+    merged_at timestamp with time zone,
+    issue_number_alias character varying(50)
 );
 
 
