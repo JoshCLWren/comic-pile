@@ -37,6 +37,17 @@ test('account switching isolates inbox data and stops signed-out inbox requests'
     }
     if (path === '/api/v2/auth/forgot-password') return respond({ message: 'Reset requested' })
     if (path.endsWith('/users/me/preferences')) return respond({ theme: 'classic', user_id: account === 'first' ? 1 : 2 })
+    // The shell renders the reading-graph health badge; without a complete
+    // payload the fallback `{}` crashes the app before the nav links mount.
+    if (path === '/api/v2/reading-graph') return respond({
+      status: 'ok',
+      cycles: [],
+      cyclic_issue_ids: [],
+      affected_lists: [],
+      affected_threads: [],
+      repairs: [],
+      unresolved_reference_count: 0,
+    })
     if (path.endsWith('/identity-inbox')) {
       inboxRequests += 1
       if (!account || !request.headers().authorization) unsignedInboxRequests += 1
