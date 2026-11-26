@@ -35,8 +35,9 @@ export default function PlannerAddSteps({
     'lane'
 
   // A series can report issues remaining while having no issue records at all
-  // (#4119). Treat the actual records, never the remaining count, as the source
-  // of truth for the empty state, and say what is absent once loading settles.
+  // (Greptile PR #3963 comment 4323288984, __scratch3607probe.spec.ts:78; #4119).
+  // Treat the actual records, never the remaining count, as the source of truth
+  // for the empty state, and say what is absent once loading settles.
   const selectedSeriesHasNoIssues =
     editor.selectedThread != null &&
     !issuesLoading &&
