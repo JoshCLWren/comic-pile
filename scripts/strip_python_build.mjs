@@ -21,6 +21,10 @@ export function withoutPythonBuild(document) {
 
 export function main(path = 'vercel.json') {
   const original = readFileSync(path, 'utf8');
+  // Keep this post-generation strip narrow: only the retired Python build is
+  // removed here. The retired-Issue strip helper was deleted as route-tooling
+  // cleanup; single-function consolidation and its production acceptance are
+  // tracked separately and are not claimed by this change.
   const updated = JSON.stringify(withoutPythonBuild(JSON.parse(original)), null, 2) + '\n';
   if (updated !== original) {
     writeFileSync(path, updated, 'utf8');
