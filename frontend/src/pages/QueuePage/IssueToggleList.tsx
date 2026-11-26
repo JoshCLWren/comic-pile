@@ -673,7 +673,6 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     onError: setActionError,
   })
 
-
   async function handleUndoEdit() {
     if (!undoPoint || isUndoing) return
     setIsUndoing(true)
