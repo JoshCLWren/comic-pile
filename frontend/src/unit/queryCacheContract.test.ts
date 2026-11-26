@@ -719,8 +719,9 @@ describe('targeted cache effects', () => {
     await invalidateAfterResumeRecovery(client)
 
     // Exact-count guards restored: scoped recovery set plus the reconciled
-    // reader-progress surfaces; no unscoped invalidateQueries blast.
-    expect(invalidateQueries).toHaveBeenCalledTimes(14)
+    // reader-progress surfaces; no unscoped invalidateQueries blast and no
+    // retired `session.pages()` key (#4839, #4343).
+    expect(invalidateQueries).toHaveBeenCalledTimes(13)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
