@@ -68,9 +68,33 @@ test('the ledger retirement migration drops the table', () => {
 });
 
 test('active docs do not advertise the retired background architecture', () => {
-  for (const path of ['docs/COMICVINE_RUNTIME_FALLBACK.md', 'docs/VERCEL_DEPLOYMENT.md']) {
+  for (const path of [
+    'docs/COMICVINE_RUNTIME_FALLBACK.md',
+    'docs/VERCEL_DEPLOYMENT.md',
+    'docs/COMICVINE_HYDRATOR.md',
+  ]) {
     const doc = read(path);
     assert.ok(!doc.includes('GET /api/v2/maintenance/comicvine-metadata-repairs'), path);
     assert.ok(!doc.includes('repository_dispatch'), path);
+  }
+  const hydrator = read('docs/COMICVINE_HYDRATOR.md');
+  assert.ok(!hydrator.includes('refreshes use the durable repair queue'));
+  assert.ok(hydrator.includes('there is no durable repair queue or maintenance worker'));
+
+  const anchors = new Set(
+    read('docs/VERCEL_DEPLOYMENT.md')
+      .split('\n')
+      .filter(line => /^#{1,6}\s/.test(line))
+      .map(line =>
+        line
+          .replace(/^#{1,6}\s*/, '')
+          .trim()
+          .toLowerCase()
+          .replace(/[^\w\s-]/g, '')
+          .replace(/\s+/g, '-'),
+      ),
+  );
+  for (const [, anchor] of hydrator.matchAll(/VERCEL_DEPLOYMENT\.md#([\w-]+)/g)) {
+    assert.ok(anchors.has(anchor), `broken VERCEL_DEPLOYMENT.md anchor: ${anchor}`);
   }
 });
