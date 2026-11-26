@@ -2570,6 +2570,7 @@ mod issue_ingress_tests {
                      id integer PRIMARY KEY,
                      thread_id integer NOT NULL,
                      issue_number text NOT NULL,
+                     issue_number_alias character varying(50),
                      status text NOT NULL,
                      position integer NOT NULL,
                      read_at timestamptz,
@@ -2799,13 +2800,15 @@ mod issue_ingress_tests {
                     "/api/v2/issues/401",
                     &access,
                     &csrf,
-                    r#"{"status":"read","idempotency_key":"ingress-issue-012345"}"#,
+                    r#"{"status":"read","issue_number_alias":"100","idempotency_key":"ingress-issue-012345"}"#,
                 ))
                 .await;
                 assert_not_path_extraction_500(status, &text);
                 assert_eq!(status, StatusCode::OK, "{text}");
                 assert_eq!(body["issue"]["issue_id"], 401);
                 assert_eq!(body["issue"]["status"], "read");
+                assert_eq!(body["issue"]["issue_number_alias"], "100");
+                assert_eq!(body["issue"]["display_issue_number"], "1 (100)");
             })
             .await;
     }
