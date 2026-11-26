@@ -39,6 +39,9 @@ export interface UseComicVineMetadataHydrationArgs {
 export interface UseComicVineMetadataHydrationResult {
   state: ComicVineHydrationState | null
   isHydrating: boolean
+  /** The Retry action applies to the current state and confirmed issue. */
+  showRetry: boolean
+  /** Retry is enabled: no in-flight request and no provider cooldown. */
   canRetry: boolean
   retryAfterSeconds: number
   /** Awaits one bounded hydration for the currently confirmed identity only. */
@@ -278,10 +281,12 @@ export function useComicVineMetadataHydration({
     || state === 'invalid-response'
     || state === 'failed'
 
+  const showRetry = issueId != null && retryable
   return {
     state,
     isHydrating,
-    canRetry: issueId != null && retryable && !isHydrating && remainingSeconds === 0,
+    showRetry,
+    canRetry: showRetry && !isHydrating && remainingSeconds === 0,
     retryAfterSeconds: remainingSeconds,
     retry,
   }

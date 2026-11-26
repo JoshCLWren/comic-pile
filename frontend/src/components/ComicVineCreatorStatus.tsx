@@ -3,6 +3,7 @@ import type { ComicVineHydrationState } from '../hooks/useComicVineMetadataHydra
 export interface ComicVineCreatorStatusProps {
   state: ComicVineHydrationState | null
   isHydrating: boolean
+  showRetry: boolean
   canRetry: boolean
   retryAfterSeconds: number
   onRetry: () => void
@@ -79,6 +80,7 @@ function present(state: ComicVineHydrationState, retryAfterSeconds: number): Sta
 export function ComicVineCreatorStatus({
   state,
   isHydrating,
+  showRetry,
   canRetry,
   retryAfterSeconds,
   onRetry,
