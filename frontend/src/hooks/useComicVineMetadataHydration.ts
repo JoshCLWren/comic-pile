@@ -42,6 +42,12 @@ interface PresentationDetails {
   retryable: boolean
 }
 
+interface OutcomeState {
+  details: PresentationDetails
+  message: string
+  retryAfterSeconds: number | null
+}
+
 const NO_CREDITS: PresentationDetails = {
   presentation: 'no_credits',
   message: 'ComicVine currently has no creator credits',
