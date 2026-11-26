@@ -3066,6 +3066,304 @@ mod tests {
         assert!(matches!(err, ProviderFailure::Unavailable));
     }
 
+    /// #5695: the executing drain must discover confirmed identities whose
+    /// metadata is empty and whose refresh row was never created. This uses the
+    /// same durable ledger as map/remap, not a second pipeline, and must not
+    /// change the owner's reading or queue state.
+    #[tokio::test]
+    async fn drain_discovers_confirmed_identities_missing_refresh_rows() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("seed connection");
+        let user_id: i32 = connection
+            .query_one(
+                "INSERT INTO users (username) VALUES ('orphan-owner') RETURNING id",
+                &[],
+            )
+            .await
+            .expect("seed user")
+            .get(0);
+        let thread_id: i32 = connection
+            .query_one(
+                "INSERT INTO threads \
+                 (title, format, issues_remaining, total_issues, queue_position, status, \
+                  user_id, last_rating, reading_progress) \
+                 VALUES ('Orphan repair', 'Comic', 2, 2, 7, 'active', $1, 4.5, \
+                         'in_progress') RETURNING id",
+                &[&user_id],
+            )
+            .await
+            .expect("seed thread")
+            .get(0);
+        let orphan = seed_confirmed_identity_for_thread(
+            &connection,
+            thread_id,
+            "1",
+            "4000-30001",
+            &json!({}),
+        )
+        .await;
+        let fresh_updated = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        let fresh_metadata =
+            normalized_metadata(&deep_provider_result(30002, &fresh_updated), 30002)
+                .expect("fresh metadata")
+                .0;
+        let fresh = seed_confirmed_identity_for_thread(
+            &connection,
+            thread_id,
+            "2",
+            "4000-30002",
+            &fresh_metadata,
+        )
+        .await;
+        drop(Object::take(connection));
+        queue_deep_provider_result(&state, 30001, "2026-11-01 17:33:53");
+
+        let report = drain_for_test(&state).await;
+        // Both discovered orphans are reconciled: the empty one is fetched and
+        // hydrated, the full-shaped fresh one settles from cache without a
+        // provider call so the bounded scan advances past it.
+        assert_eq!(report.claimed, 2);
+        assert_eq!(report.completed, 2);
+        assert_eq!(report.deferred, 0);
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let request = connection
+            .query_one(
+                "SELECT state, attempts FROM comicvine_metadata_refresh_requests \
+                 WHERE external_identity_id = $1",
+                &[&orphan],
+            )
+            .await
+            .expect("reconciled request");
+        assert_eq!(request.get::<_, String>(0), "completed");
+        assert_eq!(request.get::<_, i32>(1), 1);
+        let metadata_text: String = connection
+            .query_one(
+                "SELECT metadata_json::text FROM external_identities WHERE id = $1",
+                &[&orphan],
+            )
+            .await
+            .expect("hydrated metadata")
+            .get(0);
+        let metadata: Value = serde_json::from_str(&metadata_text).expect("hydrated JSON");
+        assert_eq!(metadata["creator_credits"][0]["name"], "Writer");
+        let fresh_request = connection
+            .query_one(
+                "SELECT state, attempts, completed_at IS NOT NULL \
+                 FROM comicvine_metadata_refresh_requests \
+                 WHERE external_identity_id = $1",
+                &[&fresh],
+            )
+            .await
+            .expect("fresh row reconciled into the ledger");
+        assert_eq!(fresh_request.get::<_, String>(0), "completed");
+        assert_eq!(fresh_request.get::<_, i32>(1), 1);
+        assert!(
+            fresh_request.get::<_, bool>(2),
+            "fresh metadata must settle, never stay pending"
+        );
+        let calls = state.recording_fake().expect("recording provider").calls();
+        assert!(
+            calls.iter().all(|call| !call.path.contains("4000-30002")),
+            "fresh metadata must settle from cache without a provider call"
+        );
+
+        let thread = connection
+            .query_one(
+                "SELECT queue_position, last_rating, reading_progress FROM threads WHERE id = $1",
+                &[&thread_id],
+            )
+            .await
+            .expect("preserved thread");
+        assert_eq!(thread.get::<_, i32>(0), 7);
+        assert_eq!(thread.get::<_, Option<f64>>(1), Some(4.5));
+        assert_eq!(
+            thread.get::<_, Option<String>>(2).as_deref(),
+            Some("in_progress")
+        );
+        let unread: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM issues WHERE thread_id = $1 AND status = 'unread'",
+                &[&thread_id],
+            )
+            .await
+            .expect("preserved issues")
+            .get(0);
+        assert_eq!(unread, 2);
+        drop(Object::take(connection));
+    }
+
+    /// #5695: a full-shaped 12-key payload with no deep-fetch stamp is stale
+    /// under the canonical predicate. The orphan scan must not hide it behind a
+    /// raw-payload shape prefilter when no refresh ledger row exists.
+    #[tokio::test]
+    async fn drain_reconciles_full_shaped_identity_without_deep_fetch_ledger() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("seed connection");
+        let user_id: i32 = connection
+            .query_one(
+                "INSERT INTO users (username) VALUES ('full-shape-owner') RETURNING id",
+                &[],
+            )
+            .await
+            .expect("seed user")
+            .get(0);
+        let thread_id: i32 = connection
+            .query_one(
+                "INSERT INTO threads \
+                 (title, format, issues_remaining, total_issues, queue_position, status, \
+                  user_id, last_rating, reading_progress) \
+                 VALUES ('Full shape repair', 'Comic', 1, 1, 9, 'active', $1, 4.5, \
+                         'in_progress') RETURNING id",
+                &[&user_id],
+            )
+            .await
+            .expect("seed thread")
+            .get(0);
+        let mut metadata =
+            normalized_metadata(&deep_provider_result(30003, "2026-11-01 17:33:53"), 30003)
+                .expect("full-shaped metadata")
+                .0;
+        metadata
+            .as_object_mut()
+            .expect("metadata object")
+            .remove("deep_metadata_refreshed_at");
+        assert!(has_complete_provider_payload(&metadata));
+        assert!(needs_provider_fetch(&metadata, chrono::Utc::now()));
+        let identity = seed_confirmed_identity_for_thread(
+            &connection,
+            thread_id,
+            "3",
+            "4000-30003",
+            &metadata,
+        )
+        .await;
+        drop(Object::take(connection));
+        queue_deep_provider_result(&state, 30003, "2026-11-01 17:33:53");
+
+        let report = drain_for_test(&state).await;
+        assert_eq!(
+            report.claimed, 1,
+            "full-shaped stale orphan must be selected"
+        );
+        assert_eq!(report.completed, 1);
+        assert_eq!(report.deferred, 0);
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let row = connection
+            .query_one(
+                "SELECT r.state, r.attempts, e.metadata_json::text \
+                 FROM comicvine_metadata_refresh_requests r \
+                 JOIN external_identities e ON e.id = r.external_identity_id \
+                 WHERE r.external_identity_id = $1",
+                &[&identity],
+            )
+            .await
+            .expect("reconciled full-shaped request");
+        assert_eq!(row.get::<_, String>(0), "completed");
+        assert_eq!(row.get::<_, i32>(1), 1);
+        let persisted: Value =
+            serde_json::from_str(row.get(2)).expect("persisted full-shaped metadata");
+        assert_eq!(persisted["creator_credits"][0]["name"], "Writer");
+        assert!(persisted["deep_metadata_refreshed_at"].is_string());
+        let calls = state.recording_fake().expect("recording provider").calls();
+        assert_eq!(calls.len(), 1, "one bounded singular provider fetch");
+        assert!(calls[0].path.contains("issue/4000-30003"));
+        drop(Object::take(connection));
+    }
+
+    /// #5695: a provider that keeps failing must reach a terminal "failed" state
+    /// instead of lingering in deferred forever, so the UI can report a real
+    /// failure rather than staying at "Creator credits queued for fetch…".
+    #[tokio::test]
+    async fn drain_reaches_terminal_failed_state_after_exhausting_retries() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_identity(&state).await;
+        seed_request(&state, identity_id, "pending", 0, "0 seconds", None).await;
+
+        // Three consecutive provider outages: the first two defer with bounded
+        // backoff, the third (attempt >= 3) fails permanently.
+        for _ in 0..3 {
+            state.recording_fake().expect("recording provider").push_ok(
+                StatusCode::SERVICE_UNAVAILABLE,
+                HeaderMap::new(),
+                Bytes::new(),
+            );
+        }
+
+        let first = drain_for_test(&state).await;
+        assert_eq!(first.claimed, 1);
+        assert_eq!(first.deferred, 1);
+        assert_eq!(first.failed, 0);
+
+        let mut connection = db::checkout(&state).await.expect("request connection");
+        connection
+            .execute(
+                "UPDATE comicvine_metadata_refresh_requests \
+                 SET next_attempt_at = now() - interval '1 second' \
+                 WHERE external_identity_id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("make first retry due");
+        drop(Object::take(connection));
+
+        let second = drain_for_test(&state).await;
+        assert_eq!(second.claimed, 1);
+        assert_eq!(second.deferred, 1);
+        assert_eq!(second.failed, 0);
+
+        connection = db::checkout(&state).await.expect("request connection");
+        connection
+            .execute(
+                "UPDATE comicvine_metadata_refresh_requests \
+                 SET next_attempt_at = now() - interval '1 second' \
+                 WHERE external_identity_id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("make second retry due");
+        drop(Object::take(connection));
+
+        let third = drain_for_test(&state).await;
+        assert_eq!(third.claimed, 1);
+        assert_eq!(third.failed, 1);
+        assert_eq!(third.deferred, 0);
+
+        let connection = db::checkout(&state).await.expect("request connection");
+        let row = connection
+            .query_one(
+                "SELECT state, attempts, last_error, next_attempt_at > now() \
+                 FROM comicvine_metadata_refresh_requests WHERE external_identity_id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("failed request");
+        assert_eq!(row.get::<_, String>(0), "failed");
+        assert_eq!(row.get::<_, i32>(1), 3);
+        assert_eq!(
+            row.get::<_, Option<String>>(2).as_deref(),
+            Some("provider_unavailable")
+        );
+        assert!(row.get::<_, bool>(3));
+        drop(Object::take(connection));
+
+        // A fourth drain must not re-claim a terminal failed row before its
+        // bounded backoff elapses.
+        let fourth = drain_for_test(&state).await;
+        assert_eq!(fourth.claimed, 0);
+        assert_eq!(fourth.failed, 0);
+    }
+
     /// #5592: worker fetches a singular issue and persists creator credits.
     #[tokio::test]
     async fn drain_persists_creator_credits_for_pending_identity() {

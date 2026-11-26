@@ -5,9 +5,9 @@ import { queryClient } from '../query/queryClient'
 import {
   applyComicVineCorrectionOptimistically,
   clearComicVineIssueIntelligence,
+  clearComicVineIssueIntelligenceMany,
   invalidateAfterIssueMappingChange,
   invalidateComicVineIssueIdentity,
-  invalidateComicVineIssueIntelligenceMany,
 } from '../query/cacheEffects'
 
 /**
@@ -187,7 +187,9 @@ export function useComicIssueMapping({
         removalIdentityRef.current = null
       }
       if (confirmedIssueIds.length > 0) {
-        await invalidateComicVineIssueIntelligenceMany(queryClient, confirmedIssueIds)
+        // Cancel and clear before refetching: a late response for the previous
+        // identity must not restore stale creators or cover on remap (#5695).
+        await clearComicVineIssueIntelligenceMany(queryClient, confirmedIssueIds)
         await Promise.all(
           confirmedIssueIds.map((confirmedId) =>
             invalidateComicVineIssueIdentity(queryClient, confirmedId),
