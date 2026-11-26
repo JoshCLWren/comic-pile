@@ -1461,8 +1461,7 @@ mod tests {
                 .expect("body bytes");
             let text = String::from_utf8_lossy(&bytes);
             assert_ne!(
-                text,
-                r#"{"detail":"Not Found"}"#,
+                text, r#"{"detail":"Not Found"}"#,
                 "{uri} must not hit native_not_found: {text}"
             );
             assert!(

@@ -1082,7 +1082,10 @@ async fn annual_special_and_fractional_issues_preview_then_commit_as_distinct_ro
     let mut numbers = std::collections::BTreeSet::new();
     for (id, number, position) in &committed {
         assert!(ids.insert(*id), "duplicate identity for #{number}");
-        assert!(positions.insert(*position), "duplicate position for #{number}");
+        assert!(
+            positions.insert(*position),
+            "duplicate position for #{number}"
+        );
         assert!(numbers.insert(number.clone()), "duplicate number #{number}");
     }
     for number in requested {
@@ -1091,5 +1094,8 @@ async fn annual_special_and_fractional_issues_preview_then_commit_as_distinct_ro
     let committed_order: Vec<&str> = committed.iter().map(|(_, n, _)| n.as_str()).collect();
     let first_index = committed_order.iter().position(|n| *n == "1").unwrap();
     let second_index = committed_order.iter().position(|n| *n == "2").unwrap();
-    assert!(first_index < second_index, "existing relative order preserved");
+    assert!(
+        first_index < second_index,
+        "existing relative order preserved"
+    );
 }
