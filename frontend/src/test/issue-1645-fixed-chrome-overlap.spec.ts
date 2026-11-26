@@ -214,9 +214,12 @@ test.describe('Fixed chrome overlap (#1645)', () => {
 
     const header = page.locator('[data-authenticated-shell] > main header')
     await expect(header).toBeVisible()
-    const ladder = header.getByText('Ladder', { exact: true })
+    // The retired "Ladder" tooltip is now the "Die" glossary link beside the
+    // die-size group; both are live header chrome at tablet width.
+    const ladder = header.getByRole('link', { name: 'Die' })
     const pickManually = header.getByRole('button', { name: 'Pick manually' })
     await expect(ladder).toBeVisible()
+    await expect(header.getByRole('group', { name: 'Die sizes' })).toBeVisible()
     await expect(pickManually).toBeVisible()
     await expect(header.locator('#die-selector')).toBeVisible()
 
@@ -233,7 +236,7 @@ test.describe('Fixed chrome overlap (#1645)', () => {
         return { left: box.left, right: box.right, top: box.top, bottom: box.bottom }
       }
       const ladderElement = headerElement.querySelector<HTMLElement>(
-        '#die-selector span.cursor-help',
+        'a[href="/glossary#die-size"]',
       )
       const pickElement = headerElement.querySelector<HTMLElement>(
         '[data-roll-primary-action="pick-manually"]',
@@ -272,7 +275,7 @@ test.describe('Fixed chrome overlap (#1645)', () => {
       ...geometry!.dieButtons,
       ...(geometry!.readingMode ? [geometry!.readingMode] : []),
     ]
-    expect(actions.length).toBeGreaterThanOrEqual(12)
+    expect(actions.length).toBeGreaterThanOrEqual(8)
     for (const action of actions) {
       expect(action.left).toBeGreaterThanOrEqual(geometry!.main.left)
       expect(action.right).toBeLessThanOrEqual(geometry!.main.right)

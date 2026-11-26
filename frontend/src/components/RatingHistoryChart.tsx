@@ -420,28 +420,33 @@ export function RatingHistoryChart({ ratedIssues, totalRatings, className = '' }
         )}
       </div>
 
-      {/* Accessible alternative for screen reader / keyboard users */}
-      <table className="sr-only" aria-label="Rating history data">
-        <caption className="sr-only">Every plotted rating in chronological order</caption>
-        <thead>
-          <tr>
-            <th scope="col">Issue</th>
-            <th scope="col">Rating</th>
-            <th scope="col">Date</th>
-            <th scope="col">Thread</th>
-          </tr>
-        </thead>
-        <tbody>
-          {ratingData.map((point) => (
-            <tr key={point.issueId}>
-              <td>{point.issueNumber}</td>
-              <td>{formatRating(point.rating)}</td>
-              <td>{point.timestamp.toLocaleDateString()}</td>
-              <td>{point.threadTitle}</td>
+      {/* Accessible alternative for screen reader / keyboard users.
+          The clip wrapper must own the table: a bare `sr-only` table keeps its
+          intrinsic min-content width and can expand document scrollWidth on
+          narrow viewports even though it is visually hidden. */}
+      <div className="sr-only overflow-hidden">
+        <table aria-label="Rating history data">
+          <caption className="sr-only">Every plotted rating in chronological order</caption>
+          <thead>
+            <tr>
+              <th scope="col">Issue</th>
+              <th scope="col">Rating</th>
+              <th scope="col">Date</th>
+              <th scope="col">Thread</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {ratingData.map((point) => (
+              <tr key={point.issueId}>
+                <td>{point.issueNumber}</td>
+                <td>{formatRating(point.rating)}</td>
+                <td>{point.timestamp.toLocaleDateString()}</td>
+                <td>{point.threadTitle}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       {unloadedRatings != null && (
         <p className="mt-2 text-xs" style={{ color: 'var(--theme-text-muted)' }}>

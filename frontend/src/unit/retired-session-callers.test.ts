@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { queryKeys } from '../query/queryKeys'
 
 const srcRoot = resolve(__dirname, '..')
 
@@ -97,5 +98,22 @@ describe('retired session/undo callers (#4839)', () => {
     expect(serviceSource).toContain('/v2/reading-sessions/${id}/snapshots')
     expect(undoSource).toContain('/v2/undo/${sessionId}/snapshots')
     expect(undoSource).toContain('/v2/undo/${sessionId}/snapshots/${snapshotId}/restore')
+  })
+
+  it('does not rebuild the retired session current/index cache namespace (#4839)', () => {
+    // `session.current` and `session.pages` described the retired v1 session
+    // reads. No query key builder, cache effect, or shipped caller may bring
+    // them back now that only v2 details/snapshots/undo reads remain.
+    expect(queryKeys.session).not.toHaveProperty('current')
+    expect(queryKeys.session).not.toHaveProperty('pages')
+    expect(queryKeys.session).not.toHaveProperty('list')
+    expect(queryKeys.session).not.toHaveProperty('page')
+
+    const retiredKeyPattern = /queryKeys\.session\.(?:current|pages|list|page)\b/
+    const violations = liveSourceFiles().flatMap((path) =>
+      retiredKeyPattern.test(readFileSync(path, 'utf-8')) ? [path.replace(`${srcRoot}/`, '')] : [],
+    )
+
+    expect(violations).toEqual([])
   })
 })

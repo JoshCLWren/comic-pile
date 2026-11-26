@@ -159,8 +159,10 @@ test.describe('rating action cluster reflow (issue #2350)', () => {
     // phone-width column beside empty space (acceptance criterion #1/#6).
     expect(g.actionsCell!.width / g.grid!.width).toBeGreaterThan(0.85)
 
-    expect(g.secondaryButtons).toHaveLength(3)
-    // At tablet the three secondaries lay out on one spread row, each with a
+    // The live decision card ships two secondary actions (Roll again /
+    // Cancel roll); the retired third control no longer exists.
+    expect(g.secondaryButtons).toHaveLength(2)
+    // At tablet the secondaries lay out on one spread row, each with a
     // comfortable tap width instead of a phone-sized squeezed lane.
     const rows = distinctRows(g.secondaryButtons)
     expect(rows).toBe(1)
@@ -190,7 +192,7 @@ test.describe('rating action cluster reflow (issue #2350)', () => {
     expect(g.actionsCell).not.toBeNull()
     expect(g.secondary).not.toBeNull()
 
-    expect(g.secondaryButtons).toHaveLength(3)
+    expect(g.secondaryButtons).toHaveLength(2)
     expect(g.comic).not.toBeNull()
     expect(g.decision).not.toBeNull()
     expect(g.decision!.top).toBeGreaterThanOrEqual(g.comic!.bottom)

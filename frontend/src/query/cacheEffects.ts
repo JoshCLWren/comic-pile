@@ -153,16 +153,11 @@ export async function applyRatedThreadCache(
   }
 
   await Promise.all([
-    // `session.current` is intentionally not invalidated here: the shared
-    // reader-progress pass below invalidates `session.all`, which covers it.
-    // A second exact invalidation re-ran the in-flight session fetch (#5264).
     // A rating writes a new "After rating" snapshot (#3468). Both snapshot
-    // lists read the same rows, and the History card counts them through the
-    // paginated session list, so all three must stop serving the pre-rating
+    // lists read the same rows, so they must stop serving the pre-rating
     // state the moment the rating commits.
     client.invalidateQueries({ queryKey: queryKeys.undo.all }),
     client.invalidateQueries({ queryKey: queryKeys.session.snapshotsAll() }),
-    client.invalidateQueries({ queryKey: queryKeys.session.pages() }),
     // A rating marks the current issue read, which can clear (or create) a
     // canonical reading blocker for any series. Every reading-boundaries read
     // lives under this prefix, so refresh it with the rest of the read state.
@@ -193,10 +188,6 @@ export async function applyUpdatedThreadCache(
     ...(thread.status === 'completed'
       ? [client.resetQueries({ queryKey: queryKeys.completed.pages() })]
       : []),
-    client.invalidateQueries({
-      queryKey: queryKeys.session.current(),
-      exact: true,
-    }),
     client.invalidateQueries({
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
@@ -249,27 +240,24 @@ export async function invalidateAfterIssueEdit(
 }
 
 export async function invalidateCurrentSessionAfterSnooze(
-  client: QueryClient,
+  _client: QueryClient,
 ): Promise<void> {
-  await client.invalidateQueries({
-    queryKey: queryKeys.session.current(),
-    exact: true,
-  })
+  // The legacy session.current read was retired under #4343; its last dead
+  // cache-key residue is removed here as Part of #4839. This PR does not
+  // close #4839: owner-gated authenticated production Rust evidence and
+  // #4343 retirement verification are still required before closure.
+  // Snooze callers refresh authoritative state via roll bootstrap reconciliation.
 }
 
 /**
  * Refresh the minimal auth-resume set after a bfcache/visibility resume
  * recovery (`ResumeRecovery`, #2582). Scoped to the retained resume
- * resources — current session, roll bootstrap, and queue pages — so recovery
- * reconciles data without the unscoped `invalidateQueries()` blast that used
- * to churn deferred layout underneath an in-progress scroll restore.
+ * resources — roll bootstrap and queue pages — so recovery reconciles data
+ * without the unscoped `invalidateQueries()` blast that used to churn
+ * deferred layout underneath an in-progress scroll restore.
  */
 export async function invalidateAfterResumeRecovery(client: QueryClient): Promise<void> {
   await Promise.all([
-    client.invalidateQueries({
-      queryKey: queryKeys.session.current(),
-      exact: true,
-    }),
     client.invalidateQueries({
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
@@ -284,7 +272,6 @@ export async function invalidateAfterResumeRecovery(client: QueryClient): Promis
     client.invalidateQueries({ queryKey: queryKeys.queue.activeCount(), exact: true }),
     client.resetQueries({ queryKey: queryKeys.completed.pages() }),
     client.resetQueries({ queryKey: queryKeys.excluded.pages() }),
-    client.invalidateQueries({ queryKey: queryKeys.session.pages() }),
     client.invalidateQueries({ queryKey: queryKeys.session.snapshotsAll() }),
     client.invalidateQueries({ queryKey: queryKeys.activity.all }),
     client.invalidateQueries({ queryKey: queryKeys.dependencies.all }),
@@ -319,31 +306,12 @@ export async function resetRollBootstrapAfterManualSelection(
     client.resetQueries({
       queryKey: queryKeys.roll.issueCardsAll(),
     }),
-    client.invalidateQueries({
-      queryKey: queryKeys.session.current(),
-      exact: true,
-    }),
   ])
 }
 
-export interface QueueMovementInvalidationOptions {
-  /**
-   * Skip the `session.current` refresh for a mutation whose own hook already
-   * refreshed it (queue-row snooze/unsnooze routes through `useSnooze` /
-   * `useUnsnooze`, which invalidate `session.current` inside the mutation).
-   * Without this opt-out a second invalidation of the same key re-runs the
-   * in-flight session fetch, so one snooze from the Queue sent the current
-   * session endpoint two extra identical GETs.
-   */
-  skipSessionCurrent?: boolean
-}
-
-export async function invalidateAfterQueueMovement(
-  client: QueryClient,
-  options: QueueMovementInvalidationOptions = {},
-): Promise<void> {
-  // The queue list reset, active-count, session, bootstrap, and excluded-view
-  // refreshes are issued together so callers can await one settled pass.
+export async function invalidateAfterQueueMovement(client: QueryClient): Promise<void> {
+  // The queue list reset, active-count, bootstrap, and excluded-view refreshes
+  // are issued together so callers can await one settled pass.
   await Promise.all([
     // Reset (not invalidate) the paginated Queue loader: re-fetching already
     // loaded pages through their pre-mutation cursors can duplicate or skip
@@ -354,9 +322,6 @@ export async function invalidateAfterQueueMovement(
       queryKey: queryKeys.queue.activeCount(),
       exact: true,
     }),
-    ...(options.skipSessionCurrent
-      ? []
-      : [client.invalidateQueries({ queryKey: queryKeys.session.current(), exact: true })]),
     client.invalidateQueries({
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
@@ -390,15 +355,11 @@ export async function invalidateAfterQueueMovement(
  *
  * A create or delete also changes which existing editions the Add Series and
  * Edit/Rename forms should warn about (#3612), so the advisory duplicate
- * answers are refreshed in the same pass. `options` passes through to
- * `invalidateAfterQueueMovement` (see `QueueMovementInvalidationOptions`).
+ * answers are refreshed in the same pass.
  */
-export async function invalidateAfterQueueMutation(
-  client: QueryClient,
-  options: QueueMovementInvalidationOptions = {},
-): Promise<void> {
+export async function invalidateAfterQueueMutation(client: QueryClient): Promise<void> {
   await Promise.all([
-    invalidateAfterQueueMovement(client, options),
+    invalidateAfterQueueMovement(client),
     invalidatePotentialDuplicates(client),
   ])
 }
@@ -461,10 +422,6 @@ export async function invalidateAfterThreadMetadataEdit(client: QueryClient): Pr
       queryKey: queryKeys.roll.issueCardsAll(),
     }),
     invalidateIssueCards(client),
-    client.invalidateQueries({
-      queryKey: queryKeys.session.current(),
-      exact: true,
-    }),
     client.invalidateQueries({ queryKey: queryKeys.readingPlans.all }),
     client.invalidateQueries({ queryKey: queryKeys.customCBLs.all }),
     // The thread page's "Next issue" line renders the series title from the
@@ -521,7 +478,6 @@ export async function invalidateAfterIssueMappingChange(client: QueryClient): Pr
 export async function invalidateAfterUndo(client: QueryClient): Promise<void> {
   await Promise.all([
     invalidateAfterQueueMovement(client),
-    client.invalidateQueries({ queryKey: queryKeys.session.pages() }),
     client.invalidateQueries({ queryKey: queryKeys.session.snapshotsAll() }),
     client.invalidateQueries({ queryKey: queryKeys.undo.all }),
     // Undo restores read state, ratings, blockers, and history across views.
@@ -556,6 +512,29 @@ export async function invalidateReadingPlansAfterCrossTabChange(
   // the remote commit. Cancel it first so every notice causes a fresh request.
   await client.cancelQueries({ queryKey: queryKeys.readingPlans.all })
   await client.invalidateQueries({ queryKey: queryKeys.readingPlans.all })
+}
+
+/**
+ * Refresh Reading List surfaces after another tab renames or re-formats a
+ * Thread (#5862).
+ *
+ * The editor seeds its draft from `customCBLs.detail` and the guide reader
+ * renders `customCBLs.reader`. Issue rows additionally prefer the cached
+ * batched IssueCard `thread_title` over the list entry's `series_name`
+ * (`ComicIssueCard`, `ReadingListEntryCard`), so the card projection must be
+ * refreshed too or the old title survives on every row even after the list
+ * itself is current. Cancel in-flight reads first so a request that started
+ * before the remote rename cannot be reused as fresh data.
+ */
+export async function invalidateReadingListsAfterCrossTabChange(
+  client: QueryClient,
+): Promise<void> {
+  await Promise.all([
+    client.cancelQueries({ queryKey: queryKeys.customCBLs.all }),
+    client.cancelQueries({ queryKey: queryKeys.issueCards.all }),
+  ])
+  await client.invalidateQueries({ queryKey: queryKeys.customCBLs.all })
+  await invalidateIssueCards(client)
 }
 
 /**
@@ -861,7 +840,6 @@ export async function invalidateAfterDependencyChange(
     client.invalidateQueries({ queryKey: queryKeys.readingPlans.all }),
     client.invalidateQueries({ queryKey: queryKeys.customCBLs.all }),
     client.invalidateQueries({ queryKey: queryKeys.roll.all }),
-    client.invalidateQueries({ queryKey: queryKeys.session.current(), exact: true }),
     client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
   ])
 }
@@ -917,7 +895,6 @@ export async function invalidateSessionRecoveryCache(
   client: QueryClient,
 ): Promise<void> {
   await Promise.all([
-    client.invalidateQueries({ queryKey: queryKeys.session.current(), exact: true }),
     client.invalidateQueries({ queryKey: queryKeys.roll.bootstrap(), exact: true }),
     client.invalidateQueries({ queryKey: queryKeys.roll.eligibleIssueIdsAll() }),
     client.invalidateQueries({ queryKey: queryKeys.roll.issueCardsAll() }),
@@ -1116,10 +1093,6 @@ export async function invalidateAfterRollDieModeUpdate(
     }),
     client.invalidateQueries({
       queryKey: queryKeys.roll.issueCardsAll(),
-    }),
-    client.invalidateQueries({
-      queryKey: queryKeys.session.current(),
-      exact: true,
     }),
   ])
 }

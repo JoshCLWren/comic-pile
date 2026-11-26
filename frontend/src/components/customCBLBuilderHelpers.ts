@@ -37,6 +37,30 @@ export function draftEntry(result: CustomCBLIssueSearchResult, position: number)
   }
 }
 
+/**
+ * Adopt a committed direct read/unread into staged Reading List entries.
+ *
+ * A direct issue write changes global read state, not the list record. The
+ * editor deliberately keeps its seeded draft instead of re-seeding from a
+ * background detail refetch, so only the read status may be reconciled here;
+ * gate, skip, checkpoint, order and unsaved intent remain editor-owned.
+ *
+ * @param entries - Currently staged entries.
+ * @param issueId - Canonical issue id from the committed direct receipt.
+ * @param status - Committed read status (`read` or `unread`).
+ * @returns The original array when nothing changes, otherwise a copy with the
+ * reconciled status.
+ */
+export function reconcileEntryReadStatus(
+  entries: CustomCBLEntry[],
+  issueId: number,
+  status: string,
+): CustomCBLEntry[] {
+  if (status !== 'read' && status !== 'unread') return entries
+  if (!entries.some((entry) => entry.issue_id === issueId && entry.status !== status)) return entries
+  return entries.map((entry) => entry.issue_id === issueId ? { ...entry, status } : entry)
+}
+
 export function sameEntries(left: CustomCBLEntry[], right: CustomCBLEntry[]): boolean {
   return (
     left.length === right.length &&
@@ -51,6 +75,30 @@ export function sameEntries(left: CustomCBLEntry[], right: CustomCBLEntry[]): bo
       )
     })
   )
+}
+
+/**
+ * Reconcile server-owned series titles into an in-progress draft (#5862).
+ *
+ * A Thread rename committed in another tab changes `series_name` on the
+ * Reading List's entries. Draft order, gates, and skips are local edits, so
+ * only the display title is replaced from fresh server data; returning the
+ * original array when nothing changed avoids needless re-renders.
+ */
+export function reconcileEntryTitles(
+  local: CustomCBLEntry[],
+  server: readonly CustomCBLEntry[],
+): CustomCBLEntry[] {
+  const titles = new Map<number, string>()
+  for (const entry of server) titles.set(entry.issue_id, entry.series_name)
+  let changed = false
+  const next = local.map((entry) => {
+    const title = titles.get(entry.issue_id)
+    if (title === undefined || title === entry.series_name) return entry
+    changed = true
+    return { ...entry, series_name: title }
+  })
+  return changed ? next : local
 }
 
 export function checkpointTargetsFor(entries: readonly CustomCBLEntry[]): Record<number, number[]> | null {

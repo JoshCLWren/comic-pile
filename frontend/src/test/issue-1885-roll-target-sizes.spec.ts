@@ -86,11 +86,15 @@ async function authHeaders(page: Page): Promise<Record<string, string>> {
   }
 }
 
-async function openRatingView(page: Page, threadId: number): Promise<void> {
+async function setPending(page: Page, threadId: number): Promise<void> {
   const pending = await page.request.post(`/api/v1/threads/${threadId}/set-pending`, {
     headers: { Authorization: `Bearer ${await getAuthToken(page)}` },
   })
   expect(pending.ok(), `set-pending failed: ${pending.status()}`).toBeTruthy()
+}
+
+async function openRatingView(page: Page, threadId: number): Promise<void> {
+  await setPending(page, threadId)
   await page.goto('/', { waitUntil: 'domcontentloaded' })
   await expect(page.locator('#rating-input')).toBeVisible()
 }
@@ -107,7 +111,7 @@ test.describe('Roll pointer target sizes (#1885)', () => {
     await expect(page.locator('#die-selector')).toBeVisible()
 
     const dieBoxes = await measureVisibleBoxes(page, '#die-selector button')
-    expect(dieBoxes).toHaveLength(10)
+    expect(dieBoxes).toHaveLength(7)
     expectMinimumTargets(dieBoxes, PRIMARY_TARGET_MIN_HEIGHT)
 
     // Keyboard operation is unchanged: tabbing reaches the ladder and Enter
@@ -182,6 +186,11 @@ test.describe('Roll pointer target sizes (#1885)', () => {
     const blocking = await createThread(page, { title: 'Blocking Alpha', format: 'Issue', issues_remaining: 2, total_issues: 2 })
     const blocked = await createThread(page, { title: 'Blocked Beta', format: 'Issue', issues_remaining: 2, total_issues: 2 })
 
+    // The canonical dependency evaluator rejects set-pending on a thread that
+    // is already blocked. Put the thread in the pending state first, then seed
+    // the dependency so the edge endpoints render in the rating view.
+    await setPending(page, blocked.id)
+
     // Reader-context edges are built from issue-level dependencies.
     const firstIssueId = async (threadId: number): Promise<number> => {
       const response = await page.request.get(`/api/v1/threads/${threadId}/issues`, {
@@ -205,7 +214,19 @@ test.describe('Roll pointer target sizes (#1885)', () => {
     expect(created.ok(), `dependency create failed: ${await created.text()}`).toBeTruthy()
 
     await page.setViewportSize({ width: 1920, height: 926 })
-    await openRatingView(page, blocked.id)
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await expect(page.locator('#rating-input')).toBeVisible()
+
+    // Connected-series edge endpoints live behind the Reading Context
+    // disclosure; open it before measuring the live targets.
+    await page.getByTestId('reading-context-button').click()
+    await expect(page.getByTestId('reading-context-content')).toBeVisible()
+
+    // The connected-threads query is gated on the disclosure and resolves
+    // asynchronously. The content shell appears before its data, so wait for
+    // the real edge endpoints instead of measuring the empty loading state.
+    const edgeEndpoints = page.locator('button[aria-label^="Open series for"]')
+    await expect(edgeEndpoints.first()).toBeVisible({ timeout: 15_000 })
 
     // Edge endpoint buttons previously rendered as bare ~12px text strips.
     expectMinimumTargets(
