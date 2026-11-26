@@ -124,10 +124,30 @@ test('renders retained navigation links when authenticated', async () => {
   expect(within(mobileNav).getByText('Roll')).toBeVisible()
   expect(within(mobileNav).getByText('Queue')).toBeVisible()
   expect(within(mobileNav).getByText('History')).toBeVisible()
-  expect(within(mobileNav).getByText('Reading plans')).toBeVisible()
+  const mobilePlans = within(mobileNav).getByRole('link', { name: /reading plans page/i })
+  expect(mobilePlans).toHaveTextContent('Plans')
+  expect(mobilePlans).toHaveAttribute('href', '/continuity-plans')
+  expect(within(mobileNav).queryByText('Reading plans')).not.toBeInTheDocument()
+  const desktopNav = screen.getByRole('navigation', { name: /desktop navigation/i })
+  expect(within(desktopNav).getByRole('link', { name: /reading plans page/i })).toHaveTextContent('Reading plans')
   expect(within(mobileNav).queryByText('Crossovers')).not.toBeInTheDocument()
   expect(within(mobileNav).getByText('More')).toBeVisible()
   expect(within(mobileNav).queryByRole('link', { name: /analytics page/i })).not.toBeInTheDocument()
+})
+
+test.each([
+  ['/', 'Roll page'],
+  ['/queue', 'Queue page'],
+  ['/history', 'History page'],
+  ['/continuity-plans', 'Reading plans page'],
+  ['/reading-lists', 'Reading plans page'],
+])('marks the correct mobile link as current on %s', async (path, name) => {
+  renderWithAuth(path)
+  const mobileNav = await screen.findByRole('navigation', { name: /mobile navigation/i })
+  const activeLink = within(mobileNav).getByRole('link', { name })
+  expect(activeLink).toHaveAttribute('aria-current', 'page')
+  expect(activeLink).toHaveClass('active')
+  expect(mobileNav.querySelectorAll('.nav-item.active')).toHaveLength(1)
 })
 
 test('marks More as the only active destination on submenu routes', async () => {
