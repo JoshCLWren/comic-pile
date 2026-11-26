@@ -87,24 +87,22 @@ async function installRatingRoutes(page: Page): Promise<void> {
   await page.route('**/v2/creators/summaries', (route) =>
     route.fulfill({ json: { summaries: {}, coverage: null } }),
   )
-  await page.route('**/v1/issues/*/comicvine', (route) =>
-    route.fulfill({
-      json: {
-        comicvine_issue_id: '2942',
-        comicvine_url: null,
-        series_name: 'Invariant Series',
-        series_id: 2942,
-        issue_number: '1',
-        name: 'Invariant Issue',
-        description: null,
-        image_url: COVER_DATA_URI,
-        cover_date: '2020-01-01',
-        store_date: null,
-        creators: [],
-        story_arcs: [],
-      },
-    }),
-  )
+  const comicvine = {
+    comicvine_issue_id: '2942',
+    comicvine_url: null,
+    series_name: 'Invariant Series',
+    series_id: 2942,
+    issue_number: '1',
+    name: 'Invariant Issue',
+    description: null,
+    image_url: COVER_DATA_URI,
+    cover_date: '2020-01-01',
+    store_date: null,
+    creators: [],
+    story_arcs: [],
+  }
+  await page.route('**/v1/issues/*/comicvine', (route) => route.fulfill({ json: comicvine }))
+  await page.route('**/v2/issues/*/comicvine', (route) => route.fulfill({ json: comicvine }))
   await page.route('**/v2/comicvine/issues/*/identity', (route) =>
     route.fulfill({
       json: {
@@ -326,11 +324,13 @@ test.describe('Roll Layout Invariants - Issue #2942', () => {
     // #2990 caps the cluster and decision track instead of prescribing ratios
     // that vary with shell/navigation width.
     expect(grid!.width).toBeLessThanOrEqual(896 + GEOMETRY_TOLERANCE_PX)
+    // The shipped xl tracks are minmax(28rem,32rem) / minmax(18rem,24rem):
+    // a slightly wider comic column beside a bounded decision column.
     expect(g.decision!.width).toBeLessThanOrEqual(384 + GEOMETRY_TOLERANCE_PX)
     expect(g.decision!.width).toBeGreaterThanOrEqual(288 - GEOMETRY_TOLERANCE_PX)
     expect(g.decision!.left - g.comic!.right).toBeCloseTo(24, 0)
     expect(g.comic!.width).toBeGreaterThan(0)
-    expect(g.comic!.width).toBeLessThanOrEqual(384 + GEOMETRY_TOLERANCE_PX)
+    expect(g.comic!.width).toBeLessThanOrEqual(512 + GEOMETRY_TOLERANCE_PX)
 
   })
 

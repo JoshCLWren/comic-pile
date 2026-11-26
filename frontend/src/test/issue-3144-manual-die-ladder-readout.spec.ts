@@ -68,8 +68,10 @@ test.describe('Decision card die readout with a pinned die (#3144)', () => {
     await openRatingView(page, threadTitle)
 
     const card = page.getByTestId('decision-card')
-    await expect(card).toContainText('Manual mode is active at d20')
-    await expect(card).not.toContainText('→')
+    // #4353 retired the Manual/Auto segments: the live readout shows the
+    // pinned die on both sides of the arrow, so it no longer promises a move.
+    await expect(card).toContainText('d20 → d20')
+    await expect(card).not.toContainText('d20 → d12')
   })
 
   test('automatic mode still reports the ladder move', async ({ authenticatedPage }) => {

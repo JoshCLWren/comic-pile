@@ -27,7 +27,7 @@ const DESTINATIONS = [
   'Roll page',
   'Queue page',
   'History page',
-  'Crossovers page',
+  'Creators page',
   'Reading plans page',
   "What's new page",
   'Glossary page',

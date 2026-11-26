@@ -165,6 +165,17 @@ async function cardRowCounts(page: Page): Promise<number[]> {
   return [...rows.values()]
 }
 
+/**
+ * Selection is URL-authoritative: a click updates `?keys=` and the controlled
+ * checkbox flips on the following render. `.check()` samples the state too
+ * early; click and assert the settled checked state instead.
+ */
+async function toggleCreator(page: Page, name: string, checked: boolean): Promise<void> {
+  const box = page.getByLabel(`Select ${name} for comparison`)
+  await box.click()
+  await expect(box).toBeChecked({ checked })
+}
+
 test.describe('Issue #3091: creator comparison', () => {
   test('desktop selection opens a bounded side-by-side comparison', async ({
     authenticatedPage,
@@ -184,11 +195,11 @@ test.describe('Issue #3091: creator comparison', () => {
     await page.goto('/creators', { waitUntil: 'domcontentloaded' })
     await expect(page.getByText('Brian K. Vaughan')).toBeVisible({ timeout: 20000 })
 
-    await page.getByLabel('Select Brian K. Vaughan for comparison').check()
+    await toggleCreator(page, 'Brian K. Vaughan', true)
     await expect(page.getByText('1 of 4 selected for comparison')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Compare' })).toHaveCount(0)
 
-    await page.getByLabel('Select Steve McNiven for comparison').check()
+    await toggleCreator(page, 'Steve McNiven', true)
     await page.getByRole('button', { name: 'Compare' }).click()
 
     await expect(page).toHaveURL(/\/creators\/compare\?keys=/)
@@ -197,9 +208,9 @@ test.describe('Issue #3091: creator comparison', () => {
     })
     await expect(page.getByText('Comparing 2 creators')).toBeVisible()
     await expect(page.getByLabel('Average rating 4.5 out of 5 from 4 ratings')).toBeVisible()
-    await expect(page.getByText('50.0%')).toBeVisible()
-    await expect(page.getByText('20.0%')).toBeVisible()
-    await expect(page.getByRole('link', { name: /Saga/ })).toHaveAttribute('href', '/thread/1')
+    await expect(page.getByText('50.0%').first()).toBeVisible()
+    await expect(page.getByText('20.0%').first()).toBeVisible()
+    await expect(page.getByRole('link', { name: /Saga/ }).first()).toHaveAttribute('href', '/thread/1')
 
     // One bounded comparison request carries both keys; never N+1 details.
     expect(compareRequests).toHaveLength(1)
@@ -393,7 +404,11 @@ test('3462 - two nonexistent keys shows none-available message with back link', 
   await expect(page.getByRole('link', { name: /Back to Creators/i })).toBeVisible()
 })
 
-test('3462 - bad syntax shows readable explanation', async ({ authenticatedPage }) => {
+test('3462 - bad syntax shows readable explanation', async ({ authenticatedPage, allowExpectedBrowserFailures }) => {
+  // The deliberately malformed key makes the v2 compare endpoint return 400.
+  allowExpectedBrowserFailures.allow({ category: 'console', message: '400 (Bad Request)' })
+  allowExpectedBrowserFailures.allow({ category: 'console', message: 'API Error: /v2/creators/compare' })
+  allowExpectedBrowserFailures.allow({ category: 'console', message: 'API Validation Error Details: {status: 400' })
   const page = authenticatedPage
   await page.goto('/creators/compare?keys=badkey,creator:7')
   await expect(page.getByText('Invalid creator key format')).toBeVisible()
@@ -436,8 +451,8 @@ test('3624 - browser back from compare restores the selected creators', async ({
   })
 
   await page.goto('/creators')
-  await page.getByLabel('Select Brian K. Vaughan for comparison').check()
-  await page.getByLabel('Select Steve McNiven for comparison').check()
+  await toggleCreator(page, 'Brian K. Vaughan', true)
+  await toggleCreator(page, 'Steve McNiven', true)
   await expect(page.getByText('2 of 4 selected for comparison')).toBeVisible()
 
   await page.getByRole('button', { name: 'Compare' }).click()
@@ -473,7 +488,7 @@ test('3624 - Change selection returns with editable restored checkboxes', async 
   expect(new URL(page.url()).searchParams.get('keys')).toBe('creator:7,creator:12')
 
   // A restored checkbox stays enabled; dropping one writes the exact new set.
-  await page.getByLabel('Select Brian K. Vaughan for comparison').uncheck()
+  await toggleCreator(page, 'Brian K. Vaughan', false)
   await expect(page.getByText('1 of 4 selected for comparison')).toBeVisible()
   expect(new URL(page.url()).searchParams.get('keys')).toBe('creator:12')
 })

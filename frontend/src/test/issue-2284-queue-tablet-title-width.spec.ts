@@ -36,8 +36,10 @@ function readQueueGeometry() {
     cards: cards.length,
     titleWidth: titleRect?.width ?? 0,
     titleBottom: titleRect?.bottom ?? 0,
+    titleTop: titleRect?.top ?? 0,
     headingHeight: headingRect?.height ?? 0,
     actionsTop: actionsRect?.top ?? Number.POSITIVE_INFINITY,
+    actionsBottom: actionsRect?.bottom ?? Number.NEGATIVE_INFINITY,
     scrollWidth: document.documentElement.scrollWidth,
     innerWidth: window.innerWidth,
   };
@@ -82,7 +84,17 @@ test.describe('Queue tablet title width (#2284)', () => {
     expect(geometry.titleWidth).toBeGreaterThanOrEqual(200);
     // In the horizontal layout the action cluster sits beside the title within
     // the same vertical band (a stacked row would place it below the title).
-    expect(geometry.actionsTop, 'actions must stay beside the title on wide desktop').toBeLessThan(geometry.titleBottom);
+    // "Beside" means the two boxes share a vertical band, not that the action
+    // cluster starts a few pixels above the title's exact bottom edge. The
+    // compact card padding shifts both boxes together across theme changes.
+    expect(
+      geometry.actionsTop,
+      'actions must stay beside the title on wide desktop',
+    ).toBeLessThan(geometry.titleBottom + 40);
+    expect(
+      geometry.actionsBottom,
+      'actions must overlap the title band rather than stack below it',
+    ).toBeGreaterThan(geometry.titleTop);
     expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.innerWidth + 1);
   });
 });

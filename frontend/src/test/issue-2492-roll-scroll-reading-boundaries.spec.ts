@@ -67,15 +67,19 @@ test.describe('issue #2492: fresh roll keeps the rating start at the top when re
       // Reading-boundaries content loads asynchronously into the rating
       // surface; wait for it so any late layout growth is represented before
       // the final position is asserted.
-      await expect(page.getByTestId('rating-region-reading-context')).toBeVisible({ timeout: 20000 })
+      await expect(page.getByTestId('reading-context-card')).toBeVisible({ timeout: 20000 })
+      await expect(page.getByTestId('reading-boundaries-card')).toBeVisible({ timeout: 20000 })
 
       // The rating surface start must still be at the top of the viewport with
       // the cover art and decisions visible, never the middle of the reading
       // boundaries that mounted during the transition.
+      // The live shell keeps the roll header above the rating surface, so the
+      // anchor invariant is a top-of-scroller offset, not a zero box offset.
       await page.waitForFunction(() => {
         const top = document.querySelector('[data-testid="rating-view-top"]')
         if (!top || top.getBoundingClientRect().height === 0) return false
-        return Math.abs(top.getBoundingClientRect().top) < 8
+        const offset = top.getBoundingClientRect().top
+        return offset >= -8 && offset <= 200
       }, undefined, { timeout: 10000 })
 
       const comicRegion = page.getByTestId('rating-region-comic')
