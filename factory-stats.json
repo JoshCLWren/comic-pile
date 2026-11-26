@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-26T02:18:15+00:00",
+  "generated_at": "2026-11-26T02:19:29+00:00",
   "models": [
     {
       "health": {
@@ -23791,7 +23791,7 @@
   },
   "counts_generated_at": "2026-11-26T02:00:46.472528+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-26T02:18:16Z",
+    "generated_at": "2026-11-26T02:19:29Z",
     "sources": {
       "nvidia": [
         "google/diffusiongemma-26b-a4b-it",
@@ -23810,8 +23810,8 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-26T02:18:16.772880+00:00",
-    "days_elapsed": 25.096,
+    "checked_at": "2026-11-26T02:19:29.892229+00:00",
+    "days_elapsed": 25.097,
     "days_in_month": 30.0,
     "days_left": 4.9,
     "in_use": true,
@@ -23832,8 +23832,8 @@
         "database": 27429672,
         "organization": 27429672,
         "owner_target": 50000000,
-        "projected_database": 32789694,
-        "projected_organization": 32789694,
+        "projected_database": 32788387,
+        "projected_organization": 32788387,
         "projected_share": 0.0656,
         "share_used": 0.0549
       },
@@ -23842,8 +23842,8 @@
         "database": 142204,
         "organization": 142204,
         "owner_target": 1000000,
-        "projected_database": 169992,
-        "projected_organization": 169992,
+        "projected_database": 169985,
+        "projected_organization": 169985,
         "projected_share": 0.017,
         "share_used": 0.0142
       },
@@ -23867,7 +23867,7 @@
     "status": "ok"
   },
   "schema": {
-    "checked_at": "2026-11-26T02:18:20+00:00",
+    "checked_at": "2026-11-26T02:19:32+00:00",
     "code_version": 6,
     "last_upgrade": {
       "at": "2026-11-25T18:11:07+00:00",
@@ -24045,7 +24045,7 @@
     "stored_version": 6
   },
   "crashes": {
-    "generated_at": "2026-11-26T02:18:20Z",
+    "generated_at": "2026-11-26T02:19:32Z",
     "groups": [
       {
         "count": 1,
@@ -24095,7 +24095,7 @@
   },
   "ready": {
     "cycles": [],
-    "generated_at": "2026-11-26T02:17:05+00:00",
+    "generated_at": "2026-11-26T02:18:37+00:00",
     "items": [
       {
         "action": "merge-conflict",
@@ -24190,48 +24190,9 @@
     ]
   },
   "gh_usage": {
-    "generated_at": "2026-11-26T02:18:21Z",
+    "generated_at": "2026-11-26T02:19:33Z",
     "jobs": {
       "dispatch": [
-        {
-          "at": 1795658111,
-          "buckets": {
-            "reader": 13,
-            "workflow": 5
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 3808,
-            "reset": 1795659127
-          },
-          "cache_hits": 0,
-          "github": 18,
-          "label": "dispatch pr:5801",
-          "paginated": 4,
-          "top": [
-            [
-              "api GET repos/R/issues/N",
-              4
-            ],
-            [
-              "api GET repos/R/issues",
-              2
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ],
-            [
-              "api GET repos/R/pulls",
-              1
-            ],
-            [
-              "api GET repos/R/actions/runs",
-              1
-            ]
-          ],
-          "writes": 0
-        },
         {
           "at": 1795658239,
           "buckets": {
@@ -24660,48 +24621,48 @@
             ]
           ],
           "writes": 3
-        }
-      ],
-      "merge": [
+        },
         {
-          "at": 1795657962,
+          "at": 1795659518,
           "buckets": {
-            "reader": 16,
-            "workflow": 6
+            "reader": 42,
+            "workflow": 14
           },
           "budget": {
             "limit": 5000,
-            "remaining": 3915,
-            "reset": 1795659127
+            "remaining": 4687,
+            "reset": 1795662728
           },
           "cache_hits": 0,
-          "github": 22,
-          "label": "merge drain",
-          "paginated": 14,
+          "github": 56,
+          "label": "dispatch roster",
+          "paginated": 9,
           "top": [
             [
-              "api GET repos/R/issues/N/comments paginate",
-              10
-            ],
-            [
-              "api GET repos/R/pulls paginate",
-              3
+              "api GET repos/R/pulls/N",
+              13
             ],
             [
               "api GET repos/R/issues",
+              8
+            ],
+            [
+              "api GET rate_limit",
+              5
+            ],
+            [
+              "api GET repos/R/issues/N",
+              4
+            ],
+            [
+              "gh pr list",
               2
-            ],
-            [
-              "api GET repos/R/pulls",
-              1
-            ],
-            [
-              "api GET repos/R/actions/runs",
-              1
             ]
           ],
-          "writes": 0
-        },
+          "writes": 2
+        }
+      ],
+      "merge": [
         {
           "at": 1795658098,
           "buckets": {
@@ -25130,6 +25091,45 @@
             ]
           ],
           "writes": 0
+        },
+        {
+          "at": 1795659558,
+          "buckets": {
+            "reader": 18,
+            "workflow": 18
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 4628,
+            "reset": 1795662728
+          },
+          "cache_hits": 0,
+          "github": 36,
+          "label": "merge drain",
+          "paginated": 14,
+          "top": [
+            [
+              "api POST repos/R/actions/runs/N/approve",
+              12
+            ],
+            [
+              "api GET repos/R/issues/N/comments paginate",
+              10
+            ],
+            [
+              "api GET repos/R/pulls paginate",
+              3
+            ],
+            [
+              "api GET repos/R/issues",
+              2
+            ],
+            [
+              "api GET repos/R/actions/workflows/ci.yml/runs",
+              2
+            ]
+          ],
+          "writes": 12
         }
       ]
     }
