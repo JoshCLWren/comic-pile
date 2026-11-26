@@ -95,13 +95,6 @@ async function failUntilHealthy(page: Page, pathname: string): Promise<() => voi
 }
 
 /**
- * Recover without a forced reload.
- *
- * The Retry click is best-effort: a scheduled retry can win the race and boot
- * the app on its own, which satisfies the same contract. The response wait and
- * the final assertions are what prove the transition happened.
- */
-/**
  * Assert the bounded, recoverable state without pinning one transient copy.
  *
  * The first failure replaces the bare splash with progress copy and Retry. If
@@ -120,6 +113,13 @@ async function expectBoundedRecovery(page: Page): Promise<void> {
   ).toBeVisible()
 }
 
+/**
+ * Recover without a forced reload.
+ *
+ * The Retry click is best-effort: a scheduled retry can win the race and boot
+ * the app on its own, which satisfies the same contract. The response wait and
+ * the final assertions are what prove the transition happened.
+ */
 async function recoverInPlace(page: Page, pathname: string): Promise<void> {
   const recovered = page.waitForResponse(
     (response) => response.url().includes(pathname) && response.status() === 200,
