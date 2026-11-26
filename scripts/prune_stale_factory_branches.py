@@ -534,13 +534,10 @@ def fetch_issue_retired(repo: str, issue_number: int) -> bool:
     retired attempt must never be deleted, and an unreadable comment list must
     not be treated as "not retired".
     """
-    proc = run([
+    proc = run_gh_api([
         "gh", "api", f"repos/{repo}/issues/{issue_number}/comments?per_page=100",
         "--paginate", "--slurp",
-    ], check=False)
-    if proc.returncode != 0:
-        detail = (proc.stderr or proc.stdout or "").strip()
-        raise RuntimeError(f"unable to read comments for issue #{issue_number}: {detail}")
+    ], label=f"unable to read comments for issue #{issue_number}")
     try:
         pages = json.loads(proc.stdout or "[]")
     except json.JSONDecodeError as exc:
@@ -909,6 +906,68 @@ def decide_branches(
     ]
 
 
+def apply_batch(
+    decisions: Sequence[Decision], max_deletions: int
+) -> tuple[list[Decision], list[Decision]]:
+    """Split eligible decisions into this run's batch and deferred refs.
+
+    Args:
+        decisions: All evaluated branch decisions.
+        max_deletions: Maximum number of refs this run may delete.
+
+    Returns:
+        Tuple of the bounded deletion batch and eligible refs deferred to a
+        later run.
+    """
+    eligible = [d for d in decisions if d.eligible]
+    limit = max(1, max_deletions)
+    return eligible[:limit], eligible[limit:]
+
+
+def build_execution_summary(
+    decisions: Sequence[Decision],
+    *,
+    mode: str,
+    deleted: Sequence[str],
+    deferred: Sequence[str],
+    failures: Sequence[str],
+    branch_count_before: int,
+) -> dict[str, object]:
+    """Build a machine-readable summary for the first and later safe runs.
+
+    Args:
+        decisions: Decisions produced for this run.
+        mode: ``apply`` or ``dry-run``.
+        deleted: Branch names actually deleted in this run.
+        deferred: Eligible branch names left for a later bounded run.
+        failures: Deletion attempts that failed.
+        branch_count_before: Remote branch count observed before deletion.
+
+    Returns:
+        Mapping with before/after counts and protection evidence for active
+        leases and open PRs.
+    """
+    skipped = [d for d in decisions if not d.eligible]
+    return {
+        "mode": mode,
+        "branch_count_before": branch_count_before,
+        "branch_count_after": branch_count_before - len(deleted),
+        "deleted_count": len(deleted),
+        "deleted_refs": list(deleted),
+        "deferred_count": len(deferred),
+        "deferred_refs": list(deferred),
+        "failure_count": len(failures),
+        "failures": list(failures),
+        "skipped_count": len(skipped),
+        "protected_by_active_lease": [
+            d.branch for d in skipped if any("lease" in reason for reason in d.reasons)
+        ],
+        "protected_by_open_pr": [
+            d.branch for d in skipped if "open PR exists" in d.reasons
+        ],
+    }
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the command-line argument parser.
 
@@ -918,11 +977,24 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--repo", help="GitHub repo (owner/name) for PR/issue/protection lookups")
     p.add_argument("--remote", default="origin", help="Git remote to inspect (default: origin)")
-    p.add_argument("--age-days", type=int, default=DEFAULT_AGE_DAYS, help="Minimum age in days (default: 14)")
-    p.add_argument("--apply", action="store_true", help="Delete eligible remote branches (default: dry-run)")
+    p.add_argument(
+        "--age-days", type=int, default=DEFAULT_AGE_DAYS,
+        help="Minimum age in days (default: 14)",
+    )
+    p.add_argument(
+        "--apply", action="store_true",
+        help="Delete a bounded batch of eligible remote branches (default: dry-run)",
+    )
+    p.add_argument(
+        "--max-deletions", type=int, default=DEFAULT_MAX_DELETIONS,
+        help="Maximum refs to delete per apply run (default: 20)",
+    )
     p.add_argument("--format", choices=("text", "json"), default="text", help="Report format")
     p.add_argument("--report-file", help="Write report output to this file")
-    p.add_argument("--all-branches", action="store_true", help="Evaluate all remote branches, not just factory/local/backup scope")
+    p.add_argument(
+        "--all-branches", action="store_true",
+        help="Evaluate all remote branches, not just factory/local/backup scope",
+    )
     return p
 
 
@@ -968,7 +1040,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"error: unable to refresh remote refs: {fetch_proc.stderr.strip() or fetch_proc.stdout.strip()}"
         )
 
-    branches = list_remote_branches(repo_root, remote)
+    all_branches = list_remote_branches(repo_root, remote)
+    branches = list(all_branches)
     if not args.all_branches:
         branches = [b for b in branches if is_stale_scope_branch(b.name)]
 
@@ -1011,45 +1084,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
 
     mode = "apply" if args.apply else "dry-run"
-    if args.format == "json":
-        payload = {
-            "mode": mode,
-            "generated_at": now.isoformat(),
-            "remote": remote,
-            "age_days": args.age_days,
-            "decisions": [
-                {
-                    "branch": d.branch,
-                    "sha": d.sha,
-                    "action": d.action,
-                    "eligible": d.eligible,
-                    "reasons": list(d.reasons),
-                    "category": d.category,
-                    "age_days": d.age_days,
-                    "merged": d.merged,
-                    "open_pr": d.open_pr,
-                    "linked_issue": d.linked_issue,
-                }
-                for d in decisions
-            ],
-        }
-        report = json.dumps(payload, indent=2, sort_keys=True) + "\n"
-    else:
-        report = render_report(decisions, mode=mode, now=now, remote=remote, age_days=args.age_days)
-
-    if args.report_file:
-        report_path = Path(args.report_file)
-        report_path.parent.mkdir(parents=True, exist_ok=True)
-        report_path.write_text(report, encoding="utf-8")
-
-    sys.stdout.write(report)
-
-    deleted = 0
+    deleted: list[str] = []
+    deferred: list[str] = []
     failures: list[str] = []
     if args.apply:
-        for decision in decisions:
-            if not decision.eligible:
-                continue
+        batch, deferred_decisions = apply_batch(decisions, args.max_deletions)
+        deferred = [d.branch for d in deferred_decisions]
+        for decision in batch:
             try:
                 # Refresh remote-tracking refs and all safety checks immediately
                 # before deletion so protections that appeared during the
@@ -1114,14 +1155,75 @@ def main(argv: Sequence[str] | None = None) -> int:
                 delete_remote_branch(
                     repo_root, remote, decision.branch, fresh_decision.sha
                 )
-                deleted += 1
+                deleted.append(decision.branch)
                 print(f"DELETED {remote}/{decision.branch}", file=sys.stderr)
             except Exception as exc:
                 failures.append(f"{decision.branch}: {exc}")
                 print(f"FAILED {decision.branch}: {exc}", file=sys.stderr)
+        for branch_name in deferred:
+            print(
+                f"DEFERRED {branch_name}: bounded batch of {args.max_deletions} "
+                "is complete; a later run will re-evaluate this ref",
+                file=sys.stderr,
+            )
+
+    # The summary proves a first safe run actually reduced the branch count and
+    # records that active leases/open PRs were protected rather than deleted.
+    summary = build_execution_summary(
+        decisions,
+        mode=mode,
+        deleted=deleted,
+        deferred=deferred,
+        failures=failures,
+        branch_count_before=len(all_branches),
+    )
+    if args.format == "json":
+        payload = {
+            "mode": mode,
+            "generated_at": now.isoformat(),
+            "remote": remote,
+            "age_days": args.age_days,
+            "summary": summary,
+            "decisions": [
+                {
+                    "branch": d.branch,
+                    "sha": d.sha,
+                    "action": d.action,
+                    "eligible": d.eligible,
+                    "reasons": list(d.reasons),
+                    "category": d.category,
+                    "age_days": d.age_days,
+                    "merged": d.merged,
+                    "open_pr": d.open_pr,
+                    "linked_issue": d.linked_issue,
+                }
+                for d in decisions
+            ],
+        }
+        report = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    else:
+        report = render_report(decisions, mode=mode, now=now, remote=remote, age_days=args.age_days)
+        report += "\n## Execution summary\n"
+        report += f"- Mode: {mode}\n"
+        report += f"- Branches before: {summary['branch_count_before']}\n"
+        report += f"- Branches after: {summary['branch_count_after']}\n"
+        report += f"- Deleted: {summary['deleted_count']}\n"
+        report += f"- Deferred to later runs: {summary['deferred_count']}\n"
+        report += f"- Failures: {summary['failure_count']}\n"
+
+    if args.report_file:
+        report_path = Path(args.report_file)
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(report, encoding="utf-8")
+
+    sys.stdout.write(report)
 
     if args.apply:
-        print(f"Applied deletions: {deleted}; failures: {len(failures)}", file=sys.stderr)
+        print(
+            f"Applied deletions: {len(deleted)}; failures: {len(failures)}; "
+            f"deferred: {len(deferred)}",
+            file=sys.stderr,
+        )
     return 1 if failures else 0
 
 
