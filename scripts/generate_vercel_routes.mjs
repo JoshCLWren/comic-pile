@@ -6,7 +6,11 @@
  */
 import {readFileSync, readdirSync, writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
-import {assertSingleNativeIngress, withCanonicalBuilds} from './vercel_builds.mjs';
+import {
+  assertSingleNativeIngress,
+  canonicalNativeDest,
+  withCanonicalBuilds,
+} from './vercel_builds.mjs';
 import {slimNativeRollRoutes} from './vercel_slim_routes.mjs';
 
 const RUST = '/api/native_roll.rs';
@@ -91,14 +95,14 @@ export function fragmentVercelRoutes(fragments, previousRoutes = []) {
       const effective = {...defaults, ...rawOperation};
       const method = effective.method;
       const path = effective.path;
-      let dest = effective.dest;
+      let dest = canonicalNativeDest(effective.dest);
       let src = effective.src;
       const previous = findPreviousRoute(method, path, previousRoutes);
       if (!dest) {
         if (!previous || !previous.dest) {
           throw new Error(`${method} ${path} needs dest; previous vercel.json has no matching route`);
         }
-        dest = previous.dest;
+        dest = canonicalNativeDest(previous.dest);
       }
       if (!src) {
         // The catch-all is never a fragment's own ingress src (slim vercel.json
@@ -154,11 +158,23 @@ export function generateVercel(config, fragments) {
     throw new Error('Cannot generate without route fragments');
   }
   const {crons, retiredRewriteSrcs} = fragmentVercelConfig(fragments);
+  // Normalize native destinations once at the input boundary. The legacy and
+  // future entrypoint spellings are one ingress, and unchanged routes keep
+  // their identity so regeneration stays byte-identical for current fragments.
+  const inputConfig = {
+    ...config,
+    routes: config.routes.map(route => {
+      const dest = canonicalNativeDest(route.dest);
+      return dest === route.dest ? route : {...route, dest};
+    }),
+  };
   // An explicit fragment declaration is authoritative. Fragments that do not
   // own crons keep the previous document's list, so unrelated cron cleanup is
   // never an accidental side effect of route regeneration.
-  const nextCrons = crons.length ? crons : config.crons;
-  const previousRoutes = config.routes.filter(route => !retiredRewriteSrcs.has(route.src));
+  const nextCrons = crons.length ? crons : inputConfig.crons;
+  const previousRoutes = inputConfig.routes.filter(
+    route => !retiredRewriteSrcs.has(route.src),
+  );
   const native = previousRoutes.filter(
     route => NATIVE.has(route.dest) && route.src !== FALLBACK,
   );
