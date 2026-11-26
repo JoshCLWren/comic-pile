@@ -12,36 +12,6 @@ import {pathToFileURL} from 'node:url';
 
 export const PYTHON_BUILD_SRC = 'api/index.py';
 
-export const RETIRED_ISSUE_BUILD_SRC = 'api/native_issue.rs';
-export const RETIRED_ISSUE_DEST = '/api/native_issue.rs';
-export const RETIRED_ISSUE_HEALTH_SRC = '/api/_native_issue/health';
-
-/** Consolidate the retired second Rust function (#5733). The generators
- * preserve baseline natives and `builds` verbatim, so this removes the
- * `api/native_issue.rs` build and every route that targets it (the internal
- * health probe and the two Issue ingress routes). The catch-all already
- * sends those requests to `api/native_roll.rs`, so dropping the routes keeps
- * the output identical to what the generators emit and keeps `--check`
- * stable. Idempotent.
- */
-export function withoutRetiredIssueFunction(document) {
-  const hasBuild = Array.isArray(document.builds)
-    && document.builds.some(build => build.src === RETIRED_ISSUE_BUILD_SRC);
-  const hasRoutes = Array.isArray(document.routes)
-    && document.routes.some(route => route.dest === RETIRED_ISSUE_DEST
-      || route.src === RETIRED_ISSUE_HEALTH_SRC);
-  if (!hasBuild && !hasRoutes) return document;
-  const result = {...document};
-  if (hasBuild) {
-    result.builds = document.builds.filter(build => build.src !== RETIRED_ISSUE_BUILD_SRC);
-  }
-  if (hasRoutes) {
-    result.routes = document.routes.filter(route => route.dest !== RETIRED_ISSUE_DEST
-      && route.src !== RETIRED_ISSUE_HEALTH_SRC);
-  }
-  return result;
-}
-
 export function withoutPythonBuild(document) {
   if (!Array.isArray(document.builds)) return document;
   const builds = document.builds.filter(build => build.src !== PYTHON_BUILD_SRC);
@@ -51,12 +21,12 @@ export function withoutPythonBuild(document) {
 
 export function main(path = 'vercel.json') {
   const original = readFileSync(path, 'utf8');
-  const updated = JSON.stringify(withoutRetiredIssueFunction(withoutPythonBuild(JSON.parse(original))), null, 2) + '\n';
+  const updated = JSON.stringify(withoutPythonBuild(JSON.parse(original)), null, 2) + '\n';
   if (updated !== original) {
     writeFileSync(path, updated, 'utf8');
-    console.log(`Removed retired function builds/routes from ${path}`);
+    console.log(`Removed retired Python build from ${path}`);
   } else {
-    console.log(`No retired function builds in ${path}`);
+    console.log(`No retired Python build in ${path}`);
   }
   return 0;
 }

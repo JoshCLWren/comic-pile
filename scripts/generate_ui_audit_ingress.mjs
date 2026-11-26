@@ -8,8 +8,7 @@
 import {readFileSync, writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
 
-// Any native Rust function destination: the retired native_issue.rs build is
-// still present in vercel.json until the generated-artifact strip step runs.
+// Any native Rust function destination.
 const RUST = {has: dest => /^\/api\/native_[a-z]+\.rs$/.test(dest)};
 // main's bot-owned vercel.json can still carry stale Python exceptions until
 // regenerate-routes.yml lands; they must be exercised as Rust 404s now.
