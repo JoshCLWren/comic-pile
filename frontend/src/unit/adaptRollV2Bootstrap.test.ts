@@ -83,6 +83,7 @@ describe('native v2 Roll bootstrap compatibility', () => {
   })
 
   it('passes the pending issue alias and provider number into Roll state (#4652)', () => {
+    // SAFETY: The fixture is a complete RollV2BootstrapResponse, including the alias/provider fields under test.
     const state = adaptRollV2Bootstrap({
       ...sample,
       active_thread: {
