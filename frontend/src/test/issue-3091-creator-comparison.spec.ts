@@ -210,7 +210,7 @@ test.describe('Issue #3091: creator comparison', () => {
     await expect(page.getByLabel('Average rating 4.5 out of 5 from 4 ratings')).toBeVisible()
     await expect(page.getByText('50.0%').first()).toBeVisible()
     await expect(page.getByText('20.0%').first()).toBeVisible()
-    await expect(page.getByRole('link', { name: /Saga/ })).toHaveAttribute('href', '/thread/1')
+    await expect(page.getByRole('link', { name: /Saga/ }).first()).toHaveAttribute('href', '/thread/1')
 
     // One bounded comparison request carries both keys; never N+1 details.
     expect(compareRequests).toHaveLength(1)
@@ -408,6 +408,7 @@ test('3462 - bad syntax shows readable explanation', async ({ authenticatedPage,
   // The deliberately malformed key makes the v2 compare endpoint return 400.
   allowExpectedBrowserFailures.allow({ category: 'console', message: '400 (Bad Request)' })
   allowExpectedBrowserFailures.allow({ category: 'console', message: 'API Error: /v2/creators/compare' })
+  allowExpectedBrowserFailures.allow({ category: 'console', message: 'API Validation Error Details: {status: 400' })
   const page = authenticatedPage
   await page.goto('/creators/compare?keys=badkey,creator:7')
   await expect(page.getByText('Invalid creator key format')).toBeVisible()

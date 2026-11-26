@@ -130,6 +130,19 @@ test.describe('Issue #2544: Roll Page Back Button', () => {
     await page.route('**/v2/issues/*/comicvine', (route) =>
       route.fulfill({ json: issueIntelligence }),
     )
+    await page.route('**/v2/comicvine/issues/*/identity', (route) =>
+      route.fulfill({
+        json: {
+          issue_id: 1,
+          thread_id: 1,
+          thread_title: 'Back Button Thread',
+          has_confirmed_identity: true,
+          confirmed_mappings: [],
+          candidate_mappings: [],
+          has_unresolved: false,
+        },
+      }),
+    )
     await page.route('**/v2/creators/*', (route) =>
       route.fulfill({ json: creatorDetailPayload() }),
     )
