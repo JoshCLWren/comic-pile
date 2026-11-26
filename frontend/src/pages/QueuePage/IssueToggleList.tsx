@@ -829,7 +829,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     setDraggedIssueId(null)
     setDragOverIssueId(null)
 
-    enqueueIssueReorder(nextIssues)
+    void previewStructuralEdit({ type: 'reorder', nextIssues })
   }
 
   const handleDragEnd = () => {
@@ -844,18 +844,12 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   function handleConfirmDelete() {
     if (!deleteDialogIssue) return
 
-    setActionError(null)
-    enqueueIssueMutation({
-      type: 'delete',
-      issueId: deleteDialogIssue.id,
-    })
-    // Confirming is the destructive action, so close right away. The pill is
-    // already removed optimistically and a failed delete is restored by the
-    // refetch in `processIssueMutations` with its message in the inline action
-    // error. Holding the dialog open until the delete settles would also trap
-    // focus: inside the Edit Series dialog the delete is a draft that only
-    // flushes on Save Changes (#3267), which a modal on top would block.
+    const issueId = deleteDialogIssue.id
+    // Close the destructive dialog before opening the preview: stacking two
+    // modals would trap focus inside the Edit Series dialog (#3267). The delete
+    // is queued only after the reader confirms the projected before/after rows.
     setDeleteDialogIssue(null)
+    void previewStructuralEdit({ type: 'delete', issueId })
   }
 
   function handleCancelDelete() {
@@ -864,15 +858,21 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
 
   function handleMoveIssue(issue: Issue, direction: 'up' | 'down') {
     const nextIssues = moveIssueByStep(issues, issue.id, direction)
-    const didReorder = enqueueIssueReorder(nextIssues, {
-      announcement: `Moved issue #${issue.issue_number} ${direction}.`,
-      focusTarget: { issueId: issue.id, direction },
-    })
+    const didReorder = nextIssues.some(
+      (candidate, index) => candidate.id !== issues[index]?.id,
+    )
 
     if (!didReorder) {
       focusMoveControl(issue.id, direction)
       return
     }
+
+    void previewStructuralEdit({
+      type: 'reorder',
+      nextIssues,
+      announcement: `Moved issue #${issue.issue_number} ${direction}.`,
+      focusTarget: { issueId: issue.id, direction },
+    })
 
     if (!isExpanded && !isReorderMode) {
       const nextUnreadId = nextIssues.find((i) => i.status === 'unread')?.id ?? null
@@ -1455,6 +1455,88 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
                 data-testid="confirm-preview-add"
               >
                 Add issues
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+      {structurePreview && (
+        <Modal
+          isOpen
+          title={structurePreview.edit.type === 'delete' ? 'Preview issue removal' : 'Preview issue reorder'}
+          onClose={() => setStructurePreview(null)}
+          data-testid="edit-series-structure-preview-modal"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-[var(--theme-text-muted)]">
+              {structurePreview.edit.type === 'delete'
+                ? 'Removing an issue from'
+                : 'Reordering issues in'}{' '}
+              <span className="font-bold text-[var(--theme-text-primary)]">
+                {structurePreview.response.thread_title}
+              </span>
+              . Review the exact before/after order and affected issues before saving.
+            </p>
+
+            {!structurePreview.response.default_outcome.can_commit && (
+              <div className="rounded-lg border border-[var(--theme-danger)] p-3 text-xs text-[var(--theme-danger)]" role="alert" data-testid="structure-preview-conflict">
+                {structurePreview.response.default_outcome.conflict_message
+                  ?? 'This change would create a reading-graph cycle.'}
+              </div>
+            )}
+            {structurePreview.response.default_outcome.graph.cycles.length > 0 && (
+              <div className="space-y-1 text-xs text-stone-400" data-testid="structure-preview-cycle-path">
+                {structurePreview.response.default_outcome.graph.cycles.map((cycle, idx) => (
+                  <div key={idx}>
+                    {cycle.edges.map((edge, i) => (
+                      <span key={i}>
+                        {i > 0 ? ' -> ' : ''}{edge.source.series_title} #{edge.source.issue_number}
+                        {i === cycle.edges.length - 1
+                          ? ` -> ${edge.target.series_title} #${edge.target.issue_number}`
+                          : ''}
+                      </span>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2" data-testid="structure-preview-before-after">
+              <div>
+                <div className="font-bold text-stone-400 mb-1">Before</div>
+                <div className="max-h-40 overflow-auto rounded-lg border border-white/10 p-2 space-y-1">
+                  {structurePreview.response.default_outcome.before.map((item, idx) => (
+                    <PreviewIssueRow key={`${item.issue_id}-${item.issue_number}-${idx}`} item={item} />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="font-bold text-stone-400 mb-1">After</div>
+                <div className="max-h-40 overflow-auto rounded-lg border border-white/10 p-2 space-y-1">
+                  {structurePreview.response.default_outcome.after.map((item, idx) => (
+                    <PreviewIssueRow key={`${item.issue_id ?? 'new'}-${item.issue_number}-${idx}`} item={item} />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setStructurePreview(null)}
+                className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
+                data-testid="cancel-structure-preview"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmStructurePreview}
+                disabled={!structurePreview.response.default_outcome.can_commit || isPreviewingStructure}
+                className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-xs font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60 transition-colors"
+                data-testid="confirm-structure-preview"
+              >
+                {structurePreview.edit.type === 'delete' ? 'Remove issue' : 'Reorder issues'}
               </button>
             </div>
           </div>
