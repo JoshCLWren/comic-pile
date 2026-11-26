@@ -49,6 +49,8 @@ pub struct IssueDetailResponse {
     pub id: i32,
     pub thread_id: i32,
     pub issue_number: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issue_number_alias: Option<String>,
     pub position: i32,
     pub status: String,
     pub read_at: Option<String>,
@@ -80,7 +82,7 @@ pub struct ThreadIssueDependenciesResponse {
     pub issues: Vec<IssueDependenciesResponse>,
 }
 
-const DETAIL_SQL: &str = "SELECT i.id, i.thread_id, i.issue_number, i.position, i.status, to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'), to_char(i.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = $1 AND t.user_id = $2 AND i.merged_into_issue_id IS NULL";
+const DETAIL_SQL: &str = "SELECT i.id, i.thread_id, i.issue_number, i.position, i.status, to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'), to_char(i.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'), NULLIF(BTRIM(i.issue_number_alias), '') FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = $1 AND t.user_id = $2 AND i.merged_into_issue_id IS NULL";
 
 const OWNED_SQL: &str = "SELECT i.id FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = $1 AND t.user_id = $2 AND i.merged_into_issue_id IS NULL";
 
@@ -121,6 +123,7 @@ pub async fn get_issue(
         status: row.get(4),
         read_at: row.get(5),
         created_at: row.get(6),
+        issue_number_alias: row.get(7),
     }))
 }
 
