@@ -78,6 +78,13 @@ test.describe('issue #2492: fresh roll keeps the rating start at the top when re
         return Math.abs(top.getBoundingClientRect().top) < 8
       }, undefined, { timeout: 10000 })
 
+      // The production scroller is `#root`, not the window; the fresh-roll
+      // anchor must leave the real scroller at the top alongside the visual
+      // anchor, and any late optional-content layout growth must have settled
+      // before the final scroll position is asserted.
+      const settledScroll = await readAppScrollState(page)
+      expect(settledScroll.rootScrollTop).toBeLessThanOrEqual(8)
+
       const comicRegion = page.getByTestId('rating-region-comic')
       await expect(comicRegion).toBeVisible()
       const comicBox = await comicRegion.boundingBox()
