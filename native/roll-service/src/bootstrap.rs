@@ -142,6 +142,10 @@ pub struct BootstrapActiveThread {
     pub tags: Vec<BootstrapTag>,
     pub issue_id: Option<i32>,
     pub issue_number: Option<String>,
+    /// Alternate overall/story number for the same physical comic (#4652).
+    pub issue_number_alias: Option<String>,
+    /// Provider's own issue number, only from a confirmed identity (#4652).
+    pub provider_issue_number: Option<String>,
     pub next_issue_id: Option<i32>,
     pub next_issue_number: Option<String>,
 }
