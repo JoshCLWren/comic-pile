@@ -34,6 +34,7 @@ async function selectedTitleGeometry(page: Page) {
       scrollWidth: el.scrollWidth,
       clientHeight: el.clientHeight,
       scrollHeight: el.scrollHeight,
+      lineHeight: styles.lineHeight,
       overflowX: styles.overflowX,
       overflowY: styles.overflowY,
       textOverflow: styles.textOverflow,

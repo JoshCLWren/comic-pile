@@ -22,7 +22,7 @@
  * - the username and Log Out control remain contained in the sidebar footer;
  * - mobile navigation/theme behavior is unchanged.
  */
-import { expect } from '@playwright/test'
+import { expect, type Locator } from '@playwright/test'
 import { test } from './fixtures'
 
 // The desktop sidebar expands to `w-72` (288px) at the `md` breakpoint
@@ -33,6 +33,21 @@ const NARROW_DESKTOP_VIEWPORT = { width: 768, height: 1024 }
 const MOBILE_VIEWPORT = { width: 390, height: 844 }
 
 type Box = { x: number; y: number; width: number; height: number }
+
+/**
+ * The expanded sidebar animates `w-16 -> w-72` over 200ms (issue #2285).
+ * Measuring immediately after the Expand click samples a mid-transition box:
+ * the parent is still narrow while its children have begun moving to their
+ * expanded positions, which looks exactly like an escape from the container.
+ * Wait for the settled 288px expanded width before asserting geometry.
+ */
+async function waitForExpandedSidebar(desktopNav: Locator): Promise<void> {
+  await expect
+    .poll(async () => (await desktopNav.boundingBox())?.width ?? 0, {
+      message: 'expanded sidebar must finish its width transition before geometry is measured',
+    })
+    .toBeGreaterThanOrEqual(280)
+}
 
 function containedBy(box: Box, container: Box, epsilon = 0.5): boolean {
   return (
@@ -58,6 +73,7 @@ test.describe('Desktop sidebar theme selector containment (#1941)', () => {
     await expect(toggle).toBeVisible()
     await toggle.click()
     await expect(desktopNav.getByRole('button', { name: 'Collapse navigation' })).toBeVisible()
+    await waitForExpandedSidebar(desktopNav)
 
     const group = desktopNav.getByRole('group', { name: 'Appearance' })
     await expect(group).toBeVisible()
@@ -69,7 +85,6 @@ test.describe('Desktop sidebar theme selector containment (#1941)', () => {
       const option = desktopNav.getByRole('button', { name: label, exact: true })
       await expect(option, `${label} must be visible`).toBeVisible()
       const box = await option.boundingBox()
-      console.log('DEBUG1941 option', label, JSON.stringify(box), 'group', JSON.stringify(groupBox))
       expect(box, `${label} must have a rendered bounding box`).not.toBeNull()
       expect(
         // SAFETY: the assertions above prove both bounding boxes rendered before this check
@@ -93,6 +108,7 @@ test.describe('Desktop sidebar theme selector containment (#1941)', () => {
     await expect(toggle).toBeVisible()
     await toggle.click()
     await expect(desktopNav.getByRole('button', { name: 'Collapse navigation' })).toBeVisible()
+    await waitForExpandedSidebar(desktopNav)
 
     const navBox = await desktopNav.boundingBox()
     expect(navBox, 'desktop navigation must have a rendered bounding box').not.toBeNull()
@@ -100,7 +116,6 @@ test.describe('Desktop sidebar theme selector containment (#1941)', () => {
     const logout = desktopNav.getByRole('button', { name: 'Log out' })
     await expect(logout).toBeVisible()
     const logoutBox = await logout.boundingBox()
-    console.log('DEBUG1941 logout', JSON.stringify(logoutBox), 'nav', JSON.stringify(navBox))
     expect(
       // SAFETY: the assertions above prove both bounding boxes rendered before this check
       containedBy(logoutBox as Box, navBox as Box, 1),
