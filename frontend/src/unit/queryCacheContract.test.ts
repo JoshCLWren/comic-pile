@@ -60,23 +60,11 @@ describe('canonical query keys', () => {
 
     expect(queryKeys.session.all).toEqual(['session'])
     expect(queryKeys.session.current()).toEqual(['session', 'current'])
-    expect(queryKeys.session.pages()).toEqual(['session', 'pages'])
-    expect(queryKeys.session.list()).toEqual(['session', 'pages', {}])
-    expect(queryKeys.session.list({ params: { status: 'done' } })).toEqual([
-      'session',
-      'pages',
-      { status: 'done' },
-    ])
-    expect(queryKeys.session.page({ pageSize: 20 })).toEqual([
-      'session',
-      'pages',
-      { pageToken: null, pageSize: 20 },
-    ])
-    expect(queryKeys.session.page({ pageToken: 'next', pageSize: 10 })).toEqual([
-      'session',
-      'pages',
-      { pageToken: 'next', pageSize: 10 },
-    ])
+    // The paginated Session index was retired with the v1 session surface
+    // (#4839, #4343); only the supported detail/snapshot keys remain.
+    expect(queryKeys.session).not.toHaveProperty('pages')
+    expect(queryKeys.session).not.toHaveProperty('list')
+    expect(queryKeys.session).not.toHaveProperty('page')
     expect(queryKeys.session.detail(9)).toEqual(['session', 'detail', 9])
 
     expect(queryKeys.queue.all).toEqual(['queue'])
@@ -185,19 +173,6 @@ describe('canonical query keys', () => {
     ])
   })
 
-  it('normalizes session list params and keeps the cursor out of the key', () => {
-    expect(
-      queryKeys.session.list({ params: { status: '  done  ', page_token: 'cursor-2' } }),
-    ).toEqual(['session', 'pages', { status: 'done' }])
-    expect(queryKeys.session.list({ params: { status: 'done', page_token: 'cursor-2' } })).toEqual(
-      queryKeys.session.list({ params: { status: 'done', page_token: 'cursor-9' } }),
-    )
-    expect(queryKeys.session.list({ params: { status: 'done', note: '  ' } })).toEqual([
-      'session',
-      'pages',
-      { status: 'done' },
-    ])
-  })
 })
 
 describe('targeted cache effects', () => {
@@ -271,8 +246,6 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.snapshotsAll(),
     })
-    // The History card counts the same rows through the paginated session list.
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.session.pages() })
     // Rating marks the issue read, so canonical reading boundaries must
     // recompute instead of retaining the pre-rating blocker.
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.dependencies.all })
@@ -714,8 +687,6 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.excluded.memberStatusAll(),
     })
-    // The history card's "N issues read" total must stop counting an undone rating (#3194).
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.session.pages() })
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.snapshotsAll(),
     })
@@ -768,7 +739,6 @@ describe('targeted cache effects', () => {
       queryKey: queryKeys.queue.activeCount(),
       exact: true,
     })
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.session.pages() })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.session.snapshotsAll() })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.activity.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.dependencies.all })

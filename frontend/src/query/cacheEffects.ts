@@ -505,10 +505,10 @@ export async function invalidateAfterIssueMappingChange(client: QueryClient): Pr
  * An undo restores queue order/membership, the current session, the roll
  * bootstrap, and the session-history aggregates that count reads and ratings,
  * so this composes the queue-movement refresh and adds the three undo-specific
- * spaces: the paginated Session history cards (whose "N issues read" total
- * must stop counting an undone rating), the snapshot lists the next undo reads
- * from, and the session detail page's snapshot list — the same rows the
- * History card counts, so both must refresh together (#3468).
+ * spaces: the snapshot lists the next undo reads from and the session detail
+ * page's snapshot list — the same rows the History activity view counts, so
+ * both must refresh together (#3468). The paginated Session index was retired
+ * with the v1 session surface (#4839, #4343) and has no live cache to refresh.
  *
  * Session detail stays on its callers' explicit refetch because that is the
  * surface the caller already owns.
@@ -519,7 +519,6 @@ export async function invalidateAfterIssueMappingChange(client: QueryClient): Pr
 export async function invalidateAfterUndo(client: QueryClient): Promise<void> {
   await Promise.all([
     invalidateAfterQueueMovement(client),
-    client.invalidateQueries({ queryKey: queryKeys.session.pages() }),
     client.invalidateQueries({ queryKey: queryKeys.session.snapshotsAll() }),
     client.invalidateQueries({ queryKey: queryKeys.undo.all }),
     // Undo restores read state, ratings, blockers, and history across views.
