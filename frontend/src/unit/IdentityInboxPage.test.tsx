@@ -6,6 +6,8 @@ import IdentityInboxPage from '../pages/IdentityInboxPage'
 import type { IdentityInboxItem } from '../services/api-identity'
 
 const mockUseIdentityInbox = vi.fn()
+const mockUseIdentityInboxSearch = vi.fn()
+const mockConfirmIdentity = vi.fn()
 type MockMutationResult = {
   mutate: ReturnType<typeof vi.fn>
   mutateAsync: ReturnType<typeof vi.fn>
