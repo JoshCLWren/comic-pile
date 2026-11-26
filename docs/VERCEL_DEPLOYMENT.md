@@ -139,7 +139,7 @@ per-owner ownership rules still apply.
 ### ComicVine metadata hydration (retired background repair)
 
 ComicVine issue hydration is no longer a scheduled job. The Vercel cron entry,
-the `.github/workflows/comicvine-metadata-repair.yml` drain (schedule,
+the retired ComicVine metadata-repair GitHub Actions workflow (schedule,
 repository dispatch and manual run), the maintenance drain/backfill endpoints
 and the repair-dispatch token are removed. `CRON_SECRET` is still required only
 by the unrelated release-sync cron above. Hydration happens inside the exact
