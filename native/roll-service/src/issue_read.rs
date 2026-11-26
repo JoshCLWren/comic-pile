@@ -88,7 +88,11 @@ pub struct ThreadIssueDependenciesResponse {
     pub issues: Vec<IssueDependenciesResponse>,
 }
 
+<<<<<<< HEAD
 const DETAIL_SQL: &str = "SELECT i.id, i.thread_id, i.issue_number, NULLIF(BTRIM(i.issue_number_alias), ''), i.position, i.status, to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'), to_char(i.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = $1 AND t.user_id = $2 AND i.merged_into_issue_id IS NULL";
+=======
+const DETAIL_SQL: &str = "SELECT i.id, i.thread_id, i.issue_number, i.position, i.status, to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'), to_char(i.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"') FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = $1 AND t.user_id = $2 AND i.merged_into_issue_id IS NULL";
+>>>>>>> origin/main
 
 const OWNED_SQL: &str = "SELECT i.id FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = $1 AND t.user_id = $2 AND i.merged_into_issue_id IS NULL";
 

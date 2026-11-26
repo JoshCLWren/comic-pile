@@ -99,6 +99,10 @@ pub struct DrainReport {
     deferred: u32,
     failed: u32,
     provider_configured: bool,
+    /// True when no repair work is due or queued after this drain pass.
+    /// The sparse cron fallback still runs; newly enqueued work should wake
+    /// the workflow via repository_dispatch (#4748).
+    queue_empty: bool,
 }
 
 #[derive(Debug)]
@@ -585,6 +589,24 @@ pub(crate) async fn catalog_volume_roster(
         }
     }
     Ok((series_info, roster))
+}
+
+/// Returns true when the repair queue has any non-terminal work.
+/// Terminal states are `completed` and `no_credits`; everything else may be
+/// claimed now or become due later, so backoff must not skip it (#4748).
+async fn queue_has_non_terminal_work(state: &AppState) -> Result<bool, ApiError> {
+    let connection = db::checkout(state).await?;
+    let row = connection
+        .query_one(
+            "SELECT EXISTS(\
+               SELECT 1 FROM comicvine_metadata_refresh_requests \
+               WHERE state NOT IN ('completed', 'no_credits')\
+             )",
+            &[],
+        )
+        .await
+        .map_err(db::query_error)?;
+    row.try_get(0).map_err(db::query_error)
 }
 
 async fn claim(state: &AppState) -> Result<Option<Job>, ApiError> {
@@ -1149,6 +1171,91 @@ fn preserve_cached_credits(patch: &mut Value, cached: Option<&Value>) {
     }
 }
 
+const REPAIR_DISPATCH_EVENT: &str = "comicvine-metadata-repair-enqueued";
+
+/// Optional dispatch credential. Absence is a supported state, not a silent
+/// failure: `notify_repair_enqueued` logs the fallback and the sparse cron
+/// bounds pickup at <= 6 hours (#4748).
+fn repair_dispatch_token() -> Option<String> {
+    std::env::var("COMICVINE_REPAIR_DISPATCH_TOKEN")
+        .ok()
+        .filter(|token| !token.trim().is_empty())
+        .or_else(|| {
+            std::env::var("GITHUB_TOKEN")
+                .ok()
+                .filter(|token| !token.trim().is_empty())
+        })
+}
+
+async fn dispatch_repair_wake(state: &AppState, token: &str) {
+    let body = match serde_json::to_vec(&json!({
+        "event_type": REPAIR_DISPATCH_EVENT,
+        "client_payload": {"source": "comicvine-repair-enqueue"},
+    })) {
+        Ok(body) => body,
+        Err(err) => {
+            tracing::warn!(
+                error_kind = crate::error_kind(&err),
+                "comicvine repair dispatch serialization failed"
+            );
+            return;
+        }
+    };
+    let request = OutboundRequest {
+        method: http::Method::POST,
+        path: format!("/repos/{}/dispatches", crate::factory_github_oauth::REPO),
+        headers: vec![
+            (
+                "Accept".to_string(),
+                "application/vnd.github+json".to_string(),
+            ),
+            ("Authorization".to_string(), format!("Bearer {token}")),
+            (
+                "User-Agent".to_string(),
+                "ComicPile-MetadataRepair".to_string(),
+            ),
+            ("Content-Type".to_string(), "application/json".to_string()),
+            ("X-GitHub-Api-Version".to_string(), "2026-03-10".to_string()),
+        ],
+        body: Bytes::from(body),
+    };
+    match crate::factory_github_oauth::send_github(state, "api.github.com", request).await {
+        Ok(response) if matches!(response.status, StatusCode::OK | StatusCode::NO_CONTENT) => {
+            tracing::info!("comicvine repair repository_dispatch wake sent");
+        }
+        Ok(response) => {
+            tracing::warn!(
+                status = response.status.as_u16(),
+                "comicvine repair repository_dispatch wake rejected"
+            );
+        }
+        Err(err) => {
+            tracing::warn!(
+                status = err.status().as_u16(),
+                "comicvine repair repository_dispatch wake failed"
+            );
+        }
+    }
+}
+
+/// Best-effort wake signal for newly enqueued metadata repairs (#4748).
+/// Fires a GitHub repository_dispatch so the sparse-cron drain can pick up new
+/// work earlier, but only when `COMICVINE_REPAIR_DISPATCH_TOKEN` or
+/// `GITHUB_TOKEN` is configured in the runtime. The signal is not guaranteed:
+/// when no token is configured, or the dispatch is rejected, pickup falls back
+/// to the sparse cron, which bounds it at <= 6 hours (#4748). No queue is
+/// permanently stuck because non-terminal rows stay claimable.
+pub(crate) async fn notify_repair_enqueued(state: &AppState) {
+    let Some(token) = repair_dispatch_token() else {
+        tracing::warn!(
+            "comicvine repair dispatch skipped: no GitHub token configured; \
+             pickup falls back to the <=6h sparse cron (#4748)"
+        );
+        return;
+    };
+    dispatch_repair_wake(state, &token).await;
+}
+
 /// CRON_SECRET authenticated, awaited Rust repair batch. No detached task or silent success.
 pub async fn drain(
     State(state): State<Arc<AppState>>,
@@ -1189,6 +1296,8 @@ async fn drain_authorized(
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
     }
+    report.queue_empty =
+        report.claimed < BATCH_LIMIT as u32 && !queue_has_non_terminal_work(state).await?;
     Ok(Json(report))
 }
 
@@ -1372,6 +1481,9 @@ async fn backfill_authorized(
     }
 
     tx.commit().await.map_err(db::query_error)?;
+    if report.enqueued > 0 {
+        notify_repair_enqueued(state).await;
+    }
     Ok(Json(report))
 }
 
@@ -3100,5 +3212,198 @@ mod tests {
             .get(0);
         let metadata: Value = serde_json::from_str(&metadata_text).expect("json");
         assert_eq!(metadata["creator_credits"][0]["name"], "Existing Writer");
+    }
+
+    #[tokio::test]
+    async fn drain_reports_queue_empty_when_no_work_remains() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let report = drain_for_test(&state).await;
+        assert_eq!(report.claimed, 0);
+        assert_eq!(report.completed, 0);
+        assert_eq!(report.deferred, 0);
+        assert_eq!(report.failed, 0);
+        assert!(
+            report.queue_empty,
+            "empty queue should report queue_empty for sparse-cron backoff (#4748)"
+        );
+    }
+
+    #[tokio::test]
+    async fn drain_empty_to_nonempty_transition_claims_new_work() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+
+        let empty = drain_for_test(&state).await;
+        assert_eq!(empty.claimed, 0);
+        assert!(empty.queue_empty);
+
+        let identity_id = seed_identity(&state).await;
+        seed_request(&state, identity_id, "pending", 0, "0 seconds", None).await;
+        queue_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
+
+        let drained = drain_for_test(&state).await;
+        assert_eq!(drained.claimed, 1);
+        assert_eq!(drained.completed, 1);
+        assert!(
+            drained.queue_empty,
+            "queue should be empty after draining the only due job"
+        );
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let request_state: String = connection
+            .query_one(
+                "SELECT state FROM comicvine_metadata_refresh_requests WHERE external_identity_id=$1",
+                &[&identity_id],
+            )
+            .await
+            .expect("request state")
+            .get(0);
+        assert_eq!(request_state, "completed");
+        drop(Object::take(connection));
+    }
+
+    #[tokio::test]
+    async fn duplicate_drain_runs_do_not_double_process_work() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_identity(&state).await;
+        seed_request(&state, identity_id, "pending", 0, "0 seconds", None).await;
+        queue_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
+
+        let first = drain_for_test(&state).await;
+        let second = drain_for_test(&state).await;
+
+        assert_eq!(first.claimed, 1);
+        assert_eq!(first.completed, 1);
+        assert_eq!(second.claimed, 0);
+        assert!(
+            second.queue_empty,
+            "second drain should see an empty terminal queue"
+        );
+
+        let calls = state.recording_fake().expect("recording provider").calls();
+        assert_eq!(
+            calls.len(),
+            1,
+            "provider should be called once for the single job"
+        );
+    }
+
+    #[tokio::test]
+    async fn drain_reports_api_error_as_deferred_without_stuck_queue() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_identity(&state).await;
+        seed_request(&state, identity_id, "pending", 0, "0 seconds", None).await;
+        // No canned response: recording fake fails closed as unavailable.
+
+        let report = drain_for_test(&state).await;
+        assert_eq!(report.claimed, 1);
+        assert_eq!(report.deferred, 1);
+        assert_eq!(report.failed, 0);
+        assert!(
+            !report.queue_empty,
+            "deferred retry work means the queue is not empty"
+        );
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let (request_state, last_error): (String, Option<String>) = connection
+            .query_one(
+                "SELECT state, last_error FROM comicvine_metadata_refresh_requests WHERE external_identity_id=$1",
+                &[&identity_id],
+            )
+            .await
+            .map(|row| (row.get(0), row.get(1)))
+            .expect("request row");
+        assert_eq!(request_state, "deferred");
+        assert_eq!(last_error.as_deref(), Some("provider_unavailable"));
+        drop(Object::take(connection));
+    }
+
+    #[tokio::test]
+    async fn drain_reports_throttling_as_deferred_with_retryable_queue() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_identity(&state).await;
+        seed_request(&state, identity_id, "pending", 0, "0 seconds", None).await;
+        let mut headers = HeaderMap::new();
+        headers.insert("retry-after", "120".parse().expect("retry-after"));
+        state.recording_fake().expect("recording provider").push_ok(
+            StatusCode::TOO_MANY_REQUESTS,
+            headers,
+            Bytes::from_static(b"{}"),
+        );
+
+        let report = drain_for_test(&state).await;
+        assert_eq!(report.claimed, 1);
+        assert_eq!(report.deferred, 1);
+        assert_eq!(report.failed, 0);
+        assert!(!report.queue_empty);
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let (request_state, last_error): (String, Option<String>) = connection
+            .query_one(
+                "SELECT state, last_error FROM comicvine_metadata_refresh_requests WHERE external_identity_id=$1",
+                &[&identity_id],
+            )
+            .await
+            .map(|row| (row.get(0), row.get(1)))
+            .expect("request row");
+        assert_eq!(request_state, "deferred");
+        assert_eq!(last_error.as_deref(), Some("rate_limit"));
+        drop(Object::take(connection));
+    }
+
+    #[tokio::test]
+    async fn notify_repair_enqueued_dispatches_repository_wake() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let fake = state.recording_fake().expect("recording provider");
+        fake.push_ok(StatusCode::NO_CONTENT, HeaderMap::new(), Bytes::new());
+
+        dispatch_repair_wake(&state, "test-token").await;
+
+        let calls = fake.calls();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].host, "api.github.com");
+        assert_eq!(
+            calls[0].path,
+            format!("/repos/{}/dispatches", crate::factory_github_oauth::REPO)
+        );
+        let body: Value = serde_json::from_slice(&calls[0].body).expect("dispatch json");
+        assert_eq!(body["event_type"], REPAIR_DISPATCH_EVENT);
+        assert_eq!(body["client_payload"]["source"], "comicvine-repair-enqueue");
+    }
+
+    #[tokio::test]
+    async fn notify_repair_enqueued_ignores_api_error() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let fake = state.recording_fake().expect("recording provider");
+        fake.push_ok(
+            StatusCode::FORBIDDEN,
+            HeaderMap::new(),
+            Bytes::from_static(b"{}"),
+        );
+
+        dispatch_repair_wake(&state, "bad-token").await;
+
+        let calls = fake.calls();
+        assert_eq!(calls.len(), 1, "dispatch should be attempted once");
     }
 }
