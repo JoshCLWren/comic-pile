@@ -1014,9 +1014,10 @@ pub(crate) async fn persist(
     // If a direct Save already read the pending issue with this same rating,
     // completing its preserved Roll offer is still a real Roll command. A
     // second command with a fresh key after that offer has been retired is not:
-    // otherwise it could step the die twice without any pending offer.
-    // An alias-only change is a real write and must not be rejected as a stale offer.
-    if source == ROLL_OFFER_SOURCE && !status_changed && !rating_changed && !alias_changed {
+    // otherwise it could step the die twice without any pending offer. A
+    // combined alias edit does not turn a stale offer into a live one: it still
+    // applies Roll die/queue effects below, so the pending check must still run.
+    if source == ROLL_OFFER_SOURCE && !status_changed && !rating_changed {
         let pending = tx
             .query_opt(
                 "SELECT 1 FROM sessions
@@ -2403,6 +2404,52 @@ mod tests {
             queue_positions(&client, &[10, 20, 30, 40]).await,
             vec![1, 3, 2, 4]
         );
+    }
+
+    #[tokio::test]
+    async fn stale_roll_offer_cannot_hide_an_alias_edit_behind_die_effects() {
+        let Some((mut client, _db_guard)) = roll_offer_fixture().await else {
+            return;
+        };
+        let user = AuthenticatedUser::for_test(1);
+
+        // Retire the offer. A rating that matches the stored one is not a
+        // correction, and the alias is the only changed field, so the write
+        // reaches the stale-offer check before any Roll effect is applied.
+        client
+            .execute("UPDATE sessions SET ended_at=NOW() WHERE id=1", &[])
+            .await
+            .unwrap();
+        let mut request = roll_offer(Some(4.5), "roll-offer-alias-stale-001");
+        request.status = None;
+        request.issue_number_alias = Some(Some("100".into()));
+
+        let tx = client.transaction().await.unwrap();
+        let error = persist(&tx, user, 101, &request)
+            .await
+            .expect_err("a retired Roll offer must not carry an alias edit");
+        tx.commit().await.unwrap();
+        assert_eq!(crate::ApiError::status(&error), StatusCode::CONFLICT);
+
+        let alias: Option<String> = client
+            .query_one(
+                "SELECT issue_number_alias FROM issues WHERE id=101",
+                &[],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        assert_eq!(alias, None, "a rejected stale offer must not write the alias");
+        let die_events: i64 = client
+            .query_one(
+                "SELECT count(*) FROM events WHERE user_id=1 AND type='rate'
+                 AND context->>'issue_command_key'='roll-offer-alias-stale-001'",
+                &[],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        assert_eq!(die_events, 0, "a rejected stale offer must not step the die");
     }
 
     #[tokio::test]
