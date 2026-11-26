@@ -1335,10 +1335,19 @@ async fn preview_projection(
     existing: &[(i32, String, i32)],
     merged: &[(i32, String)],
     strategy: IssuePlacementStrategy,
-    preserves_existing_relative_order: bool,
-    added_issue_numbers: Vec<String>,
     removed_issue_id: Option<i32>,
 ) -> Result<IssueEditPreviewOutcome, ApiError> {
+    // Both values are derived from the projected order so create, delete and
+    // reorder previews report the same preservation semantics.
+    let preserves_existing_relative_order = existing
+        .iter()
+        .map(|(id, _, _)| *id)
+        .eq(merged.iter().filter(|(id, _)| *id != 0).map(|(id, _)| *id));
+    let added_issue_numbers = merged
+        .iter()
+        .filter(|(id, _)| *id == 0)
+        .map(|(_, number)| number.clone())
+        .collect::<Vec<_>>();
     let (series_title, metadata) = load_preview_metadata(tx, thread_id).await?;
     let (mut before, after) = build_after_items(existing, merged, &series_title, &metadata);
     if let Some(removed) = removed_issue_id {
@@ -1414,19 +1423,8 @@ async fn preview_outcome(
     request: &PreviewIssuesRequest,
     strategy: IssuePlacementStrategy,
 ) -> Result<IssueEditPreviewOutcome, ApiError> {
-    let (merged, preserves) = planned_merge(existing, new_numbers, request, strategy)?;
-    preview_projection(
-        tx,
-        user,
-        thread_id,
-        existing,
-        &merged,
-        strategy,
-        preserves,
-        new_numbers.to_vec(),
-        None,
-    )
-    .await
+    let (merged, _preserves) = planned_merge(existing, new_numbers, request, strategy)?;
+    preview_projection(tx, user, thread_id, existing, &merged, strategy, None).await
 }
 
 /// `POST /api/v2/threads/{thread_id}/issues:preview`
