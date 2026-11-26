@@ -910,10 +910,19 @@ async fn a7_alias_edit_replays_safely_without_extra_rows_or_history() {
         .unwrap()
         .get(0);
     assert_eq!(row_count, 1, "alias edit never creates another issue");
-    let events: i64 = conn
-        .query_one("SELECT count(*) FROM events WHERE issue_id=$1", &[&issue_id])
+    let events: Vec<String> = conn
+        .query(
+            "SELECT type FROM events WHERE issue_id=$1 ORDER BY id",
+            &[&issue_id],
+        )
         .await
         .unwrap()
-        .get(0);
-    assert_eq!(events, 0, "alias-only edit is not a read/rating event");
+        .into_iter()
+        .map(|row| row.get(0))
+        .collect();
+    assert_eq!(
+        events,
+        vec!["issue_command", "issue_command"],
+        "alias-only edits record command keys, never read/rating history"
+    );
 }
