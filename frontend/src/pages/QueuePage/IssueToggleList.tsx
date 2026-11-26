@@ -156,6 +156,16 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   }, [])
   const displayIssues = draftReorder?.nextIssues ?? issues
   const hasStructuralPreview = Boolean(issuesService.previewReorder)
+  const pendingReorderEffects = useMemo(() => {
+    if (!draftReorder) return []
+    const originalPositions = new Map(issues.map((issue, index) => [issue.id, index + 1]))
+    return draftReorder.nextIssues.flatMap((issue, index) => {
+      const before = originalPositions.get(issue.id)
+      return before !== undefined && before !== index + 1
+        ? [{ id: issue.id, issueNumber: issue.issue_number, before, after: index + 1 }]
+        : []
+    })
+  }, [draftReorder, issues])
   const loadGenerationRef = useRef(0)
   const totalCountRef = useRef(0)
   const fullyLoadedRef = useRef(false)
@@ -706,16 +716,55 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     previewReorder: issuesService.previewReorder,
     onDelete: (issueId: number) => { setActionError(null); enqueueIssueMutation({ type: 'delete', issueId }) },
     onReorder: enqueueIssueReorder,
-    onError: setActionError,
+    onError: (message: string) => {
+      setActionError(message)
+      setStructurePreviewError(message)
+    },
   })
 
+  /**
+   * Show the requested order immediately (so a click is never a silent no-op)
+   * while the server still projects the exact constraints before commit.
+   * A seam-less caller keeps the historical direct path and needs no draft.
+   */
+  const requestStructuralEdit = useCallback((edit: StructuralEdit) => {
+    structuralEditRef.current = edit
+    const hasPreview = edit.type === 'delete'
+      ? Boolean(issuesService.previewDelete)
+      : hasStructuralPreview
+    if (deferred && hasPreview && edit.type === 'reorder') {
+      setDraftReorder({
+        nextIssues: edit.nextIssues,
+        announcement: edit.announcement,
+        focusTarget: edit.focusTarget,
+      })
+    }
+    setStructurePreviewError(null)
+    void requestStructuralPreview(edit)
+  }, [deferred, hasStructuralPreview, issuesService.previewDelete, requestStructuralPreview])
+
+  const cancelDraftReorder = useCallback(() => {
+    setDraftReorder(null)
+    setStructurePreviewError(null)
+    setActionError(null)
+    cancelStructurePreview()
+  }, [cancelStructurePreview])
+
   async function handleUndoEdit() {
-    if (!undoPoint || isUndoing) return
+    if (undoActions.length === 0 || isUndoing) return
     setIsUndoing(true)
     try {
-      await undoService.undo(undoPoint.sessionId, undoPoint.snapshotId)
-      undoPointRef.current = null
-      setUndoPoint(null)
+      // Newest-first: a reorder made after a create is reversed before the
+      // create's snapshot is restored (#5852).
+      for (const action of undoActionsRef.current) {
+        if (action.kind === 'snapshot') {
+          await undoService.undo(action.sessionId, action.snapshotId)
+        } else {
+          await issuesService.reorder(threadId, action.issueIds)
+        }
+      }
+      undoActionsRef.current = []
+      setUndoActions([])
       const refreshed = await fetchAllIssues()
       baseIssuesRef.current = refreshed
       syncOptimisticIssues(refreshed, pendingMutationsRef.current)
@@ -750,13 +799,13 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       return
     }
 
-    const nextIssues = reorderIssuesForDrop(issues, draggedIssueId, targetIssueId)
+    const nextIssues = reorderIssuesForDrop(displayIssues, draggedIssueId, targetIssueId)
     setDraggedIssueId(null)
     setDragOverIssueId(null)
 
     // A resolved no-op drop is not a structural edit; do not preview or queue it.
-    if (nextIssues.every((issue, index) => issue.id === issues[index]?.id)) return
-    void requestStructuralPreview({ type: 'reorder', nextIssues })
+    if (nextIssues.every((issue, index) => issue.id === displayIssues[index]?.id)) return
+    requestStructuralEdit({ type: 'reorder', nextIssues })
   }
 
   const handleDragEnd = () => {
@@ -776,7 +825,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     // modals would trap focus inside the Edit Series dialog (#3267). The delete
     // is queued only after the reader confirms the projected before/after rows.
     setDeleteDialogIssue(null)
-    void requestStructuralPreview({ type: 'delete', issueId })
+    requestStructuralEdit({ type: 'delete', issueId })
   }
 
   function handleCancelDelete() {
@@ -784,9 +833,9 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   }
 
   function handleMoveIssue(issue: Issue, direction: 'up' | 'down') {
-    const nextIssues = moveIssueByStep(issues, issue.id, direction)
+    const nextIssues = moveIssueByStep(displayIssues, issue.id, direction)
     const didReorder = nextIssues.some(
-      (candidate, index) => candidate.id !== issues[index]?.id,
+      (candidate, index) => candidate.id !== displayIssues[index]?.id,
     )
 
     if (!didReorder) {
@@ -794,7 +843,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       return
     }
 
-    void requestStructuralPreview({
+    requestStructuralEdit({
       type: 'reorder',
       nextIssues,
       announcement: `Moved issue #${issue.issue_number} ${direction}.`,
@@ -843,20 +892,20 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   }
 
   const visibleIssues = getVisibleIssues()
-  const hasHiddenIssues = issues.length > 5 && !isExpanded && !isReorderMode
+  const hasHiddenIssues = displayIssues.length > 5 && !isExpanded && !isReorderMode
 
   return (
     <div className="space-y-2">
       <div className="flex justify-between items-center gap-2">
         <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</p>
         <div className="flex items-center gap-2">
-          {issues.length > 5 && (
+          {displayIssues.length > 5 && (
             <button
               type="button"
               onClick={() => setIsExpanded(!isExpanded)}
               className="text-[10px] font-black uppercase tracking-widest text-amber-400 hover:text-amber-300 transition-colors"
             >
-              {isExpanded ? 'Show fewer' : `Show all ${issues.length}`}
+              {isExpanded ? 'Show fewer' : `Show all ${displayIssues.length}`}
             </button>
           )}
           <button
