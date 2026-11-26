@@ -279,6 +279,7 @@ export default function QueuePage() {
           queueSize={authoritativeActiveCount}
           onCreateSubmit={modals.handleCreateSubmit}
           onEditSubmit={modals.handleEditSubmit}
+          onEditUndoAvailable={modals.setEditUndoAvailable}
           onReactivateSubmit={modals.handleReactivateSubmit}
           onRepositionConfirm={handleRepositionConfirm}
           onDependencyChanged={() => invalidateAfterQueueMutation(queryClient)}
