@@ -464,6 +464,17 @@ pub(crate) fn natural_issue_order(existing: &[String], incoming: &[String]) -> O
         .collect();
 
     if existing_keyed.len() == existing.len() {
+        // A saved all-numeric order that is not ascending is reader-authored
+        // (or an intentionally nonmonotonic series), not a sorting defect to
+        // silently repair while inserting another issue. #4654: fall back to
+        // the caller's append/accepted-anchor path so every existing Issue ID
+        // keeps its relative order. Numeric resort stays a previewed choice.
+        if existing_keyed
+            .windows(2)
+            .any(|pair| pair[0].0 >= pair[1].0)
+        {
+            return None;
+        }
         let mut merged: Vec<((usize, &str), &String)> = existing_keyed;
         merged.extend(new_keyed);
         merged.sort_by(|left, right| left.0.cmp(&right.0));
@@ -1944,8 +1955,9 @@ mod tests {
             order(&["33", "34", "35"], &["2"]),
             Some(strings(&["2", "33", "34", "35"]))
         );
-        // All-numeric threads repair earlier out-of-order appends.
-        assert_eq!(order(&["3", "1"], &["2"]), Some(strings(&["1", "2", "3"])));
+        // Reader-authored non-monotonic numeric order is preserved: callers
+        // must fall back to append instead of rewriting saved positions.
+        assert_eq!(order(&["3", "1"], &["2"]), None);
         // Irregular incoming labels fall back to append.
         assert_eq!(order(&["1"], &["Annual 1"]), None);
         assert_eq!(order(&["1"], &["0"]), None);
@@ -1979,21 +1991,25 @@ mod tests {
         assert_eq!(ascending, Some(seated.clone()));
         assert_eq!(descending, Some(seated));
 
-        // Re-adoption after the historical append bug: the stored order is
-        // #7-#24, then #2-#6, then #1. A subsequent natural pass reseats every
-        // ordinary number instead of appending again.
+        // #4654: a non-monotonic all-numeric series is reader intent, not a
+        // defect to repair during a later adoption or plan sync. The helper
+        // must refuse to reorder it so every existing Issue ID keeps its
+        // relative order; only an explicit previewed numeric resort may move
+        // existing issues.
         let mut appended = high_run;
         appended.extend(
             ["2", "3", "4", "5", "6", "1"]
                 .iter()
                 .map(|n| (*n).to_string()),
         );
-        let reseated: Vec<String> = (1..=24).map(|n| n.to_string()).collect();
-        assert_eq!(
-            natural_issue_order(&appended, &[]),
-            Some(reseated),
-            "all-ordinary threads are repaired on the next natural pass"
-        );
+        let before = appended.clone();
+        assert_eq!(natural_issue_order(&appended, &["25"]), None);
+        assert_eq!(appended, before, "the helper never mutates saved order");
+
+        // The synthetic 129, 140-142, 130-139, 143 order is the same class of
+        // reader-authored order and must never be numerically re-seated here.
+        let julix = strings(&["129", "140", "141", "142", "130", "131", "143"]);
+        assert_eq!(natural_issue_order(&julix, &["101"]), None);
     }
 
     #[test]
