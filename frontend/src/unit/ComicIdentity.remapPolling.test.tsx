@@ -176,6 +176,6 @@ describe('ComicIdentity remapped issue metadata (#5841)', () => {
 
     await waitFor(() => expect(screen.getByTestId('creator-status-no_credits')).toBeInTheDocument())
     expect(refreshMetadata).toHaveBeenCalledTimes(2)
-    expect(screen.getByText('Test Issue')).toBeInTheDocument()
+    expect(screen.getByLabelText('Test Issue')).toBeInTheDocument()
   })
 })

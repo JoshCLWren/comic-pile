@@ -177,6 +177,7 @@ export function useComicVineMetadataHydration({
   const mountedRef = useRef(true)
   const nextRetryAtRef = useRef(0)
   const autoHydrationKeyRef = useRef<string | null>(null)
+  const identityKeyRef = useRef<string | null>(null)
 
   issueIdRef.current = issueId
   identityRef.current = identity
@@ -185,6 +186,11 @@ export function useComicVineMetadataHydration({
   // Identity replacement (or navigation to another issue) invalidates every
   // in-flight response and terminal message from the previous identity.
   useEffect(() => {
+    const key = `${issueId}:${identity}`
+    // StrictMode replays effects with unchanged props; only a real navigation
+    // or remap may invalidate the previous identity's request.
+    if (identityKeyRef.current === key) return
+    identityKeyRef.current = key
     generationRef.current += 1
     // The previous identity's request is now stale. Do not let its single-flight
     // flag swallow an explicit Retry for the newly confirmed identity; the
