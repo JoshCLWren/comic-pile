@@ -284,7 +284,8 @@ function MatchSearchPanel({
 
           {data.partial_matches.length === 0 && data.results.length === 0 && (
             <p className="text-xs text-[var(--theme-text-muted)]">
-              No matches found. Try another name, paste a URL, or map manually.
+              {data.no_match_reason ?? 'No matches found.'} Try another name, paste a URL, or map
+              manually.
             </p>
           )}
         </div>

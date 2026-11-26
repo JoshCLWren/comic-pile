@@ -73,6 +73,7 @@ export interface IdentityInboxSearchResponse {
   results: IdentityInboxSearchResult[]
   total_available: number | null
   partial_matches: IdentityInboxPartialMatch[]
+  no_match_reason: string | null
 }
 
 export interface IdentityInboxConfirmPayload {

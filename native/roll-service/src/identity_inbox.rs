@@ -161,6 +161,9 @@ pub struct IdentityInboxSearchResponse {
     /// Series-level partial matches derived from the same provider response.
     /// Always emitted (empty when no volume resolves) for wire stability.
     pub partial_matches: Vec<IdentityInboxPartialMatch>,
+    /// Explainable reason when discovery found nothing, produced by the same
+    /// matcher that scores successful searches.
+    pub no_match_reason: Option<String>,
 }
 
 fn bad_request(detail: &str) -> ApiError {
@@ -1070,6 +1073,7 @@ pub async fn search_issues(
             results: vec![],
             total_available: Some(0),
             partial_matches: vec![],
+            no_match_reason: None,
         }));
     }
 
@@ -1298,12 +1302,18 @@ pub async fn search_issues(
         &provider_issues,
     )
     .await?;
+    let no_match_reason = if results.is_empty() {
+        Some(crate::comicvine_matching::explain_no_match(&local, &provider_issues).reason)
+    } else {
+        None
+    };
     Ok(Json(IdentityInboxSearchResponse {
         issue_id: q.issue_id.unwrap_or(0),
         query: q.q.clone(),
         results,
         total_available,
         partial_matches,
+        no_match_reason,
     }))
 }
 
