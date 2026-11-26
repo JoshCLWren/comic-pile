@@ -470,10 +470,10 @@ describe('targeted cache effects', () => {
   it('restarts a canonical projection with cached data that began before the read committed (#5865)', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const key = queryKeys.dependencies.readingBoundaries([7])
-    // The open Thread/Queue surface already rendered this projection. Its next
-    // refetch starts before the direct read commits; without cancellation the
-    // invalidation joins that pre-mutation request and restores its stale
-    // Next/blocker explanation, which is the #5865 recurrence of #5537.
+    // An already-open Thread/Queue surface has cached this projection and can
+    // start a refetch before the direct read commits. Unlike the initial-load
+    // case (#5537), TanStack cancels the active fetch when cached data exists;
+    // this guards that #5865 cached-data path stays fresh without a reload.
     client.setQueryData(key, 'stale-next')
     let resolveOld!: (value: string) => void
     const oldRequest = new Promise<string>((resolve) => { resolveOld = resolve })
