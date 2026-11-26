@@ -1393,6 +1393,74 @@ async fn backfill_authorized(
     Ok(Json(run_backfill(state, query).await?))
 }
 
+/// Reconcile confirmed ComicVine identities that have no refresh-request row at
+/// all (#5695). This targets the orphan gap reported in production: confirmed
+/// identities with empty/missing metadata and no durable queue row were never
+/// claimed by the drain. Bounded and idempotent; safe to run on every drain.
+async fn reconcile_missing_refresh_rows(
+    state: &AppState,
+    limit: i64,
+) -> Result<u32, ApiError> {
+    let mut connection = db::checkout(state).await?;
+    let tx = connection.transaction().await.map_err(db::query_error)?;
+    let rows = tx
+        .query(
+            "SELECT e.id, e.metadata_json::text \
+             FROM external_identities e \
+             WHERE e.provider = 'comicvine' \
+               AND e.entity_type = 'issue' \
+               AND EXISTS ( \
+                 SELECT 1 FROM issue_external_identity_mappings m \
+                 WHERE m.external_identity_id = e.id \
+                   AND m.status = 'confirmed' \
+               ) \
+               AND NOT EXISTS ( \
+                 SELECT 1 FROM comicvine_metadata_refresh_requests r \
+                 WHERE r.external_identity_id = e.id \
+               ) \
+             ORDER BY e.id \
+             LIMIT $1",
+            &[&limit],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let now = chrono::Utc::now();
+    let mut needs_fetch: Vec<i32> = Vec::new();
+    for row in &rows {
+        let id: i32 = row.get(0);
+        let metadata: Value = row
+            .get::<_, Option<String>>(1)
+            .and_then(|text| serde_json::from_str(&text).ok())
+            .unwrap_or(Value::Null);
+        if needs_provider_fetch(&metadata, now) {
+            needs_fetch.push(id);
+        }
+    }
+    let mut enqueued = 0_u32;
+    if !needs_fetch.is_empty() {
+        enqueued = tx
+            .execute(
+                "INSERT INTO comicvine_metadata_refresh_requests \
+                    (external_identity_id, state, attempts, next_attempt_at, created_at, updated_at) \
+                 SELECT v, 'pending', 0, now(), now(), now() \
+                 FROM unnest($1::int[]) AS v \
+                 WHERE NOT EXISTS ( \
+                     SELECT 1 FROM comicvine_metadata_refresh_requests \
+                     WHERE external_identity_id = v \
+                 ) \
+                 ON CONFLICT ON CONSTRAINT uq_comicvine_metadata_refresh_identity DO NOTHING",
+                &[&needs_fetch],
+            )
+            .await
+            .map_err(db::query_error)? as u32;
+    }
+    tx.commit().await.map_err(db::query_error)?;
+    if enqueued > 0 {
+        notify_repair_enqueued(state).await;
+    }
+    Ok(enqueued)
+}
+
 /// Bounded reconciliation for confirmed ComicVine identities that need deep
 /// metadata but have no durable refresh row, or whose terminal row is stale.
 /// Used by the CRON-authenticated backfill endpoint and, in a small bounded
