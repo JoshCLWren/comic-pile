@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { applyCommittedReadingPlan, applyCreatedCustomCBL, applyUpdatedCustomCBL, applyDeletedCustomCBL } from '../query/cacheEffects'
 import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
+import { useReadingListsCrossTabSync } from '../hooks/useReadingListsCrossTabSync'
 import { queryKeys } from '../query/queryKeys'
 import Modal from './Modal'
 import { requestSemanticScroll } from '../scroll/scrollCoordinator'
@@ -31,6 +32,7 @@ import {
   messageFor,
   moveEntryRelativeToEntry,
   normalizePositions,
+  reconcileEntryTitles,
   sameEntries,
 } from './customCBLBuilderHelpers'
 interface CustomCBLBuilderProps {
@@ -80,6 +82,10 @@ export default function CustomCBLBuilder({
   onPendingChange,
 }: CustomCBLBuilderProps) {
   const queryClient = useQueryClient()
+  // A Thread rename committed in another tab must reach this open editor before
+  // the 30s staleTime expires (#5862). The reader query is refreshed by the
+  // same cache invalidation; the draft below reconciles only its series titles.
+  useReadingListsCrossTabSync()
   const issueSearchInput = useRef<HTMLInputElement>(null)
   const customCBLHeadingRef = useRef<HTMLHeadingElement>(null)
   const deleteReturnFocusRef = useRef<HTMLElement | null>(null)
@@ -190,6 +196,15 @@ export default function CustomCBLBuilder({
     setMessage(null)
     setExportError(null)
   }, [detailQuery.data, loadedListId])
+  // Fresh server data can arrive without changing the list identity (a
+  // cross-tab Thread rename, a focus refresh, or an ordinary refetch). Seed
+  // above intentionally skips that case to protect in-progress edits, so
+  // reconcile just the canonical series titles here (#5862).
+  useEffect(() => {
+    const list = detailQuery.data
+    if (!list || list.id !== selectedId) return
+    setEntries((current) => reconcileEntryTitles(current, list.entries))
+  }, [detailQuery.data, selectedId])
   const createMutation = useMutation({
     mutationFn: () => customCBLApi.create({ name: newName.trim(), issue_ids: [] }),
     onSuccess: async (created) => {
