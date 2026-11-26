@@ -1712,16 +1712,13 @@ async fn set_pending_rejections_match_python_details() {
     let target = seed_thread(&ctx, ctx.user_id, "Target", "active", 3, 0).await;
     let target_issues = track(&ctx, target, &["unread"]).await;
     let pool = ctx.state.pool.get().await.unwrap();
+    // Canonical authority: an authored reader prerequisite is the blocker; the
+    // stored `is_blocked` flag is deliberately left false (#5525 A16/A17).
     pool.execute(
-        "INSERT INTO dependencies (source_issue_id, target_issue_id, created_at)
-         VALUES ($1, $2, NOW())",
+        "INSERT INTO dependencies
+            (source_issue_id, target_issue_id, origin, classification, provenance, created_at)
+         VALUES ($1, $2, 'reader', 'A', 'Reader-authored through Dependency Builder', NOW())",
         &[&source_issues[0], &target_issues[0]],
-    )
-    .await
-    .unwrap();
-    pool.execute(
-        "UPDATE threads SET is_blocked = true WHERE id = $1",
-        &[&target],
     )
     .await
     .unwrap();
@@ -1854,6 +1851,166 @@ async fn set_pending_is_owner_scoped() {
     assert_eq!(pending, 0);
 }
 
+/// The changed set-pending writer must take the per-reader queue advisory lock
+/// before its validation transaction locks the thread row. Hold both locks in a
+/// sibling writer's canonical order, then prove set-pending and exclude both
+/// queue on the advisory lock rather than set-pending grabbing the row first.
+#[tokio::test]
+async fn set_pending_and_exclude_do_not_deadlock() {
+    let ctx = setup_with_pool("lcpendexdead", "8").await;
+    let mut holder = ctx.state.pool.get().await.unwrap();
+    let conn = ctx.state.pool.get().await.unwrap();
+    let id = seed_thread(&ctx, ctx.user_id, "Contended", "active", 1, 0).await;
+    track(&ctx, id, &["unread"]).await;
+
+    let hold = holder.transaction().await.unwrap();
+    hold.execute(
+        "SELECT pg_advisory_xact_lock($1, $2)",
+        &[&QUEUE_LOCK_NAMESPACE, &ctx.user_id],
+    )
+    .await
+    .unwrap();
+    hold.query_one(
+        "SELECT id FROM threads WHERE id = $1 AND user_id = $2 FOR UPDATE",
+        &[&id, &ctx.user_id],
+    )
+    .await
+    .unwrap();
+
+    let set_pending = {
+        let state = ctx.state.clone();
+        let token = ctx.token.clone();
+        let csrf = ctx.csrf.clone();
+        tokio::spawn(async move {
+            send(
+                &state,
+                authed(
+                    "POST",
+                    &format!("/api/v1/threads/{id}/set-pending"),
+                    &token,
+                    &csrf,
+                    None,
+                ),
+            )
+            .await
+        })
+    };
+    wait_for_queue_lock_waiters(&conn, ctx.user_id, 1).await;
+    let exclude = {
+        let state = ctx.state.clone();
+        let token = ctx.token.clone();
+        let csrf = ctx.csrf.clone();
+        tokio::spawn(async move {
+            send(
+                &state,
+                authed(
+                    "POST",
+                    &format!("/api/v1/threads/{id}/exclude"),
+                    &token,
+                    &csrf,
+                    None,
+                ),
+            )
+            .await
+        })
+    };
+    wait_for_queue_lock_waiters(&conn, ctx.user_id, 2).await;
+    hold.commit().await.unwrap();
+
+    let (pending, excluded) = tokio::join!(set_pending, exclude);
+    let (p_status, p_body) = pending.expect("set-pending task");
+    let (e_status, e_body) = excluded.expect("exclude task");
+    assert_ne!(
+        p_status,
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "set-pending deadlocked or errored: {p_status} {p_body:?}"
+    );
+    assert!(
+        matches!(p_status, StatusCode::OK | StatusCode::BAD_REQUEST),
+        "set-pending: {p_status} {p_body:?}"
+    );
+    if p_status == StatusCode::BAD_REQUEST {
+        assert_eq!(p_body["detail"], format!("Thread {id} is not active"));
+    }
+    assert_ne!(
+        e_status,
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "exclude deadlocked or errored: {e_status} {e_body:?}"
+    );
+    assert_eq!(e_status, StatusCode::OK, "exclude: {e_status} {e_body:?}");
+}
+
+/// Production fixture: `OPTION_E_ENABLED` is unset, yet `set-pending` is
+/// authorized by canonical Reading List eligibility, never by the stored
+/// `is_blocked` flag and never by the retired Option E 503 guard (#5525 A16/A17).
+#[tokio::test]
+async fn set_pending_uses_canonical_eligibility_with_option_e_unset() {
+    let ctx = setup("lcpendcanon").await;
+    let source = seed_thread(&ctx, ctx.user_id, "Prerequisite Series", "active", 1, 0).await;
+    let source_issues = track(&ctx, source, &["unread"]).await;
+    let blocked = seed_thread(&ctx, ctx.user_id, "Blocked Target", "active", 2, 0).await;
+    let blocked_issues = track(&ctx, blocked, &["unread"]).await;
+    let free = seed_thread(&ctx, ctx.user_id, "Free Series", "active", 3, 0).await;
+    let free_issues = track(&ctx, free, &["unread"]).await;
+
+    let pool = ctx.state.pool.get().await.unwrap();
+    pool.execute(
+        "INSERT INTO dependencies
+            (source_issue_id, target_issue_id, origin, classification, provenance, created_at)
+         VALUES ($1, $2, 'reader', 'A', 'Reader-authored through Dependency Builder', NOW())",
+        &[&source_issues[0], &blocked_issues[0]],
+    )
+    .await
+    .unwrap();
+    let stored_blocked: bool = pool
+        .query_one("SELECT is_blocked FROM threads WHERE id = $1", &[&blocked])
+        .await
+        .unwrap()
+        .get(0);
+    assert!(!stored_blocked, "the stale flag must not be the authority");
+    drop(pool);
+
+    let (status, body) = call(
+        &ctx,
+        "POST",
+        &format!("/api/v1/threads/{blocked}/set-pending"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
+    assert!(
+        body["detail"]
+            .as_str()
+            .unwrap()
+            .contains("Prerequisite Series"),
+        "the authentic canonical blocker must be named: {body:?}"
+    );
+    let sessions: i64 = ctx
+        .state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one(
+            "SELECT count(*) FROM sessions WHERE user_id = $1",
+            &[&ctx.user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(sessions, 0, "a rejected selection must not open a session");
+
+    let (status, body) = call(
+        &ctx,
+        "POST",
+        &format!("/api/v1/threads/{free}/set-pending"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["issue_id"], free_issues[0]);
+}
+
 // ---------------------------------------------------------------------------
 // stale
 // ---------------------------------------------------------------------------
@@ -1870,7 +2027,18 @@ async fn stale_lists_old_unblocked_unsnoozed_threads_oldest_first() {
     let snoozed = seed_thread(&ctx, ctx.user_id, "Snoozed", "active", 6, 2).await;
     let inactive = seed_thread(&ctx, ctx.user_id, "Done", "completed", 0, 0).await;
     let theirs = seed_thread(&ctx, other_id, "Theirs", "active", 1, 2).await;
+    // The blocked row is now held by an authored reader prerequisite, not by
+    // a stored flag; the prerequisite is fresh so it is not itself stale.
+    let prerequisite = seed_thread(&ctx, ctx.user_id, "Prerequisite", "active", 7, 0).await;
+    let prerequisite_issues = track(&ctx, prerequisite, &["unread"]).await;
+    let blocked_issues = track(&ctx, blocked, &["unread"]).await;
     let pool = ctx.state.pool.get().await.unwrap();
+    pool.execute(
+        "UPDATE threads SET last_activity_at = NOW() WHERE id = $1",
+        &[&prerequisite],
+    )
+    .await
+    .unwrap();
     for (id, days) in [
         (old, 40),
         (older, 90),
@@ -1893,8 +2061,10 @@ async fn stale_lists_old_unblocked_unsnoozed_threads_oldest_first() {
     .await
     .unwrap();
     pool.execute(
-        "UPDATE threads SET is_blocked = true WHERE id = $1",
-        &[&blocked],
+        "INSERT INTO dependencies
+            (source_issue_id, target_issue_id, origin, classification, provenance, created_at)
+         VALUES ($1, $2, 'reader', 'A', 'Reader-authored through Dependency Builder', NOW())",
+        &[&prerequisite_issues[0], &blocked_issues[0]],
     )
     .await
     .unwrap();
@@ -1947,6 +2117,61 @@ async fn stale_rejects_invalid_parameters() {
         );
         assert_eq!(body["detail"], "Validation failed");
     }
+}
+
+/// Production fixture (`OPTION_E_ENABLED` unset): `stale` must not report a
+/// canonically blocked thread just because its stored flag is false (#5525 A16).
+#[tokio::test]
+async fn stale_uses_canonical_eligibility_with_option_e_unset() {
+    let ctx = setup("lcstalecanon").await;
+    let source = seed_thread(&ctx, ctx.user_id, "Prerequisite Series", "active", 1, 0).await;
+    let source_issues = track(&ctx, source, &["unread"]).await;
+    let blocked = seed_thread(&ctx, ctx.user_id, "Canonically Blocked", "active", 2, 0).await;
+    let blocked_issues = track(&ctx, blocked, &["unread"]).await;
+    let allowed = seed_thread(&ctx, ctx.user_id, "Canonically Eligible", "active", 3, 0).await;
+    track(&ctx, allowed, &["unread"]).await;
+
+    let pool = ctx.state.pool.get().await.unwrap();
+    pool.execute(
+        "INSERT INTO dependencies
+            (source_issue_id, target_issue_id, origin, classification, provenance, created_at)
+         VALUES ($1, $2, 'reader', 'A', 'Reader-authored through Dependency Builder', NOW())",
+        &[&source_issues[0], &blocked_issues[0]],
+    )
+    .await
+    .unwrap();
+    for id in [source, blocked, allowed] {
+        pool.execute(
+            "UPDATE threads SET last_activity_at = NOW() - interval '60 days' WHERE id = $1",
+            &[&id],
+        )
+        .await
+        .unwrap();
+    }
+    let stored_blocked: bool = pool
+        .query_one("SELECT is_blocked FROM threads WHERE id = $1", &[&blocked])
+        .await
+        .unwrap()
+        .get(0);
+    assert!(!stored_blocked, "the stale flag must not be the authority");
+    drop(pool);
+
+    let (status, body) = call(&ctx, "GET", "/api/v1/threads/stale", None).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let ids: Vec<i64> = body
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|thread| thread["id"].as_i64().unwrap())
+        .collect();
+    assert!(
+        ids.contains(&(allowed as i64)),
+        "eligible stale thread must be listed: {body:?}"
+    );
+    assert!(
+        !ids.contains(&(blocked as i64)),
+        "canonically blocked thread must not be listed: {body:?}"
+    );
 }
 
 #[tokio::test]

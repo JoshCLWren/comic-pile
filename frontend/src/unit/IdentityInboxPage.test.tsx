@@ -6,6 +6,8 @@ import IdentityInboxPage from '../pages/IdentityInboxPage'
 import type { IdentityInboxItem } from '../services/api-identity'
 
 const mockUseIdentityInbox = vi.fn()
+const mockUseIdentityInboxSearch = vi.fn()
+const mockConfirmIdentity = vi.fn()
 type MockMutationResult = {
   mutate: ReturnType<typeof vi.fn>
   mutateAsync: ReturnType<typeof vi.fn>
@@ -27,10 +29,16 @@ const mockUseSkipInboxItem = vi.fn(() => mockSkipMutation)
 
 vi.mock('../hooks/useIdentityInbox', () => ({
   useIdentityInbox: (offset: number) => mockUseIdentityInbox(offset),
+  useIdentityInboxSearch: (query: string, issueId: number, enabled: boolean) =>
+    mockUseIdentityInboxSearch(query, issueId, enabled),
   useConfirmInboxCandidate: () => mockUseConfirmInboxCandidate(),
   useRejectInboxCandidate: () => mockUseRejectInboxCandidate(),
   useDeferInboxItem: () => mockUseDeferInboxItem(),
   useSkipInboxItem: () => mockUseSkipInboxItem(),
+}))
+
+vi.mock('../services/api-comicvine', () => ({
+  comicVineApi: { confirmIdentity: (...args: unknown[]) => mockConfirmIdentity(...args) },
 }))
 
 const inboxItem = (overrides: Partial<IdentityInboxItem> = {}): IdentityInboxItem => ({
@@ -89,8 +97,25 @@ function mockErrorState(message: string) {
   })
 }
 
+function mockSearchResult(overrides: {
+  data?: unknown
+  isPending?: boolean
+  isError?: boolean
+  refetch?: ReturnType<typeof vi.fn>
+} = {}) {
+  mockUseIdentityInboxSearch.mockReturnValue({
+    data: undefined,
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+    ...overrides,
+  })
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
+  mockSearchResult()
+  mockConfirmIdentity.mockResolvedValue({})
   mockUseConfirmInboxCandidate.mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, isError: false, error: null, data: undefined, reset: vi.fn() })
   mockUseRejectInboxCandidate.mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, isError: false, error: null, data: undefined, reset: vi.fn() })
   mockUseDeferInboxItem.mockReturnValue({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, isError: false, error: null, data: undefined, reset: vi.fn() })
@@ -457,5 +482,348 @@ describe('IdentityInboxPage', () => {
       expect(screen.getByText('new gods volume match')).toBeInTheDocument(),
     )
     expect(screen.getAllByText('Confirm')).toHaveLength(1)
+  })
+
+  // #5434: the reviewer-driven discovery panel, its explainable results and
+  // its partial-series confirmation path are part of the shipped UI, so every
+  // branch must be exercised rather than left to the coverage gate.
+  it('renders actionable next steps when the inbox item supplies them', async () => {
+    mockQueryResult([
+      inboxItem({ next_steps: ['Search by a different series name', 'Paste a ComicVine URL'] }),
+    ], 1)
+
+    render(
+      <MemoryRouter initialEntries={['/identity-inbox']}>
+        <Routes>
+          <Route path="/identity-inbox" element={<IdentityInboxPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    await userEvent.click(screen.getByText('Mister Miracle'))
+
+    expect(screen.getByText('Next steps')).toBeInTheDocument()
+    expect(screen.getByText('Paste a ComicVine URL')).toBeInTheDocument()
+  })
+
+  it('opens and hides the Find match panel', async () => {
+    mockQueryResult([inboxItem()], 1)
+
+    render(
+      <MemoryRouter initialEntries={['/identity-inbox']}>
+        <Routes>
+          <Route path="/identity-inbox" element={<IdentityInboxPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    await userEvent.click(screen.getByText('Mister Miracle'))
+    await userEvent.click(screen.getByRole('button', { name: 'Find match' }))
+
+    expect(screen.getByLabelText('ComicVine search query')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Hide search' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Hide search' }))
+    expect(screen.queryByLabelText('ComicVine search query')).not.toBeInTheDocument()
+  })
+
+  it('submits a trimmed name or pasted URL to scoped discovery', async () => {
+    mockQueryResult([inboxItem()], 1)
+
+    render(
+      <MemoryRouter initialEntries={['/identity-inbox']}>
+        <Routes>
+          <Route path="/identity-inbox" element={<IdentityInboxPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    await userEvent.click(screen.getByText('Mister Miracle'))
+    await userEvent.click(screen.getByRole('button', { name: 'Find match' }))
+    await userEvent.type(
+      screen.getByLabelText('ComicVine search query'),
+      '  https://comicvine.gamespot.com/volume/4050-42/  ',
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }))
+
+    await waitFor(() =>
+      expect(mockUseIdentityInboxSearch).toHaveBeenCalledWith(
+        'https://comicvine.gamespot.com/volume/4050-42/',
+        10,
+        true,
+      ),
+    )
+  })
+
+  it('shows a searching state while discovery is pending', async () => {
+    mockQueryResult([inboxItem()], 1)
+    mockSearchResult({ isPending: true })
+
+    render(
+      <MemoryRouter initialEntries={['/identity-inbox']}>
+        <Routes>
+          <Route path="/identity-inbox" element={<IdentityInboxPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    await userEvent.click(screen.getByText('Mister Miracle'))
+    await userEvent.click(screen.getByRole('button', { name: 'Find match' }))
+
+    expect(screen.getByText('Searching…')).toBeInTheDocument()
+  })
+
+  it('surfaces failed discovery without changing the inbox item', async () => {
+    mockQueryResult([inboxItem()], 1)
+    mockSearchResult({ isError: true })
+
+    render(
+      <MemoryRouter initialEntries={['/identity-inbox']}>
+        <Routes>
+          <Route path="/identity-inbox" element={<IdentityInboxPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    await userEvent.click(screen.getByText('Mister Miracle'))
+    await userEvent.click(screen.getByRole('button', { name: 'Find match' }))
+
+    expect(screen.getByText(/Search is unavailable right now/)).toBeInTheDocument()
+    expect(screen.getByText('Mister Miracle')).toBeInTheDocument()
+  })
+
+  it('renders explainable scores and evidence for provider results', async () => {
+    mockQueryResult([inboxItem()], 1)
+    mockSearchResult({
+      data: {
+        issue_id: 10,
+        query: 'Hellboy',
+        results: [
+          {
+            comicvine_issue_id: 900,
+            comicvine_volume_id: 42,
+            volume_name: 'Hellboy',
+            issue_number: '1',
+            issue_name: null,
+            publisher: 'Dark Horse',
+            start_year: 2000,
+            site_detail_url: null,
+            image_url: null,
+            score: 0.87,
+            evidence: ['fuzzy title match 87%'],
+          },
+        ],
+        total_available: 1,
+        partial_matches: [],
+        no_match_reason: null,
+      },
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/identity-inbox']}>
+        <Routes>
+          <Route path="/identity-inbox" element={<IdentityInboxPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    await userEvent.click(screen.getByText('Mister Miracle'))
+    await userEvent.click(screen.getByRole('button', { name: 'Find match' }))
+
+    expect(screen.getByText('87% match')).toBeInTheDocument()
+    expect(screen.getByText('fuzzy title match 87%')).toBeInTheDocument()
+    expect(screen.getByText(/#1 \(Hellboy\)/)).toBeInTheDocument()
+  })
+
+  it('renders sparse provider results without score or evidence', async () => {
+    mockQueryResult([inboxItem()], 1)
+    mockSearchResult({
+      data: {
+        issue_id: 10,
+        query: 'Hellboy',
+        results: [
+          {
+            comicvine_issue_id: 903,
+            comicvine_volume_id: null,
+            volume_name: null,
+            issue_number: null,
+            issue_name: null,
+            publisher: null,
+            start_year: null,
+            site_detail_url: null,
+            image_url: null,
+            score: null,
+            evidence: [],
+          },
+        ],
+        total_available: 1,
+        partial_matches: [],
+        no_match_reason: null,
+      },
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/identity-inbox']}>
+        <Routes>
+          <Route path="/identity-inbox" element={<IdentityInboxPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    await userEvent.click(screen.getByText('Mister Miracle'))
+    await userEvent.click(screen.getByRole('button', { name: 'Find match' }))
+
+    expect(screen.getByText('#?')).toBeInTheDocument()
+    expect(screen.queryByText(/% match/)).not.toBeInTheDocument()
+  })
+
+  it('confirms only unambiguous partial matches and lists the rest for review', async () => {
+    mockQueryResult([inboxItem()], 1)
+    mockSearchResult({
+      data: {
+        issue_id: 10,
+        query: 'B.P.R.D.',
+        results: [],
+        total_available: 0,
+        partial_matches: [
+          {
+            comicvine_volume_id: 42,
+            volume_name: 'B.P.R.D.',
+            actionable_reason: 'Volume found; 1 issue matches unambiguously',
+            matched: [
+              {
+                issue_id: 11,
+                issue_number: '2',
+                comicvine_issue_id: 901,
+                mapping_id: 2,
+                external_identity_id: 502,
+                reason: 'exact label match',
+              },
+            ],
+            unmatched: [
+              {
+                issue_id: 12,
+                issue_number: '3',
+                comicvine_issue_id: 0,
+                mapping_id: null,
+                external_identity_id: null,
+                reason: 'not on this volume',
+              },
+            ],
+          },
+        ],
+        no_match_reason: null,
+      },
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/identity-inbox']}>
+        <Routes>
+          <Route path="/identity-inbox" element={<IdentityInboxPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    await userEvent.click(screen.getByText('Mister Miracle'))
+    await userEvent.click(screen.getByRole('button', { name: 'Find match' }))
+
+    expect(screen.getByText('Volume found; 1 issue matches unambiguously')).toBeInTheDocument()
+    expect(screen.getByText('#2 → ComicVine #901')).toBeInTheDocument()
+    expect(screen.getByText('#3: not on this volume')).toBeInTheDocument()
+
+    const confirmButtons = screen.getAllByRole('button', { name: 'Confirm' })
+    await userEvent.click(confirmButtons[confirmButtons.length - 1])
+    await waitFor(() => expect(mockConfirmIdentity).toHaveBeenCalledWith(11, 901))
+  })
+
+  it('explains an empty discovery result and offers a default fallback', async () => {
+    mockQueryResult([
+      inboxItem({ mapping_id: 1 }),
+      inboxItem({ mapping_id: 2, issue_id: 11, thread_title: 'Hellboy' }),
+    ], 2)
+    mockUseIdentityInboxSearch
+      .mockReturnValueOnce({
+        data: {
+          issue_id: 10,
+          query: 'Mister Miracle',
+          results: [],
+          total_available: 0,
+          partial_matches: [],
+          no_match_reason: 'No volume found for this title',
+        },
+        isPending: false,
+        isError: false,
+        refetch: vi.fn(),
+      })
+      .mockReturnValue({
+        data: {
+          issue_id: 11,
+          query: 'Hellboy',
+          results: [],
+          total_available: 0,
+          partial_matches: [],
+          no_match_reason: null,
+        },
+        isPending: false,
+        isError: false,
+        refetch: vi.fn(),
+      })
+
+    render(
+      <MemoryRouter initialEntries={['/identity-inbox']}>
+        <Routes>
+          <Route path="/identity-inbox" element={<IdentityInboxPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    await userEvent.click(screen.getByText('Mister Miracle'))
+    await userEvent.click(screen.getByRole('button', { name: 'Find match' }))
+
+    expect(screen.getByText(/No volume found for this title/)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByText('Hellboy'))
+    await userEvent.click(screen.getByRole('button', { name: 'Find match' }))
+    expect(screen.getByText(/No matches found/)).toBeInTheDocument()
+  })
+
+  it('surfaces a failed confirmation without changing the issue', async () => {
+    mockConfirmIdentity.mockRejectedValue(new Error('confirm failed'))
+    mockQueryResult([inboxItem()], 1)
+    mockSearchResult({
+      data: {
+        issue_id: 10,
+        query: 'Hellboy',
+        results: [],
+        total_available: 0,
+        partial_matches: [
+          {
+            comicvine_volume_id: 42,
+            volume_name: 'Hellboy',
+            actionable_reason: 'Volume found; 1 issue matches unambiguously',
+            matched: [
+              {
+                issue_id: 11,
+                issue_number: '2',
+                comicvine_issue_id: 901,
+                mapping_id: 2,
+                external_identity_id: 502,
+                reason: 'exact label match',
+              },
+            ],
+            unmatched: [],
+          },
+        ],
+        no_match_reason: null,
+      },
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/identity-inbox']}>
+        <Routes>
+          <Route path="/identity-inbox" element={<IdentityInboxPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    await userEvent.click(screen.getByText('Mister Miracle'))
+    await userEvent.click(screen.getByRole('button', { name: 'Find match' }))
+    const confirmButtons = screen.getAllByRole('button', { name: 'Confirm' })
+    await userEvent.click(confirmButtons[confirmButtons.length - 1])
+
+    await waitFor(() =>
+      expect(screen.getByText(/Confirmation failed/)).toBeInTheDocument(),
+    )
+    expect(screen.getByText('Mister Miracle')).toBeInTheDocument()
   })
 })

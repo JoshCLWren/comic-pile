@@ -170,9 +170,13 @@ pub(crate) fn normalize_roster_issue_metadata(result: &Value) -> Value {
             [
                 "original_url",
                 "super_url",
+                "screen_large_url",
                 "medium_url",
+                "screen_url",
                 "small_url",
                 "thumb_url",
+                "tiny_url",
+                "icon_url",
             ]
             .iter()
             .filter_map(|key| image.get(*key).and_then(Value::as_str))
@@ -220,10 +224,20 @@ fn normalized_metadata(
     }
     let image = obj.get("image").and_then(Value::as_object);
     let cover = image.and_then(|v| {
-        ["original_url", "super_url", "medium_url", "small_url"]
-            .iter()
-            .filter_map(|k| v.get(*k).and_then(Value::as_str))
-            .find(|s| !s.is_empty())
+        [
+            "original_url",
+            "super_url",
+            "screen_large_url",
+            "medium_url",
+            "screen_url",
+            "small_url",
+            "thumb_url",
+            "tiny_url",
+            "icon_url",
+        ]
+        .iter()
+        .filter_map(|k| v.get(*k).and_then(Value::as_str))
+        .find(|s| !s.is_empty())
     });
     let person = compact_refs(&result["person_credits"]);
     let present = person.as_array().is_some_and(|v| !v.is_empty());
@@ -492,7 +506,11 @@ async fn provider_issue(
 /// Read the same ComicVine volume and complete, validated issue roster used
 /// by the Python preview builder. Never turn an outage or partial roster into
 /// an empty successful plan: doing so can approve a wrong comic identity.
+///
+/// Routes through the shared ComicVine limits so preview roster fetches respect
+/// rate limits, cooldowns, and cache fallback, matching the v2 series routes.
 pub(crate) async fn catalog_volume_roster(
+    limits: &crate::comicvine_limits::ComicVineLimits,
     outbound: &Arc<dyn OutboundHttp>,
     external_id: &str,
 ) -> Result<(Value, Vec<Value>), ApiError> {
@@ -509,7 +527,8 @@ pub(crate) async fn catalog_volume_roster(
         .filter(|v| *v > 0)
         .ok_or_else(unavailable)?;
     let api_key = provider_api_key().ok_or_else(unavailable)?;
-    let volume = provider_response(outbound, &format!("volume/4050-{volume_id}"), "", &api_key)
+    let volume = limits
+        .call(outbound, &format!("volume/4050-{volume_id}"), "", &api_key)
         .await
         .map_err(|_| unavailable())?;
     let volume_info = volume
@@ -531,7 +550,8 @@ pub(crate) async fn catalog_volume_roster(
     let mut expected_total: Option<usize> = None;
     loop {
         let query = format!("&filter=volume:{volume_id}&limit=100&offset={offset}");
-        let page = provider_response(outbound, "issues", &query, &api_key)
+        let page = limits
+            .call(outbound, "issues", &query, &api_key)
             .await
             .map_err(|_| unavailable())?;
         let results = page

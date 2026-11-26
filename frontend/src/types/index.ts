@@ -277,24 +277,6 @@ export interface SnoozeSessionResponse {
   correction: SnoozeCorrectionInfo | null;
 }
 
-export interface SessionCurrent {
-  id: number;
-  current_die: number;
-  user_id?: number;
-  start_die?: number;
-  manual_die?: number | null;
-  pending_thread_id?: number | null;
-  last_rolled_result?: number | null;
-  ladder_path?: string;
-  active_thread?: SessionThread | null;
-  snoozed_threads?: SessionThread[];
-  reading_bandwidth?: ReadingBandwidth | null;
-  reading_intent?: ReadingIntent | null;
-  reading_mode_source?: ReadingModeSource | null;
-  reading_mode_suggested?: boolean;
-  correction?: SnoozeCorrectionInfo | null;
-}
-
 export type ReadingBandwidth = 'light' | 'balanced' | 'deep'
 export type ReadingIntent = 'balanced' | 'momentum' | 'familiar' | 'explore' | 'random'
 export type ReadingModeSource = 'quiz' | 'manual'
@@ -343,18 +325,6 @@ export interface QuizQuestion {
   answers: QuizAnswerOption[]
 }
 
-export interface SessionSummary {
-  id: number;
-  started_at: string;
-  ended_at: string | null;
-  ladder_path: string | null;
-  active_thread: SessionThread | null;
-  last_rolled_result: number | null;
-  current_die: number | null;
-  start_die: number | null;
-  snapshot_count: number | null;
-}
-
 export interface SessionEvent {
   id: number;
   timestamp: string;
@@ -395,10 +365,9 @@ export interface SessionDetails {
 export type ThreadListResponse = components['schemas']['QueueThreadListResponse'] &
   Pick<components['schemas']['ThreadListResponse'], 'filtered_count'>
 
-export interface SessionListResponse {
-  sessions: SessionSummary[];
-  next_page_token: string | null;
-}
+// The session index and current-session wire types were retired with the
+// legacy session surface (#4839, #4343); supported reads use the
+// resource-shaped v2 details/snapshot contracts above.
 
 export type BlockingDependency = components['schemas']['BlockingDependency']
 

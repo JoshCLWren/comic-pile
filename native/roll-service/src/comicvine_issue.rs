@@ -404,18 +404,31 @@ fn series(metadata: &Value) -> (Option<i64>, Option<String>) {
 ///
 /// Tries image_url, primary_image, then various image sizes in order of preference.
 fn image(metadata: &Value) -> Option<String> {
+    let image_keys = [
+        "original_url",
+        "super_url",
+        "screen_large_url",
+        "medium_url",
+        "screen_url",
+        "small_url",
+        "thumb_url",
+        "tiny_url",
+        "icon_url",
+    ];
     as_string(&metadata["image_url"])
         .or_else(|| as_string(&metadata["primary_image"]))
         .or_else(|| {
-            [
-                "original_url",
-                "super_url",
-                "medium_url",
-                "small_url",
-                "thumb_url",
-            ]
-            .iter()
-            .find_map(|key| as_string(&metadata["image"][*key]))
+            image_keys
+                .iter()
+                .find_map(|key| as_string(&metadata["image"][*key]))
+        })
+        .or_else(|| {
+            let raw = &metadata["raw_provider_payload"];
+            image_keys
+                .iter()
+                .find_map(|key| as_string(&raw["image"][*key]))
+                .or_else(|| as_string(&raw["image_url"]))
+                .or_else(|| as_string(&raw["primary_image"]))
         })
 }
 

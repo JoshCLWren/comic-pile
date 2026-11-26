@@ -10,6 +10,7 @@ pub mod catalog_series_mapping_preview;
 pub mod cbl_catalog;
 pub mod comicvine_issue;
 pub mod comicvine_limits;
+pub mod comicvine_matching;
 pub mod comicvine_repair;
 pub mod comicvine_resolution;
 pub mod comicvine_v2;

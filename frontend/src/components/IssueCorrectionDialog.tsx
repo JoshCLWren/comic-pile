@@ -12,6 +12,8 @@ import {
   findBulkReadReceipt,
   writeBulkReadReceipt,
 } from '../hooks/useBulkReadOperations'
+import { invalidateAfterIssueEdit } from '../query/cacheEffects'
+import { queryClient } from '../query/queryClient'
 import type { Issue, IssueListResponse } from '../types'
 
 export interface IssueCorrectionIssuesApi {
@@ -317,6 +319,7 @@ export default function IssueCorrectionDialog({
         try { writeBulkReadReceipt(threadId, operation.id) } catch { /* ignore */ }
       }
       setPreview(null)
+      await invalidateAfterIssueEdit(queryClient, threadId)
       onSuccess()
       if (!operation) onClose()
     } catch (_err) {
