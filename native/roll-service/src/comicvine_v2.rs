@@ -1729,6 +1729,7 @@ pub async fn import_issue(
     user: AuthenticatedUser,
     request: Result<Json<ImportIssueRequest>, JsonRejection>,
 ) -> Result<(StatusCode, Json<ImportIssueResponse>), ApiError> {
+    let started = Instant::now();
     let Json(request) = request.map_err(|_| validation_failed())?;
     // Python `title: Field(min_length=1, max_length=200)` bounds the raw
     // string; the service then stores `title.strip()` (possibly empty).
@@ -1838,7 +1839,8 @@ pub async fn import_issue(
         .await
         .map_err(db::query_error)?;
     let issue_id: i32 = issue_row.get(0);
-    // Python `confirm_comicvine_identity` (no post-commit hydration on import).
+    // Same confirmed mapping contract as `confirm_comicvine_identity`;
+    // hydration is awaited after the commit, outside this transaction.
     let external_identity_id =
         link_with_source(&tx, issue_id, request.comicvine_issue_id, "user_confirmed").await?;
     let mut response = ImportIssueResponse {
@@ -1874,6 +1876,12 @@ pub async fn import_issue(
         response.total_items = Some(items.len() as i32 + 1);
     }
     tx.commit().await.map_err(db::query_error)?;
+    // A single exact-issue import is request/response work: finish hydration
+    // in this HTTP invocation, after the transaction and pooled connection are
+    // released. Provider failure is best-effort and never rolls back the
+    // committed mapping or overwrites valid stored metadata.
+    drop(connection);
+    hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started, false).await;
     Ok((StatusCode::CREATED, Json(response)))
 }
 
