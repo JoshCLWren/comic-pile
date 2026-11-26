@@ -515,7 +515,7 @@ async fn current_active_thread(
              SELECT CASE WHEN m.status='confirmed' THEN
                         NULLIF(BTRIM(COALESCE(
                             x.metadata_json->>'issue_number',
-                            x.metadata_json#>>'{raw_provider_payload,issue_number}'
+                            x.metadata_json#>>'{{raw_provider_payload,issue_number}}'
                         )), '')
                     ELSE NULL END AS provider_issue_number
              FROM issue_external_identity_mappings m
