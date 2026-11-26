@@ -113,6 +113,41 @@ describe('PlannerAddSteps', () => {
     expect(editor.setSelectedIssue).toHaveBeenCalledWith(issues[0])
   })
 
+  it('shows the empty-series state when the selected series has no issue records (#4119)', () => {
+    // Regression for the Greptile PR #3963 finding "Empty-series check creates
+    // an issue": the retired scratch probe passed issueCount: 1 to makeSeries,
+    // which created issue 1, so its "empty series" case never exercised a
+    // series without issues. A thread's remaining count is independent from
+    // the number of issue records fetched for the picker; keep them separate
+    // here so the empty state is genuinely asserted.
+    const emptySeries = {
+      ...threads[0],
+      id: 5,
+      title: 'Series With No Issues',
+      issues_remaining: 1,
+      total_issues: 1,
+    } as ThreadListItem
+    expect(emptySeries.issues_remaining).toBeGreaterThan(0)
+
+    render(
+      <PlannerAddSteps
+        editor={makeEditor({ selectedThread: emptySeries, selectedThreadId: emptySeries.id })}
+        threads={[emptySeries]}
+        issues={[]}
+        issuesLoading={false}
+        issueLoadError={null}
+        groups={[]}
+      />,
+    )
+
+    const issueSelect = screen.getByLabelText('Issue')
+    expect(issueSelect).toBeDisabled()
+    const options = within(issueSelect).getAllByRole('option')
+    expect(options).toHaveLength(1)
+    expect(options[0]).toHaveTextContent('No issues available')
+    expect(screen.getByRole('button', { name: 'Add issue' })).toBeDisabled()
+  })
+
   it('disables the issue picker when the plan has no lane', () => {
     render(
       <PlannerAddSteps
