@@ -810,7 +810,11 @@ async fn issue_cards_preserve_mixed_numbering_series_and_adjacent_volume() {
             card["display_issue_number"].as_str(),
             Some(expected_display.as_str())
         );
-        assert!(*position > 0, "authored order is preserved");
+        assert_eq!(
+            *position,
+            6 - index as i32,
+            "authored order is preserved by the mapping"
+        );
         assert_eq!(card["has_confirmed_identity"], true);
         assert_eq!(card["mapping_state"].as_str(), Some("confirmed"));
         assert_eq!(
@@ -921,6 +925,88 @@ async fn alias_only_patch_replays_identical_key_and_rejects_a_changed_payload() 
     assert_eq!(status, StatusCode::CONFLICT, "{conflict:?}");
     assert_eq!(
         first["issue"]["issue_number_alias"], "100",
+        "the original receipt still records the accepted alias"
+    );
+    let stored_alias: Option<String> = conn
+        .query_one(
+            "SELECT issue_number_alias FROM issues WHERE id=$1",
+            &[&issue_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        stored_alias.as_deref(),
+        Some("100"),
         "a conflicting stale write must not change the stored alias"
+    );
+}
+
+#[tokio::test]
+async fn issue_cards_use_verified_identity_when_candidates_conflict() {
+    let (state, token, csrf, owner_id, _guard) = setup_user("conflicting-identity").await;
+    let conn = state.pool.get().await.unwrap();
+    let thread_id: i32 = conn
+        .query_one(
+            "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status, created_at)
+             VALUES ($1, 'Saga', 'Comic', 1, 1, 'active', NOW()) RETURNING id",
+            &[&owner_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let issue_id: i32 = conn
+        .query_one(
+            "INSERT INTO issues (thread_id, issue_number, issue_number_alias, position, status, created_at)
+             VALUES ($1, '3', '100', 1, 'unread', NOW()) RETURNING id",
+            &[&thread_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+
+    // A competing candidate with a higher confidence must not win: only the
+    // confirmed provider identity supplies the number, id and cover (#4652).
+    conn.batch_execute(
+        "INSERT INTO external_identities (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+         VALUES (700, 'comicvine', 'issue', '4050-100',
+                 '{\"issue_number\":\"100\",\"image_url\":\"https://comicvine.test/confirmed.jpg\"}'::json, NOW(), NOW()),
+                (701, 'comicvine', 'issue', '4050-999',
+                 '{\"issue_number\":\"999\",\"image_url\":\"https://comicvine.test/candidate.jpg\"}'::json, NOW(), NOW());
+         INSERT INTO issue_external_identity_mappings
+             (issue_id, external_identity_id, status, confidence, evidence_json, created_at, updated_at)
+         VALUES (700, 700, 'candidate', 0.99, '{}'::json, NOW(), NOW()),
+                (701, 701, 'confirmed', 0.80, '{}'::json, NOW(), NOW());",
+    )
+    .await
+    .unwrap();
+
+    let (status, body) = send(
+        &state,
+        authed(
+            "POST",
+            "/api/v2/issues/cards",
+            &token,
+            &csrf,
+            Some(json!({ "issue_ids": [issue_id] })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let card = &body["items"][0];
+    assert_eq!(card["issue_number"].as_str(), Some("3"));
+    assert_eq!(card["issue_number_alias"].as_str(), Some("100"));
+    assert_eq!(card["provider_issue_number"].as_str(), Some("100"));
+    assert_eq!(card["comicvine_issue_id"].as_str(), Some("4050-100"));
+    assert_eq!(
+        card["cover_image_url"].as_str(),
+        Some("https://comicvine.test/confirmed.jpg")
+    );
+    assert_eq!(card["has_confirmed_identity"], true);
+    assert_eq!(card["mapping_state"].as_str(), Some("confirmed"));
+    assert_eq!(
+        card_count(&conn, &[thread_id]).await,
+        1,
+        "conflicting identities must not create a second physical comic"
     );
 }
