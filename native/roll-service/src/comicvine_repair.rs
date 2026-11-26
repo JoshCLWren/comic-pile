@@ -1101,12 +1101,77 @@ async fn confirmed_identity_for_issue(
     Some((id, external_id, metadata))
 }
 
-/// Settle the enqueued fallback refresh row after a successful inline fetch.
-/// Marks the row `completed` (credits present) or `no_credits` (genuine empty
-/// roster) with `completed_at = now()`, so `comicvine_issue::status` reports a
-/// truthful terminal state instead of `refresh_pending`. Only rows that are not
-/// currently leased by a repair worker are touched (fenced, no lock inversion).
-async fn settle_inline_refresh(
+/// Truthful outcome of one bounded, awaited ComicVine metadata hydration.
+/// These are terminal results of the current HTTP invocation, not queue states:
+/// an interactive caller can distinguish success from a legitimate empty roster
+/// and from each provider failure class without waiting for a scheduler.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum HydrationOutcome {
+    /// Deep metadata (including creator names and roles) was persisted.
+    Complete,
+    /// A valid deep payload genuinely has no creator credits. The empty result
+    /// is persisted rather than being mistaken for a failure.
+    NoCredits,
+    /// No confirmed identity for this owned issue, or the identity changed
+    /// while the provider was in flight (a late A must never overwrite B).
+    NotConfirmed,
+    /// `COMICVINE_API_KEY` is absent; distinct from a provider failure.
+    NotConfigured,
+    /// Provider outage, invalid envelope, or a transport/database failure.
+    Unavailable,
+    /// Provider throttled the bounded attempt; honour its Retry-After.
+    RateLimited { retry_after_seconds: u32 },
+    /// The single bounded attempt exceeded the request budget or provider timeout.
+    Timeout,
+    /// Provider payload was malformed or did not match the confirmed identity.
+    InvalidResponse,
+}
+
+impl HydrationOutcome {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Complete => "complete",
+            Self::NoCredits => "no_credits",
+            Self::NotConfirmed => "not_confirmed",
+            Self::NotConfigured => "provider_not_configured",
+            Self::Unavailable => "provider_unavailable",
+            Self::RateLimited { .. } => "rate_limited",
+            Self::Timeout => "timeout",
+            Self::InvalidResponse => "invalid_response",
+        }
+    }
+
+    /// True only when valid provider data was actually persisted.
+    pub(crate) fn refreshed(self) -> bool {
+        matches!(self, Self::Complete | Self::NoCredits)
+    }
+
+    pub(crate) fn retry_after_seconds(self) -> Option<i32> {
+        match self {
+            Self::RateLimited { retry_after_seconds } => Some(retry_after_seconds as i32),
+            _ => None,
+        }
+    }
+}
+
+impl From<ProviderFailure> for HydrationOutcome {
+    fn from(error: ProviderFailure) -> Self {
+        match error {
+            ProviderFailure::RateLimited(delay) => Self::RateLimited {
+                retry_after_seconds: delay,
+            },
+            ProviderFailure::Unavailable => Self::Unavailable,
+            ProviderFailure::Timeout => Self::Timeout,
+            ProviderFailure::InvalidPayload => Self::InvalidResponse,
+        }
+    }
+}
+
+/// Finalize a refresh row left by an earlier code path after synchronous
+/// hydration succeeds. This only *settles* existing rows: it never inserts a
+/// row, claims one or dispatches a wake-up. A row with a live worker lease is
+/// left alone so that worker's result stays authoritative.
+async fn settle_existing_refresh_row(
     conn: &deadpool_postgres::Object,
     identity_id: i32,
     terminal_state: &str,
@@ -1117,7 +1182,10 @@ async fn settle_inline_refresh(
              SET state = $2, lease_expires_at = NULL, last_error = NULL,
                  completed_at = now(), next_attempt_at = now(), updated_at = now()
              WHERE external_identity_id = $1
-               AND state IN ('pending', 'deferred', 'failed')",
+               AND (
+                 state IN ('pending', 'deferred', 'failed')
+                 OR (state = 'running' AND (lease_expires_at IS NULL OR lease_expires_at <= now()))
+               )",
             &[&identity_id, &terminal_state],
         )
         .await
