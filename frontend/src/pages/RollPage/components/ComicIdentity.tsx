@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, useMemo } from 'react'
 import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueIntelligence'
 import { canonicalCreatorKey, useCreatorSummaries } from '../../../hooks/useCreatorSummaries'
-import { comicVineApi, type ComicVineRelatedIssue } from '../../../services/api-comicvine'
+import { comicVineApi, type ComicVineRelatedIssue, type MetadataRefreshResponse } from '../../../services/api-comicvine'
 import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName, computeArcNeighborAnchors } from '../../../utils/comicIdentity'
 import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
 import { ComicIssueCover } from '../../../components/ComicIssueCard'
@@ -160,17 +160,23 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
       // is a truthful provider outcome, not success — say which one happened.
       if (!result?.refreshed) {
         const retryAfter = result?.retry_after_seconds
-        const message: Record<string, string> = {
+        const outcome = result?.outcome
+        const messages = {
+          complete: 'Could not refresh creator credits. Try again.',
+          no_credits: 'ComicVine currently has no creator credits.',
+          not_confirmed: 'No confirmed ComicVine issue is mapped to this comic.',
+          provider_not_configured: 'ComicVine credentials are not configured on this server.',
           provider_unavailable: 'ComicVine is unavailable right now. Your mapping is safe — try again.',
+          rate_limited: 'ComicVine rate limited this retry. Try again.',
           timeout: 'ComicVine did not answer in time. Your mapping is safe — try again.',
           invalid_response: 'ComicVine returned an invalid response. Try again.',
-          provider_not_configured: 'ComicVine credentials are not configured on this server.',
-          not_confirmed: 'No confirmed ComicVine issue is mapped to this comic.',
-        }
+        } satisfies Record<MetadataRefreshResponse['outcome'], string>
         setRefreshRecoveryError(
-          result?.outcome === 'rate_limited' && retryAfter != null && retryAfter > 0
+          outcome === 'rate_limited' && retryAfter != null && retryAfter > 0
             ? `ComicVine rate limited this retry. Try again in ${retryAfter}s.`
-            : message[result?.outcome ?? ''] ?? 'Could not refresh creator credits. Try again.',
+            : outcome != null
+              ? messages[outcome]
+              : 'Could not refresh creator credits. Try again.',
         )
       }
     } catch {
