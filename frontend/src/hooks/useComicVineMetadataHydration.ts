@@ -274,7 +274,8 @@ export function useComicVineMetadataHydration({
     : isHydrating
       ? 'hydrating'
       : failure ?? (metadata ? statusFromMetadata(metadata) : null)
-  const retryable = state === 'not-hydrated'
+  const retryable = state === 'hydrating'
+    || state === 'not-hydrated'
     || state === 'unavailable'
     || state === 'rate-limited'
     || state === 'timeout'

@@ -1066,7 +1066,6 @@ describe('ComicIdentity deep-metadata hydration (issue #5841)', () => {
   })
 
   it('never polls: time alone does not request or refetch metadata', async () => {
-    vi.useFakeTimers()
     getIntelligence.mockResolvedValue(intelligenceResponse({ metadata_status: 'not_deep_fetched' }))
     refreshMetadata.mockResolvedValue({
       issue_id: 1,
@@ -1075,13 +1074,14 @@ describe('ComicIdentity deep-metadata hydration (issue #5841)', () => {
     })
 
     renderIdentity()
-    await flushRequests()
+    await waitForLoaded()
+    await waitFor(() => expect(refreshMetadata).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(getIntelligence).toHaveBeenCalledTimes(2))
 
-    expect(refreshMetadata).toHaveBeenCalledTimes(1)
-    expect(getIntelligence).toHaveBeenCalledTimes(2)
     // A legacy queued response is presented truthfully, never as an indefinite spinner.
     expect(screen.queryByTestId('creator-status-fetching')).not.toBeInTheDocument()
 
+    vi.useFakeTimers()
     await act(async () => {
       await vi.advanceTimersByTimeAsync(180_000)
     })
@@ -1205,22 +1205,25 @@ describe('ComicIdentity deep-metadata hydration (issue #5841)', () => {
   })
 
   it('respects provider Retry-After without scheduling a request when the cooldown elapses', async () => {
-    vi.useFakeTimers()
-    getIntelligence.mockResolvedValue(intelligenceResponse({ metadata_status: 'not_deep_fetched' }))
+    getIntelligence.mockResolvedValue(intelligenceResponse({ metadata_status: 'refresh_failed' }))
     refreshMetadata.mockRejectedValue(apiError(429, { 'retry-after': '30' }))
 
     renderIdentity()
+    await waitForLoaded()
+    const retry = screen.getByRole('button', { name: 'Retry creator credits' })
+    vi.useFakeTimers()
+    fireEvent.click(retry)
     await flushRequests()
 
-    expect(await screen.findByTestId('creator-status-rate-limited')).toHaveTextContent('Retry in 30s')
-    expect(screen.getByRole('button', { name: 'Retry creator credits' })).toBeDisabled()
+    expect(screen.getByTestId('creator-status-rate-limited')).toHaveTextContent('Retry in 30s')
+    expect(retry).toBeDisabled()
     const callsBefore = refreshMetadata.mock.calls.length
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(30_000)
     })
     expect(refreshMetadata).toHaveBeenCalledTimes(callsBefore)
-    expect(screen.getByRole('button', { name: 'Retry creator credits' })).toBeEnabled()
+    expect(retry).toBeEnabled()
   })
 
   it('disables duplicate concurrent Retry clicks while a request is in flight', async () => {
