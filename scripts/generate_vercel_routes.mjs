@@ -1,14 +1,14 @@
 #!/usr/bin/env node
-/** Route-ingress generator. Every /api operation is now owned by a route
+/** Route-ingress generator. Every /api operation is owned by a route
  * fragment and routed to native Rust; the Python API and its ingress are
- * gone. The `pythonOperations` helper remains as a pure parser for the
- * generator's regression tests, but no Python runtime is consulted here.
+ * gone. This generator emits the canonical Vercel builds directly, so no
+ * post-generation strip step is required.
  */
 import {readFileSync, readdirSync, writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
+import {withCanonicalBuilds} from './vercel_builds.mjs';
 import {slimNativeRollRoutes} from './vercel_slim_routes.mjs';
 
-const PYTHON = '/api/index.py';
 const RUST = '/api/native_roll.rs';
 const NATIVE = new Set([RUST]);
 const FALLBACK = '/api(?:/.*)?';
@@ -35,36 +35,6 @@ export function applyStaticCsp(config) {
   };
 }
 const PARAM = /\{([^{}]+)\}/g;
-const INVENTORY_EXCLUDED_OPERATIONS = new Set([
-  'GET /api/v1/cron/release-sync',
-]);
-
-export function pythonOperations(data) {
-  const documented = new Set();
-  for (const [path, operations] of Object.entries(data.paths)) {
-    if (!path.startsWith('/api/')) continue;
-    for (const method of Object.keys(operations)) {
-      if (METHODS.includes(method.toUpperCase())) documented.add(method.toUpperCase() + ' ' + path);
-    }
-  }
-  const registered = new Set();
-  const visible = new Set();
-  for (const r of data.registered) {
-    if (!r.path.startsWith('/api/') || r.path === '/api/{path:path}') continue;
-    for (const method of r.methods) {
-      if (!METHODS.includes(method)) continue;
-      const id = method + ' ' + r.path;
-      registered.add(id);
-      if (r.visible) visible.add(id);
-    }
-  }
-  const missing = [...visible].filter(x => !documented.has(x));
-  if (missing.length) throw new Error('Python OpenAPI lacks registered routes: ' + missing.slice(0, 8));
-  return [...new Set([...registered, ...documented])].map(item => {
-    const split = item.indexOf(' ');
-    return [item.slice(0, split), item.slice(split + 1)];
-  }).sort((a, b) => a[1].localeCompare(b[1]) || a[0].localeCompare(b[0]));
-}
 
 function escapeRegex(text) {
   return text.replace(/[\^$.*+?()[\]{}|\-]/g, '\\$&');
@@ -79,10 +49,12 @@ export function routeRegex(path) {
   }
   return regex + escapeRegex(path.slice(cursor)) + '$';
 }
-function alreadyNative(method, path, native) {
-  const concrete = path.replace(PARAM, '1');
-  return native.some(route =>
-    (!route.methods || route.methods.includes(method)) && new RegExp(route.src).test(concrete));
+function isString(value) {
+  return Object.prototype.toString.call(value) === '[object String]';
+}
+function isApiSource(src) {
+  return src === FALLBACK || (isString(src)
+    && (src.startsWith('/api/') || src.startsWith('^/api/')));
 }
 function compareCodeUnits(left, right) {
   if (left < right) return -1;
@@ -110,6 +82,7 @@ function findPreviousRoute(method, path, previousRoutes) {
   }
   return null;
 }
+/** Derive the explicit native rewrites owned by the route fragments. */
 export function fragmentVercelRoutes(fragments, previousRoutes = []) {
   const grouped = new Map();
   for (const fragment of fragments) {
@@ -132,7 +105,7 @@ export function fragmentVercelRoutes(fragments, previousRoutes = []) {
         // relies on it instead of explicit native_roll entries).
         src = (previous && previous.src !== FALLBACK && previous.src) || routeRegex(path);
       }
-      if (dest !== PYTHON && !NATIVE.has(dest)) {
+      if (!NATIVE.has(dest)) {
         throw new Error(`unknown destination ${dest} for ${method} ${path}`);
       }
       const key = `${src}|${dest}`;
@@ -140,94 +113,37 @@ export function fragmentVercelRoutes(fragments, previousRoutes = []) {
       grouped.get(key).methods.add(method);
     }
   }
-  const routes = [...grouped.values()].map(group => {
-    const methods = new Set(group.methods);
-    if (group.dest === PYTHON) methods.add('OPTIONS');
-    return {src: group.src, methods: METHODS.filter(m => methods.has(m)), dest: group.dest};
-  });
-  const native = routes.filter(r => NATIVE.has(r.dest)).sort(compareRoutes);
-  const python = routes.filter(r => r.dest === PYTHON).sort(compareRoutes);
-  const ordered = [...native, ...python];
-  const seen = new Set();
-  for (const route of ordered) {
-    for (const method of route.methods) {
-      const identity = `${route.src}|${method}`;
-      if (NATIVE.has(route.dest) && seen.has(identity)) {
-        throw new Error(`duplicate native ingress rewrite for ${method} ${route.src}`);
-      }
-      seen.add(identity);
-    }
-  }
-  return ordered;
+  return [...grouped.values()]
+    .map(group => ({src: group.src, methods: METHODS.filter(m => group.methods.has(m)), dest: group.dest}))
+    .sort(compareRoutes);
 }
-export function generateVercel(config, operations, fragments = null) {
+/** Generate the complete native-only Vercel document from route fragments. */
+export function generateVercel(config, fragments) {
+  if (!fragments || fragments.length === 0) {
+    throw new Error('Cannot generate without route fragments');
+  }
   const native = config.routes.filter(route => NATIVE.has(route.dest) && route.src !== FALLBACK);
   if (!native.length) throw new Error('Cannot generate without explicit native Rust routes');
-  if (!fragments || fragments.length === 0) {
-    const byPath = new Map();
-    for (const [method, path] of operations) {
-      if (alreadyNative(method, path, native)) continue;
-      if (!byPath.has(path)) byPath.set(path, new Set());
-      byPath.get(path).add(method);
-    }
-    const exceptions = [...byPath].sort(([a], [b]) => a.localeCompare(b))
-      .map(([path, methods]) => {
-        methods.add('OPTIONS');
-        return {src: routeRegex(path), methods: METHODS.filter(m => methods.has(m)), dest: PYTHON};
-      });
-    const rest = config.routes.filter(route => !native.includes(route) && route.dest !== PYTHON
-      && !(route.src === FALLBACK && NATIVE.has(route.dest)));
-    return applyStaticCsp({
-      ...config,
-      routes: [...native, ...exceptions, {src: FALLBACK, dest: RUST}, ...rest],
-    });
-  }
-  // Fragment-derived generation: fragments own their paths' dest/src.
+
   const fragmentRoutes = fragmentVercelRoutes(fragments, config.routes);
   const fragmentSrcs = new Set(fragmentRoutes.map(r => r.src));
-  const fragmentOps = new Set(
-    fragments.flatMap(f => f.operations.map(o => `${o.method} ${o.path}`)),
-  );
   const baselineNatives = config.routes.filter(
     route => NATIVE.has(route.dest) && route.src !== FALLBACK && !fragmentSrcs.has(route.src),
   );
-  const byPath = new Map();
-  for (const [method, path] of operations) {
-    if (fragmentOps.has(`${method} ${path}`)) continue;
-    if (alreadyNative(method, path, native)) continue;
-    if (!byPath.has(path)) byPath.set(path, new Set());
-    byPath.get(path).add(method);
-  }
-  const baselineExceptions = [...byPath].sort(([a], [b]) => a.localeCompare(b))
-    .map(([path, methods]) => {
-      methods.add('OPTIONS');
-      return {src: routeRegex(path), methods: METHODS.filter(m => methods.has(m)), dest: PYTHON};
-    });
-  const fragmentNatives = fragmentRoutes.filter(r => NATIVE.has(r.dest));
-  const fragmentPythons = fragmentRoutes.filter(r => r.dest === PYTHON);
-  const rest = config.routes.filter(route => !native.includes(route) && route.dest !== PYTHON
-    && !(route.src === FALLBACK && NATIVE.has(route.dest)));
-  // Deterministic native-before-Python order: baseline natives (preserved
-  // order) + fragment natives (sorted) + fragment pythons (sorted) +
-  // baseline exceptions (sorted by path) + catch-all + non-API tail.
-  // Fragment-derived native_roll routes are emitted only when a later Python
-  // route could otherwise shadow them (the catch-all already
-  // sends everything else to native_roll).
+  // Only non-API routes survive from the previous document. Every API route
+  // is either fragment-derived or the native catch-all below, so a retired
+  // Python exception can never be carried forward.
+  const rest = config.routes.filter(route => !native.includes(route) && !isApiSource(route.src));
   const fullRoutes = [
     ...baselineNatives,
-    ...fragmentNatives,
-    ...fragmentPythons,
-    ...baselineExceptions,
+    ...fragmentRoutes,
     {src: FALLBACK, dest: RUST},
     ...rest,
   ];
-  return applyStaticCsp({
+  return withCanonicalBuilds(applyStaticCsp({
     ...config,
-    routes: slimNativeRollRoutes(
-      fullRoutes,
-      new Set(fragmentNatives),
-    ),
-  });
+    routes: slimNativeRollRoutes(fullRoutes, new Set(fragmentRoutes)),
+  }));
 }
 export function loadFragmentFiles(directory = 'docs/api/route-fragments') {
   return readdirSync(directory)
@@ -236,80 +152,29 @@ export function loadFragmentFiles(directory = 'docs/api/route-fragments') {
     .map(name => JSON.parse(readFileSync(`${directory}/${name}`, 'utf8')));
 }
 
-export function updateInventory(inventory, operations) {
-  // No Python operations means there is nothing to sync into the inventory;
-  // leave the fragment-owned surface (and its burndown enrichment) untouched.
-  if (operations.length === 0) return inventory;
-  const full = inventory.full_surface;
-  if (!full) throw new Error('Missing existing full_surface inventory');
-  const prev = new Map([...full.v1_operations, ...full.unversioned_operations]
-    .map(op => [op.method + ' ' + op.path, op]));
-  const v1 = [];
-  const unversioned = [];
-  for (const [method, path] of operations) {
-    const bucket = path.startsWith('/api/v1/') ? v1
-      : path.startsWith('/api/v2/') ? null
-      : path.startsWith('/api/') ? unversioned : null;
-    if (!bucket) continue;
-    const old = prev.get(method + ' ' + path);
-    bucket.push({method, path, runtime: 'python-fastapi',
-      status: old?.status || 'transitional',
-      owning_issue: old?.owning_issue ?? null,
-      consumers: old?.consumers || []});
-  }
-  return {...inventory, full_surface: {...full,
-    catch_all: {src: FALLBACK, dest: RUST},
-    v1_operations: v1, unversioned_operations: unversioned}};
-}
-export function normalizeOperationIds(operations) {
-  return operations.map(operation => [operation.method, operation.path])
-    .sort((a, b) => a[1].localeCompare(b[1]) || a[0].localeCompare(b[0]));
-}
-export function sameOperationIds(operations, expected) {
-  return JSON.stringify(normalizeOperationIds(operations))
-    === JSON.stringify(normalizeOperationIds(expected));
-}
-function inventoryOperations(operations) {
-  return operations.filter(([method, path]) => !INVENTORY_EXCLUDED_OPERATIONS.has(`${method} ${path}`));
-}
 function run() {
   const check = process.argv.includes('--check');
   const original = JSON.parse(readFileSync('vercel.json', 'utf8'));
-  const inventory = JSON.parse(readFileSync('docs/api/v2-route-inventory.json', 'utf8'));
-  // The Python API is deleted: no Python operation declares an ingress any
-  // longer. Route fragments are the sole source of explicit /api rewrites.
-  const operations = [];
+  // Route fragments are the sole source of explicit /api rewrites; there is
+  // no Python operation registry to sync into the inventory any longer.
   const fragments = loadFragmentFiles();
-  const nextVercel = JSON.stringify(generateVercel(original, operations, fragments), null, 2) + '\n';
-  const nextInventory = updateInventory(inventory, inventoryOperations(operations));
+  const nextVercel = JSON.stringify(generateVercel(original, fragments), null, 2) + '\n';
   if (check) {
-    const full = inventory.full_surface;
-    if (readFileSync('vercel.json', 'utf8') !== nextVercel
-        || !sameOperationIds(full.v1_operations, nextInventory.full_surface.v1_operations)
-        || !sameOperationIds(full.unversioned_operations, nextInventory.full_surface.unversioned_operations)
-        || full.catch_all.dest !== RUST) {
-      const current = JSON.parse(readFileSync('vercel.json', 'utf8')).routes;
-      const expected = JSON.parse(nextVercel).routes;
-      const firstDiff = Array.from({length: Math.max(current.length, expected.length)})
-        .findIndex((_, i) => JSON.stringify(current[i]) !== JSON.stringify(expected[i]));
-      const actualIds = new Set([...full.v1_operations, ...full.unversioned_operations]
-        .map(o => o.method + ' ' + o.path));
-      const expectedIds = new Set([...nextInventory.full_surface.v1_operations,
-        ...nextInventory.full_surface.unversioned_operations].map(o => o.method + ' ' + o.path));
-      const excess = [...actualIds].filter(id => !expectedIds.has(id)).slice(0, 10);
-      const missing = [...expectedIds].filter(id => !actualIds.has(id)).slice(0, 10);
-      throw new Error('Stale Vercel Python allowlist. Run node scripts/generate_vercel_routes.mjs'
-        + '; route index=' + firstDiff
-        + '; actual=' + JSON.stringify(current[firstDiff])
-        + '; expected=' + JSON.stringify(expected[firstDiff])
-        + '; stale inventory IDs=' + JSON.stringify(excess)
-        + '; missing inventory IDs=' + JSON.stringify(missing));
+    const current = readFileSync('vercel.json', 'utf8');
+    if (current !== nextVercel) {
+      const before = JSON.parse(current);
+      const after = JSON.parse(nextVercel);
+      const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+      const differingKey = [...keys].find(key => JSON.stringify(before[key]) !== JSON.stringify(after[key]));
+      throw new Error('Stale Vercel ingress. Run node scripts/generate_vercel_routes.mjs'
+        + '; differing key=' + differingKey
+        + '; actual=' + JSON.stringify(before[differingKey])
+        + '; expected=' + JSON.stringify(after[differingKey]));
     }
-    console.log('Verified Rust-default ingress (no Python operations)');
+    console.log('Verified native-only Vercel ingress with canonical builds');
     return;
   }
   writeFileSync('vercel.json', nextVercel);
-  writeFileSync('docs/api/v2-route-inventory.json', JSON.stringify(nextInventory, null, 2) + '\n');
-  console.log('Generated Rust-default ingress from route fragments (no Python operations)');
+  console.log('Generated native-only Vercel ingress with canonical builds');
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) run();
