@@ -197,7 +197,7 @@ describe('IssueToggleList #4654 preview, alias and Undo branch coverage', () => 
   })
 
   it('un-accepting an alias re-previews with no aliases and re-disables Add', async () => {
-    mockedIssuesApi.previewCreate.mockResolvedValueOnce(previewResponse(baseOutcome(), null, true))
+    mockedIssuesApi.previewCreate.mockImplementation(async () => previewResponse(baseOutcome(), null, true))
     await renderDeferred()
     await openPreview()
 
