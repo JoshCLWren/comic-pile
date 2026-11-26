@@ -200,7 +200,9 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     onPendingMutationsChangeRef.current = onPendingMutationsChange
   })
   const notifyPendingMutations = useCallback(() => {
-    onPendingMutationsChangeRef.current?.(pendingMutationsRef.current.length > 0)
+    onPendingMutationsChangeRef.current?.(
+      pendingMutationsRef.current.length > 0 || failedMutationsRef.current.length > 0
+    )
   }, [])
   const loadGenerationRef = useRef(0)
   const totalCountRef = useRef(0)
@@ -537,7 +539,8 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       }
       await processIssueMutations()
     } ,
-    hasPendingMutations: () => pendingMutationsRef.current.length > 0,
+    hasPendingMutations: () =>
+      pendingMutationsRef.current.length > 0 || failedMutationsRef.current.length > 0,
   }), [processIssueMutations, setActionError])
 
   const enqueueIssueReorder = useCallback((
