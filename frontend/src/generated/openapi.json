@@ -7417,6 +7417,80 @@
         ],
         "type": "object"
       },
+      "IdentityInboxPartialMatch": {
+        "properties": {
+          "actionable_reason": {
+            "type": "string"
+          },
+          "comicvine_volume_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "matched": {
+            "items": {
+              "$ref": "#/components/schemas/IdentityInboxPartialMatchIssue"
+            },
+            "type": "array"
+          },
+          "unmatched": {
+            "items": {
+              "$ref": "#/components/schemas/IdentityInboxPartialMatchIssue"
+            },
+            "type": "array"
+          },
+          "volume_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "comicvine_volume_id",
+          "volume_name",
+          "actionable_reason",
+          "matched",
+          "unmatched"
+        ],
+        "type": "object"
+      },
+      "IdentityInboxPartialMatchIssue": {
+        "description": "One issue in an explainable partial series match. When a stored candidate\nexists, `mapping_id`/`external_identity_id` let the UI confirm it through\nthe existing confirmation endpoint; otherwise the issue stays for review.",
+        "properties": {
+          "comicvine_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "external_identity_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "mapping_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number",
+          "comicvine_issue_id",
+          "reason"
+        ],
+        "type": "object"
+      },
       "IdentityInboxRejectRequest": {
         "description": "Body for rejecting an identity inbox candidate.",
         "properties": {
@@ -7471,6 +7545,13 @@
             "format": "int32",
             "type": "integer"
           },
+          "partial_matches": {
+            "description": "Series-level partial matches derived from the same provider response.\nAlways emitted (empty when no volume resolves) for wire stability.",
+            "items": {
+              "$ref": "#/components/schemas/IdentityInboxPartialMatch"
+            },
+            "type": "array"
+          },
           "query": {
             "type": "string"
           },
@@ -7491,7 +7572,8 @@
         "required": [
           "issue_id",
           "query",
-          "results"
+          "results",
+          "partial_matches"
         ],
         "type": "object"
       },

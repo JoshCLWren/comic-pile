@@ -5832,6 +5832,31 @@ export interface components {
             updated_at?: number | null;
             why_stopped: string;
         };
+        IdentityInboxPartialMatch: {
+            actionable_reason: string;
+            /** Format: int32 */
+            comicvine_volume_id: number;
+            matched: components["schemas"]["IdentityInboxPartialMatchIssue"][];
+            unmatched: components["schemas"]["IdentityInboxPartialMatchIssue"][];
+            volume_name: string;
+        };
+        /**
+         * @description One issue in an explainable partial series match. When a stored candidate
+         *     exists, `mapping_id`/`external_identity_id` let the UI confirm it through
+         *     the existing confirmation endpoint; otherwise the issue stays for review.
+         */
+        IdentityInboxPartialMatchIssue: {
+            /** Format: int32 */
+            comicvine_issue_id: number;
+            /** Format: int32 */
+            external_identity_id?: number | null;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            mapping_id?: number | null;
+            reason: string;
+        };
         /** @description Body for rejecting an identity inbox candidate. */
         IdentityInboxRejectRequest: {
             /** Format: int32 */
@@ -5850,6 +5875,11 @@ export interface components {
         IdentityInboxSearchResponse: {
             /** Format: int32 */
             issue_id: number;
+            /**
+             * @description Series-level partial matches derived from the same provider response.
+             *     Always emitted (empty when no volume resolves) for wire stability.
+             */
+            partial_matches: components["schemas"]["IdentityInboxPartialMatch"][];
             query: string;
             results: components["schemas"]["IdentityInboxSearchResult"][];
             /** Format: int64 */
