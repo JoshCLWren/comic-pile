@@ -19,9 +19,17 @@
  * retrying, so the bounded state is exercised exactly as production sees it,
  * and the API client deliberately stays console-silent for 503 so this outage
  * does not pollute browser-health evidence.
+ *
+ * These tests use a genuinely registered user, not a mocked auth session. The
+ * shipped Roll client resolves its reading session (`POST /v2/reading-sessions`)
+ * before it reads `GET /v2/roll/bootstrap`; a fake token answers the mocked
+ * auth endpoints but is rejected by that real resolution write (401), so the
+ * bootstrap request is never issued and a fake-token "recovery" can never reach
+ * the backend. A real token keeps the fail-then-recover path on genuine data.
  */
-import { expect, type Page } from '@playwright/test'
+import { expect, type APIRequestContext, type Page } from '@playwright/test'
 import { test } from './auth-fixtures'
+import { generateTestUser } from './helpers'
 
 const ROLL_BOOTSTRAP_PATH = '/api/v2/roll/bootstrap'
 // #4822 moved /history off the legacy session index onto the owner-scoped
@@ -29,6 +37,36 @@ const ROLL_BOOTSTRAP_PATH = '/api/v2/roll/bootstrap'
 const ACTIVITY_PATH = '/api/v2/activity'
 
 const UNAVAILABLE_BODY = JSON.stringify({ detail: 'service_unavailable' })
+
+/**
+ * Register a real user before navigation and install its token for the page.
+ *
+ * The reading-session resolution write and the post-recovery read both need a
+ * credential the backend accepts; a mocked auth session cannot satisfy them.
+ */
+async function registerRealUser(page: Page, request: APIRequestContext): Promise<void> {
+  const user = generateTestUser()
+  const registered = await request.post('/api/v2/auth/register', {
+    data: {
+      username: user.username,
+      email: user.email,
+      password: user.password,
+    },
+  })
+  expect(registered.ok(), `register failed: ${registered.status()}`).toBeTruthy()
+  const loggedIn = await request.post('/api/v2/auth/login', {
+    data: { username: user.username, password: user.password },
+  })
+  expect(loggedIn.ok(), `login failed: ${loggedIn.status()}`).toBeTruthy()
+  const body = (await loggedIn.json()) as { access_token?: string }
+  const token = body.access_token
+  expect(token, 'login response must carry an access token').toBeTruthy()
+  await page.addInitScript((accessToken: string) => {
+    localStorage.setItem('auth_token', accessToken)
+    // SAFETY: the api client reads this global token slot, which the test sets and clears directly
+    ;(window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }).__COMIC_PILE_ACCESS_TOKEN = accessToken
+  }, token!)
+}
 
 /**
  * Fail one GET endpoint until the returned callback is invoked, then pass it
