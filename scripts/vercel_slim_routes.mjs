@@ -26,15 +26,14 @@ const NATIVE_BUILD_SRC_PATTERN = /^api\/native_[^/]+\.rs$/;
 
 /** Normalize a legacy native rewrite destination to the canonical one. */
 export function canonicalNativeDestination(dest) {
-  return typeof dest === 'string' && NATIVE_DESTINATION_PATTERN.test(dest)
-    ? NATIVE_API_DESTINATION
-    : dest;
+  return NATIVE_DESTINATION_PATTERN.test(String(dest)) ? NATIVE_API_DESTINATION : dest;
 }
 
 /** Normalize a legacy native function build to the canonical entrypoint. */
 export function canonicalNativeBuild(build) {
-  if (!build || typeof build.src !== 'string' || build.src === NATIVE_API_BUILD_SRC) return build;
-  return NATIVE_BUILD_SRC_PATTERN.test(build.src)
+  const src = build?.src;
+  if (src === undefined || src === NATIVE_API_BUILD_SRC) return build;
+  return NATIVE_BUILD_SRC_PATTERN.test(String(src))
     ? {...build, src: NATIVE_API_BUILD_SRC}
     : build;
 }
