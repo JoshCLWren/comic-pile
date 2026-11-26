@@ -3339,46 +3339,6 @@ async fn do_cbl_adoption_commit(
     )
     .await
     .map_err(|e| {
-<<<<<<< HEAD
-=======
-        if crate::db::is_transport_failure(&e) {
-            CommitErr::Db(ApiError::database_unavailable())
-        } else {
-            CommitErr::Unexpected(format!("update reading plan source link: {e}"))
-        }
-    })?;
-    let updated_source = tx
-        .run_query_opt(
-            "SELECT id FROM reading_plan_sources WHERE plan_id = $1 AND raw_source_path = $2",
-            &[&plan_id, &canonical_source_path],
-        )
-        .await
-        .map_err(|e| {
-            if crate::db::is_transport_failure(&e) {
-                CommitErr::Db(ApiError::database_unavailable())
-            } else {
-                CommitErr::Unexpected(format!("lookup reading plan source: {e}"))
-            }
-        })?;
-    if updated_source.is_none() {
-        tx.run_execute(
-            "INSERT INTO reading_plan_sources (plan_id, raw_source_path, custom_cbl_list_id, cbl_source_list_id, adopted_at, recorded_at)
-             VALUES ($1, $2, $3, $4, NOW(), NOW())",
-            &[&plan_id, &canonical_source_path, &canonical_list_id, &list_id],
-        )
-        .await
-        .map_err(|e| {
-            if crate::db::is_transport_failure(&e) {
-                CommitErr::Db(ApiError::database_unavailable())
-            } else {
-                CommitErr::Unexpected(format!("insert reading plan source: {e}"))
-            }
-        })?;
-    }
-
-    let prow = tx.run_query_one("SELECT id,user_id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1", &[&plan_id]).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(format!("reload plan: {e}")) })?;
-    tx.commit().await.map_err(|e| {
->>>>>>> main
         if crate::db::is_transport_failure(&e) {
             CommitErr::Db(ApiError::database_unavailable())
         } else {
@@ -4116,10 +4076,7 @@ async fn merge_adoption_nodes_tx(
     let mut excluded_positions = Vec::new();
     let mut unresolved_positions = Vec::new();
     let mut adopted_order: Vec<String> = Vec::new();
-<<<<<<< HEAD
     let mut affected_threads: std::collections::HashSet<i32> = std::collections::HashSet::new();
-=======
->>>>>>> main
     let mut adopted_issue_ids: Vec<i32> = Vec::new();
 
     // Index existing issue nodes by ref_id
