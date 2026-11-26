@@ -1703,6 +1703,7 @@ pub async fn import_issue(
     user: AuthenticatedUser,
     request: Result<Json<ImportIssueRequest>, JsonRejection>,
 ) -> Result<(StatusCode, Json<ImportIssueResponse>), ApiError> {
+    let started = Instant::now();
     let Json(request) = request.map_err(|_| validation_failed())?;
     // Python `title: Field(min_length=1, max_length=200)` bounds the raw
     // string; the service then stores `title.strip()` (possibly empty).
@@ -1812,34 +1813,10 @@ pub async fn import_issue(
         .await
         .map_err(db::query_error)?;
     let issue_id: i32 = issue_row.get(0);
-    // Python `confirm_comicvine_identity` (no post-commit hydration on import).
+    // Python `confirm_comicvine_identity`. Deep metadata is hydrated in this
+    // request after commit; no refresh row is enqueued for a single exact import.
     let external_identity_id =
         link_with_source(&tx, issue_id, request.comicvine_issue_id, "user_confirmed").await?;
-    // #5592: single-issue adoption is an import commit too — durably enqueue
-    // deep-metadata work without waiting for a Roll read. Scheduling runs in a
-    // savepoint (same contract as `link_confirmed`): its failure never undoes
-    // the import, and the Roll intelligence read remains a fallback enqueuer.
-    tx.batch_execute("SAVEPOINT comicvine_hydration_enqueue")
-        .await
-        .map_err(db::query_error)?;
-    let enqueued_repair = match enqueue_hydration_if_needed(&tx, external_identity_id).await {
-        Ok(enqueued) => {
-            tx.batch_execute("RELEASE SAVEPOINT comicvine_hydration_enqueue")
-                .await
-                .map_err(db::query_error)?;
-            enqueued
-        }
-        Err(_) => {
-            tracing::warn!(
-                identity_id = external_identity_id,
-                "comicvine hydration scheduling failed; import kept"
-            );
-            tx.batch_execute("ROLLBACK TO SAVEPOINT comicvine_hydration_enqueue")
-                .await
-                .map_err(db::query_error)?;
-            false
-        }
-    };
 
     let mut response = ImportIssueResponse {
         thread_id,
@@ -1874,9 +1851,10 @@ pub async fn import_issue(
         response.total_items = Some(items.len() as i32 + 1);
     }
     tx.commit().await.map_err(db::query_error)?;
-    if enqueued_repair {
-        crate::comicvine_repair::notify_repair_enqueued(&state).await;
-    }
+    drop(connection);
+    let outcome =
+        hydrate_confirmed_identity_interactive(&state, user.id(), issue_id, started).await;
+    tracing::info!(issue_id, outcome = outcome.as_str(), "import hydration outcome");
     Ok((StatusCode::CREATED, Json(response)))
 }
 
