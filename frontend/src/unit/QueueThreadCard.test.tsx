@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import QueueThreadCard from '../pages/QueuePage/QueueThreadCard'
 import type { BlockingDependency, ThreadListItem } from '../types'
 import type { components } from '../generated/openapi'
@@ -161,6 +161,10 @@ function renderCard(thread: ThreadListItem, overrides: Partial<Parameters<typeof
 describe('QueueThreadCard', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it('renders the shared thread action menu as the discoverable card action', () => {
@@ -612,6 +616,31 @@ describe('QueueThreadCard', () => {
     const placeholder = screen.getByTestId('queue-thread-series-cover-placeholder')
     expect(placeholder).toHaveAttribute('aria-label', 'No cover for Bare Series')
     expect(screen.queryByRole('img', { name: /Cover for Bare Series/ })).not.toBeInTheDocument()
+  })
+
+  it('settles a cached cover immediately when the Queue row is revisited after navigation', () => {
+    // Browser cache hits do not always replay a load event on a freshly
+    // mounted <img>. Navigating away and back must not leave the row stuck on
+    // a spinner or a transparent image (issue #5692).
+    vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(true)
+    vi.spyOn(HTMLImageElement.prototype, 'naturalWidth', 'get').mockReturnValue(240)
+    vi.spyOn(HTMLImageElement.prototype, 'naturalHeight', 'get').mockReturnValue(360)
+    const url = 'https://comicvine.example/covers/revisited.jpg'
+    const thread = createMockThread({ title: 'Revisited Series', series_cover_image_url: url })
+
+    const first = renderCard(thread)
+    const firstCover = first.getByTestId('queue-thread-series-cover')
+    expect(within(firstCover).getByRole('img')).toHaveClass('opacity-100')
+    expect(within(firstCover).queryByRole('status')).not.toBeInTheDocument()
+    first.unmount()
+
+    const revisited = renderCard(thread)
+    const cover = revisited.getByTestId('queue-thread-series-cover')
+    const image = within(cover).getByRole('img', { name: 'Cover for Revisited Series' })
+    expect(image).not.toBe(firstCover.querySelector('img'))
+    expect(image).toHaveAttribute('src', url)
+    expect(image).toHaveClass('opacity-100')
+    expect(within(cover).queryByRole('status')).not.toBeInTheDocument()
   })
 
   it('renders thread title', () => {
