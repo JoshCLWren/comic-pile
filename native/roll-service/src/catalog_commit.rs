@@ -2085,6 +2085,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn debug_float_roundtrip() {
+        let value = 1_795_710_842.8638973_f64;
+        let token = serde_json::json!({"t": value}).to_string();
+        eprintln!("DEBUG_TOKEN_JSON={token}");
+        let parsed: serde_json::Value = serde_json::from_str(&token).expect("parse");
+        eprintln!("DEBUG_CANONICAL={}", canonical_json(&parsed));
+        eprintln!("DEBUG_F64_DISPLAY={}", parsed["t"].as_f64().expect("f64"));
+    }
+
+    #[test]
     fn queue_bootstrap_requires_volume_identity_and_unique_roster_numbers() {
         assert!(volume_identity_matches("Batman", "Batman (1940)"));
         assert!(volume_identity_matches("STRASSE", "Straße"));
