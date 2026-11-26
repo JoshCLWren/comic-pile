@@ -8,6 +8,9 @@ on:
       - "scripts/generate_markdown_inventory.py"
       - "tests/test_markdown_docs.py"
       - "tests/test_generate_markdown_inventory.py"
+      - "tests/test_social_preview_asset.py"
+      - "docs/images/social-preview.png"
+      - "docs/images/social-preview.html"
       - ".github/workflows/docs.yml"
   push:
     branches: [main]
@@ -17,6 +20,9 @@ on:
       - "scripts/generate_markdown_inventory.py"
       - "tests/test_markdown_docs.py"
       - "tests/test_generate_markdown_inventory.py"
+      - "tests/test_social_preview_asset.py"
+      - "docs/images/social-preview.png"
+      - "docs/images/social-preview.html"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 
@@ -44,7 +50,7 @@ jobs:
       - run: uv run python scripts/check_markdown_docs.py
       - name: Markdown pytest checks (PRs only)
         if: github.event_name == 'pull_request'
-        run: uv run python -m pytest -q --no-cov tests/test_markdown_docs.py tests/test_generate_markdown_inventory.py
+        run: uv run python -m pytest -q --no-cov tests/test_markdown_docs.py tests/test_generate_markdown_inventory.py tests/test_social_preview_asset.py
       - name: Render Markdown inventory artifact
         run: uv run python scripts/generate_markdown_inventory.py --output "${RUNNER_TEMP}/MARKDOWN_INVENTORY.md"
       - uses: actions/upload-artifact@v7
