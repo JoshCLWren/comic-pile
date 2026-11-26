@@ -2911,7 +2911,7 @@ async fn import_worker_and_roll_issue_read_show_hydrated_creators() {
         .count();
     assert_eq!(
         singular_calls, 1,
-        "the durable worker fetched the issue once"
+        "the explicit synchronous Retry fetched the issue once"
     );
 }
 
