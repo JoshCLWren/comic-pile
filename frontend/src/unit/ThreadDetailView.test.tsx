@@ -1202,12 +1202,14 @@ it('refreshes the canonical Next line after a same-tab mark-unread (#5865)', asy
       } },
     } },
   })
+  // SAFETY: the stub supplies the complete canonical batch response this view reads.
   vi.mocked(readingBoundariesApi.batch).mockImplementation(async () => boundary() as never)
   // SAFETY: the stubbed thread supplies only the fields this view reads.
   mockedThreadsApiGet.mockResolvedValue({
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: 1, queue_position: 1,
     status: 'active', total_issues: 4, next_unread_issue_number: nextNumber, notes: null,
   } as never)
+  // SAFETY: the stubbed issue list supplies only the fields this view reads.
   mockedIssuesApiList.mockResolvedValue({
     issues: [
       { id: 403, thread_id: 1, issue_number: '3', status: 'read', read_at: '2026-11-26T00:00:00Z', created_at: '2026-11-25T00:00:00Z' },
@@ -1215,25 +1217,30 @@ it('refreshes the canonical Next line after a same-tab mark-unread (#5865)', asy
     ],
     next_page_token: null, total_count: 2, page_size: 100,
   } as never)
-  const cards: Record<number, IssueCard> = {
-    403: {
+  const cards = new Map<number, IssueCard>([
+    [403, {
       issue_id: 403, thread_id: 1, thread_title: 'Saga', issue_number: '3', status: 'read',
       rating: null, mapping_state: 'confirmed', has_confirmed_identity: true,
       cover_image_url: 'https://comicvine.example/saga-3.jpg',
-    },
-    401: {
+    }],
+    [401, {
       issue_id: 401, thread_id: 1, thread_title: 'Saga', issue_number: '4', status: 'unread',
       rating: null, mapping_state: 'confirmed', has_confirmed_identity: true,
       cover_image_url: 'https://comicvine.example/saga-4.jpg',
-    },
-  }
+    }],
+  ])
   const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards').mockImplementation(
-    async (ids) => ids.flatMap((id) => cards[id] ? [cards[id]!] : []),
+    async (ids) => ids.flatMap((id) => {
+      const card = cards.get(id)
+      return card ? [card] : []
+    }),
   )
   const patchIssue = vi.spyOn(issueCardsApi, 'patchIssue').mockImplementation(async (id, input) => {
     if (id === 403 && input.status === 'unread') nextNumber = '3'
+    const card = cards.get(id)
+    if (!card) throw new Error(`No stubbed card for issue ${id}`)
     return {
-      issue: { ...cards[id]!, status: input.status === 'unread' ? 'unread' : 'read' },
+      issue: { ...card, status: input.status === 'unread' ? 'unread' : 'read' },
       thread: { thread_id: 1, status: 'active', issues_remaining: 1, next_unread_issue_id: id },
       read_event_created: false, rating_event_created: false, replayed: false,
     }
