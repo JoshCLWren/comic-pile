@@ -8,10 +8,9 @@ const THIS_FILE = import.meta.filename
 // Every production query key must be built through `queryKeys.*` in
 // `frontend/src/query/queryKeys.ts`. The sessions index historically invented
 // an inline `['sessions', params]` key (issue #2584) that escaped the `session`
-// namespace, so cacheEffects / resume invalidation targeting
-// `queryKeys.session.*` could not reliably refresh the list. The key is now the
-// `queryKeys.session.list(...)` builder; any inline `['sessions'` key is a
-// regression back to the split cache namespace.
+// namespace. The session index/list was retired under #4343/#4839; any inline
+// `['sessions'` or `['session','pages']` key is a regression back to the split
+// or retired cache namespace.
 const FORBIDDEN_PATTERNS = ["queryKey: ['sessions'", "queryKey: ['session','pages'"]
 
 function collectSourceFiles(dir: string): string[] {
@@ -41,7 +40,7 @@ it('production query keys for the session index are built through queryKeys.sess
   }
 
   const hint =
-    'Session index keys must be built through queryKeys.session.list(...) so ' +
-    'invalidating queryKeys.session.pages() / all refreshes the Session index.'
+    'Session query keys must be built through queryKeys.session.*; the retired ' +
+    'session index namespace must not reappear as inline query keys.'
   expect(violations, `${hint}\n${violations.join('\n')}`).toHaveLength(0)
 })

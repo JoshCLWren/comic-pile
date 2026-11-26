@@ -34,11 +34,14 @@ repair; because both sides changed that hunk relative to the old base,
 `git merge-tree` reported a content conflict and GitHub marked the PR
 `CONFLICTING` (F1's self-consistency objection). This run removed that local
 link: the retired-background-repair paragraph is now byte-identical to `main`,
-and the handoff stays discoverable through the link in `docs/README.md`. The
-final tree differs from `main` only by this handoff and that one link; the
-code-path guard passes on the bare head and `git merge-tree --write-tree
-origin/main HEAD` exits 0 with no conflict sections. No `docs-path-check`
-suppression, test weakening or assertion change was used.
+and the handoff stays discoverable through the link in `docs/README.md`. Ten
+frontend query-cache/test files from unrelated earlier checkpoints of this
+branch (work that landed on `main` through other issues) were likewise restored
+to `main` content, so this PR is docs-only and its tree matches `main` except for
+this handoff and that one link. The code-path guard passes on the bare head and
+`git merge-tree --write-tree origin/main <prospective-tree>` exits 0 with no
+conflict sections. No `docs-path-check` suppression, test weakening or assertion
+change was used.
 
 ## Document reconciliation recorded by this audit
 
