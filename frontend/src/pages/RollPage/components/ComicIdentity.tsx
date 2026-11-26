@@ -1,7 +1,13 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, useMemo } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, useMemo } from 'react'
 import { useComicVineIssueIntelligence } from '../../../hooks/useComicVineIssueIntelligence'
+import { useComicVineMetadataHydration } from '../../../hooks/useComicVineMetadataHydration'
+import ComicVineMetadataStatus from '../../../components/ComicVineMetadataStatus'
 import { canonicalCreatorKey, useCreatorSummaries } from '../../../hooks/useCreatorSummaries'
+<<<<<<< HEAD
 import { comicVineApi, type ComicVineRelatedIssue, type MetadataRefreshResponse } from '../../../services/api-comicvine'
+=======
+import { type ComicVineRelatedIssue } from '../../../services/api-comicvine'
+>>>>>>> origin/main
 import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName, computeArcNeighborAnchors } from '../../../utils/comicIdentity'
 import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
 import { ComicIssueCover } from '../../../components/ComicIssueCard'
@@ -34,8 +40,6 @@ const RELATED_ISSUES_PER_ARC_LIMIT = 5
 const COVER_HEIGHT_CAP_VH = 45
 const COVER_RATIO_FALLBACK = 2 / 3
 const SUMMARY_LONG_THRESHOLD = 280
-const METADATA_REFRESH_FALLBACK_SECONDS = 10
-const METADATA_REFRESH_MAX_POLLS = 30
 
 function formatRating(value: number): string {
   const normalized = parseFloat(value.toFixed(2))
@@ -69,14 +73,16 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
   const [showAllRelatedIssues, setShowAllRelatedIssues] = useState<Record<number, boolean>>({})
   const [summaryExpanded, setSummaryExpanded] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [isRetryingRefresh, setIsRetryingRefresh] = useState(false)
-  const [refreshRecoveryError, setRefreshRecoveryError] = useState<string | null>(null)
-  const [isRefreshPollingExhausted, setIsRefreshPollingExhausted] = useState(false)
-  const refreshPollCountRef = useRef(0)
-  const refreshPollingKeyRef = useRef<string | null>(null)
   const creatorsDetailsRef = useRef<HTMLDetailsElement>(null)
   const storyArcsDetailsRef = useRef<HTMLDetailsElement>(null)
   const { isDesktop } = useResponsive()
+  // One shared presentation/action contract for this exact owned issue. No
+  // per-page retry, no timers and no polling (#5841).
+  const metadataHydration = useComicVineMetadataHydration({
+    issueId,
+    metadata,
+    refetchIntelligence: refetch,
+  })
 
   useEffect(() => {
     setSummaryExpanded(false)
@@ -91,6 +97,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
     }
   }, [metadata])
 
+<<<<<<< HEAD
   const refreshPollingKey = issueId && metadata ? `${issueId}:${metadata.comicvine_issue_id}` : null
   useEffect(() => {
     if (refreshPollingKeyRef.current === refreshPollingKey) return
@@ -198,6 +205,8 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
     </button>
   )
 
+=======
+>>>>>>> origin/main
   const imageUrl = metadata?.image_url ?? null
   const coverRatio = imageUrl ? coverRatios[imageUrl] ?? null : null
   const coverAspectRatio = coverRatio ?? COVER_RATIO_FALLBACK
@@ -490,9 +499,11 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
           </>
         )}
 
-        {/* Creator credits status when no creators are available */}
-        {metadata.creators.length === 0 && metadata.metadata_status && (
+        {/* Shared exact-issue presentation/action contract: truthful state and
+            one explicit Retry, never a queued spinner or a polling loop. */}
+        {metadata.creators.length === 0 && (
           <div className="pl-6 pr-2 pb-2 border-l border-[var(--theme-border)]">
+<<<<<<< HEAD
             {(() => {
               const status = metadata.metadata_status
               const retryAfter = metadata.refresh_retry_after_seconds
@@ -564,6 +575,9 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                 {refreshRecoveryError}
               </p>
             )}
+=======
+            <ComicVineMetadataStatus state={metadataHydration} />
+>>>>>>> origin/main
           </div>
         )}
 

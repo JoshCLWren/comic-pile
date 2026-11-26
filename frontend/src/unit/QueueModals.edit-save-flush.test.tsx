@@ -36,6 +36,7 @@ vi.mock('../pages/QueuePage/IssueToggleList', () => ({
         flushCalls.push('flushed')
       },
       hasPendingMutations: () => true,
+      hasUndoPoint: () => false,
     }))
     return <button type="button" onClick={() => props.onPendingMutationsChange?.(true)}>Queue issue edit</button>
   }),

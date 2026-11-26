@@ -257,14 +257,6 @@ fn app() -> Router {
             "/api/v2/identity-inbox/{mapping_id}/skips",
             post(native_dispatch),
         )
-        .route(
-            "/api/v2/maintenance/comicvine-metadata-repairs",
-            get(native_dispatch),
-        )
-        .route(
-            "/api/v2/maintenance/comicvine-metadata-backfill",
-            get(native_dispatch),
-        )
         .route("/api/v2/activity", get(native_dispatch))
         .route("/api/v2/roll/bootstrap", get(native_dispatch))
         .route("/api/v2/reading-sessions", post(native_dispatch))
@@ -468,6 +460,17 @@ fn app() -> Router {
         .route("/api/v2/issues/{issue_id}/position", put(native_dispatch))
         .route("/api/v2/issue-read-markers", post(native_dispatch))
         .route("/api/v2/issue-read-marker-removals", post(native_dispatch))
+        // The inner router exposes these operation handlers, but without the
+        // matching outer routes the Vercel entry's fallback returns a Rust JSON
+        // 404 before the handler ever runs (#4655 review F1).
+        .route(
+            "/api/v2/issue-read-operations/{operation_id}",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/issue-read-operations/{operation_id}/undo",
+            post(native_dispatch),
+        )
         .route(
             "/api/v2/issues/{issue_id}/reader-context",
             get(native_dispatch),
@@ -950,6 +953,8 @@ mod tests {
             ("PUT", "/api/v2/issues/7/position"),
             ("POST", "/api/v2/issue-read-markers"),
             ("POST", "/api/v2/issue-read-marker-removals"),
+            ("GET", "/api/v2/issue-read-operations/7"),
+            ("POST", "/api/v2/issue-read-operations/7/undo"),
         ] {
             let mut router = app();
             let response = router
@@ -972,6 +977,14 @@ mod tests {
             assert_eq!(
                 response.headers().get("x-comicpile-api-runtime").unwrap(),
                 "rust"
+            );
+            let bytes = to_bytes(response.into_body(), 8192)
+                .await
+                .expect("body bytes");
+            assert_ne!(
+                String::from_utf8_lossy(&bytes),
+                r#"{"detail":"Not Found"}"#,
+                "{method} {uri} must not hit native_not_found"
             );
         }
     }

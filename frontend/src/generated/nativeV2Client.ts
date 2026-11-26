@@ -563,6 +563,22 @@ export interface IssueOrderRequest {
 
 export type IssueOrderResponse = void
 
+export interface IssueReadOperationGetRequest {
+  path: {
+    operation_id: number
+  }
+}
+
+export type IssueReadOperationGetResponse = components['schemas']['IssueReadOperationResponse']
+
+export interface IssueReadOperationUndoRequest {
+  path: {
+    operation_id: number
+  }
+}
+
+export type IssueReadOperationUndoResponse = components['schemas']['IssueReadOperationUndoResponse']
+
 export interface IssueReadRateRequest {
   path: {
     issue_id: number
@@ -576,13 +592,13 @@ export interface IssueReadStateBulkMarkReadRequest {
   body: components['schemas']['IssueBulkRequest']
 }
 
-export type IssueReadStateBulkMarkReadResponse = void
+export type IssueReadStateBulkMarkReadResponse = components['schemas']['IssueReadOperationResponse']
 
 export interface IssueReadStateBulkMarkUnreadRequest {
   body: components['schemas']['IssueBulkRequest']
 }
 
-export type IssueReadStateBulkMarkUnreadResponse = void
+export type IssueReadStateBulkMarkUnreadResponse = components['schemas']['IssueReadOperationResponse']
 
 export interface IssueReadStateMarkReadRequest {
   path: {
@@ -746,6 +762,24 @@ export interface PreviewRequest {
 }
 
 export type PreviewResponse = components['schemas']['PlanRecoveryPreview']
+
+export interface PreviewIssueCreateRequest {
+  path: {
+    thread_id: number
+  }
+  body: components['schemas']['PreviewIssuesRequest']
+}
+
+export type PreviewIssueCreateResponse = components['schemas']['IssueEditPreviewResponse']
+
+export interface PreviewIssueStructureRequest {
+  path: {
+    thread_id: number
+  }
+  body: components['schemas']['PreviewIssueStructureRequest']
+}
+
+export type PreviewIssueStructureResponse = components['schemas']['IssueEditPreviewResponse']
 
 export interface RatingDistributionRequest {
   path: {
@@ -1253,6 +1287,8 @@ export interface NativeV2Client {
   issueCards(args: IssueCardsRequest): Promise<IssueCardsResponse>
   issueIntelligenceDocs(args: IssueIntelligenceDocsRequest): Promise<IssueIntelligenceDocsResponse>
   issueOrder(args: IssueOrderRequest): Promise<IssueOrderResponse>
+  issueReadOperationGet(args: IssueReadOperationGetRequest): Promise<IssueReadOperationGetResponse>
+  issueReadOperationUndo(args: IssueReadOperationUndoRequest): Promise<IssueReadOperationUndoResponse>
   issueReadRate(args: IssueReadRateRequest): Promise<IssueReadRateResponse>
   issueReadStateBulkMarkRead(args: IssueReadStateBulkMarkReadRequest): Promise<IssueReadStateBulkMarkReadResponse>
   issueReadStateBulkMarkUnread(args: IssueReadStateBulkMarkUnreadRequest): Promise<IssueReadStateBulkMarkUnreadResponse>
@@ -1279,6 +1315,8 @@ export interface NativeV2Client {
   overrideRoll(args: OverrideRollRequest): Promise<OverrideRollResponse>
   patchUserPreferences(args: PatchUserPreferencesRequest): Promise<PatchUserPreferencesResponse>
   preview(args: PreviewRequest): Promise<PreviewResponse>
+  previewIssueCreate(args: PreviewIssueCreateRequest): Promise<PreviewIssueCreateResponse>
+  previewIssueStructure(args: PreviewIssueStructureRequest): Promise<PreviewIssueStructureResponse>
   ratingDistribution(args: RatingDistributionRequest): Promise<RatingDistributionResponse>
   read(args: ReadRequest): Promise<ReadResponse>
   readDemoRoll(): Promise<ReadDemoRollResponse>
@@ -1721,6 +1759,14 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
+    issueReadOperationGet(args: IssueReadOperationGetRequest) {
+      return client.get<IssueReadOperationGetResponse>(
+        `/v2/issue-read-operations/${encodeURIComponent(String(args.path.operation_id))}`,
+      )
+    },
+    issueReadOperationUndo(args: IssueReadOperationUndoRequest) {
+      return client.post<IssueReadOperationUndoResponse>(`/v2/issue-read-operations/${encodeURIComponent(String(args.path.operation_id))}/undo`)
+    },
     issueReadRate(args: IssueReadRateRequest) {
       return client.patch<IssueReadRateResponse, IssueReadRateRequest['body']>(
         `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}`,
@@ -1851,6 +1897,18 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     preview(args: PreviewRequest) {
       return client.get<PreviewResponse>(
         `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/recovery`,
+      )
+    },
+    previewIssueCreate(args: PreviewIssueCreateRequest) {
+      return client.post<PreviewIssueCreateResponse, PreviewIssueCreateRequest['body']>(
+        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/issues/preview`,
+        args.body,
+      )
+    },
+    previewIssueStructure(args: PreviewIssueStructureRequest) {
+      return client.post<PreviewIssueStructureResponse, PreviewIssueStructureRequest['body']>(
+        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/issues/structure-preview`,
+        args.body,
       )
     },
     ratingDistribution(args: RatingDistributionRequest) {

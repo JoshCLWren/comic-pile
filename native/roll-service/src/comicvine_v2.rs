@@ -23,7 +23,11 @@
 use crate::{
     auth::AuthenticatedUser,
     catalog_commit::inline_hydration_budget,
+<<<<<<< HEAD
     comicvine_repair::{hydrate_confirmed_identity_sync, HydrationOutcome, ProviderFailure},
+=======
+    comicvine_provider::{hydrate_confirmed_identity_inline, ProviderFailure},
+>>>>>>> origin/main
     comicvine_resolution::SeriesImportStatusResponse,
     db,
     thread_issues::natural_issue_order,
@@ -670,9 +674,9 @@ fn encode_query(value: &str) -> String {
     encoded
 }
 
-/// Delegates to the one credential boundary in [`crate::comicvine_repair`].
+/// Delegates to the one credential boundary in [`crate::comicvine_provider`].
 fn provider_key() -> Option<String> {
-    crate::comicvine_repair::provider_api_key()
+    crate::comicvine_provider::provider_api_key()
 }
 
 // ---------------------------------------------------------------------------
@@ -1121,16 +1125,28 @@ async fn link_with_source(
     Ok(identity_id)
 }
 
+<<<<<<< HEAD
 /// Confirm one user-selected identity on an issue row the caller has locked.
 /// Deep-metadata hydration is awaited by the handler *after* this transaction
 /// commits; this function only writes the durable mapping and never enqueues a
 /// repair row or dispatches a background wake-up.
+=======
+/// Confirm one user-selected identity. There is no enqueue or side-effect
+/// scheduling: hydration is request-driven and runs after commit in the
+/// handler (or explicitly through `metadata:refresh` / Retry).
+>>>>>>> origin/main
 async fn link_confirmed(
     tx: &Transaction<'_>,
     issue_id: i32,
     comicvine_issue_id: i32,
+<<<<<<< HEAD
 ) -> Result<i32, ApiError> {
     link_with_source(tx, issue_id, comicvine_issue_id, "user_confirmed").await
+=======
+) -> Result<(), ApiError> {
+    link_with_source(tx, issue_id, comicvine_issue_id, "user_confirmed").await?;
+    Ok(())
+>>>>>>> origin/main
 }
 
 // ---------------------------------------------------------------------------
@@ -1249,7 +1265,7 @@ pub async fn resolve_input(
             .call(
                 &state.outbound,
                 &format!("issue/4000-{id}"),
-                &format!("&field_list={}", crate::comicvine_repair::FIELDS),
+                &format!("&field_list={}", crate::comicvine_provider::FIELDS),
                 &key,
             )
             .await
@@ -1327,6 +1343,7 @@ pub async fn confirm_identity(
     link_confirmed(&tx, issue_id, request.comicvine_issue_id).await?;
     let response = identity_state(&tx, user.id(), issue_id).await?;
     tx.commit().await.map_err(db::query_error)?;
+<<<<<<< HEAD
     // Release the pooled connection before hydration checks one out; on a
     // small pool the handler holding it would starve the hydrator.
     drop(connection);
@@ -1345,13 +1362,33 @@ pub async fn confirm_identity(
 /// through the outcome and never rolls back the confirmation. No repair row is
 /// enqueued and no background wake-up is dispatched.
 async fn hydrate_confirmed_identity_interactive(
+=======
+    // Release the pooled connection before inline hydration checks one out;
+    // on a small pool the handler holding it would starve the hydrator.
+    drop(connection);
+    hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started, false).await;
+    Ok(Json(response))
+}
+
+/// Best-effort synchronous creator-credit hydration after a confirmed mapping
+/// commits. The provider key lookup stays at the mutation boundary; on failure
+/// the stored metadata is preserved and the user can retry explicitly.
+async fn hydrate_confirmed_identity_if_configured(
+>>>>>>> origin/main
     state: &AppState,
     user_id: i32,
     issue_id: i32,
     started: Instant,
+<<<<<<< HEAD
 ) -> HydrationOutcome {
     let Some(api_key) = crate::comicvine_repair::provider_api_key() else {
         return HydrationOutcome::NotConfigured;
+=======
+    force: bool,
+) {
+    let Some(api_key) = crate::comicvine_provider::provider_api_key() else {
+        return;
+>>>>>>> origin/main
     };
     hydrate_confirmed_identity_sync(
         state,
@@ -1359,7 +1396,11 @@ async fn hydrate_confirmed_identity_interactive(
         issue_id,
         inline_hydration_budget(started.elapsed()),
         &api_key,
+<<<<<<< HEAD
         false,
+=======
+        force,
+>>>>>>> origin/main
     )
     .await
 }
@@ -1402,6 +1443,7 @@ pub async fn replace_identity(
     let response = identity_state(&tx, user.id(), issue_id).await?;
     tx.commit().await.map_err(db::query_error)?;
     drop(connection);
+<<<<<<< HEAD
     let outcome =
         hydrate_confirmed_identity_interactive(&state, user.id(), issue_id, started).await;
     tracing::info!(
@@ -1409,6 +1451,9 @@ pub async fn replace_identity(
         outcome = outcome.as_str(),
         "remap hydration outcome"
     );
+=======
+    hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started, false).await;
+>>>>>>> origin/main
     Ok(Json(response))
 }
 
@@ -1540,6 +1585,7 @@ pub async fn revert_correction(
     Ok(Json(response))
 }
 
+<<<<<<< HEAD
 /// Read the currently confirmed ComicVine identity of an owned issue. Used
 /// after the awaited provider attempt so an interactive outcome never names a
 /// stale identity that a concurrent remap replaced in flight.
@@ -1576,6 +1622,13 @@ async fn confirmed_comicvine_issue_id(
 /// provider call; the persist step rechecks identity, and the response re-reads
 /// the confirmed identity so it cannot name a stale `A` replaced by `B` while
 /// the provider call was in flight.
+=======
+/// `POST /api/v2/comicvine/issues/{issue_id}/metadata:refresh` (Python
+/// `request_provider_refresh`): an explicit, bounded synchronous hydration for
+/// the *currently confirmed* identity. It never enqueues, dispatches or polls,
+/// never remaps, and preserves any valid stored metadata on provider failure.
+/// The confirmed mapping, reading state, ownership and order are untouched.
+>>>>>>> origin/main
 pub async fn refresh_metadata(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1598,6 +1651,7 @@ pub async fn refresh_metadata(
             &[&issue_id],
         )
         .await
+<<<<<<< HEAD
         .map_err(db::query_error)?
         .map(|row| row.get(0));
     tx.commit().await.map_err(db::query_error)?;
@@ -1631,6 +1685,21 @@ pub async fn refresh_metadata(
     Ok(Json(MetadataRefreshResponse {
         issue_id,
         refreshed: outcome.refreshed(),
+=======
+        .map_err(db::query_error)?;
+    tx.commit().await.map_err(db::query_error)?;
+    let comicvine_issue_id: Option<String> = identity_row.map(|row| row.get(0));
+    let refreshed = comicvine_issue_id.is_some();
+    // Release the pooled connection before hydration checks one out; on a
+    // small pool holding it here would starve the awaited provider request.
+    drop(connection);
+    if comicvine_issue_id.is_some() {
+        hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started, true).await;
+    }
+    Ok(Json(MetadataRefreshResponse {
+        issue_id,
+        refreshed,
+>>>>>>> origin/main
         comicvine_issue_id,
         outcome: outcome.as_str().to_owned(),
         retry_after_seconds: outcome.retry_after_seconds(),
@@ -1864,7 +1933,10 @@ pub async fn import_issue(
     // request after commit; no refresh row is enqueued for a single exact import.
     let external_identity_id =
         link_with_source(&tx, issue_id, request.comicvine_issue_id, "user_confirmed").await?;
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/main
     let mut response = ImportIssueResponse {
         thread_id,
         issue_id,
@@ -1898,6 +1970,7 @@ pub async fn import_issue(
         response.total_items = Some(items.len() as i32 + 1);
     }
     tx.commit().await.map_err(db::query_error)?;
+<<<<<<< HEAD
     drop(connection);
     let outcome =
         hydrate_confirmed_identity_interactive(&state, user.id(), issue_id, started).await;
@@ -1906,6 +1979,8 @@ pub async fn import_issue(
         outcome = outcome.as_str(),
         "import hydration outcome"
     );
+=======
+>>>>>>> origin/main
     Ok((StatusCode::CREATED, Json(response)))
 }
 
@@ -2717,9 +2792,12 @@ pub async fn import_series(
         response.total_items = Some(total as i32);
     }
     tx.commit().await.map_err(db::query_error)?;
+<<<<<<< HEAD
     // Bulk import persists the bounded roster only. Deep metadata is fetched
     // synchronously when an exact issue is opened or Retry is clicked — never
     // one provider request per imported issue and never an enqueue/fanout here.
+=======
+>>>>>>> origin/main
     Ok((StatusCode::CREATED, Json(response)))
 }
 

@@ -210,10 +210,25 @@ export interface IssueIdentityResponse {
   has_unresolved: boolean
 }
 
+/**
+ * Terminal outcome of one bounded ComicVine hydration attempt. The backend
+ * contract (#5840) returns these instead of an open-ended queued state.
+ */
+export type ComicVineHydrationOutcome =
+  | 'complete'
+  | 'no_credits'
+  | 'not_confirmed'
+  | 'provider_not_configured'
+  | 'provider_unavailable'
+  | 'rate_limited'
+  | 'timeout'
+  | 'invalid_response'
+
 export interface MetadataRefreshResponse {
   issue_id: number
   refreshed: boolean
   comicvine_issue_id: string | null
+<<<<<<< HEAD
   /** Terminal outcome of the bounded synchronous attempt. */
   outcome:
     | 'complete'
@@ -225,6 +240,16 @@ export interface MetadataRefreshResponse {
     | 'timeout'
     | 'invalid_response'
   retry_after_seconds: number | null
+=======
+  /**
+   * Absent on an older deployment. A response that still reports
+   * `refreshed: true` is a completed attempt whose truthful state comes from
+   * the scoped re-read; otherwise callers fall back to generic failure copy.
+   */
+  outcome?: ComicVineHydrationOutcome
+  /** Provider-requested delay before another explicit Retry, when throttled. */
+  retry_after_seconds?: number | null
+>>>>>>> origin/main
 }
 
 export interface CanonicalCorrection {

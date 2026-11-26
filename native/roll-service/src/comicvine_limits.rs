@@ -20,7 +20,7 @@
 //! throttled.
 
 use crate::{
-    comicvine_repair::{provider_exchange, Exchange, ProviderFailure},
+    comicvine_provider::{provider_exchange, Exchange, ProviderFailure},
     outbound::OutboundHttp,
 };
 use chrono::{DateTime, Utc};

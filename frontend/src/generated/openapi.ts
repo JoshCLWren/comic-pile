@@ -2387,6 +2387,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/issue-read-operations/{operation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for fetching a bulk issue-read operation. */
+        get: operations["issue_read_operation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/issue-read-operations/{operation_id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for undoing a bulk issue-read operation. */
+        post: operations["issue_read_operation_undo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/issues/cards": {
         parameters: {
             query?: never;
@@ -3392,6 +3426,46 @@ export interface paths {
          * @description Create issue labels atomically. Natural numeric placement never re-sorts previously persisted issues; a non-monotonic series appends without changing existing relative order. The complete reading graph is validated before commit.
          */
         post: operations["create_issues_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/threads/{thread_id}/issues/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Documentation-only operation for the mounted issue-create preview resource.
+         * @description Preview an issue-create edit before commit. Returns the safe default outcome and, when relevant, a numeric-resort outcome with exact before/after order and graph validation.
+         */
+        post: operations["preview_issue_create_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/threads/{thread_id}/issues/structure-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Documentation-only operation for the delete/reorder structure preview.
+         * @description Preview a delete or reorder edit before commit. Returns exact before/after issues, list memberships, read/rating/identity state, affected Queue/Roll frontier, duplicate risk and projected graph conflicts.
+         */
+        post: operations["preview_issue_structure_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4706,8 +4780,18 @@ export interface components {
             type: string;
         };
         CreateIssuesRequest: {
+            /**
+             * @description Requested numbers the reader explicitly accepted as aliases of already
+             *     mapped issues instead of creating physical duplicates (#4654).
+             */
+            accepted_alias_numbers?: string[];
             /** @description Explicit "At the end" choice. Distinct from an omitted anchor. */
             append_to_end?: boolean;
+            /**
+             * @description Issue IDs observed in the accepted preview. A changed set means the
+             *     preview is stale; the edit is refused before any write (#4654).
+             */
+            expected_issue_ids?: number[] | null;
             /**
              * Format: int32
              * @description Explicit anchor. Omit for natural placement.
@@ -4715,6 +4799,8 @@ export interface components {
             insert_after_issue_id?: number | null;
             /** @description Reader-facing range, e.g. `1-3, 5` or `Annual 1`. */
             issue_range: string;
+            /** @description Placement strategy. Defaults to safe_default. */
+            strategy?: components["schemas"]["IssuePlacementStrategy"];
         };
         CreateTagRequest: {
             color?: string;
@@ -6124,6 +6210,46 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
+        /** @description A source-preserving alternative to creating a new physical issue (#4654). */
+        IssueEditAliasOffer: {
+            /** @description Concrete identity evidence, not a generic duplicate warning. */
+            evidence: string;
+            /**
+             * Format: int32
+             * @description Existing identity-mapped issue that can be aliased instead.
+             */
+            existing_issue_id: number;
+            existing_issue_number: string;
+            /** @description Issue number the reader asked to add. */
+            requested_issue_number: string;
+            /** @description Human-readable series the existing issue belongs to. */
+            series_title: string;
+        };
+        IssueEditPreviewOutcome: {
+            added_issue_numbers: string[];
+            after: components["schemas"]["PreviewIssueItem"][];
+            before: components["schemas"]["PreviewIssueItem"][];
+            can_commit: boolean;
+            conflict_message?: string | null;
+            graph: components["schemas"]["ReadingGraphResponse"];
+            preserves_existing_relative_order: boolean;
+            strategy: components["schemas"]["IssuePlacementStrategy"];
+        };
+        IssueEditPreviewResponse: {
+            /**
+             * @description Source-preserving alternatives for numbers that already exist as
+             *     identity-mapped issues in another owned series (#4654).
+             */
+            alias_offers: components["schemas"]["IssueEditAliasOffer"][];
+            default_outcome: components["schemas"]["IssueEditPreviewOutcome"];
+            /** @description IDs shown in Before, echoed so the commit can reject a stale preview. */
+            expected_issue_ids: number[];
+            numeric_resort_outcome?: components["schemas"]["IssueEditPreviewOutcome"] | null;
+            requested_strategy: components["schemas"]["IssuePlacementStrategy"];
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
         IssueIdentityMapping: {
             comicvine_id: string;
             /** Format: double */
@@ -6173,6 +6299,16 @@ export interface components {
             page_size: number;
             /** Format: int32 */
             total_count: number;
+            /**
+             * Format: int32
+             * @description Reading session that received the pre-edit undo point, if one is active.
+             */
+            undo_session_id?: number | null;
+            /**
+             * Format: int32
+             * @description Snapshot a reader can restore to reverse this committed edit (#4654).
+             */
+            undo_snapshot_id?: number | null;
         };
         /** @description Request body for `PUT /api/v2/issues/{issue_id}/position`. */
         IssueMoveRequest: {
@@ -6196,6 +6332,32 @@ export interface components {
         /** @description Python `IssueOrderValidationResponse`. */
         IssueOrderValidationResponse: {
             warnings: string[];
+        };
+        /** @enum {string} */
+        IssuePlacementStrategy: "safe_default" | "numeric_resort";
+        /** @description One issue affected by a bulk read/unread operation. */
+        IssueReadOperationItem: {
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            previous_status: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        /** @description Reviewable, reversible record of a bulk read/unread operation (#4655). */
+        IssueReadOperationResponse: {
+            created_at: string;
+            /** Format: int64 */
+            id: number;
+            items: components["schemas"]["IssueReadOperationItem"][];
+            operation_type: string;
+            undone_at?: string | null;
+        };
+        /** @description Result of undoing a bulk read/unread operation (#4655). */
+        IssueReadOperationUndoResponse: {
+            operation: components["schemas"]["IssueReadOperationResponse"];
+            skipped_issue_ids: number[];
+            undone_issue_ids: number[];
         };
         IssueReadRateRequest: {
             /** @description Client-generated retry key. Same key/payload replays the same receipt. */
@@ -7016,6 +7178,75 @@ export interface components {
          * @enum {string}
          */
         PotentialDuplicateMatchType: "same_comicvine_volume" | "similar_title";
+        /**
+         * @description Per-issue human-readable context carried in the preview payload so the
+         *     Before/After rows can identify a specific series, its list memberships,
+         *     identity/rating/read state and the Queue/Roll frontier it affects (#4654).
+         */
+        PreviewIssueItem: {
+            /** @description Human-readable description of the order effect on this issue. */
+            effect: string;
+            /** @description Human label for the Queue/Roll frontier affected by this issue, if any. */
+            frontier_label?: string | null;
+            /** @description Whether rating history exists for this issue. */
+            has_rating: boolean;
+            /** @description Whether a second physical issue with the same number exists in the series. */
+            is_duplicate: boolean;
+            /** @description Whether the issue has a confirmed external identity/catalog mapping. */
+            is_mapped: boolean;
+            is_new: boolean;
+            /** @description Whether the issue has already been read. */
+            is_read: boolean;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+            /** @description Title of the series (thread) this issue belongs to. */
+            series_title: string;
+            /** @description Names of every custom reading list the issue is a member of. */
+            source_lists: string[];
+        };
+        /**
+         * @description Body of `POST /api/v2/threads/{thread_id}/issues/structure-preview`.
+         *
+         *     Delete and reorder are structural issue edits too, so A4 requires the same
+         *     before/after, constraint and frontier preview that create/insert receives
+         *     (#4654). The operation is deliberately described by a string plus optional
+         *     fields rather than a tagged enum so an unsupported shape is a plain 400 and
+         *     never a deserialization-shaped 500.
+         */
+        PreviewIssueStructureRequest: {
+            /**
+             * Format: int32
+             * @description Issue to remove. Required for `delete`, ignored for `reorder`.
+             */
+            issue_id?: number | null;
+            /** @description Every issue id in the requested order. Required for `reorder`. */
+            issue_ids?: number[] | null;
+            /** @description `delete` removes one issue; `reorder` applies a complete new order. */
+            operation: string;
+        };
+        PreviewIssuesRequest: {
+            /** @description Numbers the reader explicitly chose to alias instead of duplicating. */
+            accepted_alias_numbers?: string[];
+            /** @description Explicit "At the end" choice. Distinct from an omitted anchor. */
+            append_to_end?: boolean;
+            /**
+             * @description Issue IDs shown in the preview's Before rows. Used at commit time to
+             *     reject a stale preview (#4654).
+             */
+            expected_issue_ids?: number[] | null;
+            /**
+             * Format: int32
+             * @description Explicit anchor. Omit for natural placement.
+             */
+            insert_after_issue_id?: number | null;
+            /** @description Reader-facing range, e.g. `1-3, 5` or `Annual 1`. */
+            issue_range: string;
+            /** @description Requested placement strategy. Defaults to safe_default. */
+            strategy?: components["schemas"]["IssuePlacementStrategy"];
+        };
         /** @description One release ledger record returned by public-facing endpoints. */
         PublicReleaseResponse: {
             body?: string | null;
@@ -15582,12 +15813,14 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Every issue marked unread atomically */
-            204: {
+            /** @description Every issue marked unread atomically; returns a reviewable undo operation */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["IssueReadOperationResponse"];
+                };
             };
             /** @description An issue is already marked as unread */
             400: {
@@ -15639,12 +15872,14 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Every issue marked read atomically */
-            204: {
+            /** @description Every issue marked read atomically; returns a reviewable undo operation */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["IssueReadOperationResponse"];
+                };
             };
             /** @description An issue is already marked as read */
             400: {
@@ -15661,6 +15896,115 @@ export interface operations {
                 content?: never;
             };
             /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_read_operation_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned bulk issue-read operation */
+                operation_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bulk issue-read operation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueReadOperationResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Operation not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_read_operation_undo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned bulk issue-read operation */
+                operation_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operation undone with compensating events; concurrently changed issues are skipped */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueReadOperationUndoResponse"];
+                };
+            };
+            /** @description Operation already undone */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Operation not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -18624,6 +18968,116 @@ export interface operations {
             };
             /** @description Invalid reading snapshot */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    preview_issue_create_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewIssuesRequest"];
+            };
+        };
+        responses: {
+            /** @description Preview outcomes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueEditPreviewResponse"];
+                };
+            };
+            /** @description Invalid issue range or no new issues */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    preview_issue_structure_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewIssueStructureRequest"];
+            };
+        };
+        responses: {
+            /** @description Preview outcome */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueEditPreviewResponse"];
+                };
+            };
+            /** @description Invalid operation or issue set */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread or issue not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

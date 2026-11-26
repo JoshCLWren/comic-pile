@@ -36,6 +36,57 @@ test.describe('MOBILE-001: Primary mobile interaction path', () => {
     await expect(mobileNav).toBeVisible()
   })
 
+  test('mobile navigation keeps all five tabs aligned at narrow phone widths', async ({ authenticatedPage }, testInfo) => {
+    const page = authenticatedPage
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    const mobileNav = page.getByRole('navigation', { name: 'Mobile navigation' })
+
+    for (const width of [320, 375, 390, 430]) {
+      await page.setViewportSize({ width, height: 844 })
+      await expect(mobileNav).toBeVisible()
+      await expect(mobileNav.locator('.nav-item')).toHaveCount(5)
+      await expect(mobileNav.getByRole('link', { name: 'Reading plans page' })).toHaveText('Plans')
+      await page.evaluate(async () => { await document.fonts.ready })
+
+      const tabs = await mobileNav.locator('.nav-item').evaluateAll(items => items.map(item => {
+        const icon = item.querySelector('svg')
+        const label = item.querySelector('.nav-label')
+        if (!icon || !label) throw new Error('Navigation tab must have an icon and label')
+        const tabRect = item.getBoundingClientRect()
+        const iconRect = icon.getBoundingClientRect()
+        const labelRect = label.getBoundingClientRect()
+        return {
+          width: tabRect.width,
+          height: tabRect.height,
+          left: tabRect.left,
+          right: tabRect.right,
+          iconTop: iconRect.top,
+          labelTop: labelRect.top,
+          labelHeight: labelRect.height,
+          lineHeight: Number.parseFloat(getComputedStyle(label).lineHeight),
+          labelLeft: labelRect.left,
+          labelRight: labelRect.right,
+        }
+      }))
+
+      const first = tabs[0]
+      for (const tab of tabs) {
+        expect(tab.width).toBeGreaterThanOrEqual(44)
+        expect(tab.height).toBeGreaterThanOrEqual(44)
+        expect(Math.abs(tab.width - first.width)).toBeLessThanOrEqual(1)
+        expect(Math.abs(tab.height - first.height)).toBeLessThanOrEqual(1)
+        expect(Math.abs(tab.iconTop - first.iconTop)).toBeLessThanOrEqual(1)
+        expect(Math.abs(tab.labelTop - first.labelTop)).toBeLessThanOrEqual(1)
+        expect(tab.labelHeight).toBeLessThanOrEqual(tab.lineHeight + 1)
+        expect(tab.labelLeft).toBeGreaterThanOrEqual(tab.left - 1)
+        expect(tab.labelRight).toBeLessThanOrEqual(tab.right + 1)
+        expect(tab.left).toBeGreaterThanOrEqual(0)
+        expect(tab.right).toBeLessThanOrEqual(width)
+      }
+      await testInfo.attach(`mobile-navigation-${width}`, { body: await mobileNav.screenshot(), contentType: 'image/png' })
+    }
+  })
+
   test('mobile roll page: die is visible and roll works', async ({
     authenticatedPage,
   }) => {

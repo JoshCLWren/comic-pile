@@ -104,7 +104,8 @@ beforeEach(() => {
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(issuesApi.create).mockResolvedValue({ issues: [] } as never)
   vi.mocked(issuesApi.markRead).mockResolvedValue(undefined)
-  vi.mocked(issuesApi.bulkMarkRead).mockResolvedValue(undefined)
+  // SAFETY: mocked API returns partial shape; as never satisfies the mock return type
+  vi.mocked(issuesApi.bulkMarkRead).mockResolvedValue({} as never)
   // SAFETY: as never is used for type narrowing in mock data
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(issuesApi.migrateThread).mockResolvedValue({} as never)
@@ -377,7 +378,7 @@ describe('QueuePage callback coverage', () => {
     await user.click(screen.getByRole('button', { name: 'Recently added' }))
     await user.type(screen.getByPlaceholderText('Search...'), 'missing')
     // Search is debounced (300ms) so the parent query only commits after the delay.
-    await waitFor(() => expect(screen.getByText('No active series match your search')).toBeInTheDocument(), { timeout: 2000 })
+    await waitFor(() => expect(screen.getByText(/No active series match your search/)).toBeInTheDocument(), { timeout: 2000 })
     await user.clear(screen.getByPlaceholderText('Search...'))
     await waitFor(() => expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument(), { timeout: 2000 })
 

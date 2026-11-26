@@ -111,6 +111,22 @@ async fn set_events_thread_fk_cascade(admin: &Conn, cascade: bool) {
         .unwrap();
 }
 
+/// Toggle `snapshots_event_id_fkey` between the canonical `ON DELETE CASCADE`
+/// and the non-cascading form that caused #5860. Production has this drift even
+/// though the checked-in schema cascades, so the delete writer must clean up
+/// referencing snapshots itself.
+async fn set_snapshots_event_fk_cascade(admin: &Conn, cascade: bool) {
+    let action = if cascade { " ON DELETE CASCADE" } else { "" };
+    admin
+        .batch_execute(&format!(
+            "ALTER TABLE snapshots DROP CONSTRAINT IF EXISTS snapshots_event_id_fkey; \
+             ALTER TABLE snapshots ADD CONSTRAINT snapshots_event_id_fkey \
+               FOREIGN KEY (event_id) REFERENCES events(id){action}"
+        ))
+        .await
+        .unwrap();
+}
+
 async fn queue_lock_waiters(conn: &Conn, user_id: i32) -> i64 {
     conn.query_one(
         "SELECT count(*) FROM pg_locks \
@@ -380,6 +396,119 @@ async fn delete_thread_removes_non_cascading_event_reference() {
         "explicit cleanup must remove non-cascading event references"
     );
     assert_eq!(thread_count, 0, "thread row must be deleted");
+}
+
+/// Reproduce the production schema condition behind #5860: deleting a thread's
+/// events fails while a snapshot still references one of them because
+/// `snapshots_event_id_fkey` lacks ON DELETE CASCADE. Explicit snapshot cleanup
+/// must make the delete succeed; without it this returns a 400 FK violation.
+#[tokio::test]
+async fn delete_thread_removes_non_cascading_snapshot_reference() {
+    // Hold the shared-schema test lock before any DDL so sibling tests cannot
+    // observe the non-cascading constraint.
+    let (state, token, csrf, user_id, _guard) = setup_user("thread-delete-snapshot-fk").await;
+    let admin = admin_connection().await;
+    set_snapshots_event_fk_cascade(&admin, false).await;
+
+    let conn = state.pool.get().await.unwrap();
+    let thread_id: i32 = conn
+        .query_one(
+            "INSERT INTO threads (title, format, issues_remaining, queue_position, status, user_id, created_at) \
+             VALUES ('Snapshotted series', 'Comic', 1, 1, 'active', $1, NOW()) RETURNING id",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let event_id: i32 = conn
+        .query_one(
+            "INSERT INTO events (type, timestamp, user_id, thread_id) \
+             VALUES ('rate', NOW(), $1, $2) RETURNING id",
+            &[&user_id, &thread_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let session_id: i32 = conn
+        .query_one(
+            "INSERT INTO sessions (start_die, user_id) VALUES (6, $1) RETURNING id",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let snapshot_id: i32 = conn
+        .query_one(
+            "INSERT INTO snapshots (session_id, event_id, thread_states, created_at) \
+             VALUES ($1, $2, '{}'::json, NOW()) RETURNING id",
+            &[&session_id, &event_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    // An unrelated snapshot in the same session must survive the cleanup.
+    let unrelated_event_id: i32 = conn
+        .query_one(
+            "INSERT INTO events (type, timestamp, user_id, thread_id) \
+             VALUES ('rate', NOW(), $1, NULL) RETURNING id",
+            &[&user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let unrelated_snapshot_id: i32 = conn
+        .query_one(
+            "INSERT INTO snapshots (session_id, event_id, thread_states, created_at) \
+             VALUES ($1, $2, '{}'::json, NOW()) RETURNING id",
+            &[&session_id, &unrelated_event_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+
+    let (status, body) = send(
+        &state,
+        delete(&format!("/api/v1/threads/{thread_id}"), &token, &csrf),
+    )
+    .await;
+
+    // Restore the canonical constraint before asserting, so a failed assertion
+    // never leaves the shared schema in the non-cascading test condition.
+    set_snapshots_event_fk_cascade(&admin, true).await;
+
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body:?}");
+    for (label, sql, id) in [
+        (
+            "snapshots referencing the deleted thread's event",
+            "SELECT count(*) FROM snapshots WHERE id = $1",
+            snapshot_id,
+        ),
+        (
+            "events of the deleted thread",
+            "SELECT count(*) FROM events WHERE id = $1",
+            event_id,
+        ),
+        (
+            "deleted thread",
+            "SELECT count(*) FROM threads WHERE id = $1",
+            thread_id,
+        ),
+    ] {
+        let count: i64 = conn.query_one(sql, &[&id]).await.unwrap().get(0);
+        assert_eq!(count, 0, "{label} must be removed");
+    }
+    let unrelated_count: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM snapshots WHERE id = $1",
+            &[&unrelated_snapshot_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        unrelated_count, 1,
+        "snapshots for unrelated events must be preserved"
+    );
 }
 
 /// Delete is a changed writer: it now removes events, reading-order items and

@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
-import { invalidateComicVineIssueIntelligenceMany } from '../query/cacheEffects'
+import { clearComicVineIssueIntelligenceMany } from '../query/cacheEffects'
 import { seriesMappingApi } from '../services/api-series-mapping'
 import type { SeriesMappingCommitResponse } from '../services/api-series-mapping'
 
@@ -56,7 +56,9 @@ export function useCommitSeriesMapping() {
   return useMutation<SeriesMappingCommitResponse, unknown, Parameters<typeof seriesMappingApi.commit>[0]>({
     mutationFn: (request) => seriesMappingApi.commit(request),
     onSuccess: async (result) => {
-      await invalidateComicVineIssueIntelligenceMany(queryClient, result.confirmed_issue_ids)
+      // A late response for the superseded identity cannot overwrite the
+      // confirmed one: cancel and clear before the scoped refetch (#5841).
+      await clearComicVineIssueIntelligenceMany(queryClient, result.confirmed_issue_ids)
     },
   })
 }

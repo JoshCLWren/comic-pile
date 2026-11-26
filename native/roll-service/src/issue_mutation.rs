@@ -16,12 +16,25 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use tokio_postgres::Transaction;
 
 const QUEUE_LOCK_NAMESPACE: i32 = 699001;
 const MAX_ISSUES_PER_REQUEST: i64 = 1000;
+
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum IssuePlacementStrategy {
+    /// Preserve existing relative issue order. Non-monotonic numeric series
+    /// append new numbers instead of silently re-sorting persisted issues.
+    #[default]
+    SafeDefault,
+    /// Explicitly re-seat all ordinary numeric issues in numeric order.
+    /// This is a deliberate action and must be previewed before commit.
+    NumericResort,
+}
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
@@ -33,6 +46,17 @@ pub struct CreateIssuesRequest {
     /// Explicit "At the end" choice. Distinct from an omitted anchor.
     #[serde(default)]
     pub append_to_end: bool,
+    /// Placement strategy. Defaults to safe_default.
+    #[serde(default)]
+    pub strategy: IssuePlacementStrategy,
+    /// Issue IDs observed in the accepted preview. A changed set means the
+    /// preview is stale; the edit is refused before any write (#4654).
+    #[serde(default)]
+    pub expected_issue_ids: Option<Vec<i32>>,
+    /// Requested numbers the reader explicitly accepted as aliases of already
+    /// mapped issues instead of creating physical duplicates (#4654).
+    #[serde(default)]
+    pub accepted_alias_numbers: Vec<String>,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -49,6 +73,10 @@ pub struct IssueListResponse {
     pub total_count: i32,
     pub page_size: i64,
     pub next_page_token: Option<String>,
+    /// Reading session that received the pre-edit undo point, if one is active.
+    pub undo_session_id: Option<i32>,
+    /// Snapshot a reader can restore to reverse this committed edit (#4654).
+    pub undo_snapshot_id: Option<i32>,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -118,6 +146,46 @@ pub fn delete_issue_documentation() {}
 )]
 #[allow(dead_code)]
 pub fn issue_order_documentation() {}
+
+/// Documentation-only operation for the mounted issue-create preview resource.
+#[utoipa::path(
+    post,
+    path = "/api/v2/threads/{thread_id}/issues/preview",
+    tag = "issues",
+    description = "Preview an issue-create edit before commit. Returns the safe default outcome and, when relevant, a numeric-resort outcome with exact before/after order and graph validation.",
+    params(("thread_id" = i32, Path, description = "Owned Thread identifier")),
+    request_body = PreviewIssuesRequest,
+    responses(
+        (status = 200, description = "Preview outcomes", body = IssueEditPreviewResponse),
+        (status = 400, description = "Invalid issue range or no new issues"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Thread not found"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn preview_issue_create_documentation() {}
+
+/// Documentation-only operation for the delete/reorder structure preview.
+#[utoipa::path(
+    post,
+    path = "/api/v2/threads/{thread_id}/issues/structure-preview",
+    tag = "issues",
+    description = "Preview a delete or reorder edit before commit. Returns exact before/after issues, list memberships, read/rating/identity state, affected Queue/Roll frontier, duplicate risk and projected graph conflicts.",
+    params(("thread_id" = i32, Path, description = "Owned Thread identifier")),
+    request_body = PreviewIssueStructureRequest,
+    responses(
+        (status = 200, description = "Preview outcome", body = IssueEditPreviewResponse),
+        (status = 400, description = "Invalid operation or issue set"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Thread or issue not found"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn preview_issue_structure_documentation() {}
 
 fn names(inputs: &option_inputs::OptionInputs) -> BTreeMap<i32, String> {
     inputs
@@ -278,6 +346,160 @@ pub(crate) async fn reseat_positions(
     Ok(())
 }
 
+/// A source-preserving alternative to creating a new physical issue (#4654).
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct IssueEditAliasOffer {
+    /// Issue number the reader asked to add.
+    pub requested_issue_number: String,
+    /// Existing identity-mapped issue that can be aliased instead.
+    pub existing_issue_id: i32,
+    pub existing_issue_number: String,
+    /// Human-readable series the existing issue belongs to.
+    pub series_title: String,
+    /// Concrete identity evidence, not a generic duplicate warning.
+    pub evidence: String,
+}
+
+/// Find requested numbers that already exist as identity-mapped issues in
+/// another owned series. One set-based query; the reader must explicitly accept
+/// an offer before a physical duplicate may be created (#4654).
+async fn detect_alias_offers(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    thread_id: i32,
+    numbers: &[String],
+) -> Result<Vec<IssueEditAliasOffer>, ApiError> {
+    if numbers.is_empty() {
+        return Ok(Vec::new());
+    }
+    let rows = tx
+        .query(
+            "SELECT i.id, i.issue_number, t.title,
+                    i.catalog_issue_id IS NOT NULL AS catalog_evidence,
+                    EXISTS (
+                        SELECT 1 FROM issue_external_identity_mappings m
+                        WHERE m.issue_id=i.id AND m.status='confirmed'
+                    ) AS mapping_evidence
+             FROM issues i
+             JOIN threads t ON t.id=i.thread_id
+             WHERE t.user_id=$1 AND i.thread_id<>$2 AND i.issue_number = ANY($3::text[])
+             ORDER BY t.title, i.id",
+            &[&user_id, &thread_id, &numbers],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let mut offers: Vec<IssueEditAliasOffer> = Vec::new();
+    for row in &rows {
+        let number: String = row.get(1);
+        if offers
+            .iter()
+            .any(|offer| offer.requested_issue_number == number)
+        {
+            continue;
+        }
+        let catalog_evidence: bool = row.get(3);
+        let mapping_evidence: bool = row.get(4);
+        // An alias must be backed by real identity evidence. Without it, a
+        // same-number issue in another series is only a possible duplicate,
+        // not a source-preserving alternative; offering it would block a
+        // legitimate create because the UI requires acceptance (#4654).
+        if !catalog_evidence && !mapping_evidence {
+            continue;
+        }
+        let evidence = if catalog_evidence && mapping_evidence {
+            "confirmed catalog identity and external mapping"
+        } else if catalog_evidence {
+            "confirmed catalog identity"
+        } else {
+            "confirmed external identity mapping"
+        };
+        offers.push(IssueEditAliasOffer {
+            requested_issue_number: number.clone(),
+            existing_issue_id: row.get(0),
+            existing_issue_number: number,
+            series_title: row.get(2),
+            evidence: evidence.to_string(),
+        });
+    }
+    Ok(offers)
+}
+
+/// Write a bounded, version-two undo delta inside the create transaction. The
+/// existing `POST /api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore`
+/// deletes the created issues and restores the captured pre-edit issue positions
+/// and thread counters (#4026/#4027 reused by Edit Series). No separate
+/// importer or new HTTP resource is introduced.
+async fn insert_edit_undo_snapshot(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    thread_id: i32,
+    issue_changes: Vec<Value>,
+    created_ids: &[i32],
+) -> Result<Option<(i32, i32)>, ApiError> {
+    let session = tx
+        .query_opt(
+            "SELECT id FROM sessions WHERE user_id=$1 ORDER BY started_at DESC, id DESC LIMIT 1",
+            &[&user_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let Some(session) = session else {
+        return Ok(None);
+    };
+    let session_id: i32 = session.get(0);
+    let thread = tx
+        .query_one(
+            "SELECT total_issues, next_unread_issue_id, reading_progress,
+                    issues_remaining, last_rating
+             FROM threads WHERE id=$1 AND user_id=$2",
+            &[&thread_id, &user_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let mut state = Map::new();
+    state.insert("uses_issue_tracking".into(), json!(true));
+    state.insert("issue_changes".into(), Value::Array(issue_changes));
+    state.insert(
+        "created_issues".into(),
+        json!(created_ids
+            .iter()
+            .map(|id| json!({"id": id}))
+            .collect::<Vec<_>>()),
+    );
+    state.insert(
+        "total_issues".into(),
+        json!(thread.get::<_, Option<i32>>(0)),
+    );
+    state.insert(
+        "next_unread_issue_id".into(),
+        json!(thread.get::<_, Option<i32>>(1)),
+    );
+    state.insert(
+        "reading_progress".into(),
+        json!(thread.get::<_, Option<String>>(2)),
+    );
+    state.insert("issues_remaining".into(), json!(thread.get::<_, i32>(3)));
+    state.insert("last_rating".into(), json!(thread.get::<_, Option<f64>>(4)));
+    let mut thread_states = Map::new();
+    thread_states.insert("_version".into(), json!(2));
+    thread_states.insert(thread_id.to_string(), Value::Object(state));
+    let states = serde_json::to_string(&Value::Object(thread_states))
+        .map_err(|error| ApiError::Internal(error.to_string()))?;
+    let snapshot = tx
+        .query_one(
+            "INSERT INTO snapshots
+                (session_id, event_id, thread_states, session_state, created_at,
+                 description, snapshot_kind, schema_version)
+             VALUES ($1, NULL, $2::text::json, '{}'::text::json, NOW(),
+                     'Before Edit Series add', 'delta', 2)
+             RETURNING id",
+            &[&session_id, &states],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(Some((session_id, snapshot.get(0))))
+}
+
 /// `POST /api/v2/threads/{thread_id}/issues`
 pub async fn create_issues(
     State(state): State<Arc<AppState>>,
@@ -296,6 +518,29 @@ pub async fn create_issues(
     lock_reader(&tx, user.id()).await?;
     lock_thread(&tx, thread_id, user.id()).await?;
 
+    // A preview is a versioned contract. If another writer changed the issue
+    // set after the reader reviewed it, refuse before any write and ask for a
+    // fresh preview instead of silently committing a different edit (#4654).
+    if let Some(expected) = request.expected_issue_ids.as_ref() {
+        let current_rows = tx
+            .query(
+                "SELECT id FROM issues WHERE thread_id=$1 ORDER BY id",
+                &[&thread_id],
+            )
+            .await
+            .map_err(db::query_error)?;
+        let mut current: Vec<i32> = current_rows.iter().map(|row| row.get(0)).collect();
+        let mut expected = expected.clone();
+        current.sort_unstable();
+        expected.sort_unstable();
+        if current != expected {
+            return Err(ApiError::Conflict(
+                "Issue order changed since the preview; reopen the preview before saving"
+                    .to_string(),
+            ));
+        }
+    }
+
     let rows = tx
         .query(
             "SELECT id, issue_number, position FROM issues
@@ -312,15 +557,84 @@ pub async fn create_issues(
         .iter()
         .map(|(_, number, _)| number.clone())
         .collect();
-    let new_numbers: Vec<String> = requested
+    let candidates: Vec<String> = requested
         .into_iter()
         .filter(|number| !existing_numbers.contains(number))
         .collect();
+    let alias_offers = detect_alias_offers(&tx, user.id(), thread_id, &candidates).await?;
+    let unaccepted: Vec<&IssueEditAliasOffer> = alias_offers
+        .iter()
+        .filter(|offer| {
+            !request
+                .accepted_alias_numbers
+                .contains(&offer.requested_issue_number)
+        })
+        .collect();
+    if !unaccepted.is_empty() {
+        let details = unaccepted
+            .iter()
+            .map(|offer| {
+                format!(
+                    "#{} exists as an identity-mapped issue in {} ({})",
+                    offer.requested_issue_number, offer.series_title, offer.evidence
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("; ");
+        return Err(ApiError::Conflict(format!(
+            "Review the alias mapping before creating a physical duplicate: {details}"
+        )));
+    }
+    let new_numbers: Vec<String> = candidates
+        .into_iter()
+        .filter(|number| !request.accepted_alias_numbers.contains(number))
+        .collect();
     if new_numbers.is_empty() {
-        return Err(ApiError::BadRequest(
-            "All issues in range already exist".to_string(),
+        if alias_offers.is_empty() {
+            return Err(ApiError::BadRequest(
+                "All issues in range already exist".to_string(),
+            ));
+        }
+        // Every requested number was explicitly accepted as an alias: the
+        // source issue is reused and no physical duplicate is created.
+        tx.rollback().await.map_err(db::query_error)?;
+        return Ok((
+            StatusCode::CREATED,
+            Json(IssueListResponse {
+                issues: Vec::new(),
+                total_count: rows.len() as i32,
+                page_size: 0,
+                next_page_token: None,
+                undo_session_id: None,
+                undo_snapshot_id: None,
+            }),
         ));
     }
+
+    // Capture the exact pre-edit issue state once for the undo delta. Existing
+    // positions are restored as well as the created IDs being removed, so a
+    // numeric resort or an anchor insertion is reversible too (#4654).
+    let preimage_rows = tx
+        .query(
+            "SELECT id, issue_number, status, read_at::text, position, catalog_issue_id
+             FROM issues WHERE thread_id=$1",
+            &[&thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let issue_changes: Vec<Value> = preimage_rows
+        .iter()
+        .map(|row| {
+            json!({
+                "id": row.get::<_, i32>(0),
+                "number": row.get::<_, String>(1),
+                "status": row.get::<_, String>(2),
+                "read_at": row.get::<_, Option<String>>(3),
+                "position": row.get::<_, i32>(4),
+                "catalog_issue_id": row.get::<_, Option<i64>>(5),
+            })
+        })
+        .collect();
 
     tx.execute("SET CONSTRAINTS uq_issue_thread_position DEFERRED", &[])
         .await
@@ -329,12 +643,17 @@ pub async fn create_issues(
     let mut created = vec![];
     // Natural placement is only safe when persisted numeric order is already
     // monotonic. A non-monotonic series is reader-authored; appending must not
-    // silently re-sort it into a different strict-list relationship.
+    // silently re-sort it into a different strict-list relationship. An explicit
+    // NumericResort is a deliberate action that may re-seat ordinary numbers.
     let numbered: Option<Vec<i64>> = existing
         .iter()
         .map(|(_, number, _)| ordinary(number))
         .collect();
-    let mixed_natural_order = if !request.append_to_end
+    let monotonic = numbered
+        .as_ref()
+        .is_some_and(|values| values.windows(2).all(|pair| pair[0] < pair[1]));
+    let mixed_natural_order = if matches!(request.strategy, IssuePlacementStrategy::SafeDefault)
+        && !request.append_to_end
         && request.insert_after_issue_id.is_none()
         && numbered.is_none()
     {
@@ -346,9 +665,11 @@ pub async fn create_issues(
     } else {
         None
     };
-    let append = request.append_to_end
-        || (request.insert_after_issue_id.is_none()
-            && numbered.is_none_or(|values| values.windows(2).any(|pair| pair[0] >= pair[1])));
+    let append = matches!(request.strategy, IssuePlacementStrategy::SafeDefault)
+        && (request.append_to_end
+            || (request.insert_after_issue_id.is_none()
+                && !monotonic
+                && mixed_natural_order.is_none()));
 
     if let Some(anchor) = request.insert_after_issue_id {
         let anchor_position = existing
@@ -403,6 +724,7 @@ pub async fn create_issues(
             created.push(insert_issue(&tx, thread_id, number, next + offset as i32 + 1).await?);
         }
     } else {
+        // Monotonic numeric placement or explicit NumericResort.
         let mut merged = existing.clone();
         for number in &new_numbers {
             merged.push((0, number.clone(), 0));
@@ -435,6 +757,9 @@ pub async fn create_issues(
     )
     .await
     .map_err(db::query_error)?;
+    let created_ids: Vec<i32> = created.iter().map(|item| item.id).collect();
+    let undo_point =
+        insert_edit_undo_snapshot(&tx, user.id(), thread_id, issue_changes, &created_ids).await?;
     let total: i32 = tx
         .query_one(
             "SELECT count(*)::int FROM issues WHERE thread_id=$1 AND merged_into_issue_id IS NULL",
@@ -452,6 +777,8 @@ pub async fn create_issues(
             total_count: total,
             page_size,
             next_page_token: None,
+            undo_session_id: undo_point.map(|(session_id, _)| session_id),
+            undo_snapshot_id: undo_point.map(|(_, snapshot_id)| snapshot_id),
         }),
     ))
 }
@@ -638,6 +965,703 @@ pub async fn reorder_issues(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PreviewIssuesRequest {
+    /// Reader-facing range, e.g. `1-3, 5` or `Annual 1`.
+    pub issue_range: String,
+    /// Explicit anchor. Omit for natural placement.
+    pub insert_after_issue_id: Option<i32>,
+    /// Explicit "At the end" choice. Distinct from an omitted anchor.
+    #[serde(default)]
+    pub append_to_end: bool,
+    /// Requested placement strategy. Defaults to safe_default.
+    #[serde(default)]
+    pub strategy: IssuePlacementStrategy,
+    /// Issue IDs shown in the preview's Before rows. Used at commit time to
+    /// reject a stale preview (#4654).
+    #[serde(default)]
+    pub expected_issue_ids: Option<Vec<i32>>,
+    /// Numbers the reader explicitly chose to alias instead of duplicating.
+    #[serde(default)]
+    pub accepted_alias_numbers: Vec<String>,
+}
+
+/// Per-issue human-readable context carried in the preview payload so the
+/// Before/After rows can identify a specific series, its list memberships,
+/// identity/rating/read state and the Queue/Roll frontier it affects (#4654).
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct PreviewIssueItem {
+    pub issue_id: Option<i32>,
+    pub issue_number: String,
+    pub position: i32,
+    pub is_new: bool,
+    /// Title of the series (thread) this issue belongs to.
+    pub series_title: String,
+    /// Names of every custom reading list the issue is a member of.
+    pub source_lists: Vec<String>,
+    /// Whether the issue has already been read.
+    pub is_read: bool,
+    /// Whether the issue has a confirmed external identity/catalog mapping.
+    pub is_mapped: bool,
+    /// Whether rating history exists for this issue.
+    pub has_rating: bool,
+    /// Human label for the Queue/Roll frontier affected by this issue, if any.
+    pub frontier_label: Option<String>,
+    /// Human-readable description of the order effect on this issue.
+    pub effect: String,
+    /// Whether a second physical issue with the same number exists in the series.
+    pub is_duplicate: bool,
+}
+
+/// Set-based metadata gathered once per previewed thread (never per row) and
+/// keyed by issue id. `new` issues have no entry and use neutral defaults.
+#[derive(Debug, Clone, Default)]
+struct PreviewIssueMetadata {
+    source_lists: Vec<String>,
+    is_read: bool,
+    is_mapped: bool,
+    has_rating: bool,
+    is_frontier: bool,
+    is_duplicate: bool,
+}
+
+/// Load all preview context for a thread in a single grouped query. This keeps
+/// the preview free of N+1 round trips and is safe inside the preview savepoint.
+async fn load_preview_metadata(
+    tx: &Transaction<'_>,
+    thread_id: i32,
+) -> Result<(String, BTreeMap<i32, PreviewIssueMetadata>), ApiError> {
+    let rows = tx
+        .query(
+            "SELECT i.id,
+                    i.status = 'read' AS is_read,
+                    (i.catalog_issue_id IS NOT NULL OR EXISTS (
+                        SELECT 1 FROM issue_external_identity_mappings m
+                        WHERE m.issue_id = i.id AND m.status = 'confirmed'
+                    )) AS is_mapped,
+                    EXISTS (
+                        SELECT 1 FROM events e
+                        WHERE e.issue_id = i.id AND e.rating IS NOT NULL
+                    ) AS has_rating,
+                    COALESCE((
+                        SELECT array_agg(DISTINCT l.name ORDER BY l.name)::text[]
+                        FROM custom_cbl_entries ce
+                        JOIN custom_cbl_lists l ON l.id = ce.list_id
+                        WHERE ce.issue_id = i.id
+                    ), '{}'::text[]) AS source_lists,
+                    EXISTS (
+                        SELECT 1 FROM issues dup
+                        WHERE dup.thread_id = i.thread_id
+                          AND dup.issue_number = i.issue_number
+                          AND dup.id <> i.id
+                    ) AS is_duplicate,
+                    COALESCE(t.next_unread_issue_id = i.id, false) AS is_frontier,
+                    t.title
+             FROM issues i
+             JOIN threads t ON t.id = i.thread_id
+             WHERE i.thread_id = $1",
+            &[&thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+    let mut series_title = String::new();
+    let mut by_id = BTreeMap::new();
+    for row in &rows {
+        let id: i32 = row.get(0);
+        let title: String = row.get(7);
+        if series_title.is_empty() {
+            series_title = title;
+        }
+        by_id.insert(
+            id,
+            PreviewIssueMetadata {
+                source_lists: row.get(4),
+                is_read: row.get(1),
+                is_mapped: row.get(2),
+                has_rating: row.get(3),
+                is_frontier: row.get(6),
+                is_duplicate: row.get(5),
+            },
+        );
+    }
+    Ok((series_title, by_id))
+}
+
+fn describe_effect(
+    number: &str,
+    is_new: bool,
+    before_position: Option<i32>,
+    after_position: i32,
+    is_duplicate: bool,
+) -> String {
+    if is_new {
+        return format!("new issue #{number} inserted at position {after_position}");
+    }
+    let order = match before_position {
+        Some(before) if before == after_position => {
+            format!("kept #{number} at position {after_position}")
+        }
+        Some(before) => format!("moved #{number} from position {before} to {after_position}"),
+        None => format!("repositioned #{number} to position {after_position}"),
+    };
+    if is_duplicate {
+        format!("{order}; possible physical duplicate of #{number}")
+    } else {
+        order
+    }
+}
+
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct IssueEditPreviewOutcome {
+    pub strategy: IssuePlacementStrategy,
+    pub can_commit: bool,
+    pub preserves_existing_relative_order: bool,
+    pub before: Vec<PreviewIssueItem>,
+    pub after: Vec<PreviewIssueItem>,
+    pub added_issue_numbers: Vec<String>,
+    pub graph: crate::reading_graph::ReadingGraphResponse,
+    pub conflict_message: Option<String>,
+}
+
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct IssueEditPreviewResponse {
+    pub thread_id: i32,
+    pub thread_title: String,
+    pub requested_strategy: IssuePlacementStrategy,
+    pub default_outcome: IssueEditPreviewOutcome,
+    pub numeric_resort_outcome: Option<IssueEditPreviewOutcome>,
+    /// Source-preserving alternatives for numbers that already exist as
+    /// identity-mapped issues in another owned series (#4654).
+    pub alias_offers: Vec<IssueEditAliasOffer>,
+    /// IDs shown in Before, echoed so the commit can reject a stale preview.
+    pub expected_issue_ids: Vec<i32>,
+}
+
+fn build_after_items(
+    existing: &[(i32, String, i32)],
+    merged: &[(i32, String)],
+    series_title: &str,
+    metadata: &BTreeMap<i32, PreviewIssueMetadata>,
+) -> (Vec<PreviewIssueItem>, Vec<PreviewIssueItem>) {
+    let before = existing
+        .iter()
+        .map(|(id, number, position)| {
+            let meta = metadata.get(id);
+            PreviewIssueItem {
+                issue_id: Some(*id),
+                issue_number: number.clone(),
+                position: *position,
+                is_new: false,
+                series_title: series_title.to_string(),
+                source_lists: meta.map(|m| m.source_lists.clone()).unwrap_or_default(),
+                is_read: meta.is_some_and(|m| m.is_read),
+                is_mapped: meta.is_some_and(|m| m.is_mapped),
+                has_rating: meta.is_some_and(|m| m.has_rating),
+                frontier_label: meta
+                    .filter(|m| m.is_frontier)
+                    .map(|_| "current unread (Queue/Roll frontier)".to_string()),
+                effect: describe_effect(
+                    number,
+                    false,
+                    Some(*position),
+                    *position,
+                    meta.is_some_and(|m| m.is_duplicate),
+                ),
+                is_duplicate: meta.is_some_and(|m| m.is_duplicate),
+            }
+        })
+        .collect();
+    let existing_positions: BTreeMap<i32, i32> = existing
+        .iter()
+        .map(|(id, _, position)| (*id, *position))
+        .collect();
+    let after = merged
+        .iter()
+        .enumerate()
+        .map(|(index, (id, number))| {
+            let is_new = *id == 0;
+            let meta = if is_new { None } else { metadata.get(id) };
+            let after_position = index as i32 + 1;
+            let before_position = if is_new {
+                None
+            } else {
+                existing_positions.get(id).copied()
+            };
+            PreviewIssueItem {
+                issue_id: (*id != 0).then_some(*id),
+                issue_number: number.clone(),
+                position: after_position,
+                is_new,
+                series_title: series_title.to_string(),
+                source_lists: meta.map(|m| m.source_lists.clone()).unwrap_or_default(),
+                is_read: meta.is_some_and(|m| m.is_read),
+                is_mapped: meta.is_some_and(|m| m.is_mapped),
+                has_rating: meta.is_some_and(|m| m.has_rating),
+                frontier_label: meta
+                    .filter(|m| m.is_frontier)
+                    .map(|_| "current unread (Queue/Roll frontier)".to_string()),
+                effect: describe_effect(
+                    number,
+                    is_new,
+                    before_position,
+                    after_position,
+                    meta.is_some_and(|m| m.is_duplicate),
+                ),
+                is_duplicate: meta.is_some_and(|m| m.is_duplicate),
+            }
+        })
+        .collect();
+    (before, after)
+}
+
+fn planned_merge(
+    existing: &[(i32, String, i32)],
+    new_numbers: &[String],
+    request: &PreviewIssuesRequest,
+    strategy: IssuePlacementStrategy,
+) -> Result<(Vec<(i32, String)>, bool), ApiError> {
+    let numbered: Option<Vec<i64>> = existing
+        .iter()
+        .map(|(_, number, _)| ordinary(number))
+        .collect();
+    let monotonic = numbered
+        .as_ref()
+        .is_some_and(|values| values.windows(2).all(|pair| pair[0] < pair[1]));
+    let mixed_natural_order = if matches!(strategy, IssuePlacementStrategy::SafeDefault)
+        && !request.append_to_end
+        && request.insert_after_issue_id.is_none()
+        && numbered.is_none()
+    {
+        let existing_labels: Vec<String> = existing.iter().map(|(_, n, _)| n.clone()).collect();
+        natural_issue_order(&existing_labels, new_numbers)
+    } else {
+        None
+    };
+
+    let append = matches!(strategy, IssuePlacementStrategy::SafeDefault)
+        && (request.append_to_end
+            || (request.insert_after_issue_id.is_none()
+                && !monotonic
+                && mixed_natural_order.is_none()));
+
+    if let Some(anchor) = request.insert_after_issue_id {
+        let anchor_index = existing
+            .iter()
+            .position(|(id, _, _)| *id == anchor)
+            .ok_or_else(|| ApiError::NotFound(format!("Issue {anchor} not found")))?;
+        let mut merged: Vec<(i32, String)> = existing
+            .iter()
+            .map(|(id, number, _)| (*id, number.clone()))
+            .collect();
+        for (offset, number) in new_numbers.iter().enumerate() {
+            merged.insert(anchor_index + 1 + offset, (0, number.clone()));
+        }
+        return Ok((merged, true));
+    }
+
+    if let Some(order) = mixed_natural_order {
+        let mut merged: Vec<(i32, String)> = vec![];
+        for number in order {
+            if let Some((id, _, _)) = existing.iter().find(|(_, n, _)| n == &number) {
+                merged.push((*id, number));
+            } else {
+                merged.push((0, number));
+            }
+        }
+        return Ok((merged, true));
+    }
+
+    if append {
+        let mut merged: Vec<(i32, String)> = existing
+            .iter()
+            .map(|(id, number, _)| (*id, number.clone()))
+            .collect();
+        for number in new_numbers {
+            merged.push((0, number.clone()));
+        }
+        return Ok((merged, true));
+    }
+
+    if matches!(strategy, IssuePlacementStrategy::NumericResort) {
+        let mut merged: Vec<(i32, String)> = existing
+            .iter()
+            .map(|(id, number, _)| (*id, number.clone()))
+            .collect();
+        for number in new_numbers {
+            merged.push((0, number.clone()));
+        }
+        merged.sort_by(|left, right| {
+            let left_value = ordinary(&left.1).unwrap_or(i64::MAX);
+            let right_value = ordinary(&right.1).unwrap_or(i64::MAX);
+            (left_value, &left.1, left.0).cmp(&(right_value, &right.1, right.0))
+        });
+        let preserves = existing
+            .iter()
+            .zip(merged.iter().filter(|(id, _)| *id != 0))
+            .all(|(e, m)| e.0 == m.0);
+        return Ok((merged, preserves));
+    }
+
+    // Safe default, monotonic numeric series: numeric placement.
+    let mut merged: Vec<(i32, String)> = existing
+        .iter()
+        .map(|(id, number, _)| (*id, number.clone()))
+        .collect();
+    for number in new_numbers {
+        merged.push((0, number.clone()));
+    }
+    merged.sort_by(|left, right| {
+        let left_value = ordinary(&left.1).unwrap_or(i64::MAX);
+        let right_value = ordinary(&right.1).unwrap_or(i64::MAX);
+        (left_value, &left.1, left.0).cmp(&(right_value, &right.1, right.0))
+    });
+    let preserves = existing
+        .iter()
+        .zip(merged.iter().filter(|(id, _)| *id != 0))
+        .all(|(e, m)| e.0 == m.0);
+    Ok((merged, preserves))
+}
+
+/// Project an arbitrary before/after issue ordering inside a savepoint and
+/// validate the resulting reading graph. Shared by the create preview and by
+/// the delete/reorder structure previews so every structural edit reports the
+/// same metadata, affected frontier and concrete conflict information (#4654).
+async fn preview_projection(
+    tx: &Transaction<'_>,
+    user: AuthenticatedUser,
+    thread_id: i32,
+    existing: &[(i32, String, i32)],
+    merged: &[(i32, String)],
+    strategy: IssuePlacementStrategy,
+    removed_issue_id: Option<i32>,
+) -> Result<IssueEditPreviewOutcome, ApiError> {
+    // Both values are derived from the projected order so create, delete and
+    // reorder previews report the same preservation semantics.
+    let preserves_existing_relative_order = existing
+        .iter()
+        .map(|(id, _, _)| *id)
+        .eq(merged.iter().filter(|(id, _)| *id != 0).map(|(id, _)| *id));
+    let added_issue_numbers = merged
+        .iter()
+        .filter(|(id, _)| *id == 0)
+        .map(|(_, number)| number.clone())
+        .collect::<Vec<_>>();
+    let (series_title, metadata) = load_preview_metadata(tx, thread_id).await?;
+    let (mut before, after) = build_after_items(existing, merged, &series_title, &metadata);
+    if let Some(removed) = removed_issue_id {
+        for item in &mut before {
+            if item.issue_id == Some(removed) {
+                item.effect = format!("removed issue #{} from series", item.issue_number);
+            }
+        }
+    }
+
+    let savepoint = format!(
+        "sp_preview_{}",
+        match strategy {
+            IssuePlacementStrategy::SafeDefault => "safe",
+            IssuePlacementStrategy::NumericResort => "resort",
+        }
+    );
+    tx.execute(&format!("SAVEPOINT {savepoint}"), &[])
+        .await
+        .map_err(db::query_error)?;
+    tx.execute("SET CONSTRAINTS uq_issue_thread_position DEFERRED", &[])
+        .await
+        .map_err(db::query_error)?;
+
+    let positions: Vec<(i32, i32)> = merged
+        .iter()
+        .enumerate()
+        .filter_map(|(index, (id, _))| (*id != 0).then_some((*id, index as i32 + 1)))
+        .collect();
+    reseat_positions(tx, thread_id, &positions).await?;
+    for (index, (id, number)) in merged.iter().enumerate() {
+        if *id == 0 {
+            insert_issue(tx, thread_id, number, index as i32 + 1).await?;
+        }
+    }
+    recreate_tracking_state(tx, thread_id, user.id()).await?;
+
+    let inputs = option_inputs::load_inputs_in_transaction(tx, user).await?;
+    let validated = option_inputs::validated_contained(inputs.clone())?;
+    let graph = crate::reading_graph::project(&inputs, &validated, None);
+    let can_commit = graph.status == "ok";
+    let conflict_message = if can_commit {
+        None
+    } else {
+        graph.cycles.first().map(|c| c.message.clone())
+    };
+
+    tx.execute(&format!("ROLLBACK TO SAVEPOINT {savepoint}"), &[])
+        .await
+        .map_err(db::query_error)?;
+    tx.execute(&format!("RELEASE SAVEPOINT {savepoint}"), &[])
+        .await
+        .map_err(db::query_error)?;
+
+    Ok(IssueEditPreviewOutcome {
+        strategy,
+        can_commit,
+        preserves_existing_relative_order,
+        before,
+        after,
+        added_issue_numbers,
+        graph,
+        conflict_message,
+    })
+}
+
+async fn preview_outcome(
+    tx: &Transaction<'_>,
+    user: AuthenticatedUser,
+    thread_id: i32,
+    existing: &[(i32, String, i32)],
+    new_numbers: &[String],
+    request: &PreviewIssuesRequest,
+    strategy: IssuePlacementStrategy,
+) -> Result<IssueEditPreviewOutcome, ApiError> {
+    let (merged, _preserves) = planned_merge(existing, new_numbers, request, strategy)?;
+    preview_projection(tx, user, thread_id, existing, &merged, strategy, None).await
+}
+
+/// `POST /api/v2/threads/{thread_id}/issues:preview`
+pub async fn preview_issue_create(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(thread_id): Path<i32>,
+    Json(request): Json<PreviewIssuesRequest>,
+) -> Result<Json<IssueEditPreviewResponse>, ApiError> {
+    let requested = parse_issue_numbers(&request.issue_range)?;
+    let mut conn = db::checkout(&state).await?;
+    let tx = conn
+        .build_transaction()
+        .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
+        .start()
+        .await
+        .map_err(db::query_error)?;
+    lock_reader(&tx, user.id()).await?;
+    lock_thread(&tx, thread_id, user.id()).await?;
+
+    let thread_row = tx
+        .query_one(
+            "SELECT title FROM threads WHERE id=$1 AND user_id=$2",
+            &[&thread_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let thread_title: String = thread_row.get(0);
+
+    let rows = tx
+        .query(
+            "SELECT id, issue_number, position FROM issues
+             WHERE thread_id=$1 ORDER BY position, id",
+            &[&thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let existing: Vec<(i32, String, i32)> = rows
+        .iter()
+        .map(|row| (row.get(0), row.get(1), row.get(2)))
+        .collect();
+    let existing_numbers: BTreeSet<String> = existing.iter().map(|(_, n, _)| n.clone()).collect();
+    let candidates: Vec<String> = requested
+        .into_iter()
+        .filter(|n| !existing_numbers.contains(n))
+        .collect();
+    let alias_offers = detect_alias_offers(&tx, user.id(), thread_id, &candidates).await?;
+    let new_numbers: Vec<String> = candidates
+        .into_iter()
+        .filter(|number| !request.accepted_alias_numbers.contains(number))
+        .collect();
+    if new_numbers.is_empty() {
+        return Err(ApiError::BadRequest(
+            "All issues in range already exist".to_string(),
+        ));
+    }
+    let expected_issue_ids: Vec<i32> = existing.iter().map(|(id, _, _)| *id).collect();
+
+    let default_outcome = preview_outcome(
+        &tx,
+        user,
+        thread_id,
+        &existing,
+        &new_numbers,
+        &request,
+        IssuePlacementStrategy::SafeDefault,
+    )
+    .await?;
+
+    let numeric_resort_outcome =
+        if request.insert_after_issue_id.is_none() && !request.append_to_end {
+            let resort = preview_outcome(
+                &tx,
+                user,
+                thread_id,
+                &existing,
+                &new_numbers,
+                &request,
+                IssuePlacementStrategy::NumericResort,
+            )
+            .await?;
+            if resort.preserves_existing_relative_order
+                && default_outcome.preserves_existing_relative_order
+            {
+                // Same effective result; no need to show a separate resort option.
+                None
+            } else {
+                Some(resort)
+            }
+        } else {
+            None
+        };
+
+    tx.rollback().await.map_err(db::query_error)?;
+    Ok(Json(IssueEditPreviewResponse {
+        thread_id,
+        thread_title,
+        requested_strategy: request.strategy,
+        default_outcome,
+        numeric_resort_outcome,
+        alias_offers,
+        expected_issue_ids,
+    }))
+}
+
+/// Body of `POST /api/v2/threads/{thread_id}/issues/structure-preview`.
+///
+/// Delete and reorder are structural issue edits too, so A4 requires the same
+/// before/after, constraint and frontier preview that create/insert receives
+/// (#4654). The operation is deliberately described by a string plus optional
+/// fields rather than a tagged enum so an unsupported shape is a plain 400 and
+/// never a deserialization-shaped 500.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PreviewIssueStructureRequest {
+    /// `delete` removes one issue; `reorder` applies a complete new order.
+    pub operation: String,
+    /// Issue to remove. Required for `delete`, ignored for `reorder`.
+    #[serde(default)]
+    pub issue_id: Option<i32>,
+    /// Every issue id in the requested order. Required for `reorder`.
+    #[serde(default)]
+    pub issue_ids: Option<Vec<i32>>,
+}
+
+/// `POST /api/v2/threads/{thread_id}/issues/structure-preview`
+pub async fn preview_issue_structure(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(thread_id): Path<i32>,
+    Json(request): Json<PreviewIssueStructureRequest>,
+) -> Result<Json<IssueEditPreviewResponse>, ApiError> {
+    let mut conn = db::checkout(&state).await?;
+    let tx = conn
+        .build_transaction()
+        .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
+        .start()
+        .await
+        .map_err(db::query_error)?;
+    // Same lock order as every other writer: reader advisory lock before the
+    // thread row lock (#5398/#5419).
+    lock_reader(&tx, user.id()).await?;
+    lock_thread(&tx, thread_id, user.id()).await?;
+
+    let thread_row = tx
+        .query_one(
+            "SELECT title FROM threads WHERE id=$1 AND user_id=$2",
+            &[&thread_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let thread_title: String = thread_row.get(0);
+
+    let rows = tx
+        .query(
+            "SELECT id, issue_number, position FROM issues
+             WHERE thread_id=$1 ORDER BY position, id",
+            &[&thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let existing: Vec<(i32, String, i32)> = rows
+        .iter()
+        .map(|row| (row.get(0), row.get(1), row.get(2)))
+        .collect();
+    let expected_issue_ids: Vec<i32> = existing.iter().map(|(id, _, _)| *id).collect();
+
+    let (merged, removed_issue_id) = match request.operation.as_str() {
+        "delete" => {
+            let issue_id = request.issue_id.ok_or_else(|| {
+                ApiError::BadRequest("issue_id is required for a delete preview".to_string())
+            })?;
+            if !existing.iter().any(|(id, _, _)| *id == issue_id) {
+                return Err(ApiError::NotFound(format!("Issue {issue_id} not found")));
+            }
+            let merged = existing
+                .iter()
+                .filter(|(id, _, _)| *id != issue_id)
+                .map(|(id, number, _)| (*id, number.clone()))
+                .collect::<Vec<_>>();
+            (merged, Some(issue_id))
+        }
+        "reorder" => {
+            let requested = request.issue_ids.clone().ok_or_else(|| {
+                ApiError::BadRequest("issue_ids is required for a reorder preview".to_string())
+            })?;
+            let mut canonical: Vec<i32> = expected_issue_ids.clone();
+            let mut candidate = requested.clone();
+            canonical.sort_unstable();
+            candidate.sort_unstable();
+            if canonical != candidate {
+                return Err(ApiError::BadRequest(
+                    "issue_ids must list every issue in the series exactly once".to_string(),
+                ));
+            }
+            let merged = requested
+                .iter()
+                .map(|id| {
+                    let (_, number, _) = existing
+                        .iter()
+                        .find(|(issue_id, _, _)| *issue_id == *id)
+                        .ok_or_else(|| ApiError::NotFound(format!("Issue {id} not found")))?;
+                    Ok((*id, number.clone()))
+                })
+                .collect::<Result<Vec<_>, ApiError>>()?;
+            (merged, None)
+        }
+        other => {
+            return Err(ApiError::BadRequest(format!(
+                "unsupported structure preview operation: {other}"
+            )))
+        }
+    };
+
+    let outcome = preview_projection(
+        &tx,
+        user,
+        thread_id,
+        &existing,
+        &merged,
+        IssuePlacementStrategy::SafeDefault,
+        removed_issue_id,
+    )
+    .await?;
+
+    tx.rollback().await.map_err(db::query_error)?;
+    Ok(Json(IssueEditPreviewResponse {
+        thread_id,
+        thread_title,
+        requested_strategy: IssuePlacementStrategy::SafeDefault,
+        default_outcome: outcome,
+        numeric_resort_outcome: None,
+        alias_offers: Vec::new(),
+        expected_issue_ids,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -671,5 +1695,63 @@ mod tests {
             .filter_map(|value| ordinary(value))
             .collect();
         assert!(values.windows(2).any(|pair| pair[0] >= pair[1]));
+    }
+
+    #[test]
+    fn preview_effect_labels_are_human_readable() {
+        assert_eq!(
+            describe_effect("101", true, None, 3, false),
+            "new issue #101 inserted at position 3"
+        );
+        assert_eq!(
+            describe_effect("140", false, Some(2), 2, false),
+            "kept #140 at position 2"
+        );
+        assert_eq!(
+            describe_effect("130", false, Some(5), 9, false),
+            "moved #130 from position 5 to 9"
+        );
+        assert!(
+            describe_effect("130", false, Some(5), 9, true).contains("possible physical duplicate")
+        );
+    }
+
+    #[test]
+    fn preview_rows_carry_series_lists_frontier_and_effects() {
+        let existing = vec![(7, "129".to_string(), 1), (8, "140".to_string(), 2)];
+        let merged = vec![
+            (7, "129".to_string()),
+            (0, "101".to_string()),
+            (8, "140".to_string()),
+        ];
+        let mut metadata = BTreeMap::new();
+        metadata.insert(
+            7,
+            PreviewIssueMetadata {
+                source_lists: vec!["Julix".to_string()],
+                is_read: true,
+                is_mapped: true,
+                has_rating: true,
+                is_frontier: true,
+                is_duplicate: false,
+            },
+        );
+        let (before, after) =
+            build_after_items(&existing, &merged, "B.P.R.D.: Hell on Earth", &metadata);
+
+        assert_eq!(before[0].series_title, "B.P.R.D.: Hell on Earth");
+        assert_eq!(before[0].source_lists, vec!["Julix".to_string()]);
+        assert!(before[0].is_read);
+        assert!(before[0].is_mapped);
+        assert!(before[0].has_rating);
+        assert!(before[0]
+            .frontier_label
+            .as_deref()
+            .is_some_and(|label| label.contains("Queue/Roll")));
+
+        assert!(after[1].is_new);
+        assert_eq!(after[1].effect, "new issue #101 inserted at position 2");
+        assert_eq!(after[2].effect, "moved #140 from position 2 to 3");
+        assert!(after[0].source_lists.contains(&"Julix".to_string()));
     }
 }

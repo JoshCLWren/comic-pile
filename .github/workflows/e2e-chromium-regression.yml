@@ -44,16 +44,10 @@ concurrency:
 
 env:
   CI: 'true'
-  # Native Rust v2 and Python share this process-visible credential epoch.
-  ENVIRONMENT: 'test'
-  SECRET_KEY: e2e-regression-discovery-secret-key
-  # One disposable PostgreSQL database for BOTH runtimes (issue #5119). The
-  # tracked .env.test defines TEST_DATABASE_URL on :5437; in test mode Python
-  # settings prefer that value over DATABASE_URL, so it must be pinned here to
-  # the same database the native v2 service reads through RUST_ROLL_DATABASE_URL.
-  # Keep all three endpoints identical; tests/test_e2e_chromium_shared_db.py guards it.
-  DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/comic_pile_e2e_regression
-  TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/comic_pile_e2e_regression
+  # One disposable PostgreSQL database, pinned through the single native Rust
+  # variable (issue #5741). Python is no longer an application runtime, so the
+  # old three-variable DB pin and the Python backend settings are gone.
+  # tests/test_e2e_chromium_shared_db.py guards this contract.
   RUST_ROLL_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/comic_pile_e2e_regression
   RUST_ROLL_JWT_SECRET: e2e-regression-discovery-secret-key
   RUST_ROLL_ENV: development
@@ -62,7 +56,6 @@ env:
   # e2e backend contract (docker-compose.test.yml) disables rate limiting
   # for the disposable test database.
   TEST_ENVIRONMENT: 'true'
-  AUTO_BACKUP_ENABLED: 'false'
   BASE_URL: http://127.0.0.1:9000
 
 jobs:
@@ -88,6 +81,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
+      # Python remains only as the host-side scripting runtime for the
+      # inventory selector, the static/API ingress and the run summary. No
+      # Python application service is started or configured here (issue #5741).
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
@@ -124,9 +120,9 @@ jobs:
         run: CARGO_TARGET_DIR=native/roll-service/target cargo build --release --locked -p comicpile-roll-service
 
       - name: Apply migrations
-        # DATABASE_URL / TEST_DATABASE_URL come from the shared top-level env.
-        # Refinery runner (#5431); the Alembic tree is deleted.
-        run: CARGO_TARGET_DIR=native/roll-service/target cargo run --release --locked -p comicpile-migrate -- up
+        # The refinery runner reads MIGRATE_DATABASE_URL; derive it from the
+        # lane's single pinned RUST_ROLL_DATABASE_URL (issue #5741).
+        run: MIGRATE_DATABASE_URL="$RUST_ROLL_DATABASE_URL" CARGO_TARGET_DIR=native/roll-service/target cargo run --release --locked -p comicpile-migrate -- up
 
       - name: Start native v2 service and ingress
         run: |
@@ -166,7 +162,6 @@ jobs:
         if: always()
         run: |
           mkdir -p frontend/test-results/regression
-          cp /tmp/backend.log frontend/test-results/regression/backend.log || true
           cp /tmp/native.log frontend/test-results/regression/native.log || true
           cp /tmp/ingress.log frontend/test-results/regression/ingress.log || true
 

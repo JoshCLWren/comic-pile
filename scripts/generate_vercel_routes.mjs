@@ -117,23 +117,64 @@ export function fragmentVercelRoutes(fragments, previousRoutes = []) {
     .map(group => ({src: group.src, methods: METHODS.filter(m => group.methods.has(m)), dest: group.dest}))
     .sort(compareRoutes);
 }
+/** Fragment-owned Vercel settings: the active cron list and retired rewrites.
+ *
+ * Bot-owned vercel.json cannot be edited in an ordinary PR, so a retired
+ * maintenance cron/rewrite must be declared in a contributor-owned route
+ * fragment. Crons are derived from that declaration instead of being carried
+ * forward from the previous generated document; retired rewrite srcs are
+ * dropped from the regenerated routes.
+ */
+export function fragmentVercelConfig(fragments) {
+  const crons = [];
+  const retiredRewriteSrcs = new Set();
+  for (const fragment of fragments) {
+    const declared = fragment.vercel_generation || {};
+    if (declared.crons !== undefined) {
+      if (!Array.isArray(declared.crons)
+        || !declared.crons.every(cron => isString(cron?.path) && isString(cron?.schedule))) {
+        throw new Error(`${fragment.family}: vercel_generation.crons must be path/schedule objects`);
+      }
+      crons.push(...declared.crons.map(cron => ({path: cron.path, schedule: cron.schedule})));
+    }
+    if (declared.retired_rewrite_srcs !== undefined) {
+      if (!Array.isArray(declared.retired_rewrite_srcs)
+        || !declared.retired_rewrite_srcs.every(isString)) {
+        throw new Error(`${fragment.family}: retired_rewrite_srcs must be strings`);
+      }
+      for (const src of declared.retired_rewrite_srcs) retiredRewriteSrcs.add(src);
+    }
+  }
+  return {crons, retiredRewriteSrcs};
+}
+
 /** Generate the complete native-only Vercel document from route fragments. */
 export function generateVercel(config, fragments) {
   if (!fragments || fragments.length === 0) {
     throw new Error('Cannot generate without route fragments');
   }
-  const native = config.routes.filter(route => NATIVE.has(route.dest) && route.src !== FALLBACK);
+  const {crons, retiredRewriteSrcs} = fragmentVercelConfig(fragments);
+  // An explicit fragment declaration is authoritative. Fragments that do not
+  // own crons keep the previous document's list, so unrelated cron cleanup is
+  // never an accidental side effect of route regeneration.
+  const nextCrons = crons.length ? crons : config.crons;
+  const previousRoutes = config.routes.filter(route => !retiredRewriteSrcs.has(route.src));
+  const native = previousRoutes.filter(
+    route => NATIVE.has(route.dest) && route.src !== FALLBACK,
+  );
   if (!native.length) throw new Error('Cannot generate without explicit native Rust routes');
 
-  const fragmentRoutes = fragmentVercelRoutes(fragments, config.routes);
+  const fragmentRoutes = fragmentVercelRoutes(fragments, previousRoutes);
   const fragmentSrcs = new Set(fragmentRoutes.map(r => r.src));
-  const baselineNatives = config.routes.filter(
+  const baselineNatives = previousRoutes.filter(
     route => NATIVE.has(route.dest) && route.src !== FALLBACK && !fragmentSrcs.has(route.src),
   );
   // Only non-API routes survive from the previous document. Every API route
   // is either fragment-derived or the native catch-all below, so a retired
   // Python exception can never be carried forward.
-  const rest = config.routes.filter(route => !native.includes(route) && !isApiSource(route.src));
+  const rest = previousRoutes.filter(
+    route => !native.includes(route) && !isApiSource(route.src),
+  );
   const fullRoutes = [
     ...baselineNatives,
     ...fragmentRoutes,
@@ -144,6 +185,7 @@ export function generateVercel(config, fragments) {
   // one Rust compilation target and no retired API destination.
   return assertSingleNativeIngress(withCanonicalBuilds(applyStaticCsp({
     ...config,
+    crons: nextCrons,
     routes: slimNativeRollRoutes(fullRoutes, new Set(fragmentRoutes)),
   })));
 }

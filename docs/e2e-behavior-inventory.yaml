@@ -107,6 +107,13 @@ behaviors:
     status: covered
     specs: ["p0-thread-management.spec.ts"]
 
+  - id: THREAD-002
+    area: thread
+    behavior: "Edit Series preview shows human-readable before/after effects; cancel, failed-preview retry, and post-commit Undo leave the series unchanged or restored"
+    priority: P1
+    status: covered
+    specs: ["issue-4654-issue-preview-cancel-recovery.spec.ts"]
+
   # ---- Dependency behavior (P0) ----
   - id: DEP-001
     area: dep
