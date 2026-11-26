@@ -379,6 +379,13 @@
               "null"
             ]
           },
+          "issue_number_alias": {
+            "description": "Alternate overall/story number for the same physical comic (#4652).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "issues_read": {
             "format": "int32",
             "type": "integer"
@@ -409,6 +416,13 @@
             ]
           },
           "next_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_issue_number": {
+            "description": "Provider's own issue number, only from a confirmed identity (#4652).",
             "type": [
               "string",
               "null"
