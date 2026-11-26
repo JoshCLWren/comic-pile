@@ -3,7 +3,7 @@
 > **Status: point-in-time audit record, not current operating instructions.** The
 > canonical Markdown files remain the instructions; this file records the audit,
 > inventory accounting and delivery evidence required by issue #5757 acceptance
-> criteria A19 and A28, and the repair of review finding F1 on PR #5835.
+> criteria A19 and A28, and the repair of review findings F1 and F2 on PR #5835.
 <!-- docs-path-check: historical -->
 
 ## Outcome and relationship to merged work
@@ -34,14 +34,15 @@ repair; because both sides changed that hunk relative to the old base,
 `git merge-tree` reported a content conflict and GitHub marked the PR
 `CONFLICTING` (F1's self-consistency objection). This run removed that local
 link: the retired-background-repair paragraph is now byte-identical to `main`,
-and the handoff stays discoverable through the link in `docs/README.md`. Ten
-frontend query-cache/test files from unrelated earlier checkpoints of this
-branch (work that landed on `main` through other issues) were likewise restored
-to `main` content, so this PR is docs-only and its tree matches `main` except for
-this handoff and that one link. The code-path guard passes on the bare head and
-`git merge-tree --write-tree origin/main <prospective-tree>` exits 0 with no
-conflict sections. No `docs-path-check` suppression, test weakening or assertion
-change was used.
+and the handoff stays discoverable through the link in `docs/README.md`. In the
+F1/F2 repair all 45 out-of-scope frontend files that had drifted from `main` on
+this work-checkpoint branch were restored to byte-identical `main` content,
+including the #5864 staged-structural fix in `IssueToggleList.tsx` and the four
+files that were deleted relative to `main`. The tree now matches `main` except
+for this handoff and that one link. The code-path guard passes on the bare head
+and `git merge-tree --write-tree origin/main <synchronized-tree>` exits 0 with
+no conflict sections. No `docs-path-check` suppression, test weakening or
+assertion change was used.
 
 ## Document reconciliation recorded by this audit
 
@@ -116,10 +117,18 @@ Checks observed in this review runtime on the synchronized tree:
 - `node --test scripts/check_doc_code_paths.test.mjs` — exit 0; 16 pass, 0 fail.
 - `python3 scripts/generate_markdown_inventory.py --output
   /tmp/MARKDOWN_INVENTORY_5757.md` — exit 0; counts above.
-- `git write-tree` diff against `origin/main` — only this handoff and the
-  `docs/README.md` navigation link differ; `git merge-tree --write-tree
-  origin/main HEAD` exits 0 with no conflict sections, so the F1
-  self-consistency objection is resolved without a topology rebase.
+- After the F1/F2 repair, the `git write-tree` diff against `origin/main`
+  contains only this handoff and the `docs/README.md` navigation link (all 45
+  out-of-scope frontend files were restored to byte-identical `main` content,
+  including the `IssueToggleList.tsx` #5864 staged-structural fix);
+  `git merge-tree --write-tree origin/main <synchronized-tree>` exits 0 with no
+  conflict sections, so the F1 self-consistency objection is resolved without a
+  topology rebase and the F2 exact-head merge objection is resolved by an
+  explicit merge check rather than bare-head CI alone. At exact head
+  `71262625611d37f85301b64e0630d635991a1451` this check exited 1 with
+  `CONFLICT (content)` in `frontend/src/pages/QueuePage/IssueToggleList.tsx`;
+  after resynchronization it exits 0 on the synchronized repair tree, which is
+  byte-identical to `main` except for this handoff and that one link.
 - `python3 -m pytest` could not run: pytest is not installed in this runtime
   (`No module named pytest`); the Documentation workflow runs
   `tests/test_markdown_docs.py`, `tests/test_generate_markdown_inventory.py` and
@@ -131,21 +140,24 @@ Checks observed in this review runtime on the synchronized tree:
 
 At the prior bare head `24ee72c`, `gh pr checks` showed `Docs code-path check`
 and `CI Summary` failing and `mergeable: CONFLICTING`; those stale-base failures
-are fixed by the synchronization recorded above. At the exact reviewed head
-`74513e911c5828cac025bfc0392077caf67eafd2`, `gh pr checks` reports
+are fixed by the synchronization recorded above. At exact reviewed head
+`71262625611d37f85301b64e0630d635991a1451` (before the F1/F2 repair),
+`gh pr checks` reported all required checks passing, including
 `Docs code-path check`, `Markdown docs`, `CI Summary`, `Conflict Marker Guard`,
 `Fragment-only guard (no generated files)`, `Native Route DB-Test Guard`,
 `Production Runtime Migrations`, `Python Lint (ruff)`, `Python Type Check (ty)`,
 `Frontend Lint + Typecheck`, `Frontend Unit Tests (vitest)`,
-`Rendered UI Audit (Chromium)` and `Rust function build and tests` as passing,
-plus `rotisserie / wake`, `rotisserie / reconcile` and `rotisserie / guard-tests`
-(`claim`, CodeRabbit and PR-Agent advisory review skipped). `rust-roll`
-(Native Rust Roll) was still `in_progress` when this record was written, so its
-final result is left to the exact-head CI gate rather than claimed here.
-Locally observed on that same head: `node scripts/check_doc_code_paths.mjs`
-exit 0, `python3 scripts/check_markdown_docs.py` exit 0, the inventory generator
-exit 0, and `git merge-tree --write-tree origin/main HEAD` exit 0 with no
-conflict sections. Remaining discrepancies: PR #5835's reconciled doc content
+`Rendered UI Audit (Chromium)`, `Rust function build and tests` and `rust-roll`
+(Native Rust Roll), plus `rotisserie / wake`, `rotisserie / reconcile` and
+`rotisserie / guard-tests` (`claim`, CodeRabbit and PR-Agent advisory review
+skipped). The F1/F2 repair restores 45 out-of-scope frontend files to
+byte-identical `main` content; exact-head CI on the synchronized tree is
+re-gated by the factory CI check rather than claimed here. Locally observed on
+exact head `712626256`: `node scripts/check_doc_code_paths.mjs` exit 0,
+`python3 scripts/check_markdown_docs.py` exit 0 and the inventory generator
+exit 0; `git merge-tree --write-tree origin/main HEAD` exited 1 there with
+`CONFLICT (content)` in `IssueToggleList.tsx`, and exits 0 with no conflict
+sections after the F1/F2 resynchronization. Remaining discrepancies: PR #5835's reconciled doc content
 was already delivered by merged #5846; this PR is retained only as the
 audit/handoff evidence required by A19 and A28, plus the synchronization that
 makes the head self-consistent. Delivery must follow the existing Rotisserie
@@ -191,7 +203,7 @@ historical/superseded notices.
 | A24 | this file | Migration-era queue/cron fallback guidance removed on `main` in `docs/COMICVINE_HYDRATOR.md` and `docs/COMICVINE_RUNTIME_FALLBACK.md` |
 | A25 | this file | Agent guidance checked against current factory safeguards |
 | A26 | `docs/README.md`, this file | Added link uses an existing heading anchor; no dangling references added |
-| A27 | this file | Local doc/link/code-path/generator checks pass on the exact head `74513e9`; exact-head CI passes for docs, lint, type, unit, rendered-audit and Rust-build checks, with `rust-roll` left to the CI gate; prior-head failures recorded as stale-base artifacts |
+| A27 | this file | Local doc/link/code-path/generator checks pass; exact-head CI at `712626256` passed all required checks including `rust-roll`; after F1/F2 the tree is docs-only and merge-tree against `origin/main` exits 0, re-gated by exact-head CI |
 | A28 | this file | Documents, stale claims, sources, validation and discrepancies recorded |
 | A29 | this file | Documentation workflow and existing checks reused |
 | A30 | this file | Generator and code-path commands executed above |
