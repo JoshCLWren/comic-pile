@@ -109,6 +109,7 @@ describe('cblSourcesApi.commit', () => {
         content_hash: 'hash-42',
         revision_sha: 'abcdef1234567890',
       },
+      { timeout: 60_000 },
     )
   })
 
@@ -124,6 +125,7 @@ describe('cblSourcesApi.commit', () => {
       expect.objectContaining({
         overlap_decisions: [{ overlap_id: 'mister-miracle|jli', choice: 'continue_series' }],
       }),
+      { timeout: 60_000 },
     )
   })
 
@@ -161,6 +163,7 @@ describe('cblSourcesApi.commit', () => {
           { cbl_position: 2, decision: 'exclude' },
         ],
       }),
+      { timeout: 60_000 },
     )
   })
 })

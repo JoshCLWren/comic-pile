@@ -2845,7 +2845,8 @@ async fn store_cbl_adoption_receipt(
     fingerprint: &str,
     response: &CblAdoptionCommitResponseWire,
 ) -> Result<(), CommitErr> {
-    let response_json = serde_json::to_value(response).map_err(|e| CommitErr::Unexpected(e.to_string()))?;
+    let response_json =
+        serde_json::to_value(response).map_err(|e| CommitErr::Unexpected(e.to_string()))?;
     tx.run_execute(
         "INSERT INTO cbl_adoption_receipts (user_id, cbl_source_list_id, plan_id, request_fingerprint, created_at, response_json)
          VALUES ($1,$2,$3,$4,NOW(),$5)
@@ -3883,7 +3884,11 @@ async fn merge_adoption_nodes_tx(
             (id, false, None)
         } else {
             match materialize_missing_issue_tx(tx, user_id, entry).await {
-                Ok(MaterializeOutcome::Issue { id, thread_id, created }) => (id, created, Some(thread_id)),
+                Ok(MaterializeOutcome::Issue {
+                    id,
+                    thread_id,
+                    created,
+                }) => (id, created, Some(thread_id)),
                 Ok(MaterializeOutcome::Excluded { reason }) => {
                     if reason == "collection_identity_requires_review" {
                         unresolved_positions.push(pos);
@@ -4072,8 +4077,14 @@ fn ensure_node_provenance(
 }
 
 enum MaterializeOutcome {
-    Issue { id: i32, thread_id: i32, created: bool },
-    Excluded { reason: String },
+    Issue {
+        id: i32,
+        thread_id: i32,
+        created: bool,
+    },
+    Excluded {
+        reason: String,
+    },
     Unresolved,
 }
 
