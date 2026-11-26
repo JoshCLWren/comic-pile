@@ -729,7 +729,8 @@ async fn confirmed_identity_for_issue(
     Some((id, external_id, metadata))
 }
 
-/// Synchronous, bounded creator-credit hydration for identity confirm/replace.
+/// Synchronous, bounded creator-credit hydration for identity confirm/replace
+/// and explicit Retry.
 ///
 /// Runs *after* the mapping transaction commits: a provider failure, timeout or
 /// unconfigured key never rolls back the confirmation. On success the fetched
@@ -745,6 +746,7 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
     issue_id: i32,
     budget: Duration,
     api_key: &str,
+    force: bool,
 ) {
     if budget.is_zero() || api_key.is_empty() {
         return;
@@ -759,16 +761,31 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
         else {
             return;
         };
+        // A confirm/remap can reuse already-complete same-identity metadata;
+        // an explicit Retry (`force`) always performs a fresh bounded attempt.
+        if !force {
+            if let Some(metadata) = &cached {
+                if !needs_provider_fetch(metadata, chrono::Utc::now()) {
+                    return;
+                }
+            }
+        }
         let Some(comicvine_id) = issue_id_from_external(&external_id) else {
             return;
         };
         let provider_data = match provider_issue(&state.outbound, comicvine_id, api_key).await {
             Ok(value) => value,
             Err(error) => {
-                tracing::info!(
-                    ?error,
-                    "inline identity hydration provider call failed; refresh row kept"
-                );
+                match &error {
+                    ProviderFailure::RateLimited(retry_after_seconds) => tracing::info!(
+                        retry_after_seconds,
+                        "inline hydration throttled; retry is user-controlled"
+                    ),
+                    _ => tracing::info!(
+                        ?error,
+                        "inline identity hydration provider call failed"
+                    ),
+                }
                 return;
             }
         };
@@ -1239,7 +1256,7 @@ mod tests {
         let identity_id = seed_confirmed_identity(&state, "4000-29319", &json!({})).await;
         push_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
 
-        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123").await;
+        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", true).await;
 
         let connection = db::checkout(&state).await.expect("assert connection");
         let metadata: Value = serde_json::from_str(
@@ -1271,7 +1288,7 @@ mod tests {
         let identity_id = seed_confirmed_identity(&state, "4000-29319", &json!({})).await;
         // No canned provider response: the recording fake fails closed.
 
-        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123").await;
+        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", true).await;
 
         let connection = db::checkout(&state).await.expect("assert connection");
         let mapping_status: String = connection
@@ -1319,7 +1336,7 @@ mod tests {
             Bytes::from(body),
         );
 
-        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123").await;
+        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", true).await;
 
         let connection = db::checkout(&state).await.expect("assert connection");
         let metadata: Value = serde_json::from_str(
@@ -1359,7 +1376,7 @@ mod tests {
             Bytes::from(body),
         );
 
-        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123").await;
+        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", true).await;
 
         let connection = db::checkout(&state).await.expect("assert connection");
         let metadata: Value = serde_json::from_str(

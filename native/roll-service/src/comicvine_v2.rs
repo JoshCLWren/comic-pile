@@ -1322,7 +1322,7 @@ pub async fn confirm_identity(
     // Release the pooled connection before inline hydration checks one out;
     // on a small pool the handler holding it would starve the hydrator.
     drop(connection);
-    hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started).await;
+    hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started, false).await;
     Ok(Json(response))
 }
 
@@ -1334,6 +1334,7 @@ async fn hydrate_confirmed_identity_if_configured(
     user_id: i32,
     issue_id: i32,
     started: Instant,
+    force: bool,
 ) {
     let Some(api_key) = crate::comicvine_provider::provider_api_key() else {
         return;
@@ -1344,6 +1345,7 @@ async fn hydrate_confirmed_identity_if_configured(
         issue_id,
         inline_hydration_budget(started.elapsed()),
         &api_key,
+        force,
     )
     .await;
 }
@@ -1386,7 +1388,7 @@ pub async fn replace_identity(
     let response = identity_state(&tx, user.id(), issue_id).await?;
     tx.commit().await.map_err(db::query_error)?;
     drop(connection);
-    hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started).await;
+    hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started, false).await;
     Ok(Json(response))
 }
 
@@ -1553,7 +1555,7 @@ pub async fn refresh_metadata(
     // small pool holding it here would starve the awaited provider request.
     drop(connection);
     if comicvine_issue_id.is_some() {
-        hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started).await;
+        hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started, true).await;
     }
     Ok(Json(MetadataRefreshResponse {
         issue_id,
