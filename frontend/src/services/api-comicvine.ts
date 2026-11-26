@@ -228,19 +228,6 @@ export interface MetadataRefreshResponse {
   issue_id: number
   refreshed: boolean
   comicvine_issue_id: string | null
-<<<<<<< HEAD
-  /** Terminal outcome of the bounded synchronous attempt. */
-  outcome:
-    | 'complete'
-    | 'no_credits'
-    | 'not_confirmed'
-    | 'provider_not_configured'
-    | 'provider_unavailable'
-    | 'rate_limited'
-    | 'timeout'
-    | 'invalid_response'
-  retry_after_seconds: number | null
-=======
   /**
    * Absent on an older deployment. A response that still reports
    * `refreshed: true` is a completed attempt whose truthful state comes from
@@ -249,7 +236,6 @@ export interface MetadataRefreshResponse {
   outcome?: ComicVineHydrationOutcome
   /** Provider-requested delay before another explicit Retry, when throttled. */
   retry_after_seconds?: number | null
->>>>>>> origin/main
 }
 
 export interface CanonicalCorrection {

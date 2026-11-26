@@ -1014,11 +1014,6 @@ describe('ComicIdentity creator metadata contract (#5841)', () => {
     renderIdentity()
     await waitForLoaded()
 
-<<<<<<< HEAD
-    expect(screen.getByTestId('creator-status-not-fetched')).toBeInTheDocument()
-    expect(screen.getByTestId('creator-status-not-fetched')).toHaveTextContent('Creator credits not yet fetched')
-    expect(screen.getByRole('button', { name: 'Retry refresh' })).toBeInTheDocument()
-=======
     expect(screen.getByTestId('creator-status-not_hydrated')).toHaveTextContent('Creator credits not yet fetched')
     expect(screen.getByRole('button', { name: 'Retry refresh' })).toBeEnabled()
     expect(screen.queryByText(/queued for fetch/)).not.toBeInTheDocument()
@@ -1026,7 +1021,6 @@ describe('ComicIdentity creator metadata contract (#5841)', () => {
     await waitFor(() => expect(refreshMetadata).toHaveBeenCalledWith(1))
     // No repeat request: one bounded awaited attempt per deliberate open.
     expect(refreshMetadata).toHaveBeenCalledTimes(1)
->>>>>>> origin/main
   })
 
   it('leaves needs_hydration to an explicit Retry', async () => {
@@ -1100,30 +1094,6 @@ describe('ComicIdentity creator metadata contract (#5841)', () => {
 
   it('renders persisted names, roles and cover after an explicit Retry without remapping', async () => {
     getIntelligence
-<<<<<<< HEAD
-      .mockResolvedValueOnce(
-        intelligenceResponse({
-          comicvine_issue_id: '601',
-          metadata_status: 'refresh_failed',
-          refresh_retry_after_seconds: null,
-        }),
-      )
-      .mockResolvedValueOnce(
-        intelligenceResponse({
-          comicvine_issue_id: '601',
-          metadata_status: 'complete',
-          creators: [{ name: 'Recovered Writer', roles: ['writer'] }],
-        }),
-      )
-    // SAFETY: the mocked route returns every response field consumed by this test.
-    refreshMetadata.mockResolvedValue({
-      issue_id: 1,
-      refreshed: true,
-      comicvine_issue_id: '601',
-      outcome: 'complete',
-      retry_after_seconds: null,
-    })
-=======
       .mockResolvedValueOnce(intelligenceResponse({ metadata_status: 'needs_hydration' }))
       .mockResolvedValue(intelligenceResponse({
         metadata_status: 'complete',
@@ -1133,7 +1103,6 @@ describe('ComicIdentity creator metadata contract (#5841)', () => {
         ],
       }))
     refreshMetadata.mockResolvedValue(refreshResult('complete', { refreshed: true }))
->>>>>>> origin/main
 
     renderIdentity()
     await waitForLoaded()
@@ -1257,60 +1226,12 @@ describe('ComicIdentity creator metadata contract (#5841)', () => {
     expect(screen.getByRole('button', { name: 'Retry refresh' })).toBeEnabled()
   })
 
-<<<<<<< HEAD
-  it('reports a truthful provider outcome from a synchronous retry', async () => {
-    getIntelligence.mockResolvedValue(
-      intelligenceResponse({
-        comicvine_issue_id: '603',
-        metadata_status: 'refresh_failed',
-        refresh_retry_after_seconds: null,
-      }),
-    )
-    refreshMetadata.mockResolvedValue({
-      issue_id: 1,
-      refreshed: false,
-      comicvine_issue_id: '603',
-      outcome: 'rate_limited',
-      retry_after_seconds: 90,
-    })
-
-    renderIdentity()
-    await waitForLoaded()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Retry refresh' }))
-
-    await waitFor(() => expect(refreshMetadata).toHaveBeenCalledWith(1))
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'ComicVine rate limited this retry. Try again in 90s.',
-    )
-    expect(screen.getByRole('button', { name: 'Retry refresh' })).toBeEnabled()
-  })
-
-  it('shows "ComicVine currently has no creator credits" when metadata_status is deep_fetched_no_credits', async () => {
-    getIntelligence.mockResolvedValue({
-      comicvine_issue_id: '700',
-      comicvine_url: null,
-      series_name: 'Test Series',
-      series_id: 1,
-      issue_number: '1',
-      name: 'Test Issue',
-      description: null,
-      image_url: null,
-      cover_date: null,
-      store_date: null,
-      creators: [],
-      story_arcs: [],
-      metadata_status: 'deep_fetched_no_credits',
-      refresh_retry_after_seconds: null,
-    })
-=======
   it('does not re-read the exact issue after unmount', async () => {
     let resolveRetry: ((value: ReturnType<typeof refreshResult>) => void) | undefined
     refreshMetadata.mockImplementation(() => new Promise((resolve) => {
       resolveRetry = resolve
     }))
     getIntelligence.mockResolvedValue(intelligenceResponse({ metadata_status: 'needs_hydration' }))
->>>>>>> origin/main
 
     const { unmount } = renderIdentity()
     await waitForLoaded()
