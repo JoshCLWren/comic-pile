@@ -6,7 +6,11 @@
  */
 import {readFileSync, readdirSync, writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
-import {slimNativeApiRoutes} from './vercel_slim_routes.mjs';
+import {
+  canonicalNativeBuild,
+  canonicalNativeDestination,
+  slimNativeApiRoutes,
+} from './vercel_slim_routes.mjs';
 
 const PYTHON = '/api/index.py';
 const RUST = '/api/native_api.rs';
@@ -274,7 +278,20 @@ function inventoryOperations(operations) {
 }
 function run() {
   const check = process.argv.includes('--check');
-  const original = JSON.parse(readFileSync('vercel.json', 'utf8'));
+  const committed = JSON.parse(readFileSync('vercel.json', 'utf8'));
+  // Ordinary route PRs cannot commit bot-owned vercel.json. Normalize the
+  // previous native entrypoint before deriving the next artifact so a rename
+  // can land in the fragments first and be regenerated after merge.
+  const original = {
+    ...committed,
+    builds: Array.isArray(committed.builds)
+      ? committed.builds.map(canonicalNativeBuild)
+      : committed.builds,
+    routes: committed.routes.map(route => {
+      const dest = canonicalNativeDestination(route.dest);
+      return dest === route.dest ? route : {...route, dest};
+    }),
+  };
   const inventory = JSON.parse(readFileSync('docs/api/v2-route-inventory.json', 'utf8'));
   // The Python API is deleted: no Python operation declares an ingress any
   // longer. Route fragments are the sole source of explicit /api rewrites.

@@ -8,7 +8,11 @@
 import {readFileSync, writeFileSync, readdirSync} from 'node:fs';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
-import {slimNativeApiRoutes} from './vercel_slim_routes.mjs';
+import {
+  canonicalNativeBuild,
+  canonicalNativeDestination,
+  slimNativeApiRoutes,
+} from './vercel_slim_routes.mjs';
 
 const INVENTORY_PATH = 'docs/api/v2-route-inventory.json';
 const FRAGMENT_DIR = 'docs/api/route-fragments';
@@ -442,6 +446,8 @@ export function _generateVercelDocument(previous, fragments, {slim = true} = {})
       throw new BurndownGenerationError('vercel.json routes must be objects');
     }
     const full = Object.fromEntries(Object.entries(rawRoute).map(([k, v]) => [String(k), v]));
+    const canonicalDest = canonicalNativeDestination(full.dest);
+    if (canonicalDest !== full.dest) full.dest = canonicalDest;
     previousFull.push(full);
     const src = full.src;
     const dest = full.dest;
@@ -521,6 +527,9 @@ export function _generateVercelDocument(previous, fragments, {slim = true} = {})
     throw new BurndownGenerationError('Python exceptions must precede catch-all');
   }
   const document = Object.fromEntries(Object.entries(previous).map(([k, v]) => [String(k), v]));
+  if (Array.isArray(document.builds)) {
+    document.builds = document.builds.map(canonicalNativeBuild);
+  }
   document.routes = newRoutes;
   return document;
 }

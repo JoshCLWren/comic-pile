@@ -13,8 +13,31 @@
  */
 
 export const NATIVE_API_DESTINATION = '/api/native_api.rs';
+export const NATIVE_API_BUILD_SRC = 'api/native_api.rs';
 const CATCH_ALL_SRC = '/api(?:/.*)?';
 const REGEX_META = new Set(['[', ']', '(', ')', '{', '}', '|', '*', '+', '?', '.', '^', '$']);
+
+// A fragment-only PR changes the generators and fragments but cannot commit
+// the bot-owned vercel.json until the post-merge regeneration lands. Treat any
+// earlier native entrypoint as the canonical one while reading that stale
+// artifact so generation stays deterministic across the rename boundary.
+const NATIVE_DESTINATION_PATTERN = /^\/api\/native_[^/]+\.rs$/;
+const NATIVE_BUILD_SRC_PATTERN = /^api\/native_[^/]+\.rs$/;
+
+/** Normalize a legacy native rewrite destination to the canonical one. */
+export function canonicalNativeDestination(dest) {
+  return typeof dest === 'string' && NATIVE_DESTINATION_PATTERN.test(dest)
+    ? NATIVE_API_DESTINATION
+    : dest;
+}
+
+/** Normalize a legacy native function build to the canonical entrypoint. */
+export function canonicalNativeBuild(build) {
+  if (!build || typeof build.src !== 'string' || build.src === NATIVE_API_BUILD_SRC) return build;
+  return NATIVE_BUILD_SRC_PATTERN.test(build.src)
+    ? {...build, src: NATIVE_API_BUILD_SRC}
+    : build;
+}
 
 /** Parse a route regex into segments, or null when it is not a simple path. */
 export function parseSegments(src) {
