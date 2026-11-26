@@ -79,10 +79,17 @@ test.describe('Continuity Planner selected series title (#2299)', () => {
         geometry!.scrollWidth,
         'selected title must wrap instead of clipping horizontally',
       ).toBeLessThanOrEqual(geometry!.clientWidth + 1)
+      // A wrapping <p> sizes its own height to the wrapped lines, so
+      // scrollHeight equals clientHeight once the full text is visible.
+      // Compare the rendered height with one computed line instead: a clipped
+      // single-line readout stays at ~one line height, while the genuine
+      // wrapped title grows to several lines.
+      const oneLineHeight = parseFloat(geometry!.lineHeight)
+      expect(oneLineHeight, 'computed line height must be readable').toBeGreaterThan(0)
       expect(
-        geometry!.scrollHeight,
+        geometry!.clientHeight,
         'long title should visually wrap to more than one line',
-      ).toBeGreaterThan(geometry!.clientHeight)
+      ).toBeGreaterThan(oneLineHeight * 1.5)
 
       const pageLayout = await page.evaluate(() => ({
         scrollWidth: document.documentElement.scrollWidth,
