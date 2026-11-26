@@ -80,8 +80,7 @@ test.describe('issue #2492: fresh roll keeps the rating start at the top when re
 
       // The production scroller is `#root`, not the window; the fresh-roll
       // anchor must leave the real scroller at the top alongside the visual
-      // anchor, and any late optional-content layout growth must have settled
-      // before the final scroll position is asserted.
+      // anchor before the final scroll position is asserted.
       const settledScroll = await readAppScrollState(page)
       expect(settledScroll.rootScrollTop).toBeLessThanOrEqual(8)
 
