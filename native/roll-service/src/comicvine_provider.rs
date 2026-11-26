@@ -822,16 +822,130 @@ async fn confirmed_identity_for_issue(
 }
 
 /// Synchronous, bounded creator-credit hydration for identity confirm/replace
-/// and explicit Retry.
-///
-/// Runs *after* the mapping transaction commits: a provider failure, timeout or
-/// unconfigured key never rolls back the confirmation. On success the fetched
-/// credits (names + roles) and deep metadata are merged into the identity's
-/// `metadata_json`, so the immediately-following `getIssueIntelligence` refetch
-/// shows them without waiting on a background worker. On failure nothing is
-/// persisted and the stored metadata stays usable; the issue remains eligible
-/// for another explicit Retry. The whole operation is enclosed in a single
-/// `timeout(budget, ...)` that covers the DB and provider calls.
+/// and explicit Retry. Returns a truthful terminal outcome for the current HTTP
+/// invocation; a provider failure never rolls back the confirmed mapping and
+/// never overwrites valid same-identity metadata.
+pub(crate) async fn hydrate_confirmed_identity_sync(
+    state: &AppState,
+    user_id: i32,
+    issue_id: i32,
+    budget: Duration,
+    api_key: &str,
+    force: bool,
+) -> HydrationOutcome {
+    if budget.is_zero() {
+        return HydrationOutcome::Timeout;
+    }
+    let Some(api_key) = normalize_provider_api_key(api_key) else {
+        return HydrationOutcome::NotConfigured;
+    };
+    let run = async {
+        // Read the confirmed identity and cached metadata, then release the
+        // connection before any provider I/O (no DB lock across the fetch).
+        let (identity_id, external_id, cached) = {
+            let conn = match db::checkout(state).await {
+                Ok(conn) => conn,
+                Err(_) => return HydrationOutcome::Unavailable,
+            };
+            let found = confirmed_identity_for_issue(&conn, user_id, issue_id).await;
+            drop(conn);
+            match found {
+                Some(found) => found,
+                None => return HydrationOutcome::NotConfirmed,
+            }
+        };
+        let Some(comicvine_id) = issue_id(external_id.as_str()) else {
+            return HydrationOutcome::InvalidResponse;
+        };
+
+        // Reuse already-complete valid cached metadata. Retry (`force`) is the
+        // explicit way to spend a fresh bounded provider attempt.
+        let reusable = if force {
+            None
+        } else {
+            cached
+                .as_ref()
+                .filter(|metadata| !needs_provider_fetch(metadata, chrono::Utc::now()))
+        };
+        let has_credits = if let Some(cached) = reusable {
+            cached_has_credits(cached)
+        } else {
+            let provider_data = match provider_issue(&state.outbound, comicvine_id, &api_key).await
+            {
+                Ok(value) => value,
+                Err(error) => {
+                    tracing::info!(
+                        error_kind = ?error,
+                        "bounded identity hydration provider call failed; mapping kept"
+                    );
+                    return HydrationOutcome::from(error);
+                }
+            };
+            let (mut patch, has, url, updated) =
+                match normalized_metadata(&provider_data, comicvine_id) {
+                    Ok(ok) => ok,
+                    Err(error) => return HydrationOutcome::from(error),
+                };
+            // A sparser fresh roster must never erase cached creator credits.
+            if !has {
+                preserve_cached_credits(&mut patch, cached.as_ref());
+            }
+            let effective = has || cached_has_credits(&patch);
+            let Ok(json_patch) = serde_json::to_string(&patch) else {
+                return HydrationOutcome::InvalidResponse;
+            };
+            let conn = match db::checkout(state).await {
+                Ok(conn) => conn,
+                Err(_) => return HydrationOutcome::Unavailable,
+            };
+            // Recheck identity and ownership at persist. A concurrent remap
+            // that commits while the provider was in flight makes this UPDATE
+            // affect zero rows, so stale A metadata can never land on B.
+            let updated_rows = match conn
+                .execute(
+                    PERSIST_SYNC,
+                    &[
+                        &identity_id,
+                        &json_patch,
+                        &url,
+                        &updated,
+                        &issue_id,
+                        &user_id,
+                    ],
+                )
+                .await
+            {
+                Ok(rows) => rows,
+                Err(err) => {
+                    tracing::warn!(
+                        error_kind = crate::error_kind(&err),
+                        "bounded identity hydration metadata write failed"
+                    );
+                    return HydrationOutcome::Unavailable;
+                }
+            };
+            if updated_rows == 0 {
+                return HydrationOutcome::NotConfirmed;
+            }
+            effective
+        };
+        if has_credits {
+            HydrationOutcome::Complete
+        } else {
+            HydrationOutcome::NoCredits
+        }
+    };
+    match tokio::time::timeout(budget, run).await {
+        Ok(outcome) => outcome,
+        Err(_) => {
+            tracing::info!("bounded identity hydration request budget exhausted");
+            HydrationOutcome::Timeout
+        }
+    }
+}
+
+/// Back-compat wrapper used by confirm/replace/import handlers that do not need
+/// the terminal outcome in the wire response.
 pub(crate) async fn hydrate_confirmed_identity_inline(
     state: &AppState,
     user_id: i32,
@@ -840,84 +954,7 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
     api_key: &str,
     force: bool,
 ) {
-    if budget.is_zero() || api_key.is_empty() {
-        return;
-    }
-    let run = async {
-        let conn = match db::checkout(state).await {
-            Ok(c) => c,
-            Err(_) => return,
-        };
-        let Some((identity_id, external_id, cached)) =
-            confirmed_identity_for_issue(&conn, user_id, issue_id).await
-        else {
-            return;
-        };
-        // A confirm/remap can reuse already-complete same-identity metadata;
-        // an explicit Retry (`force`) always performs a fresh bounded attempt.
-        if !force {
-            if let Some(metadata) = &cached {
-                if !needs_provider_fetch(metadata, chrono::Utc::now()) {
-                    return;
-                }
-            }
-        }
-        let Some(comicvine_id) = issue_id_from_external(&external_id) else {
-            return;
-        };
-        let provider_data = match provider_issue(&state.outbound, comicvine_id, api_key).await {
-            Ok(value) => value,
-            Err(error) => {
-                match &error {
-                    ProviderFailure::RateLimited(retry_after_seconds) => tracing::info!(
-                        retry_after_seconds,
-                        "inline hydration throttled; retry is user-controlled"
-                    ),
-                    _ => tracing::info!(?error, "inline identity hydration provider call failed"),
-                }
-                return;
-            }
-        };
-        let (mut patch, has, url, updated) = match normalized_metadata(&provider_data, comicvine_id)
-        {
-            Ok(ok) => ok,
-            Err(error) => {
-                tracing::info!(
-                    ?error,
-                    "inline identity hydration normalization failed; refresh row kept"
-                );
-                return;
-            }
-        };
-        // A sparser fresh roster must never erase cached creator credits.
-        if !has {
-            preserve_cached_credits(&mut patch, cached.as_ref());
-        }
-        let Ok(json_patch) = serde_json::to_string(&patch) else {
-            return;
-        };
-        if let Err(err) = conn
-            .execute(
-                "UPDATE external_identities
-                 SET metadata_json = (COALESCE(metadata_json::jsonb, '{}'::jsonb)
-                                      || ($2::text)::jsonb)::json,
-                     external_url = COALESCE($3, external_url),
-                     provider_updated_at = COALESCE(($4::text)::timestamptz, provider_updated_at),
-                     updated_at = now()
-                 WHERE id = $1 AND provider = 'comicvine' AND entity_type = 'issue'",
-                &[&identity_id, &json_patch, &url, &updated],
-            )
-            .await
-        {
-            tracing::warn!(
-                error_kind = crate::error_kind(&err),
-                "inline identity hydration metadata write failed"
-            );
-        }
-    };
-    if tokio::time::timeout(budget, run).await.is_err() {
-        tracing::info!("inline identity creator-credit hydration budget exhausted");
-    }
+    let _ = hydrate_confirmed_identity_sync(state, user_id, issue_id, budget, api_key, force).await;
 }
 
 /// Extract the numeric ComicVine issue id from an external identity id.

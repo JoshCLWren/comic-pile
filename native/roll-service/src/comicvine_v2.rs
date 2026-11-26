@@ -23,7 +23,10 @@
 use crate::{
     auth::AuthenticatedUser,
     catalog_commit::inline_hydration_budget,
-    comicvine_provider::{hydrate_confirmed_identity_inline, ProviderFailure},
+    comicvine_provider::{
+        hydrate_confirmed_identity_inline, hydrate_confirmed_identity_sync, HydrationOutcome,
+        ProviderFailure,
+    },
     comicvine_resolution::SeriesImportStatusResponse,
     db,
     thread_issues::natural_issue_order,
@@ -210,6 +213,10 @@ pub struct MetadataRefreshResponse {
     pub issue_id: i32,
     pub refreshed: bool,
     pub comicvine_issue_id: Option<String>,
+    /// Terminal outcome of the bounded synchronous attempt.
+    pub outcome: String,
+    /// Provider-requested delay before another explicit Retry, when throttled.
+    pub retry_after_seconds: Option<i32>,
 }
 
 /// Python `ConfirmIdentityRequest` (lax `int`).
@@ -1536,7 +1543,7 @@ pub async fn refresh_metadata(
     let tx = connection.transaction().await.map_err(db::query_error)?;
     crate::queue::lock_queue(&tx, user.id()).await?;
     lock_owned_issue(&tx, user.id(), issue_id).await?;
-    let identity_row = tx
+    let comicvine_issue_id: Option<String> = tx
         .query_opt(
             "SELECT e.external_id \
              FROM external_identities e \
@@ -1547,21 +1554,66 @@ pub async fn refresh_metadata(
             &[&issue_id],
         )
         .await
-        .map_err(db::query_error)?;
+        .map_err(db::query_error)?
+        .map(|row| row.get(0));
     tx.commit().await.map_err(db::query_error)?;
-    let comicvine_issue_id: Option<String> = identity_row.map(|row| row.get(0));
-    let refreshed = comicvine_issue_id.is_some();
-    // Release the pooled connection before hydration checks one out; on a
-    // small pool holding it here would starve the awaited provider request.
+    // Release the pooled connection before the awaited provider call.
     drop(connection);
-    if comicvine_issue_id.is_some() {
-        hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started, true).await;
-    }
+
+    let outcome = if comicvine_issue_id.is_none() {
+        HydrationOutcome::NotConfirmed
+    } else {
+        match crate::comicvine_provider::provider_api_key() {
+            Some(api_key) => {
+                hydrate_confirmed_identity_sync(
+                    &state,
+                    user.id(),
+                    issue_id,
+                    inline_hydration_budget(started.elapsed()),
+                    &api_key,
+                    true,
+                )
+                .await
+            }
+            None => HydrationOutcome::NotConfigured,
+        }
+    };
+    let comicvine_issue_id = confirmed_comicvine_issue_id(&state, user.id(), issue_id).await?;
     Ok(Json(MetadataRefreshResponse {
         issue_id,
-        refreshed,
+        refreshed: outcome.refreshed(),
         comicvine_issue_id,
+        outcome: outcome.as_str().to_owned(),
+        retry_after_seconds: outcome.retry_after_seconds(),
     }))
+}
+
+/// Read the currently confirmed ComicVine identity of an owned issue. Used
+/// after the awaited provider attempt so an interactive outcome never names a
+/// stale identity that a concurrent remap replaced in flight.
+async fn confirmed_comicvine_issue_id(
+    state: &Arc<AppState>,
+    user_id: i32,
+    issue_id: i32,
+) -> Result<Option<String>, ApiError> {
+    let conn = db::checkout(state).await?;
+    let row = conn
+        .query_opt(
+            "SELECT e.external_id \
+             FROM external_identities e \
+             JOIN issue_external_identity_mappings m ON m.external_identity_id = e.id \
+             JOIN issues i ON i.id = m.issue_id \
+             JOIN threads t ON t.id = i.thread_id \
+             WHERE m.issue_id = $1 AND m.status = 'confirmed' \
+               AND t.user_id = $2 \
+               AND e.provider = 'comicvine' AND e.entity_type = 'issue' \
+             ORDER BY e.id \
+             LIMIT 1",
+            &[&issue_id, &user_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(row.map(|row| row.get(0)))
 }
 
 // ---------------------------------------------------------------------------
