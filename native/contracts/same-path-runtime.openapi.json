@@ -10499,6 +10499,67 @@
         ]
       }
     },
+    "/api/v2/threads/{thread_id}/issues/structure-preview": {
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for the delete/reorder structure preview.",
+        "description": "Preview a delete or reorder edit before commit. Returns exact before/after issues, list memberships, read/rating/identity state, affected Queue/Roll frontier, duplicate risk and projected graph conflicts.",
+        "operationId": "preview_issue_structure_documentation",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewIssueStructureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Preview outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueEditPreviewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid operation or issue set"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread or issue not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/undo/{session_id}/snapshots": {
       "get": {
         "tags": [
@@ -20163,6 +20224,39 @@
             "description": "Names of every custom reading list the issue is a member of."
           }
         }
+      },
+      "PreviewIssueStructureRequest": {
+        "type": "object",
+        "description": "Body of `POST /api/v2/threads/{thread_id}/issues/structure-preview`.\n\nDelete and reorder are structural issue edits too, so A4 requires the same\nbefore/after, constraint and frontier preview that create/insert receives\n(#4654). The operation is deliberately described by a string plus optional\nfields rather than a tagged enum so an unsupported shape is a plain 400 and\nnever a deserialization-shaped 500.",
+        "required": [
+          "operation"
+        ],
+        "properties": {
+          "issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Issue to remove. Required for `delete`, ignored for `reorder`."
+          },
+          "issue_ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "Every issue id in the requested order. Required for `reorder`."
+          },
+          "operation": {
+            "type": "string",
+            "description": "`delete` removes one issue; `reorder` applies a complete new order."
+          }
+        },
+        "additionalProperties": false
       },
       "PreviewIssuesRequest": {
         "type": "object",

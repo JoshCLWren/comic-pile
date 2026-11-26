@@ -3418,6 +3418,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/threads/{thread_id}/issues/structure-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Documentation-only operation for the delete/reorder structure preview.
+         * @description Preview a delete or reorder edit before commit. Returns exact before/after issues, list memberships, read/rating/identity state, affected Queue/Roll frontier, duplicate risk and projected graph conflicts.
+         */
+        post: operations["preview_issue_structure_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/undo/{session_id}/snapshots": {
         parameters: {
             query?: never;
@@ -7096,6 +7116,26 @@ export interface components {
             series_title: string;
             /** @description Names of every custom reading list the issue is a member of. */
             source_lists: string[];
+        };
+        /**
+         * @description Body of `POST /api/v2/threads/{thread_id}/issues/structure-preview`.
+         *
+         *     Delete and reorder are structural issue edits too, so A4 requires the same
+         *     before/after, constraint and frontier preview that create/insert receives
+         *     (#4654). The operation is deliberately described by a string plus optional
+         *     fields rather than a tagged enum so an unsupported shape is a plain 400 and
+         *     never a deserialization-shaped 500.
+         */
+        PreviewIssueStructureRequest: {
+            /**
+             * Format: int32
+             * @description Issue to remove. Required for `delete`, ignored for `reorder`.
+             */
+            issue_id?: number | null;
+            /** @description Every issue id in the requested order. Required for `reorder`. */
+            issue_ids?: number[] | null;
+            /** @description `delete` removes one issue; `reorder` applies a complete new order. */
+            operation: string;
         };
         PreviewIssuesRequest: {
             /** @description Numbers the reader explicitly chose to alias instead of duplicating. */
@@ -18779,6 +18819,61 @@ export interface operations {
                 content?: never;
             };
             /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    preview_issue_structure_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewIssueStructureRequest"];
+            };
+        };
+        responses: {
+            /** @description Preview outcome */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueEditPreviewResponse"];
+                };
+            };
+            /** @description Invalid operation or issue set */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread or issue not found */
             404: {
                 headers: {
                     [name: string]: unknown;
