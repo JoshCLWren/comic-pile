@@ -296,7 +296,6 @@ async fn option_e_eligible(
     Ok(Some(queue::evaluated_eligible_ids(&validated)?))
 }
 
-
 /// Load `ThreadResponse` projections for owned threads, in `ids` order.
 ///
 /// Mirrors `thread_to_response`: unread counts for issue-tracked threads, the
