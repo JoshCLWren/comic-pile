@@ -956,6 +956,24 @@ mod tests {
     }
 
     #[test]
+    fn ambiguous_issue_match_is_never_returned() {
+        // #5434 safety rule: two equally plausible provider issues must stay
+        // in the review bucket instead of being auto-confirmed.
+        let local = issue(1, "Saga", "1");
+        let providers = vec![provider(101, 30, "Saga", "1"), provider(102, 30, "Saga", "1")];
+
+        let unmatched = match_issue_in_volume(&local, 30, &providers)
+            .expect_err("equal-label candidates must stay ambiguous");
+        assert!(unmatched.reason.contains("ambiguous"));
+
+        let plans = plan_partial_series_match(&[local], &providers);
+        let plan = plans.first().expect("volume candidate is discovered");
+        assert!(plan.matched.is_empty());
+        assert_eq!(plan.unmatched.len(), 1);
+        assert!(plan.unmatched[0].reason.contains("ambiguous"));
+    }
+
+    #[test]
     fn explain_no_match_is_actionable() {
         let local = issue(1, "Totally Unknown Series", "1");
         let providers = vec![provider(100, 10, "Different", "1")];
