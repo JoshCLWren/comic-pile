@@ -9,6 +9,10 @@ export interface ComicIssueMappingActionProps {
   /** Series title used as the dialog search seed. */
   threadTitle: string
   issueNumber: string | null
+  /** Alternate overall/story number for the same physical comic (#4652). */
+  issueNumberAlias?: string | null
+  /** Provider's issue number from confirmed identity (#4652). */
+  providerIssueNumber?: string | null
   /** Batched identity projection; skips the per-issue identity GET. */
   initialIdentity?: IssueIdentityResponse | null
   /** Whether the identity GET may run when no identity is supplied. */
@@ -43,6 +47,8 @@ export default function ComicIssueMappingAction({
   issueId,
   threadTitle,
   issueNumber,
+  issueNumberAlias,
+  providerIssueNumber,
   initialIdentity,
   fetchEnabled,
   isOwned = true,
@@ -74,7 +80,14 @@ export default function ComicIssueMappingAction({
     )
   }
 
-  const issueLabel = issueNumber ? `issue #${issueNumber}` : 'this issue'
+  const alias = issueNumberAlias?.trim()
+  const providerNum = providerIssueNumber?.trim()
+  const showAlias = alias && issueNumber && alias.toLowerCase() !== issueNumber.toLowerCase()
+  const showProvider = providerNum && issueNumber && providerNum.toLowerCase() !== issueNumber.toLowerCase() && (!showAlias || providerNum.toLowerCase() !== alias!.toLowerCase())
+  const numberSuffix = issueNumber
+    ? `#${issueNumber}${showAlias ? ` (${alias})` : ''}${showProvider ? ` [CV #${providerNum}]` : ''}`
+    : null
+  const issueLabel = numberSuffix ? `issue ${numberSuffix}` : 'this issue'
   const statusDot = mapping.isMapped ? 'bg-[var(--theme-comic-accent)]' : 'bg-[var(--theme-text-dim)]'
   const statusText =
     mapping.status === 'mapped'

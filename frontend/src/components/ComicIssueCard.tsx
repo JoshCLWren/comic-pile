@@ -347,10 +347,13 @@ export function ComicIssueCard({
 
   const resolvedTitle = card?.thread_title || threadTitle
   const resolvedNumber = card?.issue_number || issueNumber
+  const resolvedAlias = card?.issue_number_alias ?? null
+  const resolvedProviderNumber = card?.provider_issue_number ?? null
   const resolvedStatus = (card?.status ?? status) === 'read' ? 'read' : 'unread'
   const resolvedRating = card?.rating ?? rating ?? null
   const coverImageUrl = card?.cover_image_url ?? null
-  const issueLabel = `${resolvedTitle} #${resolvedNumber}`
+  const aliasLabel = resolvedAlias && resolvedAlias.toLowerCase() !== resolvedNumber.toLowerCase() ? ` (${resolvedAlias})` : ''
+  const issueLabel = `${resolvedTitle} #${resolvedNumber}${aliasLabel}`
 
   /** Open the in-card rating editor without writing anything. */
   function openEditor(mode: 'read' | 'edit') {
@@ -413,6 +416,8 @@ export function ComicIssueCard({
             <ComicIssueIdentity
               threadTitle={resolvedTitle}
               issueNumber={resolvedNumber}
+              issueNumberAlias={resolvedAlias}
+              providerIssueNumber={resolvedProviderNumber}
               status={resolvedStatus}
               rating={resolvedRating}
               variant={variant}
