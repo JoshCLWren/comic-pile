@@ -1505,6 +1505,99 @@ mod tests {
         );
     }
 
+    /// #5522: the batched resolver must preserve duplicate-identity and
+    /// read-status disambiguation exactly (the old per-entry resolver picked
+    /// the earliest-read canonical issue and marked ambiguous mixed read state).
+    #[tokio::test]
+    async fn adoption_reconcile_preserves_duplicate_identity_and_read_status() {
+        let state = crate::test_support::test_state(1)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("test connection");
+        connection
+            .batch_execute(
+                r#"
+                INSERT INTO users (id, username) VALUES (9401, 'duplicate-identity-reader');
+                INSERT INTO threads
+                    (id, user_id, title, format, issues_remaining, queue_position, status, total_issues, reading_progress, created_at)
+                VALUES
+                    (9401, 9401, 'Thread A', 'comic', 2, 1, 'active', 2, 'in_progress', NOW()),
+                    (9402, 9401, 'Thread B', 'comic', 2, 2, 'active', 2, 'in_progress', NOW());
+                INSERT INTO issues (id, thread_id, issue_number, position, status, read_at, created_at)
+                VALUES
+                    (9401, 9401, '1', 0, 'read', '2026-01-02T00:00:00Z', NOW()),
+                    (9402, 9402, '1', 0, 'unread', NULL, NOW()),
+                    (9403, 9401, '2', 1, 'read', '2026-02-01T00:00:00Z', NOW()),
+                    (9404, 9402, '2', 1, 'read', '2026-01-01T00:00:00Z', NOW());
+                INSERT INTO external_identities
+                    (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                VALUES
+                    (9401, 'comicvine', 'issue', 'cv-dup-a', '{}'::json, NOW(), NOW()),
+                    (9402, 'comicvine', 'issue', 'cv-dup-b', '{}'::json, NOW(), NOW());
+                INSERT INTO issue_external_identity_mappings
+                    (issue_id, external_identity_id, status, evidence_source, evidence_json, created_at, updated_at)
+                VALUES
+                    (9401, 9401, 'confirmed', 'test', '{}'::json, NOW(), NOW()),
+                    (9402, 9401, 'confirmed', 'test', '{}'::json, NOW(), NOW()),
+                    (9403, 9402, 'confirmed', 'test', '{}'::json, NOW(), NOW()),
+                    (9404, 9402, 'confirmed', 'test', '{}'::json, NOW(), NOW());
+                INSERT INTO cbl_sources (id, repository, revision_sha, synced_at, created_at, updated_at)
+                VALUES (9401, 'cbl-duplicate', 'rev', NOW(), NOW(), NOW());
+                INSERT INTO cbl_source_lists
+                    (id, source_id, source_path, name, declared_issue_count,
+                     content_hash, revision_sha, active, created_at, updated_at)
+                VALUES (9401, 9401, 'lists/duplicate.json', 'Duplicate', 2,
+                        'hash', 'rev', TRUE, NOW(), NOW());
+                INSERT INTO cbl_source_entries
+                    (id, list_id, position, series_name, issue_number, external_issue_identity_id, created_at)
+                VALUES
+                    (9401, 9401, 1, 'Alpha', '1', 9401, NOW()),
+                    (9402, 9401, 2, 'Alpha', '2', 9402, NOW());
+                "#,
+            )
+            .await
+            .expect("seed duplicate identities");
+        let meta = crate::issue_identity::load_active_cbl_list_meta(&connection, 9401)
+            .await
+            .expect("list meta");
+        let entries =
+            crate::issue_identity::reconcile_entries_for_adoption(&connection, 9401, &meta)
+                .await
+                .expect("reconcile duplicate identities");
+        assert_eq!(entries.len(), 2);
+
+        let mixed = &entries[0];
+        assert_eq!(
+            mixed.get("resolved_issue_id").and_then(Value::as_i64),
+            Some(9401),
+            "read issue wins over unread duplicate"
+        );
+        assert_eq!(
+            mixed.get("resolution_status").and_then(Value::as_str),
+            Some("resolved_via_comicvine_canonical_ambiguous")
+        );
+        assert_eq!(
+            mixed.get("is_duplicate_identity").and_then(Value::as_bool),
+            Some(true)
+        );
+
+        let both_read = &entries[1];
+        assert_eq!(
+            both_read.get("resolved_issue_id").and_then(Value::as_i64),
+            Some(9404),
+            "earliest read_at wins when both duplicates are read"
+        );
+        assert_eq!(
+            both_read.get("resolution_status").and_then(Value::as_str),
+            Some("resolved_via_comicvine_canonical")
+        );
+        assert_eq!(
+            both_read.get("is_duplicate_identity").and_then(Value::as_bool),
+            Some(true)
+        );
+    }
+
     /// #5522: the reported QA shape (a 228-entry source with one position
     /// selected) must not fan out. The full source is still reconciled so no
     /// position is silently skipped; only the statement count is bounded.
