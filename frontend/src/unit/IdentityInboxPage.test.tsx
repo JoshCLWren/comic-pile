@@ -97,7 +97,12 @@ function mockErrorState(message: string) {
   })
 }
 
-function mockSearchResult(overrides: Record<string, unknown> = {}) {
+function mockSearchResult(overrides: {
+  data?: unknown
+  isPending?: boolean
+  isError?: boolean
+  refetch?: ReturnType<typeof vi.fn>
+} = {}) {
   mockUseIdentityInboxSearch.mockReturnValue({
     data: undefined,
     isPending: false,
