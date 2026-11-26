@@ -200,6 +200,14 @@ def test_ci_summary_covers_every_full_path_job() -> None:
     assert jobs == expected
 
 
+def test_contributor_ci_guards_are_executed_by_ci() -> None:
+    """The guard suite itself must gate CI, not just be linted or type-checked."""
+    job = _workflow(CI_WORKFLOW)["jobs"]["factory-actionlint"]
+    commands = _run_commands(job)
+    assert "uv run --frozen python -m pytest" in commands
+    assert "tests/test_contributor_ci.py" in commands
+
+
 @pytest.mark.parametrize("fork", [False, True])
 @pytest.mark.parametrize("failed", [None, *FULL_PATH_REQUIRED_JOBS])
 def test_ci_summary_requires_real_checks(fork: bool, failed: str | None) -> None:
