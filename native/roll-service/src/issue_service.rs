@@ -217,20 +217,35 @@ pub(crate) fn validate_cards(request: &IssueCardsRequest) -> Result<(), ApiError
 fn card_from_row(row: &tokio_postgres::Row) -> IssueCard {
     // Only a confirmed mapping may expose provider identity or a cover URL.
     // The exact provider-supplied URL is passed through without rewriting.
-    let mapping_state: String = row.get(7);
+    let mapping_state: String = row.get(8);
     let confirmed = mapping_state == "confirmed";
+    let issue_number: String = row.get(3);
+    let issue_number_alias: Option<String> = row
+        .get::<_, Option<String>>(4)
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let provider_issue_number: Option<String> = if confirmed {
+        row.get::<_, Option<String>>(10)
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+    } else {
+        None
+    };
     IssueCard {
         issue_id: row.get(0),
         thread_id: row.get(1),
         thread_title: row.get(2),
-        issue_number: row.get(3),
-        status: row.get(4),
-        read_at: row.get(5),
-        rating: row.get(6),
+        display_issue_number: display_issue_number(&issue_number, issue_number_alias.as_deref()),
+        issue_number,
+        issue_number_alias,
+        status: row.get(5),
+        read_at: row.get(6),
+        rating: row.get(7),
         has_confirmed_identity: confirmed,
         mapping_state,
-        comicvine_issue_id: if confirmed { row.get(8) } else { None },
-        cover_image_url: if confirmed { row.get(9) } else { None },
+        comicvine_issue_id: if confirmed { row.get(9) } else { None },
+        provider_issue_number,
+        cover_image_url: if confirmed { row.get(11) } else { None },
     }
 }
 
@@ -243,18 +258,27 @@ async fn card(
     // same fields and mapping precedence for every visible issue group.
     let row = tx
         .query_one(
-            "SELECT i.id, i.thread_id, t.title, i.issue_number, i.status,
+            "SELECT i.id, i.thread_id, t.title, i.issue_number,
+                NULLIF(BTRIM(i.issue_number_alias), '') AS issue_number_alias,
+                i.status,
                 to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'),
                 (SELECT e.rating FROM events e WHERE e.user_id=$2 AND e.issue_id=i.id
                     AND e.type='rate' AND e.rating IS NOT NULL
                     AND e.context->>'undone_by_snapshot_id' IS NULL
                     ORDER BY e.timestamp DESC, e.id DESC LIMIT 1),
                 COALESCE(mapping.status, 'unmapped'), mapping.external_id,
+                mapping.provider_issue_number,
                 mapping.cover_url
          FROM issues i
          JOIN threads t ON t.id=i.thread_id
          LEFT JOIN LATERAL (
              SELECT m.status, x.external_id,
+                 CASE WHEN m.status='confirmed' THEN
+                     NULLIF(BTRIM(COALESCE(
+                         x.metadata_json->>'issue_number',
+                         x.metadata_json#>>'{raw_provider_payload,issue_number}'
+                     )), '')
+                 ELSE NULL END AS provider_issue_number,
                  CASE WHEN m.status='confirmed' THEN
                      COALESCE(
                          NULLIF(BTRIM(x.metadata_json->>'image_url'), ''),
