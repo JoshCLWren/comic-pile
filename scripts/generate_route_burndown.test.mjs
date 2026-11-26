@@ -192,7 +192,7 @@ test('real creator source retains all eleven native v2 browser routes', () => {
   for (const op of routes) {
     assert.equal(op.bucket, 'operations', op.path);
     assert.equal(op.method, 'GET', op.path);
-    assert.equal(op.dest, '/api/native_roll.rs', op.path);
+    assert.equal(op.dest, '/api/native_api.rs', op.path);
     assert.equal(op.runtime, 'native-rust', op.path);
     assert.equal(op.status, 'target', op.path);
     assert.equal(op.owning_issue, 4836, op.path);
@@ -204,7 +204,7 @@ test('real creator source retains all eleven native v2 browser routes', () => {
   ]) {
     liveOperation(fragment, 'GET', route);
   }
-  assert.equal(liveOperation(fragment, 'GET', '/api/v1/threads/{thread_id}/issues/creators').dest, '/api/native_roll.rs');
+  assert.equal(liveOperation(fragment, 'GET', '/api/v1/threads/{thread_id}/issues/creators').dest, '/api/native_api.rs');
 });
 
 test('real custom CBL source retains native reading-list route ownership', () => {
@@ -213,7 +213,7 @@ test('real custom CBL source retains native reading-list route ownership', () =>
   assert.deepEqual(new Set(fragment.operations.map(op => op.bucket)), new Set(['operations']));
   assert.ok(!fragment.operations.some(op => op.method === 'OPTIONS'));
   for (const op of fragment.operations) {
-    assert.equal(op.dest, '/api/native_roll.rs', op.path);
+    assert.equal(op.dest, '/api/native_api.rs', op.path);
     assert.equal(op.runtime, 'native-rust', op.path);
     assert.ok([4684, 4844, 5435].includes(op.owning_issue), op.path + ' owning_issue=' + op.owning_issue);
   }
@@ -251,7 +251,7 @@ test('real taste and bug-report fragments cannot regress to Python ingress', () 
   liveOperation(taste, 'POST', '/api/v1/taste/discoveries/{signal_id}/dismiss');
   assert.ok(!taste.operations.some(op => op.method === 'OPTIONS'));
   assert.equal(taste.defaults.runtime, 'native-rust');
-  for (const op of taste.operations) assert.equal(op.dest, '/api/native_roll.rs', op.path);
+  for (const op of taste.operations) assert.equal(op.dest, '/api/native_api.rs', op.path);
 
   const bugs = liveFragment('bug-reports');
   assert.deepEqual(
@@ -259,7 +259,7 @@ test('real taste and bug-report fragments cannot regress to Python ingress', () 
     new Set(['POST /api/bug-reports/', 'POST /api/v1/bug-reports/']),
   );
   for (const op of bugs.operations) {
-    assert.equal(op.dest, '/api/native_roll.rs', op.path);
+    assert.equal(op.dest, '/api/native_api.rs', op.path);
     assert.equal(op.exclude_from_inventory, true, op.path);
     assert.equal(op.owning_issue, 4852, op.path);
   }
@@ -284,7 +284,7 @@ test('real session and undo fragments retain native-only supported operations', 
   assert.equal(sessions.operations.length, expectedSessions.length);
   for (const [method, route] of expectedSessions) {
     const op = liveOperation(sessions, method, route);
-    assert.equal(op.dest, '/api/native_roll.rs', route);
+    assert.equal(op.dest, '/api/native_api.rs', route);
     assert.equal(op.bucket, 'operations', route);
     assert.ok(op.consumers.includes('frontend/src/services/api-sessions.ts'), route);
   }
@@ -293,7 +293,7 @@ test('real session and undo fragments retain native-only supported operations', 
   for (const [method, route] of undoExpected) {
     const op = liveOperation(undo, method, route);
     assert.equal(op.bucket, 'operations', route);
-    assert.equal(op.dest, '/api/native_roll.rs', route);
+    assert.equal(op.dest, '/api/native_api.rs', route);
     assert.equal(op.runtime, 'native-rust', route);
     assert.equal(op.owning_issue, 4839, route);
   }
@@ -318,7 +318,7 @@ test('real releases and dependency fragments retain declared browser routes', ()
   assert.equal(releases.operations.length, expectedReleases.length);
   for (const [method, route] of expectedReleases) {
     const op = liveOperation(releases, method, route);
-    assert.equal(op.dest, '/api/native_roll.rs', route);
+    assert.equal(op.dest, '/api/native_api.rs', route);
     if (route === '/api/v2/releases') {
       assert.equal(op.bucket, 'operations', route);
       assert.ok(op.consumers.includes('frontend/src/services/api-releases.ts'), route);
@@ -333,7 +333,7 @@ test('real releases and dependency fragments retain declared browser routes', ()
     ['DELETE', '/api/v2/dependencies/{dependency_id}'],
   ]) {
     const op = liveOperation(dependencies, method, route);
-    assert.equal(op.dest, '/api/native_roll.rs', route);
+    assert.equal(op.dest, '/api/native_api.rs', route);
     assert.equal(op.runtime, 'native-rust', route);
   }
 });
@@ -356,6 +356,42 @@ test('identity-inbox v2 resources retain all seven native contracts and Rust ing
     const op = native.paths[route]?.[method.toLowerCase()];
     assert.ok(op?.operationId, 'missing native operationId for ' + method + ' ' + route);
     assert.ok(Object.keys(op.responses).some(code => code.startsWith('2')), route);
-    assert.equal(liveOperation(fragment, method, route).dest, '/api/native_roll.rs', route);
+    assert.equal(liveOperation(fragment, method, route).dest, '/api/native_api.rs', route);
   }
+});
+
+test('every contributor-owned fragment declares only the future native_api destination', () => {
+  const fragmentsDir = path.join(repoRoot, 'docs/api/route-fragments');
+  const names = readdirSync(fragmentsDir).filter(name => name.endsWith('.json'));
+  assert.ok(names.length > 0, 'no route fragments found');
+
+  let checked = 0;
+  for (const name of names) {
+    const text = readFileSync(path.join(fragmentsDir, name), 'utf8');
+    const fragment = JSON.parse(text);
+
+    // The rewritten fragment is bot-owned and still carries the deployed
+    // canonical spelling; post-merge regeneration lands that change.
+    if (name === 'vercel-rewrites.json') {
+      assert.equal(fragment.generated_by, 'scripts/generate_route_burndown.mjs', name);
+      assert.ok(fragment.routes.length > 0, name);
+      for (const route of fragment.routes) {
+        assert.equal(route.dest, '/api/native_roll.rs', name);
+      }
+      continue;
+    }
+
+    const dests = [];
+    if (Object.hasOwn(fragment.defaults ?? {}, 'dest')) dests.push(fragment.defaults.dest);
+    for (const op of fragment.operations ?? []) {
+      assert.ok(Object.hasOwn(op, 'dest'), `${name}: ${op.method} ${op.path} has no dest`);
+      dests.push(op.dest);
+    }
+    assert.ok(dests.length > 0, `${name}: no destinations declared`);
+    for (const dest of dests) {
+      assert.equal(dest, '/api/native_api.rs', `${name}: ${dest}`);
+    }
+    checked += dests.length;
+  }
+  assert.equal(checked, 202, 'expected every contributor-owned operation dest');
 });
