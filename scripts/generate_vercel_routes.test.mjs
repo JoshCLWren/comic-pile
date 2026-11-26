@@ -116,6 +116,30 @@ test('generation emits canonical builds, drops retired API ingress and keeps sta
   assert.equal(resolve(generated, 'POST', '/api/v1/tags/7'), ROLL);
 });
 
+test('fragment config derives active crons and drops retired rewrites', () => {
+  const repairCron = {path: '/api/v2/maintenance/comicvine-metadata-repairs', schedule: '0 10 * * *'};
+  const releaseCron = {path: '/api/v1/cron/release-sync', schedule: '0 9 * * *'};
+  const config = {
+    crons: [releaseCron, repairCron],
+    routes: [
+      ...baseConfig().routes,
+      {src: repairCron.path, methods: ['GET'], dest: ROLL},
+    ],
+  };
+  const configured = fragments().map((fragment, index) => index === 0
+    ? {...fragment, vercel_generation: {
+      crons: [releaseCron],
+      retired_rewrite_srcs: [repairCron.path],
+    }}
+    : fragment);
+  const generated = generateVercel(config, configured);
+  assert.deepEqual(generated.crons, [releaseCron]);
+  assert.equal(generated.routes.some(route => route.src === repairCron.path), false);
+  // The retired path still resolves through the native catch-all.
+  assert.equal(resolve(generated, 'GET', repairCron.path), ROLL);
+  assert.deepEqual(generateVercel(generated, configured), generated);
+});
+
 test('generation is byte-stable across a second regeneration', () => {
   const first = generateVercel(baseConfig(), fragments());
   const second = generateVercel(first, fragments());

@@ -244,6 +244,19 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
         .get(0);
     assert!(alias_col, "V5 must add issue_number_alias to issues");
 
+    let repair_ledger: bool = client
+        .query_one(
+            "SELECT to_regclass('public.comicvine_metadata_refresh_requests') IS NOT NULL",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert!(
+        !repair_ledger,
+        "the ComicVine background repair ledger must be retired"
+    );
+
     let again = run(&mut client).await.unwrap();
     assert_eq!((again.applied, again.adopted), (vec![], vec![]));
     drop(client);

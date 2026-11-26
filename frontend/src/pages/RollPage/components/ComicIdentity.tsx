@@ -526,6 +526,15 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                       ComicVine currently has no creator credits
                     </p>
                   );
+                case 'needs_hydration':
+                  return (
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-needs-hydration">
+                        Creator credits not yet hydrated
+                      </p>
+                      {retryRefreshButton}
+                    </div>
+                  );
                 default:
                   return null;
               }

@@ -1,0 +1,15 @@
+-- #5842: retire the background ComicVine metadata-repair ledger.
+--
+-- ComicVine issue hydration is now request/response work: the exact-issue
+-- confirm/remap handlers hydrate synchronously after commit, and an explicit
+-- authenticated `metadata:refresh` (Retry) performs a bounded fresh attempt.
+-- There is no worker, dispatcher, cron or polling consumer left for this table.
+--
+-- Pending/deferred/failed rows are intentionally abandoned with the table;
+-- they carried only retry scheduling state, never user data. Dropping them
+-- changes no confirmed mapping, canonical identity metadata, creator credits,
+-- reader progress, ratings, order or history. An incomplete confirmed identity
+-- stays detectable from its own metadata freshness (`needs_hydration`) and is
+-- recoverable through the synchronous Retry path without remapping or changing
+-- ownership. Previously hydrated metadata is untouched.
+DROP TABLE IF EXISTS public.comicvine_metadata_refresh_requests;
