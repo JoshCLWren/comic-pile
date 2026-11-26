@@ -40,6 +40,7 @@ const mockedIssuesApiList = vi.mocked(issuesApi.list)
 const mockedPreviewDelete = vi.mocked(issuesApi.previewDelete)
 const mockedDelete = vi.mocked(issuesApi.delete)
 
+// SAFETY: test fixture supplies only the fields QueueModals and IssueToggleList read for this edit draft.
 const EDITING_THREAD = {
   id: 99,
   title: 'Detective Comics',
