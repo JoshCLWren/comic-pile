@@ -3076,53 +3076,88 @@ async fn do_cbl_adoption_commit(
 
     let canonical_source_path = format!("custom-cbl:{canonical_list_id}");
 
-    // Merge committed adopted issue set into the canonical list, preserving existing entries.
-    let existing_entries: Vec<(i32, i32)> = tx
-        .run_query(
-            "SELECT issue_id, position FROM custom_cbl_entries WHERE list_id = $1 ORDER BY position, id",
-            &[&canonical_list_id],
-        )
-        .await
-        .map_err(|e| {
-            if crate::db::is_transport_failure(&e) {
-                CommitErr::Db(ApiError::database_unavailable())
-            } else {
-                CommitErr::Unexpected(format!("load reading list entries: {e}"))
-            }
-        })?
+    // A single source can resolve several positions to the same canonical
+    // issue. Deduplicate while keeping source order so the set-based insert
+    // respects the (list_id, issue_id) unique constraint (#5523).
+    let mut seen_adopted = std::collections::HashSet::new();
+    let adopted_issue_ids: Vec<i32> = adopted_issue_ids
         .into_iter()
-        .map(|row| (row.get::<_, i32>(0), row.get::<_, i32>(1)))
+        .filter(|issue_id| seen_adopted.insert(*issue_id))
         .collect();
-    let mut existing_issue_positions: std::collections::HashMap<i32, i32> = existing_entries
+
+    // Reconcile this source's list entries to the newly committed adopted set
+    // inside the same transaction. An issue included by an earlier commit but
+    // excluded now must not survive in the list or its reader/Queue projections.
+    // Scope removal to issues resolved from this CBL source so entries adopted
+    // from another source into the same list are not disturbed.
+    let source_issue_ids: Vec<i32> = planned
         .iter()
-        .map(|(issue_id, position)| (*issue_id, *position))
+        .filter_map(|entry| {
+            entry
+                .get("resolved_issue_id")
+                .and_then(|value| value.as_i64())
+                .map(|id| id as i32)
+        })
         .collect();
-    let mut next_position: i32 = existing_entries
-        .iter()
-        .map(|(_, position)| *position)
-        .max()
-        .map(|m| m + 1)
-        .unwrap_or(0);
-    for issue_id in adopted_issue_ids.iter() {
-        if existing_issue_positions.contains_key(issue_id) {
-            continue;
-        }
+    if !source_issue_ids.is_empty() {
         tx.run_execute(
-            "INSERT INTO custom_cbl_entries
-               (list_id, issue_id, position, created_at, is_checkpoint, checkpoint_target_issue_ids, gate, skipped)
-             VALUES ($1, $2, $3, NOW(), false, '[]'::json, 'none', false)",
-            &[&canonical_list_id, issue_id, &next_position],
+            "DELETE FROM custom_cbl_entries e
+             USING custom_cbl_lists l
+             WHERE e.list_id = l.id
+               AND l.user_id = $1 AND e.list_id = $2
+               AND e.issue_id = ANY($3::int[])
+               AND e.issue_id <> ALL($4::int[])",
+            &[
+                &user_id,
+                &canonical_list_id,
+                &source_issue_ids,
+                &adopted_issue_ids,
+            ],
         )
         .await
         .map_err(|e| {
             if crate::db::is_transport_failure(&e) {
                 CommitErr::Db(ApiError::database_unavailable())
             } else {
-                CommitErr::Unexpected(format!("insert reading list entry: {e}"))
+                CommitErr::Unexpected(format!("reconcile reading list entries: {e}"))
             }
         })?;
-        existing_issue_positions.insert(*issue_id, next_position);
-        next_position += 1;
+    }
+
+    // Insert the missing entries with one set-based statement rather than one
+    // round trip per issue (the Alpha Flight source has 228 entries). Positions
+    // are derived in SQL from the list's current maximum, with an explicit -1
+    // floor for an empty list, so there is no unchecked i32 + 1 in Rust. The
+    // NOT EXISTS guard keeps repeated commits idempotent (#5523).
+    if !adopted_issue_ids.is_empty() {
+        tx.run_execute(
+            r#"
+            INSERT INTO custom_cbl_entries
+              (list_id, issue_id, position, created_at, is_checkpoint,
+               checkpoint_target_issue_ids, gate, skipped)
+            SELECT $1, ids.issue_id,
+                   (COALESCE(base.max_position, -1) + ids.ord)::int,
+                   NOW(), false, '[]'::json, 'none', false
+            FROM unnest($2::int[]) WITH ORDINALITY AS ids(issue_id, ord)
+            CROSS JOIN (
+                SELECT MAX(position) AS max_position
+                FROM custom_cbl_entries WHERE list_id = $1
+            ) AS base
+            WHERE NOT EXISTS (
+                SELECT 1 FROM custom_cbl_entries existing
+                WHERE existing.list_id = $1 AND existing.issue_id = ids.issue_id
+            )
+            "#,
+            &[&canonical_list_id, &adopted_issue_ids],
+        )
+        .await
+        .map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("insert reading list entries: {e}"))
+            }
+        })?;
     }
 
     // Link plan to authoritative reading list via reading_plan_sources.
