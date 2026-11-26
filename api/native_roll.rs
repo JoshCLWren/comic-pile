@@ -384,6 +384,20 @@ fn app() -> Router {
                 .delete(native_dispatch),
         )
         .route("/api/v2/threads/{thread_id}/issues", post(native_dispatch))
+        // Edit Series previews (#5863). The inner router registers these
+        // handlers, but the Vercel entry owns a separate route table: without
+        // matching routes here the fallback returns the Rust JSON 404
+        // ("Not Found") before the preview handler runs, so no new issue can
+        // be previewed or added. Keep this table in sync with the inner
+        // comicpile_roll_service::router() routes.
+        .route(
+            "/api/v2/threads/{thread_id}/issues/preview",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/threads/{thread_id}/issues/structure-preview",
+            post(native_dispatch),
+        )
         .route(
             "/api/v2/threads/{thread_id}/issue-order",
             put(native_dispatch),
@@ -1395,6 +1409,61 @@ mod tests {
                 response.status(),
                 StatusCode::NOT_FOUND,
                 "{method} {uri} must reach Rust dispatch, not the 404 fallback"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn edit_series_preview_ingress_reaches_rust_and_never_hits_json_404() {
+        // #5863: Edit Series Add posted to the inner-router-only preview paths,
+        // so the Vercel ingress returned its JSON 404 ("Not Found") instead of
+        // previewing Annual/Special/fractional input. An unauthenticated request
+        // must now reach the dispatched handler (401) or a cold-start 503; it
+        // must never fall through to native_not_found.
+        for (uri, body) in [
+            (
+                "/api/v2/threads/1019229/issues/preview",
+                r#"{"issue_range":"Annual 1, Special 1, 0.5, 0, Annual 3"}"#,
+            ),
+            (
+                "/api/v2/threads/1019229/issues/structure-preview",
+                r#"{"operation":"delete","issue_id":7}"#,
+            ),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method("POST")
+                        .uri(uri)
+                        .header("content-type", "application/json")
+                        .body(Body::from(body))
+                        .unwrap(),
+                )
+                .await
+                .expect("preview ingress response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{uri} must reach Rust dispatch, not the 404 fallback, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{uri} must be served by the native ingress"
+            );
+            let bytes = to_bytes(response.into_body(), 8192)
+                .await
+                .expect("body bytes");
+            let text = String::from_utf8_lossy(&bytes);
+            assert_ne!(
+                text, r#"{"detail":"Not Found"}"#,
+                "{uri} must not hit native_not_found: {text}"
+            );
+            assert!(
+                !text.contains("Wrong number of path arguments"),
+                "numeric thread ids must not fail Path extraction for {uri}: {text}"
             );
         }
     }

@@ -29,7 +29,7 @@ The v1 session list/get operations and their unversioned aliases are retired. `G
 
 **Compatibility discrepancy:** [#4405](https://github.com/JoshCLWren/comic-pile/issues/4405) establishes sessionless Roll with browser-owned pending state, while the current native service still creates six-hour server sessions and stores pending selection in PostgreSQL. The qualified `ReadingSession` name remains necessary for durable history, but the server-session Roll lifecycle is not the intended final product boundary.
 
-Storage/API edges may retain familiar wire names such as `sessions`, `session_id`, `SessionListItem`, or `SessionDetail`. Ambiguity is resolved in code, not by renaming an established wire contract.
+Storage/API edges keep the established wire names listed above: the `sessions` table, the `session_id` path parameter, and the `SessionDetails`/`SessionSnapshotsResponse` client types. Retired v1-era names such as `/api/session/`, `SessionListItem`, or singular `SessionDetail` are not current contracts. Ambiguity is resolved in code, not by renaming an established wire contract.
 
 ## Historical incident and rationale
 
