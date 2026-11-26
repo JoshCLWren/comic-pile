@@ -3524,4 +3524,62 @@ mod tests {
         let calls = fake.calls();
         assert_eq!(calls.len(), 1, "dispatch should be attempted once");
     }
+
+    /// #5695: drain reconciles confirmed identities that have no refresh-request
+    /// row so already-confirmed issues recover without remapping.
+    #[tokio::test]
+    async fn drain_reconciles_confirmed_orphan_missing_refresh_row() {
+        let Some(state) = crate::test_support::test_state(4).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("seed connection");
+        let user_id: i32 = connection
+            .query_one(
+                "INSERT INTO users (username) VALUES ('orphan-owner') RETURNING id",
+                &[],
+            )
+            .await
+            .expect("orphan user")
+            .get(0);
+        let thread_id: i32 = connection
+            .query_one(
+                "INSERT INTO threads \
+                 (title, format, issues_remaining, total_issues, queue_position, status, \
+                  user_id, last_rating, reading_progress) \
+                 VALUES ('Orphan', 'Comic', 1, 1, 1, 'active', $1, 4.0, 'in_progress') \
+                 RETURNING id",
+                &[&user_id],
+            )
+            .await
+            .expect("orphan thread")
+            .get(0);
+        let identity_id = seed_confirmed_identity_for_thread(
+            &connection,
+            thread_id,
+            "1",
+            "4000-56950",
+            &json!({}),
+        )
+        .await;
+        drop(Object::take(connection));
+
+        let report = drain_for_test(&state).await;
+        assert!(
+            report.reconciled >= 1,
+            "orphaned confirmed identity should be reconciled: {report:?}"
+        );
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let row = connection
+            .query_one(
+                "SELECT state, attempts FROM comicvine_metadata_refresh_requests \
+                 WHERE external_identity_id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("refresh row created");
+        assert_eq!(row.get::<_, String>(0), "pending");
+        assert_eq!(row.get::<_, i32>(1), 0);
+    }
 }
