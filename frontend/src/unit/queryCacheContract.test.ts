@@ -59,25 +59,9 @@ describe('canonical query keys', () => {
     expect(queryKeys).not.toHaveProperty('collections')
 
     expect(queryKeys.session.all).toEqual(['session'])
-    expect(queryKeys.session.current()).toEqual(['session', 'current'])
-    expect(queryKeys.session.pages()).toEqual(['session', 'pages'])
-    expect(queryKeys.session.list()).toEqual(['session', 'pages', {}])
-    expect(queryKeys.session.list({ params: { status: 'done' } })).toEqual([
-      'session',
-      'pages',
-      { status: 'done' },
-    ])
-    expect(queryKeys.session.page({ pageSize: 20 })).toEqual([
-      'session',
-      'pages',
-      { pageToken: null, pageSize: 20 },
-    ])
-    expect(queryKeys.session.page({ pageToken: 'next', pageSize: 10 })).toEqual([
-      'session',
-      'pages',
-      { pageToken: 'next', pageSize: 10 },
-    ])
     expect(queryKeys.session.detail(9)).toEqual(['session', 'detail', 9])
+    expect(queryKeys.session.snapshots(9)).toEqual(['session', 'snapshots', 9])
+    expect(queryKeys.session.snapshotsAll()).toEqual(['session', 'snapshots'])
 
     expect(queryKeys.queue.all).toEqual(['queue'])
     expect(queryKeys.queue.pages()).toEqual(['queue', 'pages'])
@@ -185,19 +169,6 @@ describe('canonical query keys', () => {
     ])
   })
 
-  it('normalizes session list params and keeps the cursor out of the key', () => {
-    expect(
-      queryKeys.session.list({ params: { status: '  done  ', page_token: 'cursor-2' } }),
-    ).toEqual(['session', 'pages', { status: 'done' }])
-    expect(queryKeys.session.list({ params: { status: 'done', page_token: 'cursor-2' } })).toEqual(
-      queryKeys.session.list({ params: { status: 'done', page_token: 'cursor-9' } }),
-    )
-    expect(queryKeys.session.list({ params: { status: 'done', note: '  ' } })).toEqual([
-      'session',
-      'pages',
-      { status: 'done' },
-    ])
-  })
 })
 
 describe('targeted cache effects', () => {
