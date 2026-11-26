@@ -223,6 +223,21 @@ describe('CustomCBLBuilder', () => {
     expect(screen.getByRole('button', { name: /Starman #1\s*Series ID 9103/ })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByRole('button', { name: /Mutant X #1\s*Series ID 9101/ }).querySelector('[data-testid="comic-issue-cover"] img')).toHaveAttribute('src', 'https://example.test/mutant-x.jpg'))
   })
+  it('renders search-result cover from the search batch for the reported MQA-LIST-001 case', async () => {
+    const user = userEvent.setup()
+    mocks.searchIssues.mockResolvedValue([
+      { issue_id: 40001, thread_id: 9101, series_name: 'Mutant X', issue_number: '1', status: 'unread' },
+    ])
+    // SAFETY: a complete consumer-facing card stub for an exact confirmed owned issue.
+    fetchCards.mockResolvedValue([{ issue_id: 40001, thread_id: 9101, thread_title: 'Mutant X', issue_number: '1', cover_image_url: 'https://example.test/mutant-x.jpg', status: 'unread', mapping_state: 'confirmed', has_confirmed_identity: true } as Awaited<ReturnType<typeof issueCardsApi.fetchCards>>[number]])
+    renderBuilder()
+    await user.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    await user.selectOptions(await screen.findByLabelText('Custom CBL'), '9')
+    await user.type(await screen.findByLabelText('Search issues for custom CBL'), 'Mutant X #1{Enter}')
+    const result = await screen.findByRole('button', { name: /Mutant X #1\s*Series ID 9101/ })
+    await waitFor(() => expect(result.querySelector('[data-testid="comic-issue-cover"] img')).toHaveAttribute('src', 'https://example.test/mutant-x.jpg'))
+    expect(screen.queryByText(/No cover for Mutant X #1/)).not.toBeInTheDocument()
+  })
   it('uses an exact-id cover cached in the ordered-list batch when the search batch has none', async () => {
     const user = userEvent.setup()
     mocks.searchIssues.mockResolvedValue([
@@ -230,11 +245,11 @@ describe('CustomCBLBuilder', () => {
     ])
     // Defensive fallback path: the search-result batch returns no card, while
     // the ordered-list batch already holds a card for that exact issue id.
-    fetchCards.mockImplementation(async (issueIds: number[]) =>
-      issueIds.includes(26360)
-        ? [{ issue_id: 50002, thread_id: 9202, thread_title: 'Mutant X', issue_number: '1', cover_image_url: 'https://example.test/fallback-cover.jpg', status: 'unread', mapping_state: 'confirmed', has_confirmed_identity: true } as Awaited<ReturnType<typeof issueCardsApi.fetchCards>>[number]]
-        : [],
-    )
+    fetchCards.mockImplementation(async (issueIds: number[]) => {
+      // SAFETY: a complete consumer-facing card stub for an exact confirmed owned issue.
+      const card = { issue_id: 50002, thread_id: 9202, thread_title: 'Mutant X', issue_number: '1', cover_image_url: 'https://example.test/fallback-cover.jpg', status: 'unread', mapping_state: 'confirmed', has_confirmed_identity: true } as Awaited<ReturnType<typeof issueCardsApi.fetchCards>>[number]
+      return issueIds.includes(26360) ? [card] : []
+    })
     renderBuilder()
     await user.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
     await user.selectOptions(await screen.findByLabelText('Custom CBL'), '9')
