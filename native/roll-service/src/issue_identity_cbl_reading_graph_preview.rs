@@ -1380,4 +1380,164 @@ mod tests {
         assert_ne!(id, overlap_identity("comicvine:2", "comicvine:1"));
         assert!(id.starts_with("overlap-") && id.len() == "overlap-".len() + 24);
     }
+
+    /// Counts real statements sent to PostgreSQL by wrapping the `DbExec`
+    /// executor. The queries themselves are unchanged; only the call count is
+    /// observed, so a per-row fan-out is caught deterministically.
+    struct CountingExec<'a, E> {
+        inner: &'a E,
+        statements: std::cell::Cell<usize>,
+    }
+
+    impl<E> CountingExec<'_, E> {
+        fn statements(&self) -> usize {
+            self.statements.get()
+        }
+    }
+
+    impl<E: crate::issue_identity::DbExec> crate::issue_identity::DbExec for CountingExec<'_, E> {
+        async fn run_query(
+            &self,
+            sql: &str,
+            params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+        ) -> Result<Vec<tokio_postgres::Row>, tokio_postgres::Error> {
+            self.statements.set(self.statements.get() + 1);
+            self.inner.run_query(sql, params).await
+        }
+
+        async fn run_query_opt(
+            &self,
+            sql: &str,
+            params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+        ) -> Result<Option<tokio_postgres::Row>, tokio_postgres::Error> {
+            self.statements.set(self.statements.get() + 1);
+            self.inner.run_query_opt(sql, params).await
+        }
+
+        async fn run_query_one(
+            &self,
+            sql: &str,
+            params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+        ) -> Result<tokio_postgres::Row, tokio_postgres::Error> {
+            self.statements.set(self.statements.get() + 1);
+            self.inner.run_query_one(sql, params).await
+        }
+
+        async fn run_execute(
+            &self,
+            sql: &str,
+            params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
+        ) -> Result<u64, tokio_postgres::Error> {
+            self.statements.set(self.statements.get() + 1);
+            self.inner.run_execute(sql, params).await
+        }
+    }
+
+    async fn seed_statement_count_source(connection: &tokio_postgres::Client) {
+        connection
+            .batch_execute(
+                r#"
+                INSERT INTO users (id, username) VALUES (9101, 'statement-count-reader');
+                INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, total_issues, reading_progress, created_at)
+                VALUES (9101, 9101, 'Series #1', 'comic', 1, 1, 'active', 1, 'not_started', NOW());
+                INSERT INTO issues (id, thread_id, issue_number, position, status, created_at)
+                VALUES (9101, 9101, '1', 0, 'unread', NOW());
+                INSERT INTO cbl_sources (id, repository, revision_sha, synced_at, created_at, updated_at)
+                VALUES (9101, 'cbl-statement-count', 'rev', NOW(), NOW(), NOW());
+                INSERT INTO cbl_source_lists
+                    (id, source_id, source_path, name, declared_issue_count,
+                     content_hash, revision_sha, active, created_at, updated_at)
+                VALUES (9101, 9101, 'lists/statement-count.json', 'Statement count', 1001,
+                        'hash', 'rev', TRUE, NOW(), NOW());
+                INSERT INTO external_identities
+                    (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                SELECT 200000 + g, 'comicvine', 'issue', format('cv-count-%s', g), '{}'::json, NOW(), NOW()
+                FROM generate_series(1, 1001) g;
+                INSERT INTO cbl_source_entries
+                    (id, list_id, position, series_name, issue_number, external_issue_identity_id, created_at)
+                SELECT 300000 + g, 9101, g, 'Series', g::text, 200000 + g, NOW()
+                FROM generate_series(1, 1001) g;
+                "#,
+            )
+            .await
+            .expect("seed 1001-position statement-count source");
+    }
+
+    /// #5522: adoption reconciliation must issue a bounded number of real
+    /// PostgreSQL statements regardless of source-list size. The old resolver
+    /// issued 2-4 queries per row; a 1001-position preview issued thousands.
+    #[tokio::test]
+    async fn adoption_reconcile_statement_count_is_bounded_by_list_size() {
+        let state = crate::test_support::test_state(1)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("test connection");
+        seed_statement_count_source(&connection).await;
+        let meta = crate::issue_identity::load_active_cbl_list_meta(&connection, 9101)
+            .await
+            .expect("list meta");
+
+        let mut counts = Vec::new();
+        for size in [1_usize, 25, 228, 1001] {
+            let counter = CountingExec {
+                inner: &connection,
+                statements: std::cell::Cell::new(0),
+            };
+            let positions: Vec<i64> = (1..=size).map(|p| p as i64).collect();
+            let entries = crate::issue_identity::reconcile_entries_for_adoption_positions(
+                &counter, 9101, &meta, &positions,
+            )
+            .await
+            .expect("reconcile positions");
+            assert_eq!(entries.len(), size);
+            let statements = counter.statements();
+            assert!(
+                statements <= 12,
+                "preview for {size} positions issued {statements} statements (bounded N+1 regression)"
+            );
+            counts.push(statements);
+        }
+        assert_eq!(
+            counts.first(),
+            counts.last(),
+            "statement count must not grow with source size: {counts:?}"
+        );
+    }
+
+    /// #5522: the commit path reconciles inside its write transaction. The
+    /// same batched resolver must keep that transactional read bounded too,
+    /// while the write-side atomicity/receipt tests live in tests/issue_identity.rs.
+    #[tokio::test]
+    async fn adoption_commit_reconcile_inside_transaction_is_bounded() {
+        let state = crate::test_support::test_state(1)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let mut connection = db::checkout(&state).await.expect("test connection");
+        seed_statement_count_source(&connection).await;
+        let meta = crate::issue_identity::load_active_cbl_list_meta(&connection, 9101)
+            .await
+            .expect("list meta");
+
+        let mut tx = connection
+            .build_transaction()
+            .start()
+            .await
+            .expect("transaction");
+        let counter = CountingExec {
+            inner: &tx,
+            statements: std::cell::Cell::new(0),
+        };
+        let entries = crate::issue_identity::reconcile_entries_for_adoption(&counter, 9101, &meta)
+            .await
+            .expect("reconcile full source");
+        assert_eq!(entries.len(), 1001);
+        let statements = counter.statements();
+        assert!(
+            statements <= 12,
+            "commit reconcile for 1001 positions issued {statements} statements"
+        );
+        tx.commit().await.expect("commit read-only transaction");
+    }
 }
