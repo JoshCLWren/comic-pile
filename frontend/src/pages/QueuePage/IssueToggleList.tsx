@@ -718,6 +718,8 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     setDraggedIssueId(null)
     setDragOverIssueId(null)
 
+    // A resolved no-op drop is not a structural edit; do not preview or queue it.
+    if (nextIssues.every((issue, index) => issue.id === issues[index]?.id)) return
     void requestStructuralPreview({ type: 'reorder', nextIssues })
   }
 
