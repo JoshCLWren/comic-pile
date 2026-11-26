@@ -995,7 +995,7 @@ describe('ComicIdentity creator metadata contract (#5841)', () => {
   }
 
   function refreshResult(
-    outcome: 'complete' | 'no_credits' | 'provider_unavailable' | 'rate_limited' | 'timeout' | 'invalid_response',
+    outcome: 'complete' | 'no_credits' | 'not_confirmed' | 'provider_unavailable' | 'rate_limited' | 'timeout' | 'invalid_response',
     options: { refreshed?: boolean; retryAfter?: number | null } = {},
   ) {
     return {
