@@ -2,7 +2,13 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import {_generateVercelDocument, _loadRouteFragments} from './generate_route_burndown.mjs';
-import {slimNativeApiRoutes, parseSegments, routesMayOverlap} from './vercel_slim_routes.mjs';
+import {
+  canonicalNativeBuild,
+  canonicalNativeDestination,
+  slimNativeApiRoutes,
+  parseSegments,
+  routesMayOverlap,
+} from './vercel_slim_routes.mjs';
 
 const NATIVE_API = '/api/native_api.rs';
 const SHADOW = '/api/shadow.ingress';
@@ -32,6 +38,30 @@ function allTemplates(inventory, fragments) {
   for (const fragment of fragments) for (const op of fragment.operations) templates.add(op.path);
   return [...templates];
 }
+
+test('legacy native destinations are canonicalized at the I/O boundary', () => {
+  assert.equal(canonicalNativeDestination('/api/native_roll.rs'), NATIVE_API);
+  assert.equal(canonicalNativeDestination('/api/native_api.rs'), NATIVE_API);
+  assert.equal(canonicalNativeDestination('/api/index.py'), '/api/index.py');
+  assert.equal(canonicalNativeDestination('/api/native_roll.rs/extra'), '/api/native_roll.rs/extra');
+  assert.equal(canonicalNativeDestination(undefined), undefined);
+  assert.equal(canonicalNativeDestination(null), null);
+  assert.equal(canonicalNativeDestination(42), 42);
+});
+
+test('legacy native builds are canonicalized at the I/O boundary', () => {
+  const legacy = {src: 'api/native_roll.rs', use: '@vercel/rust'};
+  assert.deepEqual(canonicalNativeBuild(legacy), {src: 'api/native_api.rs', use: '@vercel/rust'});
+  assert.deepEqual(legacy, {src: 'api/native_roll.rs', use: '@vercel/rust'});
+  const canonical = {src: 'api/native_api.rs', use: '@vercel/rust'};
+  assert.equal(canonicalNativeBuild(canonical), canonical);
+  const python = {src: 'api/index.py', use: '@vercel/python'};
+  assert.equal(canonicalNativeBuild(python), python);
+  const numeric = {src: 42};
+  assert.equal(canonicalNativeBuild(numeric), numeric);
+  assert.equal(canonicalNativeBuild(undefined), undefined);
+  assert.equal(canonicalNativeBuild(null), null);
+});
 
 test('slim vercel routes resolve identically to the full route list', () => {
   const fragments = _loadRouteFragments('docs/api/route-fragments');
