@@ -3342,6 +3342,7 @@ async fn retry_during_in_flight_remap_names_current_identity_and_drops_stale_wri
         gated.call_paths().len(),
         1,
         "only the in-flight retry called the provider"
+    );
 }
 
 #[tokio::test]

@@ -966,8 +966,6 @@ async fn reorder_structure_preview_shows_projected_order_and_rejects_invalid_set
         vec!["129", "130", "131"]
     );
 }
-<<<<<<< HEAD
-=======
 
 /// #5863: the Edit Series Add box accepts Annual/Special/fractional labels.
 /// The preview must succeed for them and the committed series must keep every
@@ -1099,4 +1097,3 @@ async fn annual_special_and_fractional_issues_preview_then_commit_as_distinct_ro
         "existing relative order must be preserved"
     );
 }
->>>>>>> origin/main
