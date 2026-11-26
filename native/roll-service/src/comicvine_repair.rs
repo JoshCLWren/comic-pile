@@ -91,7 +91,7 @@ struct Job {
     metadata: Option<String>,
 }
 
-#[derive(Default, Serialize)]
+#[derive(Debug, Default, Serialize)]
 pub struct DrainReport {
     claimed: u32,
     completed: u32,
@@ -1398,10 +1398,7 @@ async fn backfill_authorized(
 /// all (#5695). This targets the orphan gap reported in production: confirmed
 /// identities with empty/missing metadata and no durable queue row were never
 /// claimed by the drain. Bounded and idempotent; safe to run on every drain.
-async fn reconcile_missing_refresh_rows(
-    state: &AppState,
-    limit: i64,
-) -> Result<u32, ApiError> {
+async fn reconcile_missing_refresh_rows(state: &AppState, limit: i64) -> Result<u32, ApiError> {
     let mut connection = db::checkout(state).await?;
     let tx = connection.transaction().await.map_err(db::query_error)?;
     let rows = tx
