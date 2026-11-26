@@ -193,6 +193,11 @@ test.describe('Roll pointer target sizes (#1885)', () => {
       expect(data.issues.length).toBeGreaterThan(0)
       return data.issues[0]!.id
     }
+    await page.setViewportSize({ width: 1920, height: 926 })
+    // Set pending before creating the dependency: the canonical evaluator
+    // rejects set-pending on a thread already blocked by a dependency (#3359).
+    await openRatingView(page, blocked.id)
+
     const created = await page.request.post('/api/v2/dependencies/', {
       headers: await authHeaders(page),
       data: {
@@ -203,9 +208,8 @@ test.describe('Roll pointer target sizes (#1885)', () => {
       },
     })
     expect(created.ok(), `dependency create failed: ${await created.text()}`).toBeTruthy()
-
-    await page.setViewportSize({ width: 1920, height: 926 })
-    await openRatingView(page, blocked.id)
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await expect(page.locator('#rating-input')).toBeVisible()
 
     // Edge endpoint buttons previously rendered as bare ~12px text strips.
     expectMinimumTargets(
