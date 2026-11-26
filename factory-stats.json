@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-26T03:15:03+00:00",
+  "generated_at": "2026-11-26T03:16:27+00:00",
   "models": [
     {
       "health": {
@@ -23776,7 +23776,7 @@
   },
   "counts_generated_at": "2026-11-26T02:56:48.731918+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-26T03:15:04Z",
+    "generated_at": "2026-11-26T03:16:28Z",
     "sources": {
       "nvidia": [
         "google/diffusiongemma-26b-a4b-it",
@@ -23795,8 +23795,8 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-26T03:15:04.924000+00:00",
-    "days_elapsed": 25.135,
+    "checked_at": "2026-11-26T03:16:28.628886+00:00",
+    "days_elapsed": 25.136,
     "days_in_month": 30.0,
     "days_left": 4.86,
     "in_use": true,
@@ -23814,21 +23814,21 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 28086022,
-        "organization": 28086022,
+        "database": 28098344,
+        "organization": 28098344,
         "owner_target": 50000000,
-        "projected_database": 33522206,
-        "projected_organization": 33522206,
-        "projected_share": 0.067,
+        "projected_database": 33535579,
+        "projected_organization": 33535579,
+        "projected_share": 0.0671,
         "share_used": 0.0562
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 144314,
-        "organization": 144314,
+        "database": 144351,
+        "organization": 144351,
         "owner_target": 1000000,
-        "projected_database": 172247,
-        "projected_organization": 172247,
+        "projected_database": 172284,
+        "projected_organization": 172284,
         "projected_share": 0.0172,
         "share_used": 0.0144
       },
@@ -23852,7 +23852,7 @@
     "status": "ok"
   },
   "schema": {
-    "checked_at": "2026-11-26T03:15:08+00:00",
+    "checked_at": "2026-11-26T03:16:32+00:00",
     "code_version": 6,
     "last_upgrade": {
       "at": "2026-11-25T18:11:07+00:00",
@@ -24030,7 +24030,7 @@
     "stored_version": 6
   },
   "crashes": {
-    "generated_at": "2026-11-26T03:15:08Z",
+    "generated_at": "2026-11-26T03:16:33Z",
     "groups": [
       {
         "count": 1,
@@ -24133,48 +24133,9 @@
     ]
   },
   "gh_usage": {
-    "generated_at": "2026-11-26T03:15:10Z",
+    "generated_at": "2026-11-26T03:16:34Z",
     "jobs": {
       "dispatch": [
-        {
-          "at": 1795661795,
-          "buckets": {
-            "reader": 29,
-            "workflow": 10
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 2841,
-            "reset": 1795662728
-          },
-          "cache_hits": 3,
-          "github": 39,
-          "label": "dispatch pr:5805",
-          "paginated": 5,
-          "top": [
-            [
-              "api GET repos/R/issues/N",
-              16
-            ],
-            [
-              "gh pr checks",
-              4
-            ],
-            [
-              "api GET repos/R/issues",
-              3
-            ],
-            [
-              "api GET repos/R/pulls/N",
-              3
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ]
-          ],
-          "writes": 2
-        },
         {
           "at": 1795661882,
           "buckets": {
@@ -24599,6 +24560,45 @@
             ],
             [
               "api GET repos/R/actions/runs",
+              1
+            ]
+          ],
+          "writes": 0
+        },
+        {
+          "at": 1795662925,
+          "buckets": {
+            "reader": 18,
+            "workflow": 5
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 4770,
+            "reset": 1795666336
+          },
+          "cache_hits": 0,
+          "github": 23,
+          "label": "dispatch pr:5781",
+          "paginated": 4,
+          "top": [
+            [
+              "api GET repos/R/issues/N",
+              4
+            ],
+            [
+              "api GET repos/R/issues",
+              2
+            ],
+            [
+              "api GET repos/R/pulls/N",
+              2
+            ],
+            [
+              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
+              2
+            ],
+            [
+              "api GET repos/R/pulls",
               1
             ]
           ],
