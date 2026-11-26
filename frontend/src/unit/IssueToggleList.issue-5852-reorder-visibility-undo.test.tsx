@@ -195,6 +195,31 @@ describe('IssueToggleList #5852 visible reorder, preview and Undo', () => {
     expect(ref.current?.hasUndoPoint()).toBe(false)
   })
 
+  it('two Move down clicks on issue #129 advance it two positions (QA repro)', async () => {
+    const ref = await renderList()
+
+    fireEvent.click(screen.getByTestId('issue-move-down-1'))
+    await screen.findByTestId('edit-series-structure-preview-modal')
+    fireEvent.click(screen.getByTestId('confirm-structure-preview'))
+    expect(reorderRowNumbers()).toEqual(['140', '129', '130'])
+
+    // After the first move is queued, the second click uses the updated list.
+    fireEvent.click(screen.getByTestId('issue-move-down-1'))
+    await screen.findByTestId('edit-series-structure-preview-modal')
+    fireEvent.click(screen.getByTestId('confirm-structure-preview'))
+    expect(reorderRowNumbers()).toEqual(['140', '130', '129'])
+
+    await act(async () => {
+      await ref.current?.flush()
+    })
+    expect(mockedIssuesApi.reorder).toHaveBeenLastCalledWith(99, [2, 3, 1])
+
+    await screen.findByTestId('edit-series-undo-bar')
+    fireEvent.click(screen.getByTestId('undo-edit-add'))
+    await waitFor(() => expect(mockedIssuesApi.reorder).toHaveBeenLastCalledWith(99, [1, 2, 3]))
+    expect(ref.current?.hasUndoPoint()).toBe(false)
+  })
+
   it('a failed reorder preview is retryable and never commits the draft', async () => {
     const ref = await renderList()
     mockedIssuesApi.previewReorder.mockRejectedValueOnce(new Error('preview exploded'))
