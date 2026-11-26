@@ -173,7 +173,7 @@ async function cardRowCounts(page: Page): Promise<number[]> {
 async function toggleCreator(page: Page, name: string, checked: boolean): Promise<void> {
   const box = page.getByLabel(`Select ${name} for comparison`)
   await box.click()
-  await expect(box)[checked ? 'toBeChecked' : 'toBeUnchecked']()
+  await expect(box).toBeChecked({ checked })
 }
 
 test.describe('Issue #3091: creator comparison', () => {
