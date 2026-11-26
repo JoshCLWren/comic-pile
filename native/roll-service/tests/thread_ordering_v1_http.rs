@@ -2330,3 +2330,58 @@ async fn roll_unsnooze_of_a_removed_series_removes_only_the_snooze() {
     assert!(snoozed_ids.is_empty());
     assert_eq!(die, die_before);
 }
+
+/// A7/Roll: the pending bootstrap must carry both numbers for the same physical
+/// issue, so `ComicPillar` renders the same identity as Issue/Queue/List (#4652).
+#[tokio::test]
+async fn bootstrap_active_thread_carries_dual_numbering() {
+    let (state, token, csrf, user_id, _guard) = setup_user("tord-dual-number").await;
+    let conn = state.pool.get().await.unwrap();
+    let thread_id = thread(&conn, user_id, "Dual numbering Saga").await;
+    let issue_id = issue(&conn, thread_id, "3", 1, "unread").await;
+    conn.execute(
+        "UPDATE issues SET issue_number_alias='100' WHERE id=$1",
+        &[&issue_id],
+    )
+    .await
+    .unwrap();
+    frontier(&conn, thread_id, issue_id).await;
+    conn.execute(
+        "UPDATE threads SET issues_remaining=1 WHERE id=$1",
+        &[&thread_id],
+    )
+    .await
+    .unwrap();
+    let identity_id: i32 = conn
+        .query_one(
+            "INSERT INTO external_identities
+                (provider, entity_type, external_id, metadata_json, created_at, updated_at)
+             VALUES ('comicvine', 'issue', '4050-100', $1, NOW(), NOW()) RETURNING id",
+            &[&json!({"issue_number": "100", "image_url": "https://example.test/100.jpg"})],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    conn.execute(
+        "INSERT INTO issue_external_identity_mappings
+            (issue_id, external_identity_id, status, confidence, evidence_json, created_at, updated_at)
+         VALUES ($1, $2, 'confirmed', 1.0, '{}'::json, NOW(), NOW())",
+        &[&issue_id, &identity_id],
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        "INSERT INTO sessions (user_id, started_at, start_die, pending_thread_id)
+         VALUES ($1, NOW(), 6, $2)",
+        &[&user_id, &thread_id],
+    )
+    .await
+    .unwrap();
+
+    let (status, body) = send(&state, get("/api/v2/roll/bootstrap", &token, &csrf)).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let active = &body["active_thread"];
+    assert_eq!(active["issue_number"], "3", "{body:?}");
+    assert_eq!(active["issue_number_alias"], "100", "{body:?}");
+    assert_eq!(active["provider_issue_number"], "100", "{body:?}");
+}
