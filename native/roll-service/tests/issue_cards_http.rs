@@ -527,8 +527,6 @@ async fn issue_cards_find_cover_in_raw_provider_payload_image() {
         "https://comicvine.gamespot.com/a/uploads/scale_avatar/0/4/5677-5.jpg"
     );
 }
-<<<<<<< HEAD
-=======
 
 #[tokio::test]
 async fn issue_cards_expose_alias_and_provider_issue_number() {
@@ -926,4 +924,3 @@ async fn alias_only_patch_replays_identical_key_and_rejects_a_changed_payload() 
         "a conflicting stale write must not change the stored alias"
     );
 }
->>>>>>> origin/main

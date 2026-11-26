@@ -65,13 +65,9 @@ The inventory generator remains available for audits through the Documentation w
 
 Do not commit `docs/MARKDOWN_INVENTORY.md`; generate the inventory locally or download the Documentation workflow artifact when an audit requires it. <!-- docs-path-check: ignore -->
 
-<<<<<<< HEAD
-Link and code-path checks do not prove semantic accuracy. When runtime behavior changes, reconcile active documents against the router, generated contracts, real callers, configuration and workflows; record unresolved contradictions in the existing issue or PR handoff rather than presenting them as intended behavior.
-=======
 Link, anchor and code-path checks do not prove semantic accuracy. When runtime behavior changes, reconcile active documents against the router, generated contracts, real callers, configuration and workflows; record unresolved contradictions in the existing issue or PR handoff rather than presenting them as intended behavior.
 
 The anchor check resolves `#fragment` links against headings published by the target Markdown file, including setext headings, explicit HTML `id`/`name` attributes, and GitHub's duplicate-heading suffixes. Links inside fenced code examples and fragments on non-Markdown files (code symbols or line references) are illustrative and are not checked; keep real cross-document navigation in prose where the guard can validate it.
->>>>>>> origin/main
 
 For a full documentation reconciliation, classify every tracked Markdown file as active, historical/superseded, generated/fixture, frozen changelog provenance, or issue-scoped. The inventory generator's #879 disposition is ownership advice, not lifecycle proof. Correct active guidance in place; give stale historical material an explicit status and replacement link; keep issue plans and frozen changelogs as provenance rather than current instructions. In a Git checkout, both Markdown checks use the tracked-file scope so untracked/ignored overlays and locally excluded files cannot invalidate PR documentation; non-Git test fixtures retain a directory-walk fallback.
 

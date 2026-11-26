@@ -504,18 +504,13 @@ async fn current_active_thread(
         "SELECT t.id,t.title,t.format,t.issues_remaining,t.queue_position,
                t.total_issues,t.reading_progress,t.last_rating,t.next_unread_issue_id,
                i.issue_number,
-<<<<<<< HEAD
-=======
                NULLIF(BTRIM(i.issue_number_alias), '') AS issue_number_alias,
                provider.provider_issue_number,
->>>>>>> origin/main
                (SELECT count(*)::int FROM issues read WHERE read.thread_id=t.id AND read.status='read' AND read.merged_into_issue_id IS NULL),
                (SELECT e.result FROM events e WHERE e.session_id=$2 AND e.selected_thread_id=t.id
                  AND e.type='roll' ORDER BY e.timestamp DESC,e.id DESC LIMIT 1),
                {position} AS computed_position
          FROM threads t LEFT JOIN issues i ON i.id=t.next_unread_issue_id AND i.thread_id=t.id AND i.merged_into_issue_id IS NULL
-<<<<<<< HEAD
-=======
          LEFT JOIN LATERAL (
              SELECT CASE WHEN m.status='confirmed' THEN
                         NULLIF(BTRIM(COALESCE(
@@ -529,7 +524,6 @@ async fn current_active_thread(
              ORDER BY m.confidence DESC NULLS LAST, m.id DESC
              LIMIT 1
          ) provider ON true
->>>>>>> origin/main
          WHERE t.id=$1 AND t.user_id=$3",
     );
     let row = conn
