@@ -38,7 +38,7 @@ report.
 ## ComicVine provider limits
 
 ComicVine repair defines its own provider backoff
-(`native/roll-service/src/comicvine_repair.rs`):
+(`native/roll-service/src/comicvine_provider.rs`):
 
 - HTTP 420/429 responses are treated as provider rate limiting.
 - The work item becomes `deferred` with a bounded `retry_after` (local backoff,

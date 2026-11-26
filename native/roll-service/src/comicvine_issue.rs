@@ -51,7 +51,7 @@ WITH auth AS (
       -- late-arriving or repaired provider roster is picked up without a
       -- hot loop. Malformed/absent credit arrays count as empty (safe: a
       -- repair is enqueued rather than suppressing it). Mirrors
-      -- comicvine_repair::needs_provider_fetch exactly.
+      -- comicvine_provider::needs_provider_fetch exactly.
       WHEN m.provider_updated_at IS NOT NULL THEN
         (m.metadata->'raw_provider_payload'->>'date_last_updated' IS NOT NULL
           AND LEFT(replace(
@@ -730,7 +730,7 @@ mod tests {
 
     #[test]
     fn empty_credits_use_seven_day_recheck_and_provider_revision() {
-        // Reader policy must mirror comicvine_repair::needs_provider_fetch.
+        // Reader policy must mirror comicvine_provider::needs_provider_fetch.
         assert!(
             READ_SQL.contains("interval '7 days'"),
             "empty credits need a 7-day recheck, not a 30-day lock"

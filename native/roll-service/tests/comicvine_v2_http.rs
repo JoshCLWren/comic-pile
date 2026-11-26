@@ -3298,14 +3298,13 @@ async fn import_series_enqueues_durable_metadata_refresh_requests() {
     assert_eq!(preserved.get::<_, i64>(7), 1, "rating history is retained");
 }
 
-/// #5592: exercise the complete production read path used by Roll after a
-/// fresh import and an awaited repair batch. No Roll read is needed to enqueue
-/// the work, and no manual identity remap participates in hydration.
+/// Imported issues report `needs_hydration` and recover through the explicit
+/// synchronous `metadata:refresh` (Retry) path. No drain, enqueue, dispatch or
+/// remap participates, and the awaited response persists the fetched credits.
 #[tokio::test]
 async fn import_worker_and_roll_issue_read_show_hydrated_creators() {
     let (state, token, csrf, _user_id, _guard) = setup_user("cvv2-5592-roll").await;
     set_key(true);
-    std::env::set_var("CRON_SECRET", "test-secret");
     provider_ok(
         &state,
         json!({"results": {"id": 5593, "name": "Roll Hydration"}}),
@@ -3335,7 +3334,7 @@ async fn import_worker_and_roll_issue_read_show_hydrated_creators() {
 
     let (status, before) = send(&state, get(&intelligence_path, &token, &csrf)).await;
     assert_eq!(status, StatusCode::OK, "{before:?}");
-    assert_eq!(before["metadata_status"], "refresh_pending");
+    assert_eq!(before["metadata_status"], "needs_hydration");
     assert_eq!(before["creators"], json!([]));
 
     provider_ok(
@@ -3355,20 +3354,15 @@ async fn import_worker_and_roll_issue_read_show_hydrated_creators() {
             "date_last_updated": "2026-11-01 17:33:53"
         }}),
     );
-    let (status, drained) = send(
+    let retry_path = format!("/api/v2/comicvine/issues/{issue_id}/metadata:refresh");
+    let (status, retried) = send(
         &state,
-        Request::builder()
-            .method("GET")
-            .uri("/api/v2/maintenance/comicvine-metadata-repairs")
-            .header(header::AUTHORIZATION, "Bearer test-secret")
-            .body(Body::empty())
-            .unwrap(),
+        call("POST", &retry_path, &token, &csrf, None),
     )
     .await;
-    assert_eq!(status, StatusCode::OK, "{drained:?}");
-    assert_eq!(drained["claimed"], 1);
-    assert_eq!(drained["completed"], 1);
-    assert_eq!(drained["deferred"], 0);
+    assert_eq!(status, StatusCode::OK, "{retried:?}");
+    assert_eq!(retried["refreshed"], true);
+    assert_eq!(retried["comicvine_issue_id"], "4000-92001");
 
     let (status, after) = send(&state, get(&intelligence_path, &token, &csrf)).await;
     assert_eq!(status, StatusCode::OK, "{after:?}");

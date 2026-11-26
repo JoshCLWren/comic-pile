@@ -936,6 +936,20 @@ mod tests {
         })
     }
 
+    /// Push a canned provider response into the recording outbound fake.
+    fn push_deep_provider_result(state: &AppState, issue_id: u32, date_last_updated: &str) {
+        let body = json!({
+            "status_code": 1,
+            "results": deep_provider_result(issue_id, date_last_updated),
+        })
+        .to_string();
+        state.recording_fake().expect("recording provider").push_ok(
+            StatusCode::OK,
+            HeaderMap::new(),
+            Bytes::from(body),
+        );
+    }
+
 
 
 
@@ -1030,7 +1044,7 @@ mod tests {
             .expect("seed aware provider revision");
         drop(Object::take(connection));
         seed_request(&state, identity_id, "pending", 0, "0 seconds", None).await;
-        queue_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
+        push_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
 
         let job = claim(&state).await.expect("claim").expect("due job");
         assert_eq!(
@@ -1043,12 +1057,8 @@ mod tests {
         let connection = db::checkout(&state).await.expect("assert connection");
         let row = connection
             .query_one(
-                "SELECT e.metadata_json::text, e.provider_updated_at, \
-                        r.state, r.last_error, r.completed_at IS NOT NULL \
-                 FROM external_identities e \
-                 JOIN comicvine_metadata_refresh_requests r \
-                   ON r.external_identity_id = e.id \
-                 WHERE e.id = $1",
+                "SELECT e.metadata_json::text, e.provider_updated_at \
+                 FROM external_identities e WHERE e.id = $1",
                 &[&identity_id],
             )
             .await
@@ -1067,9 +1077,6 @@ mod tests {
                     .with_timezone(&chrono::Utc)
             )
         );
-        assert_eq!(row.get::<_, String>(2), "completed");
-        assert_eq!(row.get::<_, Option<String>>(3), None);
-        assert!(row.get::<_, bool>(4));
         drop(Object::take(connection));
 
         let calls = state.recording_fake().expect("recording provider").calls();
@@ -1125,7 +1132,7 @@ mod tests {
             .await
             .expect("seed committed owner mappings");
         drop(Object::take(connection));
-        queue_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
+        push_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
 
         hydrate_catalog_commit_with_key(
             &state,
@@ -1224,14 +1231,6 @@ mod tests {
             .await
             .expect("seed mapping");
         connection
-            .execute(
-                "INSERT INTO comicvine_metadata_refresh_requests \
-                   (external_identity_id, state, attempts, next_attempt_at, created_at, updated_at) \
-                 VALUES ($1, 'pending', 0, now(), now(), now())",
-                &[&identity_id],
-            )
-            .await
-            .expect("seed pending refresh");
         drop(Object::take(connection));
         identity_id
     }
@@ -1243,7 +1242,7 @@ mod tests {
         };
         let _guard = crate::test_support::reset_for_test(&state).await;
         let identity_id = seed_confirmed_identity(&state, "4000-29319", &json!({})).await;
-        queue_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
+        push_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
 
         hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123").await;
 
@@ -1262,16 +1261,6 @@ mod tests {
         assert_eq!(metadata["creator_credits"][0]["name"], "Writer");
         assert_eq!(metadata["creator_credits"][0]["role"], "writer");
         assert_eq!(metadata["story_arcs"][0]["name"], "Arc");
-        let request_state: String = connection
-            .query_one(
-                "SELECT state FROM comicvine_metadata_refresh_requests \
-                 WHERE external_identity_id = $1",
-                &[&identity_id],
-            )
-            .await
-            .expect("read refresh state")
-            .get(0);
-        assert_eq!(request_state, "completed");
         drop(Object::take(connection));
         let calls = state.recording_fake().expect("recording provider").calls();
         assert_eq!(calls.len(), 1);
@@ -1279,7 +1268,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn inline_hydration_failure_keeps_mapping_and_pending_refresh() {
+    async fn inline_hydration_failure_keeps_mapping_and_stored_metadata() {
         let Some(state) = crate::test_support::test_state(2).await else {
             return;
         };
@@ -1316,21 +1305,11 @@ mod tests {
             json!({}),
             "provider failure must not fabricate credits"
         );
-        let request_state: String = connection
-            .query_one(
-                "SELECT state FROM comicvine_metadata_refresh_requests \
-                 WHERE external_identity_id = $1",
-                &[&identity_id],
-            )
-            .await
-            .expect("read refresh state")
-            .get(0);
-        assert_eq!(request_state, "pending", "fallback refresh row must remain");
         drop(Object::take(connection));
     }
 
     #[tokio::test]
-    async fn inline_hydration_zero_credits_persists_truthful_terminal_marker() {
+    async fn inline_hydration_zero_credits_persists_truthful_empty_metadata() {
         let Some(state) = crate::test_support::test_state(2).await else {
             return;
         };
@@ -1348,16 +1327,6 @@ mod tests {
         hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123").await;
 
         let connection = db::checkout(&state).await.expect("assert connection");
-        let request_state: String = connection
-            .query_one(
-                "SELECT state FROM comicvine_metadata_refresh_requests \
-                 WHERE external_identity_id = $1",
-                &[&identity_id],
-            )
-            .await
-            .expect("read refresh state")
-            .get(0);
-        assert_eq!(request_state, "no_credits");
         let metadata: Value = serde_json::from_str(
             connection
                 .query_one(
@@ -1410,16 +1379,6 @@ mod tests {
         )
         .expect("metadata JSON");
         assert_eq!(metadata["creator_credits"][0]["name"], "Cached Writer");
-        let request_state: String = connection
-            .query_one(
-                "SELECT state FROM comicvine_metadata_refresh_requests \
-                 WHERE external_identity_id = $1",
-                &[&identity_id],
-            )
-            .await
-            .expect("read refresh state")
-            .get(0);
-        assert_eq!(request_state, "completed");
         drop(Object::take(connection));
     }
 

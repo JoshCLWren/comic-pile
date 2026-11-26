@@ -23,7 +23,7 @@
 use crate::{
     auth::AuthenticatedUser,
     catalog_commit::inline_hydration_budget,
-    comicvine_repair::{hydrate_confirmed_identity_inline, ProviderFailure},
+    comicvine_provider::{hydrate_confirmed_identity_inline, ProviderFailure},
     comicvine_resolution::SeriesImportStatusResponse,
     db,
     thread_issues::natural_issue_order,
@@ -662,9 +662,9 @@ fn encode_query(value: &str) -> String {
     encoded
 }
 
-/// Delegates to the one credential boundary in [`crate::comicvine_repair`].
+/// Delegates to the one credential boundary in [`crate::comicvine_provider`].
 fn provider_key() -> Option<String> {
-    crate::comicvine_repair::provider_api_key()
+    crate::comicvine_provider::provider_api_key()
 }
 
 // ---------------------------------------------------------------------------
@@ -1241,7 +1241,7 @@ pub async fn resolve_input(
             .call(
                 &state.outbound,
                 &format!("issue/4000-{id}"),
-                &format!("&field_list={}", crate::comicvine_repair::FIELDS),
+                &format!("&field_list={}", crate::comicvine_provider::FIELDS),
                 &key,
             )
             .await
@@ -1335,7 +1335,7 @@ async fn hydrate_confirmed_identity_if_configured(
     issue_id: i32,
     started: Instant,
 ) {
-    let Some(api_key) = crate::comicvine_repair::provider_api_key() else {
+    let Some(api_key) = crate::comicvine_provider::provider_api_key() else {
         return;
     };
     hydrate_confirmed_identity_inline(
