@@ -124,7 +124,9 @@ test.describe('Queue card text overflow (#1637)', () => {
         .evaluateAll((notes) => notes.map((note) => window.getComputedStyle(note).overflowWrap));
       expect(wrapModes).toHaveLength(2);
       for (const wrapMode of wrapModes) {
-        expect(wrapMode).toBe('anywhere');
+        // Both `anywhere` and `break-word` break long imported URLs; the
+        // contract is that the note wraps instead of bleeding into neighbors.
+        expect(['anywhere', 'break-word']).toContain(wrapMode);
       }
 
       const report = await page.evaluate(auditCardTextOverflow);
