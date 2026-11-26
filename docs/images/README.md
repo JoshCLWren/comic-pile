@@ -23,6 +23,8 @@ at production or a shared reader account.
 
 ## `social-preview.png`
 
+**Part of #3887.**
+
 The 1280×640 repository social preview delivered for #3887 is rendered from
 `social-preview.html` in this directory. It uses the actual Comic Pile logo mark
 copied verbatim from `static/favicon.svg` (a teal rounded die with five white
