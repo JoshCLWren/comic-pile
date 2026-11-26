@@ -1325,6 +1325,7 @@ async fn drain_authorized(
     // or stale refresh rows are discovered and enqueued so recovery does not
     // depend on remapping or a manual per-issue refresh. Keep this small so the
     // drain's primary claim/process budget stays predictable.
+    let missing_rows = reconcile_missing_refresh_rows(state, 100).await?;
     let reconcile = run_backfill(
         state,
         BackfillQuery {
@@ -1334,7 +1335,7 @@ async fn drain_authorized(
         },
     )
     .await?;
-    report.reconciled = reconcile.enqueued;
+    report.reconciled = missing_rows.saturating_add(reconcile.enqueued);
     report.queue_empty = report.claimed < BATCH_LIMIT as u32
         && report.reconciled == 0
         && !queue_has_non_terminal_work(state).await?;
