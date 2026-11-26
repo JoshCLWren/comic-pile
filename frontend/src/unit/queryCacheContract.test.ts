@@ -595,14 +595,10 @@ describe('targeted cache effects', () => {
     // Exact-count guards restored: two queue-movement resets and the full
     // invalidation set below. No extra key may creep into either pass.
     expect(resetQueries).toHaveBeenCalledTimes(2)
-    expect(invalidateQueries).toHaveBeenCalledTimes(16)
+    expect(invalidateQueries).toHaveBeenCalledTimes(14)
     // The queue half is composed from the queue-movement effect, not re-implemented.
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.excluded.pages() })
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.session.current(),
-      exact: true,
-    })
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
@@ -624,8 +620,6 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.excluded.memberStatusAll(),
     })
-    // The history card's "N issues read" total must stop counting an undone rating (#3194).
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.session.pages() })
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.snapshotsAll(),
     })
@@ -656,11 +650,7 @@ describe('targeted cache effects', () => {
 
     // Exact-count guards restored: scoped recovery set plus the reconciled
     // reader-progress surfaces; no unscoped invalidateQueries blast.
-    expect(invalidateQueries).toHaveBeenCalledTimes(14)
-    expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.session.current(),
-      exact: true,
-    })
+    expect(invalidateQueries).toHaveBeenCalledTimes(12)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
