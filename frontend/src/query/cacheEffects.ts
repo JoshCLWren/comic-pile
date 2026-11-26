@@ -515,6 +515,29 @@ export async function invalidateReadingPlansAfterCrossTabChange(
 }
 
 /**
+ * Refresh Reading List surfaces after another tab renames or re-formats a
+ * Thread (#5862).
+ *
+ * The editor seeds its draft from `customCBLs.detail` and the guide reader
+ * renders `customCBLs.reader`. Issue rows additionally prefer the cached
+ * batched IssueCard `thread_title` over the list entry's `series_name`
+ * (`ComicIssueCard`, `ReadingListEntryCard`), so the card projection must be
+ * refreshed too or the old title survives on every row even after the list
+ * itself is current. Cancel in-flight reads first so a request that started
+ * before the remote rename cannot be reused as fresh data.
+ */
+export async function invalidateReadingListsAfterCrossTabChange(
+  client: QueryClient,
+): Promise<void> {
+  await Promise.all([
+    client.cancelQueries({ queryKey: queryKeys.customCBLs.all }),
+    client.cancelQueries({ queryKey: queryKeys.issueCards.all }),
+  ])
+  await client.invalidateQueries({ queryKey: queryKeys.customCBLs.all })
+  await invalidateIssueCards(client)
+}
+
+/**
  * Refresh every surface a release-source follow or toggle rewrites.
  *
  * Both the create (follow) and enable/disable mutations invalidate the same
