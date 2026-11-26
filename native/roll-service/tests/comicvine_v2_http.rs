@@ -2895,7 +2895,9 @@ async fn import_worker_and_roll_issue_read_show_hydrated_creators() {
     let (status, retried) = send(&state, call("POST", &retry_path, &token, &csrf, None)).await;
     assert_eq!(status, StatusCode::OK, "{retried:?}");
     assert_eq!(retried["refreshed"], true);
-    assert_eq!(retried["comicvine_issue_id"], "4000-92001");
+    // The confirmed external identity stores the numeric ComicVine issue id;
+    // the `4000-` prefix belongs only to the provider URL.
+    assert_eq!(retried["comicvine_issue_id"], "92001");
 
     let (status, after) = send(&state, get(&intelligence_path, &token, &csrf)).await;
     assert_eq!(status, StatusCode::OK, "{after:?}");
