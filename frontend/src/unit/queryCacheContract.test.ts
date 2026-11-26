@@ -229,8 +229,10 @@ describe('targeted cache effects', () => {
     })
 
     // Exact-count guard: every invalidation below is intentional; an
-    // accidental extra key (or a dropped one) must fail this test.
-    expect(invalidateQueries).toHaveBeenCalledTimes(18)
+    // accidental extra key (or a dropped one) must fail this test. The retired
+    // paginated session index no longer contributes a `session.pages()` key
+    // (#4839, #4343).
+    expect(invalidateQueries).toHaveBeenCalledTimes(17)
     expect(invalidateQueries).not.toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
@@ -656,9 +658,10 @@ describe('targeted cache effects', () => {
     await invalidateAfterUndo(client)
 
     // Exact-count guards restored: two queue-movement resets and the full
-    // invalidation set below. No extra key may creep into either pass.
+    // invalidation set below. No extra key may creep into either pass; the
+    // retired `session.pages()` key is gone (#4839, #4343).
     expect(resetQueries).toHaveBeenCalledTimes(2)
-    expect(invalidateQueries).toHaveBeenCalledTimes(16)
+    expect(invalidateQueries).toHaveBeenCalledTimes(15)
     // The queue half is composed from the queue-movement effect, not re-implemented.
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.excluded.pages() })
