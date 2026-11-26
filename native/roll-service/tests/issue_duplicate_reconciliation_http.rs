@@ -1332,7 +1332,7 @@ async fn five_part_series_maps_provider_numbers_without_renumbering_or_extra_row
             .query_one(
                 "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status, created_at) \
                  VALUES ($1, 'Story arc ' || $2, 'comic', 1, $3, 'active', NOW()) RETURNING id",
-                &[&ctx.user_id, &authored, &(index as i32)],
+                &[&ctx.user_id, &authored, &(index as i32 + 1)],
             )
             .await
             .unwrap()
