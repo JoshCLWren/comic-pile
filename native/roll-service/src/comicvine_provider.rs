@@ -1558,7 +1558,12 @@ mod tests {
             .downcast_ref::<SlashEnforcingOutbound>()
             .expect("slash-enforcing fake");
 
-        for resource in ["volume/4050-5851001", "issue/4000-5851000", "issues", "search"] {
+        for resource in [
+            "volume/4050-5851001",
+            "issue/4000-5851000",
+            "issues",
+            "search",
+        ] {
             let exchange = provider_exchange(&outbound, resource, "", "TESTKEY123")
                 .await
                 .expect("canonical URL must not be redirected");
