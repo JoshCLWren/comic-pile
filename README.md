@@ -90,14 +90,17 @@ Edit `.env` as needed. The local defaults in `.env.example` already point at
 the bundled database:
 
 ```dotenv
-DATABASE_URL=postgresql+asyncpg://comicpile:comicpile_password@localhost:5435/comicpile
+DATABASE_URL=postgresql://comicpile:comicpile_password@localhost:5435/comicpile
 ```
+
+The migration runner also accepts `+asyncpg`/`+psycopg` suffixes, but the checked-in
+default is the plain `postgresql://` URL.
 
 ### 2. Environment variables
 
 | Variable | Required? | Notes |
 | --- | --- | --- |
-| `DATABASE_URL` | Yes | Used by the migration runner. Default local: `postgresql+asyncpg://comicpile:comicpile_password@localhost:5435/comicpile` |
+| `DATABASE_URL` | Yes | Used by the migration runner. Default local: `postgresql://comicpile:comicpile_password@localhost:5435/comicpile` |
 | `RUST_ROLL_DATABASE_URL` | Yes, for the local native service | Must use a plain `postgresql://` URL; the native config does not strip driver suffixes |
 | `SECRET_KEY` / `RUST_ROLL_JWT_SECRET` | Yes | JWT signing secret. Generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"` |
 | `RUST_ROLL_ENV` | No (defaults) | `development` / `production`; development must bind to a loopback address |
