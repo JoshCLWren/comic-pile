@@ -2268,7 +2268,9 @@ mod tests {
             .expect("seed second valid mapping for origin issue");
         let fake_outbound: std::sync::Arc<dyn crate::outbound::OutboundHttp> =
             std::sync::Arc::new(crate::outbound::RecordingFakeOutbound::new());
+        let limits = crate::comicvine_limits::ComicVineLimits::default();
         let plan = build_plan_db(
+            &limits,
             &fake_outbound,
             &connection,
             1,
