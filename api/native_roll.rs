@@ -2591,6 +2591,7 @@ mod issue_ingress_tests {
                      id integer PRIMARY KEY,
                      thread_id integer NOT NULL,
                      issue_number text NOT NULL,
+                     issue_number_alias varchar(50),
                      status text NOT NULL,
                      position integer NOT NULL,
                      read_at timestamptz,

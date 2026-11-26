@@ -34,6 +34,27 @@ const ROLL_RATING_THRESHOLD: f64 = 4.0;
 /// Roll default and the direct-read default this writer already used.
 const DEFAULT_NEW_READ_RATING: f64 = 3.5;
 
+/// Keep issue number display as `authored` with an optional alternate alias
+/// when they differ, e.g. `23 (#2)`.
+pub(crate) fn display_issue_number(authored: &str, alias: Option<&str>) -> String {
+    let alias = alias.map(str::trim).filter(|value| !value.is_empty());
+    let Some(alias) = alias else {
+        return authored.to_string();
+    };
+    if alias.eq_ignore_ascii_case(authored.trim()) {
+        authored.to_string()
+    } else {
+        format!("{authored} ({alias})")
+    }
+}
+
+fn deserialize_optional_alias<'de, D>(deserializer: D) -> Result<Option<Option<String>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(Some(Option::<String>::deserialize(deserializer)?))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct IssueReadRateRequest {
@@ -41,6 +62,10 @@ pub struct IssueReadRateRequest {
     pub status: Option<String>,
     /// Effective issue rating in 0.5-point steps. Omit to keep the stored rating.
     pub rating: Option<f64>,
+    /// Alternate overall/story number for the same physical comic (#4652).
+    /// Set to a string to assign, empty string or null to clear. Omit to leave unchanged.
+    #[serde(default, deserialize_with = "deserialize_optional_alias")]
+    pub issue_number_alias: Option<Option<String>>,
     /// Client-generated retry key. Same key/payload replays the same receipt.
     pub idempotency_key: String,
     /// Source of the issue action. Omitted or "direct" is a manual read from a
@@ -60,8 +85,14 @@ pub struct IssueCard {
     pub thread_id: i32,
     /// Display series/run title.
     pub thread_title: String,
-    /// Exact issue number within the run.
+    /// Authored issue number within the run (reader's label).
     pub issue_number: String,
+    /// Alternate overall/story-arc number when the physical comic has dual numbering.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issue_number_alias: Option<String>,
+    /// Display number combining authored and alias when present.
+    #[serde(default)]
+    pub display_issue_number: String,
     /// Stored read state (``read`` or ``unread``).
     pub status: String,
     /// UTC read timestamp, when read.
@@ -74,6 +105,9 @@ pub struct IssueCard {
     pub mapping_state: String,
     /// Confirmed provider issue identifier, never a provisional candidate.
     pub comicvine_issue_id: Option<String>,
+    /// Provider's own issue number from confirmed identity metadata, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_issue_number: Option<String>,
     /// Exact provider-supplied CDN URL. Null when unmapped; never image bytes.
     pub cover_image_url: Option<String>,
 }
@@ -158,8 +192,15 @@ pub(crate) fn validate(request: &IssueReadRateRequest) -> Result<(), ApiError> {
     if request.source.as_deref() == Some(ROLL_OFFER_SOURCE) && request.rating.is_none() {
         return Err(invalid("A Roll offer rating requires a rating"));
     }
-    if request.status.is_none() && request.rating.is_none() {
-        return Err(invalid("Provide status or rating"));
+    if let Some(Some(alias)) = &request.issue_number_alias {
+        let trimmed = alias.trim();
+        if trimmed.chars().count() > 50 {
+            return Err(invalid("Issue number alias must be 50 characters or fewer"));
+        }
+    }
+    if request.status.is_none() && request.rating.is_none() && request.issue_number_alias.is_none()
+    {
+        return Err(invalid("Provide status, rating, or issue_number_alias"));
     }
     Ok(())
 }
@@ -177,20 +218,35 @@ pub(crate) fn validate_cards(request: &IssueCardsRequest) -> Result<(), ApiError
 fn card_from_row(row: &tokio_postgres::Row) -> IssueCard {
     // Only a confirmed mapping may expose provider identity or a cover URL.
     // The exact provider-supplied URL is passed through without rewriting.
-    let mapping_state: String = row.get(7);
+    let mapping_state: String = row.get(8);
     let confirmed = mapping_state == "confirmed";
+    let issue_number: String = row.get(3);
+    let issue_number_alias: Option<String> = row
+        .get::<_, Option<String>>(4)
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let provider_issue_number: Option<String> = if confirmed {
+        row.get::<_, Option<String>>(10)
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+    } else {
+        None
+    };
     IssueCard {
         issue_id: row.get(0),
         thread_id: row.get(1),
         thread_title: row.get(2),
-        issue_number: row.get(3),
-        status: row.get(4),
-        read_at: row.get(5),
-        rating: row.get(6),
+        display_issue_number: display_issue_number(&issue_number, issue_number_alias.as_deref()),
+        issue_number,
+        issue_number_alias,
+        status: row.get(5),
+        read_at: row.get(6),
+        rating: row.get(7),
         has_confirmed_identity: confirmed,
         mapping_state,
-        comicvine_issue_id: if confirmed { row.get(8) } else { None },
-        cover_image_url: if confirmed { row.get(9) } else { None },
+        comicvine_issue_id: if confirmed { row.get(9) } else { None },
+        provider_issue_number,
+        cover_image_url: if confirmed { row.get(11) } else { None },
     }
 }
 
@@ -203,18 +259,27 @@ async fn card(
     // same fields and mapping precedence for every visible issue group.
     let row = tx
         .query_one(
-            "SELECT i.id, i.thread_id, t.title, i.issue_number, i.status,
+            "SELECT i.id, i.thread_id, t.title, i.issue_number,
+                NULLIF(BTRIM(i.issue_number_alias), '') AS issue_number_alias,
+                i.status,
                 to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'),
                 (SELECT e.rating FROM events e WHERE e.user_id=$2 AND e.issue_id=i.id
                     AND e.type='rate' AND e.rating IS NOT NULL
                     AND e.context->>'undone_by_snapshot_id' IS NULL
                     ORDER BY e.timestamp DESC, e.id DESC LIMIT 1),
                 COALESCE(mapping.status, 'unmapped'), mapping.external_id,
+                mapping.provider_issue_number,
                 mapping.cover_url
          FROM issues i
          JOIN threads t ON t.id=i.thread_id
          LEFT JOIN LATERAL (
              SELECT m.status, x.external_id,
+                 CASE WHEN m.status='confirmed' THEN
+                     NULLIF(BTRIM(COALESCE(
+                         x.metadata_json->>'issue_number',
+                         x.metadata_json#>>'{raw_provider_payload,issue_number}'
+                     )), '')
+                 ELSE NULL END AS provider_issue_number,
                  CASE WHEN m.status='confirmed' THEN
                      COALESCE(
                          NULLIF(BTRIM(x.metadata_json->>'image_url'), ''),
@@ -275,18 +340,27 @@ pub(crate) async fn cards(
     }
     let rows = connection
         .query(
-            "SELECT i.id, i.thread_id, t.title, i.issue_number, i.status,
+            "SELECT i.id, i.thread_id, t.title, i.issue_number,
+                NULLIF(BTRIM(i.issue_number_alias), '') AS issue_number_alias,
+                i.status,
                 to_char(i.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'),
                 (SELECT e.rating FROM events e WHERE e.user_id=$1 AND e.issue_id=i.id
                     AND e.type='rate' AND e.rating IS NOT NULL
                     AND e.context->>'undone_by_snapshot_id' IS NULL
                     ORDER BY e.timestamp DESC, e.id DESC LIMIT 1),
                 COALESCE(mapping.status, 'unmapped'), mapping.external_id,
+                mapping.provider_issue_number,
                 mapping.cover_url
          FROM issues i
          JOIN threads t ON t.id=i.thread_id
          LEFT JOIN LATERAL (
              SELECT m.status, x.external_id,
+                 CASE WHEN m.status='confirmed' THEN
+                     NULLIF(BTRIM(COALESCE(
+                         x.metadata_json->>'issue_number',
+                         x.metadata_json#>>'{raw_provider_payload,issue_number}'
+                     )), '')
+                 ELSE NULL END AS provider_issue_number,
                  CASE WHEN m.status='confirmed' THEN
                      COALESCE(
                          NULLIF(BTRIM(x.metadata_json->>'image_url'), ''),
@@ -778,10 +852,23 @@ pub(crate) async fn persist(
     .await
     .map_err(db::query_error)?;
 
+    let requested_alias = match &request.issue_number_alias {
+        Some(Some(value)) => {
+            let trimmed = value.trim();
+            if trimmed.is_empty() {
+                Some(None)
+            } else {
+                Some(Some(trimmed.to_string()))
+            }
+        }
+        Some(None) => Some(None),
+        None => None,
+    };
     let payload = json!({
         "issue_id": issue_id,
         "status": request.status,
         "rating": request.rating,
+        "issue_number_alias": requested_alias,
         "source": source,
     });
     // Lock the owner thread before the issue; owner transfers and concurrent
@@ -858,7 +945,8 @@ pub(crate) async fn persist(
 
     let issue = tx
         .query_one(
-            "SELECT status, issue_number, position, read_at::text, catalog_issue_id
+            "SELECT status, issue_number, position, read_at::text, catalog_issue_id,
+                    NULLIF(BTRIM(issue_number_alias), '')
              FROM issues
              WHERE id=$1 AND thread_id=$2 FOR UPDATE",
             &[&issue_id, &thread_id],
@@ -867,9 +955,11 @@ pub(crate) async fn persist(
         .map_err(db::query_error)?;
     let old_status: String = issue.get(0);
     let issue_number: String = issue.get(1);
+    let old_alias: Option<String> = issue.get(5);
     let issue_state = json!({
         "id": issue_id,
         "number": issue_number,
+        "issue_number_alias": old_alias,
         "status": old_status,
         "read_at": issue.get::<_, Option<String>>(3),
         "position": issue.get::<_, i32>(2),
@@ -917,12 +1007,16 @@ pub(crate) async fn persist(
     });
     let rating_changed = requested_rating.is_some_and(|rating| Some(rating) != old_rating);
     let final_rating = requested_rating.or(old_rating);
+    let alias_changed = requested_alias
+        .as_ref()
+        .is_some_and(|new_alias| new_alias.as_deref() != old_alias.as_deref());
 
     // If a direct Save already read the pending issue with this same rating,
     // completing its preserved Roll offer is still a real Roll command. A
     // second command with a fresh key after that offer has been retired is not:
     // otherwise it could step the die twice without any pending offer.
-    if source == ROLL_OFFER_SOURCE && !status_changed && !rating_changed {
+    // An alias-only change is a real write and must not be rejected as a stale offer.
+    if source == ROLL_OFFER_SOURCE && !status_changed && !rating_changed && !alias_changed {
         let pending = tx
             .query_opt(
                 "SELECT 1 FROM sessions
@@ -945,6 +1039,16 @@ pub(crate) async fn persist(
     let mut die_after: Option<i32> = None;
     let mut source_roll_event_id: Option<i32> = None;
 
+    if alias_changed {
+        let new_alias = requested_alias.clone().unwrap_or(None);
+        tx.execute(
+            "UPDATE issues SET issue_number_alias=$1 WHERE id=$2 AND thread_id=$3",
+            &[&new_alias, &issue_id, &thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
+
     if newly_read {
         tx.execute(
             "UPDATE issues SET status='read', read_at=NOW() WHERE id=$1 AND thread_id=$2",
@@ -964,7 +1068,7 @@ pub(crate) async fn persist(
     // Completing a preserved Roll offer must run its die and queue effects
     // even when a previous independent direct Save read this exact issue with
     // the same rating. Idempotency receipt replay is handled above.
-    if status_changed || rating_changed || source == ROLL_OFFER_SOURCE {
+    if status_changed || rating_changed || alias_changed || source == ROLL_OFFER_SOURCE {
         let count_row = tx
             .query_one(
                 "SELECT count(*)::int,
@@ -1221,6 +1325,7 @@ mod tests {
         IssueReadRateRequest {
             status: status.map(str::to_owned),
             rating,
+            issue_number_alias: None,
             idempotency_key: "direct-issue-012345".into(),
             source: None,
         }
@@ -1231,6 +1336,7 @@ mod tests {
         IssueReadRateRequest {
             status: Some("read".into()),
             rating,
+            issue_number_alias: None,
             idempotency_key: key.into(),
             source: Some(ROLL_OFFER_SOURCE.into()),
         }
@@ -1499,6 +1605,7 @@ mod tests {
         let correction = IssueReadRateRequest {
             status: None,
             rating: Some(3.5),
+            issue_number_alias: None,
             idempotency_key: "direct-issue-correction-01".into(),
             source: None,
         };
@@ -1544,6 +1651,7 @@ mod tests {
             &IssueReadRateRequest {
                 status: Some("read".into()),
                 rating: None,
+                issue_number_alias: None,
                 idempotency_key: "direct-issue-unblock-01".into(),
                 source: None,
             },
@@ -1587,6 +1695,7 @@ mod tests {
             &IssueReadRateRequest {
                 status: Some("unread".into()),
                 rating: None,
+                issue_number_alias: None,
                 idempotency_key: "direct-issue-reblock-01".into(),
                 source: None,
             },
@@ -1624,6 +1733,7 @@ mod tests {
             &IssueReadRateRequest {
                 status: Some("unread".into()),
                 rating: None,
+                issue_number_alias: None,
                 idempotency_key: "direct-issue-reactivate-01".into(),
                 source: None,
             },
@@ -1682,6 +1792,7 @@ mod tests {
             &IssueReadRateRequest {
                 status: Some("read".into()),
                 rating: None,
+                issue_number_alias: None,
                 idempotency_key: "direct-issue-default-01".into(),
                 source: None,
             },
@@ -2444,5 +2555,34 @@ mod tests {
             document["components"]["securitySchemes"]["HTTPBearer"]["scheme"],
             serde_json::json!("bearer")
         );
+    }
+
+    #[test]
+    fn display_issue_number_includes_distinct_alias() {
+        assert_eq!(display_issue_number("3", Some("100")), "3 (100)");
+        assert_eq!(display_issue_number("3", Some(" 100 ")), "3 (100)");
+        assert_eq!(display_issue_number("3", Some("3")), "3");
+        assert_eq!(display_issue_number("3", Some(" 3 ")), "3");
+        assert_eq!(display_issue_number("3", None), "3");
+        assert_eq!(display_issue_number("3", Some("")), "3");
+    }
+
+    #[test]
+    fn validate_accepts_alias_only_update() {
+        let mut req = request(None, None);
+        req.issue_number_alias = Some(Some("100".into()));
+        assert!(validate(&req).is_ok());
+        req.issue_number_alias = Some(Some("   ".into()));
+        assert!(validate(&req).is_ok());
+        req.issue_number_alias = Some(None);
+        assert!(validate(&req).is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_long_alias() {
+        let mut req = request(None, None);
+        req.issue_number_alias = Some(Some("x".repeat(51)));
+        let err = validate(&req).unwrap_err();
+        assert_eq!(err.status(), StatusCode::UNPROCESSABLE_ENTITY);
     }
 }

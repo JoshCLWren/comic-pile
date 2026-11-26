@@ -13,6 +13,10 @@ export interface ComicIssueActionInput {
   status?: 'read' | 'unread'
   /** Effective rating in 0.5-point steps. Omit to keep the stored rating. */
   rating?: number
+  /** Alternate overall/story number (#4652). Omit to leave unchanged. */
+  issueNumberAlias?: string | null
+  /** True when issueNumberAlias is intentionally set/cleared. */
+  issueNumberAliasProvided?: boolean
 }
 
 /**
@@ -39,17 +43,39 @@ export function useComicIssueActions(
   }, [options?.onMutated])
   // One in-flight intent per card; kept across the await so Cancel-then-retry
   // reuses the key while a different payload starts a fresh intent.
-  const unresolvedRef = useRef<{ status?: 'read' | 'unread'; rating?: number; key: string } | null>(null)
+  const unresolvedRef = useRef<{
+    status?: 'read' | 'unread'
+    rating?: number
+    issueNumberAlias?: string | null
+    issueNumberAliasProvided?: boolean
+    key: string
+  } | null>(null)
 
   const mutation = useMutation({
     mutationFn: (input: ComicIssueActionInput) => {
       const previous = unresolvedRef.current
       const key =
-        previous && previous.status === input.status && previous.rating === input.rating
+        previous
+        && previous.status === input.status
+        && previous.rating === input.rating
+        && previous.issueNumberAliasProvided === input.issueNumberAliasProvided
+        && previous.issueNumberAlias === input.issueNumberAlias
           ? previous.key
           : newDirectIssueKey()
-      unresolvedRef.current = { status: input.status, rating: input.rating, key }
-      return issueCardsApi.patchIssue(issueId, { status: input.status, rating: input.rating, idempotencyKey: key })
+      unresolvedRef.current = {
+        status: input.status,
+        rating: input.rating,
+        issueNumberAlias: input.issueNumberAlias,
+        issueNumberAliasProvided: input.issueNumberAliasProvided,
+        key,
+      }
+      return issueCardsApi.patchIssue(issueId, {
+        status: input.status,
+        rating: input.rating,
+        issueNumberAlias: input.issueNumberAlias,
+        issueNumberAliasProvided: input.issueNumberAliasProvided,
+        idempotencyKey: key,
+      })
     },
     onSuccess: async (response) => {
       unresolvedRef.current = null
@@ -74,6 +100,9 @@ export function useComicIssueActions(
     updateRating: (rating: number) => mutation.mutateAsync({ rating }),
     /** Mark the exact issue unread (explicit correction, not a reopen). */
     markUnread: () => mutation.mutateAsync({ status: 'unread' }),
+    /** Set or clear the alternate overall/story number (#4652). */
+    updateIssueNumberAlias: (alias: string | null) =>
+      mutation.mutateAsync({ issueNumberAlias: alias, issueNumberAliasProvided: true }),
   }
 }
 

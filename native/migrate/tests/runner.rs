@@ -177,7 +177,11 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
     let report = run(&mut client).await.unwrap();
     assert_eq!(
         (report.applied, report.adopted),
+<<<<<<< HEAD
         (versions_after(0), vec![])
+=======
+        (vec![1, 2, 3, 4, 5], vec![])
+>>>>>>> origin/main
     );
 
     let stamp: String = client
@@ -192,7 +196,11 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
         .await
         .unwrap()
         .get(0);
+<<<<<<< HEAD
     assert_eq!(recorded, embedded_versions().len() as i64);
+=======
+    assert_eq!(recorded, 5);
+>>>>>>> origin/main
 
     let threads: bool = client
         .query_one("SELECT to_regclass('public.threads') IS NOT NULL", &[])
@@ -229,6 +237,21 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
         "V3 must add custom_cbl_list_id to reading_plan_release_sources"
     );
 
+    let alias_col: bool = client
+        .query_one(
+            "SELECT EXISTS (\
+               SELECT 1 FROM information_schema.columns \
+               WHERE table_schema = 'public' \
+                 AND table_name = 'issues' \
+                 AND column_name = 'issue_number_alias'\
+             )",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert!(alias_col, "V5 must add issue_number_alias to issues");
+
     let again = run(&mut client).await.unwrap();
     assert_eq!((again.applied, again.adopted), (vec![], vec![]));
     drop(client);
@@ -255,7 +278,11 @@ async fn alembic_database_at_head_is_adopted_without_rerunning() {
     let report = run(&mut client).await.unwrap();
     assert_eq!(
         (report.applied, report.adopted),
+<<<<<<< HEAD
         (versions_after(2), versions_through(2))
+=======
+        (vec![3, 4, 5], vec![1, 2])
+>>>>>>> origin/main
     );
 
     let recorded: bool = client
@@ -329,7 +356,11 @@ async fn release_list_backfill_preserves_subscriptions_and_requires_unambiguous_
     let report = run(&mut client).await.unwrap();
     assert_eq!(
         (report.applied, report.adopted),
+<<<<<<< HEAD
         (versions_after(2), versions_through(2))
+=======
+        (vec![3, 4, 5], vec![1, 2])
+>>>>>>> origin/main
     );
 
     let rows = client
@@ -369,7 +400,11 @@ async fn alembic_database_at_baseline_head_adopts_baseline_and_runs_pending() {
     let report = run(&mut client).await.unwrap();
     assert_eq!(
         (report.applied, report.adopted),
+<<<<<<< HEAD
         (versions_after(1), versions_through(1))
+=======
+        (vec![2, 3, 4, 5], vec![1])
+>>>>>>> origin/main
     );
 
     let queue_groups: bool = client
@@ -529,7 +564,11 @@ async fn alembic_baseline_with_stale_deferred_checks_is_repaired_before_stamp() 
     let report = run(&mut client).await.unwrap();
     assert_eq!(
         (report.applied, report.adopted),
+<<<<<<< HEAD
         (versions_after(1), versions_through(1))
+=======
+        (vec![2, 3, 4, 5], vec![1])
+>>>>>>> origin/main
     );
 
     let stamp: String = client

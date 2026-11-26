@@ -87,6 +87,8 @@ export function useRollPendingSession({ state, bootstrap, rollPool }: UseRollPen
         reading_progress: pendingMetadata.reading_progress ?? null,
         issue_id: pendingMetadata.issue_id ?? null,
         issue_number: pendingMetadata.issue_number ?? null,
+        issue_number_alias: pendingMetadata.issue_number_alias ?? null,
+        provider_issue_number: pendingMetadata.provider_issue_number ?? null,
         next_issue_id: pendingMetadata.next_issue_id ?? null,
         next_issue_number: pendingMetadata.next_issue_number ?? null,
         last_rolled_result: pendingMetadata.last_rolled_result ?? pendingResult,

@@ -3769,6 +3769,8 @@ export interface components {
             /** Format: int32 */
             issue_id?: number | null;
             issue_number?: string | null;
+            /** @description Alternate overall/story number for the same physical comic (#4652). */
+            issue_number_alias?: string | null;
             /** Format: int32 */
             issues_read: number;
             /** Format: int32 */
@@ -3780,6 +3782,8 @@ export interface components {
             /** Format: int32 */
             next_issue_id?: number | null;
             next_issue_number?: string | null;
+            /** @description Provider's own issue number, only from a confirmed identity (#4652). */
+            provider_issue_number?: string | null;
             /** Format: int32 */
             queue_position: number;
             reading_progress?: string | null;
@@ -6059,6 +6063,8 @@ export interface components {
             comicvine_issue_id?: string | null;
             /** @description Exact provider-supplied CDN URL. Null when unmapped; never image bytes. */
             cover_image_url?: string | null;
+            /** @description Display number combining authored and alias when present. */
+            display_issue_number?: string;
             /** @description Whether a confirmed ComicVine issue mapping exists. */
             has_confirmed_identity: boolean;
             /**
@@ -6066,10 +6072,14 @@ export interface components {
              * @description Owned issue identifier.
              */
             issue_id: number;
-            /** @description Exact issue number within the run. */
+            /** @description Authored issue number within the run (reader's label). */
             issue_number: string;
+            /** @description Alternate overall/story-arc number when the physical comic has dual numbering. */
+            issue_number_alias?: string | null;
             /** @description Stored mapping state (``confirmed``, ``candidate``, ...). */
             mapping_state: string;
+            /** @description Provider's own issue number from confirmed identity metadata, when known. */
+            provider_issue_number?: string | null;
             /**
              * Format: double
              * @description Effective per-issue saved rating.
@@ -6139,6 +6149,7 @@ export interface components {
             /** Format: int32 */
             id: number;
             issue_number: string;
+            issue_number_alias?: string | null;
             /** Format: int32 */
             position: number;
             read_at?: string | null;
@@ -6246,6 +6257,11 @@ export interface components {
         IssueReadRateRequest: {
             /** @description Client-generated retry key. Same key/payload replays the same receipt. */
             idempotency_key: string;
+            /**
+             * @description Alternate overall/story number for the same physical comic (#4652).
+             *     Set to a string to assign, empty string or null to clear. Omit to leave unchanged.
+             */
+            issue_number_alias?: string | null;
             /**
              * Format: double
              * @description Effective issue rating in 0.5-point steps. Omit to keep the stored rating.
