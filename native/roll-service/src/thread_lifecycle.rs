@@ -548,9 +548,7 @@ struct OwnedThread {
     issues_remaining: i32,
     total_issues: Option<i32>,
     reading_progress: Option<String>,
-    next_unread_issue_id: Option<i32>,
     status: String,
-    is_blocked: bool,
     queue_position: i32,
 }
 
@@ -563,7 +561,7 @@ async fn find_owned(
     let id = i32::try_from(thread_id).map_err(|_| not_found(thread_id))?;
     let sql = format!(
         "SELECT id, title, format, issues_remaining, total_issues, reading_progress,
-                next_unread_issue_id, status, is_blocked, queue_position
+                status, queue_position
          FROM threads WHERE id = $1 AND user_id = $2{}",
         if for_update { " FOR UPDATE" } else { "" }
     );
@@ -579,10 +577,8 @@ async fn find_owned(
         issues_remaining: row.get(3),
         total_issues: row.get(4),
         reading_progress: row.get(5),
-        next_unread_issue_id: row.get(6),
-        status: row.get(7),
-        is_blocked: row.get(8),
-        queue_position: row.get(9),
+        status: row.get(6),
+        queue_position: row.get(7),
     })
 }
 
