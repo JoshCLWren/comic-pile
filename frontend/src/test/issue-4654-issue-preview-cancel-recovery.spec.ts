@@ -171,3 +171,67 @@ test('Edit Series failed preview can be retried from the error modal', async ({ 
   await expect(page.getByTestId('edit-series-preview-modal')).toBeVisible()
   await expect(errorModal).toBeHidden()
 })
+
+test('committed Edit Series add offers browser Undo of the pre-edit snapshot', async ({ page }) => {
+  const suffix = `${Date.now()}`
+  await registerUser(page, {
+    username: `undopreview${suffix}`,
+    email: `undopreview${suffix}@example.com`,
+    password: 'PreviewTest123!',
+  })
+  const threadTitle = `Undo Preview 4654 ${suffix}`
+  const thread = await createThread(page, {
+    title: threadTitle,
+    format: 'comic',
+    total_issues: 1,
+    issues_remaining: 1,
+  })
+
+  await page.route(`**/api/v2/threads/${thread.id}/issues/preview`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(previewBody(thread.id, threadTitle)),
+    })
+  })
+  await page.route(`**/api/v2/threads/${thread.id}/issues`, async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue()
+      return
+    }
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        issues: [{ id: 8, thread_id: thread.id, issue_number: '101', status: 'unread' }],
+        total_count: 2,
+        page_size: 1,
+        next_page_token: null,
+        undo_session_id: 123,
+        undo_snapshot_id: 456,
+      }),
+    })
+  })
+  let undoCalls = 0
+  await page.route('**/api/v2/undo/123/snapshots/456/restore', async (route) => {
+    undoCalls += 1
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
+  })
+
+  await page.goto(`/thread/${thread.id}`)
+  await page.getByRole('button', { name: 'Edit', exact: true }).click()
+  const editor = page.getByRole('dialog', { name: 'Edit Series', exact: true })
+  await editor.getByTestId('issue-add-input').fill('101')
+  await editor.getByTestId('issue-add-button').click()
+  const modal = page.getByTestId('edit-series-preview-modal')
+  await expect(modal).toBeVisible()
+  await modal.getByTestId('confirm-preview-add').click()
+  await expect(modal).toBeHidden()
+  await editor.getByRole('button', { name: 'Save Changes' }).click()
+
+  const undoBar = page.getByTestId('edit-series-undo-bar')
+  await expect(undoBar).toBeVisible({ timeout: 10000 })
+  await undoBar.getByTestId('undo-edit-add').click()
+  await expect.poll(() => undoCalls).toBe(1)
+  await expect(undoBar).toBeHidden()
+})
