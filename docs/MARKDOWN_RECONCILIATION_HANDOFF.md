@@ -20,15 +20,18 @@ accounting, the sources of truth consulted, the validation results and the
 remaining delivery discrepancies. Merging this PR adds that evidence; it does not
 re-land business logic, API contracts, schemas or factory behavior.
 
-**Bare-head code-path artifact (recorded, not masked).** The code-path guard run
-directly on the bare branch head reports three stale paths in
-`COMICVINE_RUNTIME_FALLBACK.md` (the native ComicVine provider module, twice, and
-the V8 ledger-retirement migration). Those files were added on `main` by #5846
-and are absent from this older branch snapshot. Required CI at the exact head is
-green because the `pull_request` check checks out the PR merge tree, where the
-paths exist. The honest resolution is delivery onto current `main`, not adding
-`docs-path-check` suppressions to a guard that is otherwise catching real drift.
-No test, guard or assertion was weakened for this handoff.
+**Stale-base artifact and its resolution.** At reviewed head `24ee72c` the branch
+was 222 commits behind `main`, so the bare-head code-path guard reported three
+paths in `COMICVINE_RUNTIME_FALLBACK.md` (the native ComicVine provider module,
+twice, and the V8 ledger-retirement migration) as stale: those files exist on
+`main` but were absent from the old branch snapshot. The `Docs code-path check`
+job checks out `pull_request.head.sha`, so it failed on that bare head and the
+`VERCEL_DEPLOYMENT.md` section conflicted with `main`. Per F1's first option the
+branch was synchronized with current `main` (no-commit merge, conflict resolved
+by keeping `main`'s retired-background-repair text plus this handoff's navigation
+link). The resulting tree differs from `main` only by this handoff and its two
+links; the code-path guard passes on the bare head and no conflict remains. No
+`docs-path-check` suppression, test weakening or assertion change was used.
 
 ## Documents changed by this PR and stale claims corrected
 
@@ -69,23 +72,24 @@ production verification was attempted in this review runtime.
 
 Generated with `python3 scripts/generate_markdown_inventory.py --output
 /tmp/MARKDOWN_INVENTORY_5757.md` (the same generator the Documentation workflow
-publishes as an artifact). At generation time `git ls-files '*.md'` reported 291
-tracked Markdown files, before this handoff file was added (it becomes the 292nd
-on delivery); the generator excludes `docs/MARKDOWN_INVENTORY.md` so regeneration
-is idempotent. Disposition totals from the generated table:
+publishes as an artifact). On the synchronized head `git ls-files '*.md'` reports
+292 tracked Markdown files, including this handoff; the generator excludes
+`docs/MARKDOWN_INVENTORY.md` so regeneration is idempotent. Disposition totals
+counted from the generated 292-row table:
 
 | Disposition | Files |
 | --- | --- |
 | keep (active/canonical) | 83 |
-| historical — preserve | 198 |
+| historical — preserve | 199 |
 | superseded — preserve with link | 8 |
 | generated — test fixture | 2 |
 
 Historical prefixes (`docs/issue-plans/`, `docs/changelog*`) and generated output
 prefixes are excluded from the code-path guard by existing tooling, not by new
 rules. No active document is left pointing at a retired Python API handler or a
-deleted source path; the only unresolved discrepancies are the duplicate-delivery
-relationship and the bare-head code-path artifact recorded above.
+deleted source path; the only remaining discrepancy is the duplicate-delivery
+relationship (the reconciled doc content already landed on `main` through #5846),
+which this PR retains solely as the A19/A28 audit evidence.
 
 ## A28 — validation and handoff
 
