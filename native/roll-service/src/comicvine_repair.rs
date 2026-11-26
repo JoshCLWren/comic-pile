@@ -513,7 +513,8 @@ pub(crate) async fn catalog_volume_roster(
         .filter(|v| *v > 0)
         .ok_or_else(unavailable)?;
     let api_key = provider_api_key().ok_or_else(unavailable)?;
-    let volume = provider_response(outbound, &format!("volume/4050-{volume_id}"), "", &api_key)
+    let volume = limits
+        .call(outbound, &format!("volume/4050-{volume_id}"), "", &api_key)
         .await
         .map_err(|_| unavailable())?;
     let volume_info = volume
@@ -535,7 +536,8 @@ pub(crate) async fn catalog_volume_roster(
     let mut expected_total: Option<usize> = None;
     loop {
         let query = format!("&filter=volume:{volume_id}&limit=100&offset={offset}");
-        let page = provider_response(outbound, "issues", &query, &api_key)
+        let page = limits
+            .call(outbound, "issues", &query, &api_key)
             .await
             .map_err(|_| unavailable())?;
         let results = page
