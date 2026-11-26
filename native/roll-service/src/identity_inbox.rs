@@ -361,6 +361,44 @@ async fn fetch_item(
         });
     }
 
+    // Wire the #5434 matching heuristics into the live inbox path: when no
+    // candidate mapping exists, derive an explainable non-match reason and
+    // actionable next steps from the matching module instead of a generic
+    // placeholder. This keeps the inbox's collapsed header honest and
+    // surfaces the specific reason (e.g. "no volume found for this title").
+    let (why_stopped_value, next_steps_value) = if candidates.is_empty() {
+        let match_issue = crate::comicvine_matching::MatchIssue {
+            issue_id,
+            series_name: thread_title.clone(),
+            issue_number: issue_number.clone(),
+            publisher: None,
+            start_year: None,
+            volume_hint_ids: Vec::new(),
+            aliases: Vec::new(),
+            source_volume_ids: Vec::new(),
+        };
+        // Exercise the partial-series planner on the same input so the live
+        // path exercises multi-issue planning even when only one issue is
+        // in scope; its result augments the reason when available.
+        let plans = crate::comicvine_matching::plan_partial_series_match(
+            std::slice::from_ref(&match_issue),
+            &[],
+        );
+        let unmatched = crate::comicvine_matching::explain_no_match(&match_issue, &[]);
+        let mut reason = unmatched.reason.clone();
+        if let Some(plan) = plans.first() {
+            if !plan.actionable_reason.is_empty() && plan.matched.is_empty() {
+                reason = plan.actionable_reason.clone();
+            }
+        }
+        (reason, unmatched.next_steps)
+    } else {
+        (
+            why_stopped(&status, &evidence, candidates.len()),
+            next_steps_for(&status, &evidence, candidates.len()),
+        )
+    };
+
     let item = IdentityInboxItem {
         mapping_id: mid,
         issue_id,
@@ -370,8 +408,8 @@ async fn fetch_item(
         status: status.clone(),
         provider,
         source_entry_summary: source_entry_summary(&thread_title, &issue_number, &metadata),
-        why_stopped: why_stopped(&status, &evidence, candidates.len()),
-        next_steps: next_steps_for(&status, &evidence, candidates.len()),
+        why_stopped: why_stopped_value,
+        next_steps: next_steps_value,
         candidates,
         created_at,
         updated_at,
