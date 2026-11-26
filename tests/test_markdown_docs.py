@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 
 from scripts.check_markdown_docs import (
+    find_broken_anchors,
     find_broken_local_links,
     find_unapproved_root_markdown,
     iter_markdown_files,
@@ -98,6 +99,117 @@ def test_find_broken_local_links_reports_undefined_explicit_references(tmp_path:
     assert "docs/README.md: undefined reference: missing-ref" in errors
     assert "docs/README.md: undefined reference: collapsed" in errors
     assert all("ordinary prose" not in error for error in errors)
+
+
+def test_find_broken_anchors_accepts_same_and_cross_document_headings(tmp_path: Path) -> None:
+    """Resolve own-document, cross-document, duplicate, and encoded heading fragments.
+
+    Args:
+        tmp_path: Temporary repository root supplied by pytest.
+    """
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "target.md").write_text(
+        "# Title\n\n## Status / amendments (2026-11-18)\n\n## Duplicate\n\n## Duplicate\n",
+        encoding="utf-8",
+    )
+    source = docs / "README.md"
+    source.write_text(
+        "# Own heading\n\n"
+        "[same](#own-heading) [cross](target.md#status--amendments-2026-11-18) "
+        "[duplicate](target.md#duplicate-1) "
+        "[encoded](target.md#status%2F%20amendments%20%282026-11-18%29)\n",
+        encoding="utf-8",
+    )
+
+    assert find_broken_anchors(tmp_path, [source]) == []
+
+
+def test_find_broken_anchors_reports_unresolved_fragments(tmp_path: Path) -> None:
+    """Report missing heading fragments without weakening the file-link check.
+
+    Args:
+        tmp_path: Temporary repository root supplied by pytest.
+    """
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "target.md").write_text("# Title\n", encoding="utf-8")
+    source = docs / "README.md"
+    source.write_text(
+        "[same](#missing) [cross](target.md#nope) [reference][ref] "
+        "[external](https://example.com/page#fragment)\n\n"
+        "[ref]: target.md#absent\n",
+        encoding="utf-8",
+    )
+
+    errors = find_broken_anchors(tmp_path, [source])
+
+    assert "docs/README.md: broken anchor: #missing" in errors
+    assert "docs/README.md: broken anchor: target.md#nope" in errors
+    assert "docs/README.md: broken anchor: target.md#absent" in errors
+    assert all("external" not in error for error in errors)
+
+
+def test_find_broken_anchors_ignores_missing_files_fences_and_code_fragments(
+    tmp_path: Path,
+) -> None:
+    """Leave missing files to the link check, ignore fences and non-Markdown fragments.
+
+    Args:
+        tmp_path: Temporary repository root supplied by pytest.
+    """
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "target.md").write_text("# Target\n", encoding="utf-8")
+    (docs / "lib.rs").write_text("pub fn helper() {}\n", encoding="utf-8")
+    source = docs / "README.md"
+    source.write_text(
+        "[missing](gone.md#section) [code](lib.rs#helper) [real](target.md#bad)\n\n"
+        "```markdown\n## Fenced heading\n[example](target.md#nonexistent) [ref][fenced-ref]\n```\n\n"
+        "[fenced-ref]: target.md#also-nonexistent\n\n"
+        "[fenced](#fenced-heading)\n",
+        encoding="utf-8",
+    )
+
+    errors = find_broken_anchors(tmp_path, [source])
+
+    assert errors == ["docs/README.md: broken anchor: target.md#bad"]
+    assert (
+        "docs/README.md: missing target: gone.md#section"
+        in find_broken_local_links(tmp_path, [source])
+    )
+
+
+def test_find_broken_anchors_accepts_setext_and_html_heading_anchors(tmp_path: Path) -> None:
+    """Resolve setext headings and explicit id/name attributes on HTML elements.
+
+    Args:
+        tmp_path: Temporary repository root supplied by pytest.
+    """
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "target.md").write_text(
+        "Setext Title\n============\n\n"
+        "## Hyphen Setext\n----------------\n\n"
+        '<h2 id="explicit-html">HTML heading</h2>\n\n'
+        '<a name="legacy-anchor"></a>\n',
+        encoding="utf-8",
+    )
+    source = docs / "README.md"
+    source.write_text(
+        "[setext](target.md#setext-title) [hyphen](target.md#hyphen-setext) "
+        '[html](target.md#explicit-html) [legacy](target.md#legacy-anchor)\n',
+        encoding="utf-8",
+    )
+
+    assert find_broken_anchors(tmp_path, [source]) == []
+
+
+def test_current_repository_has_no_broken_anchors() -> None:
+    """Keep cross-document navigation valid as active documents move and headings change."""
+    root = Path(__file__).parents[1]
+
+    assert find_broken_anchors(root, iter_markdown_files(root)) == []
 
 
 def test_iter_markdown_files_ignores_generated_directories(tmp_path: Path) -> None:
