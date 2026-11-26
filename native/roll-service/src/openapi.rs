@@ -67,6 +67,7 @@ use utoipa::OpenApi;
         crate::issue_mutation::delete_issue_documentation,
         crate::issue_mutation::issue_order_documentation,
         crate::issue_mutation::preview_issue_create_documentation,
+        crate::issue_mutation::preview_issue_structure_documentation,
         crate::issue_read::get_issue_documentation,
         crate::issue_read::get_issue_dependencies_documentation,
         crate::issue_read::get_thread_issue_dependencies_documentation,

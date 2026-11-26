@@ -167,6 +167,26 @@ pub fn issue_order_documentation() {}
 #[allow(dead_code)]
 pub fn preview_issue_create_documentation() {}
 
+/// Documentation-only operation for the delete/reorder structure preview.
+#[utoipa::path(
+    post,
+    path = "/api/v2/threads/{thread_id}/issues/structure-preview",
+    tag = "issues",
+    description = "Preview a delete or reorder edit before commit. Returns exact before/after issues, list memberships, read/rating/identity state, affected Queue/Roll frontier, duplicate risk and projected graph conflicts.",
+    params(("thread_id" = i32, Path, description = "Owned Thread identifier")),
+    request_body = PreviewIssueStructureRequest,
+    responses(
+        (status = 200, description = "Preview outcome", body = IssueEditPreviewResponse),
+        (status = 400, description = "Invalid operation or issue set"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Thread or issue not found"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn preview_issue_structure_documentation() {}
+
 fn names(inputs: &option_inputs::OptionInputs) -> BTreeMap<i32, String> {
     inputs
         .lists
