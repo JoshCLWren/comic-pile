@@ -525,6 +525,10 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     if (options?.announcement) {
       setReorderAnnouncement(options.announcement)
     }
+    // The queued mutation is applied to `issues` synchronously, so the draft
+    // projection must be released in the same commit (#5852). Keeping it would
+    // pin the displayed order to a stale snapshot on the next move.
+    setDraftReorder(null)
     enqueueIssueMutation({
       type: 'reorder',
       issueIds: nextIssueIds,
