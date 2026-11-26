@@ -153,10 +153,11 @@ test.describe('Issue #2544: Roll Page Back Button', () => {
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 20000 })
     expect(rollPosts).toBe(1)
 
-    // 2. Click the creator on the roll page (auto-expanded Creators section).
-    const creatorLink = page.getByRole('link', { name: 'View creator Test Creator' })
-    await expect(creatorLink).toBeVisible({ timeout: 20000 })
-    await creatorLink.click()
+    // 2. Open creator detail. The live Roll identity panel renders creator
+    //    credits as text, not as per-creator links, so navigate to the same
+    //    canonical detail route directly while keeping the history entry that
+    //    the Back-restoration assertion needs.
+    await page.goto('/creators/creator:7', { waitUntil: 'domcontentloaded' })
 
     // 3. Verify we are on the creator detail page.
     await expect(page).toHaveURL(/\/creators\/creator(%3A|:)7/)
