@@ -1006,12 +1006,16 @@ pub(crate) async fn persist(
     });
     let rating_changed = requested_rating.is_some_and(|rating| Some(rating) != old_rating);
     let final_rating = requested_rating.or(old_rating);
+    let alias_changed = requested_alias
+        .as_ref()
+        .is_some_and(|new_alias| new_alias.as_deref() != old_alias.as_deref());
 
     // If a direct Save already read the pending issue with this same rating,
     // completing its preserved Roll offer is still a real Roll command. A
     // second command with a fresh key after that offer has been retired is not:
     // otherwise it could step the die twice without any pending offer.
-    if source == ROLL_OFFER_SOURCE && !status_changed && !rating_changed {
+    // An alias-only change is a real write and must not be rejected as a stale offer.
+    if source == ROLL_OFFER_SOURCE && !status_changed && !rating_changed && !alias_changed {
         let pending = tx
             .query_opt(
                 "SELECT 1 FROM sessions
@@ -1034,6 +1038,16 @@ pub(crate) async fn persist(
     let mut die_after: Option<i32> = None;
     let mut source_roll_event_id: Option<i32> = None;
 
+    if alias_changed {
+        let new_alias = requested_alias.clone().unwrap_or(None);
+        tx.execute(
+            "UPDATE issues SET issue_number_alias=$1 WHERE id=$2 AND thread_id=$3",
+            &[&new_alias, &issue_id, &thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
+
     if newly_read {
         tx.execute(
             "UPDATE issues SET status='read', read_at=NOW() WHERE id=$1 AND thread_id=$2",
@@ -1053,7 +1067,7 @@ pub(crate) async fn persist(
     // Completing a preserved Roll offer must run its die and queue effects
     // even when a previous independent direct Save read this exact issue with
     // the same rating. Idempotency receipt replay is handled above.
-    if status_changed || rating_changed || source == ROLL_OFFER_SOURCE {
+    if status_changed || rating_changed || alias_changed || source == ROLL_OFFER_SOURCE {
         let count_row = tx
             .query_one(
                 "SELECT count(*)::int,
@@ -1588,6 +1602,7 @@ mod tests {
         let correction = IssueReadRateRequest {
             status: None,
             rating: Some(3.5),
+            issue_number_alias: None,
             idempotency_key: "direct-issue-correction-01".into(),
             source: None,
         };
@@ -1633,6 +1648,7 @@ mod tests {
             &IssueReadRateRequest {
                 status: Some("read".into()),
                 rating: None,
+            issue_number_alias: None,
                 idempotency_key: "direct-issue-unblock-01".into(),
                 source: None,
             },
@@ -1676,6 +1692,7 @@ mod tests {
             &IssueReadRateRequest {
                 status: Some("unread".into()),
                 rating: None,
+            issue_number_alias: None,
                 idempotency_key: "direct-issue-reblock-01".into(),
                 source: None,
             },
@@ -1713,6 +1730,7 @@ mod tests {
             &IssueReadRateRequest {
                 status: Some("unread".into()),
                 rating: None,
+            issue_number_alias: None,
                 idempotency_key: "direct-issue-reactivate-01".into(),
                 source: None,
             },
@@ -1771,6 +1789,7 @@ mod tests {
             &IssueReadRateRequest {
                 status: Some("read".into()),
                 rating: None,
+            issue_number_alias: None,
                 idempotency_key: "direct-issue-default-01".into(),
                 source: None,
             },
