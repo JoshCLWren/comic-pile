@@ -120,18 +120,22 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   const [previewError, setPreviewError] = useState<string | null>(null)
   /** Numbers the reader explicitly accepted as aliases, not duplicates (#4654). */
   const [acceptedAliasNumbers, setAcceptedAliasNumbers] = useState<string[]>([])
-  /** Undo point returned by the last committed create (#4654). */
-  const [undoPoint, setUndoPoint] = useState<{
-    sessionId: number
-    snapshotId: number
-  } | null>(null)
-  // Mirrors undoPoint for the imperative handle: parents read it synchronously
-  // right after flush(), before React has committed the state update.
-  const undoPointRef = useRef<{
-    sessionId: number
-    snapshotId: number
-  } | null>(null)
+  /**
+   * Undo points from committed creates and reorders (#4654, #5852). The array
+   * mirrors the ref so parents reading hasUndoPoint() synchronously after
+   * flush() see the same truth as the rendered Undo affordance.
+   */
+  const [undoActions, setUndoActions] = useState<UndoAction[]>([])
+  const undoActionsRef = useRef<UndoAction[]>([])
   const [isUndoing, setIsUndoing] = useState(false)
+  /**
+   * A reorder is shown immediately as a local pending change (#5852). The
+   * server projection is still fetched and confirmed before the mutation is
+   * queued, so a failed preview never silently commits a structural edit.
+   */
+  const [draftReorder, setDraftReorder] = useState<DraftReorder | null>(null)
+  const [structurePreviewError, setStructurePreviewError] = useState<string | null>(null)
+  const structuralEditRef = useRef<StructuralEdit | null>(null)
   const baseIssuesRef = useRef<Issue[]>([])
   const pendingMutationsRef = useRef<IssueMutation[]>([])
   const isProcessingMutationsRef = useRef(false)
@@ -143,6 +147,15 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   const notifyPendingMutations = useCallback(() => {
     onPendingMutationsChangeRef.current?.(pendingMutationsRef.current.length > 0)
   }, [])
+  const recordUndoAction = useCallback((action: UndoAction, prepend = false) => {
+    const next = prepend
+      ? [action, ...undoActionsRef.current]
+      : [...undoActionsRef.current, action]
+    undoActionsRef.current = next
+    setUndoActions(next)
+  }, [])
+  const displayIssues = draftReorder?.nextIssues ?? issues
+  const hasStructuralPreview = Boolean(issuesService.previewReorder)
   const loadGenerationRef = useRef(0)
   const totalCountRef = useRef(0)
   const fullyLoadedRef = useRef(false)
@@ -168,8 +181,8 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   ].filter((id): id is string => id !== null).join(' ') || undefined
 
   const getNextUnreadIssueId = useCallback(() => {
-    return issues.find((issue) => issue.status === 'unread')?.id ?? null
-  }, [issues])
+    return displayIssues.find((issue) => issue.status === 'unread')?.id ?? null
+  }, [displayIssues])
 
   const getVisibilityWindow = useCallback((issueList: Issue[], nextUnreadId: number | null) => {
     if (!nextUnreadId) {
@@ -186,20 +199,20 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   }, [])
 
   const getVisibleIssues = useCallback(() => {
-    if (isExpanded || issues.length <= 5) {
-      return issues
+    if (isExpanded || displayIssues.length <= 5) {
+      return displayIssues
     }
 
     const nextUnreadId = getNextUnreadIssueId()
-    const { startIndex, endIndex } = getVisibilityWindow(issues, nextUnreadId)
+    const { startIndex, endIndex } = getVisibilityWindow(displayIssues, nextUnreadId)
 
-    return issues.slice(startIndex, endIndex)
-  }, [issues, isExpanded, getNextUnreadIssueId, getVisibilityWindow])
+    return displayIssues.slice(startIndex, endIndex)
+  }, [displayIssues, isExpanded, getNextUnreadIssueId, getVisibilityWindow])
 
   // Visible issue pills share one bounded projection; expanding the reorder
   // view expands that batch. No per-row metadata requests.
   const issueCardsQuery = useIssueCards(
-    (isReorderMode ? issues : getVisibleIssues()).map((issue) => issue.id),
+    (isReorderMode ? displayIssues : getVisibleIssues()).map((issue) => issue.id),
     { enabled: !isLoading && !loadError },
   )
   const cardsByIssue = indexIssueCards(issueCardsQuery.data)
@@ -308,9 +321,16 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       case 'delete':
         await issuesService.delete(mutation.issueId)
         return
-      case 'reorder':
+      case 'reorder': {
+        // Capture the exact pre-edit ID order while baseIssuesRef is still the
+        // uncommitted server snapshot (#5852). Reversing through the same
+        // ownership-checked issue-order write preserves issue IDs, dependencies,
+        // list memberships, ratings, read facts and Queue position.
+        const previousIssueIds = baseIssuesRef.current.map((issue) => issue.id)
         await issuesService.reorder(threadId, normalizeIssueOrder(baseIssuesRef.current, mutation.issueIds))
+        recordUndoAction({ kind: 'reorder', issueIds: previousIssueIds }, true)
         return
+      }
       case 'create': {
         const options: IssueCreateOptions = {}
         if (mutation.strategy) {
@@ -324,17 +344,16 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         }
         const response = await issuesService.create(threadId, mutation.issueRange, options)
         if (response.undo_session_id != null && response.undo_snapshot_id != null) {
-          const point = {
+          recordUndoAction({
+            kind: 'snapshot',
             sessionId: response.undo_session_id,
             snapshotId: response.undo_snapshot_id,
-          }
-          undoPointRef.current = point
-          setUndoPoint(point)
+          })
         }
         return
       }
     }
-  }, [issuesService, threadId])
+  }, [issuesService, recordUndoAction, threadId])
 
   const processIssueMutations = useCallback(async () => {
     if (isProcessingMutationsRef.current) {
@@ -472,7 +491,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       await processIssueMutations()
     } ,
     hasPendingMutations: () => pendingMutationsRef.current.length > 0,
-    hasUndoPoint: () => undoPointRef.current !== null,
+    hasUndoPoint: () => undoActionsRef.current.length > 0,
   }), [processIssueMutations, setActionError])
 
   const enqueueIssueReorder = useCallback((
