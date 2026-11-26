@@ -1126,7 +1126,7 @@ pub async fn search_issues(
         Some(crate::comicvine_v2::ParsedResource::Issue(id)) => build_resource_url(
             &api_key,
             &format!("issue/4000-{id}"),
-            &format!("id,issue_number,name,cover_date,volume,publisher,site_detail_url,image"),
+            "id,issue_number,name,cover_date,volume,publisher,site_detail_url,image",
         ),
         Some(crate::comicvine_v2::ParsedResource::Volume(id)) => {
             build_volume_issues_url(&api_key, id, clamped)
