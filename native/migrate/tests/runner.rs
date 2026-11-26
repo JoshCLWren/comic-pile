@@ -253,14 +253,10 @@ async fn alembic_database_at_head_is_adopted_without_rerunning() {
         .unwrap();
 
     let report = run(&mut client).await.unwrap();
-<<<<<<< HEAD
     assert_eq!(
         (report.applied, report.adopted),
         (versions_after(2), versions_through(2))
     );
-=======
-    assert_eq!((report.applied, report.adopted), (vec![3, 4], vec![1, 2]));
->>>>>>> origin/main
 
     let recorded: bool = client
         .query_one(
@@ -331,14 +327,10 @@ async fn release_list_backfill_preserves_subscriptions_and_requires_unambiguous_
         .unwrap();
 
     let report = run(&mut client).await.unwrap();
-<<<<<<< HEAD
     assert_eq!(
         (report.applied, report.adopted),
         (versions_after(2), versions_through(2))
     );
-=======
-    assert_eq!((report.applied, report.adopted), (vec![3, 4], vec![1, 2]));
->>>>>>> origin/main
 
     let rows = client
         .query(
