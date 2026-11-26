@@ -854,7 +854,7 @@ pub(crate) async fn hydrate_confirmed_identity_sync(
                 None => return HydrationOutcome::NotConfirmed,
             }
         };
-        let Some(comicvine_id) = issue_id(external_id.as_str()) else {
+        let Some(comicvine_id) = issue_id_from_external(external_id.as_str()) else {
             return HydrationOutcome::InvalidResponse;
         };
 
