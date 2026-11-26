@@ -890,16 +890,25 @@ async fn targeted_adoption_commit_uses_plan_lane_and_reconciles_exclusions_issue
     let (reader_status2, reader_body2) =
         get(&state, &token, "/api/v2/continuity-plans/552310/reader").await;
     assert_eq!(reader_status2, StatusCode::OK, "{reader_body2}");
-    assert_eq!(reader_body2["progress"]["total_issues"], 0, "{reader_body2}");
+    assert_eq!(
+        reader_body2["progress"]["total_issues"], 0,
+        "{reader_body2}"
+    );
 
     // Reconciliation only removes list membership: the issue and any reading
     // history survive, and the source-linked list ID stays stable.
     let issue_rows: i64 = conn
-        .query_one("SELECT COUNT(*)::bigint FROM issues WHERE id = $1", &[&issue_id])
+        .query_one(
+            "SELECT COUNT(*)::bigint FROM issues WHERE id = $1",
+            &[&issue_id],
+        )
         .await
         .unwrap()
         .get(0);
-    assert_eq!(issue_rows, 1, "adoption must not delete issues or reading history");
+    assert_eq!(
+        issue_rows, 1,
+        "adoption must not delete issues or reading history"
+    );
     let list_id2: i32 = conn
         .query_one(
             "SELECT custom_cbl_list_id FROM reading_plan_sources
@@ -910,7 +919,10 @@ async fn targeted_adoption_commit_uses_plan_lane_and_reconciles_exclusions_issue
         .await
         .unwrap()
         .get(0);
-    assert_eq!(list_id2, list_id, "the source-linked list ID must stay stable");
+    assert_eq!(
+        list_id2, list_id,
+        "the source-linked list ID must stay stable"
+    );
 }
 
 async fn crossover_snapshot(
