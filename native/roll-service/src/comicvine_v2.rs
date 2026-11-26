@@ -23,7 +23,7 @@
 use crate::{
     auth::AuthenticatedUser,
     catalog_commit::inline_hydration_budget,
-    comicvine_repair::{hydrate_confirmed_identity_inline, ProviderFailure},
+    comicvine_repair::{hydrate_confirmed_identity_sync, HydrationOutcome, ProviderFailure},
     comicvine_resolution::SeriesImportStatusResponse,
     db,
     thread_issues::natural_issue_order,
@@ -1113,155 +1113,16 @@ async fn link_with_source(
     Ok(identity_id)
 }
 
-/// Confirm one user-selected identity, then schedule best-effort hydration.
-/// Python commits the confirmation and hydrates after; here scheduling runs
-/// in a savepoint so its failure never undoes the mapping (#4631578606).
+/// Confirm one user-selected identity on an issue row the caller has locked.
+/// Deep-metadata hydration is awaited by the handler *after* this transaction
+/// commits; this function only writes the durable mapping and never enqueues a
+/// repair row or dispatches a background wake-up.
 async fn link_confirmed(
     tx: &Transaction<'_>,
     issue_id: i32,
     comicvine_issue_id: i32,
-) -> Result<bool, ApiError> {
-    let identity_id = link_with_source(tx, issue_id, comicvine_issue_id, "user_confirmed").await?;
-    tx.batch_execute("SAVEPOINT comicvine_hydration_enqueue")
-        .await
-        .map_err(db::query_error)?;
-    let enqueued = match enqueue_hydration_if_needed(tx, identity_id).await {
-        Ok(enqueued) => {
-            tx.batch_execute("RELEASE SAVEPOINT comicvine_hydration_enqueue")
-                .await
-                .map_err(db::query_error)?;
-            enqueued
-        }
-        Err(_) => {
-            tracing::warn!(
-                identity_id,
-                "comicvine hydration scheduling failed; confirmation kept"
-            );
-            tx.batch_execute("ROLLBACK TO SAVEPOINT comicvine_hydration_enqueue")
-                .await
-                .map_err(db::query_error)?;
-            false
-        }
-    };
-    Ok(enqueued)
-}
-
-/// Rust analogue of Python's post-commit `refresh_issue_metadata`: when the
-/// identity lacks fresh deep provider metadata, queue a refresh for the
-/// native repair worker. The table holds one row per identity in any state
-/// (`uq_comicvine_metadata_refresh_identity`), so a finished row (completed,
-/// no_credits or failed) is reopened instead of colliding (#4631578606); a
-/// pending, running or deferred row is left alone.
-///
-/// Lock order (#4638065822): the caller already holds the identity row (the
-/// upsert), while the repair worker's `PERSIST` locks the request row and
-/// then the identity row. To never wait in the opposite order, the request
-/// row is only ever taken with `SKIP LOCKED`: a row some other transaction
-/// holds is being claimed or persisted right now, so this best-effort
-/// enqueue skips it instead of waiting.
-async fn enqueue_hydration_if_needed(
-    tx: &Transaction<'_>,
-    identity_id: i32,
-) -> Result<bool, ApiError> {
-    enqueue_hydration_for_identities(tx, &[identity_id]).await
-}
-
-/// Set-based hydration enqueue for confirmed imported issue identities (#5592).
-/// For each identity whose metadata still needs a deep provider fetch, this
-/// reopens a finished unlocked refresh row or inserts a pending row. Locked
-/// request rows (a worker claiming/persisting them) are skipped with
-/// `SKIP LOCKED`, preserving the same deadlock-avoidance contract as the
-/// single-identity enqueue. Idempotent: pending/running/deferred rows and
-/// fresh complete metadata are left alone. Returns whether new work was made
-/// available so callers can wake the sparse drain (#4748).
-async fn enqueue_hydration_for_identities(
-    tx: &Transaction<'_>,
-    identity_ids: &[i32],
-) -> Result<bool, ApiError> {
-    if identity_ids.is_empty() {
-        return Ok(false);
-    }
-    let metadata_rows = tx
-        .query(
-            "SELECT id, metadata_json::text \
-             FROM external_identities \
-             WHERE id = ANY($1::int[]) \
-               AND provider = 'comicvine' \
-               AND entity_type = 'issue'",
-            &[&identity_ids],
-        )
-        .await
-        .map_err(db::query_error)?;
-    let now = chrono::Utc::now();
-    let mut needs_fetch: Vec<i32> = Vec::new();
-    for row in &metadata_rows {
-        let id: i32 = row.get(0);
-        let metadata: Value = row
-            .get::<_, Option<String>>(1)
-            .and_then(|text| serde_json::from_str(&text).ok())
-            .unwrap_or(Value::Null);
-        if crate::comicvine_repair::needs_provider_fetch(&metadata, now) {
-            needs_fetch.push(id);
-        }
-    }
-    if needs_fetch.is_empty() {
-        return Ok(false);
-    }
-
-    let claimable_rows = tx
-        .query(
-            "WITH claimable AS ( \
-                SELECT id, external_identity_id, state \
-                FROM comicvine_metadata_refresh_requests \
-                WHERE external_identity_id = ANY($1::int[]) \
-                FOR UPDATE SKIP LOCKED \
-             ), reopened AS ( \
-                UPDATE comicvine_metadata_refresh_requests r \
-                SET state = 'pending', attempts = 0, next_attempt_at = now(), \
-                    lease_expires_at = NULL, last_error = NULL, completed_at = NULL, \
-                    updated_at = now() \
-                FROM claimable c \
-                WHERE r.id = c.id AND r.state NOT IN ('pending', 'running', 'deferred') \
-                RETURNING r.external_identity_id \
-             ) \
-             SELECT external_identity_id, state FROM claimable",
-            &[&needs_fetch],
-        )
-        .await
-        .map_err(db::query_error)?;
-    let mut claimable: HashSet<i32> = HashSet::new();
-    let mut reopened = 0u32;
-    for row in &claimable_rows {
-        let id: i32 = row.get(0);
-        let state: String = row.get(1);
-        claimable.insert(id);
-        if !matches!(state.as_str(), "pending" | "running" | "deferred") {
-            reopened += 1;
-        }
-    }
-    let missing: Vec<i32> = needs_fetch
-        .into_iter()
-        .filter(|id| !claimable.contains(id))
-        .collect();
-    if missing.is_empty() {
-        return Ok(reopened > 0);
-    }
-    let inserted = tx
-        .execute(
-            "INSERT INTO comicvine_metadata_refresh_requests \
-                (external_identity_id, state, attempts, next_attempt_at, created_at, updated_at) \
-             SELECT v, 'pending', 0, now(), now(), now() \
-             FROM unnest($1::int[]) AS v \
-             WHERE NOT EXISTS ( \
-                 SELECT 1 FROM comicvine_metadata_refresh_requests \
-                 WHERE external_identity_id = v \
-             ) \
-             ON CONFLICT ON CONSTRAINT uq_comicvine_metadata_refresh_identity DO NOTHING",
-            &[&missing],
-        )
-        .await
-        .map_err(db::query_error)?;
-    Ok(reopened > 0 || inserted > 0)
+) -> Result<i32, ApiError> {
+    link_with_source(tx, issue_id, comicvine_issue_id, "user_confirmed").await
 }
 
 // ---------------------------------------------------------------------------
