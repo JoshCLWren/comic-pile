@@ -222,6 +222,12 @@ test.describe('Roll pointer target sizes (#1885)', () => {
     await page.getByTestId('reading-context-button').click()
     await expect(page.getByTestId('reading-context-content')).toBeVisible()
 
+    // The connected-threads query is gated on the disclosure and resolves
+    // asynchronously. The content shell appears before its data, so wait for
+    // the real edge endpoints instead of measuring the empty loading state.
+    const edgeEndpoints = page.locator('button[aria-label^="Open series for"]')
+    await expect(edgeEndpoints.first()).toBeVisible({ timeout: 15_000 })
+
     // Edge endpoint buttons previously rendered as bare ~12px text strips.
     expectMinimumTargets(
       await measureVisibleBoxes(page, 'button[aria-label^="Open series for"]'),

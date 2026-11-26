@@ -101,6 +101,25 @@ async function failUntilHealthy(page: Page, pathname: string): Promise<() => voi
  * the app on its own, which satisfies the same contract. The response wait and
  * the final assertions are what prove the transition happened.
  */
+/**
+ * Assert the bounded, recoverable state without pinning one transient copy.
+ *
+ * The first failure replaces the bare splash with progress copy and Retry. If
+ * the shared retry budget is exhausted before the assertion, the explicit
+ * failure panel keeps the same Retry affordance. Both are the #3429 contract;
+ * the only forbidden state is an indefinite bare "Loading..." splash.
+ */
+async function expectBoundedRecovery(page: Page): Promise<void> {
+  await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText('Loading...', { exact: true })).toHaveCount(0)
+  await expect(
+    page
+      .getByText(/Still loading/)
+      .or(page.getByText('Session Error'))
+      .or(page.getByText('Failed to load activity')),
+  ).toBeVisible()
+}
+
 async function recoverInPlace(page: Page, pathname: string): Promise<void> {
   const recovered = page.waitForResponse(
     (response) => response.url().includes(pathname) && response.status() === 200,
@@ -116,17 +135,16 @@ async function recoverInPlace(page: Page, pathname: string): Promise<void> {
 test.describe('Bootstrap recovery (issue #3429)', () => {
   test('a failed roll bootstrap stays recoverable in place without a reload', async ({
     page,
-    mockApi,
+    request,
   }) => {
     const markBootstrapHealthy = await failUntilHealthy(page, ROLL_BOOTSTRAP_PATH)
 
-    await mockApi.setupAuthUser()
+    await registerRealUser(page, request)
     await page.goto('/')
 
-    // Bounded loading: progress copy plus recovery, never the bare splash.
-    await expect(page.getByText(/Still loading/)).toBeVisible({ timeout: 15_000 })
-    await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible()
-    await expect(page.getByText('Loading...', { exact: true })).toHaveCount(0)
+    // Bounded loading: progress copy or the explicit failure panel, plus
+    // recovery — never the bare splash.
+    await expectBoundedRecovery(page)
 
     markBootstrapHealthy()
     await recoverInPlace(page, ROLL_BOOTSTRAP_PATH)
@@ -139,16 +157,14 @@ test.describe('Bootstrap recovery (issue #3429)', () => {
 
   test('a failed history first page stays recoverable in place without a reload', async ({
     page,
-    mockApi,
+    request,
   }) => {
     const markActivityHealthy = await failUntilHealthy(page, ACTIVITY_PATH)
 
-    await mockApi.setupAuthUser()
+    await registerRealUser(page, request)
     await page.goto('/history')
 
-    await expect(page.getByText(/Still loading/)).toBeVisible({ timeout: 15_000 })
-    await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible()
-    await expect(page.getByText('Loading...', { exact: true })).toHaveCount(0)
+    await expectBoundedRecovery(page)
 
     markActivityHealthy()
     await recoverInPlace(page, ACTIVITY_PATH)
