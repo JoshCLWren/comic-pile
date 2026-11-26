@@ -36,9 +36,12 @@ export interface IssueCorrectionDependenciesApi {
   listForThread: (threadId: number) => Promise<{
     issues?: Array<{
       issue_id: number
-      issue_number?: string
       incoming?: Array<{ source_issue_id?: number }>
-      outgoing?: Array<{ source_issue_id?: number }>
+      outgoing?: Array<{
+        source_issue_id?: number
+        source_issue_number?: string
+        source_thread_title?: string
+      }>
     }>
   }>
 }
