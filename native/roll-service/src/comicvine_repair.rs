@@ -2982,6 +2982,70 @@ mod tests {
         assert!(matches!(err, ProviderFailure::Unavailable));
     }
 
+    /// #5610: the Queue mapping preview must read the volume and roster through
+    /// the shared provider limits, so a cached roster survives a later provider
+    /// failure instead of turning the whole preview into "plan could not load".
+    #[tokio::test]
+    async fn catalog_volume_roster_serves_cached_roster_without_provider_call() {
+        let previous_key = std::env::var("COMICVINE_API_KEY").ok();
+        std::env::set_var("COMICVINE_API_KEY", "TESTKEY123");
+        let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
+        let limits = crate::comicvine_limits::ComicVineLimits::default();
+        let volume_id = "5610999";
+
+        // Prime the same cache keys the preview reads through `limits.call`.
+        fake.push_ok(
+            StatusCode::OK,
+            HeaderMap::new(),
+            Bytes::from(
+                json!({"status_code": 1, "results": {
+                    "id": 5610999, "name": "Cached Volume", "count_of_issues": 1,
+                }})
+                .to_string(),
+            ),
+        );
+        limits
+            .call(&fake, "volume/4050-5610999", "", "TESTKEY123")
+            .await
+            .expect("prime volume cache");
+        let query = "&filter=volume:5610999&limit=100&offset=0";
+        fake.push_ok(
+            StatusCode::OK,
+            HeaderMap::new(),
+            Bytes::from(
+                json!({"status_code": 1, "number_of_total_results": 1, "results": [{
+                    "id": 561099901, "issue_number": "1", "name": "Cached Issue",
+                    "volume": {"id": 5610999},
+                }]})
+                .to_string(),
+            ),
+        );
+        limits
+            .call(&fake, "issues", query, "TESTKEY123")
+            .await
+            .expect("prime roster cache");
+        // No canned response remains: a raw provider call would fail closed.
+        fake.clear();
+
+        let result = catalog_volume_roster(&limits, &fake, volume_id).await;
+        match previous_key {
+            Some(key) => std::env::set_var("COMICVINE_API_KEY", key),
+            None => std::env::remove_var("COMICVINE_API_KEY"),
+        }
+
+        let (series, roster) = result.expect("cached roster must satisfy the preview");
+        assert_eq!(series.get("name").and_then(Value::as_str), Some("Cached Volume"));
+        assert_eq!(roster.len(), 1);
+        assert_eq!(
+            roster[0].get("issue_number").and_then(Value::as_str),
+            Some("1")
+        );
+        assert!(
+            fake.calls().is_empty(),
+            "cached preview must not spend another provider request"
+        );
+    }
+
     /// #5592: worker fetches a singular issue and persists creator credits.
     #[tokio::test]
     async fn drain_persists_creator_credits_for_pending_identity() {
