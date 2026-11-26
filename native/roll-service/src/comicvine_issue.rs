@@ -679,11 +679,12 @@ mod tests {
         assert_eq!(people[1].creator_id, None);
     }
     #[test]
-    fn queue_is_owner_scoped_and_single_statement() {
+    fn read_is_owner_scoped_and_never_enqueues_background_work() {
         assert!(READ_SQL.contains("JOIN me ON me.user_id=t.user_id"));
-        assert!(READ_SQL.contains("ON CONFLICT (external_identity_id) DO UPDATE"));
-        assert!(READ_SQL.contains("WHERE f.needs_repair"));
-        assert!(!READ_SQL.contains("FOR UPDATE SKIP LOCKED"));
+        assert!(READ_SQL.contains("'needs_repair',needs_repair"));
+        assert!(!READ_SQL.contains("INSERT INTO comicvine_metadata_refresh_requests"));
+        assert!(!READ_SQL.contains("ON CONFLICT (external_identity_id) DO UPDATE"));
+        assert!(!READ_SQL.contains("comicvine_metadata_refresh_requests"));
         assert_eq!(as_id(&json!("29319")), Some(29319));
     }
     #[test]
@@ -802,8 +803,9 @@ mod tests {
                     "person_credits": seven, "character_credits": [], "team_credits": [],
                     "story_arc_credits": [], "date_last_updated": "2026-01-01T00:00:00+00:00"}
             }),
+            needs_repair: false,
         };
-        let wire = serde_json::to_value(response(mapped, None, vec![], vec![])).unwrap();
+        let wire = serde_json::to_value(response(mapped, vec![], vec![])).unwrap();
         assert_eq!(wire["creators"].as_array().unwrap().len(), 7);
         assert_eq!(wire["metadata_status"], "complete");
     }
@@ -815,19 +817,11 @@ mod tests {
             metadata: json!({"name":"Going For It","volume":{"id":1,"name":"Hellblazer"},
                 "creator_credits":[{"id":1,"name":"Jamie Delano"}],
                 "cover_date":"1988-03-01","store_date":"1988-03-24"}),
+            needs_repair: true,
         };
-        let wire = serde_json::to_value(response(
-            mapped,
-            Some(Repair {
-                state: "pending".into(),
-                next_attempt_at: None,
-            }),
-            vec![],
-            vec![],
-        ))
-        .unwrap();
+        let wire = serde_json::to_value(response(mapped, vec![], vec![])).unwrap();
         assert_eq!(wire["creators"][0]["name"], "Jamie Delano");
-        assert_eq!(wire["metadata_status"], "refresh_pending");
+        assert_eq!(wire["metadata_status"], "needs_hydration");
         assert!(wire["story_arcs"].is_array());
         assert_eq!(wire["series_name"], "Hellblazer");
     }
