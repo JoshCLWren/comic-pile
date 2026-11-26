@@ -237,6 +237,7 @@ describe('IssueToggleList #4654 delete/reorder structure preview', () => {
     const dragData = { effectAllowed: '', dropEffect: '', setData: vi.fn() }
     const dragButton = screen.getByTestId('issue-pill-2').querySelector('button')
     expect(dragButton).not.toBeNull()
+    // SAFETY: the non-null check above proves the queried element is the pill's drag handle button.
     fireEvent.dragStart(dragButton as HTMLButtonElement, { dataTransfer: dragData })
     const earlierPill = screen.getByTestId('issue-pill-1')
     fireEvent.dragOver(earlierPill, { dataTransfer: dragData })
