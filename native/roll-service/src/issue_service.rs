@@ -34,6 +34,27 @@ const ROLL_RATING_THRESHOLD: f64 = 4.0;
 /// Roll default and the direct-read default this writer already used.
 const DEFAULT_NEW_READ_RATING: f64 = 3.5;
 
+/// Keep issue number display as `authored` with an optional alternate alias
+/// when they differ, e.g. `23 (#2)`.
+pub(crate) fn display_issue_number(authored: &str, alias: Option<&str>) -> String {
+    let alias = alias.map(str::trim).filter(|value| !value.is_empty());
+    let Some(alias) = alias else {
+        return authored.to_string();
+    };
+    if alias.eq_ignore_ascii_case(authored.trim()) {
+        authored.to_string()
+    } else {
+        format!("{authored} ({alias})")
+    }
+}
+
+fn deserialize_optional_alias<'de, D>(deserializer: D) -> Result<Option<Option<String>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(Some(Option::<String>::deserialize(deserializer)?))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct IssueReadRateRequest {
@@ -41,6 +62,10 @@ pub struct IssueReadRateRequest {
     pub status: Option<String>,
     /// Effective issue rating in 0.5-point steps. Omit to keep the stored rating.
     pub rating: Option<f64>,
+    /// Alternate overall/story number for the same physical comic (#4652).
+    /// Set to a string to assign, empty string or null to clear. Omit to leave unchanged.
+    #[serde(default, deserialize_with = "deserialize_optional_alias")]
+    pub issue_number_alias: Option<Option<String>>,
     /// Client-generated retry key. Same key/payload replays the same receipt.
     pub idempotency_key: String,
     /// Source of the issue action. Omitted or "direct" is a manual read from a
@@ -60,8 +85,14 @@ pub struct IssueCard {
     pub thread_id: i32,
     /// Display series/run title.
     pub thread_title: String,
-    /// Exact issue number within the run.
+    /// Authored issue number within the run (reader's label).
     pub issue_number: String,
+    /// Alternate overall/story-arc number when the physical comic has dual numbering.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issue_number_alias: Option<String>,
+    /// Display number combining authored and alias when present.
+    #[serde(default)]
+    pub display_issue_number: String,
     /// Stored read state (``read`` or ``unread``).
     pub status: String,
     /// UTC read timestamp, when read.
@@ -74,6 +105,9 @@ pub struct IssueCard {
     pub mapping_state: String,
     /// Confirmed provider issue identifier, never a provisional candidate.
     pub comicvine_issue_id: Option<String>,
+    /// Provider's own issue number from confirmed identity metadata, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_issue_number: Option<String>,
     /// Exact provider-supplied CDN URL. Null when unmapped; never image bytes.
     pub cover_image_url: Option<String>,
 }
@@ -158,8 +192,14 @@ pub(crate) fn validate(request: &IssueReadRateRequest) -> Result<(), ApiError> {
     if request.source.as_deref() == Some(ROLL_OFFER_SOURCE) && request.rating.is_none() {
         return Err(invalid("A Roll offer rating requires a rating"));
     }
-    if request.status.is_none() && request.rating.is_none() {
-        return Err(invalid("Provide status or rating"));
+    if let Some(Some(alias)) = &request.issue_number_alias {
+        let trimmed = alias.trim();
+        if trimmed.chars().count() > 50 {
+            return Err(invalid("Issue number alias must be 50 characters or fewer"));
+        }
+    }
+    if request.status.is_none() && request.rating.is_none() && request.issue_number_alias.is_none() {
+        return Err(invalid("Provide status, rating, or issue_number_alias"));
     }
     Ok(())
 }
