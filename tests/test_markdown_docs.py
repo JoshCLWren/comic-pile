@@ -340,5 +340,8 @@ def test_comicvine_repair_cadence_matches_workflow_schedule() -> None:
 
     assert "times per hour" in deployment
     assert "UTC" in deployment
+    cadence_word = NUMBER_WORDS.get(len(hours))
+    assert cadence_word, f"No cadence word for {len(hours)} cron hours"
+    assert f"{cadence_word} times per hour" in deployment
     for hour in hours:
         assert f"{int(hour):02d}:{int(minute):02d}" in deployment
