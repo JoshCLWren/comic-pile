@@ -553,6 +553,48 @@ async fn preview_offers_alias_for_mapped_issue_and_create_requires_acceptance() 
 }
 
 #[tokio::test]
+async fn plain_same_number_issue_is_not_offered_as_an_alias() {
+    let (state, token, csrf, user_id, _guard) = setup_user("bprd-4654-alias-no-evidence").await;
+    let thread_id = seed_thread(&state, user_id, "Editing series").await;
+    seed_issue(&state, thread_id, "1", 1).await;
+    let other_thread = seed_thread(&state, user_id, "Other series").await;
+    seed_issue(&state, other_thread, "101", 1).await;
+
+    let preview = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/threads/{thread_id}/issues/preview"),
+            &token,
+            &csrf,
+            json!({"issue_range": "101"}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(preview.status(), StatusCode::OK);
+    let bytes = to_bytes(preview.into_body(), 256 * 1024).await.unwrap();
+    let body: Value = serde_json::from_slice(&bytes).unwrap();
+    // A same-number issue with no identity evidence is only a possible
+    // duplicate; it must not block creating a legitimate new issue.
+    assert!(
+        body["alias_offers"].as_array().unwrap().is_empty(),
+        "{body}"
+    );
+
+    let created = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/threads/{thread_id}/issues"),
+            &token,
+            &csrf,
+            json!({"issue_range": "101"}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(created.status(), StatusCode::CREATED);
+    assert_eq!(issue_order(&state, thread_id).await, vec!["1", "101"]);
+}
+
+#[tokio::test]
 async fn stale_preview_is_rejected_before_any_write_and_fresh_preview_retries() {
     let (state, token, csrf, user_id, _guard) = setup_user("bprd-4654-stale").await;
     let thread_id = seed_thread(&state, user_id, "Stale series").await;

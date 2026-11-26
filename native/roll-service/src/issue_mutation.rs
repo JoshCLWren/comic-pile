@@ -379,6 +379,13 @@ async fn detect_alias_offers(
         }
         let catalog_evidence: bool = row.get(3);
         let mapping_evidence: bool = row.get(4);
+        // An alias must be backed by real identity evidence. Without it, a
+        // same-number issue in another series is only a possible duplicate,
+        // not a source-preserving alternative; offering it would block a
+        // legitimate create because the UI requires acceptance (#4654).
+        if !catalog_evidence && !mapping_evidence {
+            continue;
+        }
         let evidence = if catalog_evidence && mapping_evidence {
             "confirmed catalog identity and external mapping"
         } else if catalog_evidence {
