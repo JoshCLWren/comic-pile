@@ -12378,6 +12378,13 @@
             "type": "integer",
             "format": "int32"
           },
+          "no_match_reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Explainable reason when discovery found nothing, produced by the same\nmatcher that scores successful searches."
+          },
           "partial_matches": {
             "type": "array",
             "items": {

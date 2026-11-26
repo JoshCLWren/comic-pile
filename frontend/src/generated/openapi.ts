@@ -5876,6 +5876,11 @@ export interface components {
             /** Format: int32 */
             issue_id: number;
             /**
+             * @description Explainable reason when discovery found nothing, produced by the same
+             *     matcher that scores successful searches.
+             */
+            no_match_reason?: string | null;
+            /**
              * @description Series-level partial matches derived from the same provider response.
              *     Always emitted (empty when no volume resolves) for wire stability.
              */
