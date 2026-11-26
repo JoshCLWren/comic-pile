@@ -2949,12 +2949,33 @@ async fn do_cbl_adoption_commit(
     };
 
     // Merge nodes (preserves key semantics and propagates DB outages as 503).
+    let target_lane_id = lanes_json
+        .as_array()
+        .and_then(|lanes| {
+            lanes.iter().find_map(|lane| {
+                let id = lane.get("id").and_then(|v| v.as_str())?;
+                if id == "default" {
+                    Some(id.to_string())
+                } else {
+                    None
+                }
+            })
+        })
+        .or_else(|| {
+            lanes_json
+                .as_array()
+                .and_then(|lanes| lanes.first())
+                .and_then(|lane| lane.get("id").and_then(|v| v.as_str()))
+                .map(|s| s.to_string())
+        })
+        .unwrap_or_else(|| "default".to_string());
     let merge_ctx = MergeAdoptionCtx {
         user_id,
         planned: &planned,
         source_path: &source_path,
         series_overrides: &override_bool,
         preserve_existing_order: update_target_plan_id.is_some(),
+        target_lane_id: &target_lane_id,
     };
     let merge = merge_adoption_nodes_tx(&mut tx, &mut nodes_json, &merge_ctx).await?;
     tx.run_execute(
