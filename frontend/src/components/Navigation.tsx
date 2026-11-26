@@ -40,6 +40,7 @@ type NavIconName =
 interface NavItem {
   path: string
   label: string
+  mobileLabel?: string
   icon: NavIconName
   ariaLabel: string
 }
@@ -48,7 +49,7 @@ const MAIN_NAV_ITEMS: NavItem[] = [
   { path: '/', label: 'Roll', icon: 'roll', ariaLabel: 'Roll page' },
   { path: '/queue', label: 'Queue', icon: 'queue', ariaLabel: 'Queue page' },
   { path: '/history', label: 'History', icon: 'history', ariaLabel: 'History page' },
-  { path: '/continuity-plans', label: 'Reading plans', icon: 'planner', ariaLabel: 'Reading plans page' },
+  { path: '/continuity-plans', label: 'Reading plans', mobileLabel: 'Plans', icon: 'planner', ariaLabel: 'Reading plans page' },
 ]
 
 const SECONDARY_NAV_ITEMS: NavItem[] = [
@@ -258,9 +259,11 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   if (!authState || authState.status === 'unauthenticated' || authState.status === 'service_unavailable' || authState.status === 'network_error') return null
 
   const navItemClass = (active: boolean) =>
-    `nav-item flex flex-col items-center justify-center flex-1 h-full transition-all duration-200 focus:outline-none ${
+    `nav-item flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center gap-1 py-1 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-focus-ring)] ${
       active ? 'active' : 'hover:bg-white/5'
     }`
+
+  const mobileNavLabelClass = 'nav-label max-w-full break-words text-center text-xs font-bold uppercase leading-tight tracking-wide'
 
   const desktopNavItemClass = (active: boolean) =>
     `desktop-nav-item flex w-full items-center rounded-lg transition-all duration-200 ${
@@ -289,9 +292,10 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
         to={item.path}
         className={navItemClass(active)}
         aria-label={item.ariaLabel}
+        aria-current={active ? 'page' : undefined}
       >
         <NavIcon name={item.icon} />
-        <span className="nav-label text-[10px] font-bold uppercase tracking-wide">{item.label}</span>
+        <span className={mobileNavLabelClass}>{item.mobileLabel ?? item.label}</span>
       </Link>
     )
   }
@@ -447,7 +451,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
       </nav>
 
       <nav className="fixed bottom-0 left-0 right-0 nav-container z-40 md:hidden" role="navigation" aria-label="Mobile navigation">
-        <div className="flex h-14 items-center justify-around px-1 md:h-20 md:px-2 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl mx-auto">
+        <div className="flex min-h-14 items-stretch px-1 md:px-2 max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-5xl mx-auto">
           {MAIN_NAV_ITEMS.map((item) => renderNavItem(item, isActive(item.path)))}
           {!isMobile && visibleSecondaryNavItems.map((item) => renderNavItem(item, isActive(item.path)))}
           {isMobile && (
@@ -461,7 +465,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
               aria-label="More pages"
             >
               <NavIcon name="more" />
-              <span className="nav-label text-[9px] font-bold uppercase tracking-wide md:text-[10px] md:tracking-widest">More</span>
+              <span className={mobileNavLabelClass}>More</span>
             </button>
           )}
         </div>
@@ -473,7 +477,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
             ref={moreMenuRef}
             id="secondary-navigation"
             aria-label="More pages"
-            className="fixed bottom-16 right-3 w-56 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)] p-2 shadow-2xl md:bottom-24 md:right-6"
+            className="fixed bottom-[calc(var(--mobile-nav-height)+0.5rem+env(safe-area-inset-bottom))] right-3 w-56 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)] p-2 shadow-2xl md:bottom-24 md:right-6"
           >
           {visibleSecondaryNavItems.map((item) => (
             <Link
