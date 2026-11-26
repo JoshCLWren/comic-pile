@@ -387,6 +387,7 @@ async fn authenticated_issue_cards_are_owner_scoped_and_bounded() {
                 "thread_id": hellboy_id,
                 "thread_title": "Hellboy in Hell",
                 "issue_number": "10",
+                "display_issue_number": "10",
                 "status": "read",
                 "read_at": "2026-01-02T03:04:05.123Z",
                 "rating": 4.5,
@@ -400,6 +401,7 @@ async fn authenticated_issue_cards_are_owner_scoped_and_bounded() {
                 "thread_id": hellboy_id,
                 "thread_title": "Hellboy in Hell",
                 "issue_number": "2",
+                "display_issue_number": "2",
                 "status": "unread",
                 "read_at": null,
                 "rating": null,
@@ -413,6 +415,7 @@ async fn authenticated_issue_cards_are_owner_scoped_and_bounded() {
                 "thread_id": hellboy_id,
                 "thread_title": "Hellboy in Hell",
                 "issue_number": "1",
+                "display_issue_number": "1",
                 "status": "unread",
                 "read_at": null,
                 "rating": null,
@@ -426,6 +429,7 @@ async fn authenticated_issue_cards_are_owner_scoped_and_bounded() {
                 "thread_id": bprd_id,
                 "thread_title": "B.P.R.D.",
                 "issue_number": "1",
+                "display_issue_number": "1",
                 "status": "unread",
                 "read_at": null,
                 "rating": null,
@@ -792,21 +796,31 @@ async fn issue_cards_preserve_mixed_numbering_series_and_adjacent_volume() {
         let card = &items[index];
         assert_eq!(card["issue_id"], *id);
         assert_eq!(
-            card["issue_number"], authored,
+            card["issue_number"].as_str(),
+            Some(authored.as_str()),
             "authored label must not be renumbered"
         );
-        assert_eq!(card["issue_number_alias"], *provider);
+        assert_eq!(card["issue_number_alias"].as_str(), Some(provider.as_str()));
         let expected_display = if provider == authored {
             authored.clone()
         } else {
             format!("{authored} ({provider})")
         };
-        assert_eq!(card["display_issue_number"], expected_display);
+        assert_eq!(
+            card["display_issue_number"].as_str(),
+            Some(expected_display.as_str())
+        );
         assert!(*position > 0, "authored order is preserved");
         assert_eq!(card["has_confirmed_identity"], true);
-        assert_eq!(card["mapping_state"], "confirmed");
-        assert_eq!(card["comicvine_issue_id"], *external_id);
-        assert_eq!(card["provider_issue_number"], *provider);
+        assert_eq!(card["mapping_state"].as_str(), Some("confirmed"));
+        assert_eq!(
+            card["comicvine_issue_id"].as_str(),
+            Some(external_id.as_str())
+        );
+        assert_eq!(
+            card["provider_issue_number"].as_str(),
+            Some(provider.as_str())
+        );
         assert_eq!(
             card["cover_image_url"],
             format!("https://comicvine.test/{external_id}.jpg"),
