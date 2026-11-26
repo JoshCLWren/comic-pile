@@ -24,7 +24,7 @@ const mockedDependenciesApi = {
   listForThread: vi.fn<IssueToggleListDependenciesApi['listForThread']>(),
 }
 const mockedUndo = vi.fn<
-  (sessionId: string | number, snapshotId: string | number) => Promise<unknown>
+  (sessionId: string | number, snapshotId: string | number) => Promise<void>
 >()
 
 const ISSUES: Issue[] = [
@@ -47,13 +47,17 @@ const ISSUES: Issue[] = [
 ]
 
 function listResponse(undo = false): IssueListResponse {
-  return {
+  const response: IssueListResponse = {
     issues: ISSUES,
     total_count: ISSUES.length,
     page_size: 100,
     next_page_token: null,
-    ...(undo ? { undo_session_id: 7, undo_snapshot_id: 42 } : {}),
   }
+  if (undo) {
+    response.undo_session_id = 7
+    response.undo_snapshot_id = 42
+  }
+  return response
 }
 
 function previewResponse(withAlias: boolean): IssueEditPreviewResponse {
@@ -151,8 +155,7 @@ describe('IssueToggleList #4654 alias and Undo contract', () => {
 
     expect(screen.getByTestId('preview-alias-offers')).toBeInTheDocument()
     expect(screen.getByTestId('preview-alias-offer')).toHaveTextContent('Other series')
-    const confirm = screen.getByTestId('confirm-preview-add') as HTMLButtonElement
-    expect(confirm.disabled).toBe(true)
+    expect(screen.getByTestId('confirm-preview-add')).toBeDisabled()
 
     fireEvent.click(screen.getByTestId('accept-alias'))
     await waitFor(() => {
@@ -161,7 +164,7 @@ describe('IssueToggleList #4654 alias and Undo contract', () => {
       })
     })
     await waitFor(() => {
-      expect((screen.getByTestId('confirm-preview-add') as HTMLButtonElement).disabled).toBe(false)
+      expect(screen.getByTestId('confirm-preview-add')).not.toBeDisabled()
     })
     fireEvent.click(screen.getByTestId('confirm-preview-add'))
     await ref.current!.flush()
