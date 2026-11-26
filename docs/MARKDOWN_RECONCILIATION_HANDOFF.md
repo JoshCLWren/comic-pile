@@ -25,15 +25,26 @@ was 222 commits behind `main`, so the bare-head code-path guard reported three
 paths in `COMICVINE_RUNTIME_FALLBACK.md` (the native ComicVine provider module,
 twice, and the V8 ledger-retirement migration) as stale: those files exist on
 `main` but were absent from the old branch snapshot. The `Docs code-path check`
-job checks out `pull_request.head.sha`, so it failed on that bare head and the
-`VERCEL_DEPLOYMENT.md` section conflicted with `main`. Per F1's first option the
-branch was synchronized with current `main` (no-commit merge, conflict resolved
-by keeping `main`'s retired-background-repair text plus this handoff's navigation
-link). The resulting tree differs from `main` only by this handoff and its two
-links; the code-path guard passes on the bare head and no conflict remains. No
-`docs-path-check` suppression, test weakening or assertion change was used.
+job checks out `pull_request.head.sha`, so it failed on that bare head. Prior
+checkpoints brought the branch tree's content forward to match current `main`
+(the branch is still a work-checkpoint branch, not a topology descendant of
+`main`). A local navigation link had also been added to the same
+`VERCEL_DEPLOYMENT.md` paragraph that `main` rewrote when it retired background
+repair; because both sides changed that hunk relative to the old base,
+`git merge-tree` reported a content conflict and GitHub marked the PR
+`CONFLICTING` (F1's self-consistency objection). This run removed that local
+link: the retired-background-repair paragraph is now byte-identical to `main`,
+and the handoff stays discoverable through the link in `docs/README.md`. The
+final tree differs from `main` only by this handoff and that one link; the
+code-path guard passes on the bare head and `git merge-tree --write-tree
+origin/main HEAD` exits 0 with no conflict sections. No `docs-path-check`
+suppression, test weakening or assertion change was used.
 
-## Documents changed by this PR and stale claims corrected
+## Document reconciliation recorded by this audit
+
+The first three rows were reconciled on `main` by merged PR #5846 and are
+byte-identical in this head; they are recorded here as audit evidence, not as
+new edits. Only the last two rows are changed on this branch.
 
 | File | Stale claim removed | Correct current claim |
 | --- | --- | --- |
@@ -102,26 +113,32 @@ Checks observed in this review runtime on the synchronized tree:
 - `node --test scripts/check_doc_code_paths.test.mjs` — exit 0; 16 pass, 0 fail.
 - `python3 scripts/generate_markdown_inventory.py --output
   /tmp/MARKDOWN_INVENTORY_5757.md` — exit 0; counts above.
-- `git write-tree` diff against `origin/main` — only this handoff, the
-  `docs/README.md` link and the `docs/VERCEL_DEPLOYMENT.md` link differ; the
-  `git merge-tree` conflict and the `CONFLICTING` merge state are resolved.
+- `git write-tree` diff against `origin/main` — only this handoff and the
+  `docs/README.md` navigation link differ; `git merge-tree --write-tree
+  origin/main HEAD` exits 0 with no conflict sections, so the F1
+  self-consistency objection is resolved without a topology rebase.
 - `python3 -m pytest` could not run: pytest is not installed in this runtime
   (`No module named pytest`); the Documentation workflow runs
-  `tests/test_markdown_docs.py` and `tests/test_generate_markdown_inventory.py`
-  in CI. No result is claimed for those two files locally.
+  `tests/test_markdown_docs.py`, `tests/test_generate_markdown_inventory.py` and
+  `tests/test_social_preview_asset.py` in CI. No result is claimed for those
+  files locally.
 - Not executed locally: `make dev` with a live PostgreSQL instance, browser E2E
   and any credentialed production request. These require services/credentials
   unavailable in this review runtime; no result is claimed for them.
 
 At the prior bare head `24ee72c`, `gh pr checks` showed `Docs code-path check`
-and `CI Summary` failing and `mergeable: CONFLICTING`; those failures are the
-stale-base artifacts fixed by the synchronization recorded above. Remaining
-discrepancies: PR #5835's reconciled doc content was already delivered by merged
-#5846; this PR is retained only as the audit/handoff evidence required by A19 and
-A28, plus the synchronization that makes the head self-consistent. Delivery must
-follow the existing Rotisserie claim, exact-head CI, independent review and merge
-gates; no factory policy, automation schedule, production business logic, API
-contract or schema was changed here.
+and `CI Summary` failing and `mergeable: CONFLICTING`; those stale-base failures
+are fixed by the synchronization recorded above. On the current exact head
+`5e7ee6da`, `gh pr checks` reports `rotisserie / wake` and `rotisserie /
+reconcile` as successful (`claim` and CodeRabbit skipped); no Markdown-doc or
+full CI job has reported on that exact head, so exact-head CI is recorded as a
+verification gap for the delivery wrapper rather than a locally observed pass.
+Remaining discrepancies: PR #5835's reconciled doc content was already delivered
+by merged #5846; this PR is retained only as the audit/handoff evidence required
+by A19 and A28, plus the synchronization that makes the head self-consistent.
+Delivery must follow the existing Rotisserie claim, exact-head CI, independent
+review and merge gates; no factory policy, automation schedule, production
+business logic, API contract or schema was changed here.
 
 ## A31 — maintenance rule
 
@@ -157,11 +174,11 @@ historical/superseded notices.
 | A20 | this file | All seven examples reconciled on current main with paths |
 | A21 | this file | README prerequisites/ports checked against Makefile; local limits recorded |
 | A22 | `docs/MARKDOWN_RECONCILIATION_HANDOFF.md` | API doc agreement checked against generated contracts and callers |
-| A23 | `docs/VERCEL_DEPLOYMENT.md` | Vercel/Neon, migration runner, health and preview statements verified |
-| A24 | `docs/COMICVINE_HYDRATOR.md`, `docs/COMICVINE_RUNTIME_FALLBACK.md` | Migration-era queue/cron fallback guidance removed |
+| A23 | this file | Vercel/Neon, migration runner, health and preview statements verified on `main`'s `docs/VERCEL_DEPLOYMENT.md` (byte-identical here) |
+| A24 | this file | Migration-era queue/cron fallback guidance removed on `main` in `docs/COMICVINE_HYDRATOR.md` and `docs/COMICVINE_RUNTIME_FALLBACK.md` |
 | A25 | this file | Agent guidance checked against current factory safeguards |
-| A26 | `docs/README.md`, `docs/COMICVINE_HYDRATOR.md` | Added/repaired links use existing anchors; no dangling references added |
-| A27 | this file | Local doc/link/code-path/generator/unit checks pass on the synchronized head; prior-head CI failures recorded as stale-base artifacts |
+| A26 | `docs/README.md`, this file | Added link uses an existing heading anchor; no dangling references added |
+| A27 | this file | Local doc/link/code-path/generator/unit checks pass on the synchronized head; prior-head CI failures recorded as stale-base artifacts and current exact-head CI gap recorded |
 | A28 | this file | Documents, stale claims, sources, validation and discrepancies recorded |
 | A29 | this file | Documentation workflow and existing checks reused |
 | A30 | this file | Generator and code-path commands executed above |
