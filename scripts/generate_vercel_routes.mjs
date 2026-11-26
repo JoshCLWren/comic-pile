@@ -7,9 +7,9 @@
 import {readFileSync, readdirSync, writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
 import {withCanonicalBuilds} from './vercel_builds.mjs';
-import {slimNativeRollRoutes} from './vercel_slim_routes.mjs';
+import {slimNativeApiRoutes} from './vercel_slim_routes.mjs';
 
-const RUST = '/api/native_roll.rs';
+const RUST = '/api/native_api.rs';
 const NATIVE = new Set([RUST]);
 const FALLBACK = '/api(?:/.*)?';
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
@@ -102,7 +102,7 @@ export function fragmentVercelRoutes(fragments, previousRoutes = []) {
       }
       if (!src) {
         // The catch-all is never a fragment's own ingress src (slim vercel.json
-        // relies on it instead of explicit native_roll entries).
+        // relies on it instead of explicit native_api entries).
         src = (previous && previous.src !== FALLBACK && previous.src) || routeRegex(path);
       }
       if (!NATIVE.has(dest)) {
@@ -142,7 +142,7 @@ export function generateVercel(config, fragments) {
   ];
   return withCanonicalBuilds(applyStaticCsp({
     ...config,
-    routes: slimNativeRollRoutes(fullRoutes, new Set(fragmentRoutes)),
+    routes: slimNativeApiRoutes(fullRoutes, new Set(fragmentRoutes)),
   }));
 }
 export function loadFragmentFiles(directory = 'docs/api/route-fragments') {

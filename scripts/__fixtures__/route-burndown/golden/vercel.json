@@ -18,7 +18,7 @@
   ],
   "builds": [
     {
-      "src": "api/native_roll.rs",
+      "src": "api/native_api.rs",
       "use": "@vercel/rust"
     },
     {
