@@ -166,7 +166,10 @@ def test_find_broken_anchors_ignores_missing_files_and_code_fences(tmp_path: Pat
     errors = find_broken_anchors(tmp_path, [source])
 
     assert errors == ["README.md: broken anchor: #fenced-heading"]
-    assert "README.md: missing target: gone.md" in find_broken_local_links(tmp_path, [source])
+    assert (
+        "README.md: missing target: gone.md#section"
+        in find_broken_local_links(tmp_path, [source])
+    )
 
 
 def test_current_repository_has_no_broken_anchors() -> None:

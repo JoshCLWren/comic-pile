@@ -206,7 +206,8 @@ def _document_anchors(path: Path) -> set[str]:
     anchors: set[str] = set()
     seen: dict[str, int] = {}
     fence: str | None = None
-    for line in path.read_text(encoding="utf-8").splitlines():
+    text = path.read_text(encoding="utf-8")
+    for line in text.splitlines():
         fence_match = FENCE_RE.match(line)
         if fence_match is not None:
             marker = fence_match.group(1)[0]
@@ -226,7 +227,7 @@ def _document_anchors(path: Path) -> set[str]:
         duplicate_index = seen.get(base, 0)
         seen[base] = duplicate_index + 1
         anchors.add(base if duplicate_index == 0 else f"{base}-{duplicate_index}")
-    anchors.update(name.lower() for name in HTML_ANCHOR_RE.findall(path.read_text(encoding="utf-8")))
+    anchors.update(name.lower() for name in HTML_ANCHOR_RE.findall(text))
     return anchors
 
 
@@ -254,7 +255,11 @@ def find_broken_anchors(root: Path, markdown_files: list[Path]) -> list[str]:
             if parsed.scheme or parsed.netloc or not parsed.fragment:
                 continue
             relative = unquote(parsed.path)
-            candidate = (markdown_file.parent / relative).resolve() if relative else markdown_file.resolve()
+            candidate = (
+                (markdown_file.parent / relative).resolve()
+                if relative
+                else markdown_file.resolve()
+            )
             try:
                 candidate.relative_to(root.resolve())
             except ValueError:
