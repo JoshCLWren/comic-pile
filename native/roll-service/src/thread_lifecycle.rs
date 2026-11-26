@@ -296,15 +296,6 @@ async fn option_e_eligible(
     Ok(Some(queue::evaluated_eligible_ids(&validated)?))
 }
 
-/// Option E changes the candidate pool of `stale`/`set-pending`; fail closed.
-fn reject_option_e_preview(state: &AppState) -> Result<(), ApiError> {
-    if state.option_e {
-        return Err(ApiError::ServiceUnavailable(
-            "Option E execution is not supported by this operation".to_string(),
-        ));
-    }
-    Ok(())
-}
 
 /// Load `ThreadResponse` projections for owned threads, in `ids` order.
 ///
@@ -1820,7 +1811,6 @@ pub async fn set_pending_thread(
         Err(other) => return Err(other),
     };
     check.finish(Value::Null)?;
-    reject_option_e_preview(&state)?;
     let response = set_pending_once(&state, user, thread_id.unwrap_or_default(), expected).await?;
     Ok(json_response(StatusCode::OK, response))
 }
@@ -1927,7 +1917,6 @@ pub async fn list_stale_threads(
         ),
     };
     check.finish(Value::Null)?;
-    reject_option_e_preview(&state)?;
     let days = days.unwrap_or(30);
     let page_size = page_size.unwrap_or(200);
     let user_id = user.id();
