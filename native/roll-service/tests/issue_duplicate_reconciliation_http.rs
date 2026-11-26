@@ -1295,7 +1295,6 @@ async fn three_alias_pairs_leave_one_rollable_identity_and_full_history() {
         .get(0);
     assert_eq!(suppressed, 3, "every alias is suppressed, never deleted");
 }
-<<<<<<< HEAD
 
 /// A7 synthetic fixture: one five-part series whose provider numbers are
 /// 1, 2, 100, 101, 102, plus an adjacent arc in a different provider volume.
@@ -1550,5 +1549,3 @@ async fn five_part_series_maps_provider_numbers_without_renumbering_or_extra_row
         "{detected:?}"
     );
 }
-=======
->>>>>>> origin/main
