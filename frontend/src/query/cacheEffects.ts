@@ -665,6 +665,19 @@ export async function invalidateComicVineIssueIntelligenceMany(
 }
 
 /**
+ * Drop identity-bound provider details before refetching every issue a series
+ * mapping commit confirmed. Keeping a previous identity's cached creators or
+ * cover visible during the refetch would show the wrong data for an unchanged
+ * canonical Issue (#5695).
+ */
+export async function clearComicVineIssueIntelligenceMany(
+  client: QueryClient,
+  issueIds: readonly number[],
+): Promise<void> {
+  await Promise.all(issueIds.map((issueId) => clearComicVineIssueIntelligence(client, issueId)))
+}
+
+/**
  * Invalidate the `comicVine.issueIdentity(issueId)` cache bucket after an
  * identity confirm/replace/remove so every card for the same canonical Issue
  * re-reads the new mapping state without a full-page refresh.
