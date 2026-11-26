@@ -3677,7 +3677,7 @@ async fn merge_adoption_nodes_tx(
     tx: &mut tokio_postgres::Transaction<'_>,
     nodes_json: &mut JsonValue,
     ctx: &MergeAdoptionCtx<'_>,
-) -> Result<(Vec<i32>, Vec<i32>, Vec<i32>, Vec<i32>), CommitErr> {
+) -> Result<(Vec<i32>, Vec<i32>, Vec<i32>, Vec<i32>, Vec<i32>), CommitErr> {
     let user_id = ctx.user_id;
     let planned = ctx.planned;
     let source_path = ctx.source_path;
@@ -3692,6 +3692,7 @@ async fn merge_adoption_nodes_tx(
     let mut excluded_positions = Vec::new();
     let mut unresolved_positions = Vec::new();
     let mut adopted_order: Vec<String> = Vec::new();
+    let mut adopted_issue_ids: Vec<i32> = Vec::new();
 
     // Index existing issue nodes by ref_id
     let mut issue_node_index: std::collections::HashMap<i32, usize> =
@@ -3805,6 +3806,7 @@ async fn merge_adoption_nodes_tx(
                     .unwrap_or("")
                     .to_string(),
             );
+            adopted_issue_ids.push(issue_id);
             if !created_now {
                 reused_positions.push(pos);
             }
@@ -3830,6 +3832,7 @@ async fn merge_adoption_nodes_tx(
             nodes_arr.push(node);
             issue_node_index.insert(issue_id, nodes_arr.len() - 1);
             adopted_order.push(format!("cbl-{cse_id}"));
+            adopted_issue_ids.push(issue_id);
             if !created_now {
                 reused_positions.push(pos);
             }
@@ -3877,6 +3880,7 @@ async fn merge_adoption_nodes_tx(
         created_positions,
         excluded_positions,
         unresolved_positions,
+        adopted_issue_ids,
     ))
 }
 
