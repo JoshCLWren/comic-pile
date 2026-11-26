@@ -523,3 +523,132 @@ async fn issue_cards_find_cover_in_raw_provider_payload_image() {
         "https://comicvine.gamespot.com/a/uploads/scale_avatar/0/4/5677-5.jpg"
     );
 }
+
+#[tokio::test]
+async fn issue_cards_expose_alias_and_provider_issue_number() {
+    let (state, token, csrf, owner_id, _guard) = setup_user("alias-cards").await;
+    let conn = state.pool.get().await.unwrap();
+
+    let thread_id: i32 = conn
+        .query_one(
+            "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status, created_at, total_issues, reading_progress)
+             VALUES ($1, 'Saga', 'Comic', 1, 1, 'active', NOW(), 1, 'in_progress') RETURNING id",
+            &[&owner_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let issue_id: i32 = conn
+        .query_one(
+            "INSERT INTO issues (thread_id, issue_number, issue_number_alias, position, status, created_at)
+             VALUES ($1, '3', '100', 1, 'unread', NOW()) RETURNING id",
+            &[&thread_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+
+    let identity_id: i32 = conn
+        .query_one(
+            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, created_at, updated_at)
+             VALUES ('comicvine', 'issue', '4000-999', $1, NOW(), NOW()) RETURNING id",
+            &[&json!({
+                "issue_number": "100",
+                "image_url": "https://example.test/cover.jpg"
+            })],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    conn.execute(
+        "INSERT INTO issue_external_identity_mappings
+            (issue_id, external_identity_id, status, confidence, evidence_json, created_at, updated_at)
+         VALUES ($1, $2, 'confirmed', 1.0, '{}'::jsonb, NOW(), NOW())",
+        &[&issue_id, &identity_id],
+    )
+    .await
+    .unwrap();
+
+    let (status, body) = send(
+        &state,
+        authed(
+            "POST",
+            "/api/v2/issues/cards",
+            &token,
+            &csrf,
+            Some(json!({ "issue_ids": [issue_id] })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let card = &body["items"][0];
+    assert_eq!(card["issue_number"], "3");
+    assert_eq!(card["issue_number_alias"], "100");
+    assert_eq!(card["display_issue_number"], "3 (100)");
+    assert_eq!(card["comicvine_issue_id"], "4000-999");
+    assert_eq!(card["provider_issue_number"], "100");
+    assert_eq!(card["cover_image_url"], "https://example.test/cover.jpg");
+}
+
+#[tokio::test]
+async fn issue_patch_can_set_and_clear_alias() {
+    let (state, token, csrf, owner_id, _guard) = setup_user("alias-patch").await;
+    let conn = state.pool.get().await.unwrap();
+
+    let thread_id: i32 = conn
+        .query_one(
+            "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status, created_at, total_issues, reading_progress)
+             VALUES ($1, 'Saga', 'Comic', 1, 1, 'active', NOW(), 1, 'in_progress') RETURNING id",
+            &[&owner_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let issue_id: i32 = conn
+        .query_one(
+            "INSERT INTO issues (thread_id, issue_number, position, status, created_at)
+             VALUES ($1, '3', 1, 'unread', NOW()) RETURNING id",
+            &[&thread_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+
+    let (status, body) = send(
+        &state,
+        authed(
+            "PATCH",
+            &format!("/api/v2/issues/{issue_id}"),
+            &token,
+            &csrf,
+            Some(json!({
+                "idempotency_key": "alias-set-0001",
+                "source": "direct",
+                "issue_number_alias": "100"
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["issue"]["issue_number_alias"], "100");
+    assert_eq!(body["issue"]["display_issue_number"], "3 (100)");
+
+    let (status, body) = send(
+        &state,
+        authed(
+            "PATCH",
+            &format!("/api/v2/issues/{issue_id}"),
+            &token,
+            &csrf,
+            Some(json!({
+                "idempotency_key": "alias-clear-0001",
+                "source": "direct",
+                "issue_number_alias": null
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert!(body["issue"]["issue_number_alias"].is_null());
+    assert_eq!(body["issue"]["display_issue_number"], "3");
+}
