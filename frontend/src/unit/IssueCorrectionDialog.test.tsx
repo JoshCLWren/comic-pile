@@ -446,6 +446,43 @@ describe('IssueCorrectionDialog', () => {
     expect(preview).toHaveTextContent('Read states explained')
   })
 
+  it('previews a dependent issue in another series from the real outgoing-edge shape', async () => {
+    list.mockResolvedValue(listResponse([
+      issue({ id: 1, issue_number: '1', status: 'read' }),
+      issue({ id: 2, issue_number: '2', status: 'read' }),
+      issue({ id: 3, issue_number: '3', status: 'read' }),
+      issue({ id: 4, issue_number: '4' }),
+      issue({ id: 5, issue_number: '5' }),
+    ]))
+    const dependenciesApi = {
+      listForThread: vi.fn().mockResolvedValue({
+        issues: [
+          { issue_id: 4, incoming: [], outgoing: [] },
+          {
+            issue_id: 5,
+            incoming: [],
+            outgoing: [{
+              source_issue_id: 900,
+              source_issue_number: '1',
+              source_thread_title: 'Dependent Series',
+            }],
+          },
+        ],
+      }),
+    }
+
+    renderDialog({ dependenciesApi })
+    const input = await screen.findByLabelText(/what issue are you currently on/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, '6')
+    await userEvent.click(screen.getByRole('button', { name: 'Review changes' }))
+
+    const preview = await screen.findByTestId('bulk-read-preview')
+    expect(preview).toHaveTextContent('Marking 2 issues as read before #6.')
+    expect(preview).toHaveTextContent('Dependent frontier: Dependent Series #1')
+    expect(preview).not.toHaveTextContent('no direct dependent issues detected')
+  })
+
   it('keeps a best-effort preview when dependency data is absent', async () => {
     list.mockResolvedValue(listResponse([issue({ id: 2, issue_number: '2' })]))
     const dependenciesApi = { listForThread: vi.fn().mockResolvedValue({}) }
