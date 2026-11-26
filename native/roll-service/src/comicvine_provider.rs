@@ -168,31 +168,37 @@ fn compact_refs(value: &Value) -> Value {
 
 /// Normalize a roster row for catalog commit without claiming a deep refresh.
 pub(crate) fn normalize_roster_issue_metadata(result: &Value) -> Value {
-    let volume = result.get("volume").and_then(Value::as_object).map(|source| {
-        let mut compact = Map::new();
-        for field in ["id", "name", "api_detail_url", "site_detail_url"] {
-            if let Some(value) = source.get(field) {
-                compact.insert(field.to_owned(), value.clone());
+    let volume = result
+        .get("volume")
+        .and_then(Value::as_object)
+        .map(|source| {
+            let mut compact = Map::new();
+            for field in ["id", "name", "api_detail_url", "site_detail_url"] {
+                if let Some(value) = source.get(field) {
+                    compact.insert(field.to_owned(), value.clone());
+                }
             }
-        }
-        Value::Object(compact)
-    });
-    let primary_image = result.get("image").and_then(Value::as_object).and_then(|image| {
-        [
-            "original_url",
-            "super_url",
-            "screen_large_url",
-            "medium_url",
-            "screen_url",
-            "small_url",
-            "thumb_url",
-            "tiny_url",
-            "icon_url",
-        ]
-        .iter()
-        .filter_map(|key| image.get(*key).and_then(Value::as_str))
-        .find(|value| !value.is_empty())
-    });
+            Value::Object(compact)
+        });
+    let primary_image = result
+        .get("image")
+        .and_then(Value::as_object)
+        .and_then(|image| {
+            [
+                "original_url",
+                "super_url",
+                "screen_large_url",
+                "medium_url",
+                "screen_url",
+                "small_url",
+                "thumb_url",
+                "tiny_url",
+                "icon_url",
+            ]
+            .iter()
+            .filter_map(|key| image.get(*key).and_then(Value::as_str))
+            .find(|value| !value.is_empty())
+        });
     json!({
         "name": result.get("name"),
         "issue_number": result.get("issue_number"),
@@ -475,7 +481,10 @@ async fn provider_issue(
 }
 
 fn has_complete_provider_payload(metadata: &Value) -> bool {
-    let Some(raw) = metadata.get("raw_provider_payload").and_then(|v| v.as_object()) else {
+    let Some(raw) = metadata
+        .get("raw_provider_payload")
+        .and_then(|v| v.as_object())
+    else {
         return false;
     };
     FIELDS.split(',').all(|key| raw.contains_key(key))
