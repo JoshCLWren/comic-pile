@@ -50,7 +50,7 @@ Parallel sessions share host ports. Claim the smallest free slot `N` under the l
    test "$(curl -s -o /dev/null -w '%{http_code}' "${BASE_URL}/api/v2/threads")" = 401
    ```
 
-   `TEST_ENVIRONMENT=true` is mandatory: it disables native in-process auth throttling for fixture-speed browser traffic. Python is only the static/API ingress and tooling runtime; never start `uvicorn app.main:app`. Restart the native process after Rust changes.
+   `TEST_ENVIRONMENT=true` is mandatory: it disables native in-process auth throttling for fixture-speed browser traffic. `RUST_ROLL_DATABASE_URL` is the single DB pin — a plain `postgresql://` URL. Do not add a second DB variable or a SQLAlchemy driver prefix; Python is only the static/API ingress and tooling runtime; never start `uvicorn app.main:app`. Restart the native process after Rust changes.
 
 3. Run the inventory lane from `frontend/`:
 
