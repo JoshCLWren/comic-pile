@@ -34,6 +34,97 @@ pub(crate) enum ProviderFailure {
     InvalidPayload,
 }
 
+/// Truthful outcome of one bounded, awaited ComicVine metadata hydration.
+/// These are terminal results of the current HTTP invocation, not queue states:
+/// an interactive caller can distinguish success from a legitimate empty roster
+/// and from each provider failure class without waiting for a scheduler.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum HydrationOutcome {
+    /// Deep metadata (including creator names and roles) was persisted.
+    Complete,
+    /// A valid deep payload genuinely has no creator credits. The empty result
+    /// is persisted rather than being mistaken for a failure.
+    NoCredits,
+    /// No confirmed identity for this owned issue, or the identity changed
+    /// while the provider was in flight (a late A must never overwrite B).
+    NotConfirmed,
+    /// `COMICVINE_API_KEY` is absent; distinct from a provider failure.
+    NotConfigured,
+    /// Provider outage, invalid envelope, or a transport/database failure.
+    Unavailable,
+    /// Provider throttled the bounded attempt; honour its Retry-After.
+    RateLimited { retry_after_seconds: u32 },
+    /// The single bounded attempt exceeded the request budget or provider timeout.
+    Timeout,
+    /// Provider payload was malformed or did not match the confirmed identity.
+    InvalidResponse,
+}
+
+impl HydrationOutcome {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Complete => "complete",
+            Self::NoCredits => "no_credits",
+            Self::NotConfirmed => "not_confirmed",
+            Self::NotConfigured => "provider_not_configured",
+            Self::Unavailable => "provider_unavailable",
+            Self::RateLimited { .. } => "rate_limited",
+            Self::Timeout => "timeout",
+            Self::InvalidResponse => "invalid_response",
+        }
+    }
+
+    /// True for a terminal complete/no-credits outcome, including reuse of
+    /// already-complete cached metadata.
+    pub(crate) fn refreshed(self) -> bool {
+        matches!(self, Self::Complete | Self::NoCredits)
+    }
+
+    pub(crate) fn retry_after_seconds(self) -> Option<i32> {
+        match self {
+            Self::RateLimited {
+                retry_after_seconds,
+            } => Some(retry_after_seconds as i32),
+            _ => None,
+        }
+    }
+}
+
+impl From<ProviderFailure> for HydrationOutcome {
+    fn from(error: ProviderFailure) -> Self {
+        match error {
+            ProviderFailure::RateLimited(delay) => Self::RateLimited {
+                retry_after_seconds: delay,
+            },
+            ProviderFailure::Unavailable => Self::Unavailable,
+            ProviderFailure::Timeout => Self::Timeout,
+            ProviderFailure::InvalidPayload => Self::InvalidResponse,
+        }
+    }
+}
+
+/// Persist fetched deep metadata only while the same confirmed identity is
+/// still mapped to the same owned issue. The `EXISTS` recheck fences a
+/// concurrent A -> B remap: a late A response affects zero rows and can never
+/// overwrite B's metadata.
+const PERSIST_SYNC: &str = r#"
+UPDATE external_identities e
+SET metadata_json = (COALESCE(e.metadata_json::jsonb, '{}'::jsonb)
+                     || ($2::text)::jsonb)::json,
+    external_url = COALESCE($3, e.external_url),
+    provider_updated_at = COALESCE(($4::text)::timestamptz, e.provider_updated_at),
+    updated_at = now()
+WHERE e.id = $1 AND e.provider = 'comicvine' AND e.entity_type = 'issue'
+  AND EXISTS (
+    SELECT 1 FROM issue_external_identity_mappings m
+    JOIN issues i ON i.id = m.issue_id
+    JOIN threads t ON t.id = i.thread_id
+    WHERE m.external_identity_id = e.id
+      AND m.issue_id = $5 AND m.status = 'confirmed'
+      AND t.user_id = $6
+  )
+"#;
+
 fn issue_id(external_id: &str) -> Option<u32> {
     let raw = external_id.strip_prefix("4000-").unwrap_or(external_id);
     raw.parse::<u32>().ok().filter(|id| *id > 0)
