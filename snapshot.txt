@@ -1,38 +1,38 @@
-utc: 2026-11-26T04:37:54Z
-uptime: 740.39s load: 1.61 1.14 0.67
-processes: 210
+utc: 2026-11-26T04:38:10Z
+uptime: 756.68s load: 1.70 1.19 0.69
+processes: 211
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15700        2120        8213          73        5774       13580
+Mem:           15700        3336        6998          73        5774       12364
 Swap:              0           0           0
 --- disk
 Filesystem            Size  Used Avail Use% Mounted on
 /dev/mapper/cow-root  145G   58G   87G  41% /
 /dev/mapper/cow-root  145G   58G   87G  41% /
 --- top rss (KiB, name only)
-473028 clippy-driver
-403888 clippy-driver
-374368 opencode.exe
+1874480 clippy-driver
+372208 opencode.exe
+244436 clippy-driver
+237908 clippy-driver
 226964 Runner.Worker
+193852 clippy-driver
 139988 provjobd2349642
 112016 Runner.Listener
 96980 dockerd
-89288 opencode
-76668 cargo
+89816 opencode
+77824 cargo
 55532 php-fpm8.5
-54304 containerd
+54308 containerd
 42852 snapd
 37864 opencode-pty
-36436 postgres
-29900 networkd-dispat
 --- top cpu (name only)
-99.4 clippy-driver
-99.4 clippy-driver
- 6.3 cargo
+ 127 clippy-driver
+ 100 clippy-driver
+ 100 clippy-driver
+84.9 clippy-driver
  2.3 opencode.exe
  1.3 provjobd2349642
- 1.0 cargo-clippy
  1.0 Runner.Worker
- 0.3 containerd
+ 0.8 cargo
 --- kernel oom/kill
 --- shutdown/session signals
