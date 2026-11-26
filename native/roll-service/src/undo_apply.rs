@@ -2087,6 +2087,60 @@ mod tests {
             .expect("issue row")
             .get(0);
         assert_eq!(issue_status, "unread", "the rating's read state reverts");
+        let cards =
+            crate::issue_service::cards(&connection, AuthenticatedUser::for_test(9101), &[9501])
+                .await
+                .expect("effective issue card after undo");
+        assert_eq!(
+            cards.items[0].rating, None,
+            "the undone rating is not effective"
+        );
+    }
+
+    #[tokio::test]
+    async fn undo_rating_preserves_previous_rating_and_invalidates_companion() {
+        let (state, user, _guard) = rating_undo_fixture().await;
+        let connection = db::checkout(&state).await.expect("fixture connection");
+        connection
+            .batch_execute(
+                "UPDATE threads SET last_rating = 3.0 WHERE id = 9201;
+                 UPDATE snapshots SET thread_states = jsonb_set(thread_states::jsonb,
+                    '{9201,last_rating}', '4.5'::jsonb)::json WHERE id = 9401;
+                 UPDATE events SET context = '{\"issue_command_key\":\"undo-rating-fixture\"}'::json
+                    WHERE id = 9601;
+                 INSERT INTO events (id,user_id,type,timestamp,thread_id,issue_id,rating,context)
+                 VALUES (9602,9101,'rate',NOW() - interval '1 day',9201,9501,4.5,NULL),
+                        (9603,9101,'rate',NOW(),9201,9501,3.0,
+                         '{\"dice_command_key\":\"roll-rating-9201-undo-rating-fixture\"}'::json);",
+            )
+            .await
+            .expect("seed prior rating and companion dice event");
+        drop(connection);
+
+        let Json(_) = undo_to_snapshot(Path((9301, 9401)), user, State(state.clone()))
+            .await
+            .expect("undo applies rating delta");
+        let connection = db::checkout(&state).await.expect("post-undo connection");
+        let cards =
+            crate::issue_service::cards(&connection, AuthenticatedUser::for_test(9101), &[9501])
+                .await
+                .expect("effective issue card after undo");
+        assert_eq!(cards.items[0].rating, Some(4.5));
+        let row = connection
+            .query_one("SELECT last_rating FROM threads WHERE id = 9201", &[])
+            .await
+            .expect("restored thread rating");
+        assert_eq!(row.get::<_, Option<f64>>(0), Some(4.5));
+        let marked = connection
+            .query_one(
+                "SELECT count(*) FROM events WHERE id IN (9601,9603)
+                 AND type = 'rate' AND rating = 3.0
+                 AND context->>'undone_by_snapshot_id' = '9401'",
+                &[],
+            )
+            .await
+            .expect("rating audit records retained");
+        assert_eq!(marked.get::<_, i64>(0), 2);
     }
 
     /// Greptile #4617381402: a full (session-start) restore must not erase a
