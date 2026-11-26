@@ -2417,7 +2417,11 @@ mod tests {
         // correction, and the alias is the only changed field, so the write
         // reaches the stale-offer check before any Roll effect is applied.
         client
-            .execute("UPDATE sessions SET ended_at=NOW() WHERE id=1", &[])
+            .batch_execute(
+                "UPDATE sessions SET ended_at=NOW() WHERE id=1;
+                 INSERT INTO events (user_id, issue_id, type, rating, timestamp)
+                 VALUES (1, 101, 'rate', 4.5, NOW());",
+            )
             .await
             .unwrap();
         let mut request = roll_offer(Some(4.5), "roll-offer-alias-stale-001");
