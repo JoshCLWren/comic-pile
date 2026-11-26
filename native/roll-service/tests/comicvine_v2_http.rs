@@ -2524,6 +2524,52 @@ async fn import_issue_creates_thread_identity_and_reading_order_slot() {
     assert_eq!(body["detail"], format!("Reading order {order} not found"));
 }
 
+/// A single exact-issue import finishes hydration inside the HTTP invocation:
+/// no queue, no cron and no explicit Retry are needed to see stored credits.
+#[tokio::test]
+async fn import_issue_hydrates_metadata_before_returning() {
+    let (state, token, csrf, _user_id, _guard) = setup_user("cvv2-import-hydrate").await;
+    set_key(true);
+    provider_ok(
+        &state,
+        json!({"results": {
+            "id": 777,
+            "name": "Single Import Hydration",
+            "issue_number": "3",
+            "cover_date": "2021-04-01",
+            "store_date": "2021-04-02",
+            "image": {"medium_url": "https://img.example/single.jpg"},
+            "volume": {"id": 9, "name": "Single Import"},
+            "person_credits": [{"id": 41, "name": "Import Writer", "role": "writer"}],
+            "character_credits": [],
+            "team_credits": [],
+            "story_arc_credits": [],
+            "date_last_updated": "2026-11-01 17:33:53"
+        }}),
+    );
+    let (status, imported) = send(
+        &state,
+        call(
+            "POST",
+            "/api/v2/comicvine/issues:import",
+            &token,
+            &csrf,
+            Some(json!({
+                "title": "Single Import Hydration", "comicvine_issue_id": 777, "issue_number": "3"
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{imported:?}");
+    let issue_id = imported["issue_id"].as_i64().expect("imported issue id");
+    let intelligence_path = format!("/api/v2/issues/{issue_id}/comicvine");
+    let (status, after) = send(&state, get(&intelligence_path, &token, &csrf)).await;
+    assert_eq!(status, StatusCode::OK, "{after:?}");
+    assert_eq!(after["metadata_status"], "complete");
+    assert_eq!(after["creators"][0]["name"], "Import Writer");
+    assert_eq!(after["creators"][0]["roles"], json!(["writer"]));
+}
+
 /// Python `request.issue_number or "1"` (#4636390879): a missing, null or
 /// empty issue number is stored as `"1"`; Python stores `title.strip()`.
 #[tokio::test]
