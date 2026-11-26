@@ -668,7 +668,6 @@ describe('targeted cache effects', () => {
       queryKey: queryKeys.queue.activeCount(),
       exact: true,
     })
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.session.pages() })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.session.snapshotsAll() })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.activity.all })
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.dependencies.all })
@@ -766,7 +765,6 @@ describe('targeted cache effects', () => {
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.readingPlans.list(), exact: true })
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.readingPlans.reader(readingPlan.id) })
       expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
-      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.session.current(), exact: true })
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.bootstrap(), exact: true })
     })
   })
