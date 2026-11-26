@@ -17,6 +17,8 @@ interface ComicVineSearchDialogProps {
   issueId: number | null
   threadTitle: string
   issueNumber: string | null
+  issueNumberAlias?: string | null
+  providerIssueNumber?: string | null
   mode?: 'confirm' | 'replace'
   onClose: () => void
   onConfirmed: (selected?: ComicVineIssueCandidate | null) => void
@@ -121,6 +123,8 @@ export default function ComicVineSearchDialog({
   issueId,
   threadTitle,
   issueNumber,
+  issueNumberAlias,
+  providerIssueNumber,
   mode = 'confirm',
   onClose,
   onConfirmed,
@@ -141,6 +145,13 @@ export default function ComicVineSearchDialog({
   const [siblingScope, setSiblingScope] = useState<SiblingScope | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const alias = issueNumberAlias?.trim()
+  const providerNum = providerIssueNumber?.trim()
+  const showAlias = alias && issueNumber && alias.toLowerCase() !== issueNumber.toLowerCase()
+  const showProvider = providerNum && issueNumber && providerNum.toLowerCase() !== issueNumber.toLowerCase() && (!showAlias || providerNum.toLowerCase() !== alias!.toLowerCase())
+  const targetIssueLabel = issueNumber
+    ? `#${issueNumber}${showAlias ? ` (${alias})` : ''}${showProvider ? ` [CV #${providerNum}]` : ''}`
+    : ''
   const requestsRef = useRef(new LatestRequestGuard())
   const searchingRef = useRef(false)
 
