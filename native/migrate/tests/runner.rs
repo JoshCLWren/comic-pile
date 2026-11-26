@@ -192,11 +192,7 @@ async fn fresh_database_gets_all_migrations_and_alembic_stamp() {
         .await
         .unwrap()
         .get(0);
-<<<<<<< HEAD
     assert_eq!(recorded, embedded_versions().len() as i64);
-=======
-    assert_eq!(recorded, 4);
->>>>>>> origin/main
 
     let threads: bool = client
         .query_one("SELECT to_regclass('public.threads') IS NOT NULL", &[])

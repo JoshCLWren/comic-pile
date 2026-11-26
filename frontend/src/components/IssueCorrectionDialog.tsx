@@ -314,14 +314,11 @@ export default function IssueCorrectionDialog({
         await issuesService.markUnread(targetIssue.id)
       }
 
-<<<<<<< HEAD
       setLastOperation(operation)
       if (operation) {
         try { writeBulkReadReceipt(threadId, operation.id) } catch { /* ignore */ }
       }
       setPreview(null)
-=======
->>>>>>> origin/main
       await invalidateAfterIssueEdit(queryClient, threadId)
       onSuccess()
       if (!operation) onClose()

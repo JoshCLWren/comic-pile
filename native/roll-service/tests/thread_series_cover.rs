@@ -813,4 +813,3 @@ async fn series_cover_is_present_on_later_cursor_pages() {
         Some("https://cv.example/far.jpg".to_owned())
     );
 }
->>>>>>> origin/main
