@@ -75,11 +75,12 @@ Checks actually run in this checkout:
 - `node scripts/check_doc_code_paths.mjs` — exit 0, "Doc code paths resolve in 292 Markdown files."
 - `node --test scripts/check_doc_code_paths.test.mjs` — exit 0.
 - `python3 scripts/generate_markdown_inventory.py --output /tmp/MARKDOWN_INVENTORY_5757.md` — exit 0.
-- Focused documentation tests in `tests/test_markdown_docs.py` and `tests/test_generate_markdown_inventory.py` — pass through a stdlib harness; `pytest` is not installed in this worker runtime, so no `pytest` result is claimed locally.
+- Focused documentation tests in `tests/test_markdown_docs.py` and `tests/test_generate_markdown_inventory.py` — 31 pass through a stdlib harness; `pytest` is not installed in this worker runtime, so no `pytest` result is claimed locally.
+- `python3 -m py_compile` on the changed Python tooling/tests — exit 0.
 - `git diff --check` — clean.
 - Tree scope: this handoff, the seven corrected active documents, the `docs/README.md` navigation link, the Markdown guard extension, and focused documentation tests are the only files changed relative to the audited head. A temporary-index `git write-tree` plus `git merge-tree --write-tree` against that head exits 0 with no conflict sections, because the changes are documentation, validation and test files only.
 
-Not executed locally: `uv`-driven pytest, Ruff, ty, pnpm, a clean-checkout `make dev`/browser flow, and any credentialed production request. Exact-head CI and independent review remain required before delivery; this record does not claim either as complete.
+Not executed locally: `uv`-driven pytest, Ruff, ty, `bash scripts/lint.sh` (it exits early because Ruff is absent from this worker runtime), pnpm, a clean-checkout `make dev`/browser flow, and any credentialed production request. Exact-head CI and independent review remain required before delivery; this record does not claim either as complete.
 
 ## Remaining discrepancies (recorded, not changed here)
 
