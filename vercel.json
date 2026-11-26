@@ -18,7 +18,7 @@
   },
   "builds": [
     {
-      "src": "api/native_roll.rs",
+      "src": "api/native_api.rs",
       "use": "@vercel/rust"
     },
     {
@@ -35,280 +35,280 @@
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v2/auth/login",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v2/auth/refresh",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v2/auth/logout",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v2/auth/csrf",
       "methods": [
         "GET"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v2/auth/me",
       "methods": [
         "GET"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v2/auth/forgot-password",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v2/auth/reset-password",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v1/auth/register",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v1/auth/login",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v1/auth/refresh",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v1/auth/logout",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v1/auth/csrf",
       "methods": [
         "GET"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v1/auth/me",
       "methods": [
         "GET"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v1/auth/forgot-password",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v1/auth/reset-password",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/auth/register",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/auth/login",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/auth/refresh",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/auth/logout",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/auth/csrf",
       "methods": [
         "GET"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/auth/me",
       "methods": [
         "GET"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/auth/forgot-password",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/auth/reset-password",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v2/health",
       "methods": [
         "GET"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v2/roll/bootstrap",
       "methods": [
         "GET"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v2/reading-sessions",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v2/roll/dice-command",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v2/roll/offer",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v2/roll/reset",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v2/roll/die-state",
       "methods": [
         "GET"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v2/roll/eligible-issue-ids",
       "methods": [
         "GET"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v2/reading-boundaries",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "^/api/v2/queue-entries/[0-9]+$",
       "methods": [
         "GET"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "^/api/v2/queue-entries/[0-9]+$",
       "methods": [
         "PATCH"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v2/queue-orders",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v1/roll/dismiss-pending",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/roll/dismiss-pending",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "^/api/v2/reading-graph$",
       "methods": [
         "GET"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "^/api/v2/continuity-plans/[0-9]+/reader$",
       "methods": [
         "GET"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "^/api/v2/continuity-plans/[0-9]+/recovery$",
@@ -316,74 +316,74 @@
         "GET",
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "^/api/v2/reading-graph/repairs$",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api/v2/maintenance/comicvine-metadata-repairs",
       "methods": [
         "GET"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "^/api/v1/identity\\-inbox$",
       "methods": [
         "GET"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "^/api/v1/identity\\-inbox/search/issues$",
       "methods": [
         "GET"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "^/api/v1/identity\\-inbox/[^/]+$",
       "methods": [
         "GET"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "^/api/v1/identity\\-inbox/[^/]+/confirm$",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "^/api/v1/identity\\-inbox/[^/]+/defer$",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "^/api/v1/identity\\-inbox/[^/]+/reject$",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "^/api/v1/identity\\-inbox/[^/]+/skip$",
       "methods": [
         "POST"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/api(?:/.*)?",
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "^/(?:openapi\\.json|docs|redoc|health)$",
