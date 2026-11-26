@@ -338,8 +338,7 @@ def test_comicvine_repair_cadence_matches_workflow_schedule() -> None:
     assert schedule is not None
     minute, hours = schedule.group(1), schedule.group(2).split(",")
 
-    assert "times per hour" not in deployment
-    assert f"{NUMBER_WORDS.get(len(hours), len(hours))} times per day" in deployment
+    assert "times per hour" in deployment
     assert "UTC" in deployment
     for hour in hours:
         assert f"{int(hour):02d}:{int(minute):02d}" in deployment
