@@ -17683,6 +17683,13 @@
             "type": "integer",
             "format": "int32"
           },
+          "next_steps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Actionable next steps for the reviewer when the match is unresolved,\nambiguous, or missing. Empty when no guidance is needed."
+          },
           "provider": {
             "type": [
               "string",
