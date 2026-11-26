@@ -198,7 +198,8 @@ pub(crate) fn validate(request: &IssueReadRateRequest) -> Result<(), ApiError> {
             return Err(invalid("Issue number alias must be 50 characters or fewer"));
         }
     }
-    if request.status.is_none() && request.rating.is_none() && request.issue_number_alias.is_none() {
+    if request.status.is_none() && request.rating.is_none() && request.issue_number_alias.is_none()
+    {
         return Err(invalid("Provide status, rating, or issue_number_alias"));
     }
     Ok(())
@@ -1650,7 +1651,7 @@ mod tests {
             &IssueReadRateRequest {
                 status: Some("read".into()),
                 rating: None,
-            issue_number_alias: None,
+                issue_number_alias: None,
                 idempotency_key: "direct-issue-unblock-01".into(),
                 source: None,
             },
@@ -1694,7 +1695,7 @@ mod tests {
             &IssueReadRateRequest {
                 status: Some("unread".into()),
                 rating: None,
-            issue_number_alias: None,
+                issue_number_alias: None,
                 idempotency_key: "direct-issue-reblock-01".into(),
                 source: None,
             },
@@ -1732,7 +1733,7 @@ mod tests {
             &IssueReadRateRequest {
                 status: Some("unread".into()),
                 rating: None,
-            issue_number_alias: None,
+                issue_number_alias: None,
                 idempotency_key: "direct-issue-reactivate-01".into(),
                 source: None,
             },
@@ -1791,7 +1792,7 @@ mod tests {
             &IssueReadRateRequest {
                 status: Some("read".into()),
                 rating: None,
-            issue_number_alias: None,
+                issue_number_alias: None,
                 idempotency_key: "direct-issue-default-01".into(),
                 source: None,
             },
