@@ -445,7 +445,7 @@ fn push_repairs(
     }
 }
 
-fn project(
+pub(crate) fn project(
     inputs: &OptionInputs,
     validated: &crate::reading_constraints::ValidatedReadingInputs,
     legacy: Option<&[option_inputs::LegacyDependencyRow]>,

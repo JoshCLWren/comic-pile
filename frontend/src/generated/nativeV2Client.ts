@@ -747,6 +747,24 @@ export interface PreviewRequest {
 
 export type PreviewResponse = components['schemas']['PlanRecoveryPreview']
 
+export interface PreviewIssueCreateRequest {
+  path: {
+    thread_id: number
+  }
+  body: components['schemas']['PreviewIssuesRequest']
+}
+
+export type PreviewIssueCreateResponse = components['schemas']['IssueEditPreviewResponse']
+
+export interface PreviewIssueStructureRequest {
+  path: {
+    thread_id: number
+  }
+  body: components['schemas']['PreviewIssueStructureRequest']
+}
+
+export type PreviewIssueStructureResponse = components['schemas']['IssueEditPreviewResponse']
+
 export interface RatingDistributionRequest {
   path: {
     creator_key: string
@@ -1279,6 +1297,8 @@ export interface NativeV2Client {
   overrideRoll(args: OverrideRollRequest): Promise<OverrideRollResponse>
   patchUserPreferences(args: PatchUserPreferencesRequest): Promise<PatchUserPreferencesResponse>
   preview(args: PreviewRequest): Promise<PreviewResponse>
+  previewIssueCreate(args: PreviewIssueCreateRequest): Promise<PreviewIssueCreateResponse>
+  previewIssueStructure(args: PreviewIssueStructureRequest): Promise<PreviewIssueStructureResponse>
   ratingDistribution(args: RatingDistributionRequest): Promise<RatingDistributionResponse>
   read(args: ReadRequest): Promise<ReadResponse>
   readDemoRoll(): Promise<ReadDemoRollResponse>
@@ -1851,6 +1871,18 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     preview(args: PreviewRequest) {
       return client.get<PreviewResponse>(
         `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/recovery`,
+      )
+    },
+    previewIssueCreate(args: PreviewIssueCreateRequest) {
+      return client.post<PreviewIssueCreateResponse, PreviewIssueCreateRequest['body']>(
+        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/issues/preview`,
+        args.body,
+      )
+    },
+    previewIssueStructure(args: PreviewIssueStructureRequest) {
+      return client.post<PreviewIssueStructureResponse, PreviewIssueStructureRequest['body']>(
+        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/issues/structure-preview`,
+        args.body,
       )
     },
     ratingDistribution(args: RatingDistributionRequest) {

@@ -71,6 +71,8 @@ interface UseQueueModalsResult {
   closeMigrationDialog: () => void
   handleCreateSubmit: (event: FormEvent) => Promise<void>
   handleEditSubmit: (event: FormEvent) => Promise<void>
+  /** Called by the modal after flushing so Save can preserve the Undo bar. */
+  setEditUndoAvailable: (available: boolean) => void
   handleReactivateSubmit: (event: FormEvent) => Promise<void>
   handleMigrationComplete: (migratedThread: Thread) => Promise<void>
   handleMigrationSkip: () => void
@@ -123,6 +125,9 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
   const [createError, setCreateError] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
   const [editingThread, setEditingThread] = useState<Thread | ThreadListItem | null>(null)
+  // Set by QueueModals after it flushes the deferred issue list. While true,
+  // Save keeps the dialog open so the post-commit Undo bar stays reachable.
+  const editUndoAvailableRef = useRef(false)
   const [reactivateThreadId, setReactivateThreadId] = useState('')
   const [issuesToAdd, setIssuesToAdd] = useState(1)
   const [repositioningThread, setRepositioningThread] = useState<ThreadListItem | null>(null)
@@ -166,6 +171,7 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
       // Only migrated threads render IssueToggleList; its load completion
       // clears this flag. Unmigrated threads never enter the loading state.
       const issuesLoadRequired = thread.total_issues != null
+      editUndoAvailableRef.current = false
       setEditingThread(thread)
       setEditForm({
         title: thread.title,
@@ -197,6 +203,7 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
   )
 
   const closeEditModal = useCallback(() => {
+    editUndoAvailableRef.current = false
     setEditingThread(null)
     setIsIssuesLoading(false)
     setOpenModal(null)
@@ -444,7 +451,9 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
           data.issues_remaining = Number(editForm.issuesRemaining)
         }
         await submitEdit({ id: editingThread.id, data })
-        closeEditModal()
+        if (!editUndoAvailableRef.current) {
+          closeEditModal()
+        }
         await onUpdated()
       } catch {
         console.error('Failed to update thread')
@@ -537,6 +546,9 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
     closeAddSeriesComicVineModal,
     handleCreateSubmit,
     handleEditSubmit,
+    setEditUndoAvailable: (available: boolean) => {
+      editUndoAvailableRef.current = available
+    },
     handleReactivateSubmit,
     handleMigrationComplete,
     handleMigrationSkip,
