@@ -772,14 +772,21 @@ async fn restore_thread_from_state(
                 // recorded the key (issue #3226). A missing key must preserve
                 // the existing link; an explicit JSON null must clear it.
                 let has_catalog_issue_id = ch.get("catalog_issue_id").is_some();
+                // As with catalog_issue_id, a missing alias key leaves a live
+                // alias untouched; an explicit JSON null clears it (#4652).
+                let issue_number_alias = ch.get("issue_number_alias").and_then(|v| v.as_str());
+                let has_issue_number_alias = ch.get("issue_number_alias").is_some();
 
                 tx
                     .execute(
-                        "INSERT INTO issues (id, thread_id, issue_number, status, read_at, created_at, position, catalog_issue_id)
-                         VALUES ($1, $2, $3, $4, $5::text::timestamptz, NOW(), $6, $7)
+                        "INSERT INTO issues (id, thread_id, issue_number, status, read_at, created_at, position, catalog_issue_id, issue_number_alias)
+                         VALUES ($1, $2, $3, $4, $5::text::timestamptz, NOW(), $6, $7,
+                                 CASE WHEN $10::boolean THEN $8::text ELSE NULL END)
                          ON CONFLICT (id) DO UPDATE SET issue_number = $3, status = $4,
                              read_at = $5::text::timestamptz, position = $6,
-                             catalog_issue_id = CASE WHEN $8::boolean THEN $7 ELSE issues.catalog_issue_id END",
+                             catalog_issue_id = CASE WHEN $9::boolean THEN $7 ELSE issues.catalog_issue_id END,
+                             issue_number_alias = CASE WHEN $10::boolean THEN $8::text
+                                 ELSE issues.issue_number_alias END",
                         &[
                             &issue_id,
                             &thread_id,
@@ -788,7 +795,9 @@ async fn restore_thread_from_state(
                             &read_at,
                             &(position as i32),
                             &catalog_issue_id,
+                            &issue_number_alias,
                             &has_catalog_issue_id,
+                            &has_issue_number_alias,
                         ],
                     )
                     .await
@@ -916,14 +925,20 @@ async fn restore_thread_from_state(
             // absent key must not clear a live link (Python issue #3226). Only
             // an explicit null in the snapshot clears the link.
             let has_catalog_issue_id = issue_state.get("catalog_issue_id").is_some();
+            // Preserve the same missing-key/null distinction as catalog_issue_id.
+            let issue_number_alias = issue_state.get("issue_number_alias").and_then(|v| v.as_str());
+            let has_issue_number_alias = issue_state.get("issue_number_alias").is_some();
 
             tx
                 .execute(
-                    "INSERT INTO issues (id, thread_id, issue_number, status, read_at, created_at, position, catalog_issue_id)
-                     VALUES ($1, $2, $3, $4, $5::text::timestamptz, NOW(), $6, $7)
+                    "INSERT INTO issues (id, thread_id, issue_number, status, read_at, created_at, position, catalog_issue_id, issue_number_alias)
+                     VALUES ($1, $2, $3, $4, $5::text::timestamptz, NOW(), $6, $7,
+                             CASE WHEN $10::boolean THEN $8::text ELSE NULL END)
                      ON CONFLICT (id) DO UPDATE SET issue_number = $3, status = $4,
                          read_at = $5::text::timestamptz, position = $6,
-                         catalog_issue_id = CASE WHEN $8::boolean THEN $7 ELSE issues.catalog_issue_id END",
+                         catalog_issue_id = CASE WHEN $9::boolean THEN $7 ELSE issues.catalog_issue_id END,
+                         issue_number_alias = CASE WHEN $10::boolean THEN $8::text
+                             ELSE issues.issue_number_alias END",
                     &[
                         &issue_id,
                         &thread_id,
@@ -932,7 +947,9 @@ async fn restore_thread_from_state(
                         &read_at,
                         &(position as i32),
                         &catalog_issue_id,
+                        &issue_number_alias,
                         &has_catalog_issue_id,
+                        &has_issue_number_alias,
                     ],
                 )
                 .await
