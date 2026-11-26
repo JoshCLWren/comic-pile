@@ -30,6 +30,12 @@ The former Python `/api/v1/health/*` probes (dependency, warmup, cache-quota,
 keepalive) were retired with the Python API. There is no cache dependency in the
 current runtime.
 
+The retired `GET /api/v1/keepalive` browser heartbeat has no native route or
+live caller. Do not replace it with a periodic liveness request: authenticated
+navigation uses the normal API, and `ResumeRecovery` revalidates auth and
+refreshes scoped data after a meaningful tab resume. The dependency-free
+`/api/v2/health` probe is for operational monitoring, not database prewarming.
+
 ## Database readiness
 
 Liveness intentionally does not prove database availability. Verify readiness
