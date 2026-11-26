@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -127,5 +127,80 @@ describe('PlannerAddSteps', () => {
 
     expect(screen.getByLabelText('Issue')).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Add issue' })).toBeDisabled()
+  })
+
+  it('treats a series with issues remaining but no issue records as empty (#4119)', () => {
+    // The remaining count is deliberately independent of the issue records:
+    // this series reports one issue left but has zero issue records to plan.
+    const emptySeries = { ...threads[0], issues_remaining: 1 } as ThreadListItem
+    const editor = makeEditor({
+      selectedThread: emptySeries,
+      selectedThreadId: emptySeries.id,
+    })
+    render(
+      <PlannerAddSteps
+        editor={editor}
+        threads={[emptySeries]}
+        issues={[]}
+        issuesLoading={false}
+        issueLoadError={null}
+        groups={[]}
+      />,
+    )
+
+    const issueSelect = screen.getByLabelText('Issue')
+    expect(issueSelect).toBeDisabled()
+    const options = within(issueSelect).getAllByRole('option')
+    expect(options).toHaveLength(1)
+    expect(options[0]).toHaveTextContent('No issues available')
+    expect(screen.getByRole('button', { name: 'Add issue' })).toBeDisabled()
+    expect(screen.getByRole('status')).toHaveTextContent(
+      /No issues in this series yet/i,
+    )
+  })
+
+  it('does not add a stale issue for a series with no issue records (#4119)', () => {
+    const emptySeries = { ...threads[0], issues_remaining: 1 } as ThreadListItem
+    const editor = makeEditor({
+      selectedThread: emptySeries,
+      selectedThreadId: emptySeries.id,
+      // A selection left over from a different series must not create a step.
+      selectedIssue: issues[0],
+    })
+    render(
+      <PlannerAddSteps
+        editor={editor}
+        threads={[emptySeries]}
+        issues={[]}
+        issuesLoading={false}
+        issueLoadError={null}
+        groups={[]}
+      />,
+    )
+
+    fireEvent.submit(screen.getByRole('form', { name: 'Add an issue' }))
+    expect(editor.addIssue).not.toHaveBeenCalled()
+  })
+
+  it('adds an issue that is present in the loaded issue set', () => {
+    const editor = makeEditor({
+      selectedThread: threads[0],
+      selectedThreadId: threads[0].id,
+      selectedIssue: issues[0],
+    })
+    render(
+      <PlannerAddSteps
+        editor={editor}
+        threads={threads}
+        issues={issues}
+        issuesLoading={false}
+        issueLoadError={null}
+        groups={[]}
+      />,
+    )
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Add issue' }))
+    expect(editor.addIssue).toHaveBeenCalledTimes(1)
   })
 })

@@ -95,6 +95,11 @@ export default function PlannerAddSteps({
           >
             Add issue
           </button>
+          {selectedSeriesHasNoIssues && (
+            <p role="status" className="text-xs text-[var(--theme-text-muted)]">
+              No issues in this series yet. Add issues to the series before adding them to a plan.
+            </p>
+          )}
           {lanesEmpty && (
             <p className="text-xs text-[var(--theme-text-muted)]">Add a lane first to add issues.</p>
           )}
