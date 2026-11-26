@@ -798,10 +798,10 @@ async fn a7_five_part_series_keeps_authored_identity_and_exact_provider_links() 
             assert!(card["read_at"].is_null());
         }
     }
-    for index in 5..7 {
+    for issue_id in requested_ids.iter().skip(5) {
         let card = items
             .iter()
-            .find(|item| item["issue_id"] == requested_ids[index])
+            .find(|item| item["issue_id"] == *issue_id)
             .unwrap_or_else(|| panic!("missing adjacent issue: {body:?}"));
         assert!(
             card["comicvine_issue_id"].is_null(),
