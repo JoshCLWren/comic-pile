@@ -3099,7 +3099,7 @@ async fn do_cbl_adoption_commit(
                 .map(|id| id as i32)
         })
         .collect();
-    eprintln!("DEBUG5523 source_issue_ids={source_issue_ids:?} adopted={adopted_issue_ids:?} list={canonical_list_id} user={user_id}");
+    eprintln!("DEBUG5523 source_issue_ids={source_issue_ids:?} adopted={adopted_issue_ids:?} list={canonical_list_id} user={user_id} planned={:?}", planned.iter().map(|e| (e.get("cbl_position"), e.get("resolved_issue_id"), e.get("resolution_status"), e.get("adoption_decision"))).collect::<Vec<_>>());
     if !source_issue_ids.is_empty() {
         tx.run_execute(
             "DELETE FROM custom_cbl_entries e
