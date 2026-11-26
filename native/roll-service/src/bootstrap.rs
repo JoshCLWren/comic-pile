@@ -253,22 +253,44 @@ fn extract_cover_source(metadata: &Value) -> Option<&str> {
     fn nonempty(value: &Value) -> Option<&str> {
         value.as_str().map(str::trim).filter(|s| !s.is_empty())
     }
+    let image_keys = [
+        "original_url",
+        "super_url",
+        "screen_large_url",
+        "medium_url",
+        "screen_url",
+        "small_url",
+        "thumb_url",
+        "tiny_url",
+        "icon_url",
+    ];
     ["image_url", "primary_image"]
         .iter()
         .filter_map(|key| metadata.get(key))
         .find_map(nonempty)
         .or_else(|| {
             let image = metadata.get("image")?;
-            [
-                "original_url",
-                "super_url",
-                "medium_url",
-                "small_url",
-                "thumb_url",
-            ]
-            .iter()
-            .filter_map(|key| image.get(key))
-            .find_map(nonempty)
+            image_keys
+                .iter()
+                .filter_map(|key| image.get(key))
+                .find_map(nonempty)
+        })
+        .or_else(|| {
+            let raw = metadata.get("raw_provider_payload")?;
+            let raw_image = raw.get("image");
+            raw_image
+                .and_then(|image| {
+                    image_keys
+                        .iter()
+                        .filter_map(|key| image.get(key))
+                        .find_map(nonempty)
+                })
+                .or_else(|| {
+                    ["image_url", "primary_image"]
+                        .iter()
+                        .filter_map(|key| raw.get(key))
+                        .find_map(nonempty)
+                })
         })
 }
 
