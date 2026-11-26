@@ -1,0 +1,149 @@
+<!doctype html>
+<!--
+  Deterministic source for docs/images/social-preview.png (issue #3887).
+  Render at exactly 1280x640, for example:
+
+    chromium --headless --no-sandbox --disable-gpu --hide-scrollbars \
+      --allow-file-access-from-files --force-device-scale-factor=1 \
+      --window-size=1280,640 \
+      --screenshot=docs/images/social-preview.png \
+      file://$PWD/docs/images/social-preview.html
+
+  The logo mark is copied verbatim from static/favicon.svg. The capture on the
+  right is the committed, seeded/demo-data roll-hero.png; no personal library
+  or unverified UI capture is used.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Comic Pile social preview</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; width: 1280px; height: 640px; overflow: hidden; }
+  body {
+    display: grid;
+    grid-template-columns: 560px 720px;
+    background: #0a0807;
+    font-family: Arial, Helvetica, sans-serif;
+    color: #f6efe4;
+  }
+  .brand {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 56px 52px;
+    background:
+      radial-gradient(560px 420px at 18% 22%, rgba(15, 118, 110, 0.28), transparent 70%),
+      radial-gradient(520px 420px at 92% 96%, rgba(242, 169, 0, 0.16), transparent 72%),
+      #100d0a;
+    border-right: 1px solid rgba(242, 169, 0, 0.22);
+  }
+  .logo {
+    width: 92px;
+    height: 92px;
+    margin-bottom: 34px;
+    filter: drop-shadow(0 10px 26px rgba(0, 0, 0, 0.55));
+  }
+  .eyebrow {
+    margin: 0 0 14px;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: #c8b9a2;
+  }
+  h1 {
+    margin: 0;
+    font-size: 74px;
+    line-height: 0.92;
+    font-weight: 900;
+    letter-spacing: -0.045em;
+    color: #fff8ec;
+  }
+  h1 span { color: #f2a900; }
+  .tagline {
+    margin: 24px 0 0;
+    font-size: 23px;
+    line-height: 1.25;
+    font-weight: 700;
+    color: #f2c56b;
+  }
+  .description {
+    margin: 12px 0 0;
+    font-size: 17px;
+    line-height: 1.4;
+    color: #b8aa98;
+  }
+  .demo {
+    margin-top: 44px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 17px;
+    font-weight: 700;
+    color: #e7d9c0;
+  }
+  .demo::before {
+    content: "";
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #f2a900;
+    box-shadow: 0 0 14px rgba(242, 169, 0, 0.8);
+  }
+  .capture { position: relative; overflow: hidden; background: #0a0807; }
+  .capture img {
+    position: absolute;
+    top: -22px;
+    left: -260px;
+    width: 1210px;
+    height: 736px;
+    object-fit: cover;
+    object-position: center top;
+  }
+  .capture::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, #100d0a 0%, rgba(16, 13, 10, 0.5) 7%, rgba(16, 13, 10, 0) 18%);
+  }
+  .capture-tag {
+    position: absolute;
+    z-index: 2;
+    right: 26px;
+    bottom: 22px;
+    padding: 9px 14px;
+    border: 1px solid rgba(242, 169, 0, 0.45);
+    border-radius: 8px;
+    background: rgba(10, 8, 7, 0.78);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #f2c56b;
+  }
+</style>
+</head>
+<body>
+  <section class="brand">
+    <svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" aria-label="Comic Pile logo">
+      <rect x="2" y="2" width="28" height="28" rx="6" fill="#0f766e"/>
+      <circle cx="16" cy="16" r="4" fill="white"/>
+      <circle cx="8" cy="8" r="2.5" fill="white"/>
+      <circle cx="24" cy="8" r="2.5" fill="white"/>
+      <circle cx="8" cy="24" r="2.5" fill="white"/>
+      <circle cx="24" cy="24" r="2.5" fill="white"/>
+    </svg>
+    <p class="eyebrow">Dice-driven reading</p>
+    <h1>COMIC<br><span>PILE</span></h1>
+    <p class="tagline">Roll to read.<br>Rotate your stack.</p>
+    <p class="description">A comic-reading tracker that turns your backlog into a habit.</p>
+    <p class="demo">comic-pile.vercel.app</p>
+  </section>
+  <section class="capture">
+    <img src="roll-hero.png" alt="Comic Pile Roll page">
+    <span class="capture-tag">Live Roll page · demo data</span>
+  </section>
+</body>
+</html>
