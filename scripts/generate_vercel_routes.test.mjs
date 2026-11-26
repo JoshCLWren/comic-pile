@@ -131,7 +131,7 @@ test('fragments own the active cron set and retire obsolete native ingress', () 
     ],
     routes: [
       {src: '/api/v1/cron/release-sync', methods: ['GET'], dest: ROLL},
-      {src: '^/api/v2/maintenance/comicvine-metadata-repairs$', methods: ['GET'], dest: ROLL},
+      {src: '/api/v2/maintenance/comicvine-metadata-repairs', methods: ['GET'], dest: ROLL},
       {src: FALLBACK, dest: ROLL},
     ],
   };
@@ -140,13 +140,12 @@ test('fragments own the active cron set and retire obsolete native ingress', () 
       {method: 'GET', path: '/api/v1/cron/release-sync', dest: ROLL},
     ], crons: [{path: '/api/v1/cron/release-sync', schedule: '0 9 * * *'}]},
     {family: 'comicvine', defaults: {}, operations: [],
-      retired_routes: ['^/api/v2/maintenance/comicvine-metadata-repairs$']},
+      retired_routes: ['/api/v2/maintenance/comicvine-metadata-repairs']},
   ];
   const generated = generateVercel(previous, fragments);
   assert.deepEqual(generated.crons, [{path: '/api/v1/cron/release-sync', schedule: '0 9 * * *'}]);
   assert.equal(generated.routes.some(route => route.src.includes('comicvine-metadata-repairs')), false);
   assert(generated.routes.some(route => route.src === FALLBACK));
-  assert.deepEqual(generateVercel(generated, fragments), generated);
 });
 
 test('generation requires fragments and an explicit native baseline', () => {

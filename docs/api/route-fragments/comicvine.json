@@ -5,7 +5,9 @@
     "^/api/v2/comicvine(?:/.*)?$"
   ],
   "retired_routes": [
+    "/api/v2/maintenance/comicvine-metadata-repairs",
     "^/api/v2/maintenance/comicvine-metadata-repairs$",
+    "/api/v2/maintenance/comicvine-metadata-backfill",
     "^/api/v2/maintenance/comicvine-metadata-backfill$"
   ],
   "defaults": {
