@@ -21,9 +21,12 @@ import { isWindowDefined, isFunction } from '../../utils/runtimeChecks'
 import Tooltip from '../../components/Tooltip'
 import Modal from '../../components/Modal'
 import DeleteIssueDialog from './DeleteIssueDialog'
-import { AliasOfferList, PostCreateUndoBar, PreviewIssueRow } from './IssueEditPreviewParts'
+import { PostCreateUndoBar } from './IssueEditPreviewParts'
+import { IssueCreatePreviewModal } from './IssueCreatePreviewModal'
+import { IssuePreviewErrorModal } from './IssuePreviewErrorModal'
 import { IssueStructurePreviewModal } from './IssueStructurePreviewModal'
 import { useIssueStructurePreview } from './useIssueStructurePreview'
+import type { StructuralEdit } from './useIssueStructurePreview'
 import type { IssueToggleListApi, IssueToggleListDependenciesApi, IssueToggleListHandle } from './IssueToggleList.api'
 export type { IssueToggleListApi, IssueToggleListDependenciesApi, IssueToggleListHandle } from './IssueToggleList.api'
 import CompactIssueCardTrigger from '../../components/CompactIssueCardTrigger'
@@ -40,6 +43,22 @@ import {
   getPendingCreates,
 } from './issueUtils'
 import type { IssueMutation, QueuedIssueMutation } from './types'
+
+/**
+ * A reversible edit captured while a deferred Edit Series draft is saved.
+ * Creates reuse the #4026/#4027 snapshot; reorder records the exact pre-edit
+ * ID order and reverses it with the same ownership-checked issue-order write.
+ * Actions are applied newest-first so a create + reorder batch unwinds cleanly.
+ */
+type UndoAction =
+  | { kind: 'snapshot'; sessionId: number; snapshotId: number }
+  | { kind: 'reorder'; issueIds: number[] }
+
+type DraftReorder = {
+  nextIssues: Issue[]
+  announcement?: string
+  focusTarget?: { issueId: number; direction: 'up' | 'down' }
+}
 
 export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   threadId: number
@@ -103,18 +122,22 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   const [previewError, setPreviewError] = useState<string | null>(null)
   /** Numbers the reader explicitly accepted as aliases, not duplicates (#4654). */
   const [acceptedAliasNumbers, setAcceptedAliasNumbers] = useState<string[]>([])
-  /** Undo point returned by the last committed create (#4654). */
-  const [undoPoint, setUndoPoint] = useState<{
-    sessionId: number
-    snapshotId: number
-  } | null>(null)
-  // Mirrors undoPoint for the imperative handle: parents read it synchronously
-  // right after flush(), before React has committed the state update.
-  const undoPointRef = useRef<{
-    sessionId: number
-    snapshotId: number
-  } | null>(null)
+  /**
+   * Undo points from committed creates and reorders (#4654, #5852). The array
+   * mirrors the ref so parents reading hasUndoPoint() synchronously after
+   * flush() see the same truth as the rendered Undo affordance.
+   */
+  const [undoActions, setUndoActions] = useState<UndoAction[]>([])
+  const undoActionsRef = useRef<UndoAction[]>([])
   const [isUndoing, setIsUndoing] = useState(false)
+  /**
+   * A reorder is shown immediately as a local pending change (#5852). The
+   * server projection is still fetched and confirmed before the mutation is
+   * queued, so a failed preview never silently commits a structural edit.
+   */
+  const [draftReorder, setDraftReorder] = useState<DraftReorder | null>(null)
+  const [structurePreviewError, setStructurePreviewError] = useState<string | null>(null)
+  const structuralEditRef = useRef<StructuralEdit | null>(null)
   const baseIssuesRef = useRef<Issue[]>([])
   const pendingMutationsRef = useRef<IssueMutation[]>([])
   const isProcessingMutationsRef = useRef(false)
@@ -126,6 +149,25 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   const notifyPendingMutations = useCallback(() => {
     onPendingMutationsChangeRef.current?.(pendingMutationsRef.current.length > 0)
   }, [])
+  const recordUndoAction = useCallback((action: UndoAction) => {
+    // handleUndoEdit replays this array, so keep it strictly newest-first:
+    // every committed action is prepended, never appended (#5852).
+    const next = [action, ...undoActionsRef.current]
+    undoActionsRef.current = next
+    setUndoActions(next)
+  }, [])
+  const displayIssues = draftReorder?.nextIssues ?? issues
+  const hasStructuralPreview = Boolean(issuesService.previewReorder)
+  const pendingReorderEffects = useMemo(() => {
+    if (!draftReorder) return []
+    const originalPositions = new Map(issues.map((issue, index) => [issue.id, index + 1]))
+    return draftReorder.nextIssues.flatMap((issue, index) => {
+      const before = originalPositions.get(issue.id)
+      return before !== undefined && before !== index + 1
+        ? [{ id: issue.id, issueNumber: issue.issue_number, before, after: index + 1 }]
+        : []
+    })
+  }, [draftReorder, issues])
   const loadGenerationRef = useRef(0)
   const totalCountRef = useRef(0)
   const fullyLoadedRef = useRef(false)
@@ -151,8 +193,8 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   ].filter((id): id is string => id !== null).join(' ') || undefined
 
   const getNextUnreadIssueId = useCallback(() => {
-    return issues.find((issue) => issue.status === 'unread')?.id ?? null
-  }, [issues])
+    return displayIssues.find((issue) => issue.status === 'unread')?.id ?? null
+  }, [displayIssues])
 
   const getVisibilityWindow = useCallback((issueList: Issue[], nextUnreadId: number | null) => {
     if (!nextUnreadId) {
@@ -169,20 +211,20 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   }, [])
 
   const getVisibleIssues = useCallback(() => {
-    if (isExpanded || issues.length <= 5) {
-      return issues
+    if (isExpanded || displayIssues.length <= 5) {
+      return displayIssues
     }
 
     const nextUnreadId = getNextUnreadIssueId()
-    const { startIndex, endIndex } = getVisibilityWindow(issues, nextUnreadId)
+    const { startIndex, endIndex } = getVisibilityWindow(displayIssues, nextUnreadId)
 
-    return issues.slice(startIndex, endIndex)
-  }, [issues, isExpanded, getNextUnreadIssueId, getVisibilityWindow])
+    return displayIssues.slice(startIndex, endIndex)
+  }, [displayIssues, isExpanded, getNextUnreadIssueId, getVisibilityWindow])
 
   // Visible issue pills share one bounded projection; expanding the reorder
   // view expands that batch. No per-row metadata requests.
   const issueCardsQuery = useIssueCards(
-    (isReorderMode ? issues : getVisibleIssues()).map((issue) => issue.id),
+    (isReorderMode ? displayIssues : getVisibleIssues()).map((issue) => issue.id),
     { enabled: !isLoading && !loadError },
   )
   const cardsByIssue = indexIssueCards(issueCardsQuery.data)
@@ -291,9 +333,16 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       case 'delete':
         await issuesService.delete(mutation.issueId)
         return
-      case 'reorder':
+      case 'reorder': {
+        // Capture the exact pre-edit ID order while baseIssuesRef is still the
+        // uncommitted server snapshot (#5852). Reversing through the same
+        // ownership-checked issue-order write preserves issue IDs, dependencies,
+        // list memberships, ratings, read facts and Queue position.
+        const previousIssueIds = baseIssuesRef.current.map((issue) => issue.id)
         await issuesService.reorder(threadId, normalizeIssueOrder(baseIssuesRef.current, mutation.issueIds))
+        recordUndoAction({ kind: 'reorder', issueIds: previousIssueIds })
         return
+      }
       case 'create': {
         const options: IssueCreateOptions = {}
         if (mutation.strategy) {
@@ -307,17 +356,16 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         }
         const response = await issuesService.create(threadId, mutation.issueRange, options)
         if (response.undo_session_id != null && response.undo_snapshot_id != null) {
-          const point = {
+          recordUndoAction({
+            kind: 'snapshot',
             sessionId: response.undo_session_id,
             snapshotId: response.undo_snapshot_id,
-          }
-          undoPointRef.current = point
-          setUndoPoint(point)
+          })
         }
         return
       }
     }
-  }, [issuesService, threadId])
+  }, [issuesService, recordUndoAction, threadId])
 
   const processIssueMutations = useCallback(async () => {
     if (isProcessingMutationsRef.current) {
@@ -455,7 +503,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       await processIssueMutations()
     } ,
     hasPendingMutations: () => pendingMutationsRef.current.length > 0,
-    hasUndoPoint: () => undoPointRef.current !== null,
+    hasUndoPoint: () => undoActionsRef.current.length > 0,
   }), [processIssueMutations, setActionError])
 
   const enqueueIssueReorder = useCallback((
@@ -477,6 +525,10 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     if (options?.announcement) {
       setReorderAnnouncement(options.announcement)
     }
+    // The queued mutation is applied to `issues` synchronously, so the draft
+    // projection must be released in the same commit (#5852). Keeping it would
+    // pin the displayed order to a stale snapshot on the next move.
+    setDraftReorder(null)
     enqueueIssueMutation({
       type: 'reorder',
       issueIds: nextIssueIds,
@@ -670,16 +722,55 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     previewReorder: issuesService.previewReorder,
     onDelete: (issueId: number) => { setActionError(null); enqueueIssueMutation({ type: 'delete', issueId }) },
     onReorder: enqueueIssueReorder,
-    onError: setActionError,
+    onError: (message: string) => {
+      setActionError(message)
+      setStructurePreviewError(message)
+    },
   })
 
+  /**
+   * Show the requested order immediately (so a click is never a silent no-op)
+   * while the server still projects the exact constraints before commit.
+   * A seam-less caller keeps the historical direct path and needs no draft.
+   */
+  const requestStructuralEdit = useCallback((edit: StructuralEdit) => {
+    structuralEditRef.current = edit
+    const hasPreview = edit.type === 'delete'
+      ? Boolean(issuesService.previewDelete)
+      : hasStructuralPreview
+    if (deferred && hasPreview && edit.type === 'reorder') {
+      setDraftReorder({
+        nextIssues: edit.nextIssues,
+        announcement: edit.announcement,
+        focusTarget: edit.focusTarget,
+      })
+    }
+    setStructurePreviewError(null)
+    void requestStructuralPreview(edit)
+  }, [deferred, hasStructuralPreview, issuesService.previewDelete, requestStructuralPreview])
+
+  const cancelDraftReorder = useCallback(() => {
+    setDraftReorder(null)
+    setStructurePreviewError(null)
+    setActionError(null)
+    cancelStructurePreview()
+  }, [cancelStructurePreview])
+
   async function handleUndoEdit() {
-    if (!undoPoint || isUndoing) return
+    if (undoActions.length === 0 || isUndoing) return
     setIsUndoing(true)
     try {
-      await undoService.undo(undoPoint.sessionId, undoPoint.snapshotId)
-      undoPointRef.current = null
-      setUndoPoint(null)
+      // Newest-first: a reorder made after a create is reversed before the
+      // create's snapshot is restored (#5852).
+      for (const action of undoActionsRef.current) {
+        if (action.kind === 'snapshot') {
+          await undoService.undo(action.sessionId, action.snapshotId)
+        } else {
+          await issuesService.reorder(threadId, action.issueIds)
+        }
+      }
+      undoActionsRef.current = []
+      setUndoActions([])
       const refreshed = await fetchAllIssues()
       baseIssuesRef.current = refreshed
       syncOptimisticIssues(refreshed, pendingMutationsRef.current)
@@ -714,13 +805,13 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       return
     }
 
-    const nextIssues = reorderIssuesForDrop(issues, draggedIssueId, targetIssueId)
+    const nextIssues = reorderIssuesForDrop(displayIssues, draggedIssueId, targetIssueId)
     setDraggedIssueId(null)
     setDragOverIssueId(null)
 
     // A resolved no-op drop is not a structural edit; do not preview or queue it.
-    if (nextIssues.every((issue, index) => issue.id === issues[index]?.id)) return
-    void requestStructuralPreview({ type: 'reorder', nextIssues })
+    if (nextIssues.every((issue, index) => issue.id === displayIssues[index]?.id)) return
+    requestStructuralEdit({ type: 'reorder', nextIssues })
   }
 
   const handleDragEnd = () => {
@@ -740,7 +831,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     // modals would trap focus inside the Edit Series dialog (#3267). The delete
     // is queued only after the reader confirms the projected before/after rows.
     setDeleteDialogIssue(null)
-    void requestStructuralPreview({ type: 'delete', issueId })
+    requestStructuralEdit({ type: 'delete', issueId })
   }
 
   function handleCancelDelete() {
@@ -748,9 +839,9 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   }
 
   function handleMoveIssue(issue: Issue, direction: 'up' | 'down') {
-    const nextIssues = moveIssueByStep(issues, issue.id, direction)
+    const nextIssues = moveIssueByStep(displayIssues, issue.id, direction)
     const didReorder = nextIssues.some(
-      (candidate, index) => candidate.id !== issues[index]?.id,
+      (candidate, index) => candidate.id !== displayIssues[index]?.id,
     )
 
     if (!didReorder) {
@@ -758,7 +849,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       return
     }
 
-    void requestStructuralPreview({
+    requestStructuralEdit({
       type: 'reorder',
       nextIssues,
       announcement: `Moved issue #${issue.issue_number} ${direction}.`,
@@ -807,20 +898,20 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   }
 
   const visibleIssues = getVisibleIssues()
-  const hasHiddenIssues = issues.length > 5 && !isExpanded && !isReorderMode
+  const hasHiddenIssues = displayIssues.length > 5 && !isExpanded && !isReorderMode
 
   return (
     <div className="space-y-2">
       <div className="flex justify-between items-center gap-2">
         <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Issues</p>
         <div className="flex items-center gap-2">
-          {issues.length > 5 && (
+          {displayIssues.length > 5 && (
             <button
               type="button"
               onClick={() => setIsExpanded(!isExpanded)}
               className="text-[10px] font-black uppercase tracking-widest text-amber-400 hover:text-amber-300 transition-colors"
             >
-              {isExpanded ? 'Show fewer' : `Show all ${issues.length}`}
+              {isExpanded ? 'Show fewer' : `Show all ${displayIssues.length}`}
             </button>
           )}
           <button
@@ -850,7 +941,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       )}
       {isReorderMode ? (
         <div className="space-y-1 max-h-64 overflow-auto" data-testid="issue-reorder-list">
-          {issues.map((issue, index) => {
+          {displayIssues.map((issue, index) => {
             const isBusy = toggling.has(issue.id) || deleting.has(issue.id)
 
             return (
@@ -893,7 +984,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
                 <button
                   type="button"
                   onClick={() => handleMoveIssue(issue, 'down')}
-                  disabled={isBusy || index === issues.length - 1}
+                  disabled={isBusy || index === displayIssues.length - 1}
                   className={[
                     'min-h-[44px] min-w-[44px] flex items-center justify-center text-xs font-black transition-colors',
                     'text-[var(--theme-text-muted)] hover:text-amber-300 disabled:opacity-40',
@@ -912,12 +1003,12 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       ) : (
       <div className="flex flex-wrap gap-1 max-h-40 overflow-auto">
         {visibleIssues.map((issue) => {
-    const fullIndex = issues.findIndex((i) => i.id === issue.id)
+    const fullIndex = displayIssues.findIndex((i) => i.id === issue.id)
     const isBusy = toggling.has(issue.id) || deleting.has(issue.id)
     const isDragOver = dragOverIssueId === issue.id
     const isDragged = draggedIssueId === issue.id
     const canMoveUp = fullIndex > 0
-    const canMoveDown = fullIndex < issues.length - 1
+    const canMoveDown = fullIndex < displayIssues.length - 1
     const hasDeps = dependencies[issue.id] !== undefined
     const tooltipContent = getDependencyTooltip(dependencies[issue.id])
 
@@ -1034,6 +1125,37 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
          })}
       </div>
       )}
+      {draftReorder && (
+        <div
+          className="rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3 space-y-2"
+          data-testid="pending-reorder-preview"
+        >
+          <p className="text-xs font-bold text-[var(--theme-text-primary)]">
+            Pending order change — not saved
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {pendingReorderEffects.length === 0 ? (
+              <span className="text-xs text-[var(--theme-text-muted)]">Review the new order above before saving.</span>
+            ) : pendingReorderEffects.map((effect) => (
+              <span
+                key={effect.id}
+                className="rounded border border-[var(--theme-border)] px-2 py-1 text-xs text-[var(--theme-text-muted)]"
+                data-testid={`pending-reorder-effect-${effect.id}`}
+              >
+                #{effect.issueNumber}: {effect.before} → {effect.after}
+              </span>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={cancelDraftReorder}
+            className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 py-1.5 text-xs font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] transition-colors"
+            data-testid="undo-pending-reorder"
+          >
+            Undo reorder
+          </button>
+        </div>
+      )}
       <div className="flex gap-2">
         <label htmlFor={addInputId} className="sr-only">
           Add issues
@@ -1069,7 +1191,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
           {(isAdding || isPreviewing) ? '…' : 'Add'}
         </button>
       </div>
-      {undoPoint && (
+      {undoActions.length > 0 && (
         <PostCreateUndoBar
           isUndoing={isUndoing}
           onUndo={() => void handleUndoEdit()}
@@ -1171,193 +1293,79 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         </Modal>
       )}
       {previewError && (
-        <Modal
-          isOpen
-          title="Preview unavailable"
-          onClose={() => setPreviewError(null)}
-          data-testid="edit-series-preview-error-modal"
-        >
-          <div className="space-y-4">
-            <p className="text-sm text-[var(--theme-text-muted)]" role="alert">
-              Could not preview <span className="font-bold">{addRange.trim()}</span>: {previewError}
-            </p>
-            <p className="text-xs text-stone-400">
-              Nothing was changed. You can retry the preview or cancel.
-            </p>
-            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
-              <button
-                type="button"
-                onClick={() => { setPreviewError(null); setAddError(null) }}
-                className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => { setAddError(null); void handleAddIssues() }}
-                disabled={isPreviewing || !addRange.trim()}
-                className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-xs font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60 transition-colors"
-                data-testid="retry-preview-add"
-              >
-                Retry preview
-              </button>
-            </div>
-          </div>
-        </Modal>
+        <IssuePreviewErrorModal
+          message={previewError}
+          range={addRange}
+          isPreviewing={isPreviewing}
+          onCancel={() => { setPreviewError(null); setAddError(null) }}
+          onRetry={() => { setAddError(null); void handleAddIssues() }}
+        />
       )}
       {previewState && (
-        <Modal
-          isOpen
-          title="Preview issue changes"
-          onClose={closePreview}
-          data-testid="edit-series-preview-modal"
-        >
-          <div className="space-y-4">
-            <p className="text-sm text-[var(--theme-text-muted)]">
-              Adding <span className="font-bold text-[var(--theme-text-primary)]">{previewState.range}</span> to {previewState.response.thread_title}.
-              Existing relative issue order is preserved by default.
-            </p>
-
-            <div className="space-y-2">
-              <div className={`rounded-xl border p-3 ${previewState.selectedStrategy === 'safe_default' ? 'border-[var(--theme-primary-action)]' : 'border-white/10'}`}>
-                <label className="flex items-start gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="preview-strategy"
-                    checked={previewState.selectedStrategy === 'safe_default'}
-                    onChange={() => setPreviewState({ ...previewState, selectedStrategy: 'safe_default' })}
-                    disabled={!previewState.response.default_outcome.can_commit}
-                  />
-                  <div className="text-sm">
-                    <div className="font-bold">Safe default</div>
-                    <div className="text-xs text-stone-400">
-                      {previewState.response.default_outcome.preserves_existing_relative_order
-                        ? 'Preserves existing relative issue order.'
-                        : 'May change existing relative issue order.'}
-                    </div>
-                    {!previewState.response.default_outcome.can_commit && (
-                      <div className="text-xs text-[var(--theme-danger)] mt-1" role="alert">
-                        {previewState.response.default_outcome.conflict_message ?? 'This change would create a reading-graph cycle.'}
-                      </div>
-                    )}
-                    {previewState.response.default_outcome.graph.cycles.length > 0 && (
-                      <div className="text-xs text-stone-400 mt-1 space-y-1" data-testid="safe-default-cycle-path">
-                        {previewState.response.default_outcome.graph.cycles.map((cycle, idx) => (
-                          <div key={idx}>
-                            {cycle.edges.map((e, i) => (
-                              <span key={i}>
-                                {i > 0 ? ' -> ' : ''}{e.source.series_title} #{e.source.issue_number}
-                                {i === cycle.edges.length - 1 ? ` -> ${e.target.series_title} #${e.target.issue_number}` : ''}
-                              </span>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </label>
-              </div>
-
-              {previewState.response.numeric_resort_outcome && (
-                <div className={`rounded-xl border p-3 ${previewState.selectedStrategy === 'numeric_resort' ? 'border-[var(--theme-primary-action)]' : 'border-white/10'}`}>
-                  <label className="flex items-start gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="preview-strategy"
-                      checked={previewState.selectedStrategy === 'numeric_resort'}
-                      onChange={() => setPreviewState({ ...previewState, selectedStrategy: 'numeric_resort' })}
-                      disabled={!previewState.response.numeric_resort_outcome.can_commit}
-                    />
-                    <div className="text-sm">
-                      <div className="font-bold">Numeric resort (explicit)</div>
-                      <div className="text-xs text-stone-400">
-                        Re-seats ordinary numeric issues in numeric order. Review before saving.
-                      </div>
-                      {!previewState.response.numeric_resort_outcome.can_commit && (
-                        <div className="text-xs text-[var(--theme-danger)] mt-1" role="alert" data-testid="numeric-resort-cycle">
-                          {previewState.response.numeric_resort_outcome.conflict_message ?? 'This change would create a reading-graph cycle.'}
-                        </div>
-                      )}
-                      {previewState.response.numeric_resort_outcome.graph.cycles.length > 0 && (
-                        <div className="text-xs text-stone-400 mt-1 space-y-1" data-testid="numeric-resort-cycle-path">
-                          {previewState.response.numeric_resort_outcome.graph.cycles.map((cycle, idx) => (
-                            <div key={idx}>
-                              {cycle.edges.map((e, i) => (
-                                <span key={i}>
-                                  {i > 0 ? ' -> ' : ''}{e.source.series_title} #{e.source.issue_number}
-                                  {i === cycle.edges.length - 1 ? ` -> ${e.target.series_title} #${e.target.issue_number}` : ''}
-                                </span>
-                              ))}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </label>
-                </div>
-              )}
-            </div>
-
-            <AliasOfferList
-              offers={previewState.response.alias_offers ?? []}
-              accepted={acceptedAliasNumbers}
-              onToggle={toggleAliasOffer}
-            />
-
-            <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2" data-testid="preview-before-after">
-              <div>
-                <div className="font-bold text-stone-400 mb-1">Before</div>
-                <div className="max-h-40 overflow-auto rounded-lg border border-white/10 p-2 space-y-1">
-                  {(previewState.selectedStrategy === 'numeric_resort' ? previewState.response.numeric_resort_outcome?.before : previewState.response.default_outcome.before)?.map((item, idx) => (
-                    <PreviewIssueRow key={`${item.issue_id}-${item.issue_number}-${idx}`} item={item} />
-                  ))}
-                </div>
-              </div>
-              <div>
-                <div className="font-bold text-stone-400 mb-1">After</div>
-                <div className="max-h-40 overflow-auto rounded-lg border border-white/10 p-2 space-y-1">
-                  {(previewState.selectedStrategy === 'numeric_resort' ? previewState.response.numeric_resort_outcome?.after : previewState.response.default_outcome.after)?.map((item, idx) => (
-                    <PreviewIssueRow key={`${item.issue_id ?? 'new'}-${item.issue_number}-${idx}`} item={item} />
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
-              <button
-                type="button"
-                onClick={closePreview}
-                className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmPreview}
-                disabled={!(previewState.selectedStrategy === 'numeric_resort'
-                  ? previewState.response.numeric_resort_outcome?.can_commit
-                  : previewState.response.default_outcome.can_commit)
-                  || isPreviewing
-                  || (previewState.response.alias_offers ?? []).some(
-                    (offer) => !acceptedAliasNumbers.includes(offer.requested_issue_number)
-                  )}
-                className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-xs font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60 transition-colors"
-                data-testid="confirm-preview-add"
-              >
-                Add issues
-              </button>
-            </div>
-          </div>
-        </Modal>
+        <IssueCreatePreviewModal
+          state={previewState}
+          isPreviewing={isPreviewing}
+          acceptedAliasNumbers={acceptedAliasNumbers}
+          onSelectStrategy={(strategy) => setPreviewState({ ...previewState, selectedStrategy: strategy })}
+          onToggleAlias={toggleAliasOffer}
+          onConfirm={handleConfirmPreview}
+          onCancel={closePreview}
+        />
       )}
       {structurePreview && (
         <IssueStructurePreviewModal
           kind={structurePreview.edit.type}
           response={structurePreview.response}
           isPreviewing={isPreviewingStructure}
-          onConfirm={confirmStructurePreview}
-          onCancel={cancelStructurePreview}
+          onConfirm={() => {
+            confirmStructurePreview()
+            setDraftReorder(null)
+            setStructurePreviewError(null)
+          }}
+          onCancel={cancelDraftReorder}
         />
+      )}
+      {structurePreviewError && structuralEditRef.current && (
+        <Modal
+          isOpen
+          title="Preview unavailable"
+          onClose={cancelDraftReorder}
+          data-testid="edit-series-structure-preview-error-modal"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-[var(--theme-text-muted)]" role="alert">
+              Could not preview this issue change: {structurePreviewError}
+            </p>
+            <p className="text-xs text-stone-400">
+              {structuralEditRef.current.type === 'reorder'
+                ? 'The proposed order is shown above but has not been saved. Retry the preview, or undo it.'
+                : 'Nothing was changed. Retry the preview or cancel.'}
+            </p>
+            <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+              <button
+                type="button"
+                onClick={cancelDraftReorder}
+                className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const edit = structuralEditRef.current
+                  if (!edit) return
+                  setStructurePreviewError(null)
+                  requestStructuralEdit(edit)
+                }}
+                disabled={isPreviewingStructure}
+                className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-xs font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60 transition-colors"
+                data-testid="retry-structure-preview"
+              >
+                Retry preview
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
       <DeleteIssueDialog
         issue={deleteDialogIssue}
