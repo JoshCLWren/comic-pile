@@ -23,14 +23,10 @@
 use crate::{
     auth::AuthenticatedUser,
     catalog_commit::inline_hydration_budget,
-<<<<<<< HEAD
     comicvine_provider::{
         hydrate_confirmed_identity_inline, hydrate_confirmed_identity_sync, HydrationOutcome,
         ProviderFailure,
     },
-=======
-    comicvine_provider::{hydrate_confirmed_identity_inline, ProviderFailure},
->>>>>>> origin/main
     comicvine_resolution::SeriesImportStatusResponse,
     db,
     thread_issues::natural_issue_order,
@@ -1880,15 +1876,12 @@ pub async fn import_issue(
         response.total_items = Some(items.len() as i32 + 1);
     }
     tx.commit().await.map_err(db::query_error)?;
-<<<<<<< HEAD
     // A single exact-issue import is request/response work: finish hydration
     // in this HTTP invocation, after the transaction and pooled connection are
     // released. Provider failure is best-effort and never rolls back the
     // committed mapping or overwrites valid stored metadata.
     drop(connection);
     hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started, false).await;
-=======
->>>>>>> origin/main
     Ok((StatusCode::CREATED, Json(response)))
 }
 
