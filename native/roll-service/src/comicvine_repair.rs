@@ -78,6 +78,28 @@ SELECT v, 'pending', 0, now(), now(), now()
 FROM unnest($1::int[]) AS v
 ON CONFLICT ON CONSTRAINT uq_comicvine_metadata_refresh_identity DO NOTHING
 "#;
+/// Persist one synchronous hydration result only while the exact identity the
+/// provider was called for is still the confirmed identity of the same owned
+/// issue. The `EXISTS` recheck fences a concurrent A -> B remap: a late A
+/// response affects zero rows and can never overwrite B's metadata.
+const PERSIST_SYNC: &str = r#"
+UPDATE external_identities e
+SET metadata_json = (COALESCE(e.metadata_json::jsonb, '{}'::jsonb)
+                     || ($2::text)::jsonb)::json,
+    external_url = COALESCE($3, e.external_url),
+    provider_updated_at = COALESCE(($4::text)::timestamptz, e.provider_updated_at),
+    updated_at = now()
+WHERE e.id = $1 AND e.provider = 'comicvine' AND e.entity_type = 'issue'
+  AND EXISTS (
+    SELECT 1 FROM issue_external_identity_mappings m
+    JOIN issues i ON i.id = m.issue_id
+    JOIN threads t ON t.id = i.thread_id
+    WHERE m.external_identity_id = e.id
+      AND m.issue_id = $5 AND m.status = 'confirmed'
+      AND t.user_id = $6
+  )
+RETURNING e.id
+"#;
 const SETTLE: &str = r#"
 UPDATE comicvine_metadata_refresh_requests
 SET state=($4::text)::varchar, lease_expires_at=NULL,
@@ -2181,7 +2203,15 @@ mod tests {
         let identity_id = seed_confirmed_identity(&state, "4000-29319", &json!({})).await;
         queue_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
 
-        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123").await;
+        let outcome =
+            let outcome =
+            let outcome =
+            let outcome =
+            hydrate_confirmed_identity_sync(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", false).await;
+        assert_eq!(outcome, HydrationOutcome::Complete);
+        assert_eq!(outcome, HydrationOutcome::NoCredits);
+        assert_eq!(outcome, HydrationOutcome::Unavailable);
+        assert_eq!(outcome, HydrationOutcome::Complete);
 
         let connection = db::checkout(&state).await.expect("assert connection");
         let metadata: Value = serde_json::from_str(
@@ -2223,7 +2253,7 @@ mod tests {
         let identity_id = seed_confirmed_identity(&state, "4000-29319", &json!({})).await;
         // No canned provider response: the recording fake fails closed.
 
-        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123").await;
+        hydrate_confirmed_identity_sync(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", false).await;
 
         let connection = db::checkout(&state).await.expect("assert connection");
         let mapping_status: String = connection
@@ -2281,7 +2311,7 @@ mod tests {
             Bytes::from(body),
         );
 
-        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123").await;
+        hydrate_confirmed_identity_sync(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", false).await;
 
         let connection = db::checkout(&state).await.expect("assert connection");
         let request_state: String = connection
@@ -2331,7 +2361,7 @@ mod tests {
             Bytes::from(body),
         );
 
-        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123").await;
+        hydrate_confirmed_identity_sync(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", false).await;
 
         let connection = db::checkout(&state).await.expect("assert connection");
         let metadata: Value = serde_json::from_str(

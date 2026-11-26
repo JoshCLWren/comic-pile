@@ -806,8 +806,7 @@ mod tests {
             READ_SQL.contains("m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL\n          AND LEFT(m.metadata->>'deep_metadata_refreshed_at', 19) <= to_char((now() AT TIME ZONE 'UTC') - interval '30 days'"),
             "30-day refresh must apply to credited rows"
         );
-        // Count only the deep-metadata freshness branches; the enqueue
-        // completed_at window is a separate 30-day retry guard.
+        // Count only the deep-metadata freshness branches.
         assert_eq!(
             READ_SQL
                 .matches("LEFT(m.metadata->>'deep_metadata_refreshed_at', 19) <= to_char((now() AT TIME ZONE 'UTC') - interval '30 days'")
@@ -872,5 +871,67 @@ mod tests {
         assert_eq!(wire["metadata_status"], "refresh_pending");
         assert!(wire["story_arcs"].is_array());
         assert_eq!(wire["series_name"], "Hellblazer");
+    }
+
+    #[test]
+    fn a_stale_ledger_row_never_hides_persisted_credits() {
+        // Synchronous hydration settles or bypasses the ledger, but legacy
+        // pending rows must not produce another endless "queued for fetch".
+        let mapped = Mapped {
+            external_id: "29319".into(),
+            external_url: None,
+            metadata: json!({
+                "creator_credits": [{"id": 1, "name": "Jamie Delano", "role": "writer"}],
+                "raw_provider_payload": {
+                    "id": 29319, "name": "Going For It", "issue_number": "3",
+                    "cover_date": "1988-03-01", "store_date": "1988-03-24",
+                    "image": {}, "volume": {}, "person_credits": [],
+                    "character_credits": [], "team_credits": [], "story_arc_credits": [],
+                    "date_last_updated": "2026-11-01T00:00:00Z"
+                }
+            }),
+        };
+        let wire = serde_json::to_value(response(
+            mapped,
+            Some(Repair {
+                state: "pending".into(),
+                next_attempt_at: None,
+            }),
+            vec![],
+            vec![],
+        ))
+        .unwrap();
+        assert_eq!(wire["metadata_status"], "complete");
+        assert_eq!(wire["creators"][0]["roles"][0], "writer");
+    }
+
+    #[test]
+    fn a_failed_retry_remains_visible_without_credits() {
+        let mapped = Mapped {
+            external_id: "29319".into(),
+            external_url: None,
+            metadata: json!({
+                "creator_credits": [],
+                "raw_provider_payload": {
+                    "id": 29319, "name": "Going For It", "issue_number": "3",
+                    "cover_date": "1988-03-01", "store_date": "1988-03-24",
+                    "image": {}, "volume": {}, "person_credits": [],
+                    "character_credits": [], "team_credits": [], "story_arc_credits": [],
+                    "date_last_updated": "2026-11-01T00:00:00Z"
+                }
+            }),
+        };
+        let wire = serde_json::to_value(response(
+            mapped,
+            Some(Repair {
+                state: "failed".into(),
+                next_attempt_at: Some(chrono::Utc::now().timestamp() as f64 + 60.0),
+            }),
+            vec![],
+            vec![],
+        ))
+        .unwrap();
+        assert_eq!(wire["metadata_status"], "refresh_failed");
+        assert!(wire["refresh_retry_after_seconds"].as_i64().is_some());
     }
 }
