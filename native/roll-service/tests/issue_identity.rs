@@ -714,7 +714,8 @@ async fn adoption_commit_persists_canonical_reading_list_and_plan_projection_iss
     assert_eq!(issue_count, 1, "{reader_body}");
 
     // Canonical list is discoverable/reopenable by stable ID.
-    let (list_status, list_body) = get(&state, &token, &format!("/api/v2/reading-lists/{list_id}")).await;
+    let (list_status, list_body) =
+        get(&state, &token, &format!("/api/v2/reading-lists/{list_id}")).await;
     assert_eq!(list_status, StatusCode::OK, "{list_body}");
     assert_eq!(list_body["id"], list_id, "{list_body}");
     let list_entries = list_body["entries"].as_array().unwrap();
@@ -754,13 +755,19 @@ async fn adoption_commit_persists_canonical_reading_list_and_plan_projection_iss
         .await
         .unwrap();
     let list_id2: i32 = source_row2.get(0);
-    assert_eq!(list_id2, list_id, "repeat add/update must keep same source-linked list ID");
+    assert_eq!(
+        list_id2, list_id,
+        "repeat add/update must keep same source-linked list ID"
+    );
     let plans_after: i64 = conn
         .query_one("SELECT COUNT(*)::bigint FROM continuity_plans WHERE user_id = (SELECT id FROM users WHERE username LIKE 'issue-identity-%' ORDER BY id DESC LIMIT 1)", &[])
         .await
         .unwrap()
         .get(0);
-    assert_eq!(plans_after, plans_before, "repeat add/update must not create duplicate unrelated legacy plan");
+    assert_eq!(
+        plans_after, plans_before,
+        "repeat add/update must not create duplicate unrelated legacy plan"
+    );
 }
 
 async fn crossover_snapshot(
