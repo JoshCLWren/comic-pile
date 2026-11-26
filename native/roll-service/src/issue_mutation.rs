@@ -708,6 +708,9 @@ pub async fn create_issues(
     )
     .await
     .map_err(db::query_error)?;
+    let created_ids: Vec<i32> = created.iter().map(|item| item.id).collect();
+    let undo_point =
+        insert_edit_undo_snapshot(&tx, user.id(), thread_id, issue_changes, &created_ids).await?;
     let total: i32 = tx
         .query_one(
             "SELECT count(*)::int FROM issues WHERE thread_id=$1 AND merged_into_issue_id IS NULL",
@@ -725,6 +728,8 @@ pub async fn create_issues(
             total_count: total,
             page_size,
             next_page_token: None,
+            undo_session_id: undo_point.map(|(session_id, _)| session_id),
+            undo_snapshot_id: undo_point.map(|(_, snapshot_id)| snapshot_id),
         }),
     ))
 }
@@ -924,6 +929,13 @@ pub struct PreviewIssuesRequest {
     /// Requested placement strategy. Defaults to safe_default.
     #[serde(default)]
     pub strategy: IssuePlacementStrategy,
+    /// Issue IDs shown in the preview's Before rows. Used at commit time to
+    /// reject a stale preview (#4654).
+    #[serde(default)]
+    pub expected_issue_ids: Option<Vec<i32>>,
+    /// Numbers the reader explicitly chose to alias instead of duplicating.
+    #[serde(default)]
+    pub accepted_alias_numbers: Vec<String>,
 }
 
 /// Per-issue human-readable context carried in the preview payload so the
@@ -1071,6 +1083,11 @@ pub struct IssueEditPreviewResponse {
     pub requested_strategy: IssuePlacementStrategy,
     pub default_outcome: IssueEditPreviewOutcome,
     pub numeric_resort_outcome: Option<IssueEditPreviewOutcome>,
+    /// Source-preserving alternatives for numbers that already exist as
+    /// identity-mapped issues in another owned series (#4654).
+    pub alias_offers: Vec<IssueEditAliasOffer>,
+    /// IDs shown in Before, echoed so the commit can reject a stale preview.
+    pub expected_issue_ids: Vec<i32>,
 }
 
 fn build_after_items(
@@ -1367,15 +1384,21 @@ pub async fn preview_issue_create(
         .map(|row| (row.get(0), row.get(1), row.get(2)))
         .collect();
     let existing_numbers: BTreeSet<String> = existing.iter().map(|(_, n, _)| n.clone()).collect();
-    let new_numbers: Vec<String> = requested
+    let candidates: Vec<String> = requested
         .into_iter()
         .filter(|n| !existing_numbers.contains(n))
+        .collect();
+    let alias_offers = detect_alias_offers(&tx, user.id(), thread_id, &candidates).await?;
+    let new_numbers: Vec<String> = candidates
+        .into_iter()
+        .filter(|number| !request.accepted_alias_numbers.contains(number))
         .collect();
     if new_numbers.is_empty() {
         return Err(ApiError::BadRequest(
             "All issues in range already exist".to_string(),
         ));
     }
+    let expected_issue_ids: Vec<i32> = existing.iter().map(|(id, _, _)| *id).collect();
 
     let default_outcome = preview_outcome(
         &tx,
@@ -1419,6 +1442,8 @@ pub async fn preview_issue_create(
         requested_strategy: request.strategy,
         default_outcome,
         numeric_resort_outcome,
+        alias_offers,
+        expected_issue_ids,
     }))
 }
 

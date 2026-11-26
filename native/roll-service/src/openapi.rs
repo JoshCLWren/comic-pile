@@ -216,6 +216,7 @@ use utoipa::OpenApi;
         crate::issue_mutation::PreviewIssueItem,
         crate::issue_mutation::IssueEditPreviewOutcome,
         crate::issue_mutation::IssueEditPreviewResponse,
+        crate::issue_mutation::IssueEditAliasOffer,
         crate::issue_mutation::IssuePlacementStrategy,
         crate::reading_list::ReadingListEntryIntent,
         crate::reading_list::ReadingListEntry,
