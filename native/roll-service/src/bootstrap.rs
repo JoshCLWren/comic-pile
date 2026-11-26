@@ -144,6 +144,10 @@ pub struct BootstrapActiveThread {
     pub issue_number: Option<String>,
     pub next_issue_id: Option<i32>,
     pub next_issue_number: Option<String>,
+    /// Alternate overall/story-arc number for the same physical comic (#4652).
+    pub issue_number_alias: Option<String>,
+    /// Provider's own issue number from the confirmed identity (#4652).
+    pub provider_issue_number: Option<String>,
 }
 
 /// Most recent rated issue for the active session.
@@ -503,7 +507,14 @@ async fn current_active_thread(
                (SELECT count(*)::int FROM issues read WHERE read.thread_id=t.id AND read.status='read' AND read.merged_into_issue_id IS NULL),
                (SELECT e.result FROM events e WHERE e.session_id=$2 AND e.selected_thread_id=t.id
                  AND e.type='roll' ORDER BY e.timestamp DESC,e.id DESC LIMIT 1),
-               {position} AS computed_position
+               {position} AS computed_position,
+               NULLIF(BTRIM(i.issue_number_alias), ''),
+               (SELECT NULLIF(BTRIM(COALESCE(x.metadata_json->>'issue_number',
+                                             x.metadata_json#>>'{raw_provider_payload,issue_number}')), '')
+                  FROM issue_external_identity_mappings m
+                  JOIN external_identities x ON x.id=m.external_identity_id
+                 WHERE m.issue_id=i.id AND m.status='confirmed'
+                 ORDER BY m.updated_at DESC, m.id DESC LIMIT 1)
          FROM threads t LEFT JOIN issues i ON i.id=t.next_unread_issue_id AND i.thread_id=t.id AND i.merged_into_issue_id IS NULL
          WHERE t.id=$1 AND t.user_id=$3",
     );
@@ -529,6 +540,10 @@ async fn current_active_thread(
     let last_rating: Option<f64> = row.try_get(7).map_err(db::query_error)?;
     let next_issue_id: Option<i32> = row.try_get(8).map_err(db::query_error)?;
     let next_issue_number: Option<String> = row.try_get(9).map_err(db::query_error)?;
+    // Metadata-only display fields: a missing alias or provider number never
+    // invalidates the pending Roll offer, so direct reading stays available.
+    let issue_number_alias: Option<String> = row.try_get(13).map_err(db::query_error)?;
+    let provider_issue_number: Option<String> = row.try_get(14).map_err(db::query_error)?;
     let issues_read: i32 = row.try_get(10).map_err(db::query_error)?;
     let last_rolled_result: Option<i32> = row.try_get(11).map_err(db::query_error)?;
     let tag_rows = conn
@@ -571,6 +586,8 @@ async fn current_active_thread(
         issue_number: next_issue_number.clone(),
         next_issue_id,
         next_issue_number,
+        issue_number_alias,
+        provider_issue_number,
     }))
 }
 

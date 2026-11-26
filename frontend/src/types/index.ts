@@ -247,6 +247,10 @@ export interface SessionThread {
   issue_number?: string | null;
   next_issue_id?: number | null;
   next_issue_number?: string | null;
+  /** Alternate overall/story-arc number for the same physical comic (#4652). */
+  issue_number_alias?: string | null;
+  /** Provider's own issue number from confirmed identity (#4652). */
+  provider_issue_number?: string | null;
   last_rolled_result?: number | null;
   issues_read?: number | null;
   last_rating?: number | null;
