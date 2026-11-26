@@ -214,7 +214,10 @@ test.describe('Issue #2774: creators browse page', () => {
     // Count only requests carrying the typed term; the initial list request
     // also includes an empty `search` param on the live browse surface.
     const searches = requests.filter((params) => params.get('search') === 'vaughan')
-    expect(searches).toHaveLength(1)
+    // Debounce can produce one request for the typed term and a second when
+    // the sort changes; neither may fan out per keystroke.
+    expect(searches.length).toBeGreaterThanOrEqual(1)
+    expect(searches.length).toBeLessThanOrEqual(2)
     expect(searches[0].get('search')).toBe('vaughan')
     expect(requests.at(-1)!.get('sort')).toBe('average_rating')
     // A keystroke must not fan out one request per character.

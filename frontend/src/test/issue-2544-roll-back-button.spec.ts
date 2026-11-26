@@ -123,8 +123,12 @@ test.describe('Issue #2544: Roll Page Back Button', () => {
 
     // ComicVine-backed layers are fulfilled at the network; the roll and the
     // pending session stay real.
+    const issueIntelligence = issueIntelligencePayload()
     await page.route('**/v1/issues/*/comicvine', (route) =>
-      route.fulfill({ json: issueIntelligencePayload() }),
+      route.fulfill({ json: issueIntelligence }),
+    )
+    await page.route('**/v2/issues/*/comicvine', (route) =>
+      route.fulfill({ json: issueIntelligence }),
     )
     await page.route('**/v2/creators/*', (route) =>
       route.fulfill({ json: creatorDetailPayload() }),
