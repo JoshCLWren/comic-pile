@@ -80,15 +80,26 @@ function CandidateCard({
   // Render its own ComicVine artwork, never a cover borrowed from the issue
   // being mapped or a candidate with a different identity.
   const image = isObject(meta.image) ? meta.image : null
+  const raw = isObject(meta.raw_provider_payload) ? meta.raw_provider_payload : null
+  const rawImage = raw && isObject(raw.image) ? raw.image : null
+  const pickImage = (obj: Record<string, unknown> | null) =>
+    obj ? (
+      toText(obj.original_url) ??
+      toText(obj.super_url) ??
+      toText(obj.screen_large_url) ??
+      toText(obj.medium_url) ??
+      toText(obj.screen_url) ??
+      toText(obj.small_url) ??
+      toText(obj.thumb_url) ??
+      toText(obj.tiny_url) ??
+      toText(obj.icon_url)
+    ) : null
   const coverUrl =
     toText(meta.image_url) ??
     toText(meta.primary_image) ??
-    (image ? (
-      toText(image.medium_url) ??
-      toText(image.small_url) ??
-      toText(image.original_url) ??
-      toText(image.thumb_url)
-    ) : null)
+    pickImage(image) ??
+    pickImage(rawImage) ??
+    (raw ? (toText(raw.image_url) ?? toText(raw.primary_image)) : null)
   const evidenceItems = Array.isArray(candidate.evidence_json.evidence)
     ? candidate.evidence_json.evidence.filter(isString)
     : []
