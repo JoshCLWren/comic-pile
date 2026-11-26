@@ -2672,6 +2672,46 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn pasted_issue_url_resolves_the_exact_provider_issue() {
+        let Some(state) = test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = test_support::reset_for_test(&state).await;
+        let fake = state
+            .recording_fake()
+            .expect("test state must install the recording fake outbound client");
+        fake.clear();
+        fake.push_ok(
+            http::StatusCode::OK,
+            http::HeaderMap::new(),
+            Bytes::from_static(
+                br#"{"status_code":1,"results":{"id":400077,"issue_number":"1.MU","volume":{"id":405031409,"name":"B.P.R.D.: Hell on Earth"}}}"#,
+            ),
+        );
+        let _env = ComicvineKeyEnv::install();
+        let response = search_issues(
+            State(state),
+            AuthenticatedUser::for_test(1),
+            Query(SearchQuery {
+                q: "https://comicvine.gamespot.com/issue/4000-400077/".to_string(),
+                limit: Some(10),
+                issue_id: None,
+            }),
+        )
+        .await
+        .expect("pasted issue URL must resolve through the fake");
+        assert_eq!(response.results.len(), 1);
+        assert_eq!(response.results[0].comicvine_issue_id, 400077);
+        let calls = fake.calls();
+        assert_eq!(calls.len(), 1);
+        assert!(
+            calls[0].path.starts_with("/api/issue/4000-400077/"),
+            "pasted issue URL must query that issue: {}",
+            calls[0].path
+        );
+    }
+
+    #[tokio::test]
     async fn list_and_detail_reasons_are_consistent() {
         let Some(state) = test_support::test_state(2).await else {
             return;
