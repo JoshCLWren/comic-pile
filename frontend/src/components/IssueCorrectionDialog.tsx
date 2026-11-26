@@ -3,9 +3,6 @@ import type { KeyboardEvent } from 'react'
 import Modal from './Modal'
 import CompactIssueCardTrigger from './CompactIssueCardTrigger'
 import { issuesApi } from '../services/api-issues'
-<<<<<<< /tmp/opencode/3way/frontend_src_components_IssueCorrectionDialog.tsx.ours
-import type { IssueListParams } from '../services/api-issues'
-=======
 import type { IssueListParams, IssueReadOperationResponse, IssueReadOperationUndoResponse } from '../services/api-issues'
 import { issueCardsApi } from '../services/issueCardsApi'
 import { issueDependenciesApi } from '../services/api-dependencies'
@@ -15,8 +12,6 @@ import {
   findBulkReadReceipt,
   writeBulkReadReceipt,
 } from '../hooks/useBulkReadOperations'
-
->>>>>>> /tmp/opencode/3way/frontend_src_components_IssueCorrectionDialog.tsx.theirs
 import { invalidateAfterIssueEdit } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 import type { Issue, IssueListResponse } from '../types'
@@ -319,15 +314,12 @@ export default function IssueCorrectionDialog({
         await issuesService.markUnread(targetIssue.id)
       }
 
-<<<<<<< /tmp/opencode/3way/frontend_src_components_IssueCorrectionDialog.tsx.ours
-=======
       setLastOperation(operation)
       if (operation) {
         try { writeBulkReadReceipt(threadId, operation.id) } catch { /* ignore */ }
       }
       setPreview(null)
 
->>>>>>> /tmp/opencode/3way/frontend_src_components_IssueCorrectionDialog.tsx.theirs
       await invalidateAfterIssueEdit(queryClient, threadId)
       onSuccess()
       if (!operation) onClose()
