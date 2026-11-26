@@ -1025,8 +1025,9 @@ export default function ThreadDetailView() {
               threadId={thread.id}
               onOpenDependencies={() => setIsDependencyOpen(true)}
               onIssueChanged={() => {
-                // Refetch thread data to update STATUS display after issue mutations
-                refetch()
+                // Issue mutations can satisfy blockers or change Queue/Thread/Roll/Reading
+                // List projections; reconcile all open views without a hard reload (#5537).
+                void invalidateAfterIssueEdit(client, thread.id)
               }}
               deferred={true}
               onPendingMutationsChange={setHasPendingIssueEdits}
