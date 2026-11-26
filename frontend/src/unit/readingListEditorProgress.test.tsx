@@ -194,6 +194,7 @@ describe('Reading List editing progress', () => {
     )
 
     expect(await screen.findByText('Current position: all issues in this list are read or skipped.')).toBeVisible()
+    // SAFETY: the visible issue label is rendered inside a reading-list entry row.
     const entry = (await screen.findByText('Detective Comics #3')).closest('[data-testid="reading-list-entry"]') as HTMLElement
     const card = within(entry).getByTestId('comic-issue-card')
 
