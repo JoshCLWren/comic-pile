@@ -2141,6 +2141,25 @@ mod tests {
             .await
             .expect("rating audit records retained");
         assert_eq!(marked.get::<_, i64>(0), 2);
+
+        // Re-rate after undo: the new rating is effective and counted once.
+        connection
+            .batch_execute(
+                "INSERT INTO events (id,user_id,type,timestamp,thread_id,issue_id,rating,context)
+                 VALUES (9604,9101,'rate',NOW(),9201,9501,2.0,NULL);
+                 UPDATE threads SET last_rating = 2.0 WHERE id = 9201;",
+            )
+            .await
+            .expect("seed re-rate after undo");
+        let cards =
+            crate::issue_service::cards(&connection, AuthenticatedUser::for_test(9101), &[9501])
+                .await
+                .expect("effective issue card after re-rate");
+        assert_eq!(
+            cards.items[0].rating,
+            Some(2.0),
+            "re-rate after undo is effective and counted once"
+        );
     }
 
     /// Greptile #4617381402: a full (session-start) restore must not erase a
