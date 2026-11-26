@@ -1295,3 +1295,242 @@ async fn three_alias_pairs_leave_one_rollable_identity_and_full_history() {
         .get(0);
     assert_eq!(suppressed, 3, "every alias is suppressed, never deleted");
 }
+
+/// A7 synthetic fixture: one five-part series whose provider numbers are
+/// 1, 2, 100, 101, 102, plus an adjacent arc in a different provider volume.
+/// Each physical issue keeps its authored label, gains an exact provider
+/// alias/identity, and remains exactly one rollable owned row. No provider
+/// identifier is inferred from a volume or from another issue's number.
+#[tokio::test(flavor = "multi_thread")]
+async fn five_part_series_maps_provider_numbers_without_renumbering_or_extra_rows() {
+    let ctx = setup("dupr-five-part-series").await;
+    let conn = ctx.state.pool.get().await.unwrap();
+    let unique = unique_suffix();
+
+    struct Physical {
+        issue_id: i32,
+        authored: &'static str,
+        provider: &'static str,
+        cv_id: String,
+    }
+    let mut physical = Vec::new();
+
+    // Ongoing story arc: authored chapters 1-5, exact Comic Vine numbers
+    // 1, 2, 100, 101, 102 in one provider volume.
+    for (index, (authored, provider)) in [
+        ("1", "1"),
+        ("2", "2"),
+        ("3", "100"),
+        ("4", "101"),
+        ("5", "102"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let cv_id = format!("{unique}-4050-{provider}");
+        let thread_id: i32 = conn
+            .query_one(
+                "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status, created_at) \
+                 VALUES ($1, 'Story arc ' || $2, 'comic', 1, $3, 'active', NOW()) RETURNING id",
+                &[&ctx.user_id, &authored, &(index as i32)],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        let issue_id: i32 = conn
+            .query_one(
+                "INSERT INTO issues (thread_id, issue_number, position, status, created_at) \
+                 VALUES ($1, $2, $3, 'unread', NOW()) RETURNING id",
+                &[&thread_id, &authored, &(index as i32)],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        // Only chapters 3-5 carry an explicit story-arc number; chapters 1-2
+        // use the provider's own numbering. Nothing is guessed from the volume.
+        let story_field = if index < 2 {
+            String::new()
+        } else {
+            format!(",\"story_arc_number\":\"{authored}\"")
+        };
+        let metadata: Value = serde_json::from_str(&format!(
+            "{{\"volume_id\":4050,\"issue_number\":\"{provider}\"{story_field}}}"
+        ))
+        .unwrap();
+        let identity_id: i32 = conn
+            .query_one(
+                "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
+                 VALUES ('comicvine', 'issue', $1, $2, NOW(), NOW()) RETURNING id",
+                &[&cv_id, &metadata],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        conn.execute(
+            "INSERT INTO issue_external_identity_mappings \
+             (issue_id, external_identity_id, status, evidence_source, evidence_json, created_at, updated_at) \
+             VALUES ($1, $2, 'confirmed', 'synthetic-qa-fixture', '{}'::json, NOW(), NOW())",
+            &[&issue_id, &identity_id],
+        )
+        .await
+        .unwrap();
+        physical.push(Physical {
+            issue_id,
+            authored,
+            provider,
+            cv_id,
+        });
+    }
+
+    // Adjacent arc: same authored labels, different provider volume and exact
+    // provider ids. A shared label or volume must never fabricate an identity.
+    for (index, authored) in ["1", "2"].into_iter().enumerate() {
+        let cv_id = format!("{unique}-4051-{authored}");
+        let thread_id: i32 = conn
+            .query_one(
+                "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status, created_at) \
+                 VALUES ($1, 'Adjacent arc ' || $2, 'comic', 1, $3, 'active', NOW()) RETURNING id",
+                &[&ctx.user_id, &authored, &(index as i32 + 10)],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        let issue_id: i32 = conn
+            .query_one(
+                "INSERT INTO issues (thread_id, issue_number, position, status, created_at) \
+                 VALUES ($1, $2, 0, 'unread', NOW()) RETURNING id",
+                &[&thread_id, &authored],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        let metadata: Value = serde_json::from_str(&format!(
+            "{{\"volume_id\":4051,\"issue_number\":\"{authored}\"}}"
+        ))
+        .unwrap();
+        let identity_id: i32 = conn
+            .query_one(
+                "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
+                 VALUES ('comicvine', 'issue', $1, $2, NOW(), NOW()) RETURNING id",
+                &[&cv_id, &metadata],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        conn.execute(
+            "INSERT INTO issue_external_identity_mappings \
+             (issue_id, external_identity_id, status, evidence_source, evidence_json, created_at, updated_at) \
+             VALUES ($1, $2, 'confirmed', 'synthetic-qa-fixture', '{}'::json, NOW(), NOW())",
+            &[&issue_id, &identity_id],
+        )
+        .await
+        .unwrap();
+        physical.push(Physical {
+            issue_id,
+            authored,
+            provider: authored,
+            cv_id,
+        });
+    }
+
+    for (index, item) in physical.iter().enumerate() {
+        let (status, body) = send(
+            &ctx.state,
+            authed(
+                "PATCH",
+                &format!("/api/v2/issues/{}", item.issue_id),
+                &ctx.token,
+                &ctx.csrf,
+                Some(json!({
+                    "issue_number_alias": item.provider,
+                    "idempotency_key": format!("{unique}-alias-{index}"),
+                })),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body:?}");
+        assert_eq!(body["issue"]["issue_number"], item.authored, "{body:?}");
+        assert_eq!(body["issue"]["issue_number_alias"], item.provider, "{body:?}");
+        assert_eq!(body["issue"]["comicvine_issue_id"], item.cv_id, "{body:?}");
+    }
+
+    let all_ids: Vec<i32> = physical.iter().map(|item| item.issue_id).collect();
+    let (status, cards) = send(
+        &ctx.state,
+        authed(
+            "POST",
+            "/api/v2/issues/cards",
+            &ctx.token,
+            &ctx.csrf,
+            Some(json!({ "issue_ids": all_ids })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{cards:?}");
+    let items = cards["items"].as_array().unwrap();
+    assert_eq!(items.len(), physical.len(), "{cards:?}");
+    for (item, card) in physical.iter().zip(items) {
+        assert_eq!(card["issue_number"], item.authored, "{cards:?}");
+        assert_eq!(card["issue_number_alias"], item.provider, "{cards:?}");
+        assert_eq!(card["provider_issue_number"], item.provider, "{cards:?}");
+        assert_eq!(card["comicvine_issue_id"], item.cv_id, "{cards:?}");
+        assert_eq!(card["has_confirmed_identity"], true, "{cards:?}");
+    }
+
+    // No renumbering and no extra rollable rows: each physical issue remains
+    // one unmerged row with its authored label intact.
+    let row_count: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM issues \
+             WHERE id = ANY($1::int[]) AND merged_into_issue_id IS NULL",
+            &[&all_ids],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(row_count, physical.len() as i64);
+    let authored_labels: Vec<String> = conn
+        .query(
+            "SELECT issue_number FROM issues WHERE id = ANY($1::int[]) ORDER BY id",
+            &[&all_ids],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| row.get(0))
+        .collect();
+    assert_eq!(authored_labels, vec!["1", "2", "3", "4", "5", "1", "2"]);
+
+    let (status, eligible) = send(
+        &ctx.state,
+        authed(
+            "GET",
+            "/api/v2/roll/eligible-issue-ids",
+            &ctx.token,
+            &ctx.csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{eligible:?}");
+    let rollable = eligible["issue_ids"].as_array().unwrap();
+    for id in &all_ids {
+        assert!(rollable.contains(&json!(id)), "{eligible:?}");
+    }
+
+    // Verified evidence only: a differing volume plus a non-matching story arc
+    // must not be reported as a duplicate pair.
+    let (status, detected) = send(
+        &ctx.state,
+        authed(
+            "GET",
+            "/api/v2/issue-duplicate-reconciliation/detect",
+            &ctx.token,
+            &ctx.csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{detected:?}");
+    assert_eq!(detected["groups"].as_array().unwrap().len(), 0, "{detected:?}");
+}
