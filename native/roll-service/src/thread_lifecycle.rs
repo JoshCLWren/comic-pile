@@ -2005,8 +2005,8 @@ pub async fn list_stale_threads(
     // `is_blocked` never decides which threads are stale candidates. Load it
     // before taking the write connection (the loader owns its own checkout).
     let canonical = canonical_eligibility_inputs(&state, user).await?;
-    let eligible_ids: HashSet<i32> = queue::evaluated_eligible_ids(&canonical)?;
-    let eligible_list: Vec<i32> = eligible_ids.iter().copied().collect();
+    let available_ids: HashSet<i32> = canonical_available_ids(&canonical)?;
+    let available_list: Vec<i32> = available_ids.iter().copied().collect();
     let views = with_tx!(&state, tx, db::tx_error, {
         let session = tx
             .query_opt(
@@ -2041,7 +2041,7 @@ pub async fn list_stale_threads(
                     &(days as i32),
                     &snoozed,
                     &page_size,
-                    &eligible_list,
+                    &available_list,
                 ],
             )
             .await
@@ -2049,7 +2049,7 @@ pub async fn list_stale_threads(
             .iter()
             .map(|row| row.get(0))
             .collect();
-        Ok(load_views(&*tx, user_id, &ids, Some(&eligible_ids)).await?)
+        Ok(load_views(&*tx, user_id, &ids, Some(&available_ids)).await?)
     })?;
     Ok(json_response(StatusCode::OK, views))
 }

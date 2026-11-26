@@ -73,27 +73,15 @@ async fn setup(prefix: &str) -> Ctx {
     setup_with_pool(prefix, "2").await
 }
 
-/// Fixture with the canonical reading-list evaluator effective. The setting is
-/// injected through config; no test mutates the process environment (#5525).
-async fn setup_with_option_e(prefix: &str, option_e: bool) -> Ctx {
-    setup_with_pool_and_option_e(prefix, "2", option_e).await
-}
-
 /// Same fixture as `setup`, with a larger pool for deterministic multi-writer
 /// lock tests (a lock holder plus two in-flight requests need three sockets).
 async fn setup_with_pool(prefix: &str, pool_size: &str) -> Ctx {
-    setup_with_pool_and_option_e(prefix, pool_size, false).await
-}
-
-async fn setup_with_pool_and_option_e(prefix: &str, pool_size: &str, option_e: bool) -> Ctx {
     let url = comicpile_roll_service::test_support::database_url().await;
     let state = Arc::new(test_support::test_app_state(
         Config::from_lookup(|key| match key {
             "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-thread-lifecycle-secret".into()),
             "RUST_ROLL_POOL_SIZE" => Some(pool_size.to_owned()),
-            "OPTION_E_ENABLED" if option_e => Some("true".into()),
-            "OPTION_E_APPROVED_PREVIEW" if option_e => Some("injected-by-test".into()),
             _ => None,
         })
         .unwrap(),
@@ -1724,16 +1712,13 @@ async fn set_pending_rejections_match_python_details() {
     let target = seed_thread(&ctx, ctx.user_id, "Target", "active", 3, 0).await;
     let target_issues = track(&ctx, target, &["unread"]).await;
     let pool = ctx.state.pool.get().await.unwrap();
+    // Canonical authority: an authored reader prerequisite is the blocker; the
+    // stored `is_blocked` flag is deliberately left false (#5525 A16/A17).
     pool.execute(
-        "INSERT INTO dependencies (source_issue_id, target_issue_id, created_at)
-         VALUES ($1, $2, NOW())",
+        "INSERT INTO dependencies
+            (source_issue_id, target_issue_id, origin, classification, provenance, created_at)
+         VALUES ($1, $2, 'reader', 'A', 'Reader-authored through Dependency Builder', NOW())",
         &[&source_issues[0], &target_issues[0]],
-    )
-    .await
-    .unwrap();
-    pool.execute(
-        "UPDATE threads SET is_blocked = true WHERE id = $1",
-        &[&target],
     )
     .await
     .unwrap();
@@ -1953,7 +1938,18 @@ async fn stale_lists_old_unblocked_unsnoozed_threads_oldest_first() {
     let snoozed = seed_thread(&ctx, ctx.user_id, "Snoozed", "active", 6, 2).await;
     let inactive = seed_thread(&ctx, ctx.user_id, "Done", "completed", 0, 0).await;
     let theirs = seed_thread(&ctx, other_id, "Theirs", "active", 1, 2).await;
+    // The blocked row is now held by an authored reader prerequisite, not by
+    // a stored flag; the prerequisite is fresh so it is not itself stale.
+    let prerequisite = seed_thread(&ctx, ctx.user_id, "Prerequisite", "active", 7, 0).await;
+    let prerequisite_issues = track(&ctx, prerequisite, &["unread"]).await;
+    let blocked_issues = track(&ctx, blocked, &["unread"]).await;
     let pool = ctx.state.pool.get().await.unwrap();
+    pool.execute(
+        "UPDATE threads SET last_activity_at = NOW() WHERE id = $1",
+        &[&prerequisite],
+    )
+    .await
+    .unwrap();
     for (id, days) in [
         (old, 40),
         (older, 90),
@@ -1976,8 +1972,10 @@ async fn stale_lists_old_unblocked_unsnoozed_threads_oldest_first() {
     .await
     .unwrap();
     pool.execute(
-        "UPDATE threads SET is_blocked = true WHERE id = $1",
-        &[&blocked],
+        "INSERT INTO dependencies
+            (source_issue_id, target_issue_id, origin, classification, provenance, created_at)
+         VALUES ($1, $2, 'reader', 'A', 'Reader-authored through Dependency Builder', NOW())",
+        &[&prerequisite_issues[0], &blocked_issues[0]],
     )
     .await
     .unwrap();
