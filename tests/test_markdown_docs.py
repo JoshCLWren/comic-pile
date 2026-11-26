@@ -7,6 +7,7 @@ from unittest.mock import patch
 from scripts.check_markdown_docs import (
     find_broken_anchors,
     find_broken_local_links,
+    find_stale_runtime_claims,
     find_unapproved_root_markdown,
     iter_markdown_files,
 )
@@ -216,6 +217,73 @@ def test_current_repository_has_no_broken_anchors() -> None:
     root = Path(__file__).parents[1]
 
     assert find_broken_anchors(root, iter_markdown_files(root)) == []
+
+
+def test_find_stale_runtime_claims_flags_affirmative_active_claims(tmp_path: Path) -> None:
+    """Catch present-tense retired-stack claims without banning historical mentions.
+
+    Args:
+        tmp_path: Temporary repository root supplied by pytest.
+    """
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    source = docs / "ARCHITECTURE.md"
+    source.write_text(
+        "# Architecture\n\n"
+        "The backend is FastAPI.\n"
+        "The API uses SQLAlchemy.\n"
+        "Alembic manages migrations.\n",
+        encoding="utf-8",
+    )
+
+    errors = find_stale_runtime_claims(tmp_path, [source])
+
+    assert len(errors) == 3
+    assert all("stale runtime claim" in error for error in errors)
+    assert any("backend is FastAPI" in error for error in errors)
+    assert any("served by SQLAlchemy" in error for error in errors)
+    assert any("Alembic manages" in error for error in errors)
+
+
+def test_find_stale_runtime_claims_ignores_history_fences_and_overrides(
+    tmp_path: Path,
+) -> None:
+    """Preserve negations, provenance, fenced examples and explicit line overrides.
+
+    Args:
+        tmp_path: Temporary repository root supplied by pytest.
+    """
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    history = docs / "HISTORY.md"
+    history.write_text(
+        "# History\n\n<!-- docs-path-check: historical -->\n\nThe backend is FastAPI.\n",
+        encoding="utf-8",
+    )
+    superseded = docs / "SUPERSEDED.md"
+    superseded.write_text(
+        "# Superseded note\n\n> **Status: superseded.** See [API.md](API.md).\n\n"
+        "The backend is FastAPI.\n",
+        encoding="utf-8",
+    )
+    active = docs / "README.md"
+    active.write_text(
+        "# Active\n\n"
+        "FastAPI is retired; there is no FastAPI middleware.\n"
+        "The backend is not SQLAlchemy.\n"
+        "The backend is FastAPI. <!-- docs-path-check: ignore -->\n"
+        "```md\nThe backend is FastAPI.\n```\n",
+        encoding="utf-8",
+    )
+
+    assert find_stale_runtime_claims(tmp_path, [history, superseded, active]) == []
+
+
+def test_current_repository_has_no_stale_runtime_claims() -> None:
+    """Keep the retired Python stack out of present-tense active documentation."""
+    root = Path(__file__).parents[1]
+
+    assert find_stale_runtime_claims(root, iter_markdown_files(root)) == []
 
 
 def test_iter_markdown_files_ignores_generated_directories(tmp_path: Path) -> None:

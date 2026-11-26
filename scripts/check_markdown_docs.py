@@ -30,6 +30,26 @@ HTML_ANCHOR_RE = re.compile(
     re.IGNORECASE,
 )
 FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
+STALE_RUNTIME_TECH = r"(?:FastAPI|SQLAlchemy|Alembic)"
+STALE_RUNTIME_CLAIM_RE = re.compile(
+    rf"(?:{STALE_RUNTIME_TECH}\s+(?:is|are|serves?|backs?|handles?|powers?|provides?|runs?|"
+    rf"manages?|migrates?|generates?)\b"
+    rf"|\b(?:backend|server|API|application|app)\s+(?:is|uses|runs on|served by|built (?:on|with)|"
+    rf"powered by)\s+{STALE_RUNTIME_TECH})",
+    re.IGNORECASE,
+)
+HISTORY_CUE_RE = re.compile(
+    r"\b(?:no|not|never|retired|former|formerly|historical|removed|superseded|legacy|replaced|"
+    r"was|were|used to|avoid|do not|does not|old)\b",
+    re.IGNORECASE,
+)
+HISTORICAL_MARKER = "<!-- docs-path-check: historical -->"
+IGNORE_MARKER = "<!-- docs-path-check: ignore -->"
+STALE_CLAIM_PATH_EXCLUSIONS = (
+    "docs/issue-plans/",
+    "docs/changelog",
+    "scripts/__fixtures__/",
+)
 
 
 def _tracked_markdown_files(root: Path) -> list[Path] | None:
@@ -301,6 +321,59 @@ def find_broken_anchors(root: Path, markdown_files: list[Path]) -> list[str]:
     return errors
 
 
+def _is_historical_markdown(text: str) -> bool:
+    """Return whether a document is preserved history rather than current guidance.
+
+    Args:
+        text: Markdown source to inspect.
+
+    Returns:
+        ``True`` when an explicit status marker or head notice marks the file historical.
+    """
+    visible = _visible_markdown(text)
+    head = "\n".join(visible.splitlines()[:12]).casefold()
+    return (
+        HISTORICAL_MARKER in visible
+        or "superseded" in head
+        or "status:** historical" in head
+        or "status: historical" in head
+        or "point-in-time" in head
+    )
+
+
+def find_stale_runtime_claims(root: Path, markdown_files: list[Path]) -> list[str]:
+    """Flag affirmative claims that the retired Python stack is the current runtime.
+
+    Only active documents participate. Negations, historical notices, explicit line overrides,
+    and fenced examples are ignored so preserved provenance and illustrative snippets remain
+    valid. This guards the specific drift class that opened #5757 without banning the retired
+    stack's names from historical documentation.
+
+    Args:
+        root: Repository root used for relative paths.
+        markdown_files: Markdown files to inspect.
+
+    Returns:
+        Sorted validation errors for affirmative present-tense stale runtime claims.
+    """
+    errors: list[str] = []
+    for markdown_file in markdown_files:
+        relative = markdown_file.relative_to(root).as_posix()
+        if relative.startswith(STALE_CLAIM_PATH_EXCLUSIONS):
+            continue
+        text = markdown_file.read_text(encoding="utf-8")
+        if _is_historical_markdown(text):
+            continue
+        for line_number, line in enumerate(_visible_markdown(text).splitlines(), start=1):
+            if IGNORE_MARKER in line:
+                continue
+            if STALE_RUNTIME_CLAIM_RE.search(line) and not HISTORY_CUE_RE.search(line):
+                errors.append(
+                    f"{relative}:{line_number}: stale runtime claim: {line.strip()}",
+                )
+    return sorted(errors)
+
+
 def find_unapproved_root_markdown(root: Path) -> list[str]:
     """Find tracked root Markdown files that bypass the documentation ownership model.
 
@@ -338,6 +411,7 @@ def main() -> int:
     errors = [
         *find_broken_local_links(root, markdown_files),
         *find_broken_anchors(root, markdown_files),
+        *find_stale_runtime_claims(root, markdown_files),
         *(
             f"root Markdown is not documented in the allowlist: {filename}"
             for filename in find_unapproved_root_markdown(root)
