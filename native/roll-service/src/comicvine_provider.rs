@@ -692,10 +692,13 @@ async fn hydrate_catalog_commit_with_key(
     }
 }
 
-/// Resolve the just-confirmed ComicVine issue identity for an owned issue.
-/// One set-based query: no per-row round trips and no N+1. Returns the identity
-/// id, its external id and the already-cached metadata used to preserve credits
-/// when the fresh roster is empty.
+/// Resolve the currently confirmed ComicVine issue identity for an owned issue.
+/// Evidence provenance is not part of eligibility: imported
+/// (`comicvine_issue_adoption`) and user-confirmed identities are both
+/// recoverable through the explicit synchronous Retry path. One set-based
+/// query: no per-row round trips and no N+1. Returns the identity id, its
+/// external id and the already-cached metadata used to preserve credits when
+/// the fresh roster is empty.
 async fn confirmed_identity_for_issue(
     conn: &deadpool_postgres::Object,
     user_id: i32,
@@ -711,7 +714,6 @@ async fn confirmed_identity_for_issue(
              WHERE m.issue_id = $1
                AND t.user_id = $2
                AND m.status = 'confirmed'
-               AND m.evidence_source = 'user_confirmed'
                AND e.provider = 'comicvine'
                AND e.entity_type = 'issue'
              ORDER BY e.id
