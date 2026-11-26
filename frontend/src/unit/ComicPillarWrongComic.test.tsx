@@ -240,7 +240,7 @@ describe('ComicPillar dual numbering (#4652)', () => {
     )
 
     expect(await screen.findByTestId('comic-header-title')).toHaveTextContent(
-      'Stormwatch Vol. 1 #3 (100)',
+      'Stormwatch Vol. 1 #3(100)',
     )
     expect(screen.getByTestId('comic-issue-alias-number')).toHaveTextContent('(100)')
     expect(screen.getByTestId('comic-issue-provider-number')).toHaveTextContent('Provider #101')

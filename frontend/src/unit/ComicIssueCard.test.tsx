@@ -591,3 +591,110 @@ describe('shared comic mapping integration', () => {
     expect(patch).not.toHaveBeenCalled()
   })
 })
+
+describe('dual numbering display and alias editing (#4652)', () => {
+  it('shows a distinct alias and provider number once, and hides repeats and blanks', () => {
+    const identity = (alias: string | null, provider: string | null) => (
+      <ComicIssueIdentity
+        threadTitle="Saga"
+        issueNumber="3"
+        issueNumberAlias={alias}
+        providerIssueNumber={provider}
+        status="unread"
+        rating={null}
+      />
+    )
+    const { rerender } = render(identity('100', '101'))
+    expect(screen.getByTestId('comic-issue-alias-number')).toHaveTextContent('(100)')
+    expect(screen.getByTestId('comic-issue-provider-number')).toHaveTextContent('Provider #101')
+
+    rerender(identity('100', '100'))
+    expect(screen.getByTestId('comic-issue-alias-number')).toBeVisible()
+    expect(screen.queryByTestId('comic-issue-provider-number')).not.toBeInTheDocument()
+
+    rerender(identity('3', '3'))
+    expect(screen.queryByTestId('comic-issue-alias-number')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('comic-issue-provider-number')).not.toBeInTheDocument()
+
+    rerender(identity('  ', '  '))
+    expect(screen.queryByTestId('comic-issue-alias-number')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('comic-issue-provider-number')).not.toBeInTheDocument()
+
+    rerender(identity(null, '101'))
+    expect(screen.getByTestId('comic-issue-provider-number')).toHaveTextContent('Provider #101')
+  })
+
+  it('renders the exact provider identity and cover number on a confirmed card', () => {
+    render(
+      <ComicIssueCard
+        issueId={75}
+        card={{
+          ...card,
+          issue_number_alias: '100',
+          display_issue_number: 'Annual 1 (100)',
+          mapping_state: 'confirmed',
+          has_confirmed_identity: true,
+          comicvine_issue_id: '4000-999',
+          provider_issue_number: '101',
+          cover_image_url: 'https://comicvine.gamespot.com/a/cover.jpg',
+        }}
+        threadTitle="Cable"
+        issueNumber="Annual 1"
+        status="read"
+        showMapping={false}
+      />,
+      { wrapper },
+    )
+    expect(screen.getByTestId('comic-issue-alias-number')).toHaveTextContent('(100)')
+    expect(screen.getByTestId('comic-issue-provider-number')).toHaveTextContent('Provider #101')
+    expect(screen.getByTestId('comic-issue-provider-identity')).toHaveTextContent(
+      'ComicVine #4000-999 · provider issue #101',
+    )
+    expect(screen.getByTestId('comic-issue-card')).toHaveAttribute(
+      'aria-label',
+      'Issue Cable #Annual 1 (100)',
+    )
+  })
+
+  it('saves and clears an alias without touching read state, and cancels without a write', async () => {
+    const onMutated = mount()
+    await userEvent.click(screen.getByRole('button', { name: 'Add alias' }))
+    expect(screen.getByTestId('comic-issue-alias-editor')).toBeVisible()
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByTestId('comic-issue-alias-editor')).not.toBeInTheDocument()
+    expect(patch).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add alias' }))
+    await userEvent.type(
+      screen.getByRole('textbox', { name: /Story-arc or overall number/i }),
+      '100',
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Save alias' }))
+    await waitFor(() => expect(onMutated).toHaveBeenCalledWith(receipt))
+    expect(patch).toHaveBeenCalledExactlyOnceWith(
+      75,
+      expect.objectContaining({
+        issueNumberAlias: '100',
+        issueNumberAliasProvided: true,
+        status: undefined,
+        rating: undefined,
+      }),
+    )
+  })
+
+  it('retries a failed alias-only write with the same key', async () => {
+    patch.mockRejectedValueOnce(new Error('alias offline'))
+    mount()
+    await userEvent.click(screen.getByRole('button', { name: 'Add alias' }))
+    await userEvent.type(
+      screen.getByRole('textbox', { name: /Story-arc or overall number/i }),
+      '100',
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Save alias' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('alias offline')
+    await userEvent.click(within(screen.getByRole('alert')).getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+    expect(patch).toHaveBeenCalledTimes(2)
+    expect(patch.mock.calls[1]).toEqual(patch.mock.calls[0])
+  })
+})
