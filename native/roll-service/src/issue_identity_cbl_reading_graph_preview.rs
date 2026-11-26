@@ -1593,7 +1593,9 @@ mod tests {
             Some("resolved_via_comicvine_canonical")
         );
         assert_eq!(
-            both_read.get("is_duplicate_identity").and_then(Value::as_bool),
+            both_read
+                .get("is_duplicate_identity")
+                .and_then(Value::as_bool),
             Some(true)
         );
     }
