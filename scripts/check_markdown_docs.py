@@ -23,6 +23,12 @@ ALLOWED_ROOT_MARKDOWN = {
     "TECH_DEBT.md",
 }
 IGNORED_DIRECTORIES = {".git", ".venv", ".vercel", "node_modules", "archive"}
+HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$")
+HTML_ANCHOR_RE = re.compile(
+    r"""<a\b[^>]*\b(?:id|name)\s*=\s*["']([^"']+)["']""",
+    re.IGNORECASE,
+)
+FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
 
 
 def _tracked_markdown_files(root: Path) -> list[Path] | None:
@@ -172,6 +178,96 @@ def find_broken_local_links(root: Path, markdown_files: list[Path]) -> list[str]
     return broken
 
 
+def _heading_anchor(heading: str) -> str:
+    """Convert an ATX heading to the GitHub-style fragment it publishes.
+
+    Args:
+        heading: Heading text without the leading hash marks.
+
+    Returns:
+        The lowercase, punctuation-stripped anchor with spaces replaced by hyphens.
+    """
+    value = re.sub(r"`([^`]+)`", r"\1", heading.strip())
+    value = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", value)
+    value = re.sub(r"[*_~]", "", value)
+    value = re.sub(r"[^\w\s-]", "", value, flags=re.UNICODE)
+    return value.strip().lower().replace(" ", "-")
+
+
+def _document_anchors(path: Path) -> set[str]:
+    """Collect real fragment targets published by a Markdown document.
+
+    Args:
+        path: Markdown file whose anchors should be collected.
+
+    Returns:
+        Heading and explicit HTML anchor names, including duplicate-heading suffixes.
+    """
+    anchors: set[str] = set()
+    seen: dict[str, int] = {}
+    fence: str | None = None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        fence_match = FENCE_RE.match(line)
+        if fence_match is not None:
+            marker = fence_match.group(1)[0]
+            if fence is None:
+                fence = marker
+            elif marker == fence and line.strip().startswith(fence_match.group(1)):
+                fence = None
+            continue
+        if fence is not None:
+            continue
+        heading_match = HEADING_RE.match(line)
+        if heading_match is None:
+            continue
+        base = _heading_anchor(heading_match.group(1))
+        if not base:
+            continue
+        duplicate_index = seen.get(base, 0)
+        seen[base] = duplicate_index + 1
+        anchors.add(base if duplicate_index == 0 else f"{base}-{duplicate_index}")
+    anchors.update(name.lower() for name in HTML_ANCHOR_RE.findall(path.read_text(encoding="utf-8")))
+    return anchors
+
+
+def find_broken_anchors(root: Path, markdown_files: list[Path]) -> list[str]:
+    """Find local Markdown links whose fragment does not resolve in the target document.
+
+    Missing files are already reported by ``find_broken_local_links``; this check only
+    reports fragments that point at a real file but no published heading or anchor.
+
+    Args:
+        root: Repository root used for containment and relative paths.
+        markdown_files: Markdown files to inspect.
+
+    Returns:
+        Validation errors for unresolved local fragments.
+    """
+    errors: list[str] = []
+    anchor_cache: dict[Path, set[str]] = {}
+    for markdown_file in markdown_files:
+        text = markdown_file.read_text(encoding="utf-8")
+        reference_targets, _ = _reference_targets(text)
+        for raw_target in [*INLINE_LINK_RE.findall(text), *reference_targets]:
+            target = raw_target.strip().split(maxsplit=1)[0].strip("<>")
+            parsed = urlsplit(target)
+            if parsed.scheme or parsed.netloc or not parsed.fragment:
+                continue
+            relative = unquote(parsed.path)
+            candidate = (markdown_file.parent / relative).resolve() if relative else markdown_file.resolve()
+            try:
+                candidate.relative_to(root.resolve())
+            except ValueError:
+                continue
+            if not candidate.is_file():
+                continue
+            if candidate not in anchor_cache:
+                anchor_cache[candidate] = _document_anchors(candidate)
+            if parsed.fragment.lower() not in anchor_cache[candidate]:
+                errors.append(f"{markdown_file.relative_to(root)}: broken anchor: {target}")
+    return errors
+
+
 def find_unapproved_root_markdown(root: Path) -> list[str]:
     """Find tracked root Markdown files that bypass the documentation ownership model.
 
@@ -208,6 +304,7 @@ def main() -> int:
 
     errors = [
         *find_broken_local_links(root, markdown_files),
+        *find_broken_anchors(root, markdown_files),
         *(
             f"root Markdown is not documented in the allowlist: {filename}"
             for filename in find_unapproved_root_markdown(root)
