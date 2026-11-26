@@ -91,6 +91,38 @@ beforeEach(() => {
 })
 
 describe('ComicIssueMappingAction', () => {
+  it('names the authored, alternate and provider numbers distinctly (#4652)', async () => {
+    const renderAction = (alias: string | null, provider: string | null) => (
+      <ComicIssueMappingAction
+        issueId={77}
+        threadTitle="Saga"
+        issueNumber="3"
+        issueNumberAlias={alias}
+        providerIssueNumber={provider}
+      />
+    )
+    const view = render(renderAction('100', '101'))
+    expect(await screen.findByTestId('comic-mapping-map')).toHaveAttribute(
+      'aria-label',
+      'Map issue #3 (100) [CV #101] to ComicVine',
+    )
+    view.rerender(renderAction('100', '100'))
+    expect(screen.getByTestId('comic-mapping-map')).toHaveAttribute(
+      'aria-label',
+      'Map issue #3 (100) to ComicVine',
+    )
+    view.rerender(renderAction('3', '3'))
+    expect(screen.getByTestId('comic-mapping-map')).toHaveAttribute(
+      'aria-label',
+      'Map issue #3 to ComicVine',
+    )
+    view.rerender(renderAction('  ', '101'))
+    expect(screen.getByTestId('comic-mapping-map')).toHaveAttribute(
+      'aria-label',
+      'Map issue #3 [CV #101] to ComicVine',
+    )
+  })
+
   it('shows a visible Map comic action for an unmapped owned issue without opening a search', async () => {
     render(
       <ComicIssueMappingAction issueId={77} threadTitle="Hellboy in Hell" issueNumber="1" />,
