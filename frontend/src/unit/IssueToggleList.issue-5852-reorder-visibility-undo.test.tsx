@@ -30,7 +30,9 @@ const mockedIssuesApi = {
 const mockedDependenciesApi = {
   listForThread: vi.fn<IssueToggleListDependenciesApi['listForThread']>(),
 }
-const mockedUndo = vi.fn<() => Promise<void>>()
+const mockedUndo = vi.fn<
+  (sessionId: number | string, snapshotId: number | string) => Promise<void>
+>()
 
 const ISSUES: Issue[] = [129, 140, 130].map((number, index) => ({
   id: index + 1,
