@@ -1,7 +1,7 @@
 # GET /api/v2/roll/bootstrap: behavior contract
 
 > **API v2 is a URL contract, not Rust.** The only public Roll bootstrap GET is
-> `GET /api/v2/roll/bootstrap`, served by `api/native_roll.rs` from the contract
+> `GET /api/v2/roll/bootstrap`, served by `api/native_api.rs` from the contract
 > in `native/contracts/v2-runtime.openapi.json`. Python has no Roll bootstrap GET
 > handler: the v1/legacy aliases and Python read model were removed during the
 > cutover (#4397), and the frozen Python v2 projection/parity oracle was retired
@@ -173,7 +173,7 @@ Evidence captured in that session:
 - Response headers for the bootstrap GETs and the roll offer POST:
   `x-comicpile-api-runtime: rust`, `server: Vercel`,
   `content-type: application/json` — i.e. the current `vercel.json`
-  destination `api/native_roll.rs` served successful authenticated
+  destination `api/native_api.rs` served successful authenticated
   production Roll traffic, not only route configuration.
 - A direct authenticated `fetch` with the browser's own token returned
   `200` and `x-comicpile-api-runtime: rust` with the `BootstrapResponseV2`

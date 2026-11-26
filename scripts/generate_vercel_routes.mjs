@@ -129,7 +129,7 @@ export function fragmentVercelRoutes(fragments, previousRoutes = []) {
       }
       if (!src) {
         // The catch-all is never a fragment's own ingress src (slim vercel.json
-        // relies on it instead of explicit native_roll entries).
+        // relies on it instead of explicit native_api entries).
         src = (previous && previous.src !== FALLBACK && previous.src) || routeRegex(path);
       }
       if (dest !== PYTHON && !NATIVE.has(dest)) {

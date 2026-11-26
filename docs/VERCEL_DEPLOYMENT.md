@@ -9,7 +9,7 @@ This document describes the checked-in deployment workflow and routing contract.
 - A push or merge to `main` may create one production deployment for that exact commit SHA.
 - Pull requests and non-production branches must not create Vercel deployments.
 - Pull requests are validated locally and through GitHub Actions.
-- The React/Vite frontend is built as static output. Every deployed `/api/*` operation is served by native Rust (`api/native_roll.rs`); retained v1 paths are compatibility contracts, not a Python runtime. Bare production health/docs paths return 404 from Vercel's explicit legacy-path rule.
+- The React/Vite frontend is built as static output. Every deployed `/api/*` operation is served by native Rust (`api/native_api.rs`); retained v1 paths are compatibility contracts, not a Python runtime. Bare production health/docs paths return 404 from Vercel's explicit legacy-path rule.
 - Neon is the production PostgreSQL provider.
 
 `vercel.json` disables Vercel Git deployments. The migration-aware

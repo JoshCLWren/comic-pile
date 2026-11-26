@@ -20,7 +20,7 @@ export const RETIRED_ISSUE_HEALTH_SRC = '/api/_native_issue/health';
  * preserve baseline natives and `builds` verbatim, so this removes the
  * `api/native_issue.rs` build and every route that targets it (the internal
  * health probe and the two Issue ingress routes). The catch-all already
- * sends those requests to `api/native_roll.rs`, so dropping the routes keeps
+ * sends those requests to `api/native_api.rs`, so dropping the routes keeps
  * the output identical to what the generators emit and keeps `--check`
  * stable. Idempotent.
  */

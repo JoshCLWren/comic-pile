@@ -7,7 +7,7 @@
       "bucket": "operations",
       "method": "GET",
       "path": "/api/v2/alpha",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "consumers": ["alpha.ts"]
     }
   ]

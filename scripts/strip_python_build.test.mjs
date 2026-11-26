@@ -6,7 +6,7 @@ test('removes only the retired Python function build', () => {
   const config = {
     builds: [
       {src: 'api/index.py', use: '@vercel/python', config: {excludeFiles: 'target/**'}},
-      {src: 'api/native_roll.rs', use: '@vercel/rust'},
+      {src: 'api/native_api.rs', use: '@vercel/rust'},
       {src: 'package.json', use: '@vercel/static-build'},
     ],
     routes: [],
@@ -17,7 +17,7 @@ test('removes only the retired Python function build', () => {
 });
 
 test('leaves configurations without a Python build untouched', () => {
-  const config = {builds: [{src: 'api/native_roll.rs', use: '@vercel/rust'}], routes: []};
+  const config = {builds: [{src: 'api/native_api.rs', use: '@vercel/rust'}], routes: []};
   assert.equal(withoutPythonBuild(config), config);
   assert.equal(withoutPythonBuild({routes: []}).builds, undefined);
 });
@@ -25,7 +25,7 @@ test('leaves configurations without a Python build untouched', () => {
 test('drops the retired Issue function build and its routes', () => {
   const config = {
     builds: [
-      {src: 'api/native_roll.rs', use: '@vercel/rust'},
+      {src: 'api/native_api.rs', use: '@vercel/rust'},
       {src: 'api/native_issue.rs', use: '@vercel/rust'},
       {src: 'package.json', use: '@vercel/static-build'},
     ],
@@ -33,11 +33,11 @@ test('drops the retired Issue function build and its routes', () => {
       {src: '/api/_native_issue/health', methods: ['GET'], dest: '/api/native_issue.rs'},
       {src: '^/api/v2/issues/[0-9]+$', methods: ['PATCH'], dest: '/api/native_issue.rs'},
       {src: '^/api/v2/issues/cards$', methods: ['POST'], dest: '/api/native_issue.rs'},
-      {src: '/api(?:/.*)?', dest: '/api/native_roll.rs'},
+      {src: '/api(?:/.*)?', dest: '/api/native_api.rs'},
     ],
   };
   const result = withoutRetiredIssueFunction(config);
-  assert.deepEqual(result.builds.map(b => b.src), ['api/native_roll.rs', 'package.json']);
-  assert.deepEqual(result.routes, [{src: '/api(?:/.*)?', dest: '/api/native_roll.rs'}]);
+  assert.deepEqual(result.builds.map(b => b.src), ['api/native_api.rs', 'package.json']);
+  assert.deepEqual(result.routes, [{src: '/api(?:/.*)?', dest: '/api/native_api.rs'}]);
   assert.equal(withoutRetiredIssueFunction(result), result);
 });

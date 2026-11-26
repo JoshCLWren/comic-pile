@@ -30,7 +30,7 @@ The GitHub connector available to autonomous factories can edit the repository b
 Create these pages and keep them owner-oriented rather than implementation-oriented:
 
 - `Home.md` — what ComicPile is, the production architecture at a glance, and links to the sections below.
-- `Production-Architecture.md` — Vercel production from `main`, static Vite frontend, native Rust API handlers (`api/native_roll.rs`), and Neon PostgreSQL. Link to `docs/DEPLOYMENT.md` and `docs/VERCEL_ARCHITECTURE.md` for code-coupled detail.
+- `Production-Architecture.md` — Vercel production from `main`, static Vite frontend, native Rust API handlers (`api/native_api.rs`), and Neon PostgreSQL. Link to `docs/DEPLOYMENT.md` and `docs/VERCEL_ARCHITECTURE.md` for code-coupled detail.
 - `Reading-Order-and-Dependencies.md` — terminology for reading orders, blockers, parallel reading, crossovers, and dependency graphs.
 - `Queue-Rolls-and-Sessions.md` — plain-language explanation of the queue, die/roll behavior, ratings, snoozing, repositioning, and sessions.
 - `Troubleshooting.md` — owner-facing recovery and diagnosis guidance, linking to repository runbooks when commands must stay code-coupled.

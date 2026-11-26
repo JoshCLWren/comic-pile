@@ -1,5 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Shared synthetic claims and SQL isolation checks; requires a disposable PostgreSQL service.
+//! Exercises the Rust auth matrix against the canonical auth-matrix fixture.
 use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
@@ -65,7 +66,7 @@ async fn response(app: Router, authorization: Option<&str>) -> (u16, Value, Opti
 }
 
 #[tokio::test]
-async fn shared_python_rust_auth_and_ownership_matrix() {
+async fn shared_auth_and_ownership_matrix() {
     let url = comicpile_roll_service::test_support::database_url().await;
     let state = state(&url);
     let connection = state.pool.get().await.unwrap();

@@ -1,4 +1,4 @@
-name: Native Rust Roll
+name: Native Rust API
 
 on:
   pull_request:
@@ -11,9 +11,9 @@ on:
       - 'build.sh'
       - 'check-rust-workspace-lock.mjs'
       - 'rust-toolchain.toml'
-      - 'api/native_roll.rs'
+      - 'api/native_api.rs'
       - '.vercelignore'
-      - '.github/workflows/rust-roll.yml'
+      - '.github/workflows/rust-api.yml'
       - 'tests/fixtures/roll-v2/auth-matrix.json'
   push:
     branches: [main]
@@ -26,9 +26,9 @@ on:
       - 'build.sh'
       - 'check-rust-workspace-lock.mjs'
       - 'rust-toolchain.toml'
-      - 'api/native_roll.rs'
+      - 'api/native_api.rs'
       - '.vercelignore'
-      - '.github/workflows/rust-roll.yml'
+      - '.github/workflows/rust-api.yml'
       - 'tests/fixtures/roll-v2/auth-matrix.json'
   workflow_dispatch:
 
@@ -36,7 +36,7 @@ permissions:
   contents: read
 
 jobs:
-  rust-roll:
+  rust-api:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -53,7 +53,7 @@ jobs:
           --health-retries 10
     env:
       ENVIRONMENT: test
-      SECRET_KEY: native-roll-test-secret
+      SECRET_KEY: native-api-test-secret
       DATABASE_URL: postgresql+asyncpg://postgres:native-local-test@127.0.0.1:5432/native_auth_test
       RUST_ROLL_TEST_DATABASE_URL: postgresql://postgres:native-local-test@127.0.0.1:5432/native_auth_test
       RUST_ROLL_PARITY_DATABASE_URL: postgresql://roll_test_dml:roll-test-dml@127.0.0.1:5432/native_auth_test
@@ -141,12 +141,12 @@ jobs:
           trap 'rm -rf "$bundle"' EXIT
           mkdir -p "$bundle/api" "$bundle/native/roll-service" "$bundle/native/migrate"
           cp Cargo.toml Cargo.lock build.rs "$bundle/"
-          cp api/native_roll.rs "$bundle/api/"
+          cp api/native_api.rs "$bundle/api/"
           cp native/roll-service/Cargo.toml "$bundle/native/roll-service/"
           cp -R native/roll-service/src "$bundle/native/roll-service/src"
           test ! -e "$bundle/native/roll-service/tests"
           # Cargo loads every declared workspace member's manifest (and needs
-          # its target sources) before building native_roll, so the migration
+          # its target sources) before building native_api, so the migration
           # crate must be present even though its binary is not built here.
           # The real Vercel bundle also contains it; .vercelignore only drops
           # tests/ and *.sql, which is why neither is copied above.
@@ -159,7 +159,7 @@ jobs:
             COMICPILE_BUILD_SHA="$GITHUB_SHA" \
             COMICPILE_EXPECTED_LOCK_SHA256="$COMICPILE_EXPECTED_LOCK_SHA256" \
             CARGO_TARGET_DIR="$GITHUB_WORKSPACE/native/roll-service/target" \
-              cargo build --release --locked --bin native_roll
+              cargo build --release --locked --bin native_api
           )
       - uses: actions/upload-artifact@v7
         with:

@@ -5,7 +5,7 @@ ComicPile's maintained production deployment runs on Vercel from the `main` bran
 ## Production architecture
 
 - Vercel serves the built React/Vite frontend as static output.
-- A single native Rust function (`api/native_roll.rs`) serves every deployed
+- A single native Rust function (`api/native_api.rs`) serves every deployed
   `/api/*` route; unknown API paths get a Rust JSON 404.
 - The OpenAPI contract is generated and checked in
   (`native/contracts/v2-runtime.openapi.json`, merged into

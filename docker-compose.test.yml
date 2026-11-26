@@ -53,7 +53,7 @@ services:
     command: ["up"]
     restart: "no"
 
-  native-roll-test:
+  native-api-test:
     build:
       context: .
       dockerfile: native/roll-service/Dockerfile.audit
@@ -74,7 +74,7 @@ services:
       - "${TEST_INGRESS_CONF:?Run make docker-test-up to generate the ingress}:/etc/nginx/conf.d/default.conf:ro"
       - ./static/react:/usr/share/nginx/html:ro
     depends_on:
-      - native-roll-test
+      - native-api-test
 
 networks:
   test-network:

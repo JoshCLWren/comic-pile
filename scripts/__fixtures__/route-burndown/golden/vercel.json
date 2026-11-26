@@ -5,7 +5,7 @@
       "methods": [
         "GET"
       ],
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "^/api/v2/unicode$",
@@ -17,7 +17,7 @@
     },
     {
       "src": "/api(?:/.*)?",
-      "dest": "/api/native_roll.rs"
+      "dest": "/api/native_api.rs"
     },
     {
       "src": "/(.*)",

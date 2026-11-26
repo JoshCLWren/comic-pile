@@ -4,10 +4,10 @@ import {renderAuditIngress} from './generate_ui_audit_ingress.mjs';
 
 test('audit ingress preserves production method/path routing and native priority', () => {
   const config = {routes: [
-    {src: '^/api/v1/auth/login$', methods: ['POST'], dest: '/api/native_roll.rs'},
-    {src: '^/api/v1/threads/[^/]+/restore$', methods: ['POST', 'OPTIONS'], dest: '/api/native_roll.rs'},
-    {src: '^/api/v1/threads/[^/]+/issues$', methods: ['GET'], dest: '/api/native_roll.rs'},
-    {src: '/api(?:/.*)?', dest: '/api/native_roll.rs'},
+    {src: '^/api/v1/auth/login$', methods: ['POST'], dest: '/api/native_api.rs'},
+    {src: '^/api/v1/threads/[^/]+/restore$', methods: ['POST', 'OPTIONS'], dest: '/api/native_api.rs'},
+    {src: '^/api/v1/threads/[^/]+/issues$', methods: ['GET'], dest: '/api/native_api.rs'},
+    {src: '/api(?:/.*)?', dest: '/api/native_api.rs'},
   ]};
   const nginx = renderAuditIngress(config);
   assert.match(nginx, /default rust;/);
@@ -23,7 +23,7 @@ test('audit ingress preserves production method/path routing and native priority
 test('stale pre-regeneration Python exceptions are audited as Rust', () => {
   const nginx = renderAuditIngress({routes: [
     {src: '^/api/v1/legacy$', methods: ['GET'], dest: '/api/index.py'},
-    {src: '/api(?:/.*)?', dest: '/api/native_roll.rs'},
+    {src: '/api(?:/.*)?', dest: '/api/native_api.rs'},
   ]});
   assert.match(nginx, /~\^\(\?:GET\):\(\?:\/api\/v1\/legacy\)\$ rust;/);
   assert.doesNotMatch(nginx, /python/);
@@ -31,11 +31,11 @@ test('stale pre-regeneration Python exceptions are audited as Rust', () => {
 
 test('audit ingress rejects a Python catch-all or unknown API runtime', () => {
   assert.throws(() => renderAuditIngress({routes: [
-    {src: '^/api/v2/ping$', methods: ['GET'], dest: '/api/native_roll.rs'},
+    {src: '^/api/v2/ping$', methods: ['GET'], dest: '/api/native_api.rs'},
     {src: '/api(?:/.*)?', dest: '/api/index.py'},
   ]}), /fallback must use Rust/);
   assert.throws(() => renderAuditIngress({routes: [
     {src: '^/api/v2/ping$', methods: ['GET'], dest: '/api/unknown.py'},
-    {src: '/api(?:/.*)?', dest: '/api/native_roll.rs'},
+    {src: '/api(?:/.*)?', dest: '/api/native_api.rs'},
   ]}), /Unknown API destination/);
 });

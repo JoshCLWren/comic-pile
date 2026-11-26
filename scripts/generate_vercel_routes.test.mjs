@@ -28,7 +28,7 @@ function metadata(withOrphan = true) {
   return {paths, registered};
 }
 const config = {routes: [
-  {src: '/api/v2/health', methods: ['GET'], dest: '/api/native_roll.rs'},
+  {src: '/api/v2/health', methods: ['GET'], dest: '/api/native_api.rs'},
   {src: '/api(?:/.*)?', dest: '/api/index.py'},
   {src: '/(.*)', dest: '/index.html'},
 ]};
@@ -81,11 +81,11 @@ test('deleting Python routes automatically removes exceptions and returns Rust 4
   const before = generateVercel(config, pythonOperations(metadata()));
   const after = generateVercel(config, pythonOperations(metadata(false)));
   assert.equal(destination(before, 'GET', '/api/v1/orphan'), '/api/index.py');
-  assert.equal(destination(after, 'GET', '/api/v1/orphan'), '/api/native_roll.rs');
-  assert.equal(destination(after, 'GET', '/api/v2/unknown'), '/api/native_roll.rs');
+  assert.equal(destination(after, 'GET', '/api/v1/orphan'), '/api/native_api.rs');
+  assert.equal(destination(after, 'GET', '/api/v2/unknown'), '/api/native_api.rs');
   assert.equal(destination(after, 'GET', '/api/v1/cron/release-sync'), '/api/index.py');
-  assert.equal(destination(after, 'GET', '/api/v2/health'), '/api/native_roll.rs');
-  assert.equal(destination(after, 'POST', '/api/v1/threads/7'), '/api/native_roll.rs');
+  assert.equal(destination(after, 'GET', '/api/v2/health'), '/api/native_api.rs');
+  assert.equal(destination(after, 'POST', '/api/v1/threads/7'), '/api/native_api.rs');
   assert.equal(destination(after, 'OPTIONS', '/api/v1/threads/7'), '/api/index.py');
 });
 test('generated config idempotence and anchored parameter matching', () => {
@@ -98,7 +98,7 @@ test('generated config idempotence and anchored parameter matching', () => {
 test('an empty Python operation set leaves the fragment-owned inventory untouched', () => {
   const inventory = {full_surface: {v1_operations: [
     {method: 'GET', path: '/api/v1/tags/', consumers: ['client.ts'], status: 'transitional', owning_issue: 5},
-  ], unversioned_operations: [], catch_all: {src: '/api(?:/.*)?', dest: '/api/native_roll.rs'}}};
+  ], unversioned_operations: [], catch_all: {src: '/api(?:/.*)?', dest: '/api/native_api.rs'}}};
   assert.equal(updateInventory(inventory, []), inventory);
 });
 test('deleted Python routes leave the inventory, surviving caller metadata persists', () => {
@@ -113,8 +113,8 @@ test('deleted Python routes leave the inventory, surviving caller metadata persi
     ['client.ts']);
 });
 const familyConfig = {routes: [
-  {src: '/api/v2/health', methods: ['GET'], dest: '/api/native_roll.rs'},
-  {src: '/api(?:/.*)?', dest: '/api/native_roll.rs'},
+  {src: '/api/v2/health', methods: ['GET'], dest: '/api/native_api.rs'},
+  {src: '/api(?:/.*)?', dest: '/api/native_api.rs'},
   {src: '^/(?:openapi\\.json|docs|redoc|health)$', status: 404},
   {src: '/(.*)', dest: '/index.html'},
 ]};
@@ -125,7 +125,7 @@ function familyFragments() {
       {bucket: 'v1_operations', method: 'POST', path: '/api/v1/tags/', dest: '/api/index.py', src: '^/api/v1/tags/$'},
     ]},
     {family: 'creators', defaults: {}, operations: [
-      {bucket: 'v1_operations', method: 'GET', path: '/api/v1/creators', dest: '/api/native_roll.rs', src: '^/api/v1/creators$'},
+      {bucket: 'v1_operations', method: 'GET', path: '/api/v1/creators', dest: '/api/native_api.rs', src: '^/api/v1/creators$'},
     ]},
   ];
 }
@@ -140,16 +140,16 @@ test('new family fragment merges without touching another family fragment', () =
   ]);
   // Full derivation adds the creators native route before the Python group.
   assert.equal(full[0].src, '^/api/v1/creators$');
-  assert.equal(full[0].dest, '/api/native_roll.rs');
+  assert.equal(full[0].dest, '/api/native_api.rs');
   assert.deepEqual(full[1], tagsOnlyRoutes[0]);
   // Flipping one family's dest leaves the other family's route unchanged.
   const flipped = [
-    {...fragments[0], operations: fragments[0].operations.map(op => ({...op, dest: '/api/native_roll.rs'}))},
+    {...fragments[0], operations: fragments[0].operations.map(op => ({...op, dest: '/api/native_api.rs'}))},
     fragments[1],
   ];
   const flippedRoutes = fragmentVercelRoutes(flipped, familyConfig.routes);
-  assert(flippedRoutes.some(r => r.src === '^/api/v1/tags/$' && r.dest === '/api/native_roll.rs'));
-  assert(flippedRoutes.some(r => r.src === '^/api/v1/creators$' && r.dest === '/api/native_roll.rs'));
+  assert(flippedRoutes.some(r => r.src === '^/api/v1/tags/$' && r.dest === '/api/native_api.rs'));
+  assert(flippedRoutes.some(r => r.src === '^/api/v1/creators$' && r.dest === '/api/native_api.rs'));
 });
 test('fragment generation is idempotent and native-before-Python ordered', () => {
   const fragments = familyFragments();

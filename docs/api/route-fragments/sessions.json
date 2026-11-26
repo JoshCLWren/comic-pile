@@ -16,7 +16,7 @@
       "bucket": "operations",
       "method": "GET",
       "path": "/api/v2/reading-sessions/{session_id}/details",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "src": "^/api/v2/reading-sessions/[^/]+/details$",
       "consumers": [
         "frontend/src/services/api-sessions.ts"
@@ -26,7 +26,7 @@
       "bucket": "operations",
       "method": "GET",
       "path": "/api/v2/reading-sessions/{session_id}/snapshots",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "src": "^/api/v2/reading-sessions/[^/]+/snapshots$",
       "consumers": [
         "frontend/src/services/api-sessions.ts"

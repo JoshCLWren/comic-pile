@@ -6,7 +6,7 @@ Use this as an implementation checklist, not an alternative API architecture. Th
 
 1. Start from `native/roll-service/src/lib.rs` and the owning resource module. Preserve `AuthenticatedUser`, `AppState`, `ApiError`, the bounded DB pool, owner-scoped SQL, and transaction boundaries.
 2. Define request/response DTOs with `serde`/`utoipa`. Validate bounds, nullability, errors, and ownership before database work.
-3. Register the exact HTTP method/path in the service router and the separate Vercel ingress router in `api/native_roll.rs`. Both tables must agree; an ingress omission produces a Rust JSON 404 before the handler runs.
+3. Register the exact HTTP method/path in the service router and the separate Vercel ingress router in `api/native_api.rs`. Both tables must agree; an ingress omission produces a Rust JSON 404 before the handler runs.
 4. Express production routing in `docs/api/route-fragments/*.json`. Never hand-edit `vercel.json`, `docs/api/v2-route-inventory.json`, `docs/api/route-fragments/vercel-rewrites.json`, or the generated `AGENTS.md` route block. The route-regeneration workflow owns those outputs.
 5. Switch the real caller under `frontend/src/services/`, regenerate contracts/types, and add focused frontend tests. Do not infer implementation language from an API version.
 6. For writes, use owner-scoped SQL in a transaction, serialize concurrent writers where required, preserve idempotency/locking, and assert the resulting rows. Add a disposable-PostgreSQL HTTP test for the route.

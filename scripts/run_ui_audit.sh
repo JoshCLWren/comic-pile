@@ -76,7 +76,7 @@ until [ "$(curl --silent --output /dev/null --write-out '%{http_code}' "$AUDIT_B
   if (( SECONDS >= deadline )); then
     echo "Native Rust Roll v2 ingress did not become ready."
     compose ps || true
-    compose logs native-roll-test ui-audit-ingress || true
+    compose logs native-api-test ui-audit-ingress || true
     exit 1
   fi
   sleep 2
