@@ -136,9 +136,404 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
     let _ = hydrate_confirmed_identity_sync(state, user_id, issue_id, budget, api_key, force).await;
 }
 
+fn issue_id(external_id: &str) -> Option<u32> {
+    let raw = external_id.strip_prefix("4000-").unwrap_or(external_id);
+    raw.parse::<u32>().ok().filter(|id| *id > 0)
+}
+
 /// Extract the numeric ComicVine issue id from an external identity id.
 fn issue_id_from_external(external_id: &str) -> Option<u32> {
     issue_id(external_id)
+}
+
+fn compact_refs(value: &Value) -> Value {
+    Value::Array(
+        value
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|v| {
+                let source = v.as_object()?;
+                let mut compact = Map::new();
+                for field in ["id", "name", "api_detail_url", "site_detail_url", "role"] {
+                    if let Some(value) = source.get(field) {
+                        compact.insert(field.to_owned(), value.clone());
+                    }
+                }
+                Some(Value::Object(compact))
+            })
+            .collect(),
+    )
+}
+
+/// Normalize a roster row for catalog commit without claiming a deep refresh.
+pub(crate) fn normalize_roster_issue_metadata(result: &Value) -> Value {
+    let volume = result.get("volume").and_then(Value::as_object).map(|source| {
+        let mut compact = Map::new();
+        for field in ["id", "name", "api_detail_url", "site_detail_url"] {
+            if let Some(value) = source.get(field) {
+                compact.insert(field.to_owned(), value.clone());
+            }
+        }
+        Value::Object(compact)
+    });
+    let primary_image = result.get("image").and_then(Value::as_object).and_then(|image| {
+        [
+            "original_url",
+            "super_url",
+            "screen_large_url",
+            "medium_url",
+            "screen_url",
+            "small_url",
+            "thumb_url",
+            "tiny_url",
+            "icon_url",
+        ]
+        .iter()
+        .filter_map(|key| image.get(*key).and_then(Value::as_str))
+        .find(|value| !value.is_empty())
+    });
+    json!({
+        "name": result.get("name"),
+        "issue_number": result.get("issue_number"),
+        "cover_date": result.get("cover_date"),
+        "store_date": result.get("store_date"),
+        "volume": volume,
+        "primary_image": primary_image,
+        "creator_credits": compact_refs(&result["person_credits"]),
+        "characters": compact_refs(&result["character_credits"]),
+        "teams": compact_refs(&result["team_credits"]),
+        "story_arcs": compact_refs(&result["story_arc_credits"]),
+        "raw_provider_payload": result,
+    })
+}
+
+fn normalized_metadata(
+    result: &Value,
+    expected_id: u32,
+) -> Result<(Value, bool, Option<String>, Option<String>), ProviderFailure> {
+    let obj = result.as_object().ok_or(ProviderFailure::InvalidPayload)?;
+    if obj.get("id").and_then(Value::as_u64) != Some(u64::from(expected_id)) {
+        return Err(ProviderFailure::InvalidPayload);
+    }
+    for field in [
+        "name",
+        "issue_number",
+        "cover_date",
+        "store_date",
+        "image",
+        "volume",
+        "person_credits",
+        "character_credits",
+        "team_credits",
+        "story_arc_credits",
+        "date_last_updated",
+    ] {
+        if !obj.contains_key(field) {
+            return Err(ProviderFailure::InvalidPayload);
+        }
+    }
+    let image = obj.get("image").and_then(Value::as_object);
+    let cover = image.and_then(|v| {
+        [
+            "original_url",
+            "super_url",
+            "screen_large_url",
+            "medium_url",
+            "screen_url",
+            "small_url",
+            "thumb_url",
+            "tiny_url",
+            "icon_url",
+        ]
+        .iter()
+        .filter_map(|k| v.get(*k).and_then(Value::as_str))
+        .find(|s| !s.is_empty())
+    });
+    let person = compact_refs(&result["person_credits"]);
+    let present = person.as_array().is_some_and(|v| !v.is_empty());
+    let patch = json!({
+        "name": result["name"],
+        "issue_number": result["issue_number"],
+        "cover_date": result["cover_date"],
+        "store_date": result["store_date"],
+        "volume": compact_refs(&json!([result["volume"]])).as_array().and_then(|v|v.first()).cloned(),
+        "primary_image": cover,
+        "creator_credits": person,
+        "characters": compact_refs(&result["character_credits"]),
+        "teams": compact_refs(&result["team_credits"]),
+        "story_arcs": compact_refs(&result["story_arc_credits"]),
+        "raw_provider_payload": result,
+        "deep_metadata_refreshed_at": chrono::Utc::now().to_rfc3339(),
+    });
+    let url = result["site_detail_url"]
+        .as_str()
+        .filter(|s| s.starts_with("https://comicvine.gamespot.com/"))
+        .map(str::to_owned);
+    let updated = provider_timestamp(&result["date_last_updated"]);
+    Ok((patch, present, url, updated))
+}
+
+fn provider_timestamp(value: &Value) -> Option<String> {
+    let stamp = value.as_str()?;
+    if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(stamp) {
+        return Some(parsed.to_rfc3339());
+    }
+    let naive = chrono::NaiveDateTime::parse_from_str(stamp, "%Y-%m-%d %H:%M:%S").ok()?;
+    Some(
+        chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(naive, chrono::Utc).to_rfc3339(),
+    )
+}
+
+fn normalize_provider_api_key(raw: &str) -> Option<String> {
+    let key = raw.trim();
+    (!key.is_empty()).then(|| key.to_owned())
+}
+
+pub(crate) fn provider_api_key() -> Option<String> {
+    std::env::var("COMICVINE_API_KEY")
+        .ok()
+        .and_then(|raw| normalize_provider_api_key(&raw))
+}
+
+#[derive(Debug)]
+pub(crate) enum Exchange {
+    Payload(Value),
+    Throttled {
+        status: u16,
+        retry_after: Option<String>,
+    },
+}
+
+fn repair_retry_after_seconds(raw: Option<&str>, now: chrono::DateTime<chrono::Utc>) -> u32 {
+    raw.and_then(|header| parse_retry_after(header, now))
+        .filter(|seconds| seconds.is_finite())
+        .map(|seconds| seconds.clamp(60.0, 3600.0).ceil() as u32)
+        .unwrap_or(60)
+}
+
+pub(crate) async fn provider_response(
+    outbound: &Arc<dyn OutboundHttp>,
+    resource: &str,
+    extra_query: &str,
+    api_key: &str,
+) -> Result<Value, ProviderFailure> {
+    match provider_exchange(outbound, resource, extra_query, api_key).await? {
+        Exchange::Throttled {
+            status: 420 | 429,
+            retry_after,
+        } => Err(ProviderFailure::RateLimited(repair_retry_after_seconds(
+            retry_after.as_deref(),
+            chrono::Utc::now(),
+        ))),
+        Exchange::Throttled { .. } => Err(ProviderFailure::Unavailable),
+        Exchange::Payload(payload) => {
+            let status_code = payload.get("status_code").and_then(Value::as_i64);
+            if python_envelope_ok(&payload) {
+                Ok(payload)
+            } else {
+                tracing::warn!(
+                    comicvine_status_code = ?status_code,
+                    resource,
+                    "comicvine provider returned non-success envelope"
+                );
+                Err(ProviderFailure::Unavailable)
+            }
+        }
+    }
+}
+
+pub(crate) async fn provider_exchange(
+    outbound: &Arc<dyn OutboundHttp>,
+    resource: &str,
+    extra_query: &str,
+    api_key: &str,
+) -> Result<Exchange, ProviderFailure> {
+    let Some(api_key) = normalize_provider_api_key(api_key) else {
+        tracing::debug!("comicvine provider credential is not configured");
+        return Err(ProviderFailure::Unavailable);
+    };
+    if !api_key.bytes().all(|c| c.is_ascii_alphanumeric()) {
+        tracing::warn!("comicvine provider credential contains non-alphanumeric bytes");
+        return Err(ProviderFailure::Unavailable);
+    }
+    let collection_slash = if matches!(resource, "issues" | "search") {
+        "/"
+    } else {
+        ""
+    };
+    let request = OutboundRequest {
+        method: http::Method::GET,
+        path: format!(
+            "/api/{resource}{collection_slash}?api_key={api_key}&format=json{extra_query}"
+        ),
+        headers: vec![
+            ("accept".to_string(), "application/json".to_string()),
+            (
+                "user-agent".to_string(),
+                "ComicPile/1.0 (metadata repair)".to_string(),
+            ),
+        ],
+        body: Bytes::new(),
+    };
+    let exchange = async {
+        let response = outbound.send(HOST, request).await.map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            ProviderFailure::Unavailable
+        })?;
+        let status = response.status;
+        if status == StatusCode::TOO_MANY_REQUESTS
+            || status == StatusCode::FORBIDDEN
+            || status.as_u16() == 420
+        {
+            tracing::warn!(
+                status = status.as_u16(),
+                resource,
+                "comicvine provider returned throttled or forbidden status"
+            );
+            return Ok(Exchange::Throttled {
+                status: status.as_u16(),
+                retry_after: response
+                    .headers
+                    .get("retry-after")
+                    .and_then(|h| h.to_str().ok())
+                    .map(str::to_owned),
+            });
+        }
+        if !status.is_success() {
+            tracing::warn!(
+                status = status.as_u16(),
+                resource,
+                "comicvine provider returned non-success status"
+            );
+            return Err(ProviderFailure::Unavailable);
+        }
+        if response
+            .headers
+            .get("content-length")
+            .and_then(|h| h.to_str().ok())
+            .and_then(|n| n.parse::<usize>().ok())
+            .is_some_and(|n| n > MAX_BODY)
+        {
+            return Err(ProviderFailure::InvalidPayload);
+        }
+        let mut data = Vec::new();
+        let mut body = response.body;
+        while let Some(frame) = body.frame().await {
+            let frame = frame.map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                ProviderFailure::Unavailable
+            })?;
+            if let Ok(bytes) = frame.into_data() {
+                if data.len() + bytes.len() > MAX_BODY {
+                    return Err(ProviderFailure::InvalidPayload);
+                }
+                data.extend_from_slice(&bytes);
+            }
+        }
+        let payload: Value = serde_json::from_slice(&data).map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            ProviderFailure::InvalidPayload
+        })?;
+        Ok(Exchange::Payload(payload))
+    };
+    tokio::time::timeout(PROVIDER_TIMEOUT, exchange)
+        .await
+        .map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            ProviderFailure::Timeout
+        })?
+}
+
+async fn provider_issue(
+    outbound: &Arc<dyn OutboundHttp>,
+    id: u32,
+    api_key: &str,
+) -> Result<Value, ProviderFailure> {
+    provider_response(
+        outbound,
+        &format!("issue/4000-{id}"),
+        &format!("&field_list={FIELDS}"),
+        api_key,
+    )
+    .await?
+    .get("results")
+    .cloned()
+    .ok_or(ProviderFailure::InvalidPayload)
+}
+
+fn has_complete_provider_payload(metadata: &Value) -> bool {
+    let Some(raw) = metadata.get("raw_provider_payload").and_then(|v| v.as_object()) else {
+        return false;
+    };
+    FIELDS.split(',').all(|key| raw.contains_key(key))
+}
+
+fn cached_has_credits(metadata: &Value) -> bool {
+    let creator = metadata
+        .get("creator_credits")
+        .and_then(|v| v.as_array())
+        .is_some_and(|v| !v.is_empty());
+    let raw = metadata
+        .get("raw_provider_payload")
+        .and_then(|v| v.get("person_credits"))
+        .and_then(|v| v.as_array())
+        .is_some_and(|v| !v.is_empty());
+    creator || raw
+}
+
+fn provider_newer_than_deep_fetch(metadata: &Value) -> bool {
+    let deep = metadata
+        .get("deep_metadata_refreshed_at")
+        .and_then(|v| v.as_str())
+        .and_then(|v| chrono::DateTime::parse_from_rfc3339(v).ok());
+    let Some(deep) = deep else {
+        return false;
+    };
+    let Some(last_updated) = metadata
+        .get("raw_provider_payload")
+        .and_then(|v| v.get("date_last_updated"))
+        .and_then(|v| v.as_str())
+    else {
+        return false;
+    };
+    provider_timestamp(&serde_json::Value::String(last_updated.to_owned()))
+        .and_then(|v| chrono::DateTime::parse_from_rfc3339(&v).ok())
+        .is_some_and(|provider| provider > deep)
+}
+
+pub(crate) fn needs_provider_fetch(metadata: &Value, now: chrono::DateTime<chrono::Utc>) -> bool {
+    if !has_complete_provider_payload(metadata) {
+        return true;
+    }
+    if provider_newer_than_deep_fetch(metadata) {
+        return true;
+    }
+    let Some(fetched_at) = metadata["deep_metadata_refreshed_at"]
+        .as_str()
+        .and_then(|v| chrono::DateTime::parse_from_rfc3339(v).ok())
+    else {
+        return true;
+    };
+    let age = now.signed_duration_since(fetched_at);
+    let window = if cached_has_credits(metadata) {
+        chrono::Duration::days(COMPLETE_FRESH_DAYS)
+    } else {
+        chrono::Duration::days(EMPTY_CREDIT_RECHECK_DAYS)
+    };
+    age >= window
 }
 
 /// Keep cached creator credits when a fresh fetch did not include a roster.
@@ -167,6 +562,321 @@ fn preserve_cached_credits(patch: &mut Value, cached: Option<&Value>) {
             );
         }
     }
+}
+
+/// Bounded synchronous hydration for a single confirmed ComicVine identity.
+/// Returns a truthful outcome; never enqueues, never mutates mapping/order/
+/// reader state, and never overwrites metadata when the confirmed identity has
+/// changed or the provider call fails.
+pub(crate) async fn hydrate_confirmed_identity_sync(
+    state: &AppState,
+    user_id: i32,
+    issue_id: i32,
+    budget: Duration,
+    api_key: &str,
+    force: bool,
+) -> HydrationOutcome {
+    let Some(api_key) = normalize_provider_api_key(api_key) else {
+        return HydrationOutcome::NotConfigured;
+    };
+    if budget.is_zero() {
+        return HydrationOutcome::Unavailable;
+    }
+
+    let run = async {
+        let conn = match db::checkout(state).await {
+            Ok(c) => c,
+            Err(_) => return HydrationOutcome::Unavailable,
+        };
+        let row = match conn
+            .query_opt(
+                "SELECT e.id, e.external_id, e.metadata_json::text
+                 FROM issue_external_identity_mappings m
+                 JOIN external_identities e ON e.id = m.external_identity_id
+                 JOIN issues i ON i.id = m.issue_id
+                 JOIN threads t ON t.id = i.thread_id
+                 WHERE m.issue_id = $1
+                   AND t.user_id = $2
+                   AND m.status = 'confirmed'
+                   AND e.provider = 'comicvine'
+                   AND e.entity_type = 'issue'
+                 ORDER BY e.id
+                 LIMIT 1",
+                &[&issue_id, &user_id],
+            )
+            .await
+        {
+            Ok(row) => row,
+            Err(_) => return HydrationOutcome::Unavailable,
+        };
+        let Some(row) = row else {
+            return HydrationOutcome::NotConfirmed;
+        };
+        let identity_id: i32 = row.get(0);
+        let external_id: String = row.get(1);
+        let cached = row
+            .get::<_, Option<String>>(2)
+            .and_then(|text| serde_json::from_str::<Value>(&text).ok());
+        let Some(comicvine_id) = issue_id_from_external(&external_id) else {
+            return HydrationOutcome::InvalidResponse;
+        };
+
+        if !force {
+            if let Some(ref meta) = cached {
+                if !needs_provider_fetch(meta, chrono::Utc::now()) {
+                    return if cached_has_credits(meta) {
+                        HydrationOutcome::Complete
+                    } else {
+                        HydrationOutcome::NoCredits
+                    };
+                }
+            }
+        }
+
+        let provider_data = match provider_issue(&state.outbound, comicvine_id, &api_key).await {
+            Ok(v) => v,
+            Err(e) => return HydrationOutcome::from(e),
+        };
+        let (mut patch, present, external_url, provider_updated_at) =
+            match normalized_metadata(&provider_data, comicvine_id) {
+                Ok(v) => v,
+                Err(e) => return HydrationOutcome::from(e),
+            };
+        if !present {
+            preserve_cached_credits(&mut patch, cached.as_ref());
+        }
+        let present = patch
+            .get("creator_credits")
+            .and_then(Value::as_array)
+            .is_some_and(|v| !v.is_empty());
+        let Ok(json_patch) = serde_json::to_string(&patch) else {
+            return HydrationOutcome::InvalidResponse;
+        };
+        let updated = match conn
+            .execute(
+                PERSIST_SYNC,
+                &[
+                    &identity_id,
+                    &json_patch,
+                    &external_url,
+                    &provider_updated_at,
+                    &issue_id,
+                    &user_id,
+                ],
+            )
+            .await
+        {
+            Ok(n) => n,
+            Err(err) => {
+                tracing::warn!(
+                    error_kind = crate::error_kind(&err),
+                    "confirmed identity hydration persist failed"
+                );
+                return HydrationOutcome::Unavailable;
+            }
+        };
+        if updated == 0 {
+            // Confirmed identity changed or ownership drifted before persist.
+            return HydrationOutcome::NotConfirmed;
+        }
+        if present {
+            HydrationOutcome::Complete
+        } else {
+            HydrationOutcome::NoCredits
+        }
+    };
+
+    match tokio::time::timeout(budget, run).await {
+        Ok(outcome) => outcome,
+        Err(_) => HydrationOutcome::Timeout,
+    }
+}
+
+pub(crate) async fn hydrate_catalog_commit(
+    state: &AppState,
+    user_id: i32,
+    committed_issue_ids: &[i32],
+    budget: Duration,
+) {
+    let Some(api_key) = provider_api_key() else {
+        return;
+    };
+    hydrate_catalog_commit_with_key(state, user_id, committed_issue_ids, budget, &api_key).await;
+}
+
+async fn hydrate_catalog_commit_with_key(
+    state: &AppState,
+    user_id: i32,
+    committed_issue_ids: &[i32],
+    budget: Duration,
+    api_key: &str,
+) {
+    if committed_issue_ids.is_empty() || budget.is_zero() || api_key.is_empty() {
+        return;
+    }
+    let run = async {
+        let conn = match db::checkout(state).await {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+        let rows = match conn
+            .query(
+                "SELECT DISTINCT e.id, e.external_id
+                 FROM issue_external_identity_mappings m
+                 JOIN external_identities e ON e.id = m.external_identity_id
+                 JOIN issues i ON i.id = m.issue_id
+                 JOIN threads t ON t.id = i.thread_id
+                 WHERE m.issue_id = ANY($1::integer[])
+                   AND t.user_id = $2
+                   AND m.status = 'confirmed'
+                   AND m.evidence_source = 'user_series_confirmation'
+                   AND e.provider = 'comicvine'
+                   AND e.entity_type = 'issue'
+                 ORDER BY e.id",
+                &[&committed_issue_ids, &user_id],
+            )
+            .await
+        {
+            Ok(rows) => rows,
+            Err(_) => return,
+        };
+        for row in rows {
+            let id: i32 = row.get(0);
+            let external_id: String = row.get(1);
+            let Some(comicvine_id) = issue_id(&external_id) else {
+                continue;
+            };
+            let Ok(provider_data) = provider_issue(&state.outbound, comicvine_id, api_key).await
+            else {
+                continue;
+            };
+            let Ok((patch, _, external_url, provider_updated_at)) =
+                normalized_metadata(&provider_data, comicvine_id)
+            else {
+                continue;
+            };
+            let Ok(json_patch) = serde_json::to_string(&patch) else {
+                continue;
+            };
+            if let Err(err) = conn
+                .execute(
+                    "UPDATE external_identities
+                 SET metadata_json = (COALESCE(metadata_json::jsonb, '{}'::jsonb)
+                                      || ($2::text)::jsonb)::json,
+                     external_url = COALESCE($3, external_url),
+                     provider_updated_at = COALESCE(($4::text)::timestamptz, provider_updated_at),
+                     updated_at = now()
+                 WHERE id = $1 AND provider = 'comicvine' AND entity_type = 'issue'",
+                    &[&id, &json_patch, &external_url, &provider_updated_at],
+                )
+                .await
+            {
+                tracing::warn!(
+                    error_kind = crate::error_kind(&err),
+                    "catalog commit metadata hydration failed"
+                );
+            }
+        }
+    };
+    if tokio::time::timeout(budget, run).await.is_err() {
+        tracing::info!("catalog commit inline hydration budget exhausted");
+    }
+}
+
+pub(crate) async fn catalog_volume_roster(
+    limits: &crate::comicvine_limits::ComicVineLimits,
+    outbound: &Arc<dyn OutboundHttp>,
+    external_id: &str,
+) -> Result<(Value, Vec<Value>), ApiError> {
+    if let Some(fixture) = crate::test_support::lookup_test_volume_roster(external_id) {
+        return Ok(fixture);
+    }
+    let unavailable = || ApiError::ServiceUnavailable("provider_unavailable".to_owned());
+    let volume_id = external_id
+        .parse::<u32>()
+        .ok()
+        .filter(|v| *v > 0)
+        .ok_or_else(unavailable)?;
+    let api_key = provider_api_key().ok_or_else(unavailable)?;
+    let volume = limits
+        .call(outbound, &format!("volume/4050-{volume_id}"), "", &api_key)
+        .await
+        .map_err(|_| unavailable())?;
+    let volume_info = volume
+        .get("results")
+        .filter(|v| v.is_object())
+        .ok_or_else(unavailable)?;
+    let series_info = json!({
+        "id": volume_info.get("id").map(ToString::to_string).map(|v| v.trim_matches('"').to_string()),
+        "name": volume_info.get("name"),
+        "publisher": volume_info.get("publisher").and_then(|p| p.get("name")),
+        "start_year": volume_info.get("start_year"),
+        "count_of_issues": volume_info.get("count_of_issues"),
+        "site_detail_url": volume_info.get("site_detail_url"),
+        "image": volume_info.get("image"),
+    });
+
+    let mut roster = Vec::new();
+    let mut offset = 0_usize;
+    let mut expected_total: Option<usize> = None;
+    loop {
+        let query = format!("&filter=volume:{volume_id}&limit=100&offset={offset}");
+        let page = limits
+            .call(outbound, "issues", &query, &api_key)
+            .await
+            .map_err(|_| unavailable())?;
+        let results = page
+            .get("results")
+            .and_then(Value::as_array)
+            .ok_or_else(unavailable)?;
+        if expected_total.is_none() {
+            expected_total = page
+                .get("number_of_total_results")
+                .and_then(Value::as_u64)
+                .and_then(|n| usize::try_from(n).ok());
+        }
+        for row in results {
+            if row
+                .get("volume")
+                .and_then(|v| v.get("id"))
+                .and_then(Value::as_u64)
+                .is_some_and(|id| id != u64::from(volume_id))
+            {
+                return Err(unavailable());
+            }
+            let Some(issue_number) = row.get("issue_number").filter(|v| !v.is_null()) else {
+                continue;
+            };
+            let Some(pid) = row.get("id").and_then(Value::as_i64).filter(|id| *id > 0) else {
+                continue;
+            };
+            let number = issue_number
+                .as_str()
+                .map(str::to_owned)
+                .unwrap_or_else(|| issue_number.to_string());
+            roster.push(json!({
+                "issue_id": pid,
+                "issue_number": number,
+                "title": row.get("name"),
+                "thread_id": null,
+                "thread_title": null,
+                "current_mapping_status": "unresolved",
+                "provider": "comicvine",
+                "external_id": pid.to_string(),
+                "classification": "unresolved",
+                "_roster_only": true,
+                "_provider_metadata": row,
+            }));
+        }
+        offset += results.len();
+        if results.len() < 100 || expected_total.is_some_and(|n| offset >= n) {
+            break;
+        }
+        if offset >= 10_000 {
+            return Err(unavailable());
+        }
+    }
+    Ok((series_info, roster))
 }
 
 #[cfg(test)]
