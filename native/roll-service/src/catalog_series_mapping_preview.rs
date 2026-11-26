@@ -333,6 +333,7 @@ pub async fn preview_series_mapping_handler(
     let request = parse_request(&body)?;
     let connection = db::checkout(&state).await?;
     let plan = catalog_commit::build_plan_for_commit(
+        &state.comicvine_limits,
         &state.outbound,
         &connection,
         user.id(),
