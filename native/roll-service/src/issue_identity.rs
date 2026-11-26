@@ -3375,7 +3375,6 @@ async fn do_cbl_adoption_commit(
     }
 
     let prow = tx.run_query_one("SELECT id,user_id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1", &[&plan_id]).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(format!("reload plan: {e}")) })?;
-
     let status = if requested_target_plan_id.is_some() {
         StatusCode::OK
     } else {
@@ -3397,9 +3396,6 @@ async fn do_cbl_adoption_commit(
         excluded_positions: merge.2,
         unresolved_positions: merge.3,
     };
-    // Store the authoritative commit result in the same transaction as the
-    // plan/list writes. A lost response can then be recovered by fingerprint
-    // replay instead of encouraging a duplicate adoption (#5522).
     store_cbl_adoption_receipt(&tx, user_id, list_id, plan_id, &request_fingerprint, &resp).await?;
     tx.commit().await.map_err(|e| {
         if crate::db::is_transport_failure(&e) {
@@ -4271,8 +4267,6 @@ async fn merge_adoption_nodes_tx(
         *nodes_arr = reordered;
     }
 
-    // Apply tracking state once per affected thread after the whole adoption
-    // merge, so a large commit does not recompute thread counters per issue.
     for thread_id in &affected_threads {
         apply_thread_issue_tracking_state_tx(tx, *thread_id)
             .await
