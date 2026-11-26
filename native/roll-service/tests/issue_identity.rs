@@ -1388,12 +1388,13 @@ async fn adoption_commit_recommit_is_idempotent() {
         nodes1.len(),
         "re-commit must not duplicate nodes: first={body1} second={body2}"
     );
-    assert!(
-        body2["created_positions"]
-            .as_array()
-            .map(|a| a.is_empty())
-            .unwrap_or(true),
-        "re-commit must not create duplicate positions: {body2}"
+    // #5522: a re-commit with the same fingerprint replays the authoritative
+    // stored receipt instead of recomputing the merge. Assert the whole wire
+    // response is identical to the original commit (stronger than only
+    // checking that no new positions were reported).
+    assert_eq!(
+        body2, body1,
+        "re-commit must replay the authoritative commit result: first={body1} second={body2}"
     );
 }
 
