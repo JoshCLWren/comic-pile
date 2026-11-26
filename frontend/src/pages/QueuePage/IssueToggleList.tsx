@@ -24,6 +24,8 @@ import DeleteIssueDialog from './DeleteIssueDialog'
 import { AliasOfferList, PostCreateUndoBar, PreviewIssueRow } from './IssueEditPreviewParts'
 import { IssueStructurePreviewModal } from './IssueStructurePreviewModal'
 import { useIssueStructurePreview } from './useIssueStructurePreview'
+import type { IssueToggleListApi, IssueToggleListDependenciesApi, IssueToggleListHandle } from './IssueToggleList.api'
+export type { IssueToggleListApi, IssueToggleListDependenciesApi, IssueToggleListHandle } from './IssueToggleList.api'
 import CompactIssueCardTrigger from '../../components/CompactIssueCardTrigger'
 import { useIssueCards, indexIssueCards } from '../../hooks/useIssueCards'
 import type { IssueReadRateResponse } from '../../services/issueCardsApi'
@@ -38,50 +40,6 @@ import {
   getPendingCreates,
 } from './issueUtils'
 import type { IssueMutation, QueuedIssueMutation } from './types'
-
-/** The issue-API surface IssueToggleList consumes, injectable for tests. */
-export interface IssueToggleListApi {
-  list: (
-    threadId: number,
-    params?: { status?: 'unread' | 'read'; page_size?: number; page_token?: string },
-  ) => Promise<IssueListResponse>
-  create: (
-    threadId: number,
-    issueRange: string,
-    options?: IssueCreateOptions,
-  ) => Promise<IssueListResponse>
-  previewCreate: (
-    threadId: number,
-    issueRange: string,
-    options?: IssueCreateOptions,
-  ) => Promise<import('../../services/api-issues').IssueEditPreviewResponse>
-  /** Optional structural preview seams; the production API supplies both. */
-  previewDelete?: (threadId: number, issueId: number) => Promise<import('../../services/api-issues').IssueEditPreviewResponse>
-  previewReorder?: (threadId: number, issueIds: number[]) => Promise<import('../../services/api-issues').IssueEditPreviewResponse>
-  markRead: (issueId: number) => Promise<void>
-  markUnread: (issueId: number) => Promise<void>
-  delete: (issueId: number) => Promise<void>
-  reorder: (threadId: number, issueIds: number[]) => Promise<void>
-}
-
-/** The dependency-API surface IssueToggleList consumes, injectable for tests. */
-export interface IssueToggleListDependenciesApi {
-  listForThread: (threadId: number) => Promise<ThreadIssueDependenciesResponse>
-}
-
-/** Imperative handle for deferred (draft) mode. */
-export interface IssueToggleListHandle {
-  /** Flush queued mutations to the server. Resolves when complete. */
-  flush: () => Promise<void>
-  /** Whether any mutations are queued. */
-  hasPendingMutations: () => boolean
-  /**
-   * Whether the last committed edit produced an undo point. The Edit Series
-   * dialog stays open after Save when this is true so the Undo affordance is
-   * not unmounted with the dialog (#4654).
-   */
-  hasUndoPoint: () => boolean
-}
 
 export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   threadId: number
@@ -137,7 +95,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   const [deleteDialogIssue, setDeleteDialogIssue] = useState<Issue | null>(null)
   const [previewState, setPreviewState] = useState<{
     range: string
-    response: import('../../services/api-issues').IssueEditPreviewResponse
+    response: IssueEditPreviewResponse
     selectedStrategy: 'safe_default' | 'numeric_resort'
   } | null>(null)
   const [isPreviewing, setIsPreviewing] = useState(false)
@@ -702,10 +660,8 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   }
 
   const {
-    preview: structurePreview,
-    isPreviewing: isPreviewingStructure,
-    request: requestStructuralPreview,
-    cancel: cancelStructurePreview,
+    preview: structurePreview, isPreviewing: isPreviewingStructure,
+    request: requestStructuralPreview, cancel: cancelStructurePreview,
     confirm: confirmStructurePreview,
   } = useIssueStructurePreview({
     threadId,
