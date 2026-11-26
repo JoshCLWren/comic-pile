@@ -187,7 +187,7 @@ describe('IssueToggleList #5852 visible reorder, preview and Undo', () => {
 
     expect(mockedIssuesApi.reorder).toHaveBeenLastCalledWith(99, [2, 3, 1])
     expect(ref.current?.hasUndoPoint()).toBe(true)
-    const undoBar = await screen.findByTestId('edit-series-undo-bar')
+    await screen.findByTestId('edit-series-undo-bar')
     fireEvent.click(screen.getByTestId('undo-edit-add'))
 
     await waitFor(() => expect(mockedIssuesApi.reorder).toHaveBeenLastCalledWith(99, [1, 2, 3]))
