@@ -67,7 +67,8 @@ test.describe('issue #2492: fresh roll keeps the rating start at the top when re
       // Reading-boundaries content loads asynchronously into the rating
       // surface; wait for it so any late layout growth is represented before
       // the final position is asserted.
-      await expect(page.getByTestId('rating-region-reading-context')).toBeVisible({ timeout: 20000 })
+      await expect(page.getByTestId('reading-context-card')).toBeVisible({ timeout: 20000 })
+      await expect(page.getByTestId('reading-boundaries-card')).toBeVisible({ timeout: 20000 })
 
       // The rating surface start must still be at the top of the viewport with
       // the cover art and decisions visible, never the middle of the reading
