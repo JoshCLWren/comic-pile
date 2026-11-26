@@ -1740,12 +1740,7 @@ async fn validate_set_pending_selection(
                  FROM threads
                  WHERE user_id = $1 AND status = 'active' AND queue_position >= 1) ranked
              WHERE id = $2",
-            &[
-                &user_id,
-                &thread.id,
-                &evaluated.is_some(),
-                &eligible_ids,
-            ],
+            &[&user_id, &thread.id, &evaluated.is_some(), &eligible_ids],
         )
         .await
         .map_err(db::tx_error)?;
@@ -1811,7 +1806,8 @@ async fn set_pending_once(
     // rejected request (notably a stale expected_issue_id 409) does not commit a
     // session-start undo checkpoint like Python's pre-get_or_create checks.
     with_tx!(state, tx, db::tx_error, {
-        validate_set_pending_selection(&tx, user_id, thread_id, expected_issue_id, canonical).await?;
+        validate_set_pending_selection(&tx, user_id, thread_id, expected_issue_id, canonical)
+            .await?;
         Ok::<_, LifecycleError>(())
     })?;
 
@@ -1819,7 +1815,8 @@ async fn set_pending_once(
 
     with_tx!(state, tx, db::tx_error, {
         let selection =
-            validate_set_pending_selection(&tx, user_id, thread_id, expected_issue_id, canonical).await?;
+            validate_set_pending_selection(&tx, user_id, thread_id, expected_issue_id, canonical)
+                .await?;
 
         let session = tx
             .query_opt(
