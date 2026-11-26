@@ -1851,12 +1851,12 @@ async fn set_pending_is_owner_scoped() {
     assert_eq!(pending, 0);
 }
 
-/// With the evaluated graph active, `set-pending` is authorized by canonical
-/// Reading List eligibility, never by the stored `is_blocked` flag and never
-/// by the retired Option E 503 guard (#5525 A16/A17).
+/// Production fixture: `OPTION_E_ENABLED` is unset, yet `set-pending` is
+/// authorized by canonical Reading List eligibility, never by the stored
+/// `is_blocked` flag and never by the retired Option E 503 guard (#5525 A16/A17).
 #[tokio::test]
-async fn set_pending_uses_canonical_eligibility_when_option_e_is_active() {
-    let ctx = setup_with_option_e("lcpendoptE", true).await;
+async fn set_pending_uses_canonical_eligibility_with_option_e_unset() {
+    let ctx = setup("lcpendcanon").await;
     let source = seed_thread(&ctx, ctx.user_id, "Prerequisite Series", "active", 1, 0).await;
     let source_issues = track(&ctx, source, &["unread"]).await;
     let blocked = seed_thread(&ctx, ctx.user_id, "Blocked Target", "active", 2, 0).await;
@@ -2030,11 +2030,11 @@ async fn stale_rejects_invalid_parameters() {
     }
 }
 
-/// `stale` must not report a stale stored `is_blocked=false` thread as a
-/// candidate once the canonical evaluator marks it ineligible (#5525 A16).
+/// Production fixture (`OPTION_E_ENABLED` unset): `stale` must not report a
+/// canonically blocked thread just because its stored flag is false (#5525 A16).
 #[tokio::test]
-async fn stale_uses_canonical_eligibility_when_option_e_is_active() {
-    let ctx = setup_with_option_e("lcstaleoptE", true).await;
+async fn stale_uses_canonical_eligibility_with_option_e_unset() {
+    let ctx = setup("lcstalecanon").await;
     let source = seed_thread(&ctx, ctx.user_id, "Prerequisite Series", "active", 1, 0).await;
     let source_issues = track(&ctx, source, &["unread"]).await;
     let blocked = seed_thread(&ctx, ctx.user_id, "Canonically Blocked", "active", 2, 0).await;
@@ -2081,7 +2081,7 @@ async fn stale_uses_canonical_eligibility_when_option_e_is_active() {
     );
     assert!(
         !ids.contains(&(blocked as i64)),
-        "canonically ineligible thread must not be listed: {body:?}"
+        "canonically blocked thread must not be listed: {body:?}"
     );
 }
 
