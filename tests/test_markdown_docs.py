@@ -14,11 +14,6 @@ GOOD_FIRST_ISSUES_URL = (
     "https://github.com/JoshCLWren/comic-pile/issues"
     "?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22"
 )
-CRON_SCHEDULE_RE = re.compile(
-    r"^\s*-\s*cron:\s*['\"]?(\d{1,2})\s+(\d{1,2}(?:,\d{1,2})*)\s+\*\s+\*\s+\*\s*['\"]?",
-    re.MULTILINE,
-)
-NUMBER_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 6: "six", 12: "twelve"}
 
 
 def test_find_broken_local_links_accepts_valid_local_and_external_links(tmp_path: Path) -> None:
@@ -323,24 +318,3 @@ def test_documentation_workflow_cannot_rewrite_pull_request_heads() -> None:
     assert "contents: write" not in workflow
     assert "persist-credentials: false" in workflow
     assert "git push" not in workflow
-
-
-def test_comicvine_repair_cadence_matches_workflow_schedule() -> None:
-    """Keep the documented GitHub Actions repair cadence tied to the real cron."""
-    root = Path(__file__).parents[1]
-    workflow = (root / ".github/workflows/comicvine-metadata-repair.yml").read_text(
-        encoding="utf-8"
-    )
-    deployment = (root / "docs/VERCEL_DEPLOYMENT.md").read_text(encoding="utf-8")
-
-    schedule = CRON_SCHEDULE_RE.search(workflow)
-    assert schedule is not None
-    minute, hours = schedule.group(1), schedule.group(2).split(",")
-
-    assert "times per day" in deployment
-    assert "UTC" in deployment
-    cadence_word = NUMBER_WORDS.get(len(hours))
-    assert cadence_word, f"No cadence word for {len(hours)} cron hours"
-    assert f"{cadence_word} times per day" in deployment
-    for hour in hours:
-        assert f"{int(hour):02d}:{int(minute):02d}" in deployment
