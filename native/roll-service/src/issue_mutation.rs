@@ -49,6 +49,14 @@ pub struct CreateIssuesRequest {
     /// Placement strategy. Defaults to safe_default.
     #[serde(default)]
     pub strategy: IssuePlacementStrategy,
+    /// Issue IDs observed in the accepted preview. A changed set means the
+    /// preview is stale; the edit is refused before any write (#4654).
+    #[serde(default)]
+    pub expected_issue_ids: Option<Vec<i32>>,
+    /// Requested numbers the reader explicitly accepted as aliases of already
+    /// mapped issues instead of creating physical duplicates (#4654).
+    #[serde(default)]
+    pub accepted_alias_numbers: Vec<String>,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -65,6 +73,10 @@ pub struct IssueListResponse {
     pub total_count: i32,
     pub page_size: i64,
     pub next_page_token: Option<String>,
+    /// Reading session that received the pre-edit undo point, if one is active.
+    pub undo_session_id: Option<i32>,
+    /// Snapshot a reader can restore to reverse this committed edit (#4654).
+    pub undo_snapshot_id: Option<i32>,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -314,6 +326,138 @@ pub(crate) async fn reseat_positions(
     Ok(())
 }
 
+/// A source-preserving alternative to creating a new physical issue (#4654).
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct IssueEditAliasOffer {
+    /// Issue number the reader asked to add.
+    pub requested_issue_number: String,
+    /// Existing identity-mapped issue that can be aliased instead.
+    pub existing_issue_id: i32,
+    pub existing_issue_number: String,
+    /// Human-readable series the existing issue belongs to.
+    pub series_title: String,
+    /// Concrete identity evidence, not a generic duplicate warning.
+    pub evidence: String,
+}
+
+/// Find requested numbers that already exist as identity-mapped issues in
+/// another owned series. One set-based query; the reader must explicitly accept
+/// an offer before a physical duplicate may be created (#4654).
+async fn detect_alias_offers(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    thread_id: i32,
+    numbers: &[String],
+) -> Result<Vec<IssueEditAliasOffer>, ApiError> {
+    if numbers.is_empty() {
+        return Ok(Vec::new());
+    }
+    let rows = tx
+        .query(
+            "SELECT i.id, i.issue_number, t.title,
+                    i.catalog_issue_id IS NOT NULL AS catalog_evidence,
+                    EXISTS (
+                        SELECT 1 FROM issue_external_identity_mappings m
+                        WHERE m.issue_id=i.id AND m.status='confirmed'
+                    ) AS mapping_evidence
+             FROM issues i
+             JOIN threads t ON t.id=i.thread_id
+             WHERE t.user_id=$1 AND i.thread_id<>$2 AND i.issue_number = ANY($3::text[])
+             ORDER BY t.title, i.id",
+            &[&user_id, &thread_id, &numbers],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let mut offers: Vec<IssueEditAliasOffer> = Vec::new();
+    for row in &rows {
+        let number: String = row.get(1);
+        if offers.iter().any(|offer| offer.requested_issue_number == number) {
+            continue;
+        }
+        let catalog_evidence: bool = row.get(3);
+        let mapping_evidence: bool = row.get(4);
+        let evidence = if catalog_evidence && mapping_evidence {
+            "confirmed catalog identity and external mapping"
+        } else if catalog_evidence {
+            "confirmed catalog identity"
+        } else {
+            "confirmed external identity mapping"
+        };
+        offers.push(IssueEditAliasOffer {
+            requested_issue_number: number.clone(),
+            existing_issue_id: row.get(0),
+            existing_issue_number: number,
+            series_title: row.get(2),
+            evidence: evidence.to_string(),
+        });
+    }
+    Ok(offers)
+}
+
+/// Write a bounded, version-two undo delta inside the create transaction. The
+/// existing `POST /api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore`
+/// deletes the created issues and restores the captured pre-edit issue positions
+/// and thread counters (#4026/#4027 reused by Edit Series). No separate
+/// importer or new HTTP resource is introduced.
+async fn insert_edit_undo_snapshot(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    thread_id: i32,
+    issue_changes: Vec<Value>,
+    created_ids: &[i32],
+) -> Result<Option<(i32, i32)>, ApiError> {
+    let session = tx
+        .query_opt(
+            "SELECT id FROM sessions WHERE user_id=$1 ORDER BY started_at DESC, id DESC LIMIT 1",
+            &[&user_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let Some(session) = session else {
+        return Ok(None);
+    };
+    let session_id: i32 = session.get(0);
+    let thread = tx
+        .query_one(
+            "SELECT total_issues, next_unread_issue_id, reading_progress,
+                    issues_remaining, last_rating
+             FROM threads WHERE id=$1 AND user_id=$2",
+            &[&thread_id, &user_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let mut state = Map::new();
+    state.insert("uses_issue_tracking".into(), json!(true));
+    state.insert("issue_changes".into(), Value::Array(issue_changes));
+    state.insert(
+        "created_issues".into(),
+        json!(created_ids.iter().map(|id| json!({"id": id})).collect::<Vec<_>>()),
+    );
+    state.insert("total_issues".into(), json!(thread.get::<_, Option<i32>>(0)));
+    state.insert("next_unread_issue_id".into(), json!(thread.get::<_, Option<i32>>(1)));
+    state.insert("reading_progress".into(), json!(thread.get::<_, Option<String>>(2)));
+    state.insert("issues_remaining".into(), json!(thread.get::<_, i32>(3)));
+    state.insert("last_rating".into(), json!(thread.get::<_, Option<f64>>(4)));
+    let mut thread_states = Map::new();
+    thread_states.insert("_version".into(), json!(2));
+    thread_states.insert(thread_id.to_string(), Value::Object(state));
+    let states = serde_json::to_string(&Value::Object(thread_states))
+        .map_err(|error| ApiError::Internal(error.to_string()))?;
+    let snapshot = tx
+        .query_one(
+            "INSERT INTO snapshots
+                (session_id, event_id, thread_states, session_state, created_at,
+                 description, snapshot_kind, schema_version)
+             VALUES ($1, NULL, $2::text::json, '{}'::text::json, NOW(),
+                     'Before Edit Series add', 'delta', 2)
+             RETURNING id",
+            &[&session_id, &states],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(Some((session_id, snapshot.get(0))))
+}
+
 /// `POST /api/v2/threads/{thread_id}/issues`
 pub async fn create_issues(
     State(state): State<Arc<AppState>>,
@@ -332,6 +476,26 @@ pub async fn create_issues(
     lock_reader(&tx, user.id()).await?;
     lock_thread(&tx, thread_id, user.id()).await?;
 
+    // A preview is a versioned contract. If another writer changed the issue
+    // set after the reader reviewed it, refuse before any write and ask for a
+    // fresh preview instead of silently committing a different edit (#4654).
+    if let Some(expected) = request.expected_issue_ids.as_ref() {
+        let current_rows = tx
+            .query("SELECT id FROM issues WHERE thread_id=$1 ORDER BY id", &[&thread_id])
+            .await
+            .map_err(db::query_error)?;
+        let mut current: Vec<i32> = current_rows.iter().map(|row| row.get(0)).collect();
+        let mut expected = expected.clone();
+        current.sort_unstable();
+        expected.sort_unstable();
+        if current != expected {
+            return Err(ApiError::Conflict(
+                "Issue order changed since the preview; reopen the preview before saving"
+                    .to_string(),
+            ));
+        }
+    }
+
     let rows = tx
         .query(
             "SELECT id, issue_number, position FROM issues
@@ -348,15 +512,80 @@ pub async fn create_issues(
         .iter()
         .map(|(_, number, _)| number.clone())
         .collect();
-    let new_numbers: Vec<String> = requested
+    let candidates: Vec<String> = requested
         .into_iter()
         .filter(|number| !existing_numbers.contains(number))
         .collect();
+    let alias_offers = detect_alias_offers(&tx, user.id(), thread_id, &candidates).await?;
+    let unaccepted: Vec<&IssueEditAliasOffer> = alias_offers
+        .iter()
+        .filter(|offer| !request.accepted_alias_numbers.contains(&offer.requested_issue_number))
+        .collect();
+    if !unaccepted.is_empty() {
+        let details = unaccepted
+            .iter()
+            .map(|offer| {
+                format!(
+                    "#{} exists as an identity-mapped issue in {} ({})",
+                    offer.requested_issue_number, offer.series_title, offer.evidence
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("; ");
+        return Err(ApiError::Conflict(format!(
+            "Review the alias mapping before creating a physical duplicate: {details}"
+        )));
+    }
+    let new_numbers: Vec<String> = candidates
+        .into_iter()
+        .filter(|number| !request.accepted_alias_numbers.contains(number))
+        .collect();
     if new_numbers.is_empty() {
-        return Err(ApiError::BadRequest(
-            "All issues in range already exist".to_string(),
+        if alias_offers.is_empty() {
+            return Err(ApiError::BadRequest(
+                "All issues in range already exist".to_string(),
+            ));
+        }
+        // Every requested number was explicitly accepted as an alias: the
+        // source issue is reused and no physical duplicate is created.
+        tx.rollback().await.map_err(db::query_error)?;
+        return Ok((
+            StatusCode::CREATED,
+            Json(IssueListResponse {
+                issues: Vec::new(),
+                total_count: rows.len() as i32,
+                page_size: 0,
+                next_page_token: None,
+                undo_session_id: None,
+                undo_snapshot_id: None,
+            }),
         ));
     }
+
+    // Capture the exact pre-edit issue state once for the undo delta. Existing
+    // positions are restored as well as the created IDs being removed, so a
+    // numeric resort or an anchor insertion is reversible too (#4654).
+    let preimage_rows = tx
+        .query(
+            "SELECT id, issue_number, status, read_at::text, position, catalog_issue_id
+             FROM issues WHERE thread_id=$1",
+            &[&thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let issue_changes: Vec<Value> = preimage_rows
+        .iter()
+        .map(|row| {
+            json!({
+                "id": row.get::<_, i32>(0),
+                "number": row.get::<_, String>(1),
+                "status": row.get::<_, String>(2),
+                "read_at": row.get::<_, Option<String>>(3),
+                "position": row.get::<_, i32>(4),
+                "catalog_issue_id": row.get::<_, Option<i64>>(5),
+            })
+        })
+        .collect();
 
     tx.execute("SET CONSTRAINTS uq_issue_thread_position DEFERRED", &[])
         .await
