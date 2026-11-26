@@ -1430,7 +1430,7 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
     assert_eq!(mapping["confidence"], 1.0);
     assert_eq!(mapping["evidence_source"], "user_confirmed");
     assert!(mapping["created_at"].as_str().unwrap().ends_with('Z'));
-    // Confirming queues exactly one deep-metadata refresh for the identity.
+    // Confirming hydrates synchronously and never enqueues a repair job.
     let queued: i64 = conn
         .query_one(
             "SELECT count(*) FROM comicvine_metadata_refresh_requests WHERE state = 'pending'",
@@ -1439,8 +1439,8 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
         .await
         .unwrap()
         .get(0);
-    assert_eq!(queued, 1);
-    // Re-confirming the same id is idempotent and does not queue a second job.
+    assert_eq!(queued, 0);
+    // Re-confirming the same id is idempotent and still enqueues nothing.
     let (status, _) = send(
         &state,
         call(
@@ -1461,7 +1461,7 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
         .await
         .unwrap()
         .get(0);
-    assert_eq!(queued, 1);
+    assert_eq!(queued, 0);
 
     // A different confirmed id on the same issue is a 400, not a silent swap.
     let (status, body) = send(
