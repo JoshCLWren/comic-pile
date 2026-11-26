@@ -1131,6 +1131,23 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
           {(isAdding || isPreviewing) ? '…' : 'Add'}
         </button>
       </div>
+      {undoPoint && (
+        <div
+          className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-[var(--theme-border)] px-3 py-2 text-xs"
+          data-testid="edit-series-undo-bar"
+        >
+          <span className="text-[var(--theme-text-muted)]">Issues added. You can still undo this edit.</span>
+          <button
+            type="button"
+            onClick={() => void handleUndoEdit()}
+            disabled={isUndoing}
+            className="min-h-9 rounded-lg border border-[var(--theme-border)] px-3 py-1.5 font-bold text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] disabled:opacity-60 transition-colors"
+            data-testid="undo-edit-add"
+          >
+            {isUndoing ? 'Undoing…' : 'Undo'}
+          </button>
+        </div>
+      )}
       {addValidationError && (
         <p
           id={addValidationErrorId}
@@ -1354,6 +1371,37 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
               )}
             </div>
 
+            {(previewState.response.alias_offers ?? []).length > 0 && (
+              <div
+                className="rounded-xl border border-[var(--theme-warning)] p-3 space-y-2"
+                data-testid="preview-alias-offers"
+              >
+                <div className="text-sm font-bold">Alias instead of a duplicate</div>
+                <p className="text-xs text-[var(--theme-text-muted)]">
+                  These numbers already exist as identity-mapped issues in another series.
+                  Accept an alias to reuse the source issue; no physical duplicate will be created.
+                </p>
+                {(previewState.response.alias_offers ?? []).map((offer: IssueEditAliasOffer) => (
+                  <label
+                    key={offer.requested_issue_number}
+                    className="flex items-start gap-2 text-xs"
+                    data-testid="preview-alias-offer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={acceptedAliasNumbers.includes(offer.requested_issue_number)}
+                      onChange={() => toggleAliasOffer(offer.requested_issue_number)}
+                      data-testid="accept-alias"
+                    />
+                    <span>
+                      #{offer.requested_issue_number} → {offer.series_title} #{offer.existing_issue_number}
+                      <span className="block text-[var(--theme-text-muted)]">{offer.evidence}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2" data-testid="preview-before-after">
               <div>
                 <div className="font-bold text-stone-400 mb-1">Before</div>
@@ -1376,7 +1424,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
             <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
               <button
                 type="button"
-                onClick={() => setPreviewState(null)}
+                onClick={closePreview}
                 className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
               >
                 Cancel
@@ -1386,7 +1434,11 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
                 onClick={handleConfirmPreview}
                 disabled={!(previewState.selectedStrategy === 'numeric_resort'
                   ? previewState.response.numeric_resort_outcome?.can_commit
-                  : previewState.response.default_outcome.can_commit)}
+                  : previewState.response.default_outcome.can_commit)
+                  || isPreviewing
+                  || (previewState.response.alias_offers ?? []).some(
+                    (offer) => !acceptedAliasNumbers.includes(offer.requested_issue_number)
+                  )}
                 className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-primary-action)] px-4 py-2 text-xs font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] disabled:opacity-60 transition-colors"
                 data-testid="confirm-preview-add"
               >
