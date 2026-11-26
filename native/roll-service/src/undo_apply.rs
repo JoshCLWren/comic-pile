@@ -2138,11 +2138,13 @@ mod tests {
             )
             .await
             .expect("seed pre-edit alias snapshot");
+        drop(connection);
 
         let Json(_) = undo_to_snapshot(Path((9301, 9401)), user, State(state.clone()))
             .await
             .expect("undo applies the alias-bearing rating delta");
 
+        let connection = db::checkout(&state).await.expect("post-undo connection");
         let alias: Option<String> = connection
             .query_one(
                 "SELECT issue_number_alias FROM issues WHERE id=9501",
