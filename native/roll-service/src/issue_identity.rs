@@ -2498,6 +2498,8 @@ pub struct CblAdoptionCommitRequest {
     pub series_decisions: Vec<CommitSeriesDecision>,
     #[serde(default)]
     pub series_overrides: Vec<CommitEntryOverride>,
+    #[serde(default)]
+    pub idempotency_key: Option<String>,
     pub content_hash: String,
     pub revision_sha: String,
 }
@@ -2516,7 +2518,7 @@ pub struct ContinuityPlanResponseWire {
     pub updated_at: String,
 }
 
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct CblAdoptionCommitResponseWire {
     pub id: i32,
     pub user_id: i32,
@@ -2735,6 +2737,134 @@ fn unique_adoption_plan_name(
     format!("{base_name} (dedupe exhausted)")
 }
 
+fn cbl_adoption_request_fingerprint(
+    list_id: i32,
+    target_plan_id: Option<i32>,
+    request: &CblAdoptionCommitRequest,
+) -> String {
+    let mut entry_decisions: Vec<(i32, &str)> = request
+        .entry_decisions
+        .iter()
+        .map(|(k, v)| (*k, v.as_str()))
+        .collect();
+    entry_decisions.sort_by_key(|(k, _)| *k);
+    let mut series_decisions: Vec<(&str, &str)> = request
+        .series_decisions
+        .iter()
+        .map(|s| (s.series_name.as_str(), s.decision.as_str()))
+        .collect();
+    series_decisions.sort_by(|a, b| a.0.cmp(b.0).then(a.1.cmp(b.1)));
+    let mut series_overrides: Vec<(i32, &str)> = request
+        .series_overrides
+        .iter()
+        .map(|s| (s.cbl_position, s.decision.as_str()))
+        .collect();
+    series_overrides.sort_by_key(|(k, _)| *k);
+    let payload = serde_json::json!({
+        "list_id": list_id,
+        "target_plan_id": target_plan_id,
+        "content_hash": request.content_hash,
+        "revision_sha": request.revision_sha,
+        "entry_decisions": entry_decisions,
+        "series_decisions": series_decisions,
+        "series_overrides": series_overrides,
+        "idempotency_key": request.idempotency_key.as_deref(),
+    });
+    let serialized = serde_json::to_vec(&payload).unwrap_or_default();
+    sha256_hex(&serialized)
+}
+
+async fn replay_cbl_adoption_receipt(
+    tx: &tokio_postgres::Transaction<'_>,
+    user_id: i32,
+    list_id: i32,
+    fingerprint: &str,
+) -> Result<Option<CblAdoptionCommitResponseWire>, CommitErr> {
+    let row = tx
+        .run_query_opt(
+            "SELECT request_fingerprint, response_json::text, plan_id FROM cbl_adoption_receipts WHERE user_id = $1 AND cbl_source_list_id = $2",
+            &[&user_id, &list_id],
+        )
+        .await
+        .map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("lookup adoption receipt: {e}"))
+            }
+        })?;
+    let Some(row) = row else { return Ok(None) };
+    let stored_fingerprint: String = row.get(0);
+    if stored_fingerprint != fingerprint {
+        return Ok(None);
+    }
+    let response_json: Option<String> = row.get(1);
+    if let Some(json_text) = response_json {
+        if let Ok(resp) = serde_json::from_str::<CblAdoptionCommitResponseWire>(&json_text) {
+            return Ok(Some(resp));
+        }
+    }
+    let plan_id: i32 = row.get(2);
+    let prow = tx
+        .run_query_opt(
+            "SELECT id,user_id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1 AND user_id=$2",
+            &[&plan_id, &user_id],
+        )
+        .await
+        .map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("load replay plan: {e}"))
+            }
+        })?;
+    let Some(prow) = prow else { return Ok(None) };
+    Ok(Some(CblAdoptionCommitResponseWire {
+        id: prow.get(0),
+        user_id: prow.get(1),
+        name: prow.get(2),
+        ordering_mode: prow.get(3),
+        lanes: serde_json::from_str::<JsonValue>(&prow.get::<_, String>(4))
+            .unwrap_or(serde_json::json!([])),
+        nodes: serde_json::from_str::<JsonValue>(&prow.get::<_, String>(5))
+            .unwrap_or(serde_json::json!([])),
+        created_at: prow.get(6),
+        updated_at: prow.get(7),
+        reused_positions: Vec::new(),
+        created_positions: Vec::new(),
+        excluded_positions: Vec::new(),
+        unresolved_positions: Vec::new(),
+    }))
+}
+
+async fn store_cbl_adoption_receipt(
+    tx: &tokio_postgres::Transaction<'_>,
+    user_id: i32,
+    list_id: i32,
+    plan_id: i32,
+    fingerprint: &str,
+    response: &CblAdoptionCommitResponseWire,
+) -> Result<(), CommitErr> {
+    let response_json =
+        serde_json::to_value(response).map_err(|e| CommitErr::Unexpected(e.to_string()))?;
+    tx.run_execute(
+        "INSERT INTO cbl_adoption_receipts (user_id, cbl_source_list_id, plan_id, request_fingerprint, created_at, response_json)
+         VALUES ($1,$2,$3,$4,NOW(),$5)
+         ON CONFLICT (user_id, cbl_source_list_id)
+         DO UPDATE SET plan_id = EXCLUDED.plan_id, request_fingerprint = EXCLUDED.request_fingerprint, response_json = EXCLUDED.response_json, created_at = NOW()",
+        &[&user_id, &list_id, &plan_id, &fingerprint, &response_json],
+    )
+    .await
+    .map_err(|e| {
+        if crate::db::is_transport_failure(&e) {
+            CommitErr::Db(ApiError::database_unavailable())
+        } else {
+            CommitErr::Unexpected(format!("store adoption receipt: {e}"))
+        }
+    })?;
+    Ok(())
+}
+
 async fn do_cbl_adoption_commit(
     state: &Arc<AppState>,
     user_id: i32,
@@ -2790,6 +2920,25 @@ async fn do_cbl_adoption_commit(
             "Revision mismatch: expected {revision_sha}, got {}",
             request.revision_sha
         )));
+    }
+
+    let request_fingerprint = cbl_adoption_request_fingerprint(list_id, target_plan_id, &request);
+    if let Some(replayed) =
+        replay_cbl_adoption_receipt(&tx, user_id, list_id, &request_fingerprint).await?
+    {
+        tx.commit().await.map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("commit replay tx: {e}"))
+            }
+        })?;
+        let status = if target_plan_id.is_some() {
+            StatusCode::OK
+        } else {
+            StatusCode::CREATED
+        };
+        return Ok((status, replayed));
     }
 
     let (entry_decisions_raw, series_decisions_raw, series_overrides_raw) =
@@ -3226,14 +3375,6 @@ async fn do_cbl_adoption_commit(
     }
 
     let prow = tx.run_query_one("SELECT id,user_id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1", &[&plan_id]).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(format!("reload plan: {e}")) })?;
-    tx.commit().await.map_err(|e| {
-        if crate::db::is_transport_failure(&e) {
-            CommitErr::Db(ApiError::database_unavailable())
-        } else {
-            CommitErr::Unexpected(e.to_string())
-        }
-    })?;
-
     let status = if requested_target_plan_id.is_some() {
         StatusCode::OK
     } else {
@@ -3255,6 +3396,14 @@ async fn do_cbl_adoption_commit(
         excluded_positions: merge.2,
         unresolved_positions: merge.3,
     };
+    store_cbl_adoption_receipt(&tx, user_id, list_id, plan_id, &request_fingerprint, &resp).await?;
+    tx.commit().await.map_err(|e| {
+        if crate::db::is_transport_failure(&e) {
+            CommitErr::Db(ApiError::database_unavailable())
+        } else {
+            CommitErr::Unexpected(e.to_string())
+        }
+    })?;
     Ok((status, resp))
 }
 
@@ -3927,6 +4076,7 @@ async fn merge_adoption_nodes_tx(
     let mut excluded_positions = Vec::new();
     let mut unresolved_positions = Vec::new();
     let mut adopted_order: Vec<String> = Vec::new();
+    let mut affected_threads: std::collections::HashSet<i32> = std::collections::HashSet::new();
     let mut adopted_issue_ids: Vec<i32> = Vec::new();
 
     // Index existing issue nodes by ref_id
@@ -3989,11 +4139,15 @@ async fn merge_adoption_nodes_tx(
                 v.as_i64().map(|x| x as i32)
             }
         });
-        let (issue_id, created_now) = if let Some(id) = resolved {
-            (id, false)
+        let (issue_id, created_now, materialized_thread_id) = if let Some(id) = resolved {
+            (id, false, None)
         } else {
             match materialize_missing_issue_tx(tx, user_id, entry).await {
-                Ok(MaterializeOutcome::Issue { id, created }) => (id, created),
+                Ok(MaterializeOutcome::Issue {
+                    id,
+                    thread_id,
+                    created,
+                }) => (id, created, Some(thread_id)),
                 Ok(MaterializeOutcome::Excluded { reason }) => {
                     if reason == "collection_identity_requires_review" {
                         unresolved_positions.push(pos);
@@ -4014,6 +4168,9 @@ async fn merge_adoption_nodes_tx(
         };
         if created_now {
             created_positions.push(pos);
+            if let Some(tid) = materialized_thread_id {
+                affected_threads.insert(tid);
+            }
         }
         let series_name = entry
             .get("series_name")
@@ -4110,6 +4267,15 @@ async fn merge_adoption_nodes_tx(
         *nodes_arr = reordered;
     }
 
+    for thread_id in &affected_threads {
+        apply_thread_issue_tracking_state_tx(tx, *thread_id)
+            .await
+            .map_err(|err| match err {
+                MaterializeErr::DbUnavailable => CommitErr::Db(ApiError::database_unavailable()),
+                MaterializeErr::Unexpected(msg) => CommitErr::Unexpected(msg),
+            })?;
+    }
+
     Ok((
         reused_positions,
         created_positions,
@@ -4173,8 +4339,14 @@ fn ensure_node_provenance(
 }
 
 enum MaterializeOutcome {
-    Issue { id: i32, created: bool },
-    Excluded { reason: String },
+    Issue {
+        id: i32,
+        thread_id: i32,
+        created: bool,
+    },
+    Excluded {
+        reason: String,
+    },
     Unresolved,
 }
 
@@ -4647,6 +4819,7 @@ async fn materialize_missing_issue_tx(
             }
             return Ok(MaterializeOutcome::Issue {
                 id: issue_id,
+                thread_id,
                 created: false,
             });
         }
@@ -4720,6 +4893,7 @@ async fn materialize_missing_issue_tx(
             }
             return Ok(MaterializeOutcome::Issue {
                 id: existing_issue_id,
+                thread_id,
                 created: false,
             });
         }
@@ -4731,14 +4905,13 @@ async fn materialize_missing_issue_tx(
             comicvine_id.as_deref(),
         )
         .await?;
-        // Python applies tracking state only for a genuinely inserted issue;
-        // the IntegrityError reuse path returns the existing row untouched.
-        if created {
-            apply_thread_issue_tracking_state_tx(&sp, thread_id).await?;
-        }
+        // Tracking state is applied once per affected thread after the full
+        // adoption merge so a large commit does not recompute thread counters
+        // after every inserted issue.
 
         Ok(MaterializeOutcome::Issue {
             id: issue_id,
+            thread_id,
             created,
         })
     }

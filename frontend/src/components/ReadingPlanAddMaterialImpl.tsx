@@ -3,6 +3,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { applyCommittedReadingPlan } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
+import { isAmbiguousNetworkFailure } from '../hooks/rollMutationReconciliation'
 import { isObject, isString } from '../utils/runtimeChecks'
 import {
   cblSourcesApi,
@@ -80,6 +81,7 @@ export default function ReadingPlanAddMaterial({
   const [entryDecisions, setEntryDecisions] = useState<Record<string, boolean>>({})
   const [hasSearched, setHasSearched] = useState(defaultOpen)
   const [staleReview, setStaleReview] = useState(false)
+  const [ambiguousCommit, setAmbiguousCommit] = useState(false)
   const sourcesQuery = useQuery({
     queryKey: queryKeys.cblSources.search(submittedQuery),
     queryFn: () => cblSourcesApi.discover(submittedQuery),
@@ -108,11 +110,16 @@ export default function ReadingPlanAddMaterial({
     }),
     onSuccess: async (committed) => {
       await applyCommittedReadingPlan(queryClient, committed)
+      setAmbiguousCommit(false)
       onCommitted?.(committed)
     },
     onError: (commitError) => {
       if (axios.isAxiosError(commitError) && commitError.response?.status === 409) {
         setStaleReview(true)
+        return
+      }
+      if (isAmbiguousNetworkFailure(commitError)) {
+        setAmbiguousCommit(true)
       }
     },
   })
@@ -137,12 +144,17 @@ export default function ReadingPlanAddMaterial({
     onCommitPendingChange?.(isCommitting)
     return () => onCommitPendingChange?.(false)
   }, [isCommitting, onCommitPendingChange])
-  const activeError = commitMutation.error ?? previewQuery.error ?? sourcesQuery.error
+  const activeError =
+    ambiguousCommit && isAmbiguousNetworkFailure(commitMutation.error)
+      ? (previewQuery.error ?? sourcesQuery.error)
+      : (commitMutation.error ?? previewQuery.error ?? sourcesQuery.error)
   const error = staleReview
     ? 'This source changed after you reviewed it. Refresh the preview before adding material.'
-    : activeError
-      ? errorMessage(activeError, 'Unable to complete the CBL workflow.')
-      : null
+    : ambiguousCommit
+      ? 'ComicPile did not confirm the material in time. Check this Reading Plan before adding again.'
+      : activeError
+        ? errorMessage(activeError, 'Unable to complete the CBL workflow.')
+        : null
 
   const search = async (event?: FormEvent) => {
     event?.preventDefault()
@@ -153,6 +165,7 @@ export default function ReadingPlanAddMaterial({
     setSeriesDecisions({})
     setEntryDecisions({})
     setStaleReview(false)
+    setAmbiguousCommit(false)
     commitMutation.reset()
   }
 
@@ -163,6 +176,7 @@ export default function ReadingPlanAddMaterial({
     setSeriesDecisions({})
     setEntryDecisions({})
     setStaleReview(false)
+    setAmbiguousCommit(false)
     commitMutation.reset()
     if (reloadSelectedSource) void previewQuery.refetch()
   }
@@ -178,6 +192,7 @@ export default function ReadingPlanAddMaterial({
 
   const commit = () => {
     if (!selectedSource || !preview || commitDisabled || isCommitting) return
+    setAmbiguousCommit(false)
     commitMutation.mutate({ source: selectedSource, reviewed: preview })
   }
 
@@ -317,6 +332,7 @@ export default function ReadingPlanAddMaterial({
               disabled={isCommitting}
               onClick={() => {
                 setStaleReview(false)
+                setAmbiguousCommit(false)
                 void previewQuery.refetch()
               }}
               className="min-h-11 rounded-xl border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-primary)] hover:bg-white/5 disabled:opacity-50"
