@@ -1,38 +1,38 @@
-utc: 2026-11-26T16:31:27Z
-uptime: 2143.07s load: 1.04 2.36 1.97
+utc: 2026-11-26T16:31:44Z
+uptime: 2159.87s load: 0.81 2.25 1.93
 processes: 195
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15983        1929        6899          91        7590       14053
+Mem:           15983        1933        6895          91        7590       14049
 Swap:           3071           0        3071
 --- disk
 Filesystem      Size  Used Avail Use% Mounted on
 /dev/root       145G   63G   82G  44% /
 /dev/root       145G   63G   82G  44% /
 --- top rss (KiB, name only)
-386264 opencode.exe
+386624 opencode.exe
+190356 MainThread
 177296 MainThread
-173312 MainThread
-165980 chrome-headless
+166228 chrome-headless
 164448 Runner.Worker
-145692 provjobd2959942
-126800 Runner.Listener
-121492 chrome-headless
+137472 provjobd2959942
+126804 Runner.Listener
+121496 chrome-headless
 100992 MainThread
 93856 chrome-headless
-92752 opencode
+92216 opencode
 88208 dockerd
 86772 chrome-headless
 62480 comicpile-roll-
 57640 chrome-headless
 --- top cpu (name only)
-35.2 comicpile-roll-
- 5.0 MainThread
- 4.1 MainThread
- 3.3 chrome-headless
- 2.1 opencode.exe
+34.8 comicpile-roll-
+ 2.6 MainThread
+ 2.0 opencode.exe
  1.9 provjobd2959942
- 1.7 chrome-headless
+ 1.8 MainThread
  1.6 python3
+ 1.5 chrome-headless
+ 0.9 postgres
 --- kernel oom/kill
 --- shutdown/session signals
