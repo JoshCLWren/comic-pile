@@ -101,7 +101,7 @@ it('creates, updates, deletes, and reactivates threads', async () => {
   expect(mockedThreadsApi.reactivate).toHaveBeenCalledWith({ thread_id: 7, issues_to_add: 3 })
 })
 
-it('refreshes Roll, session, and plan views when a thread is renamed (#5264)', async () => {
+it('refreshes Roll and plan views when a thread is renamed (#5264)', async () => {
   const wrapper = createWrapper()
   // SAFETY: mock payload supplies only the fields this rename reconciliation test asserts.
   const updatedThread = {

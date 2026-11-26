@@ -40,7 +40,7 @@ it('refreshes every scoped issue-card batch after a die command (#4719)', async 
   })
 })
 
-it('keeps refreshing bootstrap and the current session with the scoped die', async () => {
+it('keeps refreshing bootstrap and the scoped die-state queries', async () => {
   await invalidateAfterRollDieModeUpdate(queryClient)
 
   expect(queryClient.invalidateQueries).toHaveBeenCalledWith({

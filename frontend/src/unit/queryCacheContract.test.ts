@@ -522,7 +522,7 @@ describe('targeted cache effects', () => {
 
 
 
-  it('refreshes Roll, session, plan, and issue-card views after a thread rename without resetting queue pages (#5264)', async () => {
+  it('refreshes Roll, plan, and issue-card views after a thread rename without resetting queue pages (#5264)', async () => {
     const { client, invalidateQueries, resetQueries, setQueryData } = createSpiedClient()
 
     await invalidateAfterThreadMetadataEdit(client)
