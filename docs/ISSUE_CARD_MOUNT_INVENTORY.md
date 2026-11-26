@@ -1,6 +1,6 @@
 # Comic issue / series cover render-path inventory
 
-Live render-path audit for [#4445](https://github.com/JoshCLWren/comic-pile/issues/4445) (exact-issue actions) and [#5433](https://github.com/JoshCLWren/comic-pile/issues/5433) (covers in every view that references a comic/series). Updated November 25, 2026. **This is an implementation inventory, not proof of production browser acceptance.** Authenticated production QA remains required by #5433 before closure.
+Live render-path audit for [#4445](https://github.com/JoshCLWren/comic-pile/issues/4445) (exact-issue actions) and [#5433](https://github.com/JoshCLWren/comic-pile/issues/5433) (covers in every view that references a comic/series). Updated November 26, 2026. **This is an implementation inventory, not proof of production browser acceptance.** Authenticated production QA remains required by #5433 before closure.
 
 ## Shared presentation contract
 
@@ -8,7 +8,7 @@ Live render-path audit for [#4445](https://github.com/JoshCLWren/comic-pile/issu
 - **Series representative cover:** `ComicIssueCover` with `series_cover_image_url` from the threads projection (next unread confirmed issue, fallback first confirmed issue), computed set-based in native SQL.
 - **Provider candidate cover (unconfirmed):** `ComicIssueCover` or `ImageWithLoading` with the candidate's own provider image metadata. Never borrow another owned issue's confirmed cover or imply confirmation.
 - **No canonical identity:** render text/placeholder without fabricating an issue ID or cover. Historical Session events without canonical issue IDs are a truthful exception.
-- **Raw `<img>` is forbidden** outside `frontend/src/components/ImageWithLoading.tsx`; enforced by `frontend/src/unit/issue-cover-render-guard.test.ts`.
+- **Raw `<img>` is forbidden** outside `frontend/src/components/ImageWithLoading.tsx`; direct owned cover URL bindings to `<img>`/`<ImageWithLoading>` are forbidden outside `ImageWithLoading.tsx` and `ComicIssueCard.tsx`. Enforced by `frontend/src/unit/issue-cover-render-guard.test.ts`.
 
 ## Exhaustive render-path audit
 
@@ -36,15 +36,20 @@ Live render-path audit for [#4445](https://github.com/JoshCLWren/comic-pile/issu
 | Reading list editor search results | `components/CustomCBLBuilder.tsx` | Exact owned issue candidates | `ComicIssueCover` | Batched by visible candidate issue IDs; no draft commit on render. |
 | Reading list reader | `components/ReadingListReader.tsx`, `components/ReaderIssueActions.tsx` | Exact owned issues | `CompactIssueCardTrigger` / `ComicIssueReadingCard` | Covered by existing reader components. |
 | CBL browser adopted items | `pages/CblBrowserPage.tsx` | Exact owned adopted issues | `CompactIssueCardTrigger` | Provider-only/source-only rows must not invent owned issue identity. |
+| CBL source finder owned issue | `components/CblSourceFinder.tsx` | Exact owned issue under inspection | `CompactIssueCardTrigger` | Bounded owner batch for the inspected issue; source rows show source metadata, not fabricated owned covers. |
 | Identity inbox candidates | `pages/IdentityInboxPage.tsx` | Unconfirmed provider candidates | `ComicIssueCover` | Candidate-specific provider art from candidate metadata; never borrows confirmed owned cover. |
 | Creator detail | `pages/CreatorDetailPage.tsx` | Exact owned issues | `CompactIssueCardTrigger` | Parent batch and on-demand series group batches. |
 | Creator comparison | `pages/CreatorComparisonPage.tsx` | Exact owned evidence issues | `CompactIssueCardTrigger` | One owner batch per drilldown. |
 | Creator team chemistry | `components/CreatorTeamChemistrySection.tsx` | Exact owned issue refs | `CompactIssueCardTrigger` | Batched rendered match refs. |
+| Creator drilldown issue list | `components/DrilldownIssueList.tsx` | Exact owned issues | `CompactIssueCardTrigger` | Bounded batch for rendered drilldown issues. |
 | Creators list | `pages/CreatorsPage.tsx` | People, not comics | N/A (no comic rows) | No individual comic cover expected. |
 | Dependency builder | `components/DependencyBuilder.tsx`, `components/ReadingOrderTimeline.tsx` | Exact owned issue dependencies / timeline gates | `CompactIssueCardTrigger` (timeline) | Form `<select>` options remain text-only (native control limitation); timeline gates use shared trigger. |
 | Reading plan recovery / graph problems | `components/ReadingPlanRecovery.tsx`, `components/ReadingGraphProblemCard.tsx` | Exact owned issues | `CompactIssueCardTrigger` | Batched by visible IDs. |
 | Exclusions / eligibility / boundaries | `components/ExclusionExplanation.tsx`, `components/EligibilityExplanation.tsx`, `components/ReadingBoundaryExplanation.tsx` | Exact owned issues when ID present | `CompactIssueCardTrigger` | Fallback named link when no owner card exists. |
 | ComicVine search/confirm dialog | `components/ComicVineSearchDialog.tsx` | Provider search results/candidates | `ImageWithLoading` | Provider images are not owned confirmed identities; shared image component prevents bespoke img. |
+| Add series from ComicVine dialog | `components/AddSeriesFromComicVineDialog.tsx` | Provider series candidates | `ImageWithLoading` | Provider search/import flow; no owned confirmed cover borrowed. |
+| Add to ComicPile dialog | `components/AddToComicPileDialog.tsx` | Provider issue candidate | `ImageWithLoading` | Provider-only issue being added; no owned confirmed cover borrowed. |
+| Issue correction dialog | `components/IssueCorrectionDialog.tsx` | Exact owned issue when present | `CompactIssueCardTrigger` | Selected owned issue uses shared covered action trigger; correction preview stays text/metadata. |
 | Direct read issue picker | `components/DirectReadIssuePanel.tsx` | Exact owned issues | `ComicIssueReadingCard` / `ComicIssueCover` via shared card | Bounded paginated browse; no per-row provider call. |
 
 ## Non-cover / exception surfaces
