@@ -1520,7 +1520,7 @@ mod tests {
             .await
             .expect("list meta");
 
-        let mut tx = connection
+        let tx = connection
             .build_transaction()
             .start()
             .await
