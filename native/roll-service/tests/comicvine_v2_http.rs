@@ -3044,7 +3044,6 @@ async fn import_worker_and_roll_issue_read_show_hydrated_creators() {
     assert_eq!(
         singular_calls, 1,
         "the explicit synchronous Retry fetched the issue once"
-<<<<<<< HEAD
     );
 }
 
@@ -3343,10 +3342,9 @@ async fn retry_during_in_flight_remap_names_current_identity_and_drops_stale_wri
         gated.call_paths().len(),
         1,
         "only the in-flight retry called the provider"
-=======
->>>>>>> origin/main
     );
 }
+
 
 #[tokio::test]
 async fn import_series_error_contract_and_reading_order() {

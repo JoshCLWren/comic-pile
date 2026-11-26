@@ -23,14 +23,10 @@
 use crate::{
     auth::AuthenticatedUser,
     catalog_commit::inline_hydration_budget,
-<<<<<<< HEAD
     comicvine_provider::{
         hydrate_confirmed_identity_inline, hydrate_confirmed_identity_sync, HydrationOutcome,
         ProviderFailure,
     },
-=======
-    comicvine_provider::{hydrate_confirmed_identity_inline, ProviderFailure},
->>>>>>> origin/main
     comicvine_resolution::SeriesImportStatusResponse,
     db,
     thread_issues::natural_issue_order,
@@ -1558,7 +1554,6 @@ pub async fn refresh_metadata(
             &[&issue_id],
         )
         .await
-<<<<<<< HEAD
         .map_err(db::query_error)?
         .map(|row| row.get(0));
     tx.commit().await.map_err(db::query_error)?;
@@ -1587,21 +1582,6 @@ pub async fn refresh_metadata(
     Ok(Json(MetadataRefreshResponse {
         issue_id,
         refreshed: outcome.refreshed(),
-=======
-        .map_err(db::query_error)?;
-    tx.commit().await.map_err(db::query_error)?;
-    let comicvine_issue_id: Option<String> = identity_row.map(|row| row.get(0));
-    let refreshed = comicvine_issue_id.is_some();
-    // Release the pooled connection before hydration checks one out; on a
-    // small pool holding it here would starve the awaited provider request.
-    drop(connection);
-    if comicvine_issue_id.is_some() {
-        hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started, true).await;
-    }
-    Ok(Json(MetadataRefreshResponse {
-        issue_id,
-        refreshed,
->>>>>>> origin/main
         comicvine_issue_id,
         outcome: outcome.as_str().to_owned(),
         retry_after_seconds: outcome.retry_after_seconds(),
