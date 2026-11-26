@@ -623,10 +623,59 @@ jobs:
           git archive "$HEAD_SHA" | tar -x -C "$head_tree"
           python3 scripts/check_conflict_markers.py --root "$head_tree"
 
+  dependency-integrity:
+    name: Dependency Integrity Guard
+    # Required on every event, including factory-only fast-path changes. No path
+    # filters and no factory-scope gate: the effective merge candidate and the
+    # exact PR head are both validated, so a cached or stale status context
+    # cannot stand in for the dependency files in the candidate tree.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Test dependency-integrity guard
+        run: python3 -m unittest discover -s tests -p test_dependency_integrity.py
+      - name: Check effective candidate manifests and lockfile
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/check_dependency_integrity.py --root .
+          bash scripts/check_nested_lockfiles.sh
+          corepack enable
+          pinned="$(python3 -c 'import json; print(json.load(open("package.json"))["packageManager"].split("@", 1)[1].split("+", 1)[0])')"
+          actual="$(pnpm --version)"
+          if [[ "$actual" != "$pinned" ]]; then
+            echo "::error::pnpm $actual does not match pinned version $pinned"
+            exit 1
+          fi
+          pnpm install --frozen-lockfile --lockfile-only --offline --ignore-scripts
+          git diff --exit-code -- pnpm-lock.yaml
+      - name: Check exact pull request head
+        if: github.event_name == 'pull_request'
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          head_tree="$RUNNER_TEMP/dependency-integrity-head"
+          mkdir -p "$head_tree"
+          git archive "$HEAD_SHA" | tar -x -C "$head_tree"
+          python3 scripts/check_dependency_integrity.py --root "$head_tree"
+          (
+            cd "$head_tree"
+            pnpm install --frozen-lockfile --lockfile-only --offline --ignore-scripts
+          )
+
   check-all-jobs:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [factory-scope, factory-fast-contracts, build, build-fork, rust-ingress, route-fragment-guard, conflict-markers, docs-code-paths, script-checks, factory-actionlint, factory-shellcheck, native-route-db-test-guard, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health]
+    needs: [factory-scope, factory-fast-contracts, build, build-fork, rust-ingress, route-fragment-guard, conflict-markers, dependency-integrity, docs-code-paths, script-checks, factory-actionlint, factory-shellcheck, native-route-db-test-guard, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health]
     if: always()
     steps:
       - name: Check job results
@@ -641,6 +690,7 @@ jobs:
               "${{ needs.factory-fast-contracts.result }}" \
               "${{ needs.route-fragment-guard.result }}" \
               "${{ needs.conflict-markers.result }}" \
+              "${{ needs.dependency-integrity.result }}" \
               "${{ needs.factory-actionlint.result }}" \
               "${{ needs.factory-shellcheck.result }}"; do
               if [[ "$result" != success ]]; then
@@ -656,6 +706,7 @@ jobs:
           echo "Rust default route discovery: ${{ needs.rust-ingress.result }}"
           echo "Route fragment guard: ${{ needs.route-fragment-guard.result }}"
           echo "Conflict markers: ${{ needs.conflict-markers.result }}"
+          echo "Dependency integrity: ${{ needs.dependency-integrity.result }}"
           echo "Docs code paths: ${{ needs.docs-code-paths.result }}"
           echo "Node script tests: ${{ needs.script-checks.result }}"
           echo "Workflow syntax: ${{ needs.factory-actionlint.result }}"
@@ -672,6 +723,7 @@ jobs:
              [ "${{ needs.rust-ingress.result }}" != "success" ] || \
              [ "${{ needs.route-fragment-guard.result }}" != "success" ] || \
              [ "${{ needs.conflict-markers.result }}" != "success" ] || \
+             [ "${{ needs.dependency-integrity.result }}" != "success" ] || \
              [ "${{ needs.docs-code-paths.result }}" != "success" ] || \
              [ "${{ needs.script-checks.result }}" != "success" ] || \
              [ "${{ needs.factory-actionlint.result }}" != "success" ] || \

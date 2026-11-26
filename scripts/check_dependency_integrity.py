@@ -83,13 +83,24 @@ def unquote(value: str) -> str:
 
 
 def yaml_key(line: str, indent: int) -> str | None:
-    """Return an unquoted YAML mapping key at an exact indentation."""
+    """Return an unquoted YAML mapping key at an exact indentation.
+
+    The mapping value may follow the colon on the same line, as it does for
+    ``specifier: ^1.0.0`` inside a lockfile importer.
+    """
     if len(line) - len(line.lstrip(" ")) != indent:
         return None
     stripped = line[indent:]
-    if not stripped.endswith(":"):
-        return None
-    return unquote(stripped[:-1])
+    quote = ""
+    for position, char in enumerate(stripped):
+        if quote:
+            if char == quote:
+                quote = ""
+        elif char in "'\"":
+            quote = char
+        elif char == ":":
+            return unquote(stripped[:position])
+    return None
 
 
 def marker_findings(path: str, lines: list[str]) -> list[Finding]:
@@ -176,11 +187,16 @@ def workspace_packages(root: Path, findings: list[Finding]) -> list[str]:
             if os.path.isdir(root / match)
         ]
         if not matches:
-            findings.append(Finding(WORKSPACE_FILE, f"workspace pattern matched no directory: {pattern}"))
+            findings.append(
+                Finding(WORKSPACE_FILE, f"workspace pattern matched no directory: {pattern}")
+            )
         directories.update(matches)
     if REQUIRED_WORKSPACE not in directories:
         findings.append(
-            Finding(WORKSPACE_FILE, f"required workspace package is not declared: {REQUIRED_WORKSPACE}")
+            Finding(
+                WORKSPACE_FILE,
+                f"required workspace package is not declared: {REQUIRED_WORKSPACE}",
+            )
         )
     return sorted(directories)
 
@@ -259,7 +275,10 @@ def parse_lockfile(root: Path, findings: list[Finding]) -> dict[str, dict[str, d
                 if candidate in DEPENDENCY_FIELDS:
                     if candidate in dependencies:
                         findings.append(
-                            Finding(f"{LOCKFILE}:{index + 1}", f"duplicate dependency field: {candidate}")
+                            Finding(
+                                f"{LOCKFILE}:{index + 1}",
+                                f"duplicate dependency field: {candidate}",
+                            )
                         )
                     dependencies[candidate] = {}
                     field = candidate
@@ -385,7 +404,10 @@ def check_consistency(
             for package in locked:
                 if package not in declared:
                     findings.append(
-                        Finding(LOCKFILE, f"{importer} {field}.{package} is not declared in manifest")
+                        Finding(
+                            LOCKFILE,
+                            f"{importer} {field}.{package} is not declared in manifest",
+                        )
                     )
 
 
@@ -401,6 +423,9 @@ def validate(root: Path) -> list[Finding]:
                 findings.append(
                     Finding(nested, "nested lockfile in a pnpm workspace package is not installed")
                 )
+                nested_text = read_text(root, nested, findings)
+                if nested_text is not None:
+                    findings.extend(marker_findings(nested, nested_text.splitlines()))
     importers = parse_lockfile(root, findings)
     if root_manifest is not None:
         check_pnpm_pin(root, root_manifest, findings)

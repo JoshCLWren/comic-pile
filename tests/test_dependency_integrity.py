@@ -20,14 +20,17 @@ guard = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = guard
 SPEC.loader.exec_module(guard)
 
-ROOT_MANIFEST = {
+ROOT_MANIFEST: dict[str, object] = {
     "name": "comic-pile",
     "private": True,
-    "packageManager": "pnpm@10.15.0+sha512.486ebc259d3e999a4e8691ce03b5cac4a71cbeca39372a9b762cb500cfdf0873e2cb16abe3d951b1ee2cf012503f027b98b6584e4df22524e0c7450d9ec7aa7b",
+    "packageManager": (
+        "pnpm@10.15.0+sha512.486ebc259d3e999a4e8691ce03b5cac4a71cbeca39372a9b762cb500cfdf08"
+        "73e2cb16abe3d951b1ee2cf012503f027b98b6584e4df22524e0c7450d9ec7aa7b"
+    ),
     "dependencies": {"dotenv": "^18.0.10"},
     "devDependencies": {"vitest": "^5.1.1"},
 }
-FRONTEND_MANIFEST = {
+FRONTEND_MANIFEST: dict[str, object] = {
     "name": "frontend",
     "private": True,
     "dependencies": {"react": "^19.3.1"},
@@ -172,9 +175,12 @@ class DependencyIntegrityGuardTests(unittest.TestCase):
 
         self.assertEqual(result, 1)
         self.assertIn("frontend/pnpm-lock.yaml: nested lockfile", stderr)
-        self.assertIn("frontend/pnpm-lock.yaml:5: unresolved Git conflict marker", stderr)
-        self.assertIn("frontend/pnpm-lock.yaml:8: unresolved Git conflict marker", stderr)
-        self.assertIn("frontend/pnpm-lock.yaml:11: unresolved Git conflict marker", stderr)
+        for line in (6, 9, 12, 15, 17, 19):
+            with self.subTest(line=line):
+                self.assertIn(
+                    f"frontend/pnpm-lock.yaml:{line}: unresolved Git conflict marker",
+                    stderr,
+                )
 
     def test_valid_dependency_update_passes(self) -> None:
         """A coherent frontend manifest/lockfile version bump passes without manual intervention."""
@@ -210,7 +216,8 @@ class DependencyIntegrityGuardTests(unittest.TestCase):
         """Dropping the frontend importer cannot hide frontend dependencies from the gate."""
         root = self.temporary_root()
         make_valid_repo(root)
-        write(root / "pnpm-lock.yaml", LOCKFILE.split("  frontend:\n", 1)[0] + "packages: {}\n\nsnapshots: {}\n")
+        truncated = LOCKFILE.split("  frontend:\n", 1)[0]
+        write(root / "pnpm-lock.yaml", truncated + "packages: {}\n\nsnapshots: {}\n")
 
         result, _, stderr = run_guard(root)
 
@@ -236,16 +243,21 @@ class DependencyIntegrityGuardTests(unittest.TestCase):
         self.assertIn("pnpm-lock.yaml:", stderr)
 
     def test_pnpm_pin_drift_fails(self) -> None:
-        """package.json and the CI Dockerfile must pin the same pnpm version."""
+        """package.json, Dockerfile and lockfileVersion must agree on the pnpm pin."""
         root = self.temporary_root()
         make_valid_repo(root)
-        write(root / "Dockerfile.ci", "FROM base\nRUN npm install -g pnpm@9.0.0\n")
+        manifest = json.loads((root / "package.json").read_text(encoding="utf-8"))
+        manifest["packageManager"] = "pnpm@9.0.0+sha512.deadbeef"
+        write_json(root / "package.json", manifest)
 
         result, _, stderr = run_guard(root)
 
         self.assertEqual(result, 1)
-        self.assertIn("pnpm pin does not match packageManager pin 10.15.0", stderr)
-        self.assertIn("lockfileVersion 9.0 does not match pinned pnpm 9.0.0", stderr)
+        self.assertIn("pnpm pin does not match packageManager pin 9.0.0", stderr)
+        self.assertIn(
+            "lockfileVersion 9.0 does not match pinned pnpm 9.0.0 (expected 6.0)",
+            stderr,
+        )
 
     def test_duplicate_manifest_keys_fail(self) -> None:
         """A manifest with a repeated dependency key is not silently accepted."""
@@ -315,15 +327,24 @@ class DependencyIntegrityGuardTests(unittest.TestCase):
         )[0]
         summary = workflow.split("  check-all-jobs:\n", 1)[1]
         needs_line = next(line for line in summary.splitlines() if "needs:" in line)
+        job_commands = "\n".join(
+            line for line in job_block.splitlines() if not line.lstrip().startswith("#")
+        )
 
-        self.assertNotIn("factory-scope", job_block)
-        self.assertNotIn("fast_only", job_block)
-        self.assertIn("python3 -m unittest discover -s tests -p test_dependency_integrity.py", job_block)
+        self.assertNotIn("factory-scope", job_commands)
+        self.assertNotIn("fast_only", job_commands)
+        self.assertIn(
+            "python3 -m unittest discover -s tests -p test_dependency_integrity.py",
+            job_block,
+        )
         self.assertIn("python3 scripts/check_dependency_integrity.py", job_block)
         self.assertIn("corepack enable", job_block)
         self.assertIn("pnpm install --frozen-lockfile", job_block)
         self.assertIn('git archive "$HEAD_SHA"', job_block)
-        self.assertIn('python3 scripts/check_dependency_integrity.py --root "$head_tree"', job_block)
+        self.assertIn(
+            'python3 scripts/check_dependency_integrity.py --root "$head_tree"',
+            job_block,
+        )
         self.assertIn("dependency-integrity", needs_line)
         self.assertIn('"${{ needs.dependency-integrity.result }}"', summary)
         self.assertGreaterEqual(summary.count('"${{ needs.dependency-integrity.result }}"'), 2)
