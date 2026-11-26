@@ -2790,6 +2790,7 @@ async fn replay_cbl_adoption_receipt(
         )
         .await
         .map_err(|e| {
+            eprintln!("DEBUG receipt lookup raw error: {e}");
             if crate::db::is_transport_failure(&e) {
                 CommitErr::Db(ApiError::database_unavailable())
             } else {
