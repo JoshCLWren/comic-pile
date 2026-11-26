@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactElement, ReactNode } from 'react'
 import { createToastSpy } from './toastSpy'
@@ -32,17 +32,27 @@ const getIntelligence = vi.mocked(comicVineApi.getIssueIntelligence)
 const importIssue = vi.mocked(comicVineApi.importIssue)
 const refreshMetadata = vi.mocked(comicVineApi.refreshMetadata)
 
-const FALLBACK_REFRESH_MS = 10_000 // METADATA_REFRESH_FALLBACK_SECONDS * 1000 (component constant)
-
-// TanStack Query batches observer notifications onto setTimeout(..., 0); a refetch
-// triggered at the end of an advance needs one extra millisecond to render.
-function flushQueryNotification() {
-  return act(async () => {
-    await vi.advanceTimersByTimeAsync(1)
-  })
+function intelligence(overrides: Partial<ComicVineIssueIntelligence> = {}) {
+  return {
+    comicvine_issue_id: '1',
+    comicvine_url: null,
+    series_name: 'Test Series',
+    series_id: 1,
+    issue_number: '1',
+    name: 'Test Issue',
+    description: null,
+    image_url: null,
+    cover_date: null,
+    store_date: null,
+    creators: [],
+    story_arcs: [],
+    metadata_status: 'needs_hydration',
+    refresh_retry_after_seconds: null,
+    ...overrides,
+  }
 }
 
-describe('ComicIdentity remapped issue polling (#5695)', () => {
+describe('ComicIdentity remapped issue metadata (#5841)', () => {
   beforeEach(() => {
     getIntelligence.mockReset()
     importIssue.mockReset()
@@ -53,65 +63,74 @@ describe('ComicIdentity remapped issue polling (#5695)', () => {
     vi.useRealTimers()
   })
 
-  it('stops polling once a remapped intelligence response completes', async () => {
-    const intelligence = (overrides: Partial<ComicVineIssueIntelligence> = {}) => ({
-      comicvine_issue_id: '1',
-      comicvine_url: null,
-      series_name: 'Test Series',
-      series_id: 1,
-      issue_number: '1',
-      name: 'Test Issue',
-      description: null,
-      image_url: null,
-      cover_date: null,
-      store_date: null,
-      creators: [],
-      story_arcs: [],
-      metadata_status: 'complete',
-      refresh_retry_after_seconds: null,
-      ...overrides,
-    })
-
-    const a = intelligence({
-      comicvine_issue_id: 'A',
+  it('has no poll timer: a stored pending/running state never refetches on its own', async () => {
+    vi.useFakeTimers()
+    getIntelligence.mockResolvedValue(intelligence({
       metadata_status: 'refresh_pending',
       refresh_retry_after_seconds: null,
-      creators: [],
-    })
-    const b = intelligence({
-      comicvine_issue_id: 'B',
-      metadata_status: 'complete',
-      creators: [{ name: 'Writer B', roles: ['penciler'] }],
+    }))
+    refreshMetadata.mockResolvedValue({
+      issue_id: 1, refreshed: false, comicvine_issue_id: '1',
+      outcome: 'provider_unavailable', retry_after_seconds: null,
     })
 
-    vi.useFakeTimers()
-    getIntelligence.mockResolvedValueOnce(a).mockResolvedValue(b)
-
-    renderWithToast(<ComicIdentity issueId={1} />)
+    const { unmount } = renderWithToast(<ComicIdentity issueId={1} />)
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0)
     })
 
+    expect(screen.getByTestId('creator-status-not_hydrated')).toBeInTheDocument()
+    expect(screen.queryByTestId('creator-status-hydrating')).not.toBeInTheDocument()
     expect(getIntelligence).toHaveBeenCalledTimes(1)
-    expect(screen.getByTestId('creator-status-fetching')).toBeInTheDocument()
 
-    // The next intelligence response represents the remapped issue B.
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS)
+      await vi.advanceTimersByTimeAsync(60_000)
     })
-    await flushQueryNotification()
-    expect(getIntelligence).toHaveBeenCalledTimes(2)
+    expect(getIntelligence).toHaveBeenCalledTimes(1)
+    expect(refreshMetadata).not.toHaveBeenCalled()
 
-    // B's credits replace the pending state; the fetching message is gone.
+    unmount()
+  })
+
+  it('replaces identity A with B without a stale retry or a late refetch', async () => {
+    let resolveRetry: ((value: {
+      issue_id: number
+      refreshed: boolean
+      comicvine_issue_id: string
+      outcome: 'complete'
+    }) => void) | undefined
+    refreshMetadata.mockImplementation(() => new Promise((resolve) => {
+      resolveRetry = resolve
+    }))
+    getIntelligence.mockImplementation((issueId: number) => Promise.resolve(
+      issueId === 1
+        ? intelligence({ comicvine_issue_id: 'A' })
+        : intelligence({
+          comicvine_issue_id: 'B',
+          metadata_status: 'complete',
+          creators: [{ name: 'Writer B', roles: ['writer'] }],
+        }),
+    ))
+
+    const { rerender } = renderWithToast(<ComicIdentity issueId={1} />)
+    await waitFor(() => expect(screen.getByTestId('creator-status-not_hydrated')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry refresh' }))
+    await waitFor(() => expect(refreshMetadata).toHaveBeenCalledWith(1))
+    expect(screen.getByTestId('creator-status-hydrating')).toBeInTheDocument()
+
+    // The reader remaps to B while A's retry is still in flight.
+    rerender(<ComicIdentity issueId={2} />)
+    await waitFor(() => expect(screen.getByText('Writer B')).toBeInTheDocument())
+
+    await act(async () => {
+      resolveRetry?.({ issue_id: 1, refreshed: true, comicvine_issue_id: 'A', outcome: 'complete' })
+    })
+
+    // A's late success must not trigger a refetch or repaint B's credits.
+    await waitFor(() => expect(screen.queryByTestId('creator-status-hydrating')).not.toBeInTheDocument())
+    expect(getIntelligence).toHaveBeenCalledTimes(2)
     expect(screen.getByText('Writer B')).toBeInTheDocument()
-    expect(screen.queryByTestId('creator-status-fetching')).not.toBeInTheDocument()
-
-    // Once complete, the bounded poller is disarmed for the new identity.
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(FALLBACK_REFRESH_MS * 2)
-    })
-    expect(getIntelligence).toHaveBeenCalledTimes(2)
-
-    vi.useRealTimers()
+    expect(screen.queryByText('Writer A')).not.toBeInTheDocument()
   })
 })
