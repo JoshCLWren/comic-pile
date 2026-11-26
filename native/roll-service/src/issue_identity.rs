@@ -2498,6 +2498,8 @@ pub struct CblAdoptionCommitRequest {
     pub series_decisions: Vec<CommitSeriesDecision>,
     #[serde(default)]
     pub series_overrides: Vec<CommitEntryOverride>,
+    #[serde(default)]
+    pub idempotency_key: Option<String>,
     pub content_hash: String,
     pub revision_sha: String,
 }
@@ -2516,7 +2518,7 @@ pub struct ContinuityPlanResponseWire {
     pub updated_at: String,
 }
 
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct CblAdoptionCommitResponseWire {
     pub id: i32,
     pub user_id: i32,
