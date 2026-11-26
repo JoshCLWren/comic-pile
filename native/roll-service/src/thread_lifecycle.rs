@@ -1706,7 +1706,9 @@ async fn validate_set_pending_selection(
         .await
         .map_err(db::tx_error)?;
     let queue_position: i32 = position_row.map(|row| row.get(0)).unwrap_or(0);
-    let canonical_frontier = evaluated.get(&thread.id).and_then(|state| state.next_issue_id);
+    let canonical_frontier = evaluated
+        .get(&thread.id)
+        .and_then(|state| state.next_issue_id);
 
     let mut issue_id: Option<i32> = None;
     let mut issue_number: Option<String> = None;
@@ -1891,8 +1893,14 @@ pub async fn set_pending_thread(
     // connection: the loader owns its own pooled checkout, so nesting the two
     // would risk a second-connection deadlock under a saturated pool.
     let canonical = canonical_eligibility_inputs(&state, user).await?;
-    let response =
-        set_pending_once(&state, user, thread_id.unwrap_or_default(), expected, &canonical).await?;
+    let response = set_pending_once(
+        &state,
+        user,
+        thread_id.unwrap_or_default(),
+        expected,
+        &canonical,
+    )
+    .await?;
     Ok(json_response(StatusCode::OK, response))
 }
 
