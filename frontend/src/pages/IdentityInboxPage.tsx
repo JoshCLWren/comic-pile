@@ -4,7 +4,7 @@ import { useMutation } from '@tanstack/react-query'
 import { comicVineApi } from '../services/api-comicvine'
 import { invalidateIdentityInbox } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
-import { isObject, isNonEmptyString, isString } from '../utils/runtimeChecks'
+import { isObject, isNonEmptyString, isString, type JsonRecord } from '../utils/runtimeChecks'
 import {
   useIdentityInbox,
   useIdentityInboxSearch,
@@ -82,7 +82,7 @@ function CandidateCard({
   const image = isObject(meta.image) ? meta.image : null
   const raw = isObject(meta.raw_provider_payload) ? meta.raw_provider_payload : null
   const rawImage = raw && isObject(raw.image) ? raw.image : null
-  const pickImage = (obj: Record<string, unknown> | null) =>
+  const pickImage = (obj: JsonRecord | null) =>
     obj ? (
       toText(obj.original_url) ??
       toText(obj.super_url) ??
