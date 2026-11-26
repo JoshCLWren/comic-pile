@@ -223,6 +223,25 @@ describe('CustomCBLBuilder', () => {
     expect(screen.getByRole('button', { name: /Starman #1\s*Series ID 9103/ })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByRole('button', { name: /Mutant X #1\s*Series ID 9101/ }).querySelector('[data-testid="comic-issue-cover"] img')).toHaveAttribute('src', 'https://example.test/mutant-x.jpg'))
   })
+  it('uses an exact-id cover cached in the ordered-list batch when the search batch has none', async () => {
+    const user = userEvent.setup()
+    mocks.searchIssues.mockResolvedValue([
+      { issue_id: 50002, thread_id: 9202, series_name: 'Mutant X', issue_number: '1', status: 'unread' },
+    ])
+    // Defensive fallback path: the search-result batch returns no card, while
+    // the ordered-list batch already holds a card for that exact issue id.
+    fetchCards.mockImplementation(async (issueIds: number[]) =>
+      issueIds.includes(26360)
+        ? [{ issue_id: 50002, thread_id: 9202, thread_title: 'Mutant X', issue_number: '1', cover_image_url: 'https://example.test/fallback-cover.jpg', status: 'unread', mapping_state: 'confirmed', has_confirmed_identity: true } as Awaited<ReturnType<typeof issueCardsApi.fetchCards>>[number]]
+        : [],
+    )
+    renderBuilder()
+    await user.click(screen.getByRole('button', { name: 'Create or edit custom CBL' }))
+    await user.selectOptions(await screen.findByLabelText('Custom CBL'), '9')
+    await user.type(await screen.findByLabelText('Search issues for custom CBL'), 'Mutant X{Enter}')
+    const result = await screen.findByRole('button', { name: /Mutant X #1\s*Series ID 9202/ })
+    await waitFor(() => expect(result.querySelector('[data-testid="comic-issue-cover"] img')).toHaveAttribute('src', 'https://example.test/fallback-cover.jpg'))
+  })
   it('navigates issue results with arrows and adds only the focused canonical issue with Enter', async () => {
     const user = userEvent.setup()
     mocks.searchIssues.mockResolvedValue([

@@ -872,6 +872,11 @@ export default function CustomCBLBuilder({
               {searchResults.length > 0 && (
                 <div ref={issueSearchResults} className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-[var(--theme-border)] p-2" aria-label="Custom CBL issue search results">
                   {searchResults.map((candidate) => {
+                    // Search covers come from the exact-id search batch. The ordered-list
+                    // batch is a defensive fallback for an exact-id card already cached
+                    // there: searchResults excludes ids present in entries, so in normal
+                    // flows the fallback has no distinct source row. It never substitutes
+                    // a different issue's artwork.
                     const coverImageUrl = searchResultCardsById.get(candidate.issue_id)?.cover_image_url
                       ?? cardsByIssue.get(candidate.issue_id)?.cover_image_url
                       ?? null
