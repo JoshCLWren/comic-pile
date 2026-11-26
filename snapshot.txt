@@ -1,39 +1,39 @@
-utc: 2026-11-26T23:56:28Z
-uptime: 958.19s load: 1.50 0.50 0.24
-processes: 206
+utc: 2026-11-26T23:56:45Z
+uptime: 975.15s load: 2.24 0.72 0.31
+processes: 205
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15700        2043       10064          50        3974       13657
+Mem:           15700        3710        8204          50        4170       11990
 Swap:              0           0           0
 --- disk
 Filesystem            Size  Used Avail Use% Mounted on
-/dev/mapper/cow-root  145G   57G   89G  40% /
-/dev/mapper/cow-root  145G   57G   89G  40% /
+/dev/mapper/cow-root  145G   57G   88G  40% /
+/dev/mapper/cow-root  145G   57G   88G  40% /
 --- top rss (KiB, name only)
-325768 opencode.exe
-324384 rustc
-229000 Runner.Worker
-195416 rustc
-188352 cargo
-137916 provjobd3410290
-113668 Runner.Listener
-88976 opencode
+1423164 clippy-driver
+1307012 clippy-driver
+324680 opencode.exe
+229200 Runner.Worker
+188444 cargo
+138816 provjobd3410290
+113776 Runner.Listener
+88948 opencode
 84776 dockerd
 55528 php-fpm8.5
-51336 rustc
 47068 containerd
 43288 snapd
 37852 opencode-pty
-35740 rustc
+30084 networkd-dispat
+25296 cargo-clippy
 --- top cpu (name only)
- 120 rustc
- 101 rustc
- 100 ps
-98.3 rustc
-66.6 rustc
- 6.1 cargo
- 4.1 opencode.exe
- 2.1 Runner.Worker
+99.7 clippy-driver
+97.8 clippy-driver
+ 4.2 cargo
+ 3.8 opencode.exe
+ 2.0 Runner.Worker
+ 1.3 provjobd3410290
+ 0.3 Runner.Listener
+ 0.2 opencode
 --- kernel oom/kill
 --- shutdown/session signals
 2026-11-26T23:40:55+00:00 ip-10-0-138-82 hosted-compute-agent[2134]: {"level":"INFO","ts":1795736455.6032825,"logger":"hosted-compute-agent","msg":"Reading metadata to detect shutdown tag..."}
