@@ -10,7 +10,7 @@
  */
 import { expect, type Page } from '@playwright/test'
 import { test } from './fixtures'
-import { gotoRollPage, waitForRollPageReady } from './helpers'
+import { getAuthToken, gotoRollPage, waitForRollPageReady } from './helpers'
 
 let quizEnabled = false
 
@@ -36,8 +36,13 @@ test.describe('reading-mode quiz acceptance', () => {
     authenticatedPage,
   }) => {
     const page: Page = authenticatedPage
+    const token = await getAuthToken(page)
     const seed = await page.request.put('/api/v2/reading-mode', {
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
       data: { bandwidth: 'light', intent: 'momentum', source: 'manual' },
     })
     expect(seed.ok(), `reading-mode PUT failed: ${seed.status()}`).toBe(true)

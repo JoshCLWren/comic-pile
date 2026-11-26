@@ -120,7 +120,7 @@ test.describe('Issue #2030: creator detail route', () => {
     await expect(page.getByText(/writer/).first()).toBeVisible()
     await expect(page.getByText(/3 credited issues/)).toBeVisible()
     await expect(page.getByText(/4\.5★ across 2 ratings/)).toBeVisible()
-    await expect(page.getByText(/cover/)).toBeVisible()
+    await expect(page.getByText(/cover/).first()).toBeVisible()
     await expect(page.getByText(/1 credited issue/)).toBeVisible()
     await expect(page.getByText(/unrated/)).toBeVisible()
 
