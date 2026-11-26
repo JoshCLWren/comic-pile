@@ -2737,6 +2737,133 @@ fn unique_adoption_plan_name(
     format!("{base_name} (dedupe exhausted)")
 }
 
+fn cbl_adoption_request_fingerprint(
+    list_id: i32,
+    target_plan_id: Option<i32>,
+    request: &CblAdoptionCommitRequest,
+) -> String {
+    let mut entry_decisions: Vec<(i32, &str)> = request
+        .entry_decisions
+        .iter()
+        .map(|(k, v)| (*k, v.as_str()))
+        .collect();
+    entry_decisions.sort_by_key(|(k, _)| *k);
+    let mut series_decisions: Vec<(&str, &str)> = request
+        .series_decisions
+        .iter()
+        .map(|s| (s.series_name.as_str(), s.decision.as_str()))
+        .collect();
+    series_decisions.sort_by(|a, b| a.0.cmp(b.0).then(a.1.cmp(b.1)));
+    let mut series_overrides: Vec<(i32, &str)> = request
+        .series_overrides
+        .iter()
+        .map(|s| (s.cbl_position, s.decision.as_str()))
+        .collect();
+    series_overrides.sort_by_key(|(k, _)| *k);
+    let payload = serde_json::json!({
+        "list_id": list_id,
+        "target_plan_id": target_plan_id,
+        "content_hash": request.content_hash,
+        "revision_sha": request.revision_sha,
+        "entry_decisions": entry_decisions,
+        "series_decisions": series_decisions,
+        "series_overrides": series_overrides,
+        "idempotency_key": request.idempotency_key.as_deref(),
+    });
+    let serialized = serde_json::to_vec(&payload).unwrap_or_default();
+    sha256_hex(&serialized)
+}
+
+async fn replay_cbl_adoption_receipt(
+    tx: &tokio_postgres::Transaction<'_>,
+    user_id: i32,
+    list_id: i32,
+    fingerprint: &str,
+) -> Result<Option<CblAdoptionCommitResponseWire>, CommitErr> {
+    let row = tx
+        .run_query_opt(
+            "SELECT request_fingerprint, response_json::text, plan_id FROM cbl_adoption_receipts WHERE user_id = $1 AND cbl_source_list_id = $2",
+            &[&user_id, &list_id],
+        )
+        .await
+        .map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("lookup adoption receipt: {e}"))
+            }
+        })?;
+    let Some(row) = row else { return Ok(None) };
+    let stored_fingerprint: String = row.get(0);
+    if stored_fingerprint != fingerprint {
+        return Ok(None);
+    }
+    let response_json: Option<String> = row.get(1);
+    if let Some(json_text) = response_json {
+        if let Ok(resp) = serde_json::from_str::<CblAdoptionCommitResponseWire>(&json_text) {
+            return Ok(Some(resp));
+        }
+    }
+    let plan_id: i32 = row.get(2);
+    let prow = tx
+        .run_query_opt(
+            "SELECT id,user_id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1 AND user_id=$2",
+            &[&plan_id, &user_id],
+        )
+        .await
+        .map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("load replay plan: {e}"))
+            }
+        })?;
+    let Some(prow) = prow else { return Ok(None) };
+    Ok(Some(CblAdoptionCommitResponseWire {
+        id: prow.get(0),
+        user_id: prow.get(1),
+        name: prow.get(2),
+        ordering_mode: prow.get(3),
+        lanes: serde_json::from_str::<JsonValue>(&prow.get::<_, String>(4))
+            .unwrap_or(serde_json::json!([])),
+        nodes: serde_json::from_str::<JsonValue>(&prow.get::<_, String>(5))
+            .unwrap_or(serde_json::json!([])),
+        created_at: prow.get(6),
+        updated_at: prow.get(7),
+        reused_positions: Vec::new(),
+        created_positions: Vec::new(),
+        excluded_positions: Vec::new(),
+        unresolved_positions: Vec::new(),
+    }))
+}
+
+async fn store_cbl_adoption_receipt(
+    tx: &tokio_postgres::Transaction<'_>,
+    user_id: i32,
+    list_id: i32,
+    plan_id: i32,
+    fingerprint: &str,
+    response: &CblAdoptionCommitResponseWire,
+) -> Result<(), CommitErr> {
+    let response_json = serde_json::to_value(response).map_err(|e| CommitErr::Unexpected(e.to_string()))?;
+    tx.run_execute(
+        "INSERT INTO cbl_adoption_receipts (user_id, cbl_source_list_id, plan_id, request_fingerprint, created_at, response_json)
+         VALUES ($1,$2,$3,$4,NOW(),$5)
+         ON CONFLICT (user_id, cbl_source_list_id)
+         DO UPDATE SET plan_id = EXCLUDED.plan_id, request_fingerprint = EXCLUDED.request_fingerprint, response_json = EXCLUDED.response_json, created_at = NOW()",
+        &[&user_id, &list_id, &plan_id, &fingerprint, &response_json],
+    )
+    .await
+    .map_err(|e| {
+        if crate::db::is_transport_failure(&e) {
+            CommitErr::Db(ApiError::database_unavailable())
+        } else {
+            CommitErr::Unexpected(format!("store adoption receipt: {e}"))
+        }
+    })?;
+    Ok(())
+}
+
 async fn do_cbl_adoption_commit(
     state: &Arc<AppState>,
     user_id: i32,
