@@ -224,3 +224,39 @@ describe('ComicPillar confirmed mapping display', () => {
     expect(confirmIdentitySpy).not.toHaveBeenCalled()
   })
 })
+
+describe('ComicPillar dual numbering (#4652)', () => {
+  it('renders the authored number, alternate number and provider number together', async () => {
+    render(
+      <ComicPillar
+        activeRatingThread={{
+          ...confirmedThread,
+          next_issue_number: '3',
+          issue_number_alias: '100',
+          provider_issue_number: '101',
+        }}
+        onRefreshThread={vi.fn()}
+      />,
+    )
+
+    expect(await screen.findByTestId('comic-header-title')).toHaveTextContent(
+      'Stormwatch Vol. 1 #3 (100)',
+    )
+    expect(screen.getByTestId('comic-issue-alias-number')).toHaveTextContent('(100)')
+    expect(screen.getByTestId('comic-issue-provider-number')).toHaveTextContent('Provider #101')
+  })
+
+  it('hides an alias that merely repeats the authored number', async () => {
+    render(
+      <ComicPillar
+        activeRatingThread={{ ...confirmedThread, next_issue_number: '3', issue_number_alias: '3' }}
+        onRefreshThread={vi.fn()}
+      />,
+    )
+
+    expect(await screen.findByTestId('comic-header-title')).toHaveTextContent(
+      'Stormwatch Vol. 1 #3',
+    )
+    expect(screen.queryByTestId('comic-issue-alias-number')).not.toBeInTheDocument()
+  })
+})

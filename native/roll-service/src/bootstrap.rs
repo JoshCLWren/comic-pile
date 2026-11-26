@@ -510,7 +510,7 @@ async fn current_active_thread(
                {position} AS computed_position,
                NULLIF(BTRIM(i.issue_number_alias), ''),
                (SELECT NULLIF(BTRIM(COALESCE(x.metadata_json->>'issue_number',
-                                             x.metadata_json#>>'{raw_provider_payload,issue_number}')), '')
+                                             x.metadata_json#>>'{{raw_provider_payload,issue_number}}')), '')
                   FROM issue_external_identity_mappings m
                   JOIN external_identities x ON x.id=m.external_identity_id
                  WHERE m.issue_id=i.id AND m.status='confirmed'
