@@ -647,7 +647,7 @@ describe('dual issue numbering (#4652)', () => {
       { wrapper },
     )
     expect(screen.getByTestId('comic-issue-provider-identity')).toHaveTextContent('ComicVine #4000-999 · provider issue #100')
-    expect(screen.getByRole('article', { name: 'Issue Saga #3 (100)' })).toBeVisible()
+    expect(screen.getByRole('article', { name: 'Issue Cable #3 (100)' })).toBeVisible()
   })
 
   it('saves a new alias without a rating or status write', async () => {

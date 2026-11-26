@@ -171,9 +171,12 @@ export function ComicIssueIdentity({
         {threadTitle}{' '}
         <span className="text-[var(--theme-comic-accent)]">#{issueNumber}</span>
         {showAlias && (
-          <span className="ml-1 text-[var(--theme-text-muted)]" data-testid="comic-issue-alias-number">
-            ({alias})
-          </span>
+          <>
+            {' '}
+            <span className="text-[var(--theme-text-muted)]" data-testid="comic-issue-alias-number">
+              ({alias})
+            </span>
+          </>
         )}
       </Title>
       {showProvider && (
