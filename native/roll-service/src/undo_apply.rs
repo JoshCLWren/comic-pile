@@ -956,7 +956,10 @@ async fn restore_thread_from_state(
                     ],
                 )
                 .await
-                .map_err(db::query_error)?;
+                .map_err(|e| {
+                    eprintln!("DEBUG undo single restore alias error: {e}");
+                    db::query_error(e)
+                })?;
         }
 
         // Restore thread counters
