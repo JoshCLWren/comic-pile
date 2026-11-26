@@ -20,14 +20,14 @@
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "src": "^/api/v1/continuity\\-plans/[^/]+/reading\\-orders/project\\-preview$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "src": "^/api/v1/issue\\-identity/cbl/[^/]+/reading\\-graph\\-preview$"
     }
   ]
