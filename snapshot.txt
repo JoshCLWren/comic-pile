@@ -1,5 +1,5 @@
-utc: 2026-11-26T17:10:42Z
-uptime: 4497.70s load: 0.10 0.13 0.26
+utc: 2026-11-26T17:10:58Z
+uptime: 4514.54s load: 0.16 0.14 0.26
 processes: 175
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
@@ -26,11 +26,11 @@ Filesystem      Size  Used Avail Use% Mounted on
 36448 postgres
 36004 python3
 --- top cpu (name only)
-13.8 comicpile-roll-
+13.7 comicpile-roll-
  1.3 provjobd2959942
  0.6 python3
- 0.3 docker-proxy
  0.3 Runner.Worker
+ 0.3 docker-proxy
  0.3 postgres
  0.3 postgres
  0.3 postgres
