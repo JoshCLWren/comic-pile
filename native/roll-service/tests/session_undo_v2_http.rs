@@ -176,9 +176,14 @@ async fn v2_session_details_preserve_owner_scoped_wire_shape() {
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(body["session_id"], 93101);
-    let summary = body["narrative_summary"].as_object().expect("summary object");
+    let summary = body["narrative_summary"]
+        .as_object()
+        .expect("summary object");
     for key in ["read", "skipped", "snoozed", "completed"] {
-        assert!(summary.contains_key(key), "narrative_summary must expose {key}");
+        assert!(
+            summary.contains_key(key),
+            "narrative_summary must expose {key}"
+        );
     }
     let events = body["events"].as_array().expect("events array");
     assert!(events.iter().any(|event| event["type"] == "roll"));
@@ -211,8 +216,7 @@ async fn v2_snapshot_reads_are_equivalent_and_owner_scoped() {
         assert!(snapshots.iter().all(|item| item["session_id"] == 93101));
 
         let foreign = uri.replace("93101", "93102");
-        let (status, body) =
-            send(&ctx.state, authed("GET", &foreign, &ctx.token, &ctx.csrf)).await;
+        let (status, body) = send(&ctx.state, authed("GET", &foreign, &ctx.token, &ctx.csrf)).await;
         assert_eq!(status, StatusCode::NOT_FOUND, "{foreign}: {body:?}");
     }
 }
