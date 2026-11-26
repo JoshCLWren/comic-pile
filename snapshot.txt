@@ -1,17 +1,17 @@
-utc: 2026-11-26T17:43:50Z
-uptime: 6486.12s load: 0.20 0.12 0.11
+utc: 2026-11-26T17:44:07Z
+uptime: 6502.83s load: 0.20 0.13 0.11
 processes: 176
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15983        1170        7657          83        7583       14812
+Mem:           15983        1161        7665          83        7583       14821
 Swap:           3071           0        3071
 --- disk
 Filesystem      Size  Used Avail Use% Mounted on
 /dev/root       145G   63G   82G  44% /
 /dev/root       145G   63G   82G  44% /
 --- top rss (KiB, name only)
-170996 Runner.Worker
-141980 provjobd2959942
+170968 Runner.Worker
+141532 provjobd2959942
 131200 Runner.Listener
 88252 dockerd
 62480 comicpile-roll-
@@ -26,7 +26,7 @@ Filesystem      Size  Used Avail Use% Mounted on
 36448 postgres
 36004 python3
 --- top cpu (name only)
- 9.1 comicpile-roll-
+ 9.0 comicpile-roll-
  1.0 provjobd2959942
  0.4 python3
  0.2 Runner.Worker
