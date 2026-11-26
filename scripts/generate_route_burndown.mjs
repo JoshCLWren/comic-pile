@@ -9,7 +9,11 @@ import {readFileSync, writeFileSync, readdirSync} from 'node:fs';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {withCanonicalBuilds} from './vercel_builds.mjs';
+<<<<<<< HEAD
 import {canonicalNativeDestination, slimNativeApiRoutes} from './vercel_slim_routes.mjs';
+=======
+import {slimNativeRollRoutes} from './vercel_slim_routes.mjs';
+>>>>>>> origin/main
 
 const INVENTORY_PATH = 'docs/api/v2-route-inventory.json';
 const FRAGMENT_DIR = 'docs/api/route-fragments';
@@ -17,7 +21,11 @@ const SQL_BUDGET_SOURCES_PATH = 'docs/api/sql-budget-sources.json';
 const REWRITE_FRAGMENT_PATH = path.posix.join(FRAGMENT_DIR, 'vercel-rewrites.json');
 const VERCEL_PATH = 'vercel.json';
 const AGENTS_PATH = 'AGENTS.md';
+<<<<<<< HEAD
 const NATIVE_DESTINATIONS = new Set(['/api/native_api.rs']);
+=======
+const NATIVE_DESTINATIONS = new Set(['/api/native_roll.rs']);
+>>>>>>> origin/main
 const CATCH_ALL_SRC = '/api(?:/.*)?';
 const CATCH_ALL_DEST = '/api/native_api.rs';
 const BURN_DOWN_ISSUE = 4739;
