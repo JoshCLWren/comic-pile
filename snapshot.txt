@@ -1,38 +1,38 @@
-utc: 2026-11-26T08:58:03Z
-uptime: 747.69s load: 11.34 5.07 2.10
-processes: 211
+utc: 2026-11-26T08:58:20Z
+uptime: 764.97s load: 11.08 5.33 2.23
+processes: 208
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15983        3710        5772         117        6962       12272
+Mem:           15983        4483        4996         117        6965       11499
 Swap:           3071           0        3071
 --- disk
 Filesystem      Size  Used Avail Use% Mounted on
 /dev/root       145G   63G   83G  44% /
 /dev/root       145G   63G   83G  44% /
 --- top rss (KiB, name only)
-607584 rustc
-603272 MainThread
-495288 MainThread
-395528 opencode.exe
-210532 MainThread
-159792 Runner.Worker
-148600 MainThread
-142748 provjobd2783799
-136952 MainThread
-122588 MainThread
+1145004 rustc
+819788 MainThread
+601340 MainThread
+412952 opencode.exe
+159840 Runner.Worker
+143508 MainThread
+142756 provjobd2783799
+138556 MainThread
 114052 Runner.Listener
 102784 MainThread
 100732 MainThread
-90496 opencode
+90452 opencode
 81500 dockerd
+74748 cargo
+66340 cargo
 --- top cpu (name only)
- 300 ps
-77.8 MainThread
-71.6 MainThread
-69.7 rustc
-63.8 MainThread
-47.5 MainThread
-45.1 MainThread
-13.7 gh
+ 166 MainThread
+80.2 MainThread
+75.8 MainThread
+63.6 MainThread
+61.5 rustc
+56.8 MainThread
+ 6.1 MainThread
+ 4.1 opencode.exe
 --- kernel oom/kill
 --- shutdown/session signals
