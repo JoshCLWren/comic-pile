@@ -333,6 +333,7 @@ pub async fn preview_series_mapping_handler(
     let request = parse_request(&body)?;
     let connection = db::checkout(&state).await?;
     let plan = catalog_commit::build_plan_for_commit(
+        &state.comicvine_limits,
         &state.outbound,
         &connection,
         user.id(),
@@ -569,5 +570,268 @@ mod tests {
             payload.get("classification_digest").and_then(Value::as_str),
             Some("digest")
         );
+    }
+
+    const QUEUE_MAPPING_USER_ID: i32 = 9001;
+    const QUEUE_MAPPING_VOLUME_ID: &str = "5610777";
+    const QUEUE_MAPPING_API_KEY: &str = "TESTKEY123";
+
+    struct ComicVineKeyEnv {
+        previous: Option<String>,
+    }
+
+    impl ComicVineKeyEnv {
+        fn install() -> Self {
+            let previous = std::env::var("COMICVINE_API_KEY").ok();
+            std::env::set_var("COMICVINE_API_KEY", QUEUE_MAPPING_API_KEY);
+            Self { previous }
+        }
+    }
+
+    impl Drop for ComicVineKeyEnv {
+        fn drop(&mut self) {
+            match &self.previous {
+                Some(value) => std::env::set_var("COMICVINE_API_KEY", value),
+                None => std::env::remove_var("COMICVINE_API_KEY"),
+            }
+        }
+    }
+
+    async fn seed_queue_mapping_thread(connection: &tokio_postgres::Client, confirm_first: bool) {
+        connection
+            .batch_execute(
+                r#"
+                INSERT INTO users (id, username, created_at, is_admin)
+                VALUES (9001, 'map-series-preview', now(), false);
+                INSERT INTO threads
+                    (id, user_id, title, format, issues_remaining, queue_position, status,
+                     total_issues, created_at, is_blocked, is_test, manual_creator_credits,
+                     queue_position_is_manual)
+                VALUES (561077, 9001, 'Terra Obscura (2003)', 'Comic', 0, 1, 'active', 6, now(),
+                        false, false, '[]', false);
+                INSERT INTO issues
+                    (id, thread_id, issue_number, status, created_at, position)
+                SELECT 5610000 + n, 561077, n::text, 'unread', now(), n
+                FROM generate_series(1, 6) AS n;
+                "#,
+            )
+            .await
+            .expect("seed Queue mapping thread");
+        if confirm_first {
+            connection
+                .batch_execute(
+                    r#"
+                    WITH identity AS (
+                        INSERT INTO external_identities
+                            (provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                        VALUES ('comicvine', 'issue', '5610501',
+                                '{"name":"Issue 1","issue_number":"1","volume":{"name":"Terra Obscura"}}'::jsonb,
+                                now(), now())
+                        RETURNING id
+                    )
+                    INSERT INTO issue_external_identity_mappings
+                        (issue_id, external_identity_id, status, evidence_source, confidence,
+                         evidence_json, created_at, updated_at)
+                    SELECT 5610001, id, 'confirmed', 'seed', 1.0, '{}'::json, now(), now()
+                    FROM identity;
+                    "#,
+                )
+                .await
+                .expect("seed existing confirmed mapping");
+        }
+    }
+
+    async fn prime_queue_mapping_provider_cache(state: &AppState) {
+        let fake = state.recording_fake().expect("recording provider fake");
+        let volume = serde_json::json!({
+            "status_code": 1,
+            "results": {
+                "id": 5610777,
+                "name": "Terra Obscura",
+                "publisher": {"name": "DC Comics"},
+                "start_year": 2003,
+                "count_of_issues": 6,
+                "site_detail_url": "https://comicvine.gamespot.com/volume/4050-5610777/",
+                "image": null,
+            },
+        });
+        let issues = serde_json::json!({
+            "status_code": 1,
+            "number_of_total_results": 6,
+            "results": (1..=6_i32)
+                .map(|n| serde_json::json!({
+                    "id": 5610500 + n,
+                    "issue_number": n.to_string(),
+                    "name": format!("Issue {n}"),
+                    "volume": {"id": 5610777},
+                }))
+                .collect::<Vec<_>>(),
+        });
+        for payload in [volume, issues] {
+            fake.push_ok(
+                StatusCode::OK,
+                axum::http::HeaderMap::new(),
+                Bytes::from(serde_json::to_vec(&payload).expect("provider payload JSON")),
+            );
+        }
+        state
+            .comicvine_limits
+            .call(
+                &state.outbound,
+                &format!("volume/4050-{QUEUE_MAPPING_VOLUME_ID}"),
+                "",
+                QUEUE_MAPPING_API_KEY,
+            )
+            .await
+            .expect("cache provider volume");
+        state
+            .comicvine_limits
+            .call(
+                &state.outbound,
+                "issues",
+                &format!("&filter=volume:{QUEUE_MAPPING_VOLUME_ID}&limit=100&offset=0"),
+                QUEUE_MAPPING_API_KEY,
+            )
+            .await
+            .expect("cache provider roster");
+        assert_eq!(fake.calls().len(), 2, "prime both provider cache entries");
+        fake.clear();
+    }
+
+    async fn load_queue_mapping_preview(
+        state: Arc<AppState>,
+    ) -> Result<Json<SeriesMappingPreviewResponse>, PreviewError> {
+        preview_series_mapping_handler(
+            State(state),
+            crate::auth::AuthenticatedUser::for_test(QUEUE_MAPPING_USER_ID),
+            Bytes::from_static(
+                br#"{"origin_issue_id":5610001,"provider":"comicvine","provider_series_external_id":"5610777","scope_mode":"queue_thread_bootstrap"}"#,
+            ),
+        )
+        .await
+    }
+
+    /// Regression for #5610: the Queue preview must use the shared provider
+    /// cache/limiter. With no live response available, a raw provider call fails;
+    /// the fixed path still loads every safe row from the shared cached roster.
+    #[tokio::test]
+    async fn queue_bootstrap_preview_reuses_shared_provider_cache() {
+        let state = crate::test_support::test_state(2)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        {
+            let connection = state.pool.get().await.expect("connection");
+            seed_queue_mapping_thread(&connection, false).await;
+        }
+        let _env = ComicVineKeyEnv::install();
+        prime_queue_mapping_provider_cache(&state).await;
+
+        let Json(response) = load_queue_mapping_preview(state.clone())
+            .await
+            .expect("preview should load from the shared provider cache");
+
+        assert_eq!(response.scope.status, "available");
+        assert!(response.preview_token.is_some());
+        assert_eq!(response.counts.safe_exact_match, 6);
+        assert_eq!(response.rows.len(), 6);
+        assert!(response.rows.iter().all(|row| row.default_selected));
+        assert!(
+            state
+                .recording_fake()
+                .expect("recording provider fake")
+                .calls()
+                .is_empty(),
+            "preview must not bypass the shared cache with a raw provider call"
+        );
+    }
+
+    /// MQA-MAP-002: a partially mapped thread still loads, leaves its existing
+    /// correct mapping untouched, and approves all remaining safe rows at once.
+    #[tokio::test]
+    async fn queue_bootstrap_partial_preview_commits_only_safe_rows() {
+        let state = crate::test_support::test_state(2)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        {
+            let connection = state.pool.get().await.expect("connection");
+            seed_queue_mapping_thread(&connection, true).await;
+        }
+        let _env = ComicVineKeyEnv::install();
+        prime_queue_mapping_provider_cache(&state).await;
+
+        let Json(preview) = load_queue_mapping_preview(state.clone())
+            .await
+            .expect("partially mapped preview should load");
+        assert_eq!(preview.scope.status, "available");
+        assert_eq!(preview.counts.already_confirmed, 1);
+        assert_eq!(preview.counts.safe_exact_match, 5);
+        let existing = preview
+            .rows
+            .iter()
+            .find(|row| row.issue_id == 5610001)
+            .expect("existing mapped row");
+        assert_eq!(existing.classification, "already_confirmed");
+        assert!(!existing.default_selected);
+        assert!(!existing.metadata_refresh_required);
+        let approved_row_ids: Vec<String> = preview
+            .rows
+            .iter()
+            .filter(|row| row.default_selected)
+            .map(|row| row.row_id.clone())
+            .collect();
+        assert_eq!(approved_row_ids.len(), 5);
+        assert!(
+            state
+                .recording_fake()
+                .expect("recording provider fake")
+                .calls()
+                .is_empty(),
+            "preview must reuse the shared provider cache"
+        );
+
+        let Json(committed) = catalog_commit::commit_series_mapping_handler(
+            State(state.clone()),
+            crate::auth::AuthenticatedUser::for_test(QUEUE_MAPPING_USER_ID),
+            axum::Json(catalog_commit::CommitRequest {
+                preview_token: preview.preview_token.expect("available preview token"),
+                idempotency_key: "queue-partial-preview-5610".to_string(),
+                approved_row_ids,
+            }),
+        )
+        .await
+        .expect("safe rows should commit in one operation");
+        assert_eq!(
+            committed.confirmed_issue_ids,
+            (5610002..=5610006).collect::<Vec<_>>()
+        );
+        assert_eq!(committed.already_confirmed_issue_ids, vec![5610001]);
+        assert!(committed.needs_review_issue_ids.is_empty());
+        assert_eq!(committed.series_mapping.status, "confirmed");
+
+        let connection = state.pool.get().await.expect("connection");
+        let confirmed: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM issue_external_identity_mappings
+                 WHERE status = 'confirmed' AND issue_id BETWEEN 5610001 AND 5610006",
+                &[],
+            )
+            .await
+            .expect("reload confirmed mappings")
+            .get(0);
+        assert_eq!(confirmed, 6);
+        let existing = connection
+            .query_one(
+                "SELECT e.external_id, m.evidence_source
+                 FROM issue_external_identity_mappings m
+                 JOIN external_identities e ON e.id = m.external_identity_id
+                 WHERE m.issue_id = 5610001 AND m.status = 'confirmed'",
+                &[],
+            )
+            .await
+            .expect("reload existing mapping");
+        assert_eq!(existing.get::<_, String>(0), "5610501");
+        assert_eq!(existing.get::<_, String>(1), "seed");
     }
 }

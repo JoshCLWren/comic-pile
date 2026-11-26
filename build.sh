@@ -9,9 +9,9 @@
 # at the repo root and are not excluded by .vercelignore.
 #
 # The script proves that the root ingress package and the roll-service member
-# resolve one locked graph, then compiles both Vercel binaries through the root
-# Cargo.lock. COMICPILE_EXPECTED_LOCK_SHA256 makes the build script fail if
-# Cargo mutates the lockfile while resolving the production binaries.
+# resolve one locked graph, then compiles the single Vercel binary through the
+# root Cargo.lock. COMICPILE_EXPECTED_LOCK_SHA256 makes the build script fail if
+# Cargo mutates the lockfile while resolving the production binary.
 set -Eeuo pipefail
 
 readonly workspace_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

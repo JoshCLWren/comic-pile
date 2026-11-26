@@ -6,7 +6,7 @@
  */
 import {readFileSync, readdirSync, writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
-import {withCanonicalBuilds} from './vercel_builds.mjs';
+import {assertSingleNativeIngress, withCanonicalBuilds} from './vercel_builds.mjs';
 import {slimNativeRollRoutes} from './vercel_slim_routes.mjs';
 
 const RUST = '/api/native_roll.rs';
@@ -140,10 +140,12 @@ export function generateVercel(config, fragments) {
     {src: FALLBACK, dest: RUST},
     ...rest,
   ];
-  return withCanonicalBuilds(applyStaticCsp({
+  // The deployed manifest must keep the single-function invariant (#5733):
+  // one Rust compilation target and no retired API destination.
+  return assertSingleNativeIngress(withCanonicalBuilds(applyStaticCsp({
     ...config,
     routes: slimNativeRollRoutes(fullRoutes, new Set(fragmentRoutes)),
-  }));
+  })));
 }
 export function loadFragmentFiles(directory = 'docs/api/route-fragments') {
   return readdirSync(directory)

@@ -535,7 +535,11 @@ async fn provider_issue(
 /// Read the same ComicVine volume and complete, validated issue roster used
 /// by the Python preview builder. Never turn an outage or partial roster into
 /// an empty successful plan: doing so can approve a wrong comic identity.
+///
+/// Routes through the shared ComicVine limits so preview roster fetches respect
+/// rate limits, cooldowns, and cache fallback, matching the v2 series routes.
 pub(crate) async fn catalog_volume_roster(
+    limits: &crate::comicvine_limits::ComicVineLimits,
     outbound: &Arc<dyn OutboundHttp>,
     external_id: &str,
 ) -> Result<(Value, Vec<Value>), ApiError> {
@@ -552,7 +556,8 @@ pub(crate) async fn catalog_volume_roster(
         .filter(|v| *v > 0)
         .ok_or_else(unavailable)?;
     let api_key = provider_api_key().ok_or_else(unavailable)?;
-    let volume = provider_response(outbound, &format!("volume/4050-{volume_id}"), "", &api_key)
+    let volume = limits
+        .call(outbound, &format!("volume/4050-{volume_id}"), "", &api_key)
         .await
         .map_err(|_| unavailable())?;
     let volume_info = volume
@@ -574,7 +579,8 @@ pub(crate) async fn catalog_volume_roster(
     let mut expected_total: Option<usize> = None;
     loop {
         let query = format!("&filter=volume:{volume_id}&limit=100&offset={offset}");
-        let page = provider_response(outbound, "issues", &query, &api_key)
+        let page = limits
+            .call(outbound, "issues", &query, &api_key)
             .await
             .map_err(|_| unavailable())?;
         let results = page
