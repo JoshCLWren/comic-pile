@@ -2994,8 +2994,6 @@ async fn do_cbl_adoption_commit(
     // Persist to canonical, source-linked Option E Reading List (custom_cbl_list).
     // This keeps the Reading List as the source of truth for adopted CBL entries.
     let adopted_issue_ids: Vec<i32> = merge.4.clone();
-    let raw_source_path = format!("custom-cbl:{}", list_id);
-    // Find existing authoritative list for this plan+source, or any user source-linked list.
     let existing_list_id: Option<i32> = {
         let plan_list = tx
             .run_query_opt(
@@ -3022,9 +3020,9 @@ async fn do_cbl_adoption_commit(
                     "SELECT s.custom_cbl_list_id
                      FROM reading_plan_sources s
                      JOIN custom_cbl_lists l ON l.id = s.custom_cbl_list_id AND l.user_id = $1
-                     WHERE s.raw_source_path = $2 AND s.custom_cbl_list_id IS NOT NULL
+                     WHERE s.cbl_source_list_id = $2 AND s.custom_cbl_list_id IS NOT NULL
                      ORDER BY s.id DESC LIMIT 1",
-                    &[&user_id, &raw_source_path],
+                    &[&user_id, &list_id],
                 )
                 .await
                 .map_err(|e| {
@@ -3075,6 +3073,8 @@ async fn do_cbl_adoption_commit(
             })?;
         row.get::<_, i32>(0)
     };
+
+    let canonical_source_path = format!("custom-cbl:{canonical_list_id}");
 
     // Merge committed adopted issue set into the canonical list, preserving existing entries.
     let existing_entries: Vec<(i32, i32)> = tx
@@ -3127,9 +3127,10 @@ async fn do_cbl_adoption_commit(
 
     // Link plan to authoritative reading list via reading_plan_sources.
     tx.run_execute(
-        "UPDATE reading_plan_sources SET custom_cbl_list_id = $1, adopted_at = COALESCE(adopted_at, NOW())
+        "UPDATE reading_plan_sources
+         SET custom_cbl_list_id = $1, cbl_source_list_id = $4, adopted_at = COALESCE(adopted_at, NOW())
          WHERE plan_id = $2 AND raw_source_path = $3",
-        &[&canonical_list_id, &plan_id, &raw_source_path],
+        &[&canonical_list_id, &plan_id, &canonical_source_path, &list_id],
     )
     .await
     .map_err(|e| {
@@ -3142,7 +3143,7 @@ async fn do_cbl_adoption_commit(
     let updated_source = tx
         .run_query_opt(
             "SELECT id FROM reading_plan_sources WHERE plan_id = $1 AND raw_source_path = $2",
-            &[&plan_id, &raw_source_path],
+            &[&plan_id, &canonical_source_path],
         )
         .await
         .map_err(|e| {
@@ -3154,9 +3155,9 @@ async fn do_cbl_adoption_commit(
         })?;
     if updated_source.is_none() {
         tx.run_execute(
-            "INSERT INTO reading_plan_sources (plan_id, raw_source_path, custom_cbl_list_id, adopted_at, recorded_at)
-             VALUES ($1, $2, $3, NOW(), NOW())",
-            &[&plan_id, &raw_source_path, &canonical_list_id],
+            "INSERT INTO reading_plan_sources (plan_id, raw_source_path, custom_cbl_list_id, cbl_source_list_id, adopted_at, recorded_at)
+             VALUES ($1, $2, $3, $4, NOW(), NOW())",
+            &[&plan_id, &canonical_source_path, &canonical_list_id, &list_id],
         )
         .await
         .map_err(|e| {
