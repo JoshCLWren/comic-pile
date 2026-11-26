@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-26T22:56:57.124449+00:00",
+  "generated_at": "2026-11-26T22:58:09+00:00",
   "models": [
     {
       "health": {
@@ -23807,7 +23807,7 @@
   },
   "counts_generated_at": "2026-11-26T22:56:57.124449+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-26T22:56:57Z",
+    "generated_at": "2026-11-26T22:58:10Z",
     "sources": {
       "nvidia": [
         "google/diffusiongemma-26b-a4b-it",
@@ -24167,8 +24167,8 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-26T22:56:57.597415+00:00",
-    "days_elapsed": 25.956,
+    "checked_at": "2026-11-26T22:58:10.920592+00:00",
+    "days_elapsed": 25.957,
     "days_in_month": 30.0,
     "days_left": 4.04,
     "in_use": true,
@@ -24186,31 +24186,31 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 44753731,
-        "organization": 44753731,
+        "database": 44947853,
+        "organization": 44947853,
         "owner_target": 50000000,
-        "projected_database": 51726457,
-        "projected_organization": 51726457,
-        "projected_share": 0.1035,
-        "share_used": 0.0895
+        "projected_database": 51948823,
+        "projected_organization": 51948823,
+        "projected_share": 0.1039,
+        "share_used": 0.0899
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 187722,
-        "organization": 187722,
+        "database": 187821,
+        "organization": 187821,
         "owner_target": 1000000,
-        "projected_database": 216969,
-        "projected_organization": 216969,
+        "projected_database": 217076,
+        "projected_organization": 217076,
         "projected_share": 0.0217,
         "share_used": 0.0188
       },
       "storage_bytes": {
         "allowance": 5000000000,
-        "database": 22691840,
-        "organization": 22691840,
+        "database": 22700032,
+        "organization": 22700032,
         "owner_target": 250000000,
-        "projected_database": 22691840,
-        "projected_organization": 22691840,
+        "projected_database": 22700032,
+        "projected_organization": 22700032,
         "projected_share": 0.0045,
         "share_used": 0.0045
       }
@@ -24226,7 +24226,7 @@
     "status": "warn"
   },
   "schema": {
-    "checked_at": "2026-11-26T22:57:00+00:00",
+    "checked_at": "2026-11-26T22:58:13+00:00",
     "code_version": 6,
     "last_upgrade": {
       "at": "2026-11-25T18:11:07+00:00",
@@ -24404,7 +24404,7 @@
     "stored_version": 6
   },
   "crashes": {
-    "generated_at": "2026-11-26T22:57:00Z",
+    "generated_at": "2026-11-26T22:58:14Z",
     "groups": [
       {
         "count": 8,
@@ -24506,7 +24506,7 @@
     ]
   },
   "gh_usage": {
-    "generated_at": "2026-11-26T22:57:01Z",
+    "generated_at": "2026-11-26T22:58:16Z",
     "jobs": {
       "dispatch": [
         {
