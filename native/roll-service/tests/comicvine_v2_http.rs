@@ -1577,10 +1577,18 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
         ),
     )
     .await;
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    // The explicit Retry is truthful: with no provider key it reports why the
+    // bounded attempt did not run, and does not claim a successful refresh.
     assert_eq!(
         body,
-        json!({"issue_id": i, "refreshed": true, "comicvine_issue_id": "2222"})
+        json!({
+            "issue_id": i,
+            "refreshed": false,
+            "comicvine_issue_id": "2222",
+            "outcome": "provider_not_configured",
+            "retry_after_seconds": null,
+        })
     );
     let still_confirmed: String = conn
         .query_one(
