@@ -70,6 +70,12 @@ export interface IssueToggleListHandle {
   flush: () => Promise<void>
   /** Whether any mutations are queued. */
   hasPendingMutations: () => boolean
+  /**
+   * Whether the last committed edit produced an undo point. The Edit Series
+   * dialog stays open after Save when this is true so the Undo affordance is
+   * not unmounted with the dialog (#4654).
+   */
+  hasUndoPoint: () => boolean
 }
 
 export const IssueToggleList = forwardRef<IssueToggleListHandle, {
@@ -136,6 +142,12 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   const [acceptedAliasNumbers, setAcceptedAliasNumbers] = useState<string[]>([])
   /** Undo point returned by the last committed create (#4654). */
   const [undoPoint, setUndoPoint] = useState<{
+    sessionId: number
+    snapshotId: number
+  } | null>(null)
+  // Mirrors undoPoint for the imperative handle: parents read it synchronously
+  // right after flush(), before React has committed the state update.
+  const undoPointRef = useRef<{
     sessionId: number
     snapshotId: number
   } | null>(null)
@@ -332,10 +344,12 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
         }
         const response = await issuesService.create(threadId, mutation.issueRange, options)
         if (response.undo_session_id != null && response.undo_snapshot_id != null) {
-          setUndoPoint({
+          const point = {
             sessionId: response.undo_session_id,
             snapshotId: response.undo_snapshot_id,
-          })
+          }
+          undoPointRef.current = point
+          setUndoPoint(point)
         }
         return
       }
@@ -478,6 +492,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       await processIssueMutations()
     } ,
     hasPendingMutations: () => pendingMutationsRef.current.length > 0,
+    hasUndoPoint: () => undoPointRef.current !== null,
   }), [processIssueMutations, setActionError])
 
   const enqueueIssueReorder = useCallback((
@@ -686,6 +701,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     setIsUndoing(true)
     try {
       await undoService.undo(undoPoint.sessionId, undoPoint.snapshotId)
+      undoPointRef.current = null
       setUndoPoint(null)
       const refreshed = await fetchAllIssues()
       baseIssuesRef.current = refreshed
