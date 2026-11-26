@@ -24,11 +24,14 @@ const MOBILE_VIEWPORT = { width: 390, height: 844 };
  * in the post-roll view (issue #1883). Each must resolve to exactly one
  * accessible instance per viewport.
  */
+// The retired three-pillar layout exposed "Crossovers", "Continuity
+// Correction" and "Your Reading Boundaries" headings. Those pillars are no
+// longer mounted; the live rating view exposes the two optional disclosures
+// instead. Assert the accessible regions that actually ship (#3507).
 const REGION_NAMES = [
-  'Crossovers',
   'Your rating',
-  'Continuity Correction',
-  'Your Reading Boundaries',
+  'Reading Context (optional)',
+  'Reading Boundaries (optional)',
 ] as const;
 
 async function getCsrfToken(request: APIRequestContext, token: string): Promise<string> {
@@ -153,6 +156,15 @@ async function assertExactlyOneInstancePerRegion(page: Page): Promise<void> {
     await expect(domCopies).toHaveCount(1);
     await expect(domCopies.first()).toBeVisible();
   }
+
+  // Optional disclosures must open into exactly one content surface, so no
+  // retired duplicate region can reappear beside the live card.
+  await page.getByTestId('reading-context-button').click();
+  await expect(page.getByTestId('reading-context-content')).toHaveCount(1);
+  await expect(page.getByTestId('reading-context-button')).toHaveAttribute('aria-expanded', 'true');
+  await page.getByTestId('reading-boundaries-button').click();
+  await expect(page.getByTestId('reading-boundaries-content')).toHaveCount(1);
+  await expect(page.getByTestId('reading-boundaries-button')).toHaveAttribute('aria-expanded', 'true');
 
   // The active regions must keep their accessible names and remain reachable
   // in the focus order rather than hiding behind inert duplicates.
