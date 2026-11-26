@@ -29,6 +29,7 @@ CONTAINER_BUILD_DEPENDENT_JOBS = (
 FULL_PATH_REQUIRED_JOBS = (
     "build",
     "build-fork",
+    "native-rust-roll",
     "rust-ingress",
     "route-fragment-guard",
     "conflict-markers",
@@ -177,16 +178,39 @@ def test_fork_ui_audit_runs_on_an_unprivileged_runner() -> None:
 
 
 def test_rust_backend_checks_run_on_fork_pull_requests() -> None:
-    """Rust unit and integration tests use read-only permissions on every PR."""
+    """Rust unit and integration tests run read-only inside the required CI gate.
+
+    #5678 showed that a standalone pull_request trigger stays visible but can be
+    ignored by a green CI Summary. The suite is therefore a reusable workflow
+    invoked by ci.yml's native-rust-roll job; fork PRs still get read-only
+    permissions, no secrets, and an exact-head checkout.
+    """
     workflow = _workflow(RUST_WORKFLOW)
     triggers = workflow.get(True) or workflow.get("on") or {}
-    assert "pull_request" in triggers
+    assert "workflow_call" in triggers
+    assert "pull_request" not in triggers
     assert "pull_request_target" not in triggers
     assert workflow["permissions"] == {"contents": "read"}
     job = workflow["jobs"]["rust-roll"]
     assert "head.repo.full_name" not in str(job.get("if", ""))
     assert "secrets." not in str(job)
     assert "cargo test --workspace --locked --all-targets" in _run_commands(job)
+    checkouts = [
+        step
+        for step in _steps(job)
+        if "actions/checkout" in str(step.get("uses", ""))
+    ]
+    assert checkouts
+    assert any(
+        "github.event.pull_request.head.sha || github.sha" in str(step.get("with", {}))
+        for step in checkouts
+    )
+
+    caller = _workflow(CI_WORKFLOW)["jobs"]["native-rust-roll"]
+    assert caller["uses"] == "./.github/workflows/rust-roll.yml"
+    assert "factory-scope" in caller["needs"]
+    assert "fast_only != 'true'" in str(caller["if"])
+    assert "secrets." not in str(caller)
 
 
 def test_ci_summary_covers_every_full_path_job() -> None:
