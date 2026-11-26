@@ -10,8 +10,8 @@
     "native_rust": 1,
     "python_fastapi": 1,
     "native_rust_status": 1,
-    "shadowed_by_rust": 0,
-    "live_transitional_python_with_callers": 1,
+    "shadowed_by_rust": 1,
+    "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 0
   },
   "operations": [
@@ -40,8 +40,8 @@
       "consumers": [
         "caf\u00e9.ts \ud83d\ude00"
       ],
-      "ingress_destination": "/api/index.py",
-      "burndown_status": "live transitional Python with callers",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "shadowed by Rust",
       "verified_against": "vercel.json"
     }
   ],
