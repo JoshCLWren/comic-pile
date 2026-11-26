@@ -39,6 +39,39 @@ describe('bounded exact-issue card transport', () => {
     expect(client.patch).toHaveBeenLastCalledWith('/v2/issues/75', { source: 'direct', idempotency_key: 'unchanged-key' })
   })
 
+  it('sends alias-only changes with a stable retry key and omits an unprovided alias', async () => {
+    await api.patchIssue(75, {
+      issueNumberAlias: '100',
+      issueNumberAliasProvided: true,
+      idempotencyKey: 'alias-set-key',
+    })
+    expect(client.patch).toHaveBeenLastCalledWith('/v2/issues/75', {
+      issue_number_alias: '100',
+      source: 'direct',
+      idempotency_key: 'alias-set-key',
+    })
+
+    await api.patchIssue(75, {
+      issueNumberAlias: null,
+      issueNumberAliasProvided: true,
+      idempotencyKey: 'alias-clear-key',
+    })
+    expect(client.patch).toHaveBeenLastCalledWith('/v2/issues/75', {
+      issue_number_alias: null,
+      source: 'direct',
+      idempotency_key: 'alias-clear-key',
+    })
+
+    await api.patchIssue(75, {
+      issueNumberAlias: 'ignored',
+      idempotencyKey: 'alias-omitted-key',
+    })
+    expect(client.patch).toHaveBeenLastCalledWith('/v2/issues/75', {
+      source: 'direct',
+      idempotency_key: 'alias-omitted-key',
+    })
+  })
+
   it('generates distinct bounded server-compatible intent keys', () => {
     const keys = Array.from({ length: 20 }, () => newDirectIssueKey())
     expect(new Set(keys).size).toBe(keys.length)

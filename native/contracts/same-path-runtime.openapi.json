@@ -10993,6 +10993,13 @@
               "null"
             ]
           },
+          "issue_number_alias": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Alternate overall/story-arc number for the same physical comic (#4652)."
+          },
           "issues_read": {
             "type": "integer",
             "format": "int32"
@@ -11027,6 +11034,13 @@
               "string",
               "null"
             ]
+          },
+          "provider_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Provider's own issue number from the confirmed identity (#4652)."
           },
           "queue_position": {
             "type": "integer",
