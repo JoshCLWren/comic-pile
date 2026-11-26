@@ -318,7 +318,11 @@ test.describe('Issue #3626: creator issue deep links', () => {
     await page.goto(`/thread/${thread.id}`, { waitUntil: 'domcontentloaded' })
     await expect(page.getByRole('heading', { name: 'Hellboy History' })).toBeVisible()
     await expect(page.locator('.issue-deep-link-target')).toHaveCount(0)
-    await expect(page.locator(`#issue-${target.id}`)).not.toBeFocused()
+    // The target row may not be mounted on the plain first page; assert the
+    // focus invariant on the live document instead of a possibly absent node.
+    expect(
+      await page.evaluate(() => document.activeElement?.id?.startsWith('issue-') ?? false),
+    ).toBe(false)
 
     // Back returns to the deep link and restores the same target.
     await page.goBack({ waitUntil: 'domcontentloaded' })

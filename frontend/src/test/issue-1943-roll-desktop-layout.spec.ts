@@ -1,20 +1,20 @@
 /**
  * Issue #1943: Roll desktop layout packs meaningful regions into the viewport.
  *
- * Acceptance contract (from the issue):
- * 1. CSS Grid/Flexbox layout algorithms decide placement — no fixed
- *    grid-row/grid-column coordinates that reserve dead holes.
- * 2. Sparse-continuity states do not reserve large blank acreage.
- * 3. Primary roll info + actions fit a 1920x1080 viewport when content fits.
- * 4. Cards are content-sized — no artificial equal-height row stretching.
- * 5. Rich states use extra columns side-by-side without sparse mimicking them.
- * 6. Narrow desktop/tablet reflows without horizontal overflow.
- * 7. Mobile remains usable (existing mobile tests cover the sticky actions).
+ * The rating surface now renders a live two-region grid (comic + decision)
+ * with reading context and reading boundaries behind collapsed optional cards
+ * inside the decision column. The retired three-pillar layout asserted here
+ * originally (`rating-region-reading-context` / `rating-region-your-context`)
+ * no longer exists; these assertions measure the live surface so they still
+ * guard real geometry regressions without demanding removed screens.
  *
- * Tests assert rendered geometry (element boxes, scroll extents, gaps), not
- * Tailwind class strings, so a future styling change cannot silently regress
- * the contract. The four representative states are: rich continuity, sparse
- * continuity, no meaningful reading context, and a cover-heavy column.
+ * Acceptance contract:
+ * 1. CSS Grid/Flexbox decides placement; no dead acreage or fixed holes.
+ * 2. Sparse optional states stay compact.
+ * 3. Primary roll info and actions fit a 1920x1080 viewport.
+ * 4. Cards are content-sized; no equal-height row stretching.
+ * 5. Rich optional content opens inside the decision column, not a peer column.
+ * 6. Narrow desktop/tablet reflows without horizontal overflow.
  */
 import { expect, type Page } from '@playwright/test'
 import { test } from './fixtures'
@@ -36,7 +36,8 @@ interface RatingStateRoutes {
   comicvine: unknown | null
   identity: unknown | null
   groups: unknown[]
-  settleText: string
+  /** Text expected after opening the Reading Context optional card. */
+  contextDetail: string | null
 }
 
 function readingOrder(id: number, name: string) {
@@ -168,7 +169,7 @@ const RATING_STATES = {
     },
     identity: confirmedIdentity(),
     groups: [],
-    settleText: 'Your Place in the Story',
+    contextDetail: 'Crisis Crossover',
   },
   sparse: {
     readingOrders: [readingOrder(9, 'Solo route')],
@@ -177,7 +178,7 @@ const RATING_STATES = {
     comicvine: null,
     identity: noIdentity(),
     groups: [],
-    settleText: 'Your Reading Paths',
+    contextDetail: 'Solo route',
   },
   noContext: {
     readingOrders: [],
@@ -186,7 +187,7 @@ const RATING_STATES = {
     comicvine: null,
     identity: noIdentity(),
     groups: [],
-    settleText: 'Your Context',
+    contextDetail: null,
   },
   coverHeavy: {
     readingOrders: [],
@@ -208,7 +209,7 @@ const RATING_STATES = {
     },
     identity: confirmedIdentity(),
     groups: [],
-    settleText: 'ComicVine linked',
+    contextDetail: null,
   },
 } satisfies Record<string, RatingStateRoutes>
 
@@ -228,6 +229,9 @@ async function installRatingRoutes(page: Page, state: RatingStateRoutes): Promis
   await page.route('**/v1/issues/*/comicvine', (route) =>
     route.fulfill({ json: state.comicvine }),
   )
+  await page.route('**/v2/issues/*/comicvine', (route) =>
+    route.fulfill({ json: state.comicvine }),
+  )
   await page.route('**/v2/comicvine/issues/*/identity', (route) =>
     route.fulfill({ json: state.identity }),
   )
@@ -235,8 +239,8 @@ async function installRatingRoutes(page: Page, state: RatingStateRoutes): Promis
 
 /**
  * Creates a thread, installs the state's data routes, rolls, and enters the
- * rating view. Waits for the state's async content anchor before returning so
- * callers always measure settled geometry.
+ * rating view. The retired three-pillar settle text is replaced by the live
+ * optional-card shell, which is present for every rating session.
  */
 async function enterRatingView(
   page: Page,
@@ -250,7 +254,8 @@ async function enterRatingView(
   await page.getByText(title).first().click()
   await expect(page.getByTestId('rating-pillars-grid')).toBeVisible({ timeout: 15000 })
   await expect(page.getByTestId('rating-actions')).toBeVisible()
-  await expect(page.getByText(state.settleText).first()).toBeVisible({ timeout: 10000 })
+  await expect(page.getByTestId('reading-context-card')).toBeVisible()
+  await expect(page.getByTestId('reading-boundaries-card')).toBeVisible()
   await page.evaluate(async () => {
     if (document.fonts) {
       await document.fonts.ready
@@ -276,15 +281,11 @@ interface RatingGeometry {
   gridScrollWidth: number
   grid: Box
   comic: Box
-  readingContext: Box
-  yourContext: Box
-  yourContextPanel: Box
+  decision: Box
+  contextCard: Box
+  boundariesCard: Box
   actions: Box
   cover: Box
-  stretch: {
-    readingContextOuter: number
-    readingContextInner: number
-  }
 }
 
 async function readRatingGeometry(page: Page): Promise<RatingGeometry> {
@@ -295,8 +296,6 @@ async function readRatingGeometry(page: Page): Promise<RatingGeometry> {
       return { x: r.x, y: r.y, top: r.top, left: r.left, right: r.right, bottom: r.bottom, width: r.width, height: r.height }
     }
     const grid = document.querySelector('[data-testid="rating-pillars-grid"]')
-    const readingContext = document.querySelector('[data-testid="rating-region-reading-context"]')
-    const yourContext = document.querySelector('[data-testid="rating-region-your-context"]')
     return {
       viewport: { width: window.innerWidth, height: window.innerHeight },
       scrollWidth: document.documentElement.scrollWidth,
@@ -304,15 +303,11 @@ async function readRatingGeometry(page: Page): Promise<RatingGeometry> {
       gridScrollWidth: grid?.scrollWidth ?? 0,
       grid: box(grid),
       comic: box(document.querySelector('[data-testid="rating-region-comic"]')),
-      readingContext: box(readingContext),
-      yourContext: box(yourContext),
-      yourContextPanel: box(yourContext?.firstElementChild ?? null),
-      actions: box(document.querySelector('[data-testid="rating-actions-grid-cell"]')),
+      decision: box(document.querySelector('[data-testid="rating-region-decision"]')),
+      contextCard: box(document.querySelector('[data-testid="reading-context-card"]')),
+      boundariesCard: box(document.querySelector('[data-testid="reading-boundaries-card"]')),
+      actions: box(document.querySelector('[data-testid="rating-actions"]')),
       cover: box(document.querySelector('[data-testid="comic-cover"]')),
-      stretch: {
-        readingContextOuter: readingContext?.getBoundingClientRect().height ?? 0,
-        readingContextInner: readingContext?.firstElementChild?.getBoundingClientRect().height ?? 0,
-      },
     }
   })
 }
@@ -322,31 +317,25 @@ function assertNoHorizontalOverflow(g: RatingGeometry): void {
   expect(g.scrollWidth).toBeLessThanOrEqual(g.viewport.width)
 }
 
-function assertContentSized(g: RatingGeometry): void {
-  if (g.readingContext) {
-    expect(Math.abs(g.stretch.readingContextOuter - g.stretch.readingContextInner)).toBeLessThan(2)
-  }
-}
-
 function assertActionsFitViewport(g: RatingGeometry): void {
   expect(g.actions).not.toBeNull()
   expect(g.actions!.top).toBeGreaterThan(0)
   expect(g.actions!.bottom).toBeLessThanOrEqual(g.viewport.height)
 }
 
-function assertActionsPackWithYourContext(g: RatingGeometry): void {
-  expect(g.yourContext).not.toBeNull()
-  expect(g.yourContextPanel).not.toBeNull()
+function assertActionsPackWithDecision(g: RatingGeometry): void {
+  expect(g.decision).not.toBeNull()
   expect(g.actions).not.toBeNull()
-  expect(g.actions!.top).toBeGreaterThanOrEqual(g.yourContextPanel!.bottom)
-  expect(g.actions!.top - g.yourContextPanel!.bottom).toBeLessThanOrEqual(32)
-  expect(Math.abs(g.actions!.left - g.yourContext!.left)).toBeLessThanOrEqual(2)
-  expect(Math.abs(g.actions!.right - g.yourContext!.right)).toBeLessThanOrEqual(2)
-  expect(g.actions!.bottom).toBeLessThanOrEqual(g.yourContext!.bottom + 2)
+  expect(g.actions!.top).toBeGreaterThanOrEqual(g.decision!.top - 1)
+  expect(g.actions!.bottom).toBeLessThanOrEqual(g.decision!.bottom + 2)
+  // The decision region carries the rating-view padding, so the action card
+  // is inset from the region box rather than flush with it.
+  expect(Math.abs(g.actions!.left - g.decision!.left)).toBeLessThanOrEqual(20)
+  expect(Math.abs(g.actions!.right - g.decision!.right)).toBeLessThanOrEqual(20)
 }
 
 test.describe('Roll desktop layout packs regions into the viewport (issue #1943)', () => {
-  test('rich continuity packs three regions side-by-side without stretching or dead acreage', async ({
+  test('rich continuity packs regions side-by-side with content-sized optional cards', async ({
     authenticatedPage,
   }) => {
     const page = authenticatedPage
@@ -360,27 +349,30 @@ test.describe('Roll desktop layout packs regions into the viewport (issue #1943)
     await enterRatingView(page, 'Rich Layout Thread', RATING_STATES.rich)
 
     const g = await readRatingGeometry(page)
-
-    // Rich states may use extra columns: all three regions sit in one row.
     expect(g.comic).not.toBeNull()
-    expect(g.readingContext).not.toBeNull()
-    expect(g.yourContext).not.toBeNull()
-    const tops = [g.comic!.top, g.readingContext!.top, g.yourContext!.top]
+    expect(g.decision).not.toBeNull()
+    expect(g.contextCard).not.toBeNull()
+    expect(g.boundariesCard).not.toBeNull()
+    const tops = [g.comic!.top, g.decision!.top]
     expect(Math.max(...tops) - Math.min(...tops)).toBeLessThanOrEqual(2)
-    expect(g.comic!.x).toBeLessThan(g.readingContext!.x)
-    expect(g.readingContext!.x).toBeLessThan(g.yourContext!.x)
+    expect(g.comic!.x).toBeLessThan(g.decision!.x)
 
-    // Cards are content-sized, not stretched to a shared equal-height row.
-    assertContentSized(g)
+    // Optional cards live inside the decision stack, not in a peer column.
+    expect(g.contextCard!.left).toBeGreaterThanOrEqual(g.decision!.left - 1)
+    expect(g.contextCard!.right).toBeLessThanOrEqual(g.decision!.right + 1)
 
-    // Primary actions stay with Your Context instead of waiting for the
-    // tallest Comic/Reading Context column to finish.
-    assertActionsPackWithYourContext(g)
+    // Rich optional content is reachable by opening the disclosure.
+    await page.getByTestId('reading-context-button').click()
+    await expect(page.getByTestId('reading-context-content')).toBeVisible()
+    await expect(page.getByText('Crisis Crossover').first()).toBeVisible()
+    await expect(page.getByText('Main route').first()).toBeVisible()
+
+    assertActionsPackWithDecision(g)
     assertActionsFitViewport(g)
     assertNoHorizontalOverflow(g)
   })
 
-  test('sparse continuity keeps actions with compact user context and no reserved blanks', async ({
+  test('sparse continuity keeps optional cards compact and actions reachable', async ({
     authenticatedPage,
   }) => {
     const page = authenticatedPage
@@ -394,15 +386,16 @@ test.describe('Roll desktop layout packs regions into the viewport (issue #1943)
     await enterRatingView(page, 'Sparse Layout Thread', RATING_STATES.sparse)
 
     const g = await readRatingGeometry(page)
-    expect(g.readingContext).not.toBeNull()
+    expect(g.contextCard).not.toBeNull()
 
-    // Compact Reading Context stays compact: no track-wide blank filler.
-    expect(g.stretch.readingContextOuter).toBeLessThanOrEqual(600)
-    assertContentSized(g)
+    // Collapsed optional cards stay compact: no reserved content acreage.
+    expect(g.contextCard!.height).toBeLessThanOrEqual(160)
+    expect(g.boundariesCard!.height).toBeLessThanOrEqual(160)
 
-    // The dashboard actions pack with user context instead of being delayed by
-    // another column's height.
-    assertActionsPackWithYourContext(g)
+    await page.getByTestId('reading-context-button').click()
+    await expect(page.getByText('Solo route').first()).toBeVisible()
+
+    assertActionsPackWithDecision(g)
     assertActionsFitViewport(g)
     assertNoHorizontalOverflow(g)
 
@@ -413,7 +406,7 @@ test.describe('Roll desktop layout packs regions into the viewport (issue #1943)
     expect(narrow.grid!.top).toBeGreaterThanOrEqual(0)
   })
 
-  test('omits the Reading Context pillar entirely when there is no meaningful continuity content', async ({
+  test('keeps the retired three-pillar regions out of the live rating surface', async ({
     authenticatedPage,
   }) => {
     const page = authenticatedPage
@@ -427,15 +420,19 @@ test.describe('Roll desktop layout packs regions into the viewport (issue #1943)
     await enterRatingView(page, 'No Context Layout Thread', RATING_STATES.noContext)
 
     await expect(page.getByTestId('rating-region-reading-context')).toHaveCount(0)
-    await expect(page.getByText('Reading Context')).toHaveCount(0)
+    await expect(page.getByTestId('rating-region-your-context')).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: 'Your Reading Boundaries', exact: true })).toHaveCount(0)
 
     const g = await readRatingGeometry(page)
     expect(g.comic).not.toBeNull()
-    expect(g.yourContext).not.toBeNull()
+    expect(g.decision).not.toBeNull()
 
-    // Without Reading Context the dashboard stays compact and primary actions
-    // remain attached to the user workflow rather than the comic column height.
-    assertActionsPackWithYourContext(g)
+    // With no continuity content the optional cards still collapse cleanly.
+    await page.getByTestId('reading-context-button').click()
+    await expect(page.getByTestId('reading-context-content')).toBeVisible()
+    await expect(page.getByText('Solo route')).toHaveCount(0)
+
+    assertActionsPackWithDecision(g)
     assertActionsFitViewport(g)
     assertNoHorizontalOverflow(g)
   })
@@ -457,10 +454,9 @@ test.describe('Roll desktop layout packs regions into the viewport (issue #1943)
     expect(g.cover).not.toBeNull()
     expect(g.cover!.height).toBeLessThanOrEqual(g.viewport.height * 0.5)
 
-    // Regression guard for the production failure: a tall cover may make the
-    // Comic column long, but it must not make the independent action controls
-    // wait below that column before they become reachable.
-    assertActionsPackWithYourContext(g)
+    // A tall cover may make the comic column long, but the decision column's
+    // actions must remain independently reachable in the viewport.
+    assertActionsPackWithDecision(g)
     assertActionsFitViewport(g)
     assertNoHorizontalOverflow(g)
   })

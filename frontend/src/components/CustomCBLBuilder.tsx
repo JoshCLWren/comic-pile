@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { applyCommittedReadingPlan, applyCreatedCustomCBL, applyUpdatedCustomCBL, applyDeletedCustomCBL } from '../query/cacheEffects'
 import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
+import { useReadingListsCrossTabSync } from '../hooks/useReadingListsCrossTabSync'
 import { queryKeys } from '../query/queryKeys'
 import Modal from './Modal'
 import { requestSemanticScroll } from '../scroll/scrollCoordinator'
@@ -12,6 +13,7 @@ import {
   type ReadingListEntryIntent, type ReadingListGate, type ReadingListMode, type ReadingListPredecessorChange,
 } from '../services/api-custom-cbl'
 import type { ContinuityPlan } from '../services/api-continuity-plans'
+import type { IssueReadRateResponse } from '../services/issueCardsApi'
 import { cblSourcesApi, type CBLSourceListDiscoveryItem } from '../services/api-cbl-sources'
 import CblReplaceReviewPanel from './CblReplaceReviewPanel'
 import ReadingListEntryCard from './ReadingListEntryCard'
@@ -28,9 +30,11 @@ import {
   computeSemanticPreview,
   draftEntry,
   findMatchedEntries,
+  reconcileEntryReadStatus,
   messageFor,
   moveEntryRelativeToEntry,
   normalizePositions,
+  reconcileEntryTitles,
   sameEntries,
 } from './customCBLBuilderHelpers'
 interface CustomCBLBuilderProps {
@@ -80,6 +84,10 @@ export default function CustomCBLBuilder({
   onPendingChange,
 }: CustomCBLBuilderProps) {
   const queryClient = useQueryClient()
+  // A Thread rename committed in another tab must reach this open editor before
+  // the 30s staleTime expires (#5862). The reader query is refreshed by the
+  // same cache invalidation; the draft below reconciles only its series titles.
+  useReadingListsCrossTabSync()
   const issueSearchInput = useRef<HTMLInputElement>(null)
   const customCBLHeadingRef = useRef<HTMLHeadingElement>(null)
   const deleteReturnFocusRef = useRef<HTMLElement | null>(null)
@@ -190,6 +198,15 @@ export default function CustomCBLBuilder({
     setMessage(null)
     setExportError(null)
   }, [detailQuery.data, loadedListId])
+  // Fresh server data can arrive without changing the list identity (a
+  // cross-tab Thread rename, a focus refresh, or an ordinary refetch). Seed
+  // above intentionally skips that case to protect in-progress edits, so
+  // reconcile just the canonical series titles here (#5862).
+  useEffect(() => {
+    const list = detailQuery.data
+    if (!list || list.id !== selectedId) return
+    setEntries((current) => reconcileEntryTitles(current, list.entries))
+  }, [detailQuery.data, selectedId])
   const createMutation = useMutation({
     mutationFn: () => customCBLApi.create({ name: newName.trim(), issue_ids: [] }),
     onSuccess: async (created) => {
@@ -501,6 +518,19 @@ export default function CustomCBLBuilder({
       target.focus({ preventScroll: true })
     })
   }, [entries, currentPage, entrySearch, nextUnreadIssueId])
+  // A confirmed direct read/unread changes global issue state, but the editor's
+  // staged draft is intentionally not re-seeded from a background detail refetch
+  // (#5537). Adopt only the committed status so the Current position banner and
+  // the row badge agree immediately without discarding unsaved list edits.
+  const reconcileDirectIssueStatus = useCallback((response: IssueReadRateResponse) => {
+    const status = response.issue.status
+    if (status !== 'read' && status !== 'unread') return
+    const issueId = response.issue.issue_id
+    setEntries((current) => reconcileEntryReadStatus(current, issueId, status))
+    setDraftBaseline((current) => current && current.id === selectedId
+      ? { ...current, entries: reconcileEntryReadStatus(current.entries, issueId, status) }
+      : current)
+  }, [selectedId])
   const returnToProgress = () => {
     if (!progressIssue) return
     pendingProgressRevealRef.current = progressIssue.issue_id
@@ -990,6 +1020,7 @@ export default function CustomCBLBuilder({
                     onMoveAfterIssue={() => moveIssueRelativeToIssue(index, entry.issue_id, 'after')}
                     onInsertBefore={() => { setInsertAt({ index, position: 'before' }); issueSearchInput.current?.focus() }}
                     onInsertAfter={() => { setInsertAt({ index, position: 'after' }); issueSearchInput.current?.focus() }}
+                    onIssueMutated={reconcileDirectIssueStatus}
                   />
                 ))}
               </ol>

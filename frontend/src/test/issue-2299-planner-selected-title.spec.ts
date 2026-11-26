@@ -78,10 +78,18 @@ test.describe('Continuity Planner selected series title (#2299)', () => {
         geometry!.scrollWidth,
         'selected title must wrap instead of clipping horizontally',
       ).toBeLessThanOrEqual(geometry!.clientWidth + 1)
-      expect(
-        geometry!.scrollHeight,
-        'long title should visually wrap to more than one line',
-      ).toBeGreaterThan(geometry!.clientHeight)
+      // The readout is an auto-height <p>, so scrollHeight always equals
+      // clientHeight when nothing is clipped. Count the rendered line boxes of
+      // its text range instead: a wrapped long title occupies more than one
+      // client rect even though it never scrolls inside its own box.
+      const lineCount = await page.evaluate(() => {
+        const el = document.querySelector<HTMLElement>('[data-testid="selected-thread-title"]')
+        if (!el) return 0
+        const range = document.createRange()
+        range.selectNodeContents(el)
+        return range.getClientRects().length
+      })
+      expect(lineCount, 'long title should visually wrap to more than one line').toBeGreaterThan(1)
 
       const pageLayout = await page.evaluate(() => ({
         scrollWidth: document.documentElement.scrollWidth,

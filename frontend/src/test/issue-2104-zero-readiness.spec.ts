@@ -115,14 +115,16 @@ test.describe('Issue #2104 zero readiness network requests', () => {
 
     await page.goto(`/crossovers/${group.id}`, { waitUntil: 'domcontentloaded' })
     await expect(page.getByRole('heading', { name: 'Comics in this event' })).toBeVisible()
-    await expect(page.getByText('Zero Readiness Crossover')).toBeVisible()
+    await expect(page.getByText('Zero Readiness Crossover').first()).toBeVisible()
     await expect(
       page.getByTestId('crossover-member-row').getByText('Zero Readiness Series'),
     ).toBeVisible()
 
     await page.goto(`/continuity-plans/${plan.id}`, { waitUntil: 'domcontentloaded' })
     await expect(page.getByRole('heading', { name: 'Zero Readiness Plan' })).toBeVisible()
-    await expect(page.getByText('Zero Readiness Series #1')).toBeVisible()
+    // The shipped plan detail keeps the reading order behind a disclosure.
+    await page.getByRole('button', { name: /Show complete reading order/ }).click()
+    await expect(page.getByText('Zero Readiness Series #1').first()).toBeVisible()
 
     expect(hits, `deleted readiness paths were requested: ${hits.join(', ')}`).toEqual([])
   })

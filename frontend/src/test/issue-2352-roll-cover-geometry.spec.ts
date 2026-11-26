@@ -43,9 +43,9 @@ async function installCoverRoutes(page: Page): Promise<void> {
   await page.route('**/v2/issues/*/reader-context', (route) =>
     route.fulfill({ json: null }),
   )
-  await page.route('**/v1/issues/*/comicvine', (route) =>
-    route.fulfill({ json: { comicvine_issue_id: '77777', comicvine_url: null, series_name: 'Cover Geometry', series_id: 7, issue_number: '1', name: 'One Stable Surface', description: null, image_url: COVER_DATA_URI, cover_date: '2026-01-01', store_date: null, creators: [], story_arcs: [] } }),
-  )
+  const comicvine = { comicvine_issue_id: '77777', comicvine_url: null, series_name: 'Cover Geometry', series_id: 7, issue_number: '1', name: 'One Stable Surface', description: null, image_url: COVER_DATA_URI, cover_date: '2026-01-01', store_date: null, creators: [], story_arcs: [] }
+  await page.route('**/v1/issues/*/comicvine', (route) => route.fulfill({ json: comicvine }))
+  await page.route('**/v2/issues/*/comicvine', (route) => route.fulfill({ json: comicvine }))
   await page.route('**/v2/comicvine/issues/*/identity', (route) =>
     route.fulfill({ json: { issue_id: 1, thread_id: 1, thread_title: 'Cover Geometry Thread', has_confirmed_identity: true, confirmed_mappings: [], candidate_mappings: [], has_unresolved: false } }),
   )
@@ -59,7 +59,7 @@ async function enterRatingViewForCover(page: Page, title: string): Promise<void>
   await page.getByText(title).first().click()
   await expect(page.getByTestId('rating-pillars-grid')).toBeVisible({ timeout: 15000 })
   await expect(page.getByTestId('rating-actions')).toBeVisible()
-  await expect(page.getByText('ComicVine linked').first()).toBeVisible({ timeout: 10000 })
+  await expect(page.getByTestId('comic-cover')).toBeVisible({ timeout: 10000 })
   await page.evaluate(async () => {
     if (document.fonts) {
       await document.fonts.ready

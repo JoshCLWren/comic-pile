@@ -116,6 +116,12 @@ async function mockRustRollReadApi(page: Page): Promise<void> {
     if (path === '/api/v2/threads') {
       return route.fulfill({ json: { threads: [], next_page_token: null, active_count: 0 } })
     }
+    if (path === '/api/v2/reading-graph') {
+      return route.fulfill({ json: { status: 'ok', cycles: [], invalid_edges: [] } })
+    }
+    if (path === '/api/v2/reading-mode') {
+      return route.fulfill({ json: { bandwidth: 'balanced', intent: 'explore', source: 'manual', suggested: false } })
+    }
     return route.fulfill({ json: [] })
   })
 }

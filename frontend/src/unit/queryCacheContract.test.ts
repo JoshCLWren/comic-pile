@@ -428,6 +428,37 @@ describe('targeted cache effects', () => {
     }
   })
 
+  it('restarts a canonical projection with cached data that began before the read committed (#5865)', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const key = queryKeys.dependencies.readingBoundaries([7])
+    // An already-open Thread/Queue surface has cached this projection and can
+    // start a refetch before the direct read commits. Unlike the initial-load
+    // case (#5537), TanStack cancels the active fetch when cached data exists;
+    // this guards that #5865 cached-data path stays fresh without a reload.
+    client.setQueryData(key, 'stale-next')
+    let resolveOld!: (value: string) => void
+    const oldRequest = new Promise<string>((resolve) => { resolveOld = resolve })
+    const queryFn = vi.fn<() => Promise<string>>()
+      .mockReturnValueOnce(oldRequest)
+      .mockResolvedValue('fresh-next')
+    const observer = new QueryObserver(client, { queryKey: key, queryFn })
+    const unsubscribe = observer.subscribe(() => undefined)
+    try {
+      expect(client.getQueryData(key)).toBe('stale-next')
+      expect(queryFn).toHaveBeenCalledTimes(1)
+      await invalidateAfterReaderProgress(client)
+      expect(queryFn).toHaveBeenCalledTimes(2)
+      expect(client.getQueryData(key)).toBe('fresh-next')
+      resolveOld('stale-next')
+      await oldRequest
+      expect(client.getQueryData(key)).toBe('fresh-next')
+    } finally {
+      resolveOld('stale-next')
+      unsubscribe()
+      client.clear()
+    }
+  })
+
   it('invalidates edited issue surfaces and reconciles open views after read/progress edits', async () => {
     const { client, invalidateQueries, resetQueries } = createSpiedClient()
 
