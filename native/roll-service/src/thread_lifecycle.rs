@@ -18,9 +18,11 @@
 //!
 //! Scope notes:
 //! * Production runs legacy execution (`OPTION_E_ENABLED` unset). The Option E
-//!   preview is honored for the dense Queue ordinal in lifecycle responses;
-//!   `stale` and `set-pending` fail closed with 503 while the preview is
-//!   active because their candidate pool is then the evaluated graph.
+//!   preview is honored for the dense Queue ordinal in lifecycle responses.
+//!   `stale` and `set-pending` no longer fail closed: when the evaluated graph
+//!   is active, both resolve their candidate pool through the same canonical
+//!   eligibility authority as automatic Roll instead of the stored
+//!   `threads.is_blocked` flag (issue #5525).
 //! * `test-backdate` is only available when `TEST_ENVIRONMENT` is set, matching
 //!   the Python test helper's guard.
 //! * Python's in-process `slowapi` limits (30-120 requests per minute) are
@@ -32,6 +34,7 @@ use crate::{
     db,
     dice_api::Pending,
     option_inputs, queue,
+    reading_constraints::ValidatedReadingInputs,
     reading_session::{self, SessionPolicy},
     roll_exclusions,
     roll_override::RollResponse,
@@ -289,11 +292,84 @@ async fn option_e_eligible(
     state: &AppState,
     user: AuthenticatedUser,
 ) -> Result<Option<HashSet<i32>>, ApiError> {
+    Ok(canonical_eligibility_inputs(state, user)
+        .await?
+        .map(|validated| queue::evaluated_eligible_ids(&validated))
+        .transpose()?)
+}
+
+/// Canonical reading-list inputs for the automatic-Roll authority paths.
+///
+/// The loader checks out its own pooled connection, so callers resolve the
+/// snapshot before opening a write transaction and never nest two checkouts.
+/// With the setting inactive the legacy stored-flag authority is retained;
+/// when it is active the evaluated graph is authoritative and `is_blocked` is
+/// never consulted as permission (#5525 A16/A17).
+async fn canonical_eligibility_inputs(
+    state: &AppState,
+    user: AuthenticatedUser,
+) -> Result<Option<ValidatedReadingInputs>, ApiError> {
     if !state.option_e {
         return Ok(None);
     }
-    let validated = option_inputs::load_option_inputs_contained(state, user).await?;
-    Ok(Some(queue::evaluated_eligible_ids(&validated)?))
+    Ok(Some(
+        option_inputs::load_option_inputs_contained(state, user).await?,
+    ))
+}
+
+/// Reader-facing reason for a thread the canonical evaluator rejects.
+///
+/// Renders the authentic blocker from the same validated snapshot: the waiting
+/// issue's owning series title and issue number, matching the dependency
+/// detail the legacy path produced. Derived blockers (holds, strict order,
+/// exclusions) render their kind when no specific waiting issue exists.
+fn canonical_block_reason(validated: &ValidatedReadingInputs, thread_id: i32) -> String {
+    let Ok(evaluated) = crate::reading_eligibility::evaluate(validated) else {
+        return String::new();
+    };
+    let Some(eligibility) = evaluated.get(&thread_id) else {
+        return String::new();
+    };
+    let inputs = validated.inputs();
+    let titles: HashMap<i32, &str> = inputs
+        .core
+        .threads
+        .iter()
+        .map(|thread| (thread.id, thread.title.as_str()))
+        .collect();
+    let numbers: HashMap<i32, &str> = inputs
+        .core
+        .issues
+        .iter()
+        .map(|issue| (issue.id, issue.issue_number.as_str()))
+        .collect();
+    let issue_threads: HashMap<i32, i32> = inputs
+        .core
+        .issues
+        .iter()
+        .map(|issue| (issue.id, issue.thread_id))
+        .collect();
+    let mut reasons = Vec::new();
+    for blocker in &eligibility.blockers {
+        for issue_id in &blocker.waiting_on_issue_ids {
+            let title = issue_threads
+                .get(issue_id)
+                .and_then(|thread_id| titles.get(thread_id))
+                .copied()
+                .unwrap_or("an earlier issue");
+            let number = numbers.get(issue_id).copied().unwrap_or("?");
+            reasons.push(format!("Blocked by {title}: #{number}"));
+        }
+        if blocker.waiting_on_issue_ids.is_empty() {
+            reasons.push(format!("Blocked by {}", blocker.kind.replace('_', " ")));
+        }
+    }
+    reasons.sort_unstable();
+    reasons.dedup();
+    reasons
+        .first()
+        .map(|reason| format!(": {reason}"))
+        .unwrap_or_default()
 }
 
 /// Load `ThreadResponse` projections for owned threads, in `ids` order.
