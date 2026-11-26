@@ -847,3 +847,80 @@ async fn card_count(conn: &tokio_postgres::Client, threads: &[i32]) -> i64 {
     .unwrap()
     .get(0)
 }
+
+#[tokio::test]
+async fn alias_only_patch_replays_identical_key_and_rejects_a_changed_payload() {
+    let (state, token, csrf, owner_id, _guard) = setup_user("alias-retry").await;
+    let conn = state.pool.get().await.unwrap();
+    let thread_id: i32 = conn
+        .query_one(
+            "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position, status, created_at, total_issues, reading_progress)
+             VALUES ($1, 'Saga', 'Comic', 1, 1, 'active', NOW(), 1, 'in_progress') RETURNING id",
+            &[&owner_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let issue_id: i32 = conn
+        .query_one(
+            "INSERT INTO issues (thread_id, issue_number, position, status, created_at)
+             VALUES ($1, '3', 1, 'unread', NOW()) RETURNING id",
+            &[&thread_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let body = json!({
+        "idempotency_key": "alias-retry-0001",
+        "source": "direct",
+        "issue_number_alias": "100"
+    });
+    let (status, first) = send(
+        &state,
+        authed(
+            "PATCH",
+            &format!("/api/v2/issues/{issue_id}"),
+            &token,
+            &csrf,
+            Some(body.clone()),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{first:?}");
+    assert_eq!(first["replayed"], false);
+
+    let (status, replay) = send(
+        &state,
+        authed(
+            "PATCH",
+            &format!("/api/v2/issues/{issue_id}"),
+            &token,
+            &csrf,
+            Some(body),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{replay:?}");
+    assert_eq!(replay["replayed"], true, "an ambiguous retry is idempotent");
+
+    let (status, conflict) = send(
+        &state,
+        authed(
+            "PATCH",
+            &format!("/api/v2/issues/{issue_id}"),
+            &token,
+            &csrf,
+            Some(json!({
+                "idempotency_key": "alias-retry-0001",
+                "source": "direct",
+                "issue_number_alias": "101"
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{conflict:?}");
+    assert_eq!(
+        first["issue"]["issue_number_alias"], "100",
+        "a conflicting stale write must not change the stored alias"
+    );
+}
