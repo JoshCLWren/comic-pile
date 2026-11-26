@@ -74,6 +74,11 @@ describe('issue cover render guard (#5433)', () => {
     // Catch bespoke image rendering: <img/ImageWithLoading src={...cover...}>.
     // Owned comic/series covers must flow through ComicIssueCover or the shared
     // card components, not be bound directly to an image element in a view.
+    // `image_url` is intentionally not matched: it is the provider-candidate
+    // field (ComicVineSearchDialog, AddSeriesFromComicVineDialog,
+    // IdentityInboxPage, ComicIdentity modal zoom) legitimately bound to
+    // ImageWithLoading for unconfirmed provider art. Owned covers always use
+    // cover_image_url / series_cover_image_url through the shared cards.
     const bespokeCoverSrc =
       /<(?:img|ImageWithLoading)\b[\s\S]{0,260}?src=\{[^}]*(cover_image_url|series_cover_image_url|coverImageUrl)[^}]*\}/
 

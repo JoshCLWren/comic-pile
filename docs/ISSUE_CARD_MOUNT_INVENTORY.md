@@ -9,6 +9,7 @@ Live render-path audit for [#4445](https://github.com/JoshCLWren/comic-pile/issu
 - **Provider candidate cover (unconfirmed):** `ComicIssueCover` or `ImageWithLoading` with the candidate's own provider image metadata. Never borrow another owned issue's confirmed cover or imply confirmation.
 - **No canonical identity:** render text/placeholder without fabricating an issue ID or cover. Historical Session events without canonical issue IDs are a truthful exception.
 - **Raw `<img>` is forbidden** outside `frontend/src/components/ImageWithLoading.tsx`; direct owned cover URL bindings to `<img>`/`<ImageWithLoading>` are forbidden outside `ImageWithLoading.tsx` and `ComicIssueCard.tsx`. Enforced by `frontend/src/unit/issue-cover-render-guard.test.ts`.
+- **`image_url` is the provider-candidate field, not an owned-cover field.** ComicVine search/import dialogs, Identity Inbox candidates and the Roll modal zoom legitimately bind `image_url` to `ImageWithLoading` for *unconfirmed* provider art (see `ComicVineSearchDialog.tsx`, `AddSeriesFromComicVineDialog.tsx`, `IdentityInboxPage.tsx`, `ComicIdentity.tsx`). The guard intentionally matches only owned-cover fields (`cover_image_url`, `series_cover_image_url`, `coverImageUrl`); raw `<img>` is independently forbidden by the same test, so an owned cover bound through `image_url` to `<ImageWithLoading>` is an accepted, documented gap rather than an owned-confirmation path.
 
 ## Exhaustive render-path audit
 
