@@ -2478,30 +2478,6 @@ pub async fn import_series(
         .map_err(db::query_error)?;
     }
 
-    // #5592: every confirmed imported issue identity that still lacks deep
-    // metadata gets a durable, idempotent refresh request at commit. This is
-    // set-based and does not depend on opening the Roll page.
-    let imported_identity_rows = tx
-        .query(
-            "SELECT DISTINCT m.external_identity_id \
-             FROM issue_external_identity_mappings m \
-             JOIN external_identities e ON e.id = m.external_identity_id \
-             JOIN issues i ON i.id = m.issue_id \
-             WHERE i.thread_id = $1 \
-               AND m.status = 'confirmed' \
-               AND e.provider = 'comicvine' \
-               AND e.entity_type = 'issue' \
-               AND e.external_id = ANY($2::text[])",
-            &[&thread_id, &cv_texts],
-        )
-        .await
-        .map_err(db::query_error)?;
-    let imported_identity_ids: Vec<i32> = imported_identity_rows
-        .iter()
-        .map(|row| row.get::<_, i32>(0))
-        .collect();
-    let enqueued_repairs = enqueue_hydration_for_identities(&tx, &imported_identity_ids).await?;
-
     // Results, in roster order.
     let mut issue_results = Vec::with_capacity(entries.len());
     let (mut adopted, mut skipped, mut conflicts) = (0i32, 0i32, 0i32);
@@ -2690,9 +2666,9 @@ pub async fn import_series(
         response.total_items = Some(total as i32);
     }
     tx.commit().await.map_err(db::query_error)?;
-    if enqueued_repairs {
-        crate::comicvine_repair::notify_repair_enqueued(&state).await;
-    }
+    // Bulk import persists the bounded roster only. Deep metadata is fetched
+    // synchronously when an exact issue is opened or Retry is clicked — never
+    // one provider request per imported issue and never an enqueue/fanout here.
     Ok((StatusCode::CREATED, Json(response)))
 }
 

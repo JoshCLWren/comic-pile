@@ -105,37 +105,15 @@ WITH auth AS (
         )
     END AS needs_repair
   FROM mapped m
-), enqueue AS (
-  INSERT INTO comicvine_metadata_refresh_requests (
-    external_identity_id, state, attempts, next_attempt_at,
-    lease_expires_at, last_error, completed_at, created_at, updated_at
-  )
-  SELECT f.id, 'pending', 0, now(), NULL, NULL, NULL, now(), now()
-  FROM freshness f WHERE f.needs_repair
-  ON CONFLICT (external_identity_id) DO UPDATE
-    SET state='pending', attempts=0, next_attempt_at=now(),
-      lease_expires_at=NULL, last_error=NULL, completed_at=NULL, updated_at=now()
-    WHERE (
-      comicvine_metadata_refresh_requests.state = 'completed'
-      AND (comicvine_metadata_refresh_requests.completed_at IS NULL OR
-        comicvine_metadata_refresh_requests.completed_at <= now()-interval '30 days')
-    ) OR (
-      comicvine_metadata_refresh_requests.state = 'no_credits'
-      AND (comicvine_metadata_refresh_requests.completed_at IS NULL OR
-        comicvine_metadata_refresh_requests.completed_at <= now()-interval '7 days')
-    ) OR (
-      comicvine_metadata_refresh_requests.state='failed'
-      AND comicvine_metadata_refresh_requests.next_attempt_at <= now()
-    )
-  RETURNING external_identity_id, state, next_attempt_at
 ), repair AS (
-  SELECT state, next_attempt_at FROM (
-    SELECT 0 AS priority, e.state, e.next_attempt_at FROM enqueue e
-    UNION ALL
-    SELECT 1, r.state, r.next_attempt_at
-    FROM comicvine_metadata_refresh_requests r
-    JOIN freshness f ON f.id=r.external_identity_id
-  ) states ORDER BY priority LIMIT 1
+  -- Read-only. The intelligence GET must never enqueue a provider refresh:
+  -- exact map/remap/import and explicit Retry hydrate synchronously in
+  -- comicvine_v2.rs. A legacy refresh row is only observed here, never created
+  -- or reopened by a reader.
+  SELECT r.state, r.next_attempt_at
+  FROM comicvine_metadata_refresh_requests r
+  JOIN freshness f ON f.id = r.external_identity_id
+  LIMIT 1
 ), arc_refs AS (
   SELECT arc_id, reference, ordinality FROM (
     SELECT DISTINCT ON ((arc.value->>'id')::int)
@@ -468,30 +446,16 @@ fn plain_text(value: &Value) -> Option<String> {
     }
 }
 
-/// Determine the metadata status based on repair state and content.
+/// Determine the metadata status from persisted content first and a legacy
+/// repair row second.
 ///
-/// Returns a status string and optional retry delay in seconds.
-/// Priority order: repair state > deep fetch status > credit availability.
+/// Returns a status string and optional retry delay in seconds. A deep fetch
+/// that is already stored (with or without credits) is truthful on its own: a
+/// stale `pending`/`running` ledger row must not hide credits that are sitting
+/// in `metadata_json` behind another "queued for fetch" message. Only genuinely
+/// unfetched rows surface the ledger state, and a failed/deferred retry is kept
+/// visible for empty-credit rows so the explicit Retry stays discoverable.
 fn status(mapped: &Mapped, repair: Option<&Repair>) -> (String, Option<i64>) {
-    if let Some(repair) = repair {
-        let active = match repair.state.as_str() {
-            "pending" => Some("refresh_pending"),
-            "running" => Some("refresh_running"),
-            "deferred" => Some("refresh_deferred"),
-            "failed" => Some("refresh_failed"),
-            _ => None,
-        };
-        if let Some(state) = active {
-            let retry = if state == "refresh_deferred" || state == "refresh_failed" {
-                repair
-                    .next_attempt_at
-                    .map(|stamp| (stamp - chrono::Utc::now().timestamp() as f64).max(0.0) as i64)
-            } else {
-                None
-            };
-            return (state.to_string(), retry);
-        }
-    }
     let raw = &mapped.metadata["raw_provider_payload"];
     let deep = [
         "id",
@@ -509,13 +473,41 @@ fn status(mapped: &Mapped, repair: Option<&Repair>) -> (String, Option<i64>) {
     ]
     .iter()
     .all(|key| raw.get(*key).is_some());
-    if !deep {
-        ("not_deep_fetched".into(), None)
-    } else if creators(&mapped.metadata).is_empty() {
-        ("deep_fetched_no_credits".into(), None)
-    } else {
-        ("complete".into(), None)
+    let has_credits = !creators(&mapped.metadata).is_empty();
+
+    let repair_state = repair.and_then(|repair| {
+        let active = match repair.state.as_str() {
+            "pending" => Some("refresh_pending"),
+            "running" => Some("refresh_running"),
+            "deferred" => Some("refresh_deferred"),
+            "failed" => Some("refresh_failed"),
+            _ => None,
+        }?;
+        let retry = if active == "refresh_deferred" || active == "refresh_failed" {
+            repair
+                .next_attempt_at
+                .map(|stamp| (stamp - chrono::Utc::now().timestamp() as f64).max(0.0) as i64)
+        } else {
+            None
+        };
+        Some((active, retry))
+    });
+
+    if deep && has_credits {
+        return ("complete".into(), None);
     }
+    if deep && !has_credits {
+        // Preserve an actionable retry state when the last attempt failed, but
+        // never turn a successful empty-roster fetch into "queued".
+        if let Some((state @ ("refresh_deferred" | "refresh_failed"), retry)) = repair_state {
+            return (state.to_owned(), retry);
+        }
+        return ("deep_fetched_no_credits".into(), None);
+    }
+    if let Some((state, retry)) = repair_state {
+        return (state.to_owned(), retry);
+    }
+    ("not_deep_fetched".into(), None)
 }
 
 /// Build the complete issue intelligence response from mapped data.
@@ -731,10 +723,13 @@ mod tests {
         assert_eq!(people[1].creator_id, None);
     }
     #[test]
-    fn queue_is_owner_scoped_and_single_statement() {
+    fn read_is_owner_scoped_and_never_enqueues_provider_work() {
         assert!(READ_SQL.contains("JOIN me ON me.user_id=t.user_id"));
-        assert!(READ_SQL.contains("ON CONFLICT (external_identity_id) DO UPDATE"));
-        assert!(READ_SQL.contains("WHERE f.needs_repair"));
+        assert!(
+            !READ_SQL.contains("INSERT INTO comicvine_metadata_refresh_requests"),
+            "an intelligence GET must not enqueue, reopen or dispatch a repair"
+        );
+        assert!(!READ_SQL.contains("ON CONFLICT (external_identity_id) DO UPDATE"));
         assert!(!READ_SQL.contains("FOR UPDATE SKIP LOCKED"));
         assert_eq!(as_id(&json!("29319")), Some(29319));
     }
@@ -785,11 +780,6 @@ mod tests {
         assert!(
             READ_SQL.contains("interval '7 days'"),
             "empty credits need a 7-day recheck, not a 30-day lock"
-        );
-        assert!(READ_SQL.contains("state = 'no_credits'"));
-        assert!(
-            READ_SQL.contains("state = 'completed'"),
-            "completed rows keep the 30-day window"
         );
         assert!(
             READ_SQL.contains("date_last_updated"),
