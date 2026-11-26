@@ -842,3 +842,127 @@ async fn concurrent_sibling_previews_do_not_corrupt_thread_state() {
     assert_eq!(second.status(), StatusCode::OK);
     assert_eq!(issue_order(&state, thread_id).await, before);
 }
+
+#[tokio::test]
+async fn delete_structure_preview_shows_before_after_and_preserves_state() {
+    let (state, token, csrf, user_id, _guard) = setup_user("bprd-4654-delprev").await;
+    let thread_id = seed_thread(&state, user_id, "Authored series").await;
+    let first = seed_issue(&state, thread_id, "129", 1).await;
+    let removed = seed_issue(&state, thread_id, "140", 2).await;
+    let last = seed_issue(&state, thread_id, "130", 3).await;
+    seed_strict_list(&state, user_id, "Authored order", &[first, removed, last]).await;
+
+    let preview = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/threads/{thread_id}/issues/structure-preview"),
+            &token,
+            &csrf,
+            json!({"operation": "delete", "issue_id": removed}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(preview.status(), StatusCode::OK);
+    let bytes = to_bytes(preview.into_body(), 256 * 1024).await.unwrap();
+    let body: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(body["thread_title"], "Authored series");
+    let outcome = &body["default_outcome"];
+    assert_eq!(outcome["before"].as_array().unwrap().len(), 3);
+    assert_eq!(outcome["after"].as_array().unwrap().len(), 2);
+    assert_eq!(outcome["after"][0]["issue_number"], "129");
+    assert_eq!(outcome["after"][1]["issue_number"], "130");
+    assert_eq!(outcome["after"][1]["position"], 2);
+    assert_eq!(
+        outcome["before"][1]["effect"].as_str().unwrap(),
+        "removed issue #140 from series"
+    );
+    let labels: Vec<&str> = outcome["before"][0]["source_lists"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|value| value.as_str().unwrap())
+        .collect();
+    assert!(labels.contains(&"Authored order"), "{body}");
+    assert_eq!(outcome["graph"]["status"], "ok");
+    assert_eq!(outcome["can_commit"], true);
+    assert_eq!(body["expected_issue_ids"].as_array().unwrap().len(), 3);
+
+    // Preview is read-only: no issue was actually deleted.
+    assert_eq!(
+        issue_order(&state, thread_id).await,
+        vec!["129", "140", "130"]
+    );
+}
+
+#[tokio::test]
+async fn reorder_structure_preview_shows_projected_order_and_rejects_invalid_sets() {
+    let (state, token, csrf, user_id, _guard) = setup_user("bprd-4654-reordprev").await;
+    let thread_id = seed_thread(&state, user_id, "Authored series").await;
+    let first = seed_issue(&state, thread_id, "129", 1).await;
+    let second = seed_issue(&state, thread_id, "130", 2).await;
+    let third = seed_issue(&state, thread_id, "131", 3).await;
+
+    let preview = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/threads/{thread_id}/issues/structure-preview"),
+            &token,
+            &csrf,
+            json!({"operation": "reorder", "issue_ids": [third, first, second]}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(preview.status(), StatusCode::OK);
+    let bytes = to_bytes(preview.into_body(), 256 * 1024).await.unwrap();
+    let body: Value = serde_json::from_slice(&bytes).unwrap();
+    let outcome = &body["default_outcome"];
+    let before: Vec<&str> = outcome["before"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["issue_number"].as_str().unwrap())
+        .collect();
+    let after: Vec<&str> = outcome["after"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["issue_number"].as_str().unwrap())
+        .collect();
+    assert_eq!(before, vec!["129", "130", "131"]);
+    assert_eq!(after, vec!["131", "129", "130"]);
+    assert_eq!(outcome["after"][0]["position"], 1);
+    assert_eq!(outcome["preserves_existing_relative_order"], false);
+    assert_eq!(outcome["graph"]["status"], "ok");
+    assert_eq!(
+        issue_order(&state, thread_id).await,
+        vec!["129", "130", "131"]
+    );
+
+    // A partial or unknown id set is a concrete 400 explanation, not a 500.
+    let partial = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/threads/{thread_id}/issues/structure-preview"),
+            &token,
+            &csrf,
+            json!({"operation": "reorder", "issue_ids": [first, second]}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(partial.status(), StatusCode::BAD_REQUEST);
+    let unknown = router(state.clone())
+        .oneshot(authed(
+            "POST",
+            &format!("/api/v2/threads/{thread_id}/issues/structure-preview"),
+            &token,
+            &csrf,
+            json!({"operation": "delete", "issue_id": 999999}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(unknown.status(), StatusCode::NOT_FOUND);
+    assert_eq!(
+        issue_order(&state, thread_id).await,
+        vec!["129", "130", "131"]
+    );
+}

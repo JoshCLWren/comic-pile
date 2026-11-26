@@ -1608,10 +1608,10 @@ pub async fn preview_issue_structure(
                 .filter(|(id, _, _)| *id != issue_id)
                 .map(|(id, number, _)| (*id, number.clone()))
                 .collect::<Vec<_>>();
-            let preserves = merged
+            let preserves = merged.iter().map(|(id, _)| *id).eq(existing
                 .iter()
-                .map(|(id, _)| *id)
-                .eq(existing.iter().map(|(id, _, _)| *id).filter(|id| *id != target.0));
+                .map(|(id, _, _)| *id)
+                .filter(|id| *id != target.0));
             (merged, preserves, Some(issue_id))
         }
         "reorder" => {
