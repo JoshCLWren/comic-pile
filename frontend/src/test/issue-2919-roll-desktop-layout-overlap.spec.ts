@@ -92,9 +92,7 @@ async function installRatingRoutes(page: Page): Promise<void> {
   await page.route('**/v2/creators/summaries', (route) =>
     route.fulfill({ json: { summaries: {}, coverage: null } }),
   )
-  await page.route('**/v1/issues/*/comicvine', (route) =>
-    route.fulfill({
-      json: {
+  const comicvine = {
         comicvine_issue_id: '2919',
         comicvine_url: null,
         series_name: 'Layout Series',
@@ -107,9 +105,9 @@ async function installRatingRoutes(page: Page): Promise<void> {
         store_date: null,
         creators: [],
         story_arcs: [],
-      },
-    }),
-  )
+      }
+  await page.route('**/v1/issues/*/comicvine', (route) => route.fulfill({ json: comicvine }))
+  await page.route('**/v2/issues/*/comicvine', (route) => route.fulfill({ json: comicvine }))
   await page.route('**/v2/comicvine/issues/*/identity', (route) =>
     route.fulfill({
       json: {
