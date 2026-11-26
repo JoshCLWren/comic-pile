@@ -69,16 +69,6 @@ export interface IssueToggleListDependenciesApi {
   listForThread: (threadId: number) => Promise<ThreadIssueDependenciesResponse>
 }
 
-/** Structural edit awaiting a before/after preview (#4654). */
-type StructuralEdit =
-  | { type: 'delete'; issueId: number }
-  | {
-      type: 'reorder'
-      nextIssues: Issue[]
-      announcement?: string
-      focusTarget?: { issueId: number; direction: 'up' | 'down' }
-    }
-
 /** Imperative handle for deferred (draft) mode. */
 export interface IssueToggleListHandle {
   /** Flush queued mutations to the server. Resolves when complete. */
@@ -153,15 +143,6 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   const [isPreviewing, setIsPreviewing] = useState(false)
   /** Preview fetch failure, surfaced in a retryable modal (#4654). */
   const [previewError, setPreviewError] = useState<string | null>(null)
-  /**
-   * Before/After preview for a queued delete or reorder (#4654). The edit is
-   * only queued after the reader confirms these exact projected rows.
-   */
-  const [structurePreview, setStructurePreview] = useState<{
-    edit: StructuralEdit
-    response: IssueEditPreviewResponse
-  } | null>(null)
-  const [isPreviewingStructure, setIsPreviewingStructure] = useState(false)
   /** Numbers the reader explicitly accepted as aliases, not duplicates (#4654). */
   const [acceptedAliasNumbers, setAcceptedAliasNumbers] = useState<string[]>([])
   /** Undo point returned by the last committed create (#4654). */
@@ -720,71 +701,25 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       .finally(() => setIsPreviewing(false))
   }
 
-  /** Queue the structural edit only after the reader confirms its preview. */
-  function commitStructuralEdit(edit: StructuralEdit) {
-    if (edit.type === 'delete') {
+  const {
+    preview: structurePreview,
+    isPreviewing: isPreviewingStructure,
+    request: requestStructuralPreview,
+    cancel: cancelStructurePreview,
+    confirm: confirmStructurePreview,
+  } = useIssueStructurePreview({
+    threadId,
+    deferred,
+    previewDelete: issuesService.previewDelete,
+    previewReorder: issuesService.previewReorder,
+    onDelete: (issueId: number) => {
       setActionError(null)
-      enqueueIssueMutation({ type: 'delete', issueId: edit.issueId })
-      return
-    }
-    enqueueIssueReorder(edit.nextIssues, {
-      announcement: edit.announcement,
-      focusTarget: edit.focusTarget,
-    })
-  }
+      enqueueIssueMutation({ type: 'delete', issueId })
+    },
+    onReorder: enqueueIssueReorder,
+    onError: setActionError,
+  })
 
-  async function showStructurePreview(
-    edit: StructuralEdit,
-    request: () => Promise<IssueEditPreviewResponse>,
-  ) {
-    setActionError(null)
-    setIsPreviewingStructure(true)
-    try {
-      const response = await request()
-      setStructurePreview({ edit, response })
-    } catch (err: unknown) {
-      // A failed preview must leave the queue untouched; the reader can retry
-      // the same gesture (#4654).
-      console.error('[IssueToggleList] Error previewing structural edit:', err)
-      setActionError(getApiErrorDetail(err))
-    } finally {
-      setIsPreviewingStructure(false)
-    }
-  }
-
-  /**
-   * Delete and reorder are structural edits too, so the Edit Series draft
-   * previews their exact before/after rows before accepting them (#4654).
-   * Immediate mode has no Save boundary and keeps its existing direct path.
-   */
-  async function previewStructuralEdit(edit: StructuralEdit) {
-    if (!deferred) {
-      commitStructuralEdit(edit)
-      return
-    }
-    if (edit.type === 'delete') {
-      const previewDelete = issuesService.previewDelete
-      if (previewDelete) {
-        await showStructurePreview(edit, () => previewDelete(threadId, edit.issueId))
-      } else {
-        commitStructuralEdit(edit)
-      }
-      return
-    }
-    const previewReorder = issuesService.previewReorder
-    if (previewReorder) {
-      const issueIds = edit.nextIssues.map((issue) => issue.id)
-      await showStructurePreview(edit, () => previewReorder(threadId, issueIds))
-    } else {
-      commitStructuralEdit(edit)
-    }
-  }
-
-  function handleConfirmStructurePreview() {
-    if (!structurePreview) return
-    commitStructuralEdit(structurePreview.edit)
-    setStructurePreview(null)
-  }
 
   async function handleUndoEdit() {
     if (!undoPoint || isUndoing) return
@@ -831,7 +766,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     setDraggedIssueId(null)
     setDragOverIssueId(null)
 
-    void previewStructuralEdit({ type: 'reorder', nextIssues })
+    void requestStructuralPreview({ type: 'reorder', nextIssues })
   }
 
   const handleDragEnd = () => {
@@ -851,7 +786,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     // modals would trap focus inside the Edit Series dialog (#3267). The delete
     // is queued only after the reader confirms the projected before/after rows.
     setDeleteDialogIssue(null)
-    void previewStructuralEdit({ type: 'delete', issueId })
+    void requestStructuralPreview({ type: 'delete', issueId })
   }
 
   function handleCancelDelete() {
@@ -869,7 +804,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
       return
     }
 
-    void previewStructuralEdit({
+    void requestStructuralPreview({
       type: 'reorder',
       nextIssues,
       announcement: `Moved issue #${issue.issue_number} ${direction}.`,
@@ -1467,8 +1402,8 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
           kind={structurePreview.edit.type}
           response={structurePreview.response}
           isPreviewing={isPreviewingStructure}
-          onConfirm={handleConfirmStructurePreview}
-          onCancel={() => setStructurePreview(null)}
+          onConfirm={confirmStructurePreview}
+          onCancel={cancelStructurePreview}
         />
       )}
       <DeleteIssueDialog
