@@ -8,6 +8,7 @@
 import {readFileSync, writeFileSync, readdirSync} from 'node:fs';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
+import {withCanonicalBuilds} from './vercel_builds.mjs';
 import {slimNativeRollRoutes} from './vercel_slim_routes.mjs';
 
 const INVENTORY_PATH = 'docs/api/v2-route-inventory.json';
@@ -17,8 +18,6 @@ const REWRITE_FRAGMENT_PATH = path.posix.join(FRAGMENT_DIR, 'vercel-rewrites.jso
 const VERCEL_PATH = 'vercel.json';
 const AGENTS_PATH = 'AGENTS.md';
 const NATIVE_DESTINATIONS = new Set(['/api/native_roll.rs']);
-const PYTHON_DESTINATION = '/api/index.py';
-const VERCEL_DESTINATIONS = new Set([...NATIVE_DESTINATIONS, PYTHON_DESTINATION]);
 const CATCH_ALL_SRC = '/api(?:/.*)?';
 const CATCH_ALL_DEST = '/api/native_roll.rs';
 const BURN_DOWN_ISSUE = 4739;
@@ -81,13 +80,18 @@ function _owner(value, context) {
 
 function _optionalDest(value, context) {
   if (value === null || value === undefined) return null;
-  if (!isString(value) || !VERCEL_DESTINATIONS.has(value)) {
-    const sorted = [...VERCEL_DESTINATIONS].sort();
+  if (!isString(value) || !NATIVE_DESTINATIONS.has(value)) {
+    const sorted = [...NATIVE_DESTINATIONS].sort();
     throw new BurndownGenerationError(
       `${context} must be one of [${sorted.map(v => `'${v}'`).join(', ')}] or null`,
     );
   }
   return value;
+}
+
+function _isApiSource(src) {
+  return src === CATCH_ALL_SRC || (isString(src)
+    && (src.startsWith('/api/') || src.startsWith('^/api/')));
 }
 
 function _optionalSrc(value, context) {
@@ -329,7 +333,7 @@ function _fragmentVercelGroups(fragments, previousRoutes) {
             `${method} ${routePath} needs dest; previous vercel.json has no matching route`,
           );
         }
-        dest = previous.dest;
+        dest = _optionalDest(previous.dest, 'previous.dest');
       }
       if (src === null) {
         if (
@@ -343,7 +347,7 @@ function _fragmentVercelGroups(fragments, previousRoutes) {
           src = routeRegexForPath(routePath);
         }
       }
-      if (!VERCEL_DESTINATIONS.has(dest)) {
+      if (!NATIVE_DESTINATIONS.has(dest)) {
         throw new BurndownGenerationError(`unknown destination '${dest}'`);
       }
       const key = `${src}\0${dest}`;
@@ -351,24 +355,20 @@ function _fragmentVercelGroups(fragments, previousRoutes) {
       grouped.get(key).methods.add(method.toUpperCase());
     }
   }
-  const routes = [];
-  for (const group of grouped.values()) {
-    const effective = new Set(group.methods);
-    if (group.dest === PYTHON_DESTINATION) effective.add('OPTIONS');
-    const ordered = METHOD_ORDER.filter(item => effective.has(item));
-    routes.push({src: group.src, methods: ordered, dest: group.dest});
-  }
-  const native = routes.filter(r => NATIVE_DESTINATIONS.has(r.dest)).sort(compareRouteKeys);
-  const python = routes.filter(r => r.dest === PYTHON_DESTINATION).sort(compareRouteKeys);
-  const ordered = [...native, ...python];
+  const ordered = [...grouped.values()]
+    .map(group => ({
+      src: group.src,
+      methods: METHOD_ORDER.filter(item => group.methods.has(item)),
+      dest: group.dest,
+    }))
+    .sort(compareRouteKeys);
   const seen = new Set();
   for (const route of ordered) {
     const src = _string(route.src, 'route.src');
-    const dest = _string(route.dest, 'route.dest');
     const routeMethods = _consumers(route.methods, 'route.methods');
     for (const method of routeMethods) {
       const identity = `${src}\0${method}`;
-      if (seen.has(identity) && NATIVE_DESTINATIONS.has(dest)) {
+      if (seen.has(identity)) {
         throw new BurndownGenerationError(`duplicate native ingress rewrite for ${method} ${src}`);
       }
       seen.add(identity);
