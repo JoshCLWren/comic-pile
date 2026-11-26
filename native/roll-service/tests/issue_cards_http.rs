@@ -979,8 +979,8 @@ async fn issue_cards_use_verified_identity_when_candidates_conflict() {
     conn.execute(
         "INSERT INTO issue_external_identity_mappings
              (id, issue_id, external_identity_id, status, confidence, evidence_json, created_at, updated_at)
-         VALUES (800, $1, 700, 'candidate', 0.99, '{}'::json, NOW(), NOW()),
-                (801, $1, 701, 'confirmed', 0.80, '{}'::json, NOW(), NOW())",
+         VALUES (800, $1, 701, 'candidate', 0.99, '{}'::json, NOW(), NOW()),
+                (801, $1, 700, 'confirmed', 0.80, '{}'::json, NOW(), NOW())",
         &[&issue_id],
     )
     .await
