@@ -43,6 +43,7 @@ What’s New is backed by the release API and Neon release ledger. A dedicated p
 - [Historical production-to-local clone workflow](prod-clone-workflow.md): retired Python clone tooling; use [Database save/load](DATABASE_SAVE_LOAD.md) for the supported PostgreSQL-native backup and loopback-only restore procedure.
 - [Git hooks](GIT_HOOKS.md): repository quality hooks.
 - [GitHub Wiki handoff](WIKI_HANDOFF.md): the exact owner-only steps and required Wiki navigation for completing #879 when the Wiki remote cannot be managed by the factory connector.
+- [Markdown reconciliation handoff](MARKDOWN_RECONCILIATION_HANDOFF.md): point-in-time inventory accounting, source evidence, validation results and unresolved discrepancies for issue #5757; historical record, not operating instructions.
 
 ## Before and after
 
@@ -69,6 +70,6 @@ Link, anchor and code-path checks do not prove semantic accuracy. When runtime b
 
 The anchor check resolves `#fragment` links against headings published by the target Markdown file, including setext headings, explicit HTML `id`/`name` attributes, and GitHub's duplicate-heading suffixes. Links inside fenced code examples and fragments on non-Markdown files (code symbols or line references) are illustrative and are not checked; keep real cross-document navigation in prose where the guard can validate it.
 
-For a full documentation reconciliation, classify every tracked Markdown file as active, historical/superseded, generated/fixture, frozen changelog provenance, or issue-scoped. The inventory generator's #879 disposition is ownership advice, not lifecycle proof. Correct active guidance in place; give stale historical material an explicit status and replacement link; keep issue plans and frozen changelogs as provenance rather than current instructions. In a Git checkout, both Markdown checks use the tracked-file scope so untracked/ignored overlays and locally excluded files cannot invalidate PR documentation; non-Git test fixtures retain a directory-walk fallback.
+For a full documentation reconciliation, classify every tracked Markdown file as active, historical/superseded, generated/fixture, frozen changelog provenance, or issue-scoped. The inventory generator's #879 disposition is ownership advice, not lifecycle proof. Correct active guidance in place; give stale historical material an explicit status and replacement link; keep issue plans and frozen changelogs as provenance rather than current instructions. Point-in-time audit records such as the [Markdown reconciliation handoff](MARKDOWN_RECONCILIATION_HANDOFF.md) are evidence, not operating instructions, and carry the historical status marker. In a Git checkout, both Markdown checks use the tracked-file scope so untracked/ignored overlays and locally excluded files cannot invalidate PR documentation; non-Git test fixtures retain a directory-walk fallback.
 
 Historical implementation notes and explorations should live in the Wiki or Git history, not beside current operational instructions.
