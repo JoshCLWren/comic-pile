@@ -2003,13 +2003,13 @@ mod tests {
                 .map(|n| (*n).to_string()),
         );
         let before = appended.clone();
-        assert_eq!(natural_issue_order(&appended, &["25"]), None);
+        assert_eq!(natural_issue_order(&appended, &strings(&["25"])), None);
         assert_eq!(appended, before, "the helper never mutates saved order");
 
         // The synthetic 129, 140-142, 130-139, 143 order is the same class of
         // reader-authored order and must never be numerically re-seated here.
         let julix = strings(&["129", "140", "141", "142", "130", "131", "143"]);
-        assert_eq!(natural_issue_order(&julix, &["101"]), None);
+        assert_eq!(natural_issue_order(&julix, &strings(&["101"])), None);
     }
 
     #[test]
