@@ -184,9 +184,11 @@ These are known discrepancies, not supported API guidance:
   when the rollout setting is off. The setting changes some projections but does
   not restore the documented stored-`is_blocked` Roll fallback. This contradicts
   the intended setting-off behavior and remains a runtime handoff.
-- `frontend/src/services/api-sessions.ts` still calls the retired v1 session
-  list/get paths. The v2 details/snapshots calls are current; the list/get caller
-  drift requires a focused repair.
+- The retired v1 session list/get callers were removed under #4343;
+  `frontend/src/services/api-sessions.ts` now issues only the v2
+  `/api/v2/reading-sessions/{session_id}/details` and `/snapshots` reads. History
+  uses `/api/v2/activity`. This is recorded here so retired session paths are not
+  reintroduced as current guidance.
 - Earlier documentation referred to a separate `api/native_issue.rs` ingress. <!-- docs-path-check: ignore -->
   Current `main` builds only `api/native_roll.rs`; bot-owned route outputs are
   regenerated from the route fragments. Do not hand-edit generated route outputs.
