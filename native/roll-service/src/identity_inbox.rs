@@ -1184,8 +1184,12 @@ fn build_resource_url(api_key: &str, resource: &str, field_list: &str) -> String
 /// Resolve a pasted volume URL to the issues on that volume (bounded page).
 fn build_volume_issues_url(api_key: &str, volume_id: i32, limit: i64) -> String {
     let field_list = "id,name,issue_number,cover_date,volume,publisher,site_detail_url,image";
+    // A pasted URL carries the short provider id (`4050-31409`) while the
+    // provider's JSON `id` (and the `volume:` filter) uses the concatenated
+    // numeric form (`405031409`), matching `comicvine_v2::series_issues`.
+    let numeric_volume_id = format!("4050{volume_id}");
     format!(
-        "https://comicvine.gamespot.com/api/issues/?api_key={}&format=json&filter=volume%3A{volume_id}&limit={limit}&field_list={}",
+        "https://comicvine.gamespot.com/api/issues/?api_key={}&format=json&filter=volume%3A{numeric_volume_id}&limit={limit}&field_list={}",
         percent_encode(api_key),
         percent_encode(field_list)
     )
@@ -2362,11 +2366,13 @@ mod tests {
              INSERT INTO external_identities (id, provider, entity_type, external_id, metadata_json, created_at, updated_at) VALUES \
                 (1,'comicvine','issue','4000001','{\"volume\":{\"id\":405031409}}'::json,NOW(),NOW()), \
                 (2,'comicvine','issue','4000002','{}'::json,NOW(),NOW()), \
-                (3,'comicvine','series','405031409','{\"name\":\"B.P.R.D.: Hell on Earth\",\"publisher\":\"Dark Horse Comics\",\"start_year\":2010}'::json,NOW(),NOW()); \
+                (3,'comicvine','series','405031409','{\"name\":\"B.P.R.D.: Hell on Earth\",\"publisher\":\"Dark Horse Comics\",\"start_year\":2010}'::json,NOW(),NOW()), \
+                (4,'comicvine','issue','4000004','{\"volume\":{\"id\":405031409}}'::json,NOW(),NOW()); \
              INSERT INTO issue_external_identity_mappings \
                 (id, issue_id, external_identity_id, status, evidence_source, confidence, created_at, updated_at, evidence_json) VALUES \
                 (1,1,2,'unresolved','test',0.1,NOW(),NOW(),'{}'::json), \
-                (2,2,1,'confirmed','user_confirmed',1.0,NOW(),NOW(),'{}'::json); \
+                (2,2,1,'confirmed','user_confirmed',1.0,NOW(),NOW(),'{}'::json), \
+                (3,1,4,'confirmed','user_confirmed',1.0,NOW(),NOW(),'{}'::json); \
              INSERT INTO thread_external_series_mappings \
                 (id, thread_id, external_identity_id, status, evidence_source, created_at, updated_at) VALUES \
                 (1,1,3,'confirmed','test',NOW(),NOW()); \
