@@ -2921,6 +2921,25 @@ async fn do_cbl_adoption_commit(
         )));
     }
 
+    let request_fingerprint = cbl_adoption_request_fingerprint(list_id, target_plan_id, &request);
+    if let Some(replayed) =
+        replay_cbl_adoption_receipt(&tx, user_id, list_id, &request_fingerprint).await?
+    {
+        tx.commit().await.map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("commit replay tx: {e}"))
+            }
+        })?;
+        let status = if target_plan_id.is_some() {
+            StatusCode::OK
+        } else {
+            StatusCode::CREATED
+        };
+        return Ok((status, replayed));
+    }
+
     let (entry_decisions_raw, series_decisions_raw, series_overrides_raw) =
         normalize_decisions(&request);
     // Convert validated decisions to include/exclude booleans (Python SourceBackedDecision).
@@ -3099,14 +3118,6 @@ async fn do_cbl_adoption_commit(
         }
     })?;
     let prow = tx.run_query_one("SELECT id,user_id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1", &[&plan_id]).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(format!("reload plan: {e}")) })?;
-    tx.commit().await.map_err(|e| {
-        if crate::db::is_transport_failure(&e) {
-            CommitErr::Db(ApiError::database_unavailable())
-        } else {
-            CommitErr::Unexpected(e.to_string())
-        }
-    })?;
-
     let status = if requested_target_plan_id.is_some() {
         StatusCode::OK
     } else {
@@ -3128,6 +3139,14 @@ async fn do_cbl_adoption_commit(
         excluded_positions: merge.2,
         unresolved_positions: merge.3,
     };
+    store_cbl_adoption_receipt(&tx, user_id, list_id, plan_id, &request_fingerprint, &resp).await?;
+    tx.commit().await.map_err(|e| {
+        if crate::db::is_transport_failure(&e) {
+            CommitErr::Db(ApiError::database_unavailable())
+        } else {
+            CommitErr::Unexpected(e.to_string())
+        }
+    })?;
     Ok((status, resp))
 }
 
