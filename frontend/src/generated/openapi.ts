@@ -3330,23 +3330,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/seriesMappings:preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Stateless AIP-136 collection custom method: build a read-only series-mapping preview and a signed idempotency token for the durable commit. No mappings, receipts, history or provider state are written. */
-        post: operations["preview_series_mappings"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v2/tags": {
         parameters: {
             query?: never;
@@ -19239,44 +19222,6 @@ export interface operations {
                 content?: never;
             };
             /** @description invalid_approved_row */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    preview_series_mappings: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["NativeSeriesMappingPreviewRequest"];
-            };
-        };
-        responses: {
-            /** @description Read-only series mapping preview */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["NativeSeriesMappingPreviewResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;

@@ -19,7 +19,7 @@ for (const width of [390, 1280]) {
         site_detail_url: null, image_url: null }],
       total_available: 1, offset: 0, limit: 20, has_more: false, next_offset: null,
     } }))
-    await page.route('**/api/v2/seriesMappings:preview', async (route) => {
+    await page.route('**/api/v1/catalog/series-mappings/preview', async (route) => {
       // SAFETY: the preview hook sends origin_issue_id; this fixture reads only that field.
       const body = route.request().postDataJSON() as { origin_issue_id: number }
       originId = body.origin_issue_id

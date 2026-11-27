@@ -10083,48 +10083,6 @@
         ]
       }
     },
-    "/api/v2/seriesMappings:preview": {
-      "post": {
-        "tags": [
-          "catalog"
-        ],
-        "description": "Stateless AIP-136 collection custom method: build a read-only series-mapping preview and a signed idempotency token for the durable commit. No mappings, receipts, history or provider state are written.",
-        "operationId": "preview_series_mappings",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SeriesMappingPreviewRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Read-only series mapping preview",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SeriesMappingPreviewResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "422": {
-            "description": "Validation failed"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/v2/tags": {
       "get": {
         "tags": [

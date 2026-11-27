@@ -277,10 +277,6 @@ fn app() -> Router {
         )
         .route("/api/v2/roll/dice-command", post(native_dispatch))
         .route("/api/v2/series-mapping-commits", post(native_dispatch))
-        // #5716: this Vercel entry owns a route table separate from the inner
-        // service. Without the matching route a deployed v2 preview falls
-        // through to native_not_found instead of reaching the Rust handler.
-        .route("/api/v2/seriesMappings:preview", post(native_dispatch))
         .route(
             "/api/v1/catalog/series-mappings/commit",
             post(native_dispatch),
@@ -1746,48 +1742,6 @@ mod tests {
         assert_ne!(
             text, r#"{"detail":"Not Found"}"#,
             "v2 duplicate check must not hit native_not_found: {text}"
-        );
-    }
-
-    #[tokio::test]
-    async fn series_mappings_preview_v2_ingress_reaches_rust_and_never_hits_json_404() {
-        // #5716: `POST /api/v2/seriesMappings:preview` is registered in the
-        // inner service, but this Vercel entry has its own route table. Without
-        // the route below a deployed request hits native_not_found. An
-        // unauthenticated request must reach native_dispatch (401 with state,
-        // 503 on cold start), never the Rust JSON 404 fallback.
-        let mut router = app();
-        let response = router
-            .call(
-                Request::builder()
-                    .method("POST")
-                    .uri("/api/v2/seriesMappings:preview")
-                    .header("content-type", "application/json")
-                    .body(Body::from(
-                        r#"{"origin_issue_id":1,"provider":"comicvine","provider_series_external_id":"4050-1"}"#,
-                    ))
-                    .unwrap(),
-            )
-            .await
-            .expect("series-mapping preview ingress response");
-        assert!(
-            response.status() == StatusCode::UNAUTHORIZED
-                || response.status() == StatusCode::SERVICE_UNAVAILABLE,
-            "v2 preview must reach Rust dispatch, not the 404 fallback, got {}",
-            response.status()
-        );
-        assert_eq!(
-            response.headers().get("x-comicpile-api-runtime").unwrap(),
-            "rust",
-            "v2 preview must be served by the native ingress"
-        );
-        let bytes = to_bytes(response.into_body(), 8192)
-            .await
-            .expect("body bytes");
-        let text = String::from_utf8_lossy(&bytes);
-        assert_ne!(
-            text, r#"{"detail":"Not Found"}"#,
-            "v2 preview must not hit native_not_found: {text}"
         );
     }
 
