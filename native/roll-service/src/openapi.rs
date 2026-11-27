@@ -400,7 +400,9 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
 
     if let Some(components) = openapi.components.as_mut() {
         if let Some(schema) = canonical_thread_response {
-            components.schemas.insert("ThreadResponse".to_string(), schema);
+            components
+                .schemas
+                .insert("ThreadResponse".to_string(), schema);
         }
         if let Some(schema) = canonical_native_thread_response {
             components
@@ -422,12 +424,10 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
             let mcc = obj.properties.get("manual_creator_credits");
             let needs_fix = match mcc {
                 None => true,
-                Some(utoipa::openapi::RefOr::T(utoipa::openapi::Schema::Object(o))) => {
-                    !matches!(
-                        o.schema_type,
-                        utoipa::openapi::schema::SchemaType::Type(utoipa::openapi::schema::Type::Array)
-                    )
-                }
+                Some(utoipa::openapi::RefOr::T(utoipa::openapi::Schema::Object(o))) => !matches!(
+                    o.schema_type,
+                    utoipa::openapi::schema::SchemaType::Type(utoipa::openapi::schema::Type::Array)
+                ),
                 Some(utoipa::openapi::RefOr::T(utoipa::openapi::Schema::Array(_))) => false,
                 _ => true,
             };
@@ -437,9 +437,9 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
                     "manual_creator_credits".to_string(),
                     utoipa::openapi::RefOr::T(utoipa::openapi::Schema::Array(
                         ArrayBuilder::new()
-                            .items(utoipa::openapi::RefOr::T(
-                                utoipa::openapi::Schema::Object(ObjectBuilder::new().build()),
-                            ))
+                            .items(utoipa::openapi::RefOr::T(utoipa::openapi::Schema::Object(
+                                ObjectBuilder::new().build(),
+                            )))
                             .build(),
                     )),
                 );

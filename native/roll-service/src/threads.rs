@@ -104,7 +104,7 @@ pub struct ThreadListItem {
     pub notes: Option<String>,
     pub created_at: String,
     pub comicvine_mapping: Option<ComicVineMappingHealth>,
-    #[schema(value_type = Vec<Object>)]
+    #[schema(value_type = Vec<crate::thread_lifecycle::ManualCreatorCredit>)]
     pub manual_creator_credits: Value,
     pub tags: Vec<ThreadTag>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -150,7 +150,7 @@ pub struct ThreadDetailResponse {
     pub reading_progress: Option<String>,
     pub next_unread_issue_id: Option<i32>,
     pub next_unread_issue_number: Option<String>,
-    #[schema(value_type = Vec<Object>)]
+    #[schema(value_type = Vec<crate::thread_lifecycle::ManualCreatorCredit>)]
     pub manual_creator_credits: Value,
 }
 
