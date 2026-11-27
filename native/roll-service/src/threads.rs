@@ -1523,13 +1523,21 @@ fn cursor_clause(sort: &str, cursor: Option<&QueueCursor>) -> (String, Vec<Param
 /// OpenAPI document for the v2 reader threads collection.
 #[derive(utoipa::OpenApi)]
 #[openapi(
-    paths(list_threads_documentation, list_completed_threads_documentation),
+    paths(
+        list_threads_documentation,
+        list_completed_threads_documentation,
+        crate::thread_lifecycle::patch_thread_documentation,
+        crate::thread_lifecycle::delete_thread_v2_documentation
+    ),
     components(schemas(
         ThreadListItem,
         ThreadListResponse,
         ThreadTag,
         ComicVineMappingHealth,
-        QueueSeriesMetadata
+        QueueSeriesMetadata,
+        crate::thread_lifecycle::ThreadResponse,
+        crate::thread_lifecycle::ThreadPatchRequest,
+        crate::thread_lifecycle::ThreadPatchPrecondition
     )),
     modifiers(&ThreadsSecurityAddon)
 )]
