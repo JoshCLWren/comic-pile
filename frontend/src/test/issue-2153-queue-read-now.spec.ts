@@ -1,14 +1,14 @@
 /**
  * Regression for #5525: Queue Read & Rate opens a direct exact-owned-issue
  * editor without replacing a pending random Roll offer or checking eligibility.
- * Supersedes #2153's legacy set-pending handoff contract.
+ * Supersedes #2153's legacy manual thread-selection handoff contract.
  */
 import { expect } from '@playwright/test'
 import { test } from './fixtures'
 import { createThread, gotoRollPage, waitForQueueReady, SELECTORS } from './helpers'
 
 test.describe('P0 #5525: Queue manual issue reading', () => {
-  test('Read & Rate opens the correct issue and saves via direct Rust v2 without set-pending', async ({
+  test('Read & Rate opens the correct issue and saves via direct Rust v2 without a legacy selection write', async ({
     authenticatedPage,
   }) => {
     const page = authenticatedPage
@@ -39,7 +39,7 @@ test.describe('P0 #5525: Queue manual issue reading', () => {
     await expect(panel).toBeVisible()
     const card = panel.getByRole('article', { name: `Issue ${title} #1` })
     await expect(card).toBeVisible()
-    expect(writes.some((write) => write.includes('set-pending'))).toBe(false)
+    expect(writes.some((write) => write.includes('/v1/threads/'))).toBe(false)
 
     await card.getByRole('button', { name: 'Read now', exact: true }).click()
     await expect(card.getByRole('slider')).toBeVisible()
@@ -67,7 +67,7 @@ test.describe('P0 #5525: Queue manual issue reading', () => {
       rating: 4,
       idempotency_key: expect.any(String),
     }))
-    expect(writes.some((write) => write.includes('set-pending'))).toBe(false)
+    expect(writes.some((write) => write.includes('/v1/threads/'))).toBe(false)
     await expect(page).toHaveURL(/\/queue$/)
   })
 

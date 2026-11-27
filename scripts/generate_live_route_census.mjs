@@ -44,10 +44,6 @@ export const INVENTORY_PATH = 'docs/api/v2-route-inventory.json';
 export const AIP_BASELINE_PATH = 'docs/api/v2-aip-shapes-baseline.json';
 export const VERCEL_PATH = 'vercel.json';
 
-/** Regression pinned by #5719: a Rust-served v1 route is still a live v1 method. */
-export const SET_PENDING_KEY = 'POST /api/v1/threads/{thread_id}/set-pending';
-export const SET_PENDING_OWNER = 4344;
-
 /**
  * Regression pinned by #5937: #5713 owns comparison and candidate discovery.
  * These two exact methods must not inherit the #5712 catalog-list or #4844
@@ -791,14 +787,6 @@ export function validate(census, allowlist, dispositions, callers, aipBaseline =
   }
   // Stale AIP baseline entries are pre-existing documentation debt, not new
   // v1 drift. They are counted in the report but do not fail the census gate.
-  const setPending = census.routes.find(
-    route => route.method === 'POST' && route.path === '/api/v1/threads/{thread_id}/set-pending',
-  );
-  if (!setPending) {
-    failures.push(`${SET_PENDING_KEY}: missing from census (Rust implementation does not exempt v1)`);
-  } else if (setPending.owner_issue !== SET_PENDING_OWNER) {
-    failures.push(`${SET_PENDING_KEY}: owner should be #${SET_PENDING_OWNER}, got ${setPending.owner_issue}`);
-  }
   for (const [key, expectedDisposition] of CBL_ROUTE_DISPOSITIONS) {
     const route = census.routes.find(item => `${item.method} ${item.path}` === key);
     if (!route) continue;
