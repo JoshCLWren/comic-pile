@@ -1210,7 +1210,7 @@ mod tests {
         let token = preview.preview_token.expect("available preview token");
         assert_no_preview_writes(&state).await;
 
-        let rejected = v2_commit(
+        let rejected = match v2_commit(
             state.clone(),
             9103,
             token.clone(),
@@ -1218,7 +1218,10 @@ mod tests {
             provider_rows.iter().map(|row| row.row_id.clone()).collect(),
         )
         .await
-        .expect_err("provider-only rows must not be committable");
+        {
+            Ok(_) => panic!("provider-only rows must not be committable"),
+            Err(error) => error,
+        };
         assert_eq!(rejected.detail(), "invalid_approved_row");
         assert_no_preview_writes(&state).await;
 
