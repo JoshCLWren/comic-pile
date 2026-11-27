@@ -1674,6 +1674,7 @@ mod tests {
     }
 
     #[tokio::test]
+<<<<<<< HEAD
     async fn v2_thread_dependency_diagnosis_ingress_reaches_rust_and_v1_is_404() {
         // #5709: the canonical dependency/blocking diagnosis resources moved
         // to v2 URLs. Register them in this Vercel entry table or the fallback
@@ -1747,6 +1748,8 @@ mod tests {
     }
 
     #[tokio::test]
+=======
+>>>>>>> origin/main
     async fn v2_thread_issue_read_ingress_reaches_rust_and_never_hits_json_404() {
         // #5706: both canonical v2 reads must be registered in this Vercel
         // entry table. An unauthenticated request must reach the dispatched
