@@ -88,9 +88,10 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::threads::ThreadsApi::openapi())
         .merge_from(crate::cbl_catalog::CblCatalogApi::openapi())
         .merge_from(crate::issue_identity::IssueIdentityApi::openapi())
-        // The browser still calls these v1 thread dependency URLs, which now
-        // run in Rust. Publishing their contract here keeps the generated TS
-        // client types after the shadowed Python handlers retire (#5440).
+        // The remaining v1 thread ordering reads still run in Rust (#5709
+        // moved their dependency and eligibility URLs to v2). Publishing their
+        // contract here keeps the generated TS client types after the shadowed
+        // Python handlers retire (#5440).
         .merge_from(crate::thread_ordering::ThreadOrderingApi::openapi())
         .merge_from(crate::thread_issues::ThreadIssuesApi::openapi())
         .merge_from(crate::dependency_groups::DependencyGroupsApi::openapi())
@@ -127,16 +128,8 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
             "/api/v1/issues/{issue_id}/comicvine",
         ),
         (
-            "/api/v2/threads/{thread_id}/dependencies",
-            "/api/v1/threads/{thread_id}/dependencies",
-        ),
-        (
             "/api/v2/issues/{issue_id}/dependencies",
             "/api/v1/issues/{issue_id}/dependencies",
-        ),
-        (
-            "/api/v2/threads/{thread_id}/issue-dependencies",
-            "/api/v1/threads/{thread_id}/issue-dependencies",
         ),
     ] {
         if let Some(item) = document.paths.paths.get(source).cloned() {
@@ -177,10 +170,10 @@ mod tests {
         assert_eq!(expected.trim_end(), generated.trim_end());
     }
 
-    /// The thread dependency operations moved to native Rust but their browser
-    /// URLs stay on v1. Their response component schemas must stay in the
-    /// same-path document so retiring the Python handlers does not erase the
-    /// `components['schemas'][...]` aliases in the generated TS client (#5440).
+    /// The thread dependency operations moved to native Rust and their browser
+    /// URLs moved to v2 (#5709). Their response component schemas must stay in
+    /// the same-path document so retiring the Python handlers does not erase
+    /// the `components['schemas'][...]` aliases in the generated TS client (#5440).
     #[test]
     fn same_path_contract_documents_thread_dependency_schemas() {
         let document = serde_json::to_value(same_path_openapi()).expect("OpenAPI");
