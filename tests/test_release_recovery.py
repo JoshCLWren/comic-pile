@@ -8,6 +8,8 @@ the idempotency/deployment invariants required by the issue contract.
 from __future__ import annotations
 
 import json
+import urllib.error
+import urllib.request
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -295,3 +297,82 @@ def test_load_candidate_rejects_oversized_files(tmp_path: Path) -> None:
     valid = tmp_path / "valid.json"
     valid.write_text(json.dumps(_candidate()), encoding="utf-8")
     assert recovery._load_candidate(valid)["source_pr_number"] == 9
+
+
+def test_github_request_accepts_absolute_github_api_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A full GitHub API URL is accepted without double-prefixing the host."""
+
+    class _Response:
+        def __enter__(self) -> "_Response":
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b'{"ok": true}'
+
+    seen: dict[str, str] = {}
+
+    def fake_urlopen(request: urllib.request.Request, timeout: int = 30) -> _Response:
+        seen["url"] = request.full_url
+        return _Response()
+
+    monkeypatch.setattr(recovery.urllib.request, "urlopen", fake_urlopen)
+    payload = recovery._github_request(
+        "https://api.github.com/repos/JoshCLWren/comic-pile/pulls/1"
+    )
+
+    assert payload == {"ok": True}
+    assert seen["url"] == "https://api.github.com/repos/JoshCLWren/comic-pile/pulls/1"
+
+
+def test_github_request_rejects_malformed_absolute_url_without_leaking_secret() -> None:
+    """Malformed GitHub URLs fail with a URL-kind message and no secret leak."""
+    secret = "ghp_supersecretvalue1234567890"
+    bad_url = f"https://api.github.comhttps://api.github.com/repos/x/y/pulls/1?token={secret}"
+
+    with pytest.raises(recovery.RecoveryError) as exc_info:
+        recovery._github_request(bad_url)
+
+    message = str(exc_info.value)
+    assert "GitHub API URL is invalid" == message
+    assert secret not in message
+    assert bad_url not in message
+
+
+def test_read_json_names_url_kind_on_dns_failure_without_leaking_secret(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """DNS failures name the request kind without echoing secret-bearing URLs."""
+    secret = "token-should-not-appear"
+    request = urllib.request.Request(
+        f"https://api.github.com/repos/JoshCLWren/comic-pile/pulls/1?access={secret}",
+        headers={"Accept": "application/vnd.github+json"},
+    )
+
+    def fake_urlopen(*args: object, **kwargs: object) -> object:
+        raise urllib.error.URLError("[Errno -2] Name or service not known")
+
+    monkeypatch.setattr(recovery.urllib.request, "urlopen", fake_urlopen)
+
+    with pytest.raises(recovery.RecoveryError) as exc_info:
+        recovery._read_json(request, source_name="GitHub API")
+
+    message = str(exc_info.value)
+    assert message == "GitHub API request failed: [Errno -2] Name or service not known"
+    assert secret not in message
+    assert "access=" not in message
+
+
+def test_read_url_json_rejects_invalid_url_without_leaking_secret() -> None:
+    """Invalid absolute URLs are rejected before any network request."""
+    secret = "super-secret"
+    with pytest.raises(recovery.RecoveryError) as exc_info:
+        recovery._read_url_json(f"notaurl://example.invalid/{secret}", source_name="production health")
+
+    message = str(exc_info.value)
+    assert message == "production health URL is invalid"
+    assert secret not in message
