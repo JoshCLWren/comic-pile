@@ -573,8 +573,6 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-taste.ts",
-        "frontend/src/test/p0-auth-outage-recovery.spec.ts",
         "frontend/src/unit/api-taste.test.ts"
       ]
     },
@@ -588,7 +586,6 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-taste.ts",
         "frontend/src/unit/api-taste.test.ts"
       ]
     },
@@ -1018,10 +1015,7 @@
       "rollout_status": "slice-open",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": [
-        "frontend/src/services/api-taste.ts",
-        "frontend/src/unit/api-taste.test.ts"
-      ]
+      "consumers": []
     },
     {
       "method": "POST",
