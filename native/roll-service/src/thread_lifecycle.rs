@@ -11,12 +11,8 @@
 //! * `POST /api/v1/threads/reactivate`
 //! * `GET /api/v1/threads/stale`
 //! * `POST /api/v1/threads/check-duplicates`
-<<<<<<< HEAD
-=======
 //! * `POST /api/v2/threads:checkDuplicates` (AIP-136 advisory collection
-//!   custom method, #5705; same bounded, owner-scoped wire contract)
->>>>>>> origin/main
-//! * `GET /api/v1/threads/excluded/threads`
+//!   custom method, #5705; same bounded, owner-s//! * `GET /api/v1/threads/excluded/threads`
 //!
 //! The membership batch was retired from `/api/v1/threads/groups:batch` and is
 //! now the single v2 operation `POST /api/v2/reading-order-groups:resolveMemberships` (#5711).
@@ -2881,11 +2877,6 @@ pub async fn check_potential_duplicates(
 }
 
 // ---------------------------------------------------------------------------
-<<<<<<< HEAD
-// POST /api/v2/reading-order-groups:resolveMemberships
-// ---------------------------------------------------------------------------
-
-=======
 // POST /api/v2/threads:checkDuplicates
 // ---------------------------------------------------------------------------
 
@@ -2905,12 +2896,7 @@ pub async fn check_potential_duplicates_v2(
     check_potential_duplicates(state, user, body).await
 }
 
-// ---------------------------------------------------------------------------
-// POST /api/v2/reading-order-groups:resolveMemberships
-// ---------------------------------------------------------------------------
-
->>>>>>> origin/main
-/// `POST /api/v2/reading-order-groups:resolveMemberships`
+// -------------------------------------------------------/// `POST /api/v2/reading-order-groups:resolveMemberships`
 ///
 /// Single bounded request that resolves group memberships for every owned
 /// thread named in the body. This is the only mounted membership batch route;
@@ -3263,8 +3249,6 @@ pub fn list_excluded_threads_documentation() {}
 #[allow(dead_code)]
 pub fn check_potential_duplicates_documentation() {}
 
-<<<<<<< HEAD
-=======
 // The v2 DTOs are shared with the retained v1 path (#5705): only the path and
 // operation identity are new, so no second set of types is declared here.
 #[utoipa::path(
@@ -3282,10 +3266,7 @@ pub fn check_potential_duplicates_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn check_potential_duplicates_v2_documentation() {}
-
->>>>>>> origin/main
-#[cfg(test)]
+pub fn check_potential_duplicates_v2#[cfg(test)]
 mod tests {
     use super::*;
 
