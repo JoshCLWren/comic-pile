@@ -971,24 +971,8 @@ pub async fn list_thread_groups(
     Ok(Json(groups))
 }
 
-/// Basic group read used by mutate responses; the canonical v2 Get folds in
-/// the enriched detail view through `get_group_detail`.
-pub async fn get_group(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
-    group_id: Result<Path<String>, PathRejection>,
-) -> Result<Json<DependencyGroupResponse>, ApiError> {
-    let group_id = parse_path_i32(group_id)?;
-    let connection = db::checkout(&state).await?;
-    let group = owned_group(&**connection, group_id, user.id())
-        .await?
-        .ok_or_else(|| ApiError::NotFound(format!("Group {group_id} not found")))?;
-    let memberships = memberships(&connection, group_id).await?;
-    let response = group_response(&connection, &group, &memberships).await?;
-    Ok(Json(response))
-}
-
-/// `GET /api/v1/reading-order-groups/{group_id}/detail`
+/// Shared detail builder behind `GET /api/v2/readingOrderGroups/{group_id}`;
+/// v2 has no separate `/detail` action path (#5710).
 pub async fn get_group_detail(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1068,7 +1052,7 @@ pub async fn get_group_detail(
     }))
 }
 
-/// `PATCH /api/v1/reading-order-groups/{group_id}`
+/// Shared rename delegate behind `PATCH /api/v2/readingOrderGroups/{group_id}`.
 pub async fn update_group(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1142,7 +1126,7 @@ async fn update_group_tx(
     })
 }
 
-/// `DELETE /api/v1/reading-order-groups/{group_id}`
+/// Shared delete delegate behind `DELETE /api/v2/readingOrderGroups/{group_id}`.
 pub async fn delete_group(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
