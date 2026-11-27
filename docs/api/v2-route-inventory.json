@@ -6,10 +6,10 @@
     "generated_by": "scripts/generate_route_burndown.mjs",
     "issue": 4739,
     "ingress_source": "vercel.json",
-    "total_live_operations": 150,
-    "native_rust": 150,
+    "total_live_operations": 151,
+    "native_rust": 151,
     "python_fastapi": 0,
-    "native_rust_status": 150,
+    "native_rust_status": 151,
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 0
@@ -2405,6 +2405,19 @@
         "proof_reference": "native/roll-service/src/issue_mutation.rs",
         "measurement_status": "pending-fixture"
       },
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5704,
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/threads/{thread_id}:reactivate",
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
       "verified_against": "vercel.json"
