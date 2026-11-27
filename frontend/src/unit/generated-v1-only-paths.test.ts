@@ -46,4 +46,26 @@ describe('generated OpenAPI client surface', () => {
       expect(paths).toContain(path)
     }
   })
+
+  it('publishes only the v2 thread diagnosis resources (#5709)', () => {
+    const paths = Object.keys(schema.paths)
+    for (const path of [
+      '/api/v2/threads/{thread_id}/dependencies',
+      '/api/v2/threads/{thread_id}/issueDependencies',
+      '/api/v2/threads/{thread_id}/eligibility',
+      '/api/v2/threads:explainEligibility',
+      '/api/v2/threads/{thread_id}/connections',
+    ]) {
+      expect(paths).toContain(path)
+    }
+    for (const path of [
+      '/api/v1/threads/{thread_id}/dependencies',
+      '/api/v1/threads/{thread_id}/issue-dependencies',
+      '/api/v1/threads/{thread_id}/connected',
+      '/api/v1/threads/{thread_id}:getBlockingInfo',
+      '/api/v1/threads:getBlockingInfo',
+    ]) {
+      expect(paths).not.toContain(path)
+    }
+  })
 })
