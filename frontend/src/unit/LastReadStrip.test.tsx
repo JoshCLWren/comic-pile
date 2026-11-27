@@ -289,7 +289,7 @@ describe('last read exact issue actions (#5904)', () => {
     expect(screen.getByTestId('issue-card-trigger-31')).toBeInTheDocument()
     expect(screen.queryByTestId('comic-issue-card')).not.toBeInTheDocument()
     // The strip's own cover stays the only cover until the card is opened.
-    expect(screen.getAllByTestId('comic-issue-cover')).toHaveLength(0)
+    expect(screen.queryAllByTestId('comic-issue-cover')).toHaveLength(0)
   })
 
   it('mounts no issue card when the record has no canonical owned id', () => {
