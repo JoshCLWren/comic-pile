@@ -52,6 +52,8 @@ export interface EditThreadData {
   notes: string
   issues_remaining?: number
   manual_creator_credits?: ManualCreatorCredit[]
+  /** Snapshot of the values the reader saw, used to reject stale edits (409). */
+  expected?: ThreadPatchPayload['expected']
 }
 
 export const DEFAULT_CREATE_STATE: QueueFormState = {
