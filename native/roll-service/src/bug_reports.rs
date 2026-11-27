@@ -1481,6 +1481,22 @@ fn production_issuer(
     }
 }
 
+/// Parse, validate shape and load the authenticated owner before any GitHub
+/// work. Shared by the retained same-path handler and the canonical v2 Create
+/// so diagnostic sanitization and ownership checks cannot drift between them.
+async fn prepare_submission(
+    state: &Arc<AppState>,
+    body: &Bytes,
+    user_id: i32,
+) -> Result<(BugReportCreate, String, bool, GithubSettings), BugReportError> {
+    let environment = state.environment;
+    let request = parse_request(body).map_err(|e| e.sanitized_for(environment))?;
+    let (username, is_admin) = load_user(state, user_id)
+        .await
+        .map_err(|e| BugReportError::from(e).sanitized_for(environment))?;
+    Ok((request, username, is_admin, github_settings()))
+}
+
 /// Same create flow as the axum handler with an explicitly injected issuer.
 ///
 /// Production [`create`] always passes the real HTTPS GitHub issuer. Tests
@@ -1492,17 +1508,12 @@ async fn create_with_issuer(
     body: Bytes,
     issuer: &GithubIssuer<'_>,
 ) -> Result<Response, BugReportError> {
-    let environment = state.environment;
-    let request = parse_request(&body).map_err(|e| e.sanitized_for(environment))?;
-    let (username, is_admin) = load_user(state, user_id)
-        .await
-        .map_err(|e| BugReportError::from(e).sanitized_for(environment))?;
-    let settings = github_settings();
+    let (request, username, is_admin, settings) = prepare_submission(state, &body, user_id).await?;
     let outcome = submit_with_issuer(
         state, user_id, username, is_admin, request, settings, issuer,
     )
     .await
-    .map_err(|e| e.sanitized_for(environment))?;
+    .map_err(|e| e.sanitized_for(state.environment))?;
     match outcome {
         SubmitOutcome::RateLimited(response) => Ok(response),
         SubmitOutcome::Created(issue_url) => {
@@ -1541,17 +1552,12 @@ async fn create_v2_with_issuer(
     body: Bytes,
     issuer: &GithubIssuer<'_>,
 ) -> Result<Response, BugReportError> {
-    let environment = state.environment;
-    let request = parse_request(&body).map_err(|e| e.sanitized_for(environment))?;
-    let (username, is_admin) = load_user(state, user_id)
-        .await
-        .map_err(|e| BugReportError::from(e).sanitized_for(environment))?;
-    let settings = github_settings();
+    let (request, username, is_admin, settings) = prepare_submission(state, &body, user_id).await?;
     let outcome = submit_with_issuer(
         state, user_id, username, is_admin, request, settings, issuer,
     )
     .await
-    .map_err(|e| e.sanitized_for(environment))?;
+    .map_err(|e| e.sanitized_for(state.environment))?;
     match outcome {
         SubmitOutcome::RateLimited(response) => Ok(response),
         SubmitOutcome::Created(issue_url) => created_v2_response(&issue_url),
