@@ -152,7 +152,7 @@ reader_prerequisites AS (
     FROM dependencies d
     WHERE d.origin = 'reader'
       -- Historical CBL materialization notes are inert audit data, not live
-      -- reader prerequisites; the Reading List evaluator already projects
+      -- reader prerequisites. The Reading List evaluator already projects
       -- list order. Keep them out of canonical eligibility (#5709).
       AND (d.note IS NULL OR d.note NOT LIKE 'cbl-order:%')
       AND (EXISTS (SELECT 1 FROM owned_issues i WHERE i.id = d.source_issue_id)

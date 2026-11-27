@@ -169,7 +169,7 @@ Database-backed Rust tests cover the runtime and fail with setup instructions wh
 
 - `native/roll-service/tests/reading_cycle_containment.rs` covers cycles,
   converted-edge containment, and the reader projection.
-- `native/roll-service/tests/thread_ordering_v1_http.rs` covers ordering, reader
+- `native/roll-service/tests/thread_diagnostics_http.rs` covers ordering, reader
   entries, and blocker explanations.
 - `native/roll-service/tests/reading_boundary_concurrency.rs` covers boundary
   capability and the setting-off path.
