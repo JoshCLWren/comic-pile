@@ -672,6 +672,13 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/series-mapping-commits",
             post(catalog_commit::commit_series_mapping_handler),
         )
+        // #5716: AIP-136 stateless collection custom method. The v1 preview
+        // alias stays mounted only until production proof retires it; no new
+        // caller may use it.
+        .route(
+            "/api/v2/seriesMappings:preview",
+            post(catalog_series_mapping_preview::preview_series_mappings_v2),
+        )
         .route(
             "/api/v1/catalog/series-mappings/preview",
             post(catalog_series_mapping_preview::preview_series_mapping_handler),
@@ -1615,6 +1622,7 @@ mod tests {
     }
 
     #[tokio::test]
+<<<<<<< HEAD
     async fn retired_v1_dependency_diagnosis_routes_return_404_in_inner_router() {
         // #5709: dependency/blocking/connection diagnosis is v2-only. The
         // retired aliases must not fall through to a live handler or to the
@@ -1681,6 +1689,8 @@ mod tests {
     }
 
     #[tokio::test]
+=======
+>>>>>>> origin/main
     async fn v2_group_crud_is_mounted_and_retired_v1_crud_returns_404_in_inner_router() {
         let config = Config::from_lookup(|name| match name {
             "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),

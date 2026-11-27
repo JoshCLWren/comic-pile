@@ -29451,6 +29451,48 @@
         ]
       }
     },
+    "/api/v2/seriesMappings:preview": {
+      "post": {
+        "description": "Stateless AIP-136 collection custom method: build a read-only series-mapping preview and a signed idempotency token for the durable commit. No mappings, receipts, history or provider state are written.",
+        "operationId": "preview_series_mappings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NativeSeriesMappingPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeSeriesMappingPreviewResponse"
+                }
+              }
+            },
+            "description": "Read-only series mapping preview"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
     "/api/v2/tags": {
       "get": {
         "operationId": "list_tags_documentation",
@@ -30224,6 +30266,7 @@
         ]
       }
     },
+<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/connections": {
       "get": {
         "description": "List owner-scoped threads connected through reader-authored dependencies, with circularity derived from the effective reading precedence graph.",
@@ -30275,6 +30318,8 @@
         ]
       }
     },
+=======
+>>>>>>> origin/main
     "/api/v2/threads/{thread_id}/creatorCredits": {
       "get": {
         "operationId": "thread_creator_credits",
@@ -30347,6 +30392,7 @@
         ]
       }
     },
+<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/dependencies": {
       "get": {
         "description": "List owner-scoped reader-authored dependency edges where one thread blocks others and where it is blocked. Returns {blocking, blocked_by} of enriched DependencyResponse entries ordered by dependency id; historical converted rows and inert cbl-order notes are excluded.",
@@ -30446,6 +30492,8 @@
         ]
       }
     },
+=======
+>>>>>>> origin/main
     "/api/v2/threads/{thread_id}/issue-order": {
       "put": {
         "description": "Replace the complete issue order atomically. The projected Option E graph is validated before commit, so a manual reorder cannot introduce a strict-list/series-order cycle.",
@@ -30914,6 +30962,7 @@
         ]
       }
     },
+<<<<<<< HEAD
     "/api/v2/threads:explainEligibility": {
       "post": {
         "description": "Explain eligibility for 1..500 owner-scoped threads in one canonical graph evaluation. Explanations use strict/loose/hold/prerequisite/exclusion logic and isolate cycles.",
@@ -30963,6 +31012,8 @@
         ]
       }
     },
+=======
+>>>>>>> origin/main
     "/api/v2/undo/{session_id}/snapshots": {
       "get": {
         "operationId": "list_undo_snapshots_documentation",

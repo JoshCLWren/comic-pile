@@ -36,6 +36,9 @@ use utoipa::OpenApi;
         crate::auth::dto::forgot_password_documentation,
         crate::auth::dto::reset_password_documentation,
         crate::catalog_commit::commit_documentation,
+        // #5716: stateless AIP-136 preview, deliberately separate from the
+        // durable commit operation registered above.
+        crate::catalog_series_mapping_preview::preview_series_mappings_v2_documentation,
         crate::issue_identity::cbl_adoption_commit_documentation,
         crate::issue_identity::cbl_targeted_adoption_commit_documentation,
         crate::activity::list_activity_documentation,
@@ -292,6 +295,14 @@ use utoipa::OpenApi;
         crate::catalog_commit::CommitRequest,
         crate::catalog_commit::CommitResponse,
         crate::catalog_commit::CommitSeriesMapping,
+        // #5716: the preview DTOs are shared by the retained v1 alias, but the
+        // canonical v2 custom method must publish them in the v2 contract too.
+        crate::catalog_series_mapping_preview::SeriesMappingPreviewRequest,
+        crate::catalog_series_mapping_preview::SeriesMappingPreviewResponse,
+        crate::catalog_series_mapping_preview::SeriesMappingPreviewRow,
+        crate::catalog_series_mapping_preview::SeriesMappingPreviewScope,
+        crate::catalog_series_mapping_preview::SeriesMappingPreviewCounts,
+        crate::catalog_series_mapping_preview::SeriesMappingPreviewProviderSeries,
         crate::issue_identity::CommitSeriesDecision,
         crate::issue_identity::CommitEntryOverride,
         crate::issue_identity::CblAdoptionCommitRequest,
@@ -403,9 +414,12 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         // retired `/api/v1` aliases were unmounted. Publish them here so the
         // generated frontend client stays aligned with the live ingress.
         .merge_from(crate::dependency_groups::dependency_groups_v2_openapi())
+<<<<<<< HEAD
         // #5709: canonical eligibility, batch explanations and reader-authored
         // connections are v2-only; the v1 diagnostics were retired outright.
         .merge_from(crate::thread_ordering::thread_ordering_v2_openapi())
+=======
+>>>>>>> origin/main
         // #5710: canonical v2 reading-order-group collection CRUD; the retired
         // v1 paths are no longer part of the deployed contract.
         .merge_from(crate::dependency_groups::reading_order_groups_v2_openapi());
@@ -471,6 +485,50 @@ mod tests {
         );
     }
 
+<<<<<<< HEAD
+=======
+    /// #5716: the canonical preview is an AIP-136 stateless collection custom
+    /// method on the lowerCamelCase `seriesMappings` collection. It must not be
+    /// published as a v1 same-path operation in the v2 contract, and it must
+    /// share its DTOs with the retained commit so the idempotency token stays
+    /// intelligible end to end.
+    #[test]
+    fn series_mappings_preview_custom_method_is_in_v2_contract() {
+        let doc = document();
+        let operation = &doc["paths"]["/api/v2/seriesMappings:preview"]["post"];
+        assert_eq!(operation["operationId"], "preview_series_mappings");
+        assert_eq!(
+            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/SeriesMappingPreviewRequest"
+        );
+        assert_eq!(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/SeriesMappingPreviewResponse"
+        );
+        for schema in [
+            "SeriesMappingPreviewRequest",
+            "SeriesMappingPreviewResponse",
+            "SeriesMappingPreviewRow",
+            "SeriesMappingPreviewScope",
+            "SeriesMappingPreviewCounts",
+            "SeriesMappingPreviewProviderSeries",
+        ] {
+            assert!(
+                doc["components"]["schemas"][schema].is_object(),
+                "missing {schema} in v2 contract"
+            );
+        }
+        assert!(
+            doc["paths"]["/api/v1/catalog/series-mappings/preview"].is_null(),
+            "v1 preview must not be published in the canonical v2 contract"
+        );
+        assert!(
+            doc["paths"]["/api/v2/series-mapping-commits"]["post"].is_object(),
+            "durable v2 commit must stay registered"
+        );
+    }
+
+>>>>>>> origin/main
     /// The issue read-state and reader-context operations moved from their
     /// `/api/v1/issues/{id}:action` URLs to v2 resources. Every method must stay
     /// in both the domain document and the aggregate runtime contract with its
