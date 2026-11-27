@@ -10677,6 +10677,48 @@
         ]
       }
     },
+    "/api/v2/threads:checkDuplicates": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "description": "Advisory AIP-136 collection custom method: report existing volumes that may be the proposed series. Does not create a Thread. Results are owner-scoped, exclude a named thread, and are capped at five matches.",
+        "operationId": "check_duplicates",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckDuplicatesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Possible existing volumes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckDuplicatesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/undo/{session_id}/snapshots": {
       "get": {
         "tags": [
@@ -13360,6 +13402,51 @@
           },
           "source_repository": {
             "type": "string"
+          }
+        }
+      },
+      "CheckDuplicatesRequest": {
+        "type": "object",
+        "description": "Body of `POST /api/v1/threads/check-duplicates`.",
+        "required": [
+          "title",
+          "format"
+        ],
+        "properties": {
+          "comicvine_volume_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "exclude_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "format": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "CheckDuplicatesResponse": {
+        "type": "object",
+        "description": "Response of `POST /api/v1/threads/check-duplicates`.",
+        "required": [
+          "matches"
+        ],
+        "properties": {
+          "matches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PotentialDuplicateMatch"
+            }
           }
         }
       },
@@ -20407,6 +20494,61 @@
           "all_completed",
           "all_out_of_pool"
         ]
+      },
+      "PotentialDuplicateMatch": {
+        "type": "object",
+        "description": "One possible existing volume.",
+        "required": [
+          "thread_id",
+          "title",
+          "format",
+          "status",
+          "issues_remaining",
+          "match_type"
+        ],
+        "properties": {
+          "comicvine_volume_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "format": {
+            "type": "string"
+          },
+          "issues_remaining": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "match_type": {
+            "type": "string"
+          },
+          "start_year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
       },
       "PreviewIssueItem": {
         "type": "object",
