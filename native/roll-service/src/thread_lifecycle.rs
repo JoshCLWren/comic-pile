@@ -2167,7 +2167,6 @@ pub(crate) async fn list_stale_page(
             .collect();
         Ok(load_views(&*tx, user_id, &ids, Some(&available_ids)).await?)
     })
-    .await
     .map_err(|error| match error {
         LifecycleError::Api(api) => api,
         LifecycleError::Validation { .. } => {
@@ -2946,6 +2945,40 @@ pub fn list_thread_groups_batch_documentation() {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stale_cursor_round_trips_activity_and_null_anchor() {
+        let cursor = StaleCursor {
+            activity: "2026-01-02 03:04:05+00:00".to_string(),
+            id: 17,
+        };
+        assert_eq!(
+            decode_stale_cursor(&encode_stale_cursor(&cursor)).expect("valid cursor"),
+            cursor
+        );
+        let null_anchor = StaleCursor {
+            activity: String::new(),
+            id: 3,
+        };
+        assert_eq!(
+            decode_stale_cursor(&encode_stale_cursor(&null_anchor)).expect("valid cursor"),
+            null_anchor
+        );
+    }
+
+    #[test]
+    fn stale_cursor_rejects_foreign_or_malformed_tokens() {
+        assert_eq!(
+            decode_stale_cursor("not-base64").unwrap_err().detail(),
+            "Invalid stale page token"
+        );
+        let queue_cursor = URL_SAFE_NO_PAD
+            .encode(br#"{"sort":"position","search":"","values":["0","1","2"]}"#);
+        assert_eq!(
+            decode_stale_cursor(&queue_cursor).unwrap_err().detail(),
+            "Invalid stale page token"
+        );
+    }
 
     #[test]
     fn title_similarity_matches_python_ladder() {

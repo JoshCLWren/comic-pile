@@ -207,17 +207,6 @@ enum ThreadFilter {
     Excluded,
 }
 
-impl ThreadFilter {
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Active => "active",
-            Self::Completed => "completed",
-            Self::Stale => "stale",
-            Self::Excluded => "excluded",
-        }
-    }
-}
-
 /// Fully validated and normalized parameters for one v2 threads List request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ResolvedListQuery {
