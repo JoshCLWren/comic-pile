@@ -447,7 +447,7 @@ export async function createThread(
   let threadId: number | null = null;
 
   while (!success && attempts < maxAttempts) {
-    const response = await page.request.post('/api/v2/threads', {
+    const response = await page.request.post('/api/v1/threads/', {
       data: dataWithoutTotal,
         headers: jsonHeaders,
       });

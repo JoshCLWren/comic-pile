@@ -2,20 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { createThreadsApi } from '../services/api-threads'
 import { createHttpClientStub } from './httpClientStub'
 
-describe('threadsApi.create', () => {
-  it('posts to the canonical v2 threads collection (#5702)', async () => {
-    const client = createHttpClientStub()
-    const payload = { title: 'Saga', format: 'Comic', issues_remaining: 4 }
-    client.post.mockResolvedValueOnce({ ...payload, id: 7 })
-
-    const api = createThreadsApi(client)
-    await api.create(payload)
-
-    expect(client.post).toHaveBeenCalledTimes(1)
-    expect(client.post).toHaveBeenCalledWith('/v2/threads', payload)
-  })
-})
-
 describe('threadsApi.checkExcludedStatus', () => {
   it('aggregates excluded and active ids across chunks', async () => {
     const client = createHttpClientStub()

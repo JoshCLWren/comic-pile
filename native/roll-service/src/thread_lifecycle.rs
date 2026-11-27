@@ -1,8 +1,7 @@
 //! Native cutover of the Thread lifecycle writers that kept their original
 //! `/api/v1/threads` URLs (#4832 part A):
 //!
-//! * `POST /api/v1/threads/` (create; retained until live v2 proof)
-//! * `POST /api/v2/threads` (AIP-133 standard Create, #5702)
+//! * `POST /api/v1/threads/` (create)
 //! * `PUT` / `DELETE /api/v1/threads/{thread_id}`
 //! * `POST /api/v1/threads/{thread_id}/exclude`, `/restore`, `/set-pending`
 //! * `POST /api/v1/threads/reactivate`
@@ -47,7 +46,7 @@ use crate::{
 use axum::{
     body::Bytes,
     extract::{Path, RawQuery, State},
-    http::{header, StatusCode},
+    http::StatusCode,
     response::{IntoResponse, Response},
     Json,
 };
@@ -829,31 +828,6 @@ pub async fn create_thread(
     let input = parse_create(parse_body(&body)?)?;
     let id = retry_deadlock!(3, 100u64, create_once(&state, user, &input))?;
     respond_thread(&state, user, id, StatusCode::CREATED).await
-}
-
-/// `POST /api/v2/threads` — AIP-133 standard Create for the reader threads
-/// collection (#5702).
-///
-/// This is the v2 wire contract, not a version feature flag: the browser
-/// caller posts to the same resource collection it already lists with
-/// `GET /api/v2/threads`. The write path is shared with the legacy
-/// `POST /api/v1/threads/` handler so owner assignment, the five-second
-/// duplicate-merge guard and the Python validation envelope stay identical.
-/// The created resource is returned at `201` with its stable `id` in the body
-/// and a `Location` header naming the v2 collection member. No Plan,
-/// dependency or issue rows are created by this operation.
-pub async fn create_thread_v2(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
-    body: Bytes,
-) -> HandlerResult {
-    let input = parse_create(parse_body(&body)?)?;
-    let id = retry_deadlock!(3, 100u64, create_once(&state, user, &input))?;
-    let mut response = respond_thread(&state, user, id, StatusCode::CREATED).await?;
-    if let Ok(location) = header::HeaderValue::from_str(&format!("/api/v2/threads/{id}")) {
-        response.headers_mut().insert(header::LOCATION, location);
-    }
-    Ok(response)
 }
 
 // ---------------------------------------------------------------------------

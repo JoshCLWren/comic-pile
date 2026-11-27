@@ -40,19 +40,6 @@
     },
     {
       "bucket": "operations",
-      "method": "POST",
-      "path": "/api/v2/threads",
-      "dest": "/api/native_roll.rs",
-      "src": "/api/v2/threads",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 5702,
-      "consumers": [
-        "frontend/src/services/api-threads.ts"
-      ]
-    },
-    {
-      "bucket": "operations",
       "method": "PUT",
       "path": "/api/v2/threads/{thread_id}/issue-order",
       "dest": "/api/native_roll.rs",
