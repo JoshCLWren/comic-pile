@@ -449,7 +449,8 @@ mod tests {
             .iter()
             .any(|p| p["name"] == "search" && p["in"] == "query"));
         assert_eq!(
-            collection["post"]["operationId"], "create_thread_v2_documentation"
+            collection["post"]["operationId"],
+            "create_thread_v2_documentation"
         );
         assert_eq!(
             collection["post"]["requestBody"]["content"]["application/json"]["schema"]["$ref"],
