@@ -1342,9 +1342,11 @@ pub async fn confirm_identity(
     // Release the pooled connection before inline hydration checks one out;
     // on a small pool the handler holding it would starve the hydrator.
     drop(connection);
-    response.metadata_hydration = Some(
-        hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started, false).await,
-    );
+    let hydration =
+        hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started, false).await;
+    // No credential means no attempt was made: keep the frozen wire shape.
+    response.metadata_hydration =
+        (hydration.outcome != MetadataHydrationOutcome::ProviderNotConfigured).then_some(hydration);
     Ok(Json(response))
 }
 
@@ -1410,9 +1412,11 @@ pub async fn replace_identity(
     let mut response = identity_state(&tx, user.id(), issue_id).await?;
     tx.commit().await.map_err(db::query_error)?;
     drop(connection);
-    response.metadata_hydration = Some(
-        hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started, false).await,
-    );
+    let hydration =
+        hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started, false).await;
+    // No credential means no attempt was made: keep the frozen wire shape.
+    response.metadata_hydration =
+        (hydration.outcome != MetadataHydrationOutcome::ProviderNotConfigured).then_some(hydration);
     Ok(Json(response))
 }
 

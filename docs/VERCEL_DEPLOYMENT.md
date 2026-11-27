@@ -168,8 +168,10 @@ nothing was written), `provider_not_configured`, `provider_unavailable`,
 overwrites valid stored metadata; the provider call runs outside any
 transaction or lock, and the result is persisted only if the issue is still
 confirmed to the identity that was fetched. Series imports never fan out one
-provider request per issue; deep metadata for those issues is fetched when the
-exact issue is opened or Retry is used.
+provider request per issue. Deep metadata for those imported issues is loaded by
+an explicit Retry: opening a `needs_hydration` issue shows the incomplete state
+and does not start a fetch, while a `not_deep_fetched` issue may fetch once on
+open.
 
 ### Concurrency and retry behavior
 
