@@ -116,11 +116,36 @@ def _parse_timestamp(value: str) -> datetime:
     return parsed.astimezone(UTC)
 
 
-def _read_json(request: urllib.request.Request) -> object:
+def _request_source_name(url: str) -> str:
+    """Classify a recovery URL for safe error reporting.
+
+    Args:
+        url: Absolute request URL.
+
+    Returns:
+        A coarse source label that never includes secrets or credentials.
+    """
+    try:
+        parsed = urllib.parse.urlsplit(url)
+    except ValueError:
+        return "release recovery source"
+    host = (parsed.hostname or "").lower()
+    if host == "api.github.com":
+        return "GitHub API"
+    if host == "comic-pile.vercel.app":
+        return "production health"
+    if host:
+        return "release recovery source"
+    return "release recovery source"
+
+
+def _read_json(request: urllib.request.Request, source_name: str | None = None) -> object:
     """Perform one bounded JSON GET.
 
     Args:
         request: Fully prepared request.
+        source_name: Coarse source label used in errors; derived from the URL
+            when omitted.
 
     Returns:
         The decoded JSON payload.
@@ -128,43 +153,63 @@ def _read_json(request: urllib.request.Request) -> object:
     Raises:
         RecoveryError: The request failed or did not return valid JSON.
     """
+    url = request.full_url
+    name = source_name or _request_source_name(url)
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             return json.loads(response.read().decode())
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")
-        raise RecoveryError(
-            f"HTTP {exc.code} from release recovery source: {detail[:500]}"
-        ) from exc
+        raise RecoveryError(f"HTTP {exc.code} from {name}: {detail[:500]}") from exc
     except (urllib.error.URLError, TimeoutError) as exc:
-        raise RecoveryError(f"Release recovery request failed: {exc}") from exc
+        reason = getattr(exc, "reason", exc)
+        raise RecoveryError(f"{name} request failed: {reason}") from exc
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise RecoveryError("Release recovery source returned invalid JSON") from exc
+        raise RecoveryError(f"{name} returned invalid JSON") from exc
 
 
-def _read_url_json(url: str) -> object:
+def _read_url_json(url: str, source_name: str | None = None) -> object:
     """Read one JSON document from an absolute URL.
 
     Args:
         url: Absolute HTTP URL.
+        source_name: Coarse source label used in errors.
 
     Returns:
         The decoded JSON payload.
+
+    Raises:
+        RecoveryError: The URL is malformed or the request failed.
     """
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        name = source_name or "release recovery source"
+        raise RecoveryError(f"{name} URL is invalid")
     return _read_json(
-        urllib.request.Request(url, headers={"Accept": "application/json"})
+        urllib.request.Request(url, headers={"Accept": "application/json"}),
+        source_name=source_name,
     )
 
 
-def _github_request(path: str) -> object:
-    """Read one GitHub REST path with the workflow token when available.
+def _github_request(path_or_url: str) -> object:
+    """Read one GitHub REST path or URL with the workflow token when available.
 
     Args:
-        path: REST path beginning with ``/``.
+        path_or_url: REST path beginning with ``/`` or an absolute GitHub API URL.
 
     Returns:
         The decoded GitHub response.
+
+    Raises:
+        RecoveryError: The URL is malformed or outside the GitHub API host.
     """
+    if path_or_url.startswith("/"):
+        url = f"{GITHUB_API_BASE}{path_or_url}"
+    else:
+        parsed = urllib.parse.urlsplit(path_or_url)
+        if parsed.scheme != "https" or parsed.netloc != "api.github.com":
+            raise RecoveryError("GitHub API URL is invalid")
+        url = path_or_url
     headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": "ComicPile-release-recovery",
@@ -174,7 +219,8 @@ def _github_request(path: str) -> object:
     if token:
         headers["Authorization"] = f"Bearer {token}"
     return _read_json(
-        urllib.request.Request(f"{GITHUB_API_BASE}{path}", headers=headers)
+        urllib.request.Request(url, headers=headers),
+        source_name="GitHub API",
     )
 
 
