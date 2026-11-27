@@ -63,7 +63,7 @@ describe('dependencyGroupsApi', () => {
     ])
 
     expect(client.get).toHaveBeenCalledWith(
-      '/v1/reading-order-groups/threads/42/groups',
+      '/v2/threads/42/reading-order-group-memberships',
     )
   })
 
@@ -79,7 +79,7 @@ describe('dependencyGroupsApi', () => {
     })
 
     expect(client.post).toHaveBeenCalledTimes(1)
-    expect(client.post).toHaveBeenCalledWith('/v1/threads/groups:batch', {
+    expect(client.post).toHaveBeenCalledWith('/v2/reading-order-groups:resolveMemberships', {
       thread_ids: [42, 43],
     })
     expect(client.get).not.toHaveBeenCalled()
@@ -98,7 +98,7 @@ describe('dependencyGroupsApi', () => {
     await expect(dependencyGroupsApi.addIssueRange(7, 42, 1, 8)).resolves.toEqual(result)
 
     expect(client.post).toHaveBeenCalledWith(
-      '/v1/reading-order-groups/7/issue-ranges',
+      '/v2/reading-order-groups/7/issue-ranges',
       {
         thread_id: 42,
         start_position: 1,
@@ -119,16 +119,16 @@ describe('dependencyGroupsApi', () => {
 
     expect(client.post).toHaveBeenNthCalledWith(
       1,
-      '/v1/reading-order-groups/7/members',
+      '/v2/reading-order-groups/7/members',
       { thread_id: 42 },
     )
     expect(client.post).toHaveBeenNthCalledWith(
       2,
-      '/v1/reading-order-groups/7/members',
+      '/v2/reading-order-groups/7/members',
       { issue_id: 99 },
     )
     expect(client.delete).toHaveBeenCalledWith(
-      '/v1/reading-order-groups/7/members/10',
+      '/v2/reading-order-groups/7/members/10',
     )
   })
 })

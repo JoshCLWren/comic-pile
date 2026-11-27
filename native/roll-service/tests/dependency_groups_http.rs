@@ -177,7 +177,7 @@ async fn reading_order_group_routes_round_trip_over_http() {
     assert_eq!(body["name"], json!("Crossover"));
 
     // Thread-level membership, then issue range (set-based insert).
-    let path = format!("/api/v1/reading-order-groups/{group_id}/members");
+    let path = format!("/api/v2/reading-order-groups/{group_id}/members");
     let (status, body) = send(
         &state,
         authed(
@@ -193,12 +193,12 @@ async fn reading_order_group_routes_round_trip_over_http() {
     let member_id = body["id"].as_i64().unwrap() as i32;
 
     // The group now appears in the thread-scoped listing.
-    let path = format!("/api/v1/reading-order-groups/threads/{thread_id}/groups");
+    let path = format!("/api/v2/threads/{thread_id}/reading-order-group-memberships");
     let (status, body) = send(&state, authed("GET", &path, &token, &csrf, None)).await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(body.as_array().unwrap().len(), 1);
 
-    let path = format!("/api/v1/reading-order-groups/{group_id}/issue-ranges");
+    let path = format!("/api/v2/reading-order-groups/{group_id}/issue-ranges");
     let (status, body) = send(
         &state,
         authed(
@@ -243,7 +243,7 @@ async fn reading_order_group_routes_round_trip_over_http() {
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
 
-    let path = format!("/api/v1/reading-order-groups/{group_id}/plans");
+    let path = format!("/api/v2/reading-order-groups/{group_id}/reading-plans");
     let (status, body) = send(&state, authed("GET", &path, &token, &csrf, None)).await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(body, json!([]));
@@ -267,7 +267,7 @@ async fn reading_order_group_routes_round_trip_over_http() {
         &state,
         authed(
             "DELETE",
-            &format!("/api/v1/reading-order-groups/{group_id}/members/{member_id}"),
+            &format!("/api/v2/reading-order-groups/{group_id}/members/{member_id}"),
             &token,
             &csrf,
             None,
@@ -360,7 +360,7 @@ async fn reading_order_group_validation_uses_python_422_body() {
     // Malformed JSON bodies must map to the production validation body.
     let request = Request::builder()
         .method("POST")
-        .uri(format!("/api/v1/reading-order-groups/{group_id}/members"))
+        .uri(format!("/api/v2/reading-order-groups/{group_id}/members"))
         .header(header::AUTHORIZATION, format!("Bearer {token}"))
         .header("x-csrf-token", &csrf)
         .header(header::COOKIE, format!("csrf_token={csrf}"))
@@ -375,7 +375,7 @@ async fn reading_order_group_validation_uses_python_422_body() {
 
     // Issue-member sequence_order must be >= 1 (Python schema ge=1).
     for sequence_order in [0_i64, -1_i64] {
-        let path = format!("/api/v1/reading-order-groups/{group_id}/members");
+        let path = format!("/api/v2/reading-order-groups/{group_id}/members");
         let (status, body) = send(
             &state,
             authed(
@@ -591,7 +591,7 @@ async fn group_writers_serialize_with_sibling_issue_and_queue_writes() {
         let state = state.clone();
         let token = token.clone();
         let csrf = csrf.clone();
-        let path = format!("/api/v1/reading-order-groups/{group_id}/members");
+        let path = format!("/api/v2/reading-order-groups/{group_id}/members");
         tokio::spawn(async move {
             send(
                 &state,
@@ -721,7 +721,7 @@ async fn add_issue_range_serializes_with_sibling_issue_write() {
         let state = state.clone();
         let token = token.clone();
         let csrf = csrf.clone();
-        let path = format!("/api/v1/reading-order-groups/{group_id}/issue-ranges");
+        let path = format!("/api/v2/reading-order-groups/{group_id}/issue-ranges");
         tokio::spawn(async move {
             send(
                 &state,
@@ -792,7 +792,7 @@ async fn remove_member_serializes_with_sibling_issue_write() {
         let state = state.clone();
         let token = token.clone();
         let csrf = csrf.clone();
-        let path = format!("/api/v1/reading-order-groups/{group_id}/members/{member_id}");
+        let path = format!("/api/v2/reading-order-groups/{group_id}/members/{member_id}");
         tokio::spawn(
             async move { send(&state, authed("DELETE", &path, &token, &csrf, None)).await },
         )

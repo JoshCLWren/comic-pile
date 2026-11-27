@@ -89,7 +89,7 @@ async function seedLargeCrossover(page: Page): Promise<CrossoverFixture> {
 
   for (const threadId of threadIds) {
     const memberResponse = await page.request.post(
-      `/api/v1/reading-order-groups/${group.id}/members`,
+      `/api/v2/reading-order-groups/${group.id}/members`,
       {
         headers,
         data: { thread_id: threadId },

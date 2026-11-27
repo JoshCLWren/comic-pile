@@ -799,7 +799,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/queue-exclusion-groups/{group_id}/restore",
             post(queue_exclusions::restore_group),
         )
-        .route("/api/v2/threads", get(threads::list_threads))
+        .route(
+            "/api/v2/threads",
+            get(threads::list_threads).post(thread_lifecycle::create_thread_v2),
+        )
         .route(
             "/api/v1/threads/{thread_id}",
             get(threads::get_thread_detail),
@@ -889,9 +892,16 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/threads/excluded/threads",
             get(thread_lifecycle::list_excluded_threads),
         )
+        // The retired batch URL would otherwise be captured as a
+        // `/api/v1/threads/{thread_id}` action. Pin it to an explicit 404 so
+        // v2 is the only membership batch authority (#5711).
         .route(
             "/api/v1/threads/groups:batch",
-            post(thread_lifecycle::list_thread_groups_batch),
+            post(|| async { ApiError::NotFound("Not Found".to_string()) }),
+        )
+        .route(
+            "/api/v2/threads/{thread_id}/reading-order-group-memberships",
+            get(dependency_groups::list_thread_groups),
         )
         .route(
             "/api/v1/threads/reactivate",
@@ -1417,6 +1427,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             delete(dependency_groups::delete_group_v2),
         )
         .route(
+<<<<<<< HEAD
             "/api/v1/reading-order-groups/threads/{thread_id}/groups",
             get(dependency_groups::list_thread_groups),
         )
@@ -1431,14 +1442,46 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
             delete(dependency_groups::remove_member),
+=======
+            "/api/v1/reading-order-groups/{group_id}",
+            get(dependency_groups::get_group),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}",
+            patch(dependency_groups::update_group),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}",
+            delete(dependency_groups::delete_group),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/detail",
+            get(dependency_groups::get_group_detail),
+>>>>>>> origin/main
         )
         .route(
             "/api/v1/reading-order-groups/{group_id}/order",
             put(dependency_groups::set_group_order),
         )
         .route(
-            "/api/v1/reading-order-groups/{group_id}/plans",
+            "/api/v2/reading-order-groups:resolveMemberships",
+            post(thread_lifecycle::resolve_memberships),
+        )
+        .route(
+            "/api/v2/reading-order-groups/{group_id}/reading-plans",
             get(dependency_groups::list_crossover_plans),
+        )
+        .route(
+            "/api/v2/reading-order-groups/{group_id}/members",
+            post(dependency_groups::add_member),
+        )
+        .route(
+            "/api/v2/reading-order-groups/{group_id}/issue-ranges",
+            post(dependency_groups::add_issue_range),
+        )
+        .route(
+            "/api/v2/reading-order-groups/{group_id}/members/{member_id}",
+            delete(dependency_groups::remove_member),
         )
         .fallback(|| async { ApiError::NotFound("Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {
@@ -1525,6 +1568,43 @@ mod tests {
             to_bytes(response.into_body(), 4096).await.unwrap(),
             r#"{"detail":"Request timed out"}"#
         );
+    }
+
+    #[tokio::test]
+    async fn retired_v1_membership_routes_return_404_in_inner_router() {
+        let config = Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
+            _ => None,
+        })
+        .unwrap();
+        let state = Arc::new(AppState::new(config).unwrap());
+        for (method, uri) in [
+            ("POST", "/api/v1/threads/groups:batch"),
+            ("GET", "/api/v1/reading-order-groups/threads/42/groups"),
+            ("GET", "/api/v1/reading-order-groups/7/plans"),
+            ("POST", "/api/v1/reading-order-groups/7/members"),
+            ("POST", "/api/v1/reading-order-groups/7/issue-ranges"),
+            ("DELETE", "/api/v1/reading-order-groups/7/members/10"),
+        ] {
+            let response = router(Arc::clone(&state))
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{method} {uri}");
+            let bytes = to_bytes(response.into_body(), 1024).await.unwrap();
+            assert_eq!(
+                String::from_utf8_lossy(&bytes),
+                r#"{"detail":"Not Found"}"#,
+                "{method} {uri}"
+            );
+        }
     }
 
     #[test]

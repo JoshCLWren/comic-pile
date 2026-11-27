@@ -535,15 +535,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+<<<<<<< HEAD
     "/api/v1/reading-order-groups/threads/{thread_id}/groups": {
+=======
+    "/api/v1/reading-order-groups/": {
+>>>>>>> origin/main
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
+<<<<<<< HEAD
         /** Documentation-only operation for listing groups for a thread. */
         get: operations["dependency_groups_list_thread_groups"];
+=======
+        /** Documentation-only operation for listing reading-order groups. */
+        get: operations["dependency_groups_list"];
+        put?: never;
+        /** Documentation-only operation for creating a reading-order group. */
+        post: operations["dependency_groups_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reading-order-groups/{group_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for fetching one group. */
+        get: operations["dependency_groups_get"];
+        put?: never;
+        post?: never;
+        /** Documentation-only operation for deleting one group. */
+        delete: operations["dependency_groups_delete"];
+        options?: never;
+        head?: never;
+        /** Documentation-only operation for renaming one group. */
+        patch: operations["dependency_groups_update"];
+        trace?: never;
+    };
+    "/api/v1/reading-order-groups/{group_id}/detail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for fetching enriched group detail. */
+        get: operations["dependency_groups_get_detail"];
+>>>>>>> origin/main
         put?: never;
         post?: never;
         delete?: never;
@@ -552,6 +598,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+<<<<<<< HEAD
     "/api/v1/reading-order-groups/{group_id}/issue-ranges": {
         parameters: {
             query?: never;
@@ -603,6 +650,8 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+=======
+>>>>>>> origin/main
     "/api/v1/reading-order-groups/{group_id}/order": {
         parameters: {
             query?: never;
@@ -613,23 +662,6 @@ export interface paths {
         get?: never;
         /** Documentation-only operation for setting crossover order. */
         put: operations["dependency_groups_set_order"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/reading-order-groups/{group_id}/plans": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Documentation-only operation for listing linked continuity plans. */
-        get: operations["dependency_groups_list_plans"];
-        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -2813,6 +2845,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/reading-order-groups/{group_id}/issue-ranges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for adding an issue-position range (v2). */
+        post: operations["dependency_groups_v2_add_issue_range"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/reading-order-groups/{group_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for adding a group member (v2). */
+        post: operations["dependency_groups_v2_add_member"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/reading-order-groups/{group_id}/members/{member_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Documentation-only operation for removing a group member (v2). */
+        delete: operations["dependency_groups_v2_remove_member"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/reading-order-groups/{group_id}/reading-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for listing linked continuity plans (v2). */
+        get: operations["dependency_groups_v2_list_reading_plans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/reading-order-groups:resolveMemberships": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Documentation-only operation for the bounded v2 membership batch action.
+         * @description Resolve group memberships for several owned threads in one bounded response (AIP-136).
+         */
+        post: operations["dependency_groups_v2_resolve_memberships"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/reading-orders/": {
         parameters: {
             query?: never;
@@ -3371,7 +3491,14 @@ export interface paths {
         /** Documentation-only operation used to emit the generated OpenAPI contract. */
         get: operations["list_threads_documentation"];
         put?: never;
-        post?: never;
+        /**
+         * Documentation-only operation for the AIP-133 standard Create on the v2
+         *     threads collection (#5702). The handler lives in `thread_lifecycle` and
+         *     shares the legacy write path; only the URL and the `Location` response
+         *     header differ.
+         * @description Create a thread at the end of the authenticated reader's queue. The created resource (including its stable `id`) is returned at 201 with a `Location` header naming the v2 collection member. The write preserves owner assignment, the five-second duplicate-merge guard and the Python validation envelope; it creates no Plan, dependency or issue rows.
+         */
+        post: operations["create_thread_v2_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3452,6 +3579,23 @@ export interface paths {
          * @description Preview a delete or reorder edit before commit. Returns exact before/after issues, list memberships, read/rating/identity state, affected Queue/Roll frontier, duplicate risk and projected graph conflicts.
          */
         post: operations["preview_issue_structure_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/threads/{thread_id}/reading-order-group-memberships": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for listing a thread's group memberships (v2). */
+        get: operations["dependency_groups_v2_list_thread_group_memberships"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5858,6 +6002,10 @@ export interface components {
              */
             unprotected_frontiers: number;
         };
+        /** @description Body of `POST /api/v2/reading-order-groups:resolveMemberships`. */
+        GroupsBatchRequest: {
+            thread_ids: number[];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -6885,7 +7033,7 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
-        /** @description Python `ThreadResponse`. */
+        /** @description The Python `ThreadResponse` projection every lifecycle writer returns. */
         NativeThreadResponse: {
             blocking_reasons: string[];
             created_at: string;
@@ -6899,7 +7047,7 @@ export interface components {
             last_activity_at?: string | null;
             /** Format: double */
             last_rating?: number | null;
-            manual_creator_credits: Record<string, never>[];
+            manual_creator_credits: unknown;
             /** Format: int32 */
             next_unread_issue_id?: number | null;
             next_unread_issue_number?: string | null;
@@ -9218,6 +9366,18 @@ export interface components {
             /** Total Issues */
             total_issues?: number | null;
         };
+        /** @description Body of `POST /api/v1/threads/`. */
+        ThreadCreateRequest: {
+            format: string;
+            is_test?: boolean;
+            /** Format: int32 */
+            issues_remaining: number;
+            manual_creator_credits?: unknown[];
+            notes?: string | null;
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
+        };
         /**
          * @description Wire parity with Python `ThreadDependenciesResponse`
          *     (`app/schemas/dependency.py`): the `blocking` list holds edges where this
@@ -10904,6 +11064,7 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
     dependency_groups_list_thread_groups: {
         parameters: {
             query?: never;
@@ -10912,17 +11073,32 @@ export interface operations {
                 /** @description Owned thread identifier */
                 thread_id: number;
             };
+=======
+    dependency_groups_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+>>>>>>> origin/main
             cookie?: never;
         };
         requestBody?: never;
         responses: {
+<<<<<<< HEAD
             /** @description Groups containing the thread or its issues */
+=======
+            /** @description Owned groups with memberships */
+>>>>>>> origin/main
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
+<<<<<<< HEAD
                     "application/json": components["schemas"]["NativeDependencyGroupSummary"][];
+=======
+                    "application/json": components["schemas"]["NativeDependencyGroupResponse"][];
+>>>>>>> origin/main
                 };
             };
             /** @description Not authenticated */
@@ -10932,6 +11108,7 @@ export interface operations {
                 };
                 content?: never;
             };
+<<<<<<< HEAD
             /** @description Thread not found */
             404: {
                 headers: {
@@ -10946,6 +11123,8 @@ export interface operations {
                 };
                 content?: never;
             };
+=======
+>>>>>>> origin/main
             /** @description Database temporarily unavailable */
             503: {
                 headers: {
@@ -10955,6 +11134,7 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
     dependency_groups_add_issue_range: {
         parameters: {
             query?: never;
@@ -10963,10 +11143,18 @@ export interface operations {
                 /** @description Owned group identifier */
                 group_id: number;
             };
+=======
+    dependency_groups_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+>>>>>>> origin/main
             cookie?: never;
         };
         requestBody: {
             content: {
+<<<<<<< HEAD
                 "application/json": components["schemas"]["DependencyGroupIssueRangeCreateRequest"];
             };
         };
@@ -11027,12 +11215,23 @@ export interface operations {
         };
         responses: {
             /** @description Created membership */
+=======
+                "application/json": components["schemas"]["DependencyGroupCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created group */
+>>>>>>> origin/main
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
+<<<<<<< HEAD
                     "application/json": components["schemas"]["NativeDependencyGroupMemberResponse"];
+=======
+                    "application/json": components["schemas"]["NativeDependencyGroupResponse"];
+>>>>>>> origin/main
                 };
             };
             /** @description Not authenticated */
@@ -11042,6 +11241,7 @@ export interface operations {
                 };
                 content?: never;
             };
+<<<<<<< HEAD
             /** @description Group, thread, or issue not found */
             404: {
                 headers: {
@@ -11050,6 +11250,9 @@ export interface operations {
                 content?: never;
             };
             /** @description This member is already in the group */
+=======
+            /** @description A group with this name already exists */
+>>>>>>> origin/main
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11072,21 +11275,91 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
     dependency_groups_remove_member: {
+=======
+    dependency_groups_get: {
+>>>>>>> origin/main
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description Owned group identifier */
                 group_id: number;
+<<<<<<< HEAD
                 /** @description Membership identifier */
                 member_id: number;
+=======
+>>>>>>> origin/main
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
+<<<<<<< HEAD
             /** @description Membership removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+=======
+            /** @description Owned group */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeDependencyGroupResponse"];
+                };
+>>>>>>> origin/main
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+<<<<<<< HEAD
+            /** @description Group or member not found */
+=======
+            /** @description Group not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dependency_groups_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned group identifier */
+                group_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Group deleted */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -11100,7 +11373,121 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Group or member not found */
+            /** @description Group not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dependency_groups_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned group identifier */
+                group_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DependencyGroupUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Renamed group */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeDependencyGroupResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Group not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A group with this name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dependency_groups_get_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned group identifier */
+                group_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned group detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeDependencyGroupDetailResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Group not found */
+>>>>>>> origin/main
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -11156,57 +11543,6 @@ export interface operations {
                 content?: never;
             };
             /** @description Group, issue, or membership not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request validation failed */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    dependency_groups_list_plans: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Owned group identifier */
-                group_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Linked continuity plans */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["NativeDependencyGroupSummary"][];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Group not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -17293,6 +17629,272 @@ export interface operations {
             };
         };
     };
+    dependency_groups_v2_add_issue_range: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned group identifier */
+                group_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DependencyGroupIssueRangeCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Range membership result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeDependencyGroupIssueRangeResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Group or thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dependency_groups_v2_add_member: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned group identifier */
+                group_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DependencyGroupMemberCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created membership */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeDependencyGroupMemberResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Group, thread, or issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description This member is already in the group */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dependency_groups_v2_remove_member: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned group identifier */
+                group_id: number;
+                /** @description Membership identifier */
+                member_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Membership removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Group or member not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dependency_groups_v2_list_reading_plans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned group identifier */
+                group_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Linked continuity plans */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeDependencyGroupSummary"][];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Group not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dependency_groups_v2_resolve_memberships: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupsBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Map of thread id to crossover groups */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: components["schemas"]["NativeDependencyGroupSummary"][];
+                    };
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A requested thread is not owned by the reader */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     reading_orders_list: {
         parameters: {
             query?: never;
@@ -18773,6 +19375,44 @@ export interface operations {
             };
         };
     };
+    create_thread_v2_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThreadCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created (or the duplicate created seconds earlier) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeThreadResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     issue_order_documentation: {
         parameters: {
             query?: never;
@@ -18998,6 +19638,57 @@ export interface operations {
             };
             /** @description Thread or issue not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dependency_groups_v2_list_thread_group_memberships: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Groups containing the thread or its issues */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeDependencyGroupSummary"][];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

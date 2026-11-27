@@ -358,7 +358,10 @@ fn app() -> Router {
         .route("/api/v1/threads/", post(native_dispatch))
         .route("/api/v1/threads/check-duplicates", post(native_dispatch))
         .route("/api/v1/threads/excluded/threads", get(native_dispatch))
-        .route("/api/v1/threads/groups:batch", post(native_dispatch))
+        // #5711: the retired membership batch alias must not be swallowed by
+        // the generic `/api/v1/threads/{thread_id}` POST action route. A static
+        // segment wins in axum and terminates at the Rust JSON 404 fallback.
+        .route("/api/v1/threads/groups:batch", post(native_not_found))
         .route("/api/v1/threads/reactivate", post(native_dispatch))
         .route("/api/v1/threads/stale", get(native_dispatch))
         .route("/api/v1/threads/{thread_id}", put(native_dispatch))
@@ -768,11 +771,19 @@ fn app() -> Router {
         .route("/api/v2/readingOrderGroups", get(native_dispatch))
         .route("/api/v2/readingOrderGroups", post(native_dispatch))
         .route(
+<<<<<<< HEAD
             "/api/v2/readingOrderGroups/{group_id}",
             get(native_dispatch),
         )
         .route(
             "/api/v2/readingOrderGroups/{group_id}",
+=======
+            "/api/v1/reading-order-groups/{group_id}",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}",
+>>>>>>> origin/main
             patch(native_dispatch),
         )
         .route(
@@ -784,23 +795,34 @@ fn app() -> Router {
             get(native_dispatch),
         )
         .route(
-            "/api/v1/reading-order-groups/{group_id}/issue-ranges",
-            post(native_dispatch),
-        )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}/members",
-            post(native_dispatch),
-        )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
-            delete(native_dispatch),
-        )
-        .route(
             "/api/v1/reading-order-groups/{group_id}/order",
             put(native_dispatch),
         )
+        // #5711: the v2 crossover-membership surface is the single authority.
+        // The Vercel entry needs its own route registrations; without them the
+        // native_not_found fallback returns a JSON 404 before dispatch.
         .route(
-            "/api/v1/reading-order-groups/{group_id}/plans",
+            "/api/v2/reading-order-groups:resolveMemberships",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/reading-order-groups/{group_id}/reading-plans",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/reading-order-groups/{group_id}/members",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/reading-order-groups/{group_id}/issue-ranges",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/reading-order-groups/{group_id}/members/{member_id}",
+            delete(native_dispatch),
+        )
+        .route(
+            "/api/v2/threads/{thread_id}/reading-order-group-memberships",
             get(native_dispatch),
         )
         .fallback(native_not_found)
@@ -1468,6 +1490,77 @@ mod tests {
                 response.status(),
                 StatusCode::NOT_FOUND,
                 "retired {method} {uri} must not be mounted at ingress"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn v2_reading_order_group_ingress_reaches_rust_and_old_v1_is_404() {
+        // #5711: the membership operations moved to v2 URLs. Register them in
+        // this Vercel entry table or the fallback returns the Rust JSON 404
+        // before the dispatched handler runs. The retired v1 aliases must
+        // terminate at that fallback instead of remaining a second authority.
+        for (method, uri) in [
+            ("POST", "/api/v2/reading-order-groups:resolveMemberships"),
+            ("GET", "/api/v2/threads/42/reading-order-group-memberships"),
+            ("GET", "/api/v2/reading-order-groups/7/reading-plans"),
+            ("POST", "/api/v2/reading-order-groups/7/members"),
+            ("POST", "/api/v2/reading-order-groups/7/issue-ranges"),
+            ("DELETE", "/api/v2/reading-order-groups/7/members/10"),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{method} {uri} runtime header"
+            );
+            assert_ne!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "{method} {uri} must reach Rust dispatch, not the 404 fallback"
+            );
+        }
+        for (method, uri) in [
+            ("POST", "/api/v1/threads/groups:batch"),
+            ("GET", "/api/v1/reading-order-groups/threads/42/groups"),
+            ("GET", "/api/v1/reading-order-groups/7/plans"),
+            ("POST", "/api/v1/reading-order-groups/7/members"),
+            ("POST", "/api/v1/reading-order-groups/7/issue-ranges"),
+            ("DELETE", "/api/v1/reading-order-groups/7/members/10"),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{method} {uri}");
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust"
+            );
+            let bytes = to_bytes(response.into_body(), 1024)
+                .await
+                .expect("body bytes");
+            assert_eq!(
+                String::from_utf8_lossy(&bytes),
+                r#"{"detail":"Not Found"}"#,
+                "{method} {uri} must hit native_not_found"
             );
         }
     }
