@@ -1138,7 +1138,14 @@ fn parse_patch(
     if let Some(fields) = mask {
         let mut masked = serde_json::Map::new();
         for field in fields {
-            let value = map.get(&field).cloned().unwrap_or(Value::Null);
+            // A masked field absent from the body is explicitly cleared to its
+            // zero value. `null` cannot clear a required title/count, so those
+            // correctly fail validation instead.
+            let value = match map.get(&field) {
+                Some(value) => value.clone(),
+                None if field == "is_test" => Value::Bool(false),
+                None => Value::Null,
+            };
             masked.insert(field, value);
         }
         map = masked;
@@ -3270,6 +3277,15 @@ mod tests {
         assert_eq!(input.format, None);
         assert!(input.notes_present);
         assert_eq!(input.notes, None);
+
+        let mut check = Check::default();
+        let (input, _) = parse_patch(
+            &mut check,
+            Some(json!({"title": "kept", "update_mask": ["is_test"]})),
+        )
+        .unwrap();
+        assert!(check.is_clean());
+        assert_eq!(input.is_test, Some(false));
     }
 
     #[test]
