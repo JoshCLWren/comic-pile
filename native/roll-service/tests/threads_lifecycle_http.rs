@@ -2674,6 +2674,270 @@ async fn check_duplicates_reports_volume_and_title_matches_for_the_owner_only() 
     assert_eq!(invalid["errors"].as_array().unwrap().len(), 3);
 }
 
+/// The canonical v2 advisory custom method (#5705) must keep the exact-ID,
+/// title/format, exclude-self and owner-scoping behavior of the check it
+/// replaces, report both mapped and unmapped matches, and leave the
+/// `GET /api/v2/threads` search/filter contract untouched.
+#[tokio::test]
+async fn check_duplicates_v2_is_scoped_mapped_unmapped_and_excludes_self() {
+    let ctx = setup("lcdupv2").await;
+    let (_, _, other_id) = second_user(&ctx).await;
+    let mapped = seed_thread(&ctx, ctx.user_id, "Unrelated Name", "active", 1, 2).await;
+    let similar = seed_thread(&ctx, ctx.user_id, "Amazing Spider-Man", "active", 2, 4).await;
+    let renamed = seed_thread(&ctx, ctx.user_id, "Amazing Spider-Man", "active", 3, 1).await;
+    // Identical title belonging to another reader must never be returned.
+    seed_thread(&ctx, other_id, "Amazing Spider-Man", "active", 1, 9).await;
+    let pool = ctx.state.pool.get().await.unwrap();
+    let identity: i32 = pool
+        .query_one(
+            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json,
+                                              created_at, updated_at)
+             VALUES ('comicvine', 'series', '4050', $1, NOW(), NOW()) RETURNING id",
+            &[&json!({"start_year": "1963"})],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    pool.execute(
+        "INSERT INTO thread_external_series_mappings (thread_id, external_identity_id, status,
+                                                      created_at, updated_at)
+         VALUES ($1, $2, 'confirmed', NOW(), NOW())",
+        &[&mapped, &identity],
+    )
+    .await
+    .unwrap();
+    drop(pool);
+
+    let (status, body) = call(
+        &ctx,
+        "POST",
+        "/api/v2/threads:checkDuplicates",
+        Some(json!({
+            "title": "Amazing Spider-Man",
+            "format": "comics",
+            "comicvine_volume_id": 4050,
+            "exclude_thread_id": renamed,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let matches = body["matches"].as_array().unwrap();
+    let summary: Vec<(i64, &str)> = matches
+        .iter()
+        .map(|m| {
+            (
+                m["thread_id"].as_i64().unwrap(),
+                m["match_type"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        summary,
+        vec![
+            (mapped as i64, "same_comicvine_volume"),
+            (similar as i64, "similar_title"),
+        ],
+        "mapped match first, self excluded, other reader invisible: {body:?}"
+    );
+    assert_eq!(matches[0]["title"], "Unrelated Name");
+    assert_eq!(matches[0]["comicvine_volume_id"], 4050);
+    assert_eq!(matches[0]["start_year"], 1963);
+    assert_eq!(matches[1]["comicvine_volume_id"], Value::Null);
+    assert_eq!(matches[1]["start_year"], Value::Null);
+
+    // Without a volume, the mapped series no longer matches; the renamed
+    // thread still never warns about itself.
+    let (_, by_title) = call(
+        &ctx,
+        "POST",
+        "/api/v2/threads:checkDuplicates",
+        Some(json!({
+            "title": "Amazing Spider-Man",
+            "format": "Comic",
+            "exclude_thread_id": renamed,
+        })),
+    )
+    .await;
+    let ids: Vec<i64> = by_title["matches"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m["thread_id"].as_i64().unwrap())
+        .collect();
+    assert_eq!(ids, vec![similar as i64], "{by_title:?}");
+
+    // A candidate with no possible duplicate returns an empty result, not an
+    // omitted field or an error.
+    let (_, no_match) = call(
+        &ctx,
+        "POST",
+        "/api/v2/threads:checkDuplicates",
+        Some(json!({"title": "An utterly different series", "format": "Digital"})),
+    )
+    .await;
+    assert_eq!(no_match["matches"], json!([]), "{no_match:?}");
+
+    let (status, invalid) = call(
+        &ctx,
+        "POST",
+        "/api/v2/threads:checkDuplicates",
+        Some(json!({"title": "", "format": "x".repeat(51), "comicvine_volume_id": 0})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{invalid:?}");
+
+    // The custom method is additive: the v2 collection read keeps its search
+    // and filter behavior on the same `threads` resource family.
+    let (status, page) = call(&ctx, "GET", "/api/v2/threads?search=Amazing", None).await;
+    assert_eq!(status, StatusCode::OK, "{page:?}");
+    assert_eq!(page["filtered_count"], 2);
+    let listed: Vec<i64> = page["threads"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|thread| thread["id"].as_i64().unwrap())
+        .collect();
+    assert!(listed.contains(&(similar as i64)), "{page:?}");
+    assert!(listed.contains(&(renamed as i64)), "{page:?}");
+}
+
+/// The advisory result is bounded even when many owned titles resemble the
+/// candidate; a single v2 request can never return an unbounded payload.
+#[tokio::test]
+async fn check_duplicates_v2_caps_matches_at_five() {
+    let ctx = setup("lcdupv2cap").await;
+    for position in 1..=7 {
+        seed_thread(
+            &ctx,
+            ctx.user_id,
+            "Amazing Spider-Man",
+            "active",
+            position,
+            1,
+        )
+        .await;
+    }
+
+    let (status, body) = call(
+        &ctx,
+        "POST",
+        "/api/v2/threads:checkDuplicates",
+        Some(json!({"title": "Amazing Spider-Man", "format": "Comic"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["matches"].as_array().unwrap().len(), 5, "{body:?}");
+}
+
+/// The v2 contract promises at most five matches even for exact ComicVine
+/// matches: one confirmed series mapping can exist on several owned historical
+/// threads. The cap must keep the lowest thread IDs, exclude a named thread,
+/// and never displace an exact match with a similar-title match (#5705).
+#[tokio::test]
+async fn check_duplicates_v2_caps_exact_volume_matches_at_five() {
+    let ctx = setup("lcdupv2exact").await;
+    let pool = ctx.state.pool.get().await.unwrap();
+    let identity: i32 = pool
+        .query_one(
+            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json,
+                                              created_at, updated_at)
+             VALUES ('comicvine', 'series', '4050', $1, NOW(), NOW()) RETURNING id",
+            &[&json!({"start_year": "1963"})],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let mut mapped = Vec::new();
+    for position in 1..=7 {
+        let thread_id = seed_thread(
+            &ctx,
+            ctx.user_id,
+            &format!("Unrelated historical volume {position}"),
+            "active",
+            position,
+            1,
+        )
+        .await;
+        pool.execute(
+            "INSERT INTO thread_external_series_mappings (thread_id, external_identity_id, status,
+                                                          created_at, updated_at)
+             VALUES ($1, $2, 'confirmed', NOW(), NOW())",
+            &[&thread_id, &identity],
+        )
+        .await
+        .unwrap();
+        mapped.push(thread_id);
+    }
+    drop(pool);
+    // An unmapped title match would otherwise be reported; exact matches must
+    // take precedence over it even when more than five of them exist.
+    seed_thread(&ctx, ctx.user_id, "Amazing Spider-Man", "active", 8, 2).await;
+
+    let (status, body) = call(
+        &ctx,
+        "POST",
+        "/api/v2/threads:checkDuplicates",
+        Some(json!({
+            "title": "Amazing Spider-Man",
+            "format": "Comic",
+            "comicvine_volume_id": 4050,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let matches = body["matches"].as_array().unwrap();
+    assert_eq!(matches.len(), 5, "{body:?}");
+    let summary: Vec<(i64, &str)> = matches
+        .iter()
+        .map(|m| {
+            (
+                m["thread_id"].as_i64().unwrap(),
+                m["match_type"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        summary,
+        mapped[..5]
+            .iter()
+            .map(|id| (*id as i64, "same_comicvine_volume"))
+            .collect::<Vec<_>>(),
+        "lowest five exact matches must win, ordered by thread id: {body:?}"
+    );
+
+    // Excluding the lowest exact match promotes the next one, still capped at
+    // five; the similar-title candidate remains outside the bounded result.
+    let (_, excluded) = call(
+        &ctx,
+        "POST",
+        "/api/v2/threads:checkDuplicates",
+        Some(json!({
+            "title": "Amazing Spider-Man",
+            "format": "Comic",
+            "comicvine_volume_id": 4050,
+            "exclude_thread_id": mapped[0],
+        })),
+    )
+    .await;
+    let excluded_matches = excluded["matches"].as_array().unwrap();
+    assert_eq!(excluded_matches.len(), 5, "{excluded:?}");
+    let ids: Vec<i64> = excluded_matches
+        .iter()
+        .map(|m| m["thread_id"].as_i64().unwrap())
+        .collect();
+    assert_eq!(
+        ids,
+        mapped[1..6].iter().map(|id| *id as i64).collect::<Vec<_>>(),
+        "exclude-self must apply before the exact-match cap: {excluded:?}"
+    );
+    assert!(
+        excluded_matches
+            .iter()
+            .all(|m| m["match_type"] == "same_comicvine_volume"),
+        "an exact match must never be displaced by a similar-title match: {excluded:?}"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // groups:batch
 // ---------------------------------------------------------------------------

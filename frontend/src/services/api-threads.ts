@@ -134,11 +134,13 @@ export function createThreadsApi(client: HttpClient) {
       client.post<SetCurrentIssueResponse, { issue_number: string }>(`/v1/threads/${id}:setCurrentIssue`, { issue_number: issueNumber }),
     /**
      * Advisory existing-volume lookup for an Add Series or Edit/Rename
-     * candidate (#3612). Read-only: it never creates, merges, or renames.
+     * candidate (#3612, #5705). Read-only: it never creates, merges, or
+     * renames. The canonical v2 surface is a scoped AIP-136 collection custom
+     * method, so it never competes with `GET /v2/threads`'s filter/search.
      */
     checkPotentialDuplicates: (data: CheckPotentialDuplicatesRequest) =>
       client.post<CheckPotentialDuplicatesResponse, CheckPotentialDuplicatesRequest>(
-        '/v1/threads/check-duplicates',
+        '/v2/threads:checkDuplicates',
         data,
       ),
   }
