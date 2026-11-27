@@ -556,6 +556,9 @@ export function buildCensus(inputs) {
     },
     summary,
     routes: censusRoutes,
+    retired_cross_references: Array.isArray(inputs.dispositions.retired_cross_references)
+      ? inputs.dispositions.retired_cross_references
+      : [],
   };
 }
 
@@ -612,7 +615,7 @@ function mdCell(value) {
 }
 
 /** Human-readable published ownership matrix with the #5719 columns. */
-export function renderReport(census, allowlist) {
+export function renderReport(census, allowlist, dispositions = {}) {
   const lines = [
     '# Live route census (all API versions)',
     '',
@@ -686,6 +689,18 @@ export function renderReport(census, allowlist) {
     lines.push('', 'Non-browser / helper / infrastructure surface included in the census:', '');
     for (const route of special) {
       lines.push(`- \`${route.method} ${route.path}\` — ${route.rollout_status} (owner #${route.owner_issue}).`);
+    }
+  }
+  const crossReferences = Array.isArray(dispositions.retired_cross_references)
+    ? dispositions.retired_cross_references
+    : [];
+  if (crossReferences.length) {
+    lines.push('', '## Retired legacy issues cross-referenced (no live v1 registration)', '');
+    for (const reference of crossReferences) {
+      lines.push(
+        `- #${reference.issue}: \`${reference.method} ${reference.path}\` — `
+        + `${reference.status}; ${reference.disposition}.`,
+      );
     }
   }
   lines.push('', '## Baseline debt requiring an owner issue', '');
@@ -790,7 +805,7 @@ export function generate(root = DEFAULT_ROOT) {
   const callers = scanCallers(root);
   const census = buildCensus({routerText, inventory, dispositions, aipBaseline, vercel, callers});
   const allowlist = buildAllowlist(census, dispositions, aipBaseline);
-  const report = renderReport(census, allowlist);
+  const report = renderReport(census, allowlist, dispositions);
   const failures = validate(census, allowlist, dispositions, callers, aipBaseline);
   return {
     census,

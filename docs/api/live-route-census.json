@@ -4882,11 +4882,11 @@
       "caller_count": 34,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
-      "owner_issue": 4335,
+      "owner_issue": 4299,
       "needs_owner_issue": false,
-      "disposition": "canonical-v2",
-      "rollout_status": "live-target",
-      "notes": ""
+      "disposition": "retire-without-replacement",
+      "rollout_status": "awaiting-caller-migration-4350",
+      "notes": "#4299 owns server deletion after #4350 moves every caller to scoped Roll resources."
     },
     {
       "method": "POST",
@@ -5761,6 +5761,32 @@
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
       "notes": ""
+    }
+  ],
+  "retired_cross_references": [
+    {
+      "issue": 4341,
+      "method": "POST",
+      "path": "/api/v1/roll/override",
+      "status": "not-live",
+      "disposition": "retire-without-replacement",
+      "notes": "Direct v2 issue actions supersede the legacy Roll override; no Rust v1 registration remains."
+    },
+    {
+      "issue": 4343,
+      "method": "GET",
+      "path": "/api/v1/sessions/current/",
+      "status": "not-live",
+      "disposition": "retire-without-replacement",
+      "notes": "Event-derived v2 state supersedes the legacy current-session resource."
+    },
+    {
+      "issue": 5525,
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}/set-pending",
+      "status": "live-p0-evidence",
+      "disposition": "retire-without-replacement",
+      "notes": "P0 production 503 evidence for the still-live v1 set-pending method owned by #4344."
     }
   ]
 }

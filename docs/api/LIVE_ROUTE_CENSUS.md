@@ -238,7 +238,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | GET | `/api/v2/readingSessions/{session_id}/details` | `session_details::get_session_details` | v2 | frontend/src/unit/api.test.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | GET | `/api/v2/readingSessions/{session_id}/snapshots` | `session_history::list_session_snapshots` | v2 | frontend/src/unit/api.test.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | GET | `/api/v2/releases` | `releases::list` | v2 | frontend/src/services/api-releases.ts, frontend/src/test/network-budget/authTransitions.network.test.tsx, frontend/src/test/network-budget/auxiliaryRoutes.network.test.tsx, frontend/src/test/whats-new-wiring.test.ts, frontend/src/unit/api-releases.test.ts | /api/native_roll.rs | #4849 | canonical-v2 | live-target |
-| GET | `/api/v2/roll/bootstrap` | `bootstrap::bootstrap_v2` | v2 | frontend/src/services/protectedRollMutationApi.ts, frontend/src/services/rollBootstrapApi.ts, frontend/src/test/core-views-request-budget.spec.ts, frontend/src/test/issue-3429-bootstrap-recovery.spec.ts, frontend/src/test/issue-4140-http-request-count.spec.ts, frontend/src/test/issue-4140-roll-navigation-optimization.spec.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/test/p0-dependencies-reading-order.spec.ts, frontend/src/test/p0-roll-selection.spec.ts, frontend/src/test/p0-snooze-unsnooze.spec.ts, frontend/src/test/reading-mode-acceptance.spec.ts, frontend/src/test/roll-back-to-queue.spec.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/rollBootstrapTimezone.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
+| GET | `/api/v2/roll/bootstrap` | `bootstrap::bootstrap_v2` | v2 | frontend/src/services/protectedRollMutationApi.ts, frontend/src/services/rollBootstrapApi.ts, frontend/src/test/core-views-request-budget.spec.ts, frontend/src/test/issue-3429-bootstrap-recovery.spec.ts, frontend/src/test/issue-4140-http-request-count.spec.ts, frontend/src/test/issue-4140-roll-navigation-optimization.spec.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/test/p0-dependencies-reading-order.spec.ts, frontend/src/test/p0-roll-selection.spec.ts, frontend/src/test/p0-snooze-unsnooze.spec.ts, frontend/src/test/reading-mode-acceptance.spec.ts, frontend/src/test/roll-back-to-queue.spec.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/rollBootstrapTimezone.test.ts | /api/native_roll.rs | #4299 | retire-without-replacement | awaiting-caller-migration-4350 |
 | POST | `/api/v2/roll/dice-command` | `dice_api::manual_die` | v2 | frontend/src/services/api-roll.ts, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
 | GET | `/api/v2/roll/die-state` | `roll_resources::die_state` | v2 | frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/rollResourcesApi.test.ts | /api/native_roll.rs | #4595 | canonical-v2 | live-target |
 | POST | `/api/v2/roll/dismiss-pending` | `dismiss_pending::dismiss_pending` | v2 | frontend/src/services/api-roll.ts | /api/native_roll.rs | #4850 | canonical-v2 | live-target |
@@ -279,7 +279,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 
 ## Owner issue cross-reference
 
-Existing owner/disposition issues resolved for this census: #4335, #4342, #4344, #4443, #4459, #4549, #4595, #4623, #4653, #4684, #4822, #4832, #4835, #4836, #4838, #4839, #4841, #4844, #4849, #4850, #4851, #4855, #5276, #5435, #5701, #5702, #5703, #5704, #5705, #5706, #5709, #5711, #5712, #5714, #5715, #5716, #5717, #5718.
+Existing owner/disposition issues resolved for this census: #4299, #4335, #4342, #4344, #4443, #4459, #4549, #4595, #4623, #4653, #4684, #4822, #4832, #4835, #4836, #4838, #4839, #4841, #4844, #4849, #4850, #4851, #4855, #5276, #5435, #5701, #5702, #5703, #5704, #5705, #5706, #5709, #5711, #5712, #5714, #5715, #5716, #5717, #5718.
 No new backlog issue is created by this tooling task: every current live v1 method resolves to an existing owner issue and an AIP destination or an explicit retire-without-replacement decision.
 
 Non-browser / helper / infrastructure surface included in the census:
@@ -290,6 +290,12 @@ Non-browser / helper / infrastructure surface included in the census:
 - `GET /api/v1/cron/release-sync` — background-caller-migration (owner #5276).
 - `POST /api/v1/threads/groups:batch` — pinned-404 (owner #5711).
 - `PUT /api/v1/threads/{thread_id}/test-backdate` — test-helper-debt (owner #4335).
+
+## Retired legacy issues cross-referenced (no live v1 registration)
+
+- #4341: `POST /api/v1/roll/override` — not-live; retire-without-replacement.
+- #4343: `GET /api/v1/sessions/current/` — not-live; retire-without-replacement.
+- #5525: `POST /api/v1/threads/{thread_id}/set-pending` — live-p0-evidence; retire-without-replacement.
 
 ## Baseline debt requiring an owner issue
 

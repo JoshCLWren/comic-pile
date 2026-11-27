@@ -3,6 +3,32 @@
   "issue": 5719,
   "description": "Curated owner/disposition source for the all-version live route census. Family defaults are applied longest-prefix-first; exact overrides win. Every live v1 or bare /api route must resolve to a specific retirement owner issue and a proposed AIP v2 destination or an explicit retire-without-replacement decision. This is the human-owned input; docs/api/live-route-census.json, docs/api/v1-retirement-allowlist.json and docs/api/LIVE_ROUTE_CENSUS.md are generated.",
   "known_unowned_baseline": [],
+  "retired_cross_references": [
+    {
+      "issue": 4341,
+      "method": "POST",
+      "path": "/api/v1/roll/override",
+      "status": "not-live",
+      "disposition": "retire-without-replacement",
+      "notes": "Direct v2 issue actions supersede the legacy Roll override; no Rust v1 registration remains."
+    },
+    {
+      "issue": 4343,
+      "method": "GET",
+      "path": "/api/v1/sessions/current/",
+      "status": "not-live",
+      "disposition": "retire-without-replacement",
+      "notes": "Event-derived v2 state supersedes the legacy current-session resource."
+    },
+    {
+      "issue": 5525,
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}/set-pending",
+      "status": "live-p0-evidence",
+      "disposition": "retire-without-replacement",
+      "notes": "P0 production 503 evidence for the still-live v1 set-pending method owned by #4344."
+    }
+  ],
   "families": [
     {
       "prefix": "/api/v1/threads/{thread_id}/set-pending",
@@ -296,6 +322,12 @@
       "replacement": "retire-without-replacement",
       "rollout_status": "owner-issue-open",
       "notes": "Census regression: Rust implementation does not make this v1 surface complete or retired. Direct v2 issue actions supersede it (#5525)."
+    },
+    "GET /api/v2/roll/bootstrap": {
+      "owner_issue": 4299,
+      "replacement": "retire-without-replacement",
+      "rollout_status": "awaiting-caller-migration-4350",
+      "notes": "#4299 owns server deletion after #4350 moves every caller to scoped Roll resources."
     }
   }
 }
