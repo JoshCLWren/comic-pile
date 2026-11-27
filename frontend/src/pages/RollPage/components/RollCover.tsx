@@ -95,9 +95,6 @@ export function RollCover({
         variant="compact"
         frameClassName="roll-cover-frame"
         imageClassName="roll-cover-art"
-        altText=""
-        testId="roll-cover-art"
-        placeholderTestId="roll-cover-missing"
       />
       {thread.issue_id != null ? (
         <div
