@@ -17,7 +17,6 @@ The same method and suffix under `/api/v1` remain unchanged:
 | GET | `/api/threads/stale` |
 | POST | `/api/threads/reactivate` |
 | PUT, DELETE | `/api/threads/{thread_id}` |
-| POST | `/api/threads/{thread_id}/set-pending` |
 | PUT | `/api/threads/{thread_id}/test-backdate` |
 | POST | `/api/threads/{thread_id}:migrateToIssues` |
 | POST | `/api/threads/{thread_id}:migrateToIssuesSimple` |

@@ -28,7 +28,7 @@ groups:
 |-------|------------------------|--------------------|
 | Stateless previews | 3 (`POST /api/v1/catalog/series-mappings/preview`, `POST /api/v1/continuity-plans/{plan_id}/reading-orders/project-preview`, `POST /api/v1/issue-identity/cbl/{list_id}/reading-graph-preview`) | stateless v2 preview operations (#5714, #5715, #5716) |
 | Reading-order groups | 7 (`GET/POST /api/v1/reading-order-groups/`, `GET/PATCH/DELETE /api/v1/reading-order-groups/{group_id}`, `GET /api/v1/reading-order-groups/{group_id}/detail`, `PUT /api/v1/reading-order-groups/{group_id}/order`) | `/api/v2/readingOrderGroups…` and memberships/ranges (#5710 retired collection CRUD, #5711 retains order) |
-| Threads | 12 (`/api/v1/threads…` create, check-duplicates, excluded, reactivate, stale, item PATCH/DELETE, exclude, restore, set-pending, test-backdate, issues/creators) | `GET/POST/PATCH/DELETE /api/v2/threads…` (#5701, #5703, #5704, #5705, #5706) |
+| Threads | 11 (`/api/v1/threads…` create, check-duplicates, excluded, reactivate, stale, item PATCH/DELETE, exclude, restore, test-backdate, issues/creators) | `GET/POST/PATCH/DELETE /api/v2/threads…` (#5701, #5703, #5704, #5705, #5706) |
 
 `docs/api/v2-route-inventory.json` is authoritative for the exact
 `METHOD path` list and its caller lists. `scripts/check_v1_canonical_guidance.mjs`
