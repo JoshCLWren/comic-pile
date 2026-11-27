@@ -1409,6 +1409,69 @@ mod tests {
         }
     }
 
+    /// The v2 reading-order-group collection (#5710) must be mounted in the
+    /// separate Vercel ingress table as well as the library router; the retired
+    /// v1 collection/Get/detail paths must stay off the ingress table.
+    #[tokio::test]
+    async fn reading_order_groups_v2_ingress_reaches_rust_and_v1_crud_is_gone() {
+        for (method, uri) in [
+            ("GET", "/api/v2/readingOrderGroups"),
+            ("POST", "/api/v2/readingOrderGroups"),
+            ("GET", "/api/v2/readingOrderGroups/42"),
+            ("PATCH", "/api/v2/readingOrderGroups/42"),
+            ("DELETE", "/api/v2/readingOrderGroups/42"),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .header("content-type", "application/json")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{method} {uri} runtime header"
+            );
+            assert_ne!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "{method} {uri} must reach Rust dispatch, not native_not_found"
+            );
+        }
+
+        for (method, uri) in [
+            ("GET", "/api/v1/reading-order-groups/"),
+            ("POST", "/api/v1/reading-order-groups/"),
+            ("GET", "/api/v1/reading-order-groups/42"),
+            ("PATCH", "/api/v1/reading-order-groups/42"),
+            ("DELETE", "/api/v1/reading-order-groups/42"),
+            ("GET", "/api/v1/reading-order-groups/42/detail"),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert_eq!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "retired {method} {uri} must not be mounted at ingress"
+            );
+        }
+    }
+
     #[tokio::test]
     async fn edit_series_preview_ingress_reaches_rust_and_never_hits_json_404() {
         // #5863: Edit Series Add posted to the inner-router-only preview paths,
