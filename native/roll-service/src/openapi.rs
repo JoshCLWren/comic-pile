@@ -500,32 +500,6 @@ mod tests {
         );
     }
 
-    /// #5714: the CBL preview surface is one read-only singleton resource and
-    /// two stateless AIP-136 custom methods, not three more v1 aliases.
-    #[test]
-    fn cbl_source_previews_are_in_v2_contract() {
-        let doc = document();
-        let preview = &doc["paths"]["/api/v2/cblSources/{source_id}/adoptionPreview"]["get"];
-        assert_eq!(preview["operationId"], "get_cbl_adoption_preview_v2");
-        let plan = &doc["paths"]["/api/v2/cblSources/{source_id}:planAdoption"]["post"];
-        assert_eq!(plan["operationId"], "plan_cbl_adoption_v2");
-        let graph = &doc["paths"]["/api/v2/cblSources/{source_id}:previewReadingGraph"]["post"];
-        assert_eq!(graph["operationId"], "preview_cbl_reading_graph_v2");
-        for schema in [
-            "CblAdoptionPlanRequest",
-            "CblAdoptionPreviewResponse",
-            "ReadingGraphPreviewRequest",
-            "ReadingGraphPreview",
-        ] {
-            assert!(
-                doc["components"]["schemas"][schema].is_object(),
-                "missing {schema} in v2 contract"
-            );
-        }
-        // A read-only singleton stays a GET; only the calculations are POSTs.
-        assert!(doc["paths"]["/api/v2/cblSources/{source_id}/adoptionPreview"]["post"].is_null());
-    }
-
     /// #5716: the canonical preview is an AIP-136 stateless collection custom
     /// method on the lowerCamelCase `seriesMappings` collection. It must not be
     /// published as a v1 same-path operation in the v2 contract, and it must
@@ -1061,5 +1035,31 @@ mod tests {
             "RollEligibleIssueIdsResponse",
             &["die", "issue_ids", "thread_ids", "pool_reason"],
         );
+    }
+
+    /// #5714: the CBL preview surface is one read-only singleton resource and
+    /// two stateless AIP-136 custom methods, not three more v1 aliases.
+    #[test]
+    fn cbl_source_previews_are_in_v2_contract() {
+        let doc = document();
+        let preview = &doc["paths"]["/api/v2/cblSources/{source_id}/adoptionPreview"]["get"];
+        assert_eq!(preview["operationId"], "get_cbl_adoption_preview_v2");
+        let plan = &doc["paths"]["/api/v2/cblSources/{source_id}:planAdoption"]["post"];
+        assert_eq!(plan["operationId"], "plan_cbl_adoption_v2");
+        let graph = &doc["paths"]["/api/v2/cblSources/{source_id}:previewReadingGraph"]["post"];
+        assert_eq!(graph["operationId"], "preview_cbl_reading_graph_v2");
+        for schema in [
+            "CblAdoptionPlanRequest",
+            "CblAdoptionPreviewResponse",
+            "ReadingGraphPreviewRequest",
+            "ReadingGraphPreview",
+        ] {
+            assert!(
+                doc["components"]["schemas"][schema].is_object(),
+                "missing {schema} in v2 contract"
+            );
+        }
+        // A read-only singleton stays a GET; only the calculations are POSTs.
+        assert!(doc["paths"]["/api/v2/cblSources/{source_id}/adoptionPreview"]["post"].is_null());
     }
 }
