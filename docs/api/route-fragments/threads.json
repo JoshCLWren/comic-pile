@@ -53,6 +53,32 @@
     },
     {
       "bucket": "operations",
+      "method": "PATCH",
+      "path": "/api/v2/threads/{thread_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/threads/[0-9]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5703,
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "DELETE",
+      "path": "/api/v2/threads/{thread_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/threads/[0-9]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5703,
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
       "method": "PUT",
       "path": "/api/v2/threads/{thread_id}/issue-order",
       "dest": "/api/native_roll.rs",
@@ -91,6 +117,7 @@
       "owning_issue": 4841
     },
     {
+<<<<<<< HEAD
       "bucket": "operations",
       "method": "GET",
       "path": "/api/v2/threads/{thread_id}/readingOrders",
@@ -104,6 +131,8 @@
       ]
     },
     {
+=======
+>>>>>>> origin/main
       "bucket": "unversioned_operations",
       "method": "GET",
       "path": "/api/threads/{thread_id}",

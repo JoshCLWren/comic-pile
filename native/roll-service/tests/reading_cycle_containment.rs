@@ -684,7 +684,7 @@ async fn bprd_legacy_numeric_reorder_reproduces_exact_cycle_but_reads_survive() 
         &state,
         auth,
         "POST",
-        "/api/v2/reading-sessions",
+        "/api/v2/readingSessions",
         Some(json!({"timezone": null})),
     )
     .await;
@@ -979,7 +979,7 @@ async fn evening_four_edge_cycle_is_repairable_and_two_owners_stay_isolated() {
             &state,
             auth,
             "POST",
-            "/api/v2/reading-sessions",
+            "/api/v2/readingSessions",
             Some(json!({"timezone": null})),
         )
         .await;

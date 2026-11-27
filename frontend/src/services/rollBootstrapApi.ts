@@ -11,7 +11,7 @@ import type {
 /**
  * Client-lifetime reading-session resolution state (#4276).
  *
- * `POST /v2/reading-sessions` is a write: it takes the per-user advisory lock
+ * `POST /v2/readingSessions` is a write: it takes the per-user advisory lock
  * and runs a transaction to resolve-or-create the reader's active session.
  * `GET /v2/roll/bootstrap` is the read-only projection and answers 404
  * ("No active session") when none exists. Resolution therefore only needs to
@@ -60,7 +60,7 @@ export function createRollBootstrapApi(client: HttpClient) {
         // Explicitly initialize/resolve the retained legacy session on a write route.
         // The following GET is a pure projection and must never create state.
         await client.post<{ session_id: number; created: boolean }, { timezone?: string }>(
-          '/v2/reading-sessions',
+          '/v2/readingSessions',
           timezone ? { timezone } : {},
         )
         // Reached only when the POST committed, so the session exists

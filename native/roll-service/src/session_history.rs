@@ -73,7 +73,7 @@ pub async fn list_session_snapshots(
 /// OpenAPI declaration for the v2 session snapshots read.
 #[utoipa::path(
     get,
-    path = "/api/v2/reading-sessions/{session_id}/snapshots",
+    path = "/api/v2/readingSessions/{session_id}/snapshots",
     tag = "sessions",
     params(("session_id" = i32, Path, description = "Owned reading session")),
     responses(

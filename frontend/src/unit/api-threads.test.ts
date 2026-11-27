@@ -16,6 +16,44 @@ describe('threadsApi.create', () => {
   })
 })
 
+<<<<<<< HEAD
+=======
+describe('threadsApi.update', () => {
+  it('patches the canonical v2 thread resource and derives update_mask (#5703)', async () => {
+    const client = createHttpClientStub()
+    client.patch.mockResolvedValueOnce({ id: 5, title: 'Renamed' })
+
+    const api = createThreadsApi(client)
+    await api.update(5, {
+      title: 'Renamed',
+      notes: 'kept',
+      expected: { title: 'Old', format: 'Comic', notes: null, manual_creator_credits: [] },
+    })
+
+    expect(client.patch).toHaveBeenCalledTimes(1)
+    expect(client.patch).toHaveBeenCalledWith('/v2/threads/5', {
+      title: 'Renamed',
+      notes: 'kept',
+      update_mask: ['title', 'notes'],
+      expected: { title: 'Old', format: 'Comic', notes: null, manual_creator_credits: [] },
+    })
+  })
+})
+
+describe('threadsApi.delete', () => {
+  it('deletes the canonical v2 thread resource (#5703)', async () => {
+    const client = createHttpClientStub()
+    client.delete.mockResolvedValueOnce(undefined)
+
+    const api = createThreadsApi(client)
+    await api.delete(9)
+
+    expect(client.delete).toHaveBeenCalledTimes(1)
+    expect(client.delete).toHaveBeenCalledWith('/v2/threads/9')
+  })
+})
+
+>>>>>>> origin/main
 describe('threadsApi.checkExcludedStatus', () => {
   it('aggregates excluded and active ids across chunks', async () => {
     const client = createHttpClientStub()

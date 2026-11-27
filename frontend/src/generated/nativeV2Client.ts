@@ -361,6 +361,17 @@ export interface DeleteTagRequest {
 
 export type DeleteTagResponse = components['schemas']['TagDeleteResponse']
 
+<<<<<<< HEAD
+=======
+export interface DeleteThreadV2Request {
+  path: {
+    thread_id: number
+  }
+}
+
+export type DeleteThreadV2Response = void
+
+>>>>>>> origin/main
 export interface DependencyGroupsV2AddIssueRangeRequest {
   path: {
     group_id: number
@@ -552,6 +563,14 @@ export type GetReadingListResponse = components['schemas']['ReadingList']
 
 export type GetReadingModeResponse = components['schemas']['ReadingModeResponse']
 
+export interface GetReadingSessionRequest {
+  path: {
+    session_id: number
+  }
+}
+
+export type GetReadingSessionResponse = components['schemas']['ReadingSessionResource']
+
 export interface GetSessionDetailsRequest {
   path: {
     session_id: number
@@ -727,6 +746,15 @@ export type ListCorrectionsResponse = components['schemas']['MetadataCorrections
 
 export type ListReadingListsResponse = Array<components['schemas']['ReadingListSummary']>
 
+export interface ListReadingSessionsRequest {
+  query?: {
+    page_size?: number
+    page_token?: string
+  }
+}
+
+export type ListReadingSessionsResponse = components['schemas']['ListReadingSessionsResponse']
+
 export interface ListSessionSnapshotsRequest {
   path: {
     session_id: number
@@ -812,6 +840,15 @@ export interface OverrideRollRequest {
 }
 
 export type OverrideRollResponse = components['schemas']['NativeRollResponse']
+
+export interface PatchThreadRequest {
+  path: {
+    thread_id: number
+  }
+  body: components['schemas']['ThreadPatchRequest']
+}
+
+export type PatchThreadResponse = components['schemas']['NativeThreadResponse']
 
 export interface PatchUserPreferencesRequest {
   body: components['schemas']['UserPreferencesPatchRequest']
@@ -1328,6 +1365,10 @@ export interface NativeV2Client {
   deleteOverlapDecision(args: DeleteOverlapDecisionRequest): Promise<DeleteOverlapDecisionResponse>
   deleteReadingList(args: DeleteReadingListRequest): Promise<DeleteReadingListResponse>
   deleteTag(args: DeleteTagRequest): Promise<DeleteTagResponse>
+<<<<<<< HEAD
+=======
+  deleteThreadV2(args: DeleteThreadV2Request): Promise<DeleteThreadV2Response>
+>>>>>>> origin/main
   dependencyGroupsV2AddIssueRange(args: DependencyGroupsV2AddIssueRangeRequest): Promise<DependencyGroupsV2AddIssueRangeResponse>
   dependencyGroupsV2AddMember(args: DependencyGroupsV2AddMemberRequest): Promise<DependencyGroupsV2AddMemberResponse>
   dependencyGroupsV2ListReadingPlans(args: DependencyGroupsV2ListReadingPlansRequest): Promise<DependencyGroupsV2ListReadingPlansResponse>
@@ -1356,6 +1397,7 @@ export interface NativeV2Client {
   getQueueEntry(args: GetQueueEntryRequest): Promise<GetQueueEntryResponse>
   getReadingList(args: GetReadingListRequest): Promise<GetReadingListResponse>
   getReadingMode(): Promise<GetReadingModeResponse>
+  getReadingSession(args: GetReadingSessionRequest): Promise<GetReadingSessionResponse>
   getSessionDetails(args: GetSessionDetailsRequest): Promise<GetSessionDetailsResponse>
   getTag(args: GetTagRequest): Promise<GetTagResponse>
   getThreadDependencies(args: GetThreadDependenciesRequest): Promise<GetThreadDependenciesResponse>
@@ -1381,6 +1423,7 @@ export interface NativeV2Client {
   listBlockedLegacyDependencies(): Promise<ListBlockedLegacyDependenciesResponse>
   listCorrections(args: ListCorrectionsRequest): Promise<ListCorrectionsResponse>
   listReadingLists(): Promise<ListReadingListsResponse>
+  listReadingSessions(args?: ListReadingSessionsRequest): Promise<ListReadingSessionsResponse>
   listSessionSnapshots(args: ListSessionSnapshotsRequest): Promise<ListSessionSnapshotsResponse>
   listTags(): Promise<ListTagsResponse>
   listThreadIssues(args: ListThreadIssuesRequest): Promise<ListThreadIssuesResponse>
@@ -1393,6 +1436,7 @@ export interface NativeV2Client {
   metric(args: MetricRequest): Promise<MetricResponse>
   offer(args: OfferRequest): Promise<OfferResponse>
   overrideRoll(args: OverrideRollRequest): Promise<OverrideRollResponse>
+  patchThread(args: PatchThreadRequest): Promise<PatchThreadResponse>
   patchUserPreferences(args: PatchUserPreferencesRequest): Promise<PatchUserPreferencesResponse>
   preview(args: PreviewRequest): Promise<PreviewResponse>
   previewIssueCreate(args: PreviewIssueCreateRequest): Promise<PreviewIssueCreateResponse>
@@ -1693,6 +1737,14 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v2/tags/${encodeURIComponent(String(args.path.tag_id))}`,
       )
     },
+<<<<<<< HEAD
+=======
+    deleteThreadV2(args: DeleteThreadV2Request) {
+      return client.delete<DeleteThreadV2Response>(
+        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}`,
+      )
+    },
+>>>>>>> origin/main
     dependencyGroupsV2AddIssueRange(args: DependencyGroupsV2AddIssueRangeRequest) {
       return client.post<DependencyGroupsV2AddIssueRangeResponse, DependencyGroupsV2AddIssueRangeRequest['body']>(
         `/v2/reading-order-groups/${encodeURIComponent(String(args.path.group_id))}/issue-ranges`,
@@ -1827,9 +1879,14 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     getReadingMode() {
       return client.get<GetReadingModeResponse>("/v2/reading-mode")
     },
+    getReadingSession(args: GetReadingSessionRequest) {
+      return client.get<GetReadingSessionResponse>(
+        `/v2/readingSessions/${encodeURIComponent(String(args.path.session_id))}`,
+      )
+    },
     getSessionDetails(args: GetSessionDetailsRequest) {
       return client.get<GetSessionDetailsResponse>(
-        `/v2/reading-sessions/${encodeURIComponent(String(args.path.session_id))}/details`,
+        `/v2/readingSessions/${encodeURIComponent(String(args.path.session_id))}/details`,
       )
     },
     getTag(args: GetTagRequest) {
@@ -1864,7 +1921,7 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     initializeSession(args: InitializeSessionRequest) {
       return client.post<InitializeSessionResponse, InitializeSessionRequest['body']>(
-        "/v2/reading-sessions",
+        "/v2/readingSessions",
         args.body,
       )
     },
@@ -1953,9 +2010,15 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     listReadingLists() {
       return client.get<ListReadingListsResponse>("/v2/reading-lists")
     },
+    listReadingSessions(args: ListReadingSessionsRequest = {}) {
+      return client.get<ListReadingSessionsResponse>(
+        "/v2/readingSessions",
+        { params: compactQuery(args.query) },
+      )
+    },
     listSessionSnapshots(args: ListSessionSnapshotsRequest) {
       return client.get<ListSessionSnapshotsResponse>(
-        `/v2/reading-sessions/${encodeURIComponent(String(args.path.session_id))}/snapshots`,
+        `/v2/readingSessions/${encodeURIComponent(String(args.path.session_id))}/snapshots`,
       )
     },
     listTags() {
@@ -2011,6 +2074,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     overrideRoll(args: OverrideRollRequest) {
       return client.post<OverrideRollResponse, OverrideRollRequest['body']>(
         "/v2/roll/override",
+        args.body,
+      )
+    },
+    patchThread(args: PatchThreadRequest) {
+      return client.patch<PatchThreadResponse, PatchThreadRequest['body']>(
+        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}`,
         args.body,
       )
     },

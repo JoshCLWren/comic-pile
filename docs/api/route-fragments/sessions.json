@@ -1,23 +1,44 @@
 {
   "family": "sessions",
   "owned_path_patterns": [
-    "^/api/v2/reading-sessions/[^/]+/(?:details|snapshots)$"
+    "^/api/v2/readingSessions(?:/[^/]+(?:/(?:details|snapshots))?)?$"
   ],
   "defaults": {
-    "owning_issue": 4839,
+    "owning_issue": 5708,
     "runtime": "native-rust",
     "status": "target",
     "consumers": [
-      "frontend/src/services/api-sessions.ts"
+      "frontend/src/services/api-sessions.ts",
+      "frontend/src/services/rollBootstrapApi.ts"
     ]
   },
   "operations": [
     {
       "bucket": "operations",
       "method": "GET",
-      "path": "/api/v2/reading-sessions/{session_id}/details",
+      "path": "/api/v2/readingSessions",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/reading-sessions/[^/]+/details$",
+      "src": "^/api/v2/readingSessions$",
+      "consumers": [
+        "frontend/src/services/api-sessions.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/readingSessions",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/readingSessions$",
+      "consumers": [
+        "frontend/src/services/rollBootstrapApi.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/readingSessions/{session_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/readingSessions/[^/]+$",
       "consumers": [
         "frontend/src/services/api-sessions.ts"
       ]
@@ -25,9 +46,19 @@
     {
       "bucket": "operations",
       "method": "GET",
-      "path": "/api/v2/reading-sessions/{session_id}/snapshots",
+      "path": "/api/v2/readingSessions/{session_id}/details",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/reading-sessions/[^/]+/snapshots$",
+      "src": "^/api/v2/readingSessions/[^/]+/details$",
+      "consumers": [
+        "frontend/src/services/api-sessions.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/readingSessions/{session_id}/snapshots",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/readingSessions/[^/]+/snapshots$",
       "consumers": [
         "frontend/src/services/api-sessions.ts"
       ]

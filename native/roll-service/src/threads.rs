@@ -1529,7 +1529,9 @@ fn cursor_clause(sort: &str, cursor: Option<&QueueCursor>) -> (String, Vec<Param
     paths(
         list_threads_documentation,
         create_thread_v2_documentation,
-        list_completed_threads_documentation
+        list_completed_threads_documentation,
+        crate::thread_lifecycle::patch_thread_documentation,
+        crate::thread_lifecycle::delete_thread_v2_documentation
     ),
     components(schemas(
         ThreadListItem,
@@ -1538,7 +1540,9 @@ fn cursor_clause(sort: &str, cursor: Option<&QueueCursor>) -> (String, Vec<Param
         ComicVineMappingHealth,
         QueueSeriesMetadata,
         crate::thread_lifecycle::ThreadCreateRequest,
-        crate::thread_lifecycle::ThreadResponse
+        crate::thread_lifecycle::ThreadResponse,
+        crate::thread_lifecycle::ThreadPatchRequest,
+        crate::thread_lifecycle::ThreadPatchPrecondition
     )),
     modifiers(&ThreadsSecurityAddon)
 )]

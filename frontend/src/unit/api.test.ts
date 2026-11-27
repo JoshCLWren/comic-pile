@@ -183,18 +183,23 @@ it('uses only v2 session detail/snapshot paths and v2 undo paths', async () => {
   await undoApi.undo(7, 3)
   await undoApi.listSnapshots(7)
 
-  expect(get).toHaveBeenCalledWith('/v2/reading-sessions/7/details')
-  expect(get).toHaveBeenCalledWith('/v2/reading-sessions/7/snapshots')
+  expect(get).toHaveBeenCalledWith('/v2/readingSessions/7/details')
+  expect(get).toHaveBeenCalledWith('/v2/readingSessions/7/snapshots')
   expect(post).toHaveBeenCalledWith('/v2/undo/7/snapshots/3/restore')
   expect(get).toHaveBeenCalledWith('/v2/undo/7/snapshots')
   expect(get.mock.calls.map(([url]) => String(url)).join(' ')).not.toContain('/v1/sessions')
 })
 
-it('keeps retired session list/single/lifecycle methods off the session service (#4839, #4343)', () => {
-  expect(sessionApi).not.toHaveProperty('list')
-  expect(sessionApi).not.toHaveProperty('get')
+it('uses the canonical event-derived session list/get and drops v1 lifecycle reads (#5708, #4343)', async () => {
+  expect(sessionApi).toHaveProperty('list')
+  expect(sessionApi).toHaveProperty('get')
   expect(sessionApi).not.toHaveProperty('getCurrent')
   expect(sessionApi).not.toHaveProperty('restoreSessionStart')
+
+  await sessionApi.list()
+  await sessionApi.get(7)
+  expect(get).toHaveBeenCalledWith('/v2/readingSessions', { params: { page_size: 50 } })
+  expect(get).toHaveBeenCalledWith('/v2/readingSessions/7')
 })
 
 it('adds auth and csrf headers to mutating requests', async () => {
@@ -224,7 +229,7 @@ it('handles request defaults and issue dependency payloads', async () => {
     source_type: 'issue', source_id: 8, target_type: 'issue', target_id: 9,
   })
   await sessionApi.getDetails(7)
-  expect(get).toHaveBeenCalledWith('/v2/reading-sessions/7/details')
+  expect(get).toHaveBeenCalledWith('/v2/readingSessions/7/details')
 })
 
 it('handles missing request URLs and cookies while sharing csrf bootstrap work', async () => {

@@ -85,6 +85,7 @@ pub mod same_path_openapi;
 mod session_bandwidth;
 pub mod session_details;
 pub mod session_history;
+pub mod session_list;
 pub mod tags;
 pub mod taste_discoveries;
 pub mod thread_issues;
@@ -718,19 +719,27 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/roll/switch-prerequisite",
             post(roll_switch_prerequisite::switch_prerequisite),
         )
+        // Canonical AIP-122 reading-session collection (#5708). All verbs live
+        // under the one lowerCamelCase resource name; no hyphenated v2 alias
+        // and no Rust-served v1 session route is published.
         .route(
-            "/api/v2/reading-sessions",
+            "/api/v2/readingSessions",
+            get(session_list::list_reading_sessions),
+        )
+        .route(
+            "/api/v2/readingSessions",
             post(bootstrap::initialize_session),
         )
-        // Session reads moved to the resource-shaped v2 surface (#4335).
-        // The v1 single-session/list reads and the unversioned aliases are
-        // retired (#4343); only the snapshot and details reads remain.
         .route(
-            "/api/v2/reading-sessions/{session_id}/snapshots",
+            "/api/v2/readingSessions/{session_id}",
+            get(session_list::get_reading_session),
+        )
+        .route(
+            "/api/v2/readingSessions/{session_id}/snapshots",
             get(session_history::list_session_snapshots),
         )
         .route(
-            "/api/v2/reading-sessions/{session_id}/details",
+            "/api/v2/readingSessions/{session_id}/details",
             get(session_details::get_session_details),
         )
         // Undo snapshots list and restore (issues #4839, #4838/#4335)
@@ -802,6 +811,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v2/threads",
             get(threads::list_threads).post(thread_lifecycle::create_thread_v2),
+        )
+        .route(
+            "/api/v2/threads/{thread_id}",
+            patch(thread_lifecycle::patch_thread).delete(thread_lifecycle::delete_thread_v2),
         )
         .route(
             "/api/v1/threads/{thread_id}",
