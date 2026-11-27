@@ -1,12 +1,26 @@
 import { useCallback, useMemo } from 'react'
 import type { RollBootstrapResponse, RollBootstrapThread } from '../types/rollBootstrap'
-import { useToast } from '../contexts/useToast'
+import type { SessionMode } from '../types'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import { readRollSnoozes } from '../services/api-roll'
 import { useRollDieState, useRollEligibleIssueIds, useRollIssueCards } from './useRollResources'
 import { useRollPendingSelection } from './useRollPendingSelection'
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from './rollMutationReconciliation'
+
+const EMPTY_SESSION_MODE: SessionMode = {
+  active_bandwidth: null,
+  predicted_bandwidth: null,
+  bandwidth_confidence: null,
+  bandwidth_source: null,
+  bandwidth_version: null,
+  active_intent: null,
+  predicted_intent: null,
+  intent_confidence: null,
+  intent_source: null,
+  intent_version: null,
+  session_mode_correction_guidance: null,
+}
 
 /**
  * Read-only Roll view model assembled entirely from scoped native resources.
@@ -58,7 +72,7 @@ export function useRollBootstrap() {
       user_id: 0,
       pending_thread_id: pending?.thread_id ?? null,
       last_rolled_result: pending?.result ?? null,
-      session_mode: null as unknown as RollBootstrapResponse['session_mode'],
+      session_mode: EMPTY_SESSION_MODE,
       active_thread: activeThread,
       roll_recovery: null,
       roll_pool: rollPool,
@@ -94,8 +108,6 @@ export function useRollBootstrap() {
     failureCount: 0,
     isRetrying: false,
     refetch,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    showToast: useToast().showToast,
   }
 }
 
