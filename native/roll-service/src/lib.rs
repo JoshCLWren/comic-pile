@@ -5,6 +5,7 @@ pub mod activity;
 pub mod auth;
 pub mod bootstrap;
 pub mod bug_reports;
+pub mod cbl_sources_v2;
 pub mod catalog_commit;
 pub mod catalog_series_mapping_preview;
 pub mod cbl_catalog;
