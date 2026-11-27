@@ -3,6 +3,7 @@
 //! The collection is served only by the canonical v2 resource, whose Get folds
 //! the enriched detail view into the single group read:
 //!
+<<<<<<< HEAD
 //! * `GET /api/v2/readingOrderGroups`
 //! * `POST /api/v2/readingOrderGroups`
 //! * `GET /api/v2/readingOrderGroups/{group_id}`
@@ -13,6 +14,14 @@
 //! in #5711:
 //!
 
+=======
+//! * `GET /api/v1/reading-order-groups/` (group CRUD stays on v1, #5710)
+//! * `POST /api/v1/reading-order-groups/`
+//! * `GET /api/v1/reading-order-groups/{group_id}`
+//! * `GET /api/v1/reading-order-groups/{group_id}/detail`
+//! * `PATCH /api/v1/reading-order-groups/{group_id}`
+//! * `DELETE /api/v1/reading-order-groups/{group_id}`
+>>>>>>> origin/main
 //! * `PUT /api/v1/reading-order-groups/{group_id}/order`
 //!
 //! The six membership operations moved to their v2-only resources in #5711:
@@ -1709,6 +1718,33 @@ pub async fn delete_group_v2(
     path = "/api/v2/threads/{thread_id}/reading-order-group-memberships",
     tag = "reading-order-groups",
 
+<<<<<<< HEAD
+=======
+/// Documentation-only operation for creating a reading-order group.
+#[utoipa::path(
+    post,
+    path = "/api/v1/reading-order-groups/",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_create",
+    request_body = DependencyGroupCreateRequest,
+    responses(
+        (status = 201, description = "Created group", body = DependencyGroupResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 409, description = "A group with this name already exists"),
+        (status = 422, description = "Request validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn create_group_documentation() {}
+
+/// Documentation-only operation for listing a thread's group memberships (v2).
+#[utoipa::path(
+    get,
+    path = "/api/v2/threads/{thread_id}/reading-order-group-memberships",
+    tag = "reading-order-groups",
+>>>>>>> origin/main
     operation_id = "dependency_groups_v2_list_thread_group_memberships",
     params(("thread_id" = i32, Path, description = "Owned thread identifier")),
     responses(
@@ -1723,6 +1759,69 @@ pub async fn delete_group_v2(
 #[allow(dead_code)]
 pub fn list_thread_group_memberships_documentation() {}
 
+
+<<<<<<< HEAD
+=======
+/// Documentation-only operation for renaming one group.
+#[utoipa::path(
+    patch,
+    path = "/api/v1/reading-order-groups/{group_id}",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_update",
+    params(("group_id" = i32, Path, description = "Owned group identifier")),
+    request_body = DependencyGroupUpdateRequest,
+    responses(
+        (status = 200, description = "Renamed group", body = DependencyGroupResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Group not found"),
+        (status = 409, description = "A group with this name already exists"),
+        (status = 422, description = "Request validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn update_group_documentation() {}
+
+/// Documentation-only operation for deleting one group.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/reading-order-groups/{group_id}",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_delete",
+    params(("group_id" = i32, Path, description = "Owned group identifier")),
+    responses(
+        (status = 204, description = "Group deleted"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Group not found"),
+        (status = 422, description = "Request validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn delete_group_documentation() {}
+
+/// Documentation-only operation for fetching enriched group detail.
+#[utoipa::path(
+    get,
+    path = "/api/v1/reading-order-groups/{group_id}/detail",
+    tag = "reading-order-groups",
+    operation_id = "dependency_groups_get_detail",
+    params(("group_id" = i32, Path, description = "Owned group identifier")),
+    responses(
+        (status = 200, description = "Owned group detail", body = DependencyGroupDetailResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Group not found"),
+        (status = 422, description = "Request validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn get_group_detail_documentation() {}
+
+>>>>>>> origin/main
 /// Documentation-only operation for adding an issue-position range (v2).
 #[utoipa::path(
     post,
@@ -1843,6 +1942,7 @@ pub fn list_reading_plans_v2_documentation() {}
 )]
 #[allow(dead_code)]
 pub fn resolve_memberships_documentation() {}
+<<<<<<< HEAD
 
 /// Documentation-only operation for listing v2 reading-order groups.
 #[utoipa::path(
@@ -1938,6 +2038,8 @@ pub fn update_group_v2_documentation() {}
 )]
 #[allow(dead_code)]
 pub fn delete_group_v2_documentation() {}
+=======
+>>>>>>> origin/main
 
 /// OpenAPI document for the native same-path reading-order-group surface.
 #[derive(utoipa::OpenApi)]
@@ -1948,7 +2050,16 @@ pub fn delete_group_v2_documentation() {}
         description = "Generated contract for the native reading-order-group handlers that retain their original method and path."
     ),
     paths(
+<<<<<<< HEAD
 
+=======
+        list_groups_documentation,
+        create_group_documentation,
+        get_group_documentation,
+        update_group_documentation,
+        delete_group_documentation,
+        get_group_detail_documentation,
+>>>>>>> origin/main
         set_group_order_documentation
     ),
     components(schemas(
@@ -1991,6 +2102,7 @@ pub fn dependency_groups_openapi() -> utoipa::openapi::OpenApi {
     DependencyGroupsApi::openapi()
 }
 
+<<<<<<< HEAD
 /// v2 collection CRUD contract (#5710). Kept as a separate domain document so
 /// the canonical `/api/v2` surface can merge it without re-declaring the
 /// retained v1 same-path operations.
@@ -2026,6 +2138,8 @@ pub fn reading_order_groups_v2_openapi() -> utoipa::openapi::OpenApi {
     use utoipa::OpenApi;
     ReadingOrderGroupsV2Api::openapi()
 }
+=======
+>>>>>>> origin/main
 /// OpenAPI document for the v2 reading-order-group membership surface.
 ///
 /// These six operations are the single authority for group membership reads and
@@ -2494,6 +2608,20 @@ mod tests {
         // The CRUD and membership operations are v2-only: their retired v1 URLs
         // must not remain documented as live operations.
         for path in [
+<<<<<<< HEAD
+
+=======
+            "/api/v1/reading-order-groups/",
+            "/api/v1/reading-order-groups/{group_id}",
+            "/api/v1/reading-order-groups/{group_id}/detail",
+            "/api/v1/reading-order-groups/{group_id}/order",
+        ] {
+            assert!(document["paths"].get(path).is_some(), "{path}");
+        }
+        // The membership operations are v2-only: their retired v1 URLs must not
+        // remain documented as live operations.
+        for path in [
+>>>>>>> origin/main
             "/api/v1/reading-order-groups/threads/{thread_id}/groups",
             "/api/v1/reading-order-groups/{group_id}/issue-ranges",
             "/api/v1/reading-order-groups/{group_id}/members",
@@ -2501,6 +2629,7 @@ mod tests {
             "/api/v1/reading-order-groups/{group_id}/plans",
         ] {
             assert!(document["paths"].get(path).is_none(), "{path}");
+<<<<<<< HEAD
         }
         for retired in [
             "/api/v1/reading-order-groups/",
@@ -2511,12 +2640,15 @@ mod tests {
                 document["paths"].get(retired).is_none(),
                 "retired v1 CRUD path still documented: {retired}"
             );
+=======
+>>>>>>> origin/main
         }
         let expected = include_str!("../../contracts/reading-order-groups-v1.openapi.json");
         let generated = dependency_groups_openapi().to_pretty_json().unwrap();
         assert_eq!(expected.trim_end(), generated.trim_end());
     }
 
+<<<<<<< HEAD
     /// The v2 collection CRUD contract must expose the five standard methods
     /// with canonical Get carrying the enriched detail view and no `/detail`
     /// action path (#5710).
@@ -2593,6 +2725,8 @@ mod tests {
             );
         }
     }
+=======
+>>>>>>> origin/main
     #[test]
     fn v2_contract_documents_all_six_membership_operations() {
         let document = serde_json::to_value(dependency_groups_v2_openapi()).unwrap();
