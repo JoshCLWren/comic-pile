@@ -160,11 +160,6 @@ volume_evidence AS (
     JOIN thread_external_series_mappings m ON m.thread_id = t.id
     JOIN external_identities e ON e.id = m.external_identity_id
     WHERE m.status = 'confirmed'
-    UNION ALL
-    SELECT t.id AS thread_id, e.provider, e.external_id, e.entity_type
-    FROM owned_threads t
-    JOIN catalog_series s ON s.id = t.catalog_series_id
-    JOIN external_identities e ON e.id = s.canonical_external_identity_id
 ),
 overlap_rows AS (
     SELECT d.id, d.list_id, c.provider AS continuing_provider,
@@ -181,11 +176,27 @@ exclusion_rows AS (
     FROM collection_exclusions WHERE user_id = (SELECT user_id FROM me)
 ),
 issue_volume_rows AS (
-    SELECT i.id AS issue_id, e.provider, e.external_id
+    SELECT DISTINCT i.id AS issue_id, ei.provider, ei.external_id
     FROM owned_issues i
-    JOIN catalog_issues ci ON ci.id = i.catalog_issue_id
-    JOIN catalog_series s ON s.id = ci.catalog_series_id
-    JOIN external_identities e ON e.id = s.canonical_external_identity_id
+    JOIN issue_external_identity_mappings ieim ON ieim.issue_id = i.id AND ieim.status = 'confirmed'
+    JOIN external_identities ei ON ei.id = ieim.external_identity_id
+    WHERE ei.entity_type = 'series'
+    UNION
+    SELECT DISTINCT i.id AS issue_id, ei.provider,
+           COALESCE(
+               NULLIF(ei.metadata_json->>'volume_id', ''),
+               NULLIF(ei.metadata_json->'volume'->>'id', '')
+           ) AS external_id
+    FROM owned_issues i
+    JOIN issue_external_identity_mappings ieim ON ieim.issue_id = i.id AND ieim.status = 'confirmed'
+    JOIN external_identities ei ON ei.id = ieim.external_identity_id
+    WHERE COALESCE(NULLIF(ei.metadata_json->>'volume_id', ''), NULLIF(ei.metadata_json->'volume'->>'id', '')) IS NOT NULL
+    UNION
+    SELECT DISTINCT i.id AS issue_id, ei.provider, ei.external_id
+    FROM owned_issues i
+    JOIN thread_external_series_mappings tesm ON tesm.thread_id = i.thread_id AND tesm.status = 'confirmed'
+    JOIN external_identities ei ON ei.id = tesm.external_identity_id
+    WHERE ei.entity_type = 'series'
 )"#;
 
 /// The snapshot JSON projection over [`SNAPSHOT_CTES`].
