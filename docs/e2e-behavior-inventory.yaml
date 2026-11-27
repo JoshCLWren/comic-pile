@@ -251,10 +251,10 @@ behaviors:
 
   - id: REG-003
     area: regression
-    behavior: "Desktop sidebar controls stay contained inside their rendered boundary"
+    behavior: "Desktop sidebar footer controls stay contained inside their rendered boundary with no appearance selector"
     priority: P1
     status: covered
-    specs: ["issue-1941-sidebar-theme-containment.spec.ts"]
+    specs: ["issue-1941-sidebar-footer-containment.spec.ts"]
 
   - id: REG-004
     area: regression
@@ -346,7 +346,7 @@ behaviors:
 
   - id: THEME-001
     area: feature
-    behavior: "Each theme keeps a distinct visual personality with shared semantic accents"
+    behavior: "Night Shift is the sole visual identity across surfaces with no appearance selector or stored theme effect"
     priority: P2
     status: covered
-    specs: ["issue-2232-theme-personality.spec.ts"]
+    specs: ["night-shift-visual-identity.spec.ts"]
