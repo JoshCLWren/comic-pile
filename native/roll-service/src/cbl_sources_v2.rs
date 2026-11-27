@@ -16,6 +16,12 @@
 //! resource. The fingerprint returned with each preview is the source revision
 //! the commit path validates for stale-preview conflicts; cross-user reads are
 //! scoped through the same owner-aware reconcile helpers as v1.
+//!
+//! axum/matchit rejects a path parameter followed by literal text in the same
+//! segment, so the two custom methods share one POST segment route that
+//! dispatches on the `:camelCase` suffix (the same pattern as
+//! `/api/v1/threads/{thread_id}:action`). Their published OpenAPI operations
+//! keep the canonical paths.
 
 use crate::{
     auth::AuthenticatedUser,
@@ -25,12 +31,13 @@ use crate::{
     issue_identity_cbl_reading_graph_preview::{
         preview_reading_graph_for, PreviewError, ReadingGraphPreview, ReadingGraphPreviewRequest,
     },
-    preview_validation::parse_path_int,
+    preview_validation::{parse_path_int, validation_failed},
     ApiError, AppState,
 };
 use axum::{
     body::Bytes,
     extract::{rejection::PathRejection, Path, State},
+    response::{IntoResponse, Response},
     Json,
 };
 use std::{collections::HashMap, sync::Arc};
@@ -110,9 +117,11 @@ pub async fn plan_adoption_v2_handler(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     source_id: Result<Path<String>, PathRejection>,
-    Json(request): Json<CblAdoptionPlanRequest>,
+    body: Bytes,
 ) -> Result<Json<CblAdoptionPreviewResponse>, IdentityError> {
     let source_id = parse_source_id(source_id)?;
+    let request: CblAdoptionPlanRequest =
+        serde_json::from_slice(&body).map_err(|_| validation_failed())?;
     adoption_preview_for(
         &state,
         user.id(),
@@ -137,4 +146,38 @@ pub async fn preview_reading_graph_v2_handler(
     preview_reading_graph_for(&state, user, source_id, &body)
         .await
         .map(Json)
+}
+
+/// Route the two AIP-136 custom methods on one matchit segment.
+///
+/// The suffix is part of the public path, but matchit only binds a parameter to
+/// a whole segment. Unknown actions are a plain 404; known actions delegate to
+/// the same handlers the canonical operations document.
+pub async fn cbl_source_action_v2_handler(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    segment: Result<Path<String>, PathRejection>,
+    body: Bytes,
+) -> Response {
+    let Path(segment) = match segment {
+        Ok(segment) => segment,
+        Err(_) => return validation_failed().into_response(),
+    };
+    let Some((raw_source_id, action)) = segment.split_once(':') else {
+        return ApiError::NotFound("Not Found".to_string()).into_response();
+    };
+    let source = Ok(Path(raw_source_id.to_string()));
+    match action {
+        "planAdoption" => match plan_adoption_v2_handler(State(state), user, source, body).await {
+            Ok(preview) => preview.into_response(),
+            Err(error) => error.into_response(),
+        },
+        "previewReadingGraph" => {
+            match preview_reading_graph_v2_handler(State(state), user, source, body).await {
+                Ok(preview) => preview.into_response(),
+                Err(error) => error.into_response(),
+            }
+        }
+        _ => ApiError::NotFound("Not Found".to_string()).into_response(),
+    }
 }

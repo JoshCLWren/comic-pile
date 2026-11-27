@@ -297,6 +297,18 @@ fn app() -> Router {
             "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
             post(native_dispatch),
         )
+        // #5714: the canonical v2 CBL preview surface must be in this Vercel
+        // route table too; otherwise deployment requests hit native_not_found
+        // before the inner service router sees them. The POST segment covers
+        // both `:planAdoption` and `:previewReadingGraph` custom methods.
+        .route(
+            "/api/v2/cblSources/{source_id}/adoptionPreview",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/cblSources/{source_id_action}",
+            post(native_dispatch),
+        )
         .route("/api/v2/roll/offer", post(native_dispatch))
         .route("/api/v2/roll/unsnooze", post(native_dispatch))
         .route("/api/v2/roll/reset", post(native_dispatch))

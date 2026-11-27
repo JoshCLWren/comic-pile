@@ -689,6 +689,17 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
             post(issue_identity_cbl_reading_graph_preview::preview_cbl_reading_graph_handler),
         )
+        // #5714: canonical v2 CBL previews. `adoptionPreview` is a read-only
+        // resource; the two AIP-136 custom methods share one POST segment
+        // because matchit cannot bind `{source_id}:action` in a single segment.
+        .route(
+            "/api/v2/cblSources/{source_id}/adoptionPreview",
+            get(cbl_sources_v2::adoption_preview_v2_handler),
+        )
+        .route(
+            "/api/v2/cblSources/{source_id_action}",
+            post(cbl_sources_v2::cbl_source_action_v2_handler),
+        )
         .route("/api/auth/register", post(auth::handlers::register))
         .route("/api/auth/login", post(auth::handlers::login))
         .route("/api/auth/refresh", post(auth::handlers::refresh))
