@@ -2581,6 +2581,34 @@ async fn check_duplicates_v2_is_scoped_mapped_unmapped_and_excludes_self() {
     assert!(listed.contains(&(renamed as i64)), "{page:?}");
 }
 
+/// The advisory result is bounded even when many owned titles resemble the
+/// candidate; a single v2 request can never return an unbounded payload.
+#[tokio::test]
+async fn check_duplicates_v2_caps_matches_at_five() {
+    let ctx = setup("lcdupv2cap").await;
+    for position in 1..=7 {
+        seed_thread(
+            &ctx,
+            ctx.user_id,
+            "Amazing Spider-Man",
+            "active",
+            position,
+            1,
+        )
+        .await;
+    }
+
+    let (status, body) = call(
+        &ctx,
+        "POST",
+        "/api/v2/threads:checkDuplicates",
+        Some(json!({"title": "Amazing Spider-Man", "format": "Comic"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["matches"].as_array().unwrap().len(), 5, "{body:?}");
+}
+
 // ---------------------------------------------------------------------------
 // groups:batch
 // ---------------------------------------------------------------------------
