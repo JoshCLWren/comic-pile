@@ -171,6 +171,11 @@ use utoipa::OpenApi;
         crate::creators_v2::series_documentation,
         // AIP-136 collection custom method for the advisory duplicate lookup (#5705).
         crate::thread_lifecycle::check_potential_duplicates_v2_documentation,
+        // Canonical CBL source previews: one read-only singleton resource and
+        // two stateless AIP-136 custom methods (#5714).
+        crate::cbl_sources_v2::adoption_preview_v2_documentation,
+        crate::cbl_sources_v2::plan_adoption_v2_documentation,
+        crate::cbl_sources_v2::preview_reading_graph_v2_documentation,
     ),
     components(schemas(
         crate::auth::dto::RegisterRequest,
@@ -360,6 +365,22 @@ use utoipa::OpenApi;
         crate::thread_lifecycle::CheckDuplicatesRequest,
         crate::thread_lifecycle::CheckDuplicatesResponse,
         crate::thread_lifecycle::PotentialDuplicateMatch,
+        // CBL adoption-plan/preview DTOs shared by the canonical v2 surface (#5714).
+        crate::issue_identity::CblAdoptionPlanRequest,
+        crate::issue_identity::CblSourceFingerprintResponse,
+        crate::issue_identity::CblAdoptionEntryResponse,
+        crate::issue_identity::CblAdoptionSummaryResponse,
+        crate::issue_identity::CblAdoptionPreviewResponse,
+        crate::issue_identity_cbl_reading_graph_preview::ReadingGraphPreviewRequest,
+        crate::issue_identity_cbl_reading_graph_preview::ReadingGraphOverlapChoice,
+        crate::issue_identity_cbl_reading_graph_preview::ReadingGraphPreview,
+        crate::issue_identity_cbl_reading_graph_preview::ReadingGraphSeriesReference,
+        crate::issue_identity_cbl_reading_graph_preview::ReadingGraphSeriesNode,
+        crate::issue_identity_cbl_reading_graph_preview::ReadingGraphBlocker,
+        crate::issue_identity_cbl_reading_graph_preview::ReadingGraphIssueReference,
+        crate::issue_identity_cbl_reading_graph_preview::ReadingGraphOverlap,
+        crate::issue_identity_cbl_reading_graph_preview::ReadingGraphChoiceEffect,
+        crate::issue_identity_cbl_reading_graph_preview::ReadingGraphCycleError,
     )),
     modifiers(&NativeSecurityAddon)
 )]
@@ -466,6 +487,32 @@ mod tests {
             collection["post"]["requestBody"]["content"]["application/json"]["schema"]["$ref"],
             "#/components/schemas/ThreadCreateRequest"
         );
+    }
+
+    /// #5714: the CBL preview surface is one read-only singleton resource and
+    /// two stateless AIP-136 custom methods, not three more v1 aliases.
+    #[test]
+    fn cbl_source_previews_are_in_v2_contract() {
+        let doc = document();
+        let preview = &doc["paths"]["/api/v2/cblSources/{source_id}/adoptionPreview"]["get"];
+        assert_eq!(preview["operationId"], "get_cbl_adoption_preview_v2");
+        let plan = &doc["paths"]["/api/v2/cblSources/{source_id}:planAdoption"]["post"];
+        assert_eq!(plan["operationId"], "plan_cbl_adoption_v2");
+        let graph = &doc["paths"]["/api/v2/cblSources/{source_id}:previewReadingGraph"]["post"];
+        assert_eq!(graph["operationId"], "preview_cbl_reading_graph_v2");
+        for schema in [
+            "CblAdoptionPlanRequest",
+            "CblAdoptionPreviewResponse",
+            "ReadingGraphPreviewRequest",
+            "ReadingGraphPreview",
+        ] {
+            assert!(
+                doc["components"]["schemas"][schema].is_object(),
+                "missing {schema} in v2 contract"
+            );
+        }
+        // A read-only singleton stays a GET; only the calculations are POSTs.
+        assert!(doc["paths"]["/api/v2/cblSources/{source_id}/adoptionPreview"]["post"].is_null());
     }
 
     /// The issue read-state and reader-context operations moved from their
