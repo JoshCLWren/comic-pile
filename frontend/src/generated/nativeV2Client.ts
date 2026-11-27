@@ -784,6 +784,19 @@ export interface ListThreadIssuesV2Request {
   path: {
     thread_id: number
   }
+<<<<<<< HEAD
+=======
+  query?: {
+    status?: string
+    page_size?: number
+    page_token?: string
+  }
+}
+
+export type ListThreadIssuesV2Response = components['schemas']['ThreadIssueListResponse']
+
+export interface ListThreadsRequest {
+>>>>>>> origin/main
   query?: {
     status?: string
     page_size?: number
@@ -899,6 +912,12 @@ export interface PreviewIssueStructureRequest {
 }
 
 export type PreviewIssueStructureResponse = components['schemas']['IssueEditPreviewResponse']
+
+export interface PreviewSeriesMappingsRequest {
+  body: components['schemas']['NativeSeriesMappingPreviewRequest']
+}
+
+export type PreviewSeriesMappingsResponse = components['schemas']['NativeSeriesMappingPreviewResponse']
 
 export interface RatingDistributionRequest {
   path: {
@@ -1495,6 +1514,7 @@ export interface NativeV2Client {
   preview(args: PreviewRequest): Promise<PreviewResponse>
   previewIssueCreate(args: PreviewIssueCreateRequest): Promise<PreviewIssueCreateResponse>
   previewIssueStructure(args: PreviewIssueStructureRequest): Promise<PreviewIssueStructureResponse>
+  previewSeriesMappings(args: PreviewSeriesMappingsRequest): Promise<PreviewSeriesMappingsResponse>
   ratingDistribution(args: RatingDistributionRequest): Promise<RatingDistributionResponse>
   read(args: ReadRequest): Promise<ReadResponse>
   readDemoRoll(): Promise<ReadDemoRollResponse>
@@ -2170,6 +2190,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     previewIssueStructure(args: PreviewIssueStructureRequest) {
       return client.post<PreviewIssueStructureResponse, PreviewIssueStructureRequest['body']>(
         `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/issues/structure-preview`,
+        args.body,
+      )
+    },
+    previewSeriesMappings(args: PreviewSeriesMappingsRequest) {
+      return client.post<PreviewSeriesMappingsResponse, PreviewSeriesMappingsRequest['body']>(
+        "/v2/seriesMappings:preview",
         args.body,
       )
     },

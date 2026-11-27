@@ -3279,6 +3279,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/seriesMappings:preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Stateless AIP-136 collection custom method: build a read-only series-mapping preview and a signed idempotency token for the durable commit. No mappings, receipts, history or provider state are written. */
+        post: operations["preview_series_mappings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/tags": {
         parameters: {
             query?: never;
@@ -3486,8 +3503,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+<<<<<<< HEAD
         /** Standard resource Get for one owned Thread. */
         get: operations["get_thread_v2_documentation"];
+=======
+        get?: never;
+>>>>>>> origin/main
         put?: never;
         post?: never;
         /** @description Delete an owned Thread (AIP-135). A second delete, or a delete of a foreign or already deleted Thread, returns 404. Never 403. */
@@ -9641,12 +9662,15 @@ export interface components {
             next_page_token?: string | null;
             threads: components["schemas"]["ThreadListItem"][];
         };
+<<<<<<< HEAD
         /**
          * @description One v2 threads list response. The active/completed/excluded filters keep the
          *     queue-list projection; the stale filter keeps the legacy detail-shaped
          *     projection. Both are emitted inline (no envelope variant key).
          */
         ThreadListResult: components["schemas"]["ThreadListResponse"] | components["schemas"]["StaleThreadListResponse"];
+=======
+>>>>>>> origin/main
         /** @description Committed values a stale client read before issuing a Thread patch. */
         ThreadPatchPrecondition: {
             /** @description Format observed by the client. */
@@ -18991,6 +19015,44 @@ export interface operations {
             };
         };
     };
+    preview_series_mappings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NativeSeriesMappingPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Read-only series mapping preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeSeriesMappingPreviewResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_tags_documentation: {
         parameters: {
             query?: never;
@@ -19425,6 +19487,7 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
     get_thread_v2_documentation: {
         parameters: {
             query?: never;
@@ -19462,6 +19525,8 @@ export interface operations {
             };
         };
     };
+=======
+>>>>>>> origin/main
     delete_thread_v2_documentation: {
         parameters: {
             query?: never;
