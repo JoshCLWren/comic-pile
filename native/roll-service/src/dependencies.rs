@@ -644,10 +644,10 @@ mod tests {
              INSERT INTO issues (id,thread_id,issue_number,status,created_at,position)
              VALUES (311,31,'1','unread',NOW(),1),(321,32,'1','unread',NOW(),1),
                     (331,33,'1','unread',NOW(),1);
-             INSERT INTO dependencies (source_issue_id,target_issue_id,origin,classification,note,created_at)
-             VALUES (311,321,'reader','A',NULL,NOW()),
-                    (311,321,'converted','A','converted from CBL',NOW()),
-                    (311,321,'generated','A','cbl-order: series order',NOW());",
+             INSERT INTO dependencies (source_issue_id,target_issue_id,origin,classification,provenance,note,created_at)
+             VALUES (311,321,'reader','A','reader authored',NULL,NOW()),
+                    (311,321,'converted','C','converted from CBL',NULL,NOW()),
+                    (311,321,'reader','A','inert materialization','cbl-order: series order',NOW());",
         )
         .await
         .expect("reader-authored dependency fixtures");
