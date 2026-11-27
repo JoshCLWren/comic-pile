@@ -68,7 +68,7 @@ async function listIssues(
   threadId: number,
 ): Promise<Array<{ id: number; position: number }>> {
   const token = await getAuthToken(page)
-  const response = await page.request.get(`/api/v1/threads/${threadId}/issues`, {
+  const response = await page.request.get(`/api/v2/threads/${threadId}/issues`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   expect(response.ok()).toBeTruthy()

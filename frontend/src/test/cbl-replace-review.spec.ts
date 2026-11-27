@@ -28,7 +28,7 @@ async function authHeaders(page: Page) {
 
 async function getFirstIssueId(page: Page, threadId: number): Promise<number> {
   const headers = await authHeaders(page)
-  const response = await page.request.get(`/api/v1/threads/${threadId}/issues`, { headers })
+  const response = await page.request.get(`/api/v2/threads/${threadId}/issues`, { headers })
   expect(response.ok(), await response.text()).toBeTruthy()
   // SAFETY: the test reads only the response fields listed in this type
   const data = await response.json() as { issues: Array<{ id: number }> }

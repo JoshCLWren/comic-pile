@@ -26,7 +26,7 @@ async function authHeaders(page: Parameters<typeof getAuthToken>[0]) {
 
 async function firstIssueId(page: Parameters<typeof getAuthToken>[0], threadId: number): Promise<number> {
   const headers = await authHeaders(page)
-  const response = await page.request.get(`/api/v1/threads/${threadId}/issues`, { headers })
+  const response = await page.request.get(`/api/v2/threads/${threadId}/issues`, { headers })
   expect(response.ok(), await response.text()).toBeTruthy()
   // SAFETY: the thread issues endpoint returns issue IDs used to build the reading-list fixture.
   const data = (await response.json()) as { issues: Array<{ id: number }> }

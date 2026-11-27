@@ -73,7 +73,7 @@ async function apiPost(
 }
 
 async function listIssues(page: Page, user: TestUser, threadId: number): Promise<IssueInfo[]> {
-  const response = await page.request.get(`/api/v1/threads/${threadId}/issues`, {
+  const response = await page.request.get(`/api/v2/threads/${threadId}/issues`, {
     headers: { Authorization: `Bearer ${user.accessToken ?? ''}` },
   });
   if (!response.ok()) {
