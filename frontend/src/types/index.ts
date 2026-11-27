@@ -398,6 +398,12 @@ export type BlockingInfoResponse = components['schemas']['BlockingExplanation']
 
 export type BatchBlockingInfoResponse = components['schemas']['BatchBlockingExplanationResponse']
 
+// #5709: canonical v2 eligibility is a derived singleton resource. Explicit
+// Read Now is a reader action and is never vetoed by this automatic decision.
+export type ThreadEligibilityResponse = components['schemas']['ThreadEligibilityResponse']
+
+export type EligibilityBlockerInfo = components['schemas']['EligibilityBlockerInfo']
+
 export interface DependencyCreatePayload {
   sourceType?: 'thread' | 'issue';
   sourceId: number;

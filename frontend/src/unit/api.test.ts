@@ -1,5 +1,6 @@
 import { beforeEach, expect, it } from 'vitest'
 import { createApiClient, setAccessToken } from '../services/api'
+import { createIssueDependenciesApi } from '../services/api-dependencies'
 import { createApiServiceSet } from './apiServiceSet'
 import { createTransportDouble } from './transportDouble'
 
@@ -126,13 +127,17 @@ it('calls queue resource endpoints with expected paths', async () => {
 it('calls dependency endpoints with expected paths', async () => {
   await dependenciesApi.listBlockedThreadIds()
   await dependenciesApi.listThreadDependencies(11)
-  await dependenciesApi.getBlockingInfo(12)
+  await dependenciesApi.getThreadEligibility(12)
+  await dependenciesApi.getBatchBlockingInfo([12, 13])
   await dependenciesApi.createDependency({ sourceId: 1, targetId: 2 })
   await dependenciesApi.deleteDependency(7)
+  await createIssueDependenciesApi(client).listForThread(14)
 
   expect(get).toHaveBeenCalledWith('/v2/dependencies/blocked')
-  expect(get).toHaveBeenCalledWith('/v1/threads/11/dependencies')
-  expect(post).toHaveBeenCalledWith('/v1/threads/12:getBlockingInfo')
+  expect(get).toHaveBeenCalledWith('/v2/threads/11/dependencies')
+  expect(get).toHaveBeenCalledWith('/v2/threads/12/eligibility')
+  expect(post).toHaveBeenCalledWith('/v2/threads:explainEligibility', { thread_ids: [12, 13] })
+  expect(get).toHaveBeenCalledWith('/v2/threads/14/issueDependencies')
   expect(post).toHaveBeenCalledWith('/v2/dependencies/', {
     source_type: 'thread',
     source_id: 1,
