@@ -602,13 +602,11 @@ def select_sources(
     shas = [source.merge_commit_sha for source in deployed]
     existing = lookup(repository, numbers, shas)
     missing = select_missing_source(deployed, existing)
-    missing_count = sum(
-        1
+    missing_sources = [
+        source
         for source in deployed
-        if not any(
-            row == (source.number, source.merge_commit_sha) for row in existing
-        )
-    )
+        if not any(row == (source.number, source.merge_commit_sha) for row in existing)
+    ]
     return {
         "needed": missing is not None,
         "pr_number": missing.number if missing else None,
@@ -616,7 +614,8 @@ def select_sources(
         "deployed_revision": live_sha,
         "candidates": len(candidates),
         "deployed_candidates": len(deployed),
-        "missing_count": missing_count,
+        "missing_count": len(missing_sources),
+        "missing_pr_numbers": [source.number for source in missing_sources],
     }
 
 
