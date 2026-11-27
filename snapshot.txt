@@ -1,9 +1,9 @@
-utc: 2026-11-27T00:25:16Z
-uptime: 2733.86s load: 0.00 0.00 0.00
+utc: 2026-11-27T00:25:32Z
+uptime: 2750.07s load: 0.00 0.00 0.00
 processes: 186
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15700         977       11899          55        3196       14723
+Mem:           15700         973       11902          55        3196       14727
 Swap:              0           0           0
 --- disk
 Filesystem            Size  Used Avail Use% Mounted on
@@ -11,7 +11,7 @@ Filesystem            Size  Used Avail Use% Mounted on
 /dev/mapper/cow-root  145G   56G   89G  39% /
 --- top rss (KiB, name only)
 235168 Runner.Worker
-140468 provjobd7603807
+140348 provjobd7603807
 123032 Runner.Listener
 85880 dockerd
 55116 php-fpm8.5
@@ -33,6 +33,6 @@ Filesystem            Size  Used Avail Use% Mounted on
  0.0 systemd
  0.0 pr/ttyS0
  0.0 dockerd
- 0.0 kworker/u16:0-events_power_efficient
+ 0.0 kworker/u16:0-events_unbound
 --- kernel oom/kill
 --- shutdown/session signals
