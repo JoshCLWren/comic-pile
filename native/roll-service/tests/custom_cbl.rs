@@ -1014,3 +1014,65 @@ async fn issue_search_returns_each_issue_once_and_keeps_same_titled_series_disti
     threads.sort();
     assert_eq!(threads, vec![910301, 910302], "{body}");
 }
+
+#[tokio::test]
+async fn issue_search_returns_exact_owned_cover_and_series_identity() {
+    let fixture = setup().await;
+    let user_id = fixture.user_id;
+    let conn = fixture.state.pool.get().await.unwrap();
+    conn.batch_execute(&format!(
+        "INSERT INTO threads
+           (id, user_id, title, format, issues_remaining, queue_position, status,
+            manual_creator_credits, is_test, is_blocked, queue_position_is_manual, created_at)
+         VALUES (910401, {user_id}, 'Mutant X', 'Comic', 1, 10, 'active',
+                 '[]'::json, false, false, false, NOW()),
+                (910402, {user_id}, 'Mutant X', 'Comic', 1, 11, 'active',
+                 '[]'::json, false, false, false, NOW());
+         INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+         VALUES (910411, 910401, '1', 'unread', NOW(), 1),
+                (910421, 910402, '1', 'unread', NOW(), 1);
+         INSERT INTO external_identities
+           (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+         VALUES (910501, 'comicvine', 'issue', 'cv-1',
+                 '{{\"image\":{{\"original_url\":\"https://example.test/mutant-x-910411.jpg\"}}}}'::json,
+                 NOW(), NOW());
+         INSERT INTO issue_external_identity_mappings
+           (id, issue_id, external_identity_id, status, confidence, evidence_json, created_at, updated_at)
+         VALUES (910601, 910411, 910501, 'confirmed', 1.0, '{{}}'::json, NOW(), NOW());"
+    ))
+    .await
+    .expect("seed cover search fixture");
+    drop(conn);
+
+    let (status, body) = get(
+        &fixture.state,
+        &fixture.token,
+        "/api/v2/reading-lists/issue-candidates?q=Mutant%20X%20%231&limit=10",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let results = body.as_array().expect("array body");
+    assert_eq!(results.len(), 2, "{body}");
+
+    let with_cover = results
+        .iter()
+        .find(|item| item["issue_id"] == json!(910411))
+        .expect("issue with cover");
+    assert_eq!(with_cover["thread_id"], json!(910401));
+    assert_eq!(with_cover["series_name"], json!("Mutant X"));
+    assert_eq!(with_cover["issue_number"], json!("1"));
+    assert_eq!(
+        with_cover["cover_image_url"],
+        json!("https://example.test/mutant-x-910411.jpg")
+    );
+
+    let without_cover = results
+        .iter()
+        .find(|item| item["issue_id"] == json!(910421))
+        .expect("issue without cover");
+    assert_eq!(without_cover["thread_id"], json!(910402));
+    assert!(
+        without_cover["cover_image_url"].is_null(),
+        "unmapped issue should have no cover: {without_cover}"
+    );
+}
