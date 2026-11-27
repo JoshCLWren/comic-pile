@@ -1713,12 +1713,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     getThreadDependencies(args: GetThreadDependenciesRequest) {
       return client.get<GetThreadDependenciesResponse>(
-        `/v1/threads/${encodeURIComponent(String(args.path.thread_id))}/dependencies`,
+        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/dependencies`,
       )
     },
     getThreadIssueDependencies(args: GetThreadIssueDependenciesRequest) {
       return client.get<GetThreadIssueDependenciesResponse>(
-        `/v1/threads/${encodeURIComponent(String(args.path.thread_id))}/issue-dependencies`,
+        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/issueDependencies`,
       )
     },
     getUserPreferences() {

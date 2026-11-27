@@ -21993,54 +21993,6 @@
         ]
       }
     },
-    "/api/v1/threads/{thread_id}/dependencies": {
-      "get": {
-        "description": "List owner-scoped dependency edges where one thread blocks others and where it is blocked. Wire parity with Python GET /api/v1/threads/{thread_id}/dependencies: {blocking, blocked_by} of enriched DependencyResponse entries ordered by dependency id.",
-        "operationId": "get_thread_dependencies_documentation",
-        "parameters": [
-          {
-            "description": "Owned thread identifier",
-            "in": "path",
-            "name": "thread_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ThreadDependenciesResponse"
-                }
-              }
-            },
-            "description": "Thread dependencies"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Thread not found"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for the mounted thread-dependencies read.",
-        "tags": [
-          "dependencies"
-        ]
-      }
-    },
     "/api/v1/threads/{thread_id}/dependency-order-check": {
       "get": {
         "operationId": "thread_ordering_dependency_order_check",
@@ -22137,54 +22089,6 @@
         "tags": [
           "threads",
           "threads"
-        ]
-      }
-    },
-    "/api/v1/threads/{thread_id}/issue-dependencies": {
-      "get": {
-        "description": "Return dependency edges for every issue in one owner-scoped thread. Wire parity with Python: issues are ordered by position and id, incoming/outgoing edges are ordered by dependency id, and foreign endpoints are omitted.",
-        "operationId": "get_thread_issue_dependencies_documentation",
-        "parameters": [
-          {
-            "description": "Owned thread identifier",
-            "in": "path",
-            "name": "thread_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ThreadIssueDependenciesResponse"
-                }
-              }
-            },
-            "description": "Thread issue dependencies"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Thread not found"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for the mounted thread issue-dependencies batch read.",
-        "tags": [
-          "dependencies"
         ]
       }
     },
@@ -29530,6 +29434,54 @@
         ]
       }
     },
+    "/api/v2/threads/{thread_id}/dependencies": {
+      "get": {
+        "description": "List reader-authored dependency edges where one thread blocks others and where it is blocked: {blocking, blocked_by} of enriched DependencyResponse entries ordered by dependency id. Converted historical edges are excluded; owner-scoped and 404 for a missing or foreign thread.",
+        "operationId": "get_thread_dependencies_documentation",
+        "parameters": [
+          {
+            "description": "Owned thread identifier",
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadDependenciesResponse"
+                }
+              }
+            },
+            "description": "Thread dependencies"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the mounted v2 thread-dependencies read.",
+        "tags": [
+          "dependencies"
+        ]
+      }
+    },
     "/api/v2/threads/{thread_id}/eligibility": {
       "get": {
         "operationId": "thread_eligibility_get",
@@ -29634,6 +29586,54 @@
         "summary": "Documentation-only operation for the mounted issue-order resource.",
         "tags": [
           "issues"
+        ]
+      }
+    },
+    "/api/v2/threads/{thread_id}/issueDependencies": {
+      "get": {
+        "description": "Return dependency edges for every issue in one owner-scoped thread. Issues are ordered by position and id, incoming/outgoing edges are ordered by dependency id, and foreign endpoints are omitted. One bounded batch: no per-issue round trips.",
+        "operationId": "get_thread_issue_dependencies_documentation",
+        "parameters": [
+          {
+            "description": "Owned thread identifier",
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadIssueDependenciesResponse"
+                }
+              }
+            },
+            "description": "Thread issue dependencies"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the mounted v2 thread issue-edge batch read.",
+        "tags": [
+          "dependencies"
         ]
       }
     },
