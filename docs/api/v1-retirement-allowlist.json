@@ -111,7 +111,9 @@
       "rollout_status": "compatibility-alias-debt",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": []
+      "consumers": [
+        "frontend/src/services/api-bug-reports.ts"
+      ]
     },
     {
       "method": "GET",
@@ -133,7 +135,10 @@
       "rollout_status": "legacy-family-debt",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": []
+      "consumers": [
+        "frontend/src/services/api-roll.ts",
+        "frontend/src/services/rollBootstrapApi.ts"
+      ]
     },
     {
       "method": "GET",
@@ -144,7 +149,14 @@
       "rollout_status": "compatibility-alias-debt",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": []
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/services/api-dependency-groups.ts",
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/api-migration.ts",
+        "frontend/src/services/api-reading-orders.ts",
+        "frontend/src/services/api-threads.ts"
+      ]
     },
     {
       "method": "GET",
@@ -270,7 +282,9 @@
       "rollout_status": "slice-open",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": []
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ]
     },
     {
       "method": "POST",
@@ -317,7 +331,14 @@
       "rollout_status": "migrated-awaiting-retirement",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": []
+      "consumers": [
+        "frontend/src/services/api-creators.ts",
+        "frontend/src/services/creatorComparisonApi.ts",
+        "frontend/src/services/creatorDiscoveryApi.ts",
+        "frontend/src/services/creatorMetricDrilldownApi.ts",
+        "frontend/src/services/creatorTeamChemistryApi.ts",
+        "frontend/src/services/creatorsApi.ts"
+      ]
     },
     {
       "method": "GET",
@@ -339,7 +360,14 @@
       "rollout_status": "migrated-awaiting-retirement",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": []
+      "consumers": [
+        "frontend/src/services/api-creators.ts",
+        "frontend/src/services/creatorComparisonApi.ts",
+        "frontend/src/services/creatorDiscoveryApi.ts",
+        "frontend/src/services/creatorMetricDrilldownApi.ts",
+        "frontend/src/services/creatorTeamChemistryApi.ts",
+        "frontend/src/services/creatorsApi.ts"
+      ]
     },
     {
       "method": "GET",
@@ -350,7 +378,9 @@
       "rollout_status": "background-caller-migration",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": []
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts"
+      ]
     },
     {
       "method": "GET",
@@ -491,7 +521,11 @@
       "rollout_status": "migrated-awaiting-retirement",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": []
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/api-reader-context.ts"
+      ]
     },
     {
       "method": "PUT",
@@ -559,7 +593,10 @@
       "rollout_status": "legacy-family-debt",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": []
+      "consumers": [
+        "frontend/src/services/api-roll.ts",
+        "frontend/src/services/rollBootstrapApi.ts"
+      ]
     },
     {
       "method": "GET",
@@ -816,7 +853,14 @@
       "rollout_status": "slice-open",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": []
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/services/api-dependency-groups.ts",
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/api-migration.ts",
+        "frontend/src/services/api-reading-orders.ts",
+        "frontend/src/services/api-threads.ts"
+      ]
     },
     {
       "method": "POST",
@@ -1009,7 +1053,10 @@
       "rollout_status": "slice-open",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": []
+      "consumers": [
+        "frontend/src/services/api-preferences.ts",
+        "frontend/src/services/api-taste.ts"
+      ]
     },
     {
       "method": "PUT",
