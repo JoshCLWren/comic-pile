@@ -472,3 +472,27 @@ describe('SiblingSeriesMappingOffer no preview token', () => {
     expect(mutate).not.toHaveBeenCalled()
   })
 })
+
+describe('exact owned issue actions in sibling preview (#5904)', () => {
+  it('mounts the shared card for owned rows and never for provider inventory', () => {
+    mockPreview(previewResponse([
+      ORIGIN_ROW,
+      SIBLING_ROW,
+      previewRow({
+        row_id: 'provider:9',
+        issue_id: 9,
+        issue_number: '9',
+        title: null,
+        thread_id: null,
+        thread_title: null,
+        classification: 'unresolved',
+      }),
+    ]))
+
+    renderOffer()
+
+    expect(screen.getByTestId('issue-card-trigger-2')).toBeInTheDocument()
+    expect(screen.queryByTestId('issue-card-trigger-9')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('comic-issue-card')).not.toBeInTheDocument()
+  })
+})

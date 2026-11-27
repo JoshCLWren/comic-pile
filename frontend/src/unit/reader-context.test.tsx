@@ -165,6 +165,14 @@ describe('SeriesPanel', () => {
     expect(screen.getByAltText('Cover for Thanos #9')).toHaveAttribute('src', 'https://cdn.example/thanos-9.jpg')
     expect(screen.getByAltText('Cover for Thanos #10')).toHaveAttribute('src', 'https://cdn.example/thanos-10.jpg')
   })
+
+  it('exposes the shared covered card entrance for every exact owned issue (#5904)', () => {
+    render(<SeriesPanel series={thanosSeries} />)
+    for (const id of [23425, 23426, 23427]) {
+      expect(screen.getByTestId(`issue-card-trigger-${id}`)).toBeInTheDocument()
+    }
+    expect(screen.queryByTestId('comic-issue-card')).not.toBeInTheDocument()
+  })
 })
 
 describe('CrossoverAnalytics', () => {

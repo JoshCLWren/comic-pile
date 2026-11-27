@@ -7721,6 +7721,7 @@
         ]
       }
     },
+<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/connections": {
       "get": {
         "tags": [
@@ -7772,6 +7773,8 @@
         ]
       }
     },
+=======
+>>>>>>> origin/main
     "/api/v2/threads/{thread_id}/creatorCredits": {
       "get": {
         "tags": [
@@ -7844,6 +7847,7 @@
         ]
       }
     },
+<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/dependencies": {
       "get": {
         "tags": [
@@ -7943,6 +7947,8 @@
         ]
       }
     },
+=======
+>>>>>>> origin/main
     "/api/v2/threads/{thread_id}/issue-order": {
       "put": {
         "tags": [
@@ -8458,6 +8464,7 @@
         ]
       }
     },
+<<<<<<< HEAD
     "/api/v2/threads:explainEligibility": {
       "post": {
         "tags": [
@@ -8507,6 +8514,8 @@
         ]
       }
     },
+=======
+>>>>>>> origin/main
     "/api/v2/undo/{session_id}/snapshots": {
       "get": {
         "tags": [
@@ -21520,6 +21529,7 @@
           }
         }
       },
+<<<<<<< HEAD
       "ThreadEligibilityResponse": {
         "type": "object",
         "description": "`GET /api/v2/threads/{thread_id}/eligibility`: derived singleton resource.\n\n`state` is one of `available`, `blocked`, `complete` or `unavailable`.\n`manual_read_now_allowed` is derived from the unread frontier, never from\nthe denormalized `threads.is_blocked` flag or historical converted edges:\nan explicit Read Now is a reader action and automatic eligibility does not\nauthorize or veto it.",
@@ -21559,6 +21569,8 @@
           }
         }
       },
+=======
+>>>>>>> origin/main
       "ThreadIssueDependenciesResponse": {
         "type": "object",
         "description": "Wire parity with Python `ThreadIssueDependenciesResponse`.",

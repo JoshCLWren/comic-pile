@@ -19,11 +19,14 @@ interface Props {
   actionLabel?: string
   /** The expanded card can be featured in a Plan header, compact in dense lists. */
   expandedVariant?: ComicIssueCardVariant
+  /** Host already renders this exact issue's cover; suppress the duplicate. */
+  showCover?: boolean
 }
 
 /** On-demand detail loader: a dense collapsed list does not mount a query per row. */
 function ExpandedIssueCard({
-  issueId, card, threadTitle, issueNumber, status, rating, onMutated, onCardLoaded, expandedVariant = 'compact',
+  issueId, card, threadTitle, issueNumber, status, rating, onMutated, onCardLoaded,
+  expandedVariant = 'compact', showCover = true,
 }: Omit<Props, 'hideTitle'> & { onCardLoaded: (card: IssueCard) => void }) {
   const fetched = useIssueCards([issueId], { enabled: card == null })
   const fetchedExact = fetched.data?.find((item) => item.issue_id === issueId) ?? null
@@ -54,6 +57,7 @@ function ExpandedIssueCard({
         status={isRead ? 'read' : 'unread'}
         rating={rating}
         variant={expandedVariant}
+        showCover={showCover}
         onMutated={onMutated}
       />
     </div>
@@ -68,7 +72,8 @@ function ExpandedIssueCard({
  */
 export default function CompactIssueCardTrigger({
   issueId, threadTitle, issueNumber, status = 'unread',
-  rating = null, card, onMutated, hideTitle = false, actionLabel, expandedVariant = 'compact',
+  rating = null, card, onMutated, hideTitle = false, actionLabel,
+  expandedVariant = 'compact', showCover = true,
 }: Props) {
   const [open, setOpen] = useState(false)
   const [loadedCard, setLoadedCard] = useState<IssueCard | null>(null)
@@ -89,12 +94,14 @@ export default function CompactIssueCardTrigger({
         onClick={() => setOpen((value) => !value)}
         className="flex min-h-11 max-w-full items-center gap-2 rounded-lg p-1 text-left text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
       >
-        <ComicIssueCover
-          coverImageUrl={resolved?.cover_image_url ?? null}
-          threadTitle={title}
-          issueNumber={number}
-          variant="compact"
-        />
+        {showCover && (
+          <ComicIssueCover
+            coverImageUrl={resolved?.cover_image_url ?? null}
+            threadTitle={title}
+            issueNumber={number}
+            variant="compact"
+          />
+        )}
         <span className="min-w-0">
           {!hideTitle && <span className="block break-words text-xs font-semibold">{title} #{number}</span>}
           <span className="block text-[11px] text-[var(--theme-text-muted)]">
@@ -114,6 +121,7 @@ export default function CompactIssueCardTrigger({
           rating={rating}
           onMutated={onMutated}
           expandedVariant={expandedVariant}
+          showCover={showCover}
           onCardLoaded={setLoadedCard}
         />
       )}
