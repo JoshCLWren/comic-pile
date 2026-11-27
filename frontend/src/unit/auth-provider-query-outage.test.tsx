@@ -34,14 +34,6 @@ vi.mock('../services/api', () => {
   }
 })
 
-vi.mock('../services/api-preferences', () => ({
-  preferencesApi: {
-    get: (options?: { timeout?: number; skipAuthRedirect?: boolean }) =>
-      mocks.get('/v2/users/me/preferences', options),
-    patch: (data: { theme?: string | null }) => mocks.patch('/v2/users/me/preferences', data),
-  },
-}))
-
 vi.mock('../query/cacheEffects', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../query/cacheEffects')>()
   return {
