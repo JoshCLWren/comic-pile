@@ -106,7 +106,7 @@ async function applyReadingList(
 
 async function isThreadBlocked(page: Page, threadId: number): Promise<boolean> {
   const headers = await authHeaders(page)
-  const response = await page.request.get(
+  const response = await page.request.post(
     `/api/v2/threads/${threadId}/eligibility`,
     { headers },
   )

@@ -81,7 +81,7 @@ async function installRoutes(page: Page, intelligence: ComicVineIssueIntelligenc
   await page.route('**/v1/threads/*/reading-orders', (route) =>
     route.fulfill({ json: { reading_orders: [] } }),
   )
-  await page.route('**/v2/threads/*/connections', (route) =>
+  await page.route('**/v1/threads/*/connected', (route) =>
     route.fulfill({ json: { connected_threads: [] } }),
   )
   await page.route('**/v1/reading-order-groups/threads/*/groups', (route) =>

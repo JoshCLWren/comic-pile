@@ -98,7 +98,7 @@ test.describe('DEP-001 + ORDER-001: Dependency and reading order', () => {
     await createDependency(page, blocking.id, blocked.id)
 
     const token = await getAuthToken(page)
-    const response = await page.request.get(`/api/v2/threads/${blocked.id}/dependencies`, {
+    const response = await page.request.get(`/api/v1/threads/${blocked.id}/dependencies`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     expect(response.ok()).toBeTruthy()
@@ -234,7 +234,7 @@ test.describe('DEP-001 + ORDER-001: Dependency and reading order', () => {
     await createDependency(page, threadA.id, threadB.id)
 
     const token = await getAuthToken(page)
-    const depsResponse = await page.request.get(`/api/v2/threads/${threadB.id}/dependencies`, {
+    const depsResponse = await page.request.get(`/api/v1/threads/${threadB.id}/dependencies`, {
       headers: { Authorization: `Bearer ${token}` },
     })
     const depsData = await depsResponse.json()

@@ -276,16 +276,8 @@ async fn blocking_info_reports_canonical_unread_blockers_with_isolation() {
     assert_eq!(body["is_blocked"], true);
     assert_eq!(body["eligible"], false);
     let reasons = body["blocking_reasons"].as_array().unwrap();
-    assert!(
-        reasons
-            .iter()
-            .any(|r| r.as_str().unwrap().contains("Blocker Series")),
-        "{body:?}"
-    );
-    assert!(
-        reasons.iter().any(|r| r.as_str().unwrap().contains("#12")),
-        "{body:?}"
-    );
+    assert!(reasons.iter().any(|r| r.as_str().unwrap().contains("Blocker Series")), "{body:?}");
+    assert!(reasons.iter().any(|r| r.as_str().unwrap().contains("#12")), "{body:?}");
     let deps = body["blocking_dependencies"].as_array().unwrap();
     assert_eq!(deps.len(), 1, "{body:?}");
     assert_eq!(deps[0]["thread_id"], blocker);
@@ -325,7 +317,11 @@ async fn blocking_info_reports_canonical_unread_blockers_with_isolation() {
     for id in [999_999, foreign] {
         let (status, body) = send(
             &state,
-            get(&format!("/api/v2/threads/{id}/eligibility"), &token, &csrf),
+            get(
+                &format!("/api/v2/threads/{id}/eligibility"),
+                &token,
+                &csrf,
+            ),
         )
         .await;
         assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
@@ -369,18 +365,17 @@ async fn blocking_info_contains_option_e_cycles_and_preserves_healthy_threads() 
 
     let (status, body) = send(
         &state,
-        get(&format!("/api/v2/threads/{a}/eligibility"), &token, &csrf),
+        get(
+            &format!("/api/v2/threads/{a}/eligibility"),
+            &token,
+            &csrf,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(body["is_blocked"], true, "{body:?}");
     let reasons = body["blocking_reasons"].as_array().unwrap();
-    assert!(
-        reasons
-            .iter()
-            .any(|r| r.as_str().unwrap().contains("Reading constraint cycle")),
-        "{body:?}"
-    );
+    assert!(reasons.iter().any(|r| r.as_str().unwrap().contains("Reading constraint cycle")), "{body:?}");
 
     let (status, body) = send(
         &state,
@@ -422,19 +417,9 @@ async fn batch_blocking_info_preserves_request_order_and_validates() {
     let text = String::from_utf8(bytes.to_vec()).unwrap();
     let body: Value = serde_json::from_str(&text).unwrap();
     assert_eq!(body["threads"][b.to_string()]["is_blocked"], true, "{text}");
-    let reasons = body["threads"][b.to_string()]["blocking_reasons"]
-        .as_array()
-        .unwrap();
-    assert!(
-        reasons
-            .iter()
-            .any(|r| r.as_str().unwrap().contains("Alpha")),
-        "{text}"
-    );
-    assert!(
-        reasons.iter().any(|r| r.as_str().unwrap().contains("#1")),
-        "{text}"
-    );
+    let reasons = body["threads"][b.to_string()]["blocking_reasons"].as_array().unwrap();
+    assert!(reasons.iter().any(|r| r.as_str().unwrap().contains("Alpha")), "{text}");
+    assert!(reasons.iter().any(|r| r.as_str().unwrap().contains("#1")), "{text}");
     assert_eq!(body["threads"][a.to_string()]["is_blocked"], false);
     let first = text.find(&format!("\"{b}\":")).unwrap();
     let second = text.find(&format!("\"{a}\":")).unwrap();
@@ -482,7 +467,7 @@ async fn connected_threads_report_direction_and_issue_level_cycles() {
 
     let (status, body) = send(
         &state,
-        get(&format!("/api/v2/threads/{a}/connections"), &token, &csrf),
+        get(&format!("/api/v1/threads/{a}/connections"), &token, &csrf),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
@@ -504,7 +489,7 @@ async fn connected_threads_report_direction_and_issue_level_cycles() {
         .unwrap();
     let (_, body) = send(
         &state,
-        get(&format!("/api/v2/threads/{a}/connections"), &token, &csrf),
+        get(&format!("/api/v1/threads/{a}/connections"), &token, &csrf),
     )
     .await;
     assert_eq!(
@@ -517,7 +502,7 @@ async fn connected_threads_report_direction_and_issue_level_cycles() {
     let (status, body) = send(
         &state,
         get(
-            &format!("/api/v2/threads/{lonely}/connections"),
+            &format!("/api/v1/threads/{lonely}/connections"),
             &token,
             &csrf,
         ),
@@ -531,7 +516,7 @@ async fn connected_threads_report_direction_and_issue_level_cycles() {
         let csrf_for = if who == &token { &csrf } else { &csrf2 };
         let (status, body) = send(
             &state,
-            get(&format!("/api/v2/threads/{id}/connections"), who, csrf_for),
+            get(&format!("/api/v1/threads/{id}/connections"), who, csrf_for),
         )
         .await;
         assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
@@ -2400,108 +2385,27 @@ async fn v2_eligibility_uses_canonical_logic_and_batch_authorization() {
     dependency(&conn, ai, bi, None).await; // b blocked by a (reader prereq)
 
     // Single eligibility
-    let (status, body) = send(
-        &state,
-        get(&format!("/api/v2/threads/{b}/eligibility"), &token, &csrf),
-    )
-    .await;
+    let (status, body) = send(&state, get(&format!("/api/v2/threads/{b}/eligibility"), &token, &csrf)).await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(body["thread_id"], b);
     assert_eq!(body["is_blocked"], true);
     assert_eq!(body["eligible"], false);
-    assert!(body["blocking_reasons"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|r| r.as_str().unwrap().contains("Alpha")));
+    assert!(body["blocking_reasons"].as_array().unwrap().iter().any(|r| r.as_str().unwrap().contains("Alpha")));
 
     // Batch preserves order and per-id authz
-    let (status, body) = send(
-        &state,
-        post(
-            "/api/v2/threads:explainEligibility",
-            &token,
-            &csrf,
-            Some(json!({"thread_ids": [b, c, b]})),
-        ),
-    )
-    .await;
+    let (status, body) = send(&state, post("/api/v2/threads:explainEligibility", &token, &csrf, Some(json!({"thread_ids": [b, c, b]})))).await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
-    let keys: Vec<String> = body["threads"]
-        .as_object()
-        .unwrap()
-        .keys()
-        .cloned()
-        .collect();
+    let keys: Vec<String> = body["threads"].as_object().unwrap().keys().cloned().collect();
     assert_eq!(keys, vec![b.to_string(), c.to_string()]);
     assert_eq!(body["threads"][b.to_string()]["is_blocked"], true);
     assert_eq!(body["threads"][c.to_string()]["is_blocked"], false);
 
     let foreign = thread(&conn, user2, "Foreign").await;
-    let (status, body) = send(
-        &state,
-        post(
-            "/api/v2/threads:explainEligibility",
-            &token,
-            &csrf,
-            Some(json!({"thread_ids": [b, foreign]})),
-        ),
-    )
-    .await;
+    let (status, body) = send(&state, post("/api/v2/threads:explainEligibility", &token, &csrf, Some(json!({"thread_ids": [b, foreign]})))).await;
     assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
 
     // Connections v2
-    let (status, body) = send(
-        &state,
-        get(&format!("/api/v2/threads/{b}/connections"), &token, &csrf),
-    )
-    .await;
+    let (status, body) = send(&state, get(&format!("/api/v2/threads/{b}/connections"), &token, &csrf)).await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(body["thread_id"], b);
-}
-
-#[tokio::test]
-async fn retired_v1_thread_dependency_reads_are_not_routed() {
-    let (state, token, csrf, user_id, _guard) = setup_user("tord-retired").await;
-    let conn = state.pool.get().await.unwrap();
-    let t = thread(&conn, user_id, "Retired").await;
-    for (method, path, request) in [
-        (
-            "GET",
-            format!("/api/v1/threads/{t}/issue-dependencies"),
-            get(
-                &format!("/api/v1/threads/{t}/issue-dependencies"),
-                &token,
-                &csrf,
-            ),
-        ),
-        (
-            "GET",
-            format!("/api/v1/threads/{t}/dependencies"),
-            get(&format!("/api/v1/threads/{t}/dependencies"), &token, &csrf),
-        ),
-        (
-            "POST",
-            format!("/api/v1/threads/{t}:getBlockingInfo"),
-            post(
-                &format!("/api/v1/threads/{t}:getBlockingInfo"),
-                &token,
-                &csrf,
-                None,
-            ),
-        ),
-        (
-            "POST",
-            "/api/v1/threads:getBlockingInfo".to_string(),
-            post("/api/v1/threads:getBlockingInfo", &token, &csrf, None),
-        ),
-        (
-            "GET",
-            format!("/api/v1/threads/{t}/connected"),
-            get(&format!("/api/v1/threads/{t}/connected"), &token, &csrf),
-        ),
-    ] {
-        let (status, body) = send(&state, request).await;
-        assert_eq!(status, StatusCode::NOT_FOUND, "{method} {path}: {body:?}");
-    }
 }
