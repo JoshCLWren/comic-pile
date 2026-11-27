@@ -1,4 +1,0 @@
-{
-  "schema_version": 1,
-  "fixture_note": "Relative link target for the golden LIVE_ROUTE_CENSUS.md report. The real inventory is docs/api/v2-route-inventory.json; this stub only keeps the generated fixture self-contained for check_markdown_docs.py."
-}
