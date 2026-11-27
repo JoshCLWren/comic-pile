@@ -1245,17 +1245,22 @@ async fn update_once(
     user: AuthenticatedUser,
     thread_id: i64,
     input: &UpdateInput,
+    expected: Option<&PatchPrecondition>,
+    lock_queue: bool,
 ) -> Result<(), LifecycleError> {
     with_tx!(state, tx, db::tx_error, {
-        // Take the queue lock before the row lock when this update can mutate the
-        // active queue, matching every other queue writer (exclude/restore/delete/
-        // reactivate/renormalize) so concurrent operations cannot deadlock.
-        if input.issues_remaining.is_some() {
+        // Take the queue lock before the row lock when this writer can touch the
+        // active queue (including every v2 patch), matching every other queue
+        // writer (exclude/restore/delete/reactivate/renormalize).
+        if lock_queue {
             acquire_queue_lock(&tx, user.id()).await?;
         }
         // Lock the owned row so a concurrent writer cannot change fields that this
-        // partial PUT does not supply while we decide/apply queue transitions.
+        // partial update does not supply while we decide/apply queue transitions.
         let thread = find_owned(&tx, user.id(), thread_id, true).await?;
+        if let Some(expected) = expected {
+            check_precondition(&thread, expected)?;
+        }
 
         // Python applies the legacy issues_remaining transition in-place (and may
         // flush status before computing an append position) instead of rewriting the
@@ -1354,7 +1359,12 @@ async fn update_once(
     })
 }
 
-/// `PUT /api/v1/threads/{thread_id}`
+/// `PUT /api/v1/threads/{thread_id}` (retained temporarily for live callers).
+///
+/// This is a partial update in practice, but AIP-134 names `PATCH` as the
+/// standard resource method; `patch_thread` is the v2 destination. No full
+/// replacement PUT contract exists, so no v2 PUT is introduced. The v1 route is
+/// removed only after #5703's v2 callers are proven in production.
 pub async fn update_thread(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1367,7 +1377,41 @@ pub async fn update_thread(
     let (input, raw_body) = parse_update(&mut check, parsed_body)?;
     check.finish(raw_body)?;
     let thread_id = thread_id.unwrap_or_default();
-    update_once(&state, user, thread_id, &input).await?;
+    update_once(
+        &state,
+        user,
+        thread_id,
+        &input,
+        None,
+        input.issues_remaining.is_some(),
+    )
+    .await?;
+    respond_thread(&state, user, thread_id as i32, StatusCode::OK).await
+}
+
+// ---------------------------------------------------------------------------
+// PATCH /api/v2/threads/{thread_id}
+// ---------------------------------------------------------------------------
+
+/// `PATCH /api/v2/threads/{thread_id}` (AIP-134 partial update).
+///
+/// The URL and response are v2-only. Ownership is checked inside the same
+/// transaction as the write, so a deleted or foreign Thread is always a 404 and
+/// never confirms that somebody else's series exists.
+pub async fn patch_thread(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(raw_id): Path<String>,
+    body: Bytes,
+) -> HandlerResult {
+    let mut check = Check::default();
+    let thread_id = path_int(&mut check, "thread_id", &raw_id);
+    let parsed_body = parse_body(&body)?;
+    let raw_body = parsed_body.clone().unwrap_or(Value::Null);
+    let (input, expected) = parse_patch(&mut check, parsed_body)?;
+    check.finish(raw_body)?;
+    let thread_id = thread_id.unwrap_or_default();
+    update_once(&state, user, thread_id, &input, expected.as_ref(), true).await?;
     respond_thread(&state, user, thread_id as i32, StatusCode::OK).await
 }
 
