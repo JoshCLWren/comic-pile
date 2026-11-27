@@ -27,7 +27,11 @@ import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
 import { rollApi, writeRollSnoozes } from '../services/api-roll'
-import { writePendingSelection } from '../services/rollPendingSelection'
+import {
+  clearAllPendingSelections,
+  resetRollPendingSelectionMemory,
+  writePendingSelection,
+} from '../services/rollPendingSelection'
 import type { ThreadListItem } from '../types'
 import { SNOOZE_REQUIRES_PENDING_SERIES_REASON } from '../components/snoozeAvailability'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
@@ -156,6 +160,9 @@ const mockedDependenciesApi = vi.mocked(dependenciesApi) as any
 const mockedIssuesApi = vi.mocked(issuesApi) as any
 
 beforeEach(() => {
+  clearAllPendingSelections(null)
+  resetRollPendingSelectionMemory()
+  writeRollSnoozes([])
   // Completed rows come from the independent Rust collection, never the active Queue response.
   // SAFETY: The test-only hook mock supplies a bounded completed-series fixture with required display and paging fields.
   mockedUseCompletedThreads.mockReturnValue({
@@ -376,6 +383,7 @@ describe('Visible action Snooze/Unsnooze', () => {
       },
       refetch: vi.fn(),
     })
+    writePendingSelection(null, { thread_id: 2, issue_id: 2, selected_at: Date.now() })
 
     const user = userEvent.setup()
     render(
