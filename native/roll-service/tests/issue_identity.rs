@@ -3154,7 +3154,11 @@ async fn v2_reading_order_projection_preview_is_read_only_and_commit_is_idempote
     let (status, _) = raw_request(&state, "POST", preview_uri, None, &csrf, "{}").await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 
-    for bad in [json!({}), json!({"reading_order_id": 0}), json!({"reading_order_id": "x"})] {
+    for bad in [
+        json!({}),
+        json!({"reading_order_id": 0}),
+        json!({"reading_order_id": "x"}),
+    ] {
         let (status, body) = post_json(&state, &token, &csrf, preview_uri, bad.clone()).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{bad}");
         assert_eq!(body, validation_failed(), "{bad}");

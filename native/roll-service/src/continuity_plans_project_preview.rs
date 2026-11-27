@@ -460,8 +460,7 @@ pub async fn preview_reading_order_projection_v2(
     // route captures `710:previewReadingOrderProjection` and only the exact
     // documented custom-method suffix is accepted here. A different suffix is
     // an owner-scoped 404, never a silent fallthrough to the preview.
-    let Path(segment) =
-        custom_method.map_err(|_| PreviewError::Api(validation_failed()))?;
+    let Path(segment) = custom_method.map_err(|_| PreviewError::Api(validation_failed()))?;
     let Some(plan_id) = segment.strip_suffix(":previewReadingOrderProjection") else {
         return Err(not_found(format!(
             "Unknown continuity plan custom method {segment:?}"
