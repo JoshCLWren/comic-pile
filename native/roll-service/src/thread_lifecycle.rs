@@ -1646,6 +1646,23 @@ pub async fn delete_thread(
     Ok(StatusCode::NO_CONTENT.into_response())
 }
 
+/// `DELETE /api/v2/threads/{thread_id}` (AIP-135).
+///
+/// Idempotent at the HTTP contract level: a second delete (or a delete of a
+/// foreign/deleted Thread) returns 404 from the owner-scoped lookup, because
+/// 404 never confirms that another reader's resource exists.
+pub async fn delete_thread_v2(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(raw_id): Path<String>,
+) -> HandlerResult {
+    let mut check = Check::default();
+    let thread_id = path_int(&mut check, "thread_id", &raw_id);
+    check.finish(Value::Null)?;
+    delete_once(&state, user, thread_id.unwrap_or_default()).await?;
+    Ok(StatusCode::NO_CONTENT.into_response())
+}
+
 // ---------------------------------------------------------------------------
 // exclude / restore / reactivate
 // ---------------------------------------------------------------------------
@@ -2975,6 +2992,49 @@ pub fn update_thread_documentation() {}
 )]
 #[allow(dead_code)]
 pub fn delete_thread_documentation() {}
+
+#[utoipa::path(
+    patch,
+    path = "/api/v2/threads/{thread_id}",
+    tag = "threads",
+    description = "Partially update an owned Thread (AIP-134). Omitted fields are \
+                   preserved. When `update_mask` is supplied only its fields are applied; \
+                   a masked field missing from the body is cleared. An `expected` \
+                   precondition that no longer matches the committed row returns 409 with \
+                   `detail.code = thread_edit_conflict` and the current values. Foreign or \
+                   deleted Threads return 404, never 403.",
+    params(("thread_id" = i32, Path, description = "Owned thread identifier")),
+    request_body = ThreadPatchRequest,
+    responses(
+        (status = 200, description = "Updated thread", body = ThreadResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Thread not found (including another reader's thread)"),
+        (status = 409, description = "Stale `expected` precondition; reload before retrying"),
+        (status = 422, description = "Validation failed")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn patch_thread_documentation() {}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v2/threads/{thread_id}",
+    tag = "threads",
+    description = "Delete an owned Thread (AIP-135). A second delete, or a delete of a \
+                   foreign or already deleted Thread, returns 404. Never 403.",
+    params(("thread_id" = i32, Path, description = "Owned thread identifier")),
+    responses(
+        (status = 204, description = "Deleted"),
+        (status = 400, description = "The database refused the deletion"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Thread not found"),
+        (status = 422, description = "Validation failed")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn delete_thread_v2_documentation() {}
 
 #[utoipa::path(
     post,
