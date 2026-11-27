@@ -417,8 +417,8 @@ mod tests {
 
     /// The advisory duplicate check is a v2 AIP-136 collection custom method
     /// (#5705). It must be published with its own operation identity and DTOs,
-    /// without adding a POST to the `GET /api/v2/threads` collection read that
-    /// owns the `search`/filter contract.
+    /// separate from both the `GET /api/v2/threads` list/filter contract
+    /// (AIP-132) and the standard AIP-133 Create on the same collection (#5702).
     #[test]
     fn check_duplicates_custom_method_is_in_v2_contract() {
         let doc = document();
@@ -438,9 +438,23 @@ mod tests {
                 "missing {schema} in v2 contract"
             );
         }
-        // The collection read is unchanged: search stays a GET query parameter.
-        assert!(doc["paths"]["/api/v2/threads"]["get"].is_object());
-        assert!(doc["paths"]["/api/v2/threads"]["post"].is_null());
+        // The collection read keeps its AIP-132 search/filter parameters, and
+        // the collection POST remains the standard Create — neither is
+        // overloaded with the advisory custom method.
+        let collection = &doc["paths"]["/api/v2/threads"];
+        assert!(collection["get"].is_object());
+        assert!(collection["get"]["parameters"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["name"] == "search" && p["in"] == "query"));
+        assert_eq!(
+            collection["post"]["operationId"], "create_thread_v2_documentation"
+        );
+        assert_eq!(
+            collection["post"]["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ThreadCreateRequest"
+        );
     }
 
     /// The issue read-state and reader-context operations moved from their
