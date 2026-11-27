@@ -259,7 +259,7 @@ export default function RollPage() {
     [captureCoverFlight, rating],
   )
 
-  // Entering the rating view unmounts the Roll CTA that held keyboard focus,
+  // Entering the rating view unmounts the die that held keyboard focus,
   // which drops focus to document.body and forces a keyboard user to re-tab
   // through the whole shell to reach the result. The rating region owns the
   // restore, so every entry path (roll, skip, read, stale read, recovery, and
