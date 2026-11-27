@@ -274,6 +274,9 @@ export default function SessionPage() {
   // One bounded batch for the only events that actually carry a canonical
   // owned issue id. Hooks run before the early returns so hook order stays
   // stable across loading/error states.
+  // SAFETY: the session details endpoint returns enriched events carrying the
+  // display-only `issue_id` field beyond SessionEvent; the filter below keeps
+  // only canonical numeric ids from the owner projection.
   const sessionIssueIds = useMemo(
     () => (details?.events ?? [])
       .map((event) => (event as DisplayEvent).issue_id)
