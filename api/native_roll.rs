@@ -336,7 +336,10 @@ fn app() -> Router {
             "/api/v2/queue-exclusion-groups/{group_id}/restore",
             post(native_dispatch),
         )
-        .route("/api/v2/threads", get(native_dispatch).post(native_dispatch))
+        .route(
+            "/api/v2/threads",
+            get(native_dispatch).post(native_dispatch),
+        )
         // #5705: the advisory duplicate check is an AIP-136 collection custom
         // method. The inner service registers it too, but this Vercel entry owns
         // a separate route table: without a matching route here a deployed
@@ -1761,8 +1764,15 @@ mod tests {
                                 assert!(
                                     matches!(
                                         method,
-                                        "get" | "post" | "patch" | "put" | "delete" | "options"
-                                            | "head" | "trace" | "connect"
+                                        "get"
+                                            | "post"
+                                            | "patch"
+                                            | "put"
+                                            | "delete"
+                                            | "options"
+                                            | "head"
+                                            | "trace"
+                                            | "connect"
                                     ),
                                     "unsupported route method expression for {path}: {method}"
                                 );
@@ -1789,7 +1799,10 @@ mod tests {
         let ingress = routes(include_str!("native_roll.rs"));
         assert!(!inner.is_empty() && !ingress.is_empty());
         let missing: Vec<_> = inner.difference(&ingress).collect();
-        assert!(missing.is_empty(), "missing v2 ingress methods: {missing:?}");
+        assert!(
+            missing.is_empty(),
+            "missing v2 ingress methods: {missing:?}"
+        );
     }
 
     #[tokio::test]
