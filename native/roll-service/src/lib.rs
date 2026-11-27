@@ -1760,7 +1760,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn api_error_variants_carry_typed_status_and_detail() {
         let cases = [

@@ -537,8 +537,6 @@ mod tests {
         );
     }
 
-
-
     /// #5715: the canonical projection preview is an AIP-136 custom method on
     /// the lowerCamelCase `continuityPlans` resource, and the thread collection
     /// read is an AIP-122 nested collection. Both publish the frozen wire DTOs;

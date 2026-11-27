@@ -1746,7 +1746,6 @@ mod tests {
         }
     }
 
-
     #[tokio::test]
     async fn edit_series_preview_ingress_reaches_rust_and_never_hits_json_404() {
         // #5863: Edit Series Add posted to the inner-router-only preview paths,
@@ -1886,8 +1885,6 @@ mod tests {
             "v2 preview must not hit native_not_found: {text}"
         );
     }
-
-
 
     #[tokio::test]
     async fn reading_order_v2_routes_reach_rust_and_never_hit_json_404() {
