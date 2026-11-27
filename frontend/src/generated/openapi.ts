@@ -1461,6 +1461,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/cblSources/{source_id}/adoptionPreview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_cbl_adoption_preview_v2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/cblSources/{source_id}:planAdoption": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["plan_cbl_adoption_v2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/cblSources/{source_id}:previewReadingGraph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["preview_cbl_reading_graph_v2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/comicvine/issues/{issue_id}/identity": {
         parameters: {
             query?: never;
@@ -13439,6 +13487,146 @@ export interface operations {
             };
             /** @description Database temporarily unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_cbl_adoption_preview_v2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description CBL source list id */
+                source_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Read-only adoption projection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CblAdoptionPreviewResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CBL source list not found or not active */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    plan_cbl_adoption_v2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description CBL source list id */
+                source_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CblAdoptionPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description Stateless adoption calculation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CblAdoptionPreviewResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CBL source list not found or not active */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    preview_cbl_reading_graph_v2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description CBL source list id */
+                source_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NativeReadingGraphPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Read-only prospective graph */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeReadingGraphPreview"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CBL source list or target reading list not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed, or unknown/unresolved source position or overlap answer */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

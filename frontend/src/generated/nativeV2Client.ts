@@ -497,6 +497,14 @@ export interface GetRequest {
 
 export type GetResponse = components['schemas']['IdentityInboxResponse']
 
+export interface GetCblAdoptionPreviewV2Request {
+  path: {
+    source_id: number
+  }
+}
+
+export type GetCblAdoptionPreviewV2Response = components['schemas']['CblAdoptionPreviewResponse']
+
 export interface GetIssueRequest {
   path: {
     issue_id: number
@@ -863,6 +871,15 @@ export interface PatchUserPreferencesRequest {
 
 export type PatchUserPreferencesResponse = components['schemas']['UserPreferencesResponse']
 
+export interface PlanCblAdoptionV2Request {
+  path: {
+    source_id: number
+  }
+  body: components['schemas']['CblAdoptionPlanRequest']
+}
+
+export type PlanCblAdoptionV2Response = components['schemas']['CblAdoptionPreviewResponse']
+
 export interface PreviewRequest {
   path: {
     plan_id: number
@@ -870,6 +887,15 @@ export interface PreviewRequest {
 }
 
 export type PreviewResponse = components['schemas']['PlanRecoveryPreview']
+
+export interface PreviewCblReadingGraphV2Request {
+  path: {
+    source_id: number
+  }
+  body: components['schemas']['NativeReadingGraphPreviewRequest']
+}
+
+export type PreviewCblReadingGraphV2Response = components['schemas']['NativeReadingGraphPreview']
 
 export interface PreviewIssueCreateRequest {
   path: {
@@ -1429,6 +1455,7 @@ export interface NativeV2Client {
   exportCustomCbl(args: ExportCustomCblRequest): Promise<ExportCustomCblResponse>
   forgotPassword(args: ForgotPasswordRequest): Promise<ForgotPasswordResponse>
   get(args: GetRequest): Promise<GetResponse>
+  getCblAdoptionPreviewV2(args: GetCblAdoptionPreviewV2Request): Promise<GetCblAdoptionPreviewV2Response>
   getIssue(args: GetIssueRequest): Promise<GetIssueResponse>
   getIssueDependencies(args: GetIssueDependenciesRequest): Promise<GetIssueDependenciesResponse>
   getIssueIdentity(args: GetIssueIdentityRequest): Promise<GetIssueIdentityResponse>
@@ -1480,7 +1507,9 @@ export interface NativeV2Client {
   overrideRoll(args: OverrideRollRequest): Promise<OverrideRollResponse>
   patchThread(args: PatchThreadRequest): Promise<PatchThreadResponse>
   patchUserPreferences(args: PatchUserPreferencesRequest): Promise<PatchUserPreferencesResponse>
+  planCblAdoptionV2(args: PlanCblAdoptionV2Request): Promise<PlanCblAdoptionV2Response>
   preview(args: PreviewRequest): Promise<PreviewResponse>
+  previewCblReadingGraphV2(args: PreviewCblReadingGraphV2Request): Promise<PreviewCblReadingGraphV2Response>
   previewIssueCreate(args: PreviewIssueCreateRequest): Promise<PreviewIssueCreateResponse>
   previewIssueStructure(args: PreviewIssueStructureRequest): Promise<PreviewIssueStructureResponse>
   ratingDistribution(args: RatingDistributionRequest): Promise<RatingDistributionResponse>
@@ -1882,6 +1911,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v2/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}`,
       )
     },
+    getCblAdoptionPreviewV2(args: GetCblAdoptionPreviewV2Request) {
+      return client.get<GetCblAdoptionPreviewV2Response>(
+        `/v2/cblSources/${encodeURIComponent(String(args.path.source_id))}/adoptionPreview`,
+      )
+    },
     getIssue(args: GetIssueRequest) {
       return client.get<GetIssueResponse>(
         `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}`,
@@ -2139,9 +2173,21 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
+    planCblAdoptionV2(args: PlanCblAdoptionV2Request) {
+      return client.post<PlanCblAdoptionV2Response, PlanCblAdoptionV2Request['body']>(
+        `/v2/cblSources/${encodeURIComponent(String(args.path.source_id))}:planAdoption`,
+        args.body,
+      )
+    },
     preview(args: PreviewRequest) {
       return client.get<PreviewResponse>(
         `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/recovery`,
+      )
+    },
+    previewCblReadingGraphV2(args: PreviewCblReadingGraphV2Request) {
+      return client.post<PreviewCblReadingGraphV2Response, PreviewCblReadingGraphV2Request['body']>(
+        `/v2/cblSources/${encodeURIComponent(String(args.path.source_id))}:previewReadingGraph`,
+        args.body,
       )
     },
     previewIssueCreate(args: PreviewIssueCreateRequest) {
