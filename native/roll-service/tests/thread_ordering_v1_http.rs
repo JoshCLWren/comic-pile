@@ -482,7 +482,7 @@ async fn connected_threads_report_direction_and_issue_level_cycles() {
 
     let (status, body) = send(
         &state,
-        get(&format!("/api/v1/threads/{a}/connections"), &token, &csrf),
+        get(&format!("/api/v2/threads/{a}/connections"), &token, &csrf),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
@@ -504,7 +504,7 @@ async fn connected_threads_report_direction_and_issue_level_cycles() {
         .unwrap();
     let (_, body) = send(
         &state,
-        get(&format!("/api/v1/threads/{a}/connections"), &token, &csrf),
+        get(&format!("/api/v2/threads/{a}/connections"), &token, &csrf),
     )
     .await;
     assert_eq!(
@@ -517,7 +517,7 @@ async fn connected_threads_report_direction_and_issue_level_cycles() {
     let (status, body) = send(
         &state,
         get(
-            &format!("/api/v1/threads/{lonely}/connections"),
+            &format!("/api/v2/threads/{lonely}/connections"),
             &token,
             &csrf,
         ),
@@ -531,7 +531,7 @@ async fn connected_threads_report_direction_and_issue_level_cycles() {
         let csrf_for = if who == &token { &csrf } else { &csrf2 };
         let (status, body) = send(
             &state,
-            get(&format!("/api/v1/threads/{id}/connections"), who, csrf_for),
+            get(&format!("/api/v2/threads/{id}/connections"), who, csrf_for),
         )
         .await;
         assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
