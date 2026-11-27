@@ -742,10 +742,14 @@ def _write_outputs(outputs: JsonObject) -> None:
     Args:
         outputs: Mapping of output names to values.
     """
-    rendered = {
-        key: str(value).lower() if isinstance(value, bool) else str(value)
-        for key, value in outputs.items()
-    }
+    rendered: dict[str, str] = {}
+    for key, value in outputs.items():
+        if isinstance(value, bool):
+            rendered[key] = str(value).lower()
+        elif isinstance(value, (list, dict)):
+            rendered[key] = json.dumps(value, separators=(",", ":"))
+        else:
+            rendered[key] = str(value)
     destination = os.getenv("GITHUB_OUTPUT", "").strip()
     if destination:
         with Path(destination).open("a", encoding="utf-8") as output:

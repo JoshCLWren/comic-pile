@@ -118,7 +118,7 @@ jobs:
           echo "::add-mask::$uri"
           RELEASE_NEON_DATABASE_URL="$uri" python scripts/release_recovery.py select \
             --repository "$GITHUB_REPOSITORY" \
-            --lookback-hours 72
+            --lookback-hours 72 | tee "$RUNNER_TEMP/release-recovery.json"
       - name: Dispatch exact-PR writer for the selected source
         shell: bash
         env:
@@ -141,17 +141,39 @@ jobs:
             -f "pr_number=${INPUT_PR}"
       - name: Write recovery summary
         if: always()
+        shell: bash
+        env:
+          SELECT_OUTCOME: ${{ steps.select.outcome }}
+          NEEDED: ${{ steps.select.outputs.needed }}
+          PR_NUMBER: ${{ steps.select.outputs.pr_number }}
+          MERGE_SHA: ${{ steps.select.outputs.merge_sha }}
+          DEPLOYED_REVISION: ${{ steps.select.outputs.deployed_revision }}
+          CANDIDATES: ${{ steps.select.outputs.candidates }}
+          DEPLOYED_CANDIDATES: ${{ steps.select.outputs.deployed_candidates }}
+          MISSING_COUNT: ${{ steps.select.outputs.missing_count }}
+          MISSING_PRS: ${{ steps.select.outputs.missing_pr_numbers }}
         run: |
+          set -Eeuo pipefail
+          missing_prs="$MISSING_PRS"
+          if [[ -z "$missing_prs" && -f "$RUNNER_TEMP/release-recovery.json" ]]; then
+            missing_prs="$(python -c 'import json,sys; print(json.load(open(sys.argv[1])).get("missing_pr_numbers",""))' "$RUNNER_TEMP/release-recovery.json" 2>/dev/null || true)"
+          fi
           {
             echo '## Release recovery discovery'
             echo
-            echo '- Needed: ${{ steps.select.outputs.needed }}'
-            echo '- PR: ${{ steps.select.outputs.pr_number }}'
-            echo '- Merge SHA: ${{ steps.select.outputs.merge_sha }}'
-            echo '- Deployed revision: ${{ steps.select.outputs.deployed_revision }}'
-            echo '- Candidates: ${{ steps.select.outputs.candidates }}'
-            echo '- Deployed candidates: ${{ steps.select.outputs.deployed_candidates }}'
-            echo '- Still missing: ${{ steps.select.outputs.missing_count }}'
+            echo "- Outcome: ${SELECT_OUTCOME:-unknown}"
+            echo "- Needed: ${NEEDED:-unknown}"
+            echo "- PR: ${PR_NUMBER:-}"
+            echo "- Merge SHA: ${MERGE_SHA:-}"
+            echo "- Deployed revision: ${DEPLOYED_REVISION:-}"
+            echo "- Candidates: ${CANDIDATES:-}"
+            echo "- Deployed candidates: ${DEPLOYED_CANDIDATES:-}"
+            echo "- Still missing: ${MISSING_COUNT:-unknown}"
+            echo "- Missing PRs: ${missing_prs:-unknown}"
+            if [[ "${SELECT_OUTCOME:-}" != "success" ]]; then
+              echo
+              echo "Recovery selection failed; inspect the select step logs for the URL-kind error before retrying."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
   generate:
