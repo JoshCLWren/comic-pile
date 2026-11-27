@@ -1068,7 +1068,6 @@ async fn editor_nodes_for_plan(
     Ok(nodes)
 }
 
-
 // ============================================================================
 // GET /api/v2/continuity-plans/ - List plans
 // ============================================================================
@@ -3519,7 +3518,10 @@ mod tests {
             .await
             .expect("compiled edge")
             .map(|row| row.get(0));
-        assert!(edge.is_none(), "plan save must not compile a canonical edge");
+        assert!(
+            edge.is_none(),
+            "plan save must not compile a canonical edge"
+        );
         drop(conn);
 
         let status =
@@ -3539,7 +3541,10 @@ mod tests {
             .await
             .expect("edge after delete")
             .map(|row| row.get(0));
-        assert!(edge_after.is_none(), "no compiled rule-derived edge may exist");
+        assert!(
+            edge_after.is_none(),
+            "no compiled rule-derived edge may exist"
+        );
         let rule_after: i64 = conn
             .query_one(
                 "SELECT count(*) FROM continuity_rules WHERE note = $1",
