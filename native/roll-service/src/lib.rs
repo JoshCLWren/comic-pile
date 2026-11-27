@@ -1432,29 +1432,28 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/reading-mode/suggestions",
             post(reading_mode::suggest_reading_mode),
         )
+        // #5710: the v2 collection is the single reading-order-group CRUD
+        // authority. The retired v1 list/Get/PATCH/DELETE/detail paths are no
+        // longer mounted and terminate at the Rust JSON 404 fallback.
         .route(
-            "/api/v1/reading-order-groups/",
-            get(dependency_groups::list_groups),
+            "/api/v2/readingOrderGroups",
+            get(dependency_groups::list_groups_v2),
         )
         .route(
-            "/api/v1/reading-order-groups/",
-            post(dependency_groups::create_group),
+            "/api/v2/readingOrderGroups",
+            post(dependency_groups::create_group_v2),
         )
         .route(
-            "/api/v1/reading-order-groups/{group_id}",
-            get(dependency_groups::get_group),
+            "/api/v2/readingOrderGroups/{group_id}",
+            get(dependency_groups::get_group_v2),
         )
         .route(
-            "/api/v1/reading-order-groups/{group_id}",
-            patch(dependency_groups::update_group),
+            "/api/v2/readingOrderGroups/{group_id}",
+            patch(dependency_groups::update_group_v2),
         )
         .route(
-            "/api/v1/reading-order-groups/{group_id}",
-            delete(dependency_groups::delete_group),
-        )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}/detail",
-            get(dependency_groups::get_group_detail),
+            "/api/v2/readingOrderGroups/{group_id}",
+            delete(dependency_groups::delete_group_v2),
         )
         .route(
             "/api/v1/reading-order-groups/{group_id}/order",
@@ -1605,10 +1604,14 @@ mod tests {
     }
 
     #[tokio::test]
+<<<<<<< HEAD
     async fn retired_v1_dependency_diagnosis_routes_return_404_in_inner_router() {
         // #5709: dependency/blocking/connection diagnosis is v2-only. The
         // retired aliases must not fall through to a live handler or to the
         // generic `{thread_id}` POST action dispatcher.
+=======
+    async fn v2_group_crud_is_mounted_and_retired_v1_crud_returns_404_in_inner_router() {
+>>>>>>> origin/main
         let config = Config::from_lookup(|name| match name {
             "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
@@ -1617,6 +1620,7 @@ mod tests {
         .unwrap();
         let state = Arc::new(AppState::new(config).unwrap());
         for (method, uri) in [
+<<<<<<< HEAD
             ("GET", "/api/v1/threads/42/dependencies"),
             ("GET", "/api/v1/threads/42/issue-dependencies"),
             ("GET", "/api/v1/threads/42/connected"),
@@ -1627,6 +1631,35 @@ mod tests {
             // unauthenticated probe is 401 before dispatch. With a valid
             // credential the action dispatcher returns 404 (covered by the
             // DB-backed HTTP test). It has no live handler either way.
+=======
+            ("GET", "/api/v2/readingOrderGroups"),
+            ("POST", "/api/v2/readingOrderGroups"),
+            ("GET", "/api/v2/readingOrderGroups/7"),
+            ("PATCH", "/api/v2/readingOrderGroups/7"),
+            ("DELETE", "/api/v2/readingOrderGroups/7"),
+        ] {
+            let response = router(Arc::clone(&state))
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_ne!(response.status(), StatusCode::NOT_FOUND, "{method} {uri}");
+        }
+        for (method, uri) in [
+            ("GET", "/api/v1/reading-order-groups/"),
+            ("POST", "/api/v1/reading-order-groups/"),
+            ("GET", "/api/v1/reading-order-groups/7"),
+            ("PATCH", "/api/v1/reading-order-groups/7"),
+            ("DELETE", "/api/v1/reading-order-groups/7"),
+            ("GET", "/api/v1/reading-order-groups/7/detail"),
+            ("GET", "/api/v2/readingOrderGroups/7/detail"),
+        ] {
+>>>>>>> origin/main
             let response = router(Arc::clone(&state))
                 .oneshot(
                     Request::builder()
@@ -1645,6 +1678,7 @@ mod tests {
                 "{method} {uri}"
             );
         }
+<<<<<<< HEAD
         for (method, uri) in [
             ("GET", "/api/v2/threads/42/dependencies"),
             ("GET", "/api/v2/threads/42/issueDependencies"),
@@ -1668,6 +1702,8 @@ mod tests {
                 "{method} {uri} must reach its handler, not the 404 fallback"
             );
         }
+=======
+>>>>>>> origin/main
     }
 
     #[test]
