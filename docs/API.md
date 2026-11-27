@@ -70,7 +70,7 @@ response schemas, bounds, and status codes come from the generated contracts.
 | Reading Lists | `GET`/`POST /api/v2/reading-lists`; list CRUD, `reader`, export, issue candidates, overlap decisions, and adoption commits under `/api/v2/reading-lists/{list_id}/...` |
 | Reading constraints | `POST /api/v2/reading-boundaries`; `GET`/`PUT /api/v2/reading-mode`; reading-mode suggestion/dismissal resources |
 | Dependencies | Writes and blocked-list reads under `/api/v2/dependencies...`; retained thread-dependency reads in the same-path contract |
-| Reading history | `POST /api/v2/reading-sessions`; `GET /api/v2/reading-sessions/{session_id}/details` and `/snapshots`; undo snapshots and restore under `/api/v2/undo/{session_id}/snapshots...` |
+| Reading history | Canonical AIP-122 collection `GET`/`POST /api/v2/readingSessions` (List/Create), `GET /api/v2/readingSessions/{session_id}` (event-derived Get), `/{session_id}/details` and `/{session_id}/snapshots`; undo snapshots and restore under `/api/v2/undo/{session_id}/snapshots...` |
 | Continuity plans | Canonical plan CRUD, reader/recovery, release sources, and projection under `/api/v2/continuity-plans...`; retained project-preview and continuity-rule paths in the same-path contract |
 | ComicVine and CBL | Search, resolve, series import/status/roster, issue import, identity, and metadata correction resources under `/api/v2/comicvine...`; retained CBL source/adoption previews under `/api/v1/issue-identity/...`; commits use `/api/v2/reading-lists/{list_id}/adoption-commits` |
 | Creators, tags, releases | Creator reads under `/api/v2/creators...`; tag CRUD/usage/effective tags/assignments under `/api/v2/tags...`; `GET /api/v2/releases` plus retained release operations in the same-path contract |
@@ -118,7 +118,7 @@ exclusions, and the recorded setting-off discrepancy.
 The product target is sessionless Roll with browser-owned pending state
 ([#4405](https://github.com/JoshCLWren/comic-pile/issues/4405)). Current native
 compatibility behavior still initializes six-hour server sessions and stores
-pending selection in PostgreSQL. `POST /api/v2/reading-sessions` performs that
+pending selection in PostgreSQL. `POST /api/v2/readingSessions` performs that
 initialization; `GET /api/v2/roll/bootstrap` is read-only and returns
 `404 No active session` until it exists. This server-session boundary is a
 recorded discrepancy, not the intended final contract. The Roll pool takes the
@@ -184,11 +184,13 @@ These are known discrepancies, not supported API guidance:
   when the rollout setting is off. The setting changes some projections but does
   not restore the documented stored-`is_blocked` Roll fallback. This contradicts
   the intended setting-off behavior and remains a runtime handoff.
-- The retired v1 session list/get callers were removed under #4343;
-  `frontend/src/services/api-sessions.ts` now issues only the v2
-  `/api/v2/reading-sessions/{session_id}/details` and `/snapshots` reads. History
-  uses `/api/v2/activity`. This is recorded here so retired session paths are not
-  reintroduced as current guidance.
+- The retired v1 session list/get callers were removed under #4343. #5708 adds
+  the event-derived canonical collection (`GET /api/v2/readingSessions`,
+  `GET /api/v2/readingSessions/{session_id}`) without server session lifetime or
+  pending state, and moves the existing create/details/snapshot reads onto the
+  same lowerCamelCase resource. `frontend/src/services/api-sessions.ts` owns those
+  reads; History still uses `/api/v2/activity` for its event stream. Retired v1
+  paths are not reintroduced as current guidance.
 - Earlier documentation referred to a separate `api/native_issue.rs` ingress. <!-- docs-path-check: ignore -->
   Current `main` builds only `api/native_roll.rs`; bot-owned route outputs are
   regenerated from the route fragments. Do not hand-edit generated route outputs.

@@ -20,9 +20,11 @@ The auth module must not import or call reading-history persistence. Revoke cred
 
 ## Current HTTP resources
 
-- `POST /api/v2/reading-sessions` explicitly initializes or reuses durable reading history.
-- `GET /api/v2/reading-sessions/{session_id}/details` returns one owned history detail.
-- `GET /api/v2/reading-sessions/{session_id}/snapshots` returns owned snapshots.
+- `GET /api/v2/readingSessions` lists the authenticated reader's durable, event-derived sessions with bounded keyset pagination.
+- `POST /api/v2/readingSessions` explicitly initializes or reuses durable reading history.
+- `GET /api/v2/readingSessions/{session_id}` returns one owned event-derived session resource (stable `readingSessions/{session_id}` name).
+- `GET /api/v2/readingSessions/{session_id}/details` returns one owned history detail.
+- `GET /api/v2/readingSessions/{session_id}/snapshots` returns owned snapshots.
 - Undo snapshot list/restore uses `/api/v2/undo/{session_id}/snapshots...`.
 
 The v1 session list/get operations and their unversioned aliases are retired. `GET /api/v2/roll/bootstrap` reads an already initialized session and never creates one.

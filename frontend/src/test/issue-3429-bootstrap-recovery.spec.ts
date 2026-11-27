@@ -21,7 +21,7 @@
  * does not pollute browser-health evidence.
  *
  * These tests use a genuinely registered user, not a mocked auth session. The
- * shipped Roll client resolves its reading session (`POST /v2/reading-sessions`)
+ * shipped Roll client resolves its reading session (`POST /v2/readingSessions`)
  * before it reads `GET /v2/roll/bootstrap`; a fake token answers the mocked
  * auth endpoints but is rejected by that real resolution write (401), so the
  * bootstrap request is never issued and a fake-token "recovery" can never reach

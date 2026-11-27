@@ -432,7 +432,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/v2/reading-sessions",
+      "path": "/api/v2/readingSessions",
       "sql_budget": {
         "application_statements": 20,
         "transaction_control_statements": 2,

@@ -72,7 +72,6 @@ export const ALLOWLIST = new Map([
     'session_detail',
     'session_details',
     'session_history',
-    'session_list',
     'taste_discoveries',
     'undo_apply',
     'undo_snapshots',

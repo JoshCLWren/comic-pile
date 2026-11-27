@@ -9134,10 +9134,64 @@
         ]
       }
     },
-    "/api/v2/reading-sessions": {
+    "/api/v2/readingSessions": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Documentation-only List operation for the canonical collection.",
+        "operationId": "list_reading_sessions_documentation",
+        "parameters": [
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "Bounded page size (1-100, default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "page_token",
+            "in": "query",
+            "description": "Opaque continuation token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of event-derived reading sessions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListReadingSessionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid page size or token"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
       "post": {
         "tags": [
-          "reading-sessions"
+          "readingSessions"
         ],
         "summary": "Documentation-only operation for the mounted v2 reading-session initializer.",
         "operationId": "initialize_session_documentation",
@@ -9176,7 +9230,54 @@
         ]
       }
     },
-    "/api/v2/reading-sessions/{session_id}/details": {
+    "/api/v2/readingSessions/{session_id}": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Documentation-only Get operation for the canonical collection.",
+        "operationId": "get_reading_session_documentation",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Owned reading session",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Event-derived reading session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingSessionResource"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/readingSessions/{session_id}/details": {
       "get": {
         "tags": [
           "sessions"
@@ -9223,7 +9324,7 @@
         ]
       }
     },
-    "/api/v2/reading-sessions/{session_id}/snapshots": {
+    "/api/v2/readingSessions/{session_id}/snapshots": {
       "get": {
         "tags": [
           "sessions"
@@ -19640,6 +19741,27 @@
           }
         }
       },
+      "ListReadingSessionsResponse": {
+        "type": "object",
+        "description": "One bounded page of the canonical reading-session collection.",
+        "required": [
+          "reading_sessions"
+        ],
+        "properties": {
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingSessionResource"
+            }
+          }
+        }
+      },
       "LoginRequest": {
         "type": "object",
         "description": "Request body for username/password login.\n\nLogin deliberately does not impose the registration minimum length: accounts\ncreated before the current policy must still be able to sign in. An empty\npassword is rejected by bcrypt verification with the same non-enumerating\n401 as any other incorrect credential, matching Python.",
@@ -23309,6 +23431,66 @@
           "session_id": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "ReadingSessionResource": {
+        "type": "object",
+        "description": "One durable, event-derived reading session in the canonical collection.",
+        "required": [
+          "name",
+          "session_id",
+          "started_at",
+          "start_die",
+          "current_die",
+          "ladder_path",
+          "event_count",
+          "snapshot_count"
+        ],
+        "properties": {
+          "current_die": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Event-derived die, with the legacy `manual_die` column as fallback only."
+          },
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "event_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ladder_path": {
+            "type": "string",
+            "description": "`start_die` followed by the session's recorded `die_after` values."
+          },
+          "name": {
+            "type": "string",
+            "description": "Stable AIP-122 resource name: `readingSessions/{session_id}`."
+          },
+          "session_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "snapshot_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "start_die": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },

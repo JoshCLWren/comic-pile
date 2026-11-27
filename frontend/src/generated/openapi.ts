@@ -2936,14 +2936,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/reading-sessions": {
+    "/api/v2/readingSessions": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Documentation-only List operation for the canonical collection. */
+        get: operations["list_reading_sessions_documentation"];
         put?: never;
         /** Documentation-only operation for the mounted v2 reading-session initializer. */
         post: operations["initialize_session_documentation"];
@@ -2953,7 +2954,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/reading-sessions/{session_id}/details": {
+    "/api/v2/readingSessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only Get operation for the canonical collection. */
+        get: operations["get_reading_session_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/readingSessions/{session_id}/details": {
         parameters: {
             query?: never;
             header?: never;
@@ -2970,7 +2988,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/reading-sessions/{session_id}/snapshots": {
+    "/api/v2/readingSessions/{session_id}/snapshots": {
         parameters: {
             query?: never;
             header?: never;
@@ -6455,6 +6473,11 @@ export interface components {
             /** Thread Id */
             thread_id: number;
         };
+        /** @description One bounded page of the canonical reading-session collection. */
+        ListReadingSessionsResponse: {
+            next_page_token?: string | null;
+            reading_sessions: components["schemas"]["ReadingSessionResource"][];
+        };
         /**
          * @description Request body for username/password login.
          *
@@ -8227,6 +8250,29 @@ export interface components {
             created: boolean;
             /** Format: int32 */
             session_id: number;
+        };
+        /** @description One durable, event-derived reading session in the canonical collection. */
+        ReadingSessionResource: {
+            /**
+             * Format: int32
+             * @description Event-derived die, with the legacy `manual_die` column as fallback only.
+             */
+            current_die: number;
+            ended_at?: string | null;
+            /** Format: int32 */
+            event_count: number;
+            /** @description `start_die` followed by the session's recorded `die_after` values. */
+            ladder_path: string;
+            /** @description Stable AIP-122 resource name: `readingSessions/{session_id}`. */
+            name: string;
+            /** Format: int32 */
+            session_id: number;
+            /** Format: int32 */
+            snapshot_count: number;
+            /** Format: int32 */
+            start_die: number;
+            started_at: string;
+            timezone?: string | null;
         };
         ReconcileApplyRequest: {
             /** Format: int32 */
@@ -17812,6 +17858,52 @@ export interface operations {
             };
         };
     };
+    list_reading_sessions_documentation: {
+        parameters: {
+            query?: {
+                /** @description Bounded page size (1-100, default 50) */
+                page_size?: number;
+                /** @description Opaque continuation token */
+                page_token?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of event-derived reading sessions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListReadingSessionsResponse"];
+                };
+            };
+            /** @description Invalid page size or token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     initialize_session_documentation: {
         parameters: {
             query?: never;
@@ -17836,6 +17928,50 @@ export interface operations {
             };
             /** @description Not authenticated */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_reading_session_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned reading session */
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Event-derived reading session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingSessionResource"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

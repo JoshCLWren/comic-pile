@@ -50,6 +50,8 @@ use utoipa::OpenApi;
         crate::dismiss_pending::dismiss_pending_documentation,
         crate::session_history::list_session_snapshots_documentation,
         crate::session_details::get_session_details_documentation,
+        crate::session_list::list_reading_sessions_documentation,
+        crate::session_list::get_reading_session_documentation,
         crate::roll_resources::die_state_documentation,
         crate::roll_resources::eligible_issue_ids_documentation,
         crate::reading_boundary::reading_boundary_batch_documentation,
@@ -664,7 +666,7 @@ mod tests {
             Some("#/components/schemas/BootstrapResponseV2")
         );
         assert_eq!(
-            document["paths"]["/api/v2/reading-sessions"]["post"]["responses"]["200"]["content"]
+            document["paths"]["/api/v2/readingSessions"]["post"]["responses"]["200"]["content"]
                 ["application/json"]["schema"]["$ref"]
                 .as_str(),
             Some("#/components/schemas/ReadingSessionCreatedResponse")
