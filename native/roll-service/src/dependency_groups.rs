@@ -1809,14 +1809,14 @@ pub fn add_issue_range_v2_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn add_member_documentation() {}
+pub fn add_member_v2_documentation() {}
 
-/// Documentation-only operation for removing a group member.
+/// Documentation-only operation for removing a group member (v2).
 #[utoipa::path(
     delete,
-    path = "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
+    path = "/api/v2/reading-order-groups/{group_id}/members/{member_id}",
     tag = "reading-order-groups",
-    operation_id = "dependency_groups_remove_member",
+    operation_id = "dependency_groups_v2_remove_member",
     params(
         ("group_id" = i32, Path, description = "Owned group identifier"),
         ("member_id" = i32, Path, description = "Membership identifier")
@@ -1831,7 +1831,7 @@ pub fn add_member_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn remove_member_documentation() {}
+pub fn remove_member_v2_documentation() {}
 
 /// Documentation-only operation for setting crossover order.
 #[utoipa::path(
@@ -1853,12 +1853,12 @@ pub fn remove_member_documentation() {}
 #[allow(dead_code)]
 pub fn set_group_order_documentation() {}
 
-/// Documentation-only operation for listing linked continuity plans.
+/// Documentation-only operation for listing linked continuity plans (v2).
 #[utoipa::path(
     get,
-    path = "/api/v1/reading-order-groups/{group_id}/plans",
+    path = "/api/v2/reading-order-groups/{group_id}/reading-plans",
     tag = "reading-order-groups",
-    operation_id = "dependency_groups_list_plans",
+    operation_id = "dependency_groups_v2_list_reading_plans",
     params(("group_id" = i32, Path, description = "Owned group identifier")),
     responses(
         (status = 200, description = "Linked continuity plans", body = Vec<DependencyGroupSummary>),
@@ -1870,7 +1870,26 @@ pub fn set_group_order_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn list_crossover_plans_documentation() {}
+pub fn list_reading_plans_v2_documentation() {}
+
+/// Documentation-only operation for the bounded v2 membership batch action.
+#[utoipa::path(
+    post,
+    path = "/api/v2/reading-order-groups:resolveMemberships",
+    tag = "reading-order-groups",
+    description = "Resolve group memberships for several owned threads in one bounded response (AIP-136).",
+    operation_id = "dependency_groups_v2_resolve_memberships",
+    request_body = crate::thread_lifecycle::GroupsBatchRequest,
+    responses(
+        (status = 200, description = "Map of thread id to crossover groups", body = HashMap<String, Vec<DependencyGroupSummary>>),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "A requested thread is not owned by the reader"),
+        (status = 422, description = "Validation failed")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn resolve_memberships_documentation() {}
 
 /// OpenAPI document for the native same-path reading-order-group surface.
 #[derive(utoipa::OpenApi)]
@@ -1883,16 +1902,11 @@ pub fn list_crossover_plans_documentation() {}
     paths(
         list_groups_documentation,
         create_group_documentation,
-        list_thread_groups_documentation,
         get_group_documentation,
         update_group_documentation,
         delete_group_documentation,
         get_group_detail_documentation,
-        add_issue_range_documentation,
-        add_member_documentation,
-        remove_member_documentation,
-        set_group_order_documentation,
-        list_crossover_plans_documentation
+        set_group_order_documentation
     ),
     components(schemas(
         DependencyGroupCreateRequest,
@@ -1932,6 +1946,43 @@ impl utoipa::Modify for DependencyGroupsSecurityAddon {
 pub fn dependency_groups_openapi() -> utoipa::openapi::OpenApi {
     use utoipa::OpenApi;
     DependencyGroupsApi::openapi()
+}
+
+/// OpenAPI document for the v2 reading-order-group membership surface.
+///
+/// These six operations are the single authority for group membership reads and
+/// writes; the retired `/api/v1` aliases are no longer mounted or documented.
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    info(
+        title = "ComicPile native v2 reading-order-group memberships API",
+        version = "2.0.0",
+        description = "Generated contract for the native v2 crossover membership and batch lookups."
+    ),
+    paths(
+        resolve_memberships_documentation,
+        list_thread_group_memberships_documentation,
+        list_reading_plans_v2_documentation,
+        add_member_v2_documentation,
+        add_issue_range_v2_documentation,
+        remove_member_v2_documentation
+    ),
+    components(schemas(
+        crate::thread_lifecycle::GroupsBatchRequest,
+        DependencyGroupSummary,
+        DependencyGroupMemberCreateRequest,
+        DependencyGroupIssueRangeCreateRequest,
+        DependencyGroupIssueRangeResponse,
+        DependencyGroupMemberResponse
+    )),
+    modifiers(&DependencyGroupsSecurityAddon)
+)]
+pub struct DependencyGroupsV2Api;
+
+/// Emit the native v2 reading-order-group membership contract.
+pub fn dependency_groups_v2_openapi() -> utoipa::openapi::OpenApi {
+    use utoipa::OpenApi;
+    DependencyGroupsV2Api::openapi()
 }
 
 #[cfg(test)]
