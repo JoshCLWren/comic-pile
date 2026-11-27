@@ -642,12 +642,13 @@ mod tests {
                     (32,'Beta','comic',0,2,'active',1,NOW()),
                     (33,'Foreign','comic',0,3,'active',2,NOW());
              INSERT INTO issues (id,thread_id,issue_number,status,created_at,position)
-             VALUES (311,31,'1','unread',NOW(),1),(321,32,'1','unread',NOW(),1),
+             VALUES (311,31,'1','unread',NOW(),1),(312,31,'2','unread',NOW(),2),
+                    (321,32,'1','unread',NOW(),1),(322,32,'2','unread',NOW(),2),
                     (331,33,'1','unread',NOW(),1);
              INSERT INTO dependencies (source_issue_id,target_issue_id,origin,classification,provenance,note,created_at)
              VALUES (311,321,'reader','A','reader authored',NULL,NOW()),
-                    (311,321,'converted','C','converted from CBL',NULL,NOW()),
-                    (311,321,'reader','A','inert materialization','cbl-order: series order',NOW());",
+                    (312,321,'converted','C','converted from CBL',NULL,NOW()),
+                    (311,322,'reader','A','inert materialization','cbl-order: series order',NOW());",
         )
         .await
         .expect("reader-authored dependency fixtures");
