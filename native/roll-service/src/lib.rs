@@ -808,10 +808,6 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(threads::get_thread_detail),
         )
         .route("/api/threads/{thread_id}", get(threads::get_thread_detail))
-        .route(
-            "/api/v1/threads/{thread_id}/issues",
-            get(issue_read::list_thread_issues),
-        )
         // axum/matchit rejects a parameter followed by literal text, so the
         // `{thread_id}:action` operation family is routed through the single
         // `{thread_id}` segment and dispatched on the action suffix.
@@ -862,10 +858,6 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/threads/{thread_id}/issues",
             post(thread_issues::create_thread_issues),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}/issues/creators",
-            get(thread_issues::list_thread_issue_creators),
         )
         .route(
             "/api/v1/threads/{thread_id}/issues:reorder",
