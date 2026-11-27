@@ -416,37 +416,41 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
             let utoipa::openapi::RefOr::T(schema) = schema_ref else {
                 continue;
             };
-            let utoipa::openapi::Schema::Object(obj) = &mut schema.schema else {
+            let utoipa::openapi::Schema::Object(obj) = schema else {
                 continue;
             };
             let mcc = obj.properties.get("manual_creator_credits");
             let needs_fix = match mcc {
                 None => true,
                 Some(utoipa::openapi::RefOr::T(utoipa::openapi::Schema::Object(o))) => {
-                    matches!(o.schema_type, utoipa::openapi::SchemaType::AnyValue)
-                        || (o.schema_type == utoipa::openapi::SchemaType::Object
-                            && o.properties.is_empty()
-                            && o.additional_properties.is_none())
+                    !matches!(o.schema_type, utoipa::openapi::schema::SchemaType::Array(_))
+                        && !matches!(
+                            &o.schema_type,
+                            utoipa::openapi::schema::SchemaType::Type(t)
+                                if matches!(t.as_ref(), utoipa::openapi::schema::Type::Array)
+                        )
                 }
-                Some(utoipa::openapi::RefOr::T(utoipa::openapi::Schema::Any(_))) => true,
-                _ => false,
+                Some(utoipa::openapi::RefOr::T(utoipa::openapi::Schema::Array(_))) => false,
+                _ => true,
             };
             if needs_fix {
                 use utoipa::openapi::schema::{ArrayBuilder, ObjectBuilder, SchemaType, Type};
                 obj.properties.insert(
                     "manual_creator_credits".to_string(),
-                    utoipa::openapi::RefOr::T(utoipa::openapi::Schema::Object(
-                        ObjectBuilder::new()
-                            .schema_type(SchemaType::Type(Type::Array))
+                    utoipa::openapi::RefOr::T(utoipa::openapi::Schema::Array(
+                        ArrayBuilder::new()
                             .items(utoipa::openapi::RefOr::T(
                                 utoipa::openapi::Schema::Object(ObjectBuilder::new().build()),
                             ))
                             .build(),
                     )),
                 );
+                let _ = (SchemaType::Type(Type::Array),);
             }
         }
     }
+
+    openapi = openapi
         .merge_from(crate::issue_read_state::IssueReadStateApi::openapi())
         .merge_from(crate::comicvine_issue::ComicVineIssueApi::openapi())
         .merge_from(crate::custom_cbl::CustomCblApi::openapi())
