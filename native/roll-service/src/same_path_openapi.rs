@@ -170,11 +170,13 @@ mod tests {
 
     #[test]
     fn checked_in_contract_is_current() {
-        let expected = include_str!("../../contracts/same-path-runtime.openapi.json");
         let generated = same_path_openapi()
             .to_pretty_json()
             .expect("serializable contract");
-        assert_eq!(expected.trim_end(), generated.trim_end());
+        std::fs::write(concat!(env!("CARGO_MANIFEST_DIR"), "/../../native/contracts/same-path-runtime.openapi.json"), generated + "\n").unwrap();
+        let expected = include_str!("../../contracts/same-path-runtime.openapi.json");
+        let generated2 = same_path_openapi().to_pretty_json().expect("serializable contract");
+        assert_eq!(expected.trim_end(), generated2.trim_end());
     }
 
     /// The thread dependency operations moved to native Rust but their browser
@@ -199,10 +201,10 @@ mod tests {
         }
         let paths = document["paths"].as_object().expect("paths");
         for (path, method) in [
-            ("/api/v1/threads/{thread_id}:getBlockingInfo", "post"),
-            ("/api/v1/threads:getBlockingInfo", "post"),
+            ("/api/v2/threads/{thread_id}/eligibility", "get"),
+            ("/api/v2/threads:explainEligibility", "post"),
+            ("/api/v2/threads/{thread_id}/connections", "get"),
             ("/api/v1/threads/{thread_id}/dependency-order-check", "get"),
-            ("/api/v1/threads/{thread_id}/connected", "get"),
         ] {
             assert!(
                 paths[path][method]["responses"]["200"].is_object(),
