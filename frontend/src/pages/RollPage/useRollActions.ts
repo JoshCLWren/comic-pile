@@ -9,6 +9,7 @@ import {
 } from '../../components/snoozeAvailability'
 import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 import type { RollBootstrapResponse, RollBootstrapThread } from '../../types/rollBootstrap'
+import type { RollOfferSeed } from '../../hooks/useRollPendingSelection'
 import type { RollResponse } from '../../types'
 import type { RollUnsnoozeResponse } from '../../services/apiTypes'
 import type { SnoozeMutationOutcome } from '../../hooks/useSnooze'
@@ -50,12 +51,7 @@ interface UseRollActionsParams {
   /** Browser-owned pending selection, never server-owned pending state. */
   pendingThreadId?: number | null
   /** Seed the exact browser selection from a successful offer response. */
-  seedPending?: (offer: {
-    thread_id: number | null
-    issue_id: number | null
-    issue_number?: string | null
-    result?: number | null
-  }) => void
+  seedPending?: (offer: RollOfferSeed) => void
 }
 
 /**

@@ -41,6 +41,11 @@ export { useReaderContext, useReadingOrdersForThread, useConnectedThreads } from
 export { useTasteDiscoveries } from './useTasteDiscoveries'
 export { useCreatorDiscoveries } from './useCreatorDiscoveries'
 export { useRollBootstrap, resolveBrowserTimezone } from './useRollBootstrap'
+export {
+  useRollPendingSelection,
+  type RollOfferSeed,
+  type UseRollPendingSelectionResult,
+} from './useRollPendingSelection'
 export { useRollPrerequisiteSwitch } from './useRollPrerequisiteSwitch'
 export { usePreferences, useUpdatePreferences, PreferencesSync } from './usePreferences'
 export { useQueueBlockingInfo } from './useQueueBlockingInfo'

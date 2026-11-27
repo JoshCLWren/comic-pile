@@ -40,14 +40,17 @@ const EMPTY_SESSION_MODE: SessionMode = {
  * retained as the page's local view model so feature modules share one snapshot;
  * it is never sent to, or fetched from, a bootstrap/session endpoint.
  */
-export function useRollBootstrap() {
+export function useRollBootstrap(_api?: unknown) {
+  // The optional transport argument is retained for existing focused tests;
+  // scoped state comes from the shared query cache, never from that transport.
+  void _api
   const { pending } = useRollPendingSelection()
   const die = useRollDieState()
   const snoozedIds = useMemo(() => readRollSnoozes(), [])
   const eligible = useRollEligibleIssueIds(snoozedIds)
   const cards = useRollIssueCards(eligible.data?.issue_ids ?? [])
 
-  const data = useMemo<RollBootstrapResponse>(() => {
+  const data: RollBootstrapResponse | null = useMemo<RollBootstrapResponse>(() => {
     const issueIds = eligible.data?.issue_ids ?? []
     const threadIds = eligible.data?.thread_ids ?? []
     const cardByIssue = new Map((cards.data?.items ?? []).map((card) => [card.issue_id, card]))
