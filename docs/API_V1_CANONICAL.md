@@ -1,90 +1,108 @@
-# Canonical `/api/v1` API Surface
+# Retained `/api/v1` API Surface
 
-> **Status: historical/superseded.** This migration-era v1 catalogue is not the
-> current client contract. Use [API.md](API.md), the generated native/same-path
-> contracts, and [the route inventory](api/v2-route-inventory.json). Retained v1
-> paths are native compatibility operations, not permission for new v1 clients.
+> **Status: archival compatibility catalogue.** Retained `/api/v1` paths are
+> native Rust compatibility operations kept only for callers that have not been
+> migrated yet. They are **not** permission for new v1 consumers and they are
+> **not** the current client contract. Use [API.md](API.md), the generated
+> native/same-path contracts, and [the route inventory](api/v2-route-inventory.json)
+> for the contract to code against.
 <!-- docs-path-check: historical -->
 
-This document is the authoritative reference for ComicPile's versioned API surface. It
-supports issue #638 (Developer experience and frontend simplification) and the
-#642 `/api/v1` normalization audit (#954). The companion contract test
-`tests/test_api_v1_canonical_contract.py` enforces every statement below against the <!-- docs-path-check: ignore -->
-generated OpenAPI schema, so this list cannot silently drift.
+This document supports the `/api/v1` normalization audit (#642, #954) and the
+Rust v2-only end state in #4335 / #4456. It records the retained v1 surface; it
+does not authorize new v1 work. Per-route retirement is owned by #5719 (live
+inventory) and the small migration slices #5701–#5718.
 
-## Native v2 analytics transition
+## Current runtime
 
-`GET /api/v2/analytics/metrics` is the new bounded native Rust resource. The legacy
-`GET /api/v1/analytics/metrics` and `/api/analytics/metrics` handlers remain available until the
-replacement is deployed and authenticated production proof exists, per #4348. The real frontend
-service already calls the native v2 resource; the legacy handlers are not a long-lived parallel
-implementation.
+The Python application runtime is retired; there is no Python handler, process,
+module, or deployed function behind any `/api/v1` path. Every remaining v1
+operation is served by the native Rust ingress `api/native_roll.rs`
+(`vercel.json` routes `/api(?:/.*)?` to it). There is no Python-runtime
+exception, parity oracle, or "Python stays mounted" hold on this surface.
 
-## Canonical families (must use `/api/v1`)
+There are 27 retained `/api/v1` operations, all served by native Rust, in two
+families only:
 
-These retained first-party client families are exposed under `/api/v1/<family>` and are
-the supported, documented surface. New client code must call these paths:
+| Family | Retained v1 operations | Target resource |
+|--------|------------------------|-----------------|
+| Reading-order groups | 15 (`/api/v1/reading-order-groups…` collection, item, detail, issue-ranges, members, order, plans) | `GET/POST /api/v2/readingOrderGroups…` (#5710) |
+| Threads | 12 (`/api/v1/threads…` create, check-duplicates, excluded, reactivate, stale, item PATCH/DELETE, exclude, restore, set-pending, test-backdate, issues/creators) | `GET/POST/PATCH/DELETE /api/v2/threads…` (#5701, #5703, #5704, #5705, #5706) |
 
-| Family | Canonical prefix |
-|--------|------------------|
-| Analytics | `/api/v1/analytics` (legacy retained until #4348 production proof; new clients use `/api/v2/analytics/metrics`) |
-| Auth | `/api/v1/auth` |
-| Continuity | `/api/v1/continuity` |
-| Continuity plans | `/api/v1/continuity-plans` |
-| Continuity rules | `/api/v1/continuity-rules` |
-| Dependencies | `/api/v1/dependencies` |
-| Issues | `/api/v1/issues` |
-| Queue | `/api/v1/queue` |
-| Rate | `/api/v1/rate` |
-| Reading-order groups | `/api/v1/reading-order-groups` |
-| Releases | `/api/v1/releases` |
-| Roll | `/api/v1/roll` |
-| Sessions | `/api/v1/sessions` |
-| Threads | `/api/v1/threads` (collection read moved to native `GET /api/v2/threads`) |
-| Undo | `/api/v1/undo` |
+`docs/api/v2-route-inventory.json` is authoritative for the exact
+`METHOD path` list and its caller lists. `scripts/check_v1_canonical_guidance.mjs`
+fails CI when the count above and the inventory disagree, when any retained v1
+operation is attributed to a non-Rust runtime, or when active guidance starts
+telling new code to use v1 again.
 
-The v1 snooze family (`POST /api/v1/snooze/`, `POST /api/v1/snooze/{id}/unsnooze`,
-and the legacy `/api/snooze` alias) was retired with the Rust roll cutover (#4338,
-#4349). Snooze is the native `POST /api/v2/roll/offer` reroll, which records the
-snooze and rolls the replacement in one transaction; unsnooze is client-only (the
-`comicpile_roll_snoozes` browser cookie) and has no server route.
+The v1 count is **not** the v2 retirement proof: the v2 inventory counts v2
+operations only. Retiring a v1 route requires its callers to move to the v2
+resource, the route to be removed from the Rust router and route fragments, and
+the obsolete path to 404 in production.
 
-## Intentional legacy aliases (`/api`)
+## What new client code must use
 
-Two categories of bare `/api/<segment>` routes are retained deliberately and must remain
-on the explicit allowlist:
+New frontend, background and recovery callers use the canonical v2 resources
+(AIP-121/122/131–136/185): `GET /api/v2/threads` and
+`GET /api/v2/threads/{thread_id}` for Thread reads, the
+`/api/v2/readingOrderGroups…` family for reading-order groups, and the
+per-family v2 resources listed in [API.md](API.md). Do not add a caller to a
+retained `/api/v1` path, do not re-add a retired v1 path as an alias, and do not
+mirror a v2 resource back onto v1 "for symmetry".
 
-1. **Compatibility aliases** — Roll retains its two Python unversioned
-   handlers while its live migration is in progress. Rust separately publishes
-   auth compatibility paths at `/api/auth/*` and `/api/v1/auth/*`; the product
-   auth client uses `/api/v2/auth/*`. The 16 Python unversioned `threads`,
-   `sessions`, and `undo` operations are retired following a caller audit;
-   their existing versioned contracts remain. Native `GET /api/threads/{thread_id}`,
-   `GET /api/sessions/{session_id}`, and
-   `GET /api/sessions/{session_id}/snapshots` remain compatibility routes.
+## Retired families (not surface)
+
+These v1 and unversioned families are gone, not merely deprecated. They have no
+handler, no supported route, and no compatibility alias:
+
+- Auth (`/api/v1/auth`, `/api/auth`) — the product client uses `/api/v2/auth/*`.
+- Analytics (`/api/v1/analytics/metrics`, `/api/analytics/metrics`) — replaced by
+  the bounded native `GET /api/v2/analytics/metrics`.
+- Continuity, continuity-plans, continuity-rules, dependencies, issues, queue,
+  rate, releases, roll, sessions, and undo v1 families — migrated to their v2
+  resources under #4335 / #4456.
+- Snooze (`POST /api/v1/snooze/`, `POST /api/v1/snooze/{id}/unsnooze`, legacy
+  `/api/snooze`) — retired with the Rust roll cutover (#4338, #4349). Snooze is
+  the native `POST /api/v2/roll/offer` reroll; unsnooze is client-only (the
+  `comicpile_roll_snoozes` browser cookie) and has no server route.
+- The 16 unversioned `threads`, `sessions` and `undo` operations — retired after
+  a caller audit. No unversioned operations remain in the live inventory.
+
+## Intentional bare `/api` compatibility routes
+
+Two categories of bare `/api/<segment>` routes are retained deliberately:
+
+1. **Native compatibility aliases** — `GET /api/threads/{thread_id}`,
+   `GET /api/sessions/{session_id}`, `GET /api/sessions/{session_id}/snapshots`,
+   plus the Roll and auth compatibility aliases. They are served by native Rust
+   and are excluded from the versioned inventory count. They are retained for
+   existing callers only; new code uses the v2 resource.
 2. **Infrastructure surfaces** — bounded health, ping and metrics routes remain
    available. Retired admin, debug and bug-report aliases are not exceptions.
 
-Any other bare `/api` route is a regression and fails the contract test.
+Any other bare `/api` route is a regression and fails
+`python3 scripts/check_route_fragment_guard.py`.
 
 ## Collections
 
-Collections were removed. The OpenAPI document contains no supported Collections route,
-schema, or operation. Durable reader exclusions under Option E remain in storage, but the
-distinct `/api/v1/collection-exclusions` HTTP API was retired with the Python API (Part of
-#5431); it neither exists as a supported operation nor restores the retired Collections
-domain. References to a *retired* `collection_id` query parameter in legacy
-operation descriptions are documentation of removed behavior, not supported surface.
+Collections were removed. The OpenAPI document contains no supported Collections
+route, schema, or operation. Durable reader exclusions under Option E remain in
+storage, but the distinct `/api/v1/collection-exclusions` HTTP API was retired
+with the Python API (part of #5431). References to a *retired* `collection_id`
+query parameter in legacy operation descriptions document removed behavior; they
+are not supported surface.
 
 ## Verification
 
-Run the contract test (no database required):
+These are the checks that actually exist and run:
 
 ```bash
-pytest tests/test_api_v1_canonical_contract.py
+node scripts/check_v1_canonical_guidance.mjs   # this catalogue vs live inventory, no v1 instructions
+python3 scripts/check_route_fragment_guard.py  # route fragments only; generated outputs stay bot-owned
+node scripts/generate_openapi_types.mjs --check # generated OpenAPI schema, types and native client
+python3 scripts/check_markdown_docs.py         # Markdown policy
 ```
 
-It asserts: no duplicate `operationId`s, no supported Collections surface, every canonical
-family above has an `/api/v1` route, and every bare `/api` alias is on the allowlist.
-Regenerate the schema with `node scripts/generate_openapi_types.mjs` after any routing
-change.
+The former `tests/test_api_v1_canonical_contract.py` contract test no longer
+exists (the Python test tree it lived in was retired), so this document must not
+claim it as enforcement.
