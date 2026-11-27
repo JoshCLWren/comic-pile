@@ -3391,19 +3391,19 @@ mod tests {
     #[test]
     fn stale_cursor_rejects_foreign_or_malformed_tokens() {
         assert_eq!(
-            decode_stale_cursor("not-base64").unwrap_err().detail(),
+            decode_stale_cursor("not-base64", 30).unwrap_err().detail(),
             "Invalid stale page token"
         );
         let queue_cursor =
             URL_SAFE_NO_PAD.encode(br#"{"sort":"position","search":"","values":["0","1","2"]}"#);
         assert_eq!(
-            decode_stale_cursor(&queue_cursor).unwrap_err().detail(),
+            decode_stale_cursor(&queue_cursor, 30).unwrap_err().detail(),
             "Invalid stale page token"
         );
         let forged =
             URL_SAFE_NO_PAD.encode(br#"{"kind":"stale","activity":"not-a-timestamp","id":3}"#);
         assert_eq!(
-            decode_stale_cursor(&forged).unwrap_err().detail(),
+            decode_stale_cursor(&forged, 30).unwrap_err().detail(),
             "Invalid stale page token"
         );
     }
