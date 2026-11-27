@@ -1,6 +1,6 @@
 //! Canonical continuity-plan reader.
 //!
-//! A linked custom Reading List is the sole authority for effective Option E order.
+//! A linked custom Reading List is the sole authority for effective Reading List engine order.
 //! Historic plan membership and provenance are never projected as authority.
 //! Reads share the exact Rust Reading List evaluation used by Roll and Queue.
 //!
@@ -283,7 +283,7 @@ pub async fn read(
         // This plan never recorded an owned Reading List. It is authored state,
         // so keep it open and editable even after issues are saved into it.
         // Retained membership is shown as a reference with no hard blockers:
-        // only a real Reading List drives availability in Option E.
+        // only a real Reading List drives availability in Reading List engine.
         let retained = conn
             .query(
                 "SELECT r.occurrence_id, r.issue_id, r.lane_id, r.display_position,
@@ -407,7 +407,7 @@ pub async fn read(
     };
     drop(conn);
 
-    // The list reader is the actual authoritative Option E read evaluator.
+    // The list reader is the actual authoritative Reading List engine read evaluator.
     // Never run an independent projection that can diverge from Roll/Queue.
     let list = reading_list::read_reading_list(State(state.clone()), user, Path(list_id))
         .await?
@@ -568,7 +568,7 @@ pub async fn read(
         .cloned()
         .collect();
     Ok(Json(PlanReaderResponse {
-        execution_mode: "option_e".to_string(),
+        execution_mode: "reading_lists".to_string(),
         plan_id,
         name: plan_name,
         // The order mode is the plan's explicit saved intent, also shown by the
@@ -600,7 +600,7 @@ pub async fn read(
     tag = "continuity-plans",
     params(("plan_id" = i32, Path, description = "Owned Reading Plan identifier")),
     responses(
-        (status = 200, description = "Option E plan projected from its authoritative Reading List", body = PlanReaderResponse),
+        (status = 200, description = "Reading List engine plan projected from its authoritative Reading List", body = PlanReaderResponse),
         (status = 401, description = "Not authenticated"),
         (status = 404, description = "Reading Plan not found"),
         (status = 409, description = "Plan missing its authoritative Reading List")

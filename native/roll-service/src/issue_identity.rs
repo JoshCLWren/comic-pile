@@ -2545,7 +2545,7 @@ fn adoption_conflict(code: &str, message: &str) -> (StatusCode, Json<JsonValue>)
 fn adoption_422(message: &str) -> (StatusCode, Json<JsonValue>) {
     (
         StatusCode::UNPROCESSABLE_ENTITY,
-        Json(serde_json::json!({"detail": {"code": "adoption_error", "message": message}})),
+        Json(serde_json::json!({"detail": {"code": "adreading_listsrror", "message": message}})),
     )
 }
 fn adoption_unexpected() -> (StatusCode, Json<JsonValue>) {
@@ -3170,7 +3170,7 @@ async fn do_cbl_adoption_commit(
         }
     })?;
 
-    // Persist to canonical, source-linked Option E Reading List (custom_cbl_list).
+    // Persist to canonical, source-linked Reading List engine Reading List (custom_cbl_list).
     // This keeps the Reading List as the source of truth for adopted CBL entries.
     let adopted_issue_ids: Vec<i32> = merge.4.clone();
     let existing_list_id: Option<i32> = {

@@ -85,8 +85,8 @@ Dependencies or change global read state.
 `GET /api/v2/reading-lists/{list_id}/reader` always projects availability from the
 canonical Rust evaluator.
 
-The owner-approved rollout setting (`OPTION_E_ENABLED` truthy plus a non-blank
-`OPTION_E_APPROVED_PREVIEW`, parsed once into `AppState::option_e`) controls several
+The owner-approved rollout setting (`READING_LISTS_ENABLED` truthy plus a non-blank
+`READING_LISTS_APPROVED_PREVIEW`, parsed once into `AppState::reading_lists`) controls several
 Queue/Thread/boundary projections, but current Roll offer/bootstrap behavior is
 not a uniform setting-off fallback. See
 [Reading List runtime](../READING_LIST_RUNTIME.md#owner-approved-rollout-setting)

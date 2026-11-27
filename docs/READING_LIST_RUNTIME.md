@@ -42,13 +42,13 @@ Issue/Thread identities and normalized volume IDs, including ComicVine numeric a
 ## Owner-approved rollout setting
 
 Evaluated eligibility is a rollout setting, not a per-request feature flag and not
-an API-version marker. `native/roll-service/src/option_e_setting.rs` parses it once
-at startup into `AppState::option_e`:
+an API-version marker. `native/roll-service/src/reading_lists_setting.rs` parses it once
+at startup into `AppState::reading_lists`:
 
 | Variable | Effect |
 | --- | --- |
-| `OPTION_E_ENABLED` | Must be truthy (`1`, `true`, `yes`, `on`, `t`, `y`). |
-| `OPTION_E_APPROVED_PREVIEW` | Must be non-blank; records the owner approval reference. |
+| `READING_LISTS_ENABLED` | Must be truthy (`1`, `true`, `yes`, `on`, `t`, `y`). |
+| `READING_LISTS_APPROVED_PREVIEW` | Must be non-blank; records the owner approval reference. |
 
 The approval reference is an audit marker, not independently verified
 authorization. Handlers must not read the environment directly; tests inject the
@@ -57,7 +57,7 @@ resolved value.
 Current behavior is not uniform across every surface:
 
 - The Reading List reader endpoint always evaluates the canonical graph and
-  reports `execution_mode: "option_e"`, even when the rollout setting is off.
+  reports `execution_mode: "reading_lists"`, even when the rollout setting is off.
 - Queue, Thread list/detail, ordering, and lifecycle projections use the setting to
   choose canonical or legacy stored `threads.is_blocked` authority.
 - `POST /api/v2/reading-boundaries` returns `evaluator: "unavailable"`, no next

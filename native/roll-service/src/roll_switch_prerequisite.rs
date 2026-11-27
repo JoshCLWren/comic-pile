@@ -8,7 +8,7 @@
 //! shapes (including the refreshed roll-recovery payload), the
 //! `dependency_recovery` roll event, and the session pointer move.
 //!
-//! Eligibility is the same Option E authority the native Roll offer uses, and
+//! Eligibility is the same Reading List engine authority the native Roll offer uses, and
 //! the refreshed guidance is projected by the same bounded recovery builder the
 //! native bootstrap uses, so a client cannot be told a stale prerequisite is
 //! current.
@@ -201,7 +201,7 @@ async fn switch(
     // Bootstrap resolves (and creates when needed) the authoritative session,
     // matching Python's get_or_create.
     let active = reading_session::bootstrap(&state, user, None, SessionPolicy::default()).await?;
-    // Read-only Option E snapshot before the write connection so this request
+    // Read-only Reading List engine snapshot before the write connection so this request
     // never nests two pool checkouts.
     let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
     let candidates = validated.eligible_frontiers().map_err(|e| {

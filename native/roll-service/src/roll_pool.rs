@@ -1,4 +1,4 @@
-//! Shared bounding for the Option E Roll pool.
+//! Shared bounding for the Reading List engine Roll pool.
 //!
 //! Bootstrap and the Roll offer must rank the same validated frontiers and
 //! apply the same top-`die` bound **before** this browser's temporary snoozes

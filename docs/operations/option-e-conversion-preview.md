@@ -1,7 +1,7 @@
-# Option E conversion preview and rollback rehearsal
+# Reading List engine conversion preview and rollback rehearsal
 
 > **Status: historical, superseded (2026-11-24).** This runbook documents the
-> retired Python conversion planner. `scripts.plan_option_e_conversion` was
+> retired Python conversion planner. `scripts.plan_reading_lists_conversion` was
 > deleted with the Python API; there is no replacement CLI and no apply or commit
 > command. The current Reading List runtime is documented in
 > [Reading List runtime](../READING_LIST_RUNTIME.md). The intent schema and
@@ -11,8 +11,8 @@
 Run from the repository root with the project Python environment:
 
 ```bash
-uv run python -m scripts.plan_option_e_conversion \
-  --database-url "$OPTION_E_PREFLIGHT_DATABASE_URL" --user-id 1 \
+uv run python -m scripts.plan_reading_lists_conversion \
+  --database-url "$READING_LISTS_PREFLIGHT_DATABASE_URL" --user-id 1 \
   --intent /private/reviewed-intent.json --mode preflight
 ```
 
@@ -64,8 +64,8 @@ mappings. Thread and Issue targets must belong to the reader.
 For an explicitly local PostgreSQL database, the same intent can be rehearsed:
 
 ```bash
-uv run python -m scripts.plan_option_e_conversion \
-  --database-url "$OPTION_E_LOCAL_DATABASE_URL" --user-id 1 \
+uv run python -m scripts.plan_reading_lists_conversion \
+  --database-url "$READING_LISTS_LOCAL_DATABASE_URL" --user-id 1 \
   --intent /private/reviewed-intent.json --mode rehearse --acknowledge-rollback
 ```
 

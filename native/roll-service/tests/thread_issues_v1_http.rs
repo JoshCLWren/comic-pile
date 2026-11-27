@@ -41,10 +41,10 @@ async fn setup_user(
     setup_user_with(prefix, false).await
 }
 
-/// `option_e` is injected into the state's config; nothing touches the process env.
+/// `reading_lists` is injected into the state's config; nothing touches the process env.
 async fn setup_user_with(
     prefix: &str,
-    option_e: bool,
+    reading_lists: bool,
 ) -> (
     Arc<AppState>,
     String,
@@ -59,8 +59,8 @@ async fn setup_user_with(
                 "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
                 "RUST_ROLL_JWT_SECRET" => Some("synthetic-roll-routes-secret".into()),
                 "RUST_ROLL_POOL_SIZE" => Some("2".into()),
-                "OPTION_E_ENABLED" if option_e => Some("true".into()),
-                "OPTION_E_APPROVED_PREVIEW" if option_e => Some("injected-by-test".into()),
+                "READING_LISTS_ENABLED" if reading_lists => Some("true".into()),
+                "READING_LISTS_APPROVED_PREVIEW" if reading_lists => Some("injected-by-test".into()),
                 _ => None,
             })
             .unwrap(),
@@ -1273,7 +1273,7 @@ async fn pending_pair(conn: &Conn, user_id: i32) -> (Option<i32>, Option<i32>) {
 }
 
 #[tokio::test]
-async fn set_current_issue_option_e_exercises_manual_pick_and_rollback() {
+async fn set_current_issue_reading_lists_exercises_manual_pick_and_rollback() {
     let (state, token, csrf, user_id, _guard) = setup_user_with("tiss-opte", true).await;
     let conn = state.pool.get().await.unwrap();
     let thread = plain_thread(&conn, user_id, "OptE", 4, 1).await;

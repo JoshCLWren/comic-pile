@@ -6,7 +6,7 @@
 //! by a strict Reading List or by natural series order could therefore be
 //! committed and only surface later as a global `ReadingCycleError` outage
 //! (#4684, #4656). These canonical Rust `/api/v2` resources validate the
-//! complete projected Option E graph — series order, strict/loose list order,
+//! complete projected Reading List engine graph — series order, strict/loose list order,
 //! gates, prerequisites and cross-list dependencies — inside the write
 //! transaction, before commit, so a cyclic edge can never be persisted.
 //!
@@ -406,7 +406,7 @@ pub async fn get_thread_dependencies(
     post,
     path = "/api/v2/dependencies/",
     tag = "dependencies",
-    description = "Create one owner-scoped issue-level reader dependency after combined reading-graph preflight. The complete projected Option E graph is validated inside the write transaction before commit; a cyclic edge is rejected with the named series/issues and nothing is changed.",
+    description = "Create one owner-scoped issue-level reader dependency after combined reading-graph preflight. The complete projected Reading List engine graph is validated inside the write transaction before commit; a cyclic edge is rejected with the named series/issues and nothing is changed.",
     request_body = DependencyCreateRequest,
     responses(
         (status = 201, description = "Created dependency", body = DependencyResponse),

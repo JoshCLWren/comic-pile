@@ -6,7 +6,7 @@
 > [Reading List runtime](READING_LIST_RUNTIME.md).
 <!-- docs-path-check: historical -->
 
-Option E's shadow report compares the existing stored frontier/cache with derived
+Reading List engine's shadow report compares the existing stored frontier/cache with derived
 frontiers and hypothetical eligibility from current authored Reading List modes,
 gates, skips, explicit requirements and resolved collection exclusions. It does
 not activate lists, repair pointers, refresh blocked flags or change Roll.
@@ -20,7 +20,7 @@ uv run python -m scripts.report_reading_eligibility \
 
 The CLI uses a PostgreSQL-enforced read-only, repeatable-read transaction with
 autoflush disabled. It never loads the URL from application settings. Normal
-For the **app-wide Option E cutover** (#3676), inspect every reader in one
+For the **app-wide Reading List engine cutover** (#3676), inspect every reader in one
 repeatable-read snapshot and save the fingerprinted acceptance evidence:
 
 ```bash
@@ -82,5 +82,5 @@ apparently successful parity result by dropping unresolved constraints.
 
 This report is evidence for #3672 and the guarded conversion/activation review in
 #3676. A valid report or zero diff neither authorizes a production write nor
-satisfies the Option E trust milestone. Reader review and fresh approved previews
+satisfies the Reading List engine trust milestone. Reader review and fresh approved previews
 remain required by [the ADR](READING_LIST_EXECUTION_ADR.md).

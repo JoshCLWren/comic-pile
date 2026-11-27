@@ -1,7 +1,7 @@
 //! Canonical owner-scoped Reading List resources.
 //!
 //! These replace the read/list/create/delete half of the Python custom-CBL
-//! surface. Authoring still runs through the one shared Option E graph
+//! surface. Authoring still runs through the one shared Reading List engine graph
 //! validator, inside the write transaction, before commit. The reader projects
 //! availability from the same canonical Rust eligibility snapshot Roll and
 //! Queue use, so a persisted cycle cannot make this page fail globally.
@@ -1176,7 +1176,7 @@ pub async fn read_reading_list(
         list_id: row.0,
         name: row.1,
         mode: row.3,
-        execution_mode: "option_e".to_string(),
+        execution_mode: "reading_lists".to_string(),
         entries: projected,
     }))
 }

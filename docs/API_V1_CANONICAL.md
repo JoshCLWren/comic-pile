@@ -88,7 +88,7 @@ Any other bare `/api` route is a regression and fails
 ## Collections
 
 Collections were removed. The OpenAPI document contains no supported Collections
-route, schema, or operation. Durable reader exclusions under Option E remain in
+route, schema, or operation. Durable reader exclusions under Reading List engine remain in
 storage, but the distinct `/api/v1/collection-exclusions` HTTP API was retired
 with the Python API (part of #5431). References to a *retired* `collection_id`
 query parameter in legacy operation descriptions document removed behavior; they

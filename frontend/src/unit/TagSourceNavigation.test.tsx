@@ -33,7 +33,7 @@ vi.mock('../hooks/useCrossoverGroups', () => ({ useCrossoverGroups: () => ({ gro
 vi.mock('../hooks/useThreadIssues', () => ({ useThreadIssuePages: () => ({ issues: [], pages: [], totalCount: 0 }) }))
 vi.mock('../hooks/useThreadIssueCreators', () => ({ useThreadIssueCreators: () => ({ data: { issues: [] } }) }))
 vi.mock('../hooks/useReadingPlans', () => ({ useReadingPlanReader: () => ({ data: {
-  plan_id: 9, name: 'Mignolaverse', ordering_mode: 'informational', execution_mode: 'option_e',
+  plan_id: 9, name: 'Mignolaverse', ordering_mode: 'informational', execution_mode: 'reading_lists',
   progress: { total_issues: 0, read_issues: 0 }, available_now: [], blocked_next: [], lanes: [], sources: [],
 } }) }))
 

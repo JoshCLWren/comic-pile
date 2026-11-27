@@ -60,7 +60,7 @@
 - `factory/openrouter-crouton-alpha-20261104` — abandoned, age=14.13d, issue=n/a; eligible: abandoned for 14.1 days
 - `factory/pending-session-repair` — merged, age=18.46d, issue=n/a; eligible: merged for 18.5 days
 - `factory/retire-unusable-free-workers-20261103` — abandoned, age=14.99d, issue=n/a; eligible: abandoned for 15.0 days
-- `factory/roll-pool-option-e` — abandoned, age=18.35d, issue=n/a; eligible: abandoned for 18.3 days
+- `factory/roll-pool-reading-lists` — abandoned, age=18.35d, issue=n/a; eligible: abandoned for 18.3 days
 - `factory/roll-reset` — merged, age=18.41d, issue=n/a; eligible: merged for 18.4 days
 - `factory/rust-write-test-guard` — merged, age=18.44d, issue=n/a; eligible: merged for 18.4 days
 - `local/4458-queue-measurement` — abandoned, age=17.22d, issue=4458; eligible: abandoned for 17.2 days

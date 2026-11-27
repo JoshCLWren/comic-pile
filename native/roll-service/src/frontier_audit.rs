@@ -1,7 +1,7 @@
-//! Read-only Option E frontier audit (#4198).
+//! Read-only Reading List engine frontier audit (#4198).
 //!
 //! Identifies the current unread frontier of every active queued Thread that
-//! Option E would offer today while an inert legacy or converted `dependencies`
+//! Reading List engine would offer today while an inert legacy or converted `dependencies`
 //! row into that frontier from an incomplete source still records possible
 //! reader intent. The report exists so a human can decide — manually — whether
 //! a reader-authored prerequisite should be authored; it is never an execution
@@ -16,7 +16,7 @@
 //!   blanket conversion of the converted/legacy rows is suggested: findings
 //!   name single rows and recommend manual review only.
 //! * The frontier set comes from
-//!   [`ValidatedReadingInputs::frontier_blockers`], the same Option E authority
+//!   [`ValidatedReadingInputs::frontier_blockers`], the same Reading List engine authority
 //!   Roll, Queue and the reading-boundary resources consume, so a frontier
 //!   that any actionable constraint protects is never reported.
 #![forbid(unsafe_code)]
@@ -99,10 +99,10 @@ pub struct FrontierAuditFinding {
 pub struct FrontierAuditReport {
     /// Live frontiers examined (active queued Threads, one next unread each).
     pub frontiers_examined: usize,
-    /// Examined frontiers an actionable Option E constraint currently blocks
+    /// Examined frontiers an actionable Reading List engine constraint currently blocks
     /// (reader prerequisite or list order).
     pub frontiers_protected: usize,
-    /// Examined frontiers with no actionable Option E constraint while inert
+    /// Examined frontiers with no actionable Reading List engine constraint while inert
     /// legacy evidence records possible reader intent: the reported gaps.
     pub unprotected_frontiers: usize,
     /// The gap findings, bounded at [`MAX_REPORTED_FINDINGS`].
@@ -146,10 +146,10 @@ pub fn evidence_class(row: &LegacyDependencyRow) -> &'static str {
     }
 }
 
-/// Audit the validated Option E inputs against the inert legacy evidence.
+/// Audit the validated Reading List engine inputs against the inert legacy evidence.
 ///
 /// Pure and read-only: nothing in this function mutates state, and the report
-/// never feeds eligibility. A frontier protected by any actionable Option E
+/// never feeds eligibility. A frontier protected by any actionable Reading List engine
 /// constraint (reader prerequisite or list order) is never reported.
 pub fn audit_frontiers(
     inputs: &OptionInputs,
@@ -190,7 +190,7 @@ pub fn audit_frontiers(
     let mut gaps = 0usize;
     for frontier in &frontiers {
         if !frontier.unsatisfied.is_empty() {
-            // An actionable Option E constraint protects this frontier.
+            // An actionable Reading List engine constraint protects this frontier.
             protected += 1;
             continue;
         }
@@ -398,7 +398,7 @@ mod tests {
     fn unprotected_frontier_with_legacy_evidence_is_reported() {
         let inputs = fixture_inputs();
         let validated = validated(inputs.clone());
-        // The Option E authority offers UXM #361 today: the gap.
+        // The Reading List engine authority offers UXM #361 today: the gap.
         let eligible: Vec<i32> = validated
             .eligible_frontiers()
             .expect("eligibility")
@@ -454,7 +454,7 @@ mod tests {
             .into_iter()
             .map(|frontier| frontier.issue_id)
             .collect();
-        // Option E blocks #361 until the authored prerequisite is read; the
+        // Reading List engine blocks #361 until the authored prerequisite is read; the
         // unrelated X-Men frontier stays eligible.
         assert!(
             !eligible.contains(&2029),

@@ -63,7 +63,7 @@ function renderEditRoute(planId = '29', search = '') {
 }
 
 function response(
-  execution_mode: 'option_e' | 'legacy',
+  execution_mode: 'reading_lists' | 'legacy',
   sources: Array<{ raw_source_path: string; display_name: string | null }> = [],
 ): ReadingPlanReaderView {
   return cast<ReadingPlanReaderView>({ execution_mode, sources })
@@ -76,8 +76,8 @@ beforeEach(() => {
 })
 
 describe('ReadingPlanEditRoute', () => {
-  it('redirects a linked Option E Plan to its explicitly owned List', async () => {
-    getReader.mockResolvedValue(response('option_e', [
+  it('redirects a linked Reading List engine Plan to its explicitly owned List', async () => {
+    getReader.mockResolvedValue(response('reading_lists', [
       { raw_source_path: 'comicvine:4050-18250', display_name: null },
       { raw_source_path: 'custom-cbl:1000018', display_name: 'Planetary / Authority' },
     ]))
@@ -100,8 +100,8 @@ describe('ReadingPlanEditRoute', () => {
     expect(screen.queryByText('Legacy Plan editor')).not.toBeInTheDocument()
   })
 
-  it('does not guess authority by name when an Option E List is not owner-resolved', async () => {
-    getReader.mockResolvedValue(response('option_e', [
+  it('does not guess authority by name when an Reading List engine List is not owner-resolved', async () => {
+    getReader.mockResolvedValue(response('reading_lists', [
       { raw_source_path: 'custom-cbl:1000018', display_name: null },
     ]))
     renderEditRoute()
@@ -177,8 +177,8 @@ describe('ReadingPlanEditRoute', () => {
     expect(screen.queryByText('Legacy Plan editor')).not.toBeInTheDocument()
   })
 
-  it('still redirects a linked Option E plan from the authoring link', async () => {
-    getReader.mockResolvedValue(response('option_e', [
+  it('still redirects a linked Reading List engine plan from the authoring link', async () => {
+    getReader.mockResolvedValue(response('reading_lists', [
       { raw_source_path: 'custom-cbl:1000018', display_name: 'Planetary / Authority' },
     ]))
     renderEditRoute('29', '?authoring=1')

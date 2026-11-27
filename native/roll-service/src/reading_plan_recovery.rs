@@ -1,4 +1,4 @@
-//! Owner-scoped, explicit recovery for orphaned Option E continuity plans.
+//! Owner-scoped, explicit recovery for orphaned Reading List engine continuity plans.
 //! The persisted Plan is historical provenance; the selected Reading List becomes
 //! the authority only after a before/after preview and an optimistic-lock check.
 //! No existing membership, issue, rating, or event is rewritten.

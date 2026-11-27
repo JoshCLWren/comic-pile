@@ -34,7 +34,7 @@
 //! recover the recorded revision instead of re-shuffling.
 //!
 //! Pool use is bounded per request. The reposition handler evaluates its
-//! Option E grouping inside the advisory-locked write transaction it already
+//! Reading List engine grouping inside the advisory-locked write transaction it already
 //! holds, so a move never needs a second pooled connection; the read path
 //! releases its row connection before it evaluates the same grouping.
 
@@ -155,7 +155,7 @@ pub(crate) async fn move_to_back(
 /// mirroring `comic_pile.queue.move_to_safe_position`.
 ///
 /// Only threads the next roll could actually select are counted, so `eligible`
-/// is the Option E authority and `excluded` the complete rating-time exclusion
+/// is the Reading List engine authority and `excluded` the complete rating-time exclusion
 /// set (session snoozes, session skips, durable backoff and durable removals).
 /// The target is seated at the rank of the `die_size`-th rollable thread other
 /// than itself, which is the position immediately after that thread once the
@@ -291,7 +291,7 @@ fn not_found(thread_id: i32) -> ApiError {
 /// Return the eligible-thread authority used by the read path.
 ///
 /// Production defaults to the stored `threads.is_blocked` flag, matching the
-/// legacy authority Python uses when Option E is disabled. When Option E is
+/// legacy authority Python uses when Reading List engine is disabled. When Reading List engine is
 /// explicitly enabled, ordering follows the same evaluated eligibility graph
 /// instead of silently reverting to the stored flag.
 ///
@@ -303,14 +303,14 @@ async fn eligible_thread_ids(
     state: &AppState,
     user: AuthenticatedUser,
 ) -> Result<Option<std::collections::HashSet<i32>>, ApiError> {
-    if !state.option_e {
+    if !state.reading_lists {
         return Ok(None);
     }
     let validated = crate::option_inputs::load_option_inputs_contained(state, user).await?;
     Ok(Some(evaluated_eligible_ids(&validated)?))
 }
 
-/// Reduce validated Option E inputs to the eligible thread ids.
+/// Reduce validated Reading List engine inputs to the eligible thread ids.
 ///
 /// Shares one authority and one error surface between the pool-based read path,
 /// the in-transaction write path, and rating-time queue placement.
@@ -526,10 +526,10 @@ async fn reposition(
         .map_err(|error| db::query_error_for("queue.reposition.lock", error))?;
 
     let rows = load_queue_rows(&*transaction, user_id).await?;
-    // Evaluate Option E grouping on the already-locked write transaction. This
+    // Evaluate Reading List engine grouping on the already-locked write transaction. This
     // keeps the grouping consistent with the serialized move and avoids a second
     // pool checkout while this request holds its write connection.
-    let eligible = if state.option_e {
+    let eligible = if state.reading_lists {
         let validated =
             crate::option_inputs::load_validated_contained_in_transaction(&transaction, user)
                 .await?;
@@ -613,7 +613,7 @@ async fn reposition(
         .any(|row| row.get::<_, i32>(1) != row.get::<_, i32>(2));
     // Rebuild the reader's post-move display order so the response reports the
     // position and order revision the next read will observe. Blocked grouping
-    // comes from the same pre-move snapshot the clamp used, so Option E
+    // comes from the same pre-move snapshot the clamp used, so Reading List engine
     // eligibility stays authoritative instead of the stored flag alone.
     let blocked_by_thread: std::collections::HashMap<i32, bool> = entries
         .iter()
@@ -914,20 +914,20 @@ mod tests {
         pool_size: usize,
         connection_recovery: bool,
     ) -> Arc<AppState> {
-        state_with_option_e_values(url, pool_size, connection_recovery, None, None)
+        state_with_reading_lists_values(url, pool_size, connection_recovery, None, None)
     }
 
-    /// Build a state whose Option E setting is effective-enabled.
+    /// Build a state whose Reading List engine setting is effective-enabled.
     ///
     /// The setting is injected through the config lookup; no test mutates the
     /// process environment, so tests stay deterministic under parallel runs.
-    async fn state_with_option_e(pool_size: usize) -> Arc<AppState> {
+    async fn state_with_reading_lists(pool_size: usize) -> Arc<AppState> {
         let url = test_database_url().await;
-        state_with_option_e_values(&url, pool_size, true, Some("true"), Some("queue-unit-test"))
+        state_with_reading_lists_values(&url, pool_size, true, Some("true"), Some("queue-unit-test"))
     }
 
-    /// Build a state from raw `OPTION_E_*` values, exercising the real parser.
-    fn state_with_option_e_values(
+    /// Build a state from raw `READING_LISTS_*` values, exercising the real parser.
+    fn state_with_reading_lists_values(
         url: &str,
         pool_size: usize,
         connection_recovery: bool,
@@ -938,8 +938,8 @@ mod tests {
             "RUST_ROLL_DATABASE_URL" => Some(url.to_string()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-queue-test".into()),
             "RUST_ROLL_POOL_SIZE" => Some(pool_size.to_string()),
-            "OPTION_E_ENABLED" => enabled.map(str::to_string),
-            "OPTION_E_APPROVED_PREVIEW" => approval.map(str::to_string),
+            "READING_LISTS_ENABLED" => enabled.map(str::to_string),
+            "READING_LISTS_APPROVED_PREVIEW" => approval.map(str::to_string),
             _ => None,
         })
         .expect("queue test config");
@@ -1033,8 +1033,8 @@ mod tests {
         rows.iter().map(|row| row.get(0)).collect()
     }
 
-    /// Seed one active Option E thread and, optionally, its unread issue.
-    async fn seed_option_e_thread(
+    /// Seed one active Reading List engine thread and, optionally, its unread issue.
+    async fn seed_reading_lists_thread(
         db: &AppState,
         user_id: i32,
         thread_id: i32,
@@ -1058,7 +1058,7 @@ mod tests {
                 &[
                     &thread_id,
                     &user_id,
-                    &format!("Option E thread {thread_id}"),
+                    &format!("Reading List engine thread {thread_id}"),
                     &queue_position,
                     &stored_blocked,
                 ],
@@ -1114,13 +1114,13 @@ mod tests {
         let url = format!(
             "{base}{separator}options=-csearch_path%3Dqueue_unit_test%2Cpublic%20-c%20log_min_duration_statement%3D0"
         );
-        let measurement_state = |option_e: bool| {
+        let measurement_state = |reading_lists: bool| {
             let config = Config::from_lookup(|name| match name {
                 "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
                 "RUST_ROLL_JWT_SECRET" => Some("synthetic-queue-test".into()),
                 "RUST_ROLL_POOL_SIZE" => Some("4".into()),
-                "OPTION_E_ENABLED" if option_e => Some("true".into()),
-                "OPTION_E_APPROVED_PREVIEW" if option_e => Some("measurement".into()),
+                "READING_LISTS_ENABLED" if reading_lists => Some("true".into()),
+                "READING_LISTS_APPROVED_PREVIEW" if reading_lists => Some("measurement".into()),
                 _ => None,
             })
             .expect("measurement config");
@@ -1142,7 +1142,7 @@ mod tests {
         drop(Object::take(connection));
 
         let user = AuthenticatedUser::for_test(7);
-        for (mode, enabled) in [("legacy", false), ("option_e", true)] {
+        for (mode, enabled) in [("legacy", false), ("reading_lists", true)] {
             let state = measurement_state(enabled);
             // Warm the pool so the timed requests show steady-state reuse.
             let _ = get_queue_entry(State(state.clone()), user, Path(150))
@@ -1662,32 +1662,32 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn option_e_grouping_authority_is_shared_by_get_and_patch() {
+    async fn reading_lists_grouping_authority_is_shared_by_get_and_patch() {
         let _guard = DB_LOCK.lock().await;
-        let state = state_with_option_e(2).await;
+        let state = state_with_reading_lists(2).await;
         reset(&state).await;
         let user = AuthenticatedUser::for_test(7);
         // 1: stored readable, but no unread issue -> evaluated blocked.
-        seed_option_e_thread(&state, 7, 1, 1, false, None).await;
+        seed_reading_lists_thread(&state, 7, 1, 1, false, None).await;
         // 2: unread issue, no prerequisites -> evaluated readable.
-        seed_option_e_thread(&state, 7, 2, 2, false, Some(20)).await;
-        // 3: stored blocked, but Option E evaluates it readable.
-        seed_option_e_thread(&state, 7, 3, 3, true, Some(30)).await;
+        seed_reading_lists_thread(&state, 7, 2, 2, false, Some(20)).await;
+        // 3: stored blocked, but Reading List engine evaluates it readable.
+        seed_reading_lists_thread(&state, 7, 3, 3, true, Some(30)).await;
         // 4: unread issue behind an unsatisfied prerequisite -> evaluated blocked.
-        seed_option_e_thread(&state, 7, 4, 4, false, Some(40)).await;
+        seed_reading_lists_thread(&state, 7, 4, 4, false, Some(40)).await;
         let connection = db::checkout(&state).await.expect("prerequisite connection");
         connection
             .execute(
                 "INSERT INTO dependencies \
                      (id, created_at, source_issue_id, target_issue_id, origin, classification, provenance) \
-                 VALUES (1, now(), 20, 40, 'reader', 'A', 'option-e-queue-test')",
+                 VALUES (1, now(), 20, 40, 'reader', 'A', 'reading-lists-queue-test')",
                 &[],
             )
             .await
             .expect("seed prerequisite");
         drop(Object::take(connection));
 
-        // Option E groups readable 2,3 before blocked 1,4 even though thread 1 is
+        // Reading List engine groups readable 2,3 before blocked 1,4 even though thread 1 is
         // stored readable and thread 3 is stored blocked.
         for (thread_id, expected) in [(2, 1), (3, 2), (1, 3), (4, 4)] {
             assert_eq!(
@@ -1759,15 +1759,15 @@ mod tests {
     /// enabled switch plus a non-blank approval changes ordering authority, all
     /// other combinations keep the stored legacy grouping with identical results.
     #[tokio::test]
-    async fn option_e_setting_combinations_select_one_grouping_authority() {
+    async fn reading_lists_setting_combinations_select_one_grouping_authority() {
         let _guard = DB_LOCK.lock().await;
         let state = state().await;
         reset(&state).await;
         let url = test_database_url().await;
         let user = AuthenticatedUser::for_test(7);
-        seed_option_e_thread(&state, 7, 1, 1, false, None).await;
-        seed_option_e_thread(&state, 7, 2, 2, false, Some(20)).await;
-        seed_option_e_thread(&state, 7, 3, 3, true, Some(30)).await;
+        seed_reading_lists_thread(&state, 7, 1, 1, false, None).await;
+        seed_reading_lists_thread(&state, 7, 2, 2, false, Some(20)).await;
+        seed_reading_lists_thread(&state, 7, 3, 3, true, Some(30)).await;
 
         // Stored: 1,2 readable then 3 blocked. Evaluated: 2,3 readable then 1.
         let legacy = [(1, 1), (2, 2), (3, 3)];
@@ -1784,7 +1784,7 @@ mod tests {
         ];
         for (enabled, approval, expected) in cases {
             // The real startup parser resolves the injected values; no env mutation.
-            let case_state = state_with_option_e_values(&url, 2, true, enabled, approval);
+            let case_state = state_with_reading_lists_values(&url, 2, true, enabled, approval);
             for (thread_id, position) in expected {
                 let entry = get_queue_entry(State(case_state.clone()), user, Path(thread_id))
                     .await
@@ -2003,9 +2003,9 @@ mod tests {
     /// Nested pooled checkout removed during the #4535 investigation (root cause
     /// unproven): a reposition must not need a second pooled connection.
     ///
-    /// Production runs Option E with a bounded pool. The reposition handler used
+    /// Production runs Reading List engine with a bounded pool. The reposition handler used
     /// to keep its write transaction's connection checked out and then ask for a
-    /// second one to evaluate Option E, so a concurrent Queue read burst could
+    /// second one to evaluate Reading List engine, so a concurrent Queue read burst could
     /// starve the write path into the pool wait timeout (HTTP 503) and the move
     /// never committed. A single-slot pool makes that regression deterministic:
     /// the old code waits for the pool timeout and fails, while evaluating the
@@ -2015,20 +2015,20 @@ mod tests {
     /// the in-transaction evaluation covers blocked grouping, readable moves and
     /// a blocked clamp, not just the all-readable case.
     #[tokio::test]
-    async fn option_e_reposition_needs_only_one_pooled_connection_at_a_time() {
+    async fn reading_lists_reposition_needs_only_one_pooled_connection_at_a_time() {
         let _guard = DB_LOCK.lock().await;
-        let state = state_with_option_e(1).await;
+        let state = state_with_reading_lists(1).await;
         reset(&state).await;
         let user = AuthenticatedUser::for_test(7);
-        seed_option_e_thread(&state, 7, 1, 1, false, Some(10)).await;
-        seed_option_e_thread(&state, 7, 2, 2, false, Some(20)).await;
-        seed_option_e_thread(&state, 7, 3, 3, false, Some(30)).await;
+        seed_reading_lists_thread(&state, 7, 1, 1, false, Some(10)).await;
+        seed_reading_lists_thread(&state, 7, 2, 2, false, Some(20)).await;
+        seed_reading_lists_thread(&state, 7, 3, 3, false, Some(30)).await;
         let connection = db::checkout(&state).await.expect("prerequisite connection");
         connection
             .execute(
                 "INSERT INTO dependencies \
                      (id, created_at, source_issue_id, target_issue_id, origin, classification, provenance) \
-                 VALUES (1, now(), 10, 30, 'reader', 'A', 'option-e-lock-test')",
+                 VALUES (1, now(), 10, 30, 'reader', 'A', 'reading-lists-lock-test')",
                 &[],
             )
             .await
@@ -2038,7 +2038,7 @@ mod tests {
         // Read path: readable 1 and 2 ahead of prerequisite-blocked 3.
         let before = get_queue_entry(State(state.clone()), user, Path(3))
             .await
-            .expect("Option E entry read")
+            .expect("Reading List engine entry read")
             .0;
         assert_eq!(before.position, 3);
 
@@ -2051,7 +2051,7 @@ mod tests {
             Json(QueueEntryPatch { position: 2 }),
         )
         .await
-        .expect("Option E reposition must complete with one pooled connection")
+        .expect("Reading List engine reposition must complete with one pooled connection")
         .0;
         assert_eq!(moved.position, 2);
         assert_ne!(moved.ordering_version, before.ordering_version);
@@ -2068,7 +2068,7 @@ mod tests {
             Json(QueueEntryPatch { position: 1 }),
         )
         .await
-        .expect("Option E blocked clamp")
+        .expect("Reading List engine blocked clamp")
         .0;
         assert_eq!(clamped.position, 3);
         assert_eq!(clamped.ordering_version, moved.ordering_version);
@@ -2076,21 +2076,21 @@ mod tests {
         assert_eq!(event_count(&state, "reorder").await, 1);
     }
 
-    /// Two concurrent Option E repositions each need only their own connection.
+    /// Two concurrent Reading List engine repositions each need only their own connection.
     ///
     /// Both requests take the queue advisory lock, so they serialize, and each
-    /// evaluates Option E on its own locked transaction. With a two-slot pool a
+    /// evaluates Reading List engine on its own locked transaction. With a two-slot pool a
     /// nested second checkout would need four slots and time out; this asserts
     /// the dense rewrite and both reorder revisions instead.
     #[tokio::test]
-    async fn concurrent_option_e_repositions_serialize_without_extra_pool_slots() {
+    async fn concurrent_reading_lists_repositions_serialize_without_extra_pool_slots() {
         let _guard = DB_LOCK.lock().await;
-        let state = state_with_option_e(2).await;
+        let state = state_with_reading_lists(2).await;
         reset(&state).await;
         let user = AuthenticatedUser::for_test(7);
-        seed_option_e_thread(&state, 7, 1, 1, false, Some(10)).await;
-        seed_option_e_thread(&state, 7, 2, 2, false, Some(20)).await;
-        seed_option_e_thread(&state, 7, 3, 3, false, Some(30)).await;
+        seed_reading_lists_thread(&state, 7, 1, 1, false, Some(10)).await;
+        seed_reading_lists_thread(&state, 7, 2, 2, false, Some(20)).await;
+        seed_reading_lists_thread(&state, 7, 3, 3, false, Some(30)).await;
 
         let first = update_queue_entry(
             State(state.clone()),
@@ -2105,8 +2105,8 @@ mod tests {
             Json(QueueEntryPatch { position: 2 }),
         );
         let (first, second) = tokio::join!(first, second);
-        assert!(first.is_ok(), "first concurrent Option E move failed");
-        assert!(second.is_ok(), "second concurrent Option E move failed");
+        assert!(first.is_ok(), "first concurrent Reading List engine move failed");
+        assert!(second.is_ok(), "second concurrent Reading List engine move failed");
 
         let mut ranks: Vec<i32> = positions(&state, 7)
             .await
@@ -2413,18 +2413,18 @@ mod tests {
             "the trigger-accepted reorder event carries the owner"
         );
 
-        // Option E phase: eligibility evaluated inside the locked transaction,
+        // Reading List engine phase: eligibility evaluated inside the locked transaction,
         // still against the canonical NOT NULL/trigger/deferred-key shape.
         {
-            let option_e_state = state_with_option_e(2).await;
+            let reading_lists_state = state_with_reading_lists(2).await;
             let clamped = update_queue_entry(
-                State(option_e_state.clone()),
+                State(reading_lists_state.clone()),
                 user,
                 Path(4),
                 Json(QueueEntryPatch { position: 2 }),
             )
             .await
-            .expect("Option E reposition against the production-shaped schema")
+            .expect("Reading List engine reposition against the production-shaped schema")
             .0;
             assert_eq!(clamped.position, 2);
             assert_eq!(

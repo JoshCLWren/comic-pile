@@ -3,7 +3,7 @@
 //! This is deliberately not an HTTP route. The coordinated Roll cutover must
 //! call this from authenticated Rust handlers in the SAME transaction as any
 //! queue/progress/selection changes. A writer cannot independently determine
-//! Option E eligibility or validate the currently offered comic.
+//! Reading List engine eligibility or validate the currently offered comic.
 //!
 //! Postgres user-scoped transaction locks serialize different commands; a
 //! unique owner/key index guarantees retry safety even across processes.
@@ -26,7 +26,7 @@ pub enum DiceCommand {
         die: i32,
     },
     Reset,
-    /// The caller must prove this is the pending, Option E-readable offer.
+    /// The caller must prove this is the pending, Reading List engine-readable offer.
     Reroll {
         thread_id: i32,
     },
@@ -139,7 +139,7 @@ impl DiceCommand {
 /// The caller MUST commit the transaction. For Roll completion, the progress
 /// update and next-offer decision must share this transaction. In particular,
 /// this method must not be exposed directly as a rating or reroll HTTP action
-/// without the coordinated Option E and current-offer validation.
+/// without the coordinated Reading List engine and current-offer validation.
 ///
 /// Lock ordering: this function takes the per-reader advisory lock as its first
 /// database statement, before any row lock. A composite caller must invoke it

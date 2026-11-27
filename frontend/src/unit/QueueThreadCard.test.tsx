@@ -332,7 +332,7 @@ describe('QueueThreadCard', () => {
       readingBoundary: {
         thread_id: 1,
         state: 'unavailable',
-        summary: 'Option E is not active for Test Thread.',
+        summary: 'Reading List engine is not active for Test Thread.',
         blockers: [],
       },
     })

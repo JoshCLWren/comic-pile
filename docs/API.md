@@ -155,7 +155,7 @@ configuration. The reading-session gap is fixed by `SessionPolicy::default()`.
 The dice ladder is `[2, 4, 6, 8, 10, 12, 20]`, with d6 as the default; native Roll
 rating steps use the 4.0 threshold. See
 `native/roll-service/src/config.rs` and
-`native/roll-service/src/option_e_setting.rs` for the exact settings.
+`native/roll-service/src/reading_lists_setting.rs` for the exact settings.
 
 ## Regeneration and validation
 

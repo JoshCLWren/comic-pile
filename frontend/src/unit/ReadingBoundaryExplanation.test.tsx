@@ -59,7 +59,7 @@ describe('ReadingBoundaryExplanation', () => {
 
   it('falls back to the supplied legacy content when the evaluator is unavailable', () => {
     renderExplanation({
-      explanation: explanation({ state: 'unavailable', summary: 'Option E is not active.' }),
+      explanation: explanation({ state: 'unavailable', summary: 'Reading List engine is not active.' }),
       fallback: <p>Legacy recorded prerequisites</p>,
     })
 

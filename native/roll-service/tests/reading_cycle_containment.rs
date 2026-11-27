@@ -7,7 +7,7 @@
 //! `INSERT ... RETURNING` on the disposable database.
 //!
 //! These tests exercise the real mounted Rust `/api/v2` handlers and the one
-//! production Option E validator. They do not build a parallel graph engine or
+//! production Reading List engine validator. They do not build a parallel graph engine or
 //! mock validation.
 
 mod incident_fixtures;
@@ -31,8 +31,8 @@ fn state(url: &str) -> Arc<AppState> {
             "RUST_ROLL_DATABASE_URL" => Some(url.into()),
             "RUST_ROLL_JWT_SECRET" => Some(test_support::TEST_JWT_SECRET.into()),
             "RUST_ROLL_POOL_SIZE" => Some("4".into()),
-            "OPTION_E_ENABLED" => Some("true".into()),
-            "OPTION_E_APPROVED_PREVIEW" => Some("injected-by-test".into()),
+            "READING_LISTS_ENABLED" => Some("true".into()),
+            "READING_LISTS_APPROVED_PREVIEW" => Some("injected-by-test".into()),
             _ => None,
         })
         .unwrap(),
@@ -1208,7 +1208,7 @@ async fn reading_list_resources_contain_cycles_and_reject_cyclic_creation() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{reader}");
-    assert_eq!(reader["execution_mode"], "option_e");
+    assert_eq!(reader["execution_mode"], "reading_lists");
     assert!(reader["entries"]
         .as_array()
         .unwrap()
@@ -1257,7 +1257,7 @@ async fn converted_legacy_cycle_does_not_block_creation_but_reader_cycle_does() 
     let conn = state.pool.get().await.unwrap();
 
     // A historical converted back-edge closes the natural series order. It is
-    // audit data: the row stays, but it has no Option E execution authority.
+    // audit data: the row stays, but it has no Reading List engine execution authority.
     let converted_id: i32 = conn
         .query_one(
             "INSERT INTO dependencies

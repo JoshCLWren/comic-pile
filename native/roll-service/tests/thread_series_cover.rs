@@ -37,21 +37,21 @@ struct Ctx {
 }
 
 async fn setup(prefix: &str) -> Ctx {
-    setup_with_option_e(prefix, false).await
+    setup_with_reading_lists(prefix, false).await
 }
 
-/// Option E is injected into the test config, never the process environment.
+/// Reading List engine is injected into the test config, never the process environment.
 /// The blocked-series regression needs the evaluated eligibility projection so
 /// its blocker is a live prerequisite rather than a stored flag.
-async fn setup_with_option_e(prefix: &str, option_e: bool) -> Ctx {
+async fn setup_with_reading_lists(prefix: &str, reading_lists: bool) -> Ctx {
     let url = comicpile_roll_service::test_support::database_url().await;
     let state = Arc::new(test_support::test_app_state(
         Config::from_lookup(|key| match key {
             "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-thread-series-cover-secret".into()),
             "RUST_ROLL_POOL_SIZE" => Some("2".into()),
-            "OPTION_E_ENABLED" if option_e => Some("true".into()),
-            "OPTION_E_APPROVED_PREVIEW" if option_e => {
+            "READING_LISTS_ENABLED" if reading_lists => Some("true".into()),
+            "READING_LISTS_APPROVED_PREVIEW" if reading_lists => {
                 Some("factory-thread-series-cover-regression".into())
             }
             _ => None,
@@ -401,9 +401,9 @@ async fn series_cover_null_when_thread_has_no_issues() {
 #[tokio::test]
 async fn series_cover_still_renders_for_a_prerequisite_blocked_series() {
     // The reported FF #12 / Fantastic Four #600 case: a live reader
-    // prerequisite keeps the row blocked under Option E, but must not suppress
+    // prerequisite keeps the row blocked under Reading List engine, but must not suppress
     // an available cover or alter the blocker explanation.
-    let ctx = setup_with_option_e("series-cover-blocked", true).await;
+    let ctx = setup_with_reading_lists("series-cover-blocked", true).await;
     let ff_thread = seed_thread(&ctx, ctx.user_id, "FF", "active", 1).await;
     let ff_issue = seed_issue(&ctx, ff_thread, "12", 1, "unread").await;
     set_frontier(&ctx, ff_thread, Some(ff_issue)).await;
@@ -684,7 +684,7 @@ async fn series_cover_finds_raw_provider_payload_image() {
     );
 }
 
-/// The default (Option E disabled) deployment derives `is_blocked` from the
+/// The default (Reading List engine disabled) deployment derives `is_blocked` from the
 /// stored flag. The prerequisite-based regression above proves the evaluated
 /// path; this one proves the same cover guarantee on the default path, so a
 /// blocked row never loses its available artwork because of how it was blocked.

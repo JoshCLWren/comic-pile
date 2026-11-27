@@ -107,7 +107,7 @@ export interface RollV2BootstrapResponse {
   roll_recovery?: RollRecoveryInfo | null
   bandwidth: RollV2BandwidthState
   rollable: RollV2Item[]
-  /** Minimal empty-pool explanation derived from the same Option E inputs. */
+  /** Minimal empty-pool explanation derived from the same Reading List engine inputs. */
   pool_reason: RollPoolReason
   last_read: RollV2LastRead | null
   snoozed_threads: RollV2Thread[]

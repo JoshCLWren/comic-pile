@@ -8,9 +8,9 @@
 **Status:** Independent review. Not an accepted decision, migration, or implementation specification.  
 **Date:** 2026-10-25  
 **Does not supersede:** [Reading List execution ADR](READING_LIST_EXECUTION_ADR.md). That document remains the authority for reading-order rules and forbids a stored frontier or cached `is_blocked` flag from becoming a second authority.  
-**Evidence:** Live Option E evaluator, the Roll request path, and the two five-request production samples recorded around PRs [#4188](https://github.com/JoshCLWren/comic-pile/pull/4188) and [#4191](https://github.com/JoshCLWren/comic-pile/pull/4191). Those samples are not a controlled benchmark.
+**Evidence:** Live Reading List engine evaluator, the Roll request path, and the two five-request production samples recorded around PRs [#4188](https://github.com/JoshCLWren/comic-pile/pull/4188) and [#4191](https://github.com/JoshCLWren/comic-pile/pull/4191). Those samples are not a controlled benchmark.
 
-This review answers one question: how Roll should obtain the set of Issue IDs it may offer, given the canonical Option E rules. Every option below is a candidate. None is authorized for production schema or data changes by this document.
+This review answers one question: how Roll should obtain the set of Issue IDs it may offer, given the canonical Reading List engine rules. Every option below is a candidate. None is authorized for production schema or data changes by this document.
 
 ## Recommendation
 
@@ -106,7 +106,7 @@ Option J is not in the original design note. It is the only stored-table design 
 
 **Verdict.** Reject. The cheap read does not pay for the missing per-element integrity and the write amplification.
 
-## Option E: Append-only normalized snapshot membership
+## Reading List engine: Append-only normalized snapshot membership
 
 **Mechanism.** Append a snapshot header and one child row per eligible Issue, with a real foreign key to `issues(id)`. Roll reads the latest header's members.
 

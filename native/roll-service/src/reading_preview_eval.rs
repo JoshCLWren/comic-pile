@@ -1,4 +1,4 @@
-//! Pure Option E evaluation for the prospective reading-graph preview.
+//! Pure Reading List engine evaluation for the prospective reading-graph preview.
 //!
 //! Faithful port of `app/services/reading_list_evaluator.py::evaluate` and its
 //! list-blocker helpers. The preview must evaluate a *hypothetical* list set

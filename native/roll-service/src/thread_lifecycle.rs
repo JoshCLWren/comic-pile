@@ -27,7 +27,7 @@
 //! Scope notes:
 //! * `stale` and `set-pending` resolve their candidate pool through the same
 //!   canonical Reading List evaluator as automatic Roll, unconditionally: no
-//!   `OPTION_E_ENABLED` mode switch, approval gate or stored `is_blocked`
+//!   `READING_LISTS_ENABLED` mode switch, approval gate or stored `is_blocked`
 //!   fallback (issue #5525 A7/A16/A17). The dense Queue ordinal in lifecycle
 //!   responses keeps the preview's presentation contract for wire parity.
 //! * `test-backdate` is only available when `TEST_ENVIRONMENT` is set, matching
@@ -349,11 +349,11 @@ fn iso(column: &str) -> String {
 ///
 /// Presentation-only: the preview keeps the frozen Python response ordering,
 /// while the write authority paths below always use the canonical evaluator.
-async fn option_e_eligible(
+async fn reading_lists_eligible(
     state: &AppState,
     user: AuthenticatedUser,
 ) -> Result<Option<HashSet<i32>>, ApiError> {
-    if !state.option_e {
+    if !state.reading_lists {
         return Ok(None);
     }
     Ok(Some(queue::evaluated_eligible_ids(
@@ -364,7 +364,7 @@ async fn option_e_eligible(
 /// Canonical reading-list inputs for the automatic-Roll authority paths.
 ///
 /// The evaluated graph is the only execution model: the snapshot is resolved
-/// unconditionally, never behind `OPTION_E_ENABLED` (#5525 A7/A17), so stored
+/// unconditionally, never behind `READING_LISTS_ENABLED` (#5525 A7/A17), so stored
 /// `threads.is_blocked` is never consulted as permission. The loader checks
 /// out its own pooled connection; callers resolve it before opening a write
 /// transaction and never nest two checkouts.
@@ -534,7 +534,7 @@ async fn respond_thread(
     thread_id: i32,
     status: StatusCode,
 ) -> HandlerResult {
-    let eligible = option_e_eligible(state, user).await?;
+    let eligible = reading_lists_eligible(state, user).await?;
     let connection = db::checkout(state).await?;
     let mut views = load_views(&**connection, user.id(), &[thread_id], eligible.as_ref()).await?;
     let view = views.pop().ok_or_else(|| not_found(thread_id.into()))?;

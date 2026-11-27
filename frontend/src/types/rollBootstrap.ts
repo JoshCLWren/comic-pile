@@ -11,7 +11,7 @@ export type { ReadingBandwidth, ReadingIntent, SessionMode, SessionModeCorrectio
 
 /**
  * Why the Roll pool has no in-play faces. One minimal reason derived from the
- * already-loaded Option E inputs; never a list, count or whole-library report.
+ * already-loaded Reading List engine inputs; never a list, count or whole-library report.
  */
 export type RollPoolReason =
   | 'ready'

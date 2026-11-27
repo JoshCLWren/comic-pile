@@ -695,7 +695,7 @@ async fn strict_plan_linked_to_loose_list_keeps_explicit_ordering_mode() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{reader}");
-    assert_eq!(reader["execution_mode"], "option_e", "{reader}");
+    assert_eq!(reader["execution_mode"], "reading_lists", "{reader}");
     assert_eq!(reader["ordering_mode"], "strict_sequential", "{reader}");
     // Availability is still projected by the linked loose List, not the mode
     // we display for the plan.

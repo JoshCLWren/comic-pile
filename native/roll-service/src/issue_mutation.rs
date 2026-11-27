@@ -2,7 +2,7 @@
 //!
 //! These replace the Python `/v1/threads/{thread_id}/issues`,
 //! `/v1/issues/{issue_id}` and `/v1/threads/{thread_id}/issues:reorder`
-//! handlers. Every mutation validates the complete projected Option E graph
+//! handlers. Every mutation validates the complete projected Reading List engine graph
 //! before commit, and a destructive edit that would leave a Reading List,
 //! prerequisite or plan dangling is refused with the owning names.
 
@@ -131,7 +131,7 @@ pub fn delete_issue_documentation() {}
     put,
     path = "/api/v2/threads/{thread_id}/issue-order",
     tag = "issues",
-    description = "Replace the complete issue order atomically. The projected Option E graph is validated before commit, so a manual reorder cannot introduce a strict-list/series-order cycle.",
+    description = "Replace the complete issue order atomically. The projected Reading List engine graph is validated before commit, so a manual reorder cannot introduce a strict-list/series-order cycle.",
     params(("thread_id" = i32, Path, description = "Owned Thread identifier")),
     request_body = IssueOrderRequest,
     responses(

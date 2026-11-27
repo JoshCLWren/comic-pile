@@ -1,4 +1,4 @@
-//! Authenticated Roll v2 bootstrap using the already merged native session and Option E loaders.
+//! Authenticated Roll v2 bootstrap using the already merged native session and Reading List engine loaders.
 //! No Python hop and no synthetic "success" values for missing database rows.
 use crate::{
     auth::AuthenticatedUser,
@@ -490,7 +490,7 @@ async fn current_active_thread(
     user: AuthenticatedUser,
     session_id: i32,
     pending_thread_id: Option<i32>,
-    option_e: bool,
+    reading_lists: bool,
     candidates: Vec<i32>,
 ) -> Result<Option<BootstrapActiveThread>, ApiError> {
     let Some(thread_id) = pending_thread_id else {
@@ -529,7 +529,7 @@ async fn current_active_thread(
     let row = conn
         .query_opt(
             &sql,
-            &[&thread_id, &session_id, &user.id(), &option_e, &candidates],
+            &[&thread_id, &session_id, &user.id(), &reading_lists, &candidates],
         )
         .await
         .map_err(db::query_error)?
@@ -1180,8 +1180,8 @@ pub async fn bootstrap_v2(
         &legacy_excluded,
         &candidates,
     )?;
-    let option_e = state.option_e;
-    let eligible_candidate_ids = if option_e {
+    let reading_lists = state.reading_lists;
+    let eligible_candidate_ids = if reading_lists {
         crate::threads::eligible_candidate_ids(&validated)?
     } else {
         Vec::new()
@@ -1191,7 +1191,7 @@ pub async fn bootstrap_v2(
         user,
         session.id,
         session.pending_thread_id,
-        option_e,
+        reading_lists,
         eligible_candidate_ids,
     )
     .await?;
@@ -1560,7 +1560,7 @@ mod pool_parity_tests {
     }
 
     /// A legacy session can carry skip/snooze arrays and durable snooze
-    /// history while the Option E frontier still contains those threads.
+    /// history while the Reading List engine frontier still contains those threads.
     /// Bootstrap must display the same top-die faces the offer draws from;
     /// only temporary cookie/previous-pending exclusions may shrink the offer.
     #[tokio::test]
@@ -1625,7 +1625,7 @@ mod pool_parity_tests {
         assert_eq!(
             bootstrap_ids,
             (1..=10).collect::<Vec<_>>(),
-            "bootstrap must show the full Option E d10 pool"
+            "bootstrap must show the full Reading List engine d10 pool"
         );
         assert_eq!(
             bootstrap_ids, offer_ids,

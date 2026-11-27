@@ -8,7 +8,7 @@
 //! * the ordered eligible issue identifiers for that die.
 //!
 //! Both reads issue exactly one PostgreSQL statement, including the token's
-//! revocation and credential-epoch check, and both reuse the Option E
+//! revocation and credential-epoch check, and both reuse the Reading List engine
 //! evaluator and the [`crate::roll_pool`] top-die bound that
 //! `POST /api/v2/roll/offer` uses. The reported identifiers are therefore
 //! exactly the set the next offer can select: a reader never sees a face the
@@ -102,7 +102,7 @@ pub struct RollEligibleIssueIdsResponse {
     /// The owning thread identifiers, parallel to `issue_ids`.
     pub thread_ids: Vec<i32>,
     /// Why an empty in-play pool has no faces, when it does.
-    /// Derived from the already-loaded Option E inputs and the eligible
+    /// Derived from the already-loaded Reading List engine inputs and the eligible
     /// frontiers before the die bound and browser snoozes, exactly as
     /// `GET /api/v2/roll/bootstrap` reports it. `ready` means at least one
     /// frontier is eligible; the other variants name why an empty pool has
@@ -231,7 +231,7 @@ fn die_statement() -> &'static str {
     })
 }
 
-/// One statement: the folded authentication, the Option E snapshot, the die and
+/// One statement: the folded authentication, the Reading List engine snapshot, the die and
 /// the pending offer.
 ///
 /// The snapshot CTEs and their projection are the same owner-scoped
@@ -274,7 +274,7 @@ async fn load_die_payload(
     Ok(payload)
 }
 
-/// Read the folded authentication, Option E snapshot, die and pending offer in
+/// Read the folded authentication, Reading List engine snapshot, die and pending offer in
 /// one statement.
 async fn load_eligible_payload(
     state: &AppState,

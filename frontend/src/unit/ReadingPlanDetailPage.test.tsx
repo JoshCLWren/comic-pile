@@ -293,7 +293,7 @@ describe('ReadingPlanDetailPage', () => {
   it('opens a linked Reading List directly instead of the obsolete plan editor', async () => {
     mockGetReader.mockResolvedValue({
       ...readerView,
-      execution_mode: 'option_e',
+      execution_mode: 'reading_lists',
       sources: [
         { ...readerView.sources[0], raw_source_path: 'custom-cbl:9999', display_name: null },
         { ...readerView.sources[0], id: 2, raw_source_path: 'custom-cbl:2', display_name: 'Mignolaverse' },
@@ -307,10 +307,10 @@ describe('ReadingPlanDetailPage', () => {
     expect(screen.queryByRole('button', { name: 'Edit plan' })).not.toBeInTheDocument()
   })
 
-  it('does not expose legacy Plan mutation controls for an unresolved Option E List', async () => {
+  it('does not expose legacy Plan mutation controls for an unresolved Reading List engine List', async () => {
     mockGetReader.mockResolvedValue({
       ...readerView,
-      execution_mode: 'option_e',
+      execution_mode: 'reading_lists',
       sources: [{ ...readerView.sources[0], raw_source_path: 'custom-cbl:9999', display_name: null }],
     })
     renderPage()
@@ -431,7 +431,7 @@ describe('ReadingPlanDetailPage', () => {
       ...readerView,
       name: 'Mignolaverse',
       ordering_mode: 'strict_sequential',
-      execution_mode: 'option_e',
+      execution_mode: 'reading_lists',
       progress: { total_issues: 100, read_issues: 82 },
       available_now: [],
       blocked_next: Array.from({ length: 8 }, (_, index) => ({

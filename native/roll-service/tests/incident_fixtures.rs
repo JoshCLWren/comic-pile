@@ -10,7 +10,7 @@
 //!   https://github.com/JoshCLWren/comic-pile/issues/4670#issuecomment-6673272874
 //!
 //! THESE ARE FIXTURE VALUES, NOT COMPLETED TESTS. Connect the data to the real
-//! Rust /api/v2 handlers, canonical Option E graph builder/validator, and the
+//! Rust /api/v2 handlers, canonical Reading List engine graph builder/validator, and the
 //! Alembic-head PostgreSQL fixture. Do not implement a second test-only graph
 //! engine or claim success by asserting only these constant arrays.
 //!

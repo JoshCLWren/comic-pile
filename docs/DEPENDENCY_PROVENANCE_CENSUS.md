@@ -1,4 +1,4 @@
-# Read-only Option E dependency and frontier census
+# Read-only Reading List engine dependency and frontier census
 
 > **Status: historical Python report harness.** The census command and Python
 > fixtures below are retired. Current dependency/eligibility authority is documented

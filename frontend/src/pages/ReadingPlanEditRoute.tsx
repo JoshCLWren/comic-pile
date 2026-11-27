@@ -3,7 +3,7 @@ import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom'
 import { useReadingPlanReader, useReadingPlanRecoveryPreview } from '../hooks/useReadingPlans'
 
 /**
- * Keep old edit bookmarks useful after the Option E single-authority cutover.
+ * Keep old edit bookmarks useful after the Reading List engine single-authority cutover.
  *
  * A linked Plan must be edited through its owned Reading List. The legacy Plan
  * editor is available when the reader reports legacy mode, or when the owner
@@ -38,7 +38,7 @@ export default function ReadingPlanEditRoute({ legacyEditor }: { legacyEditor: R
     // The recovery screen explicitly offers authoring as an alternative to
     // relinking an orphaned plan. That link opts into the legacy editor, which
     // loads the owned Plan directly and can save a fresh authored order. A
-    // linked Option E plan still resolves below and is sent to its List.
+    // linked Reading List engine plan still resolves below and is sent to its List.
     if (authoring && recovery.isPending) {
       return <p role="status">Checking Reading Plan recovery state…</p>
     }
@@ -57,7 +57,7 @@ export default function ReadingPlanEditRoute({ legacyEditor }: { legacyEditor: R
     return <>{legacyEditor}</>
   }
 
-  if (reader.data.execution_mode !== 'option_e') {
+  if (reader.data.execution_mode !== 'reading_lists') {
     return (
       <div role="alert">
         The Reading Plan's execution mode could not be verified. The obsolete Plan editor is unavailable.{' '}

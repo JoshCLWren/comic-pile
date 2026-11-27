@@ -196,7 +196,7 @@ export interface ReleaseSourceCreateRequest {
 }
 
 export interface ReadingPlanReaderView {
-  execution_mode?: 'legacy' | 'option_e'
+  execution_mode?: 'legacy' | 'reading_lists'
   plan_id: number
   name: string
   ordering_mode: ContinuityPlanOrderingMode

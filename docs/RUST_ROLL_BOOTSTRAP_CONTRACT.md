@@ -68,7 +68,7 @@ The matrix below records the retired Python oracle's fixture design. It is not a
 description of current GET side effects: the native GET is read-only, and explicit
 session initialization now belongs to `POST /api/v2/readingSessions`.
 
-All historical happy-path fixtures used Option E enabled with a local-only
+All historical happy-path fixtures used Reading List engine enabled with a local-only
 approval reference. Unless specified, Alpha and Beta each had two unread issues,
 queue positions 1 and 2, no mappings, and a recent existing d6 reading session with
 uninitialized bandwidth. `before` and `after` captured reading-session fields,
@@ -137,7 +137,7 @@ boundary; unforeseen failures use its 500 handler.
 A reader-authored constraint cycle is contained to affected Threads. Healthy
 Threads retain their candidates, while cyclic Threads report a `reading_cycle`
 blocker. Converted/historical edges are not loaded and cannot create a cycle.
-Existing auth, recovery, route-versioning, and Option E tests remain authoritative.
+Existing auth, recovery, route-versioning, and Reading List engine tests remain authoritative.
 
 ### Historical campaign checklist
 

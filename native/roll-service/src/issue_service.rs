@@ -1,4 +1,4 @@
-//! Authenticated issue read/rate completion. Option E selects offers, not
+//! Authenticated issue read/rate completion. Reading List engine selects offers, not
 //! permissions: this writer applies the exact issue action a reader asked for,
 //! and only a Roll-offer rating carries the Roll completion effects.
 //! Uses the canonical issues/events schema and the shared PostgreSQL pool.
@@ -650,7 +650,7 @@ async fn effective_roll_exclusions(
     Ok(excluded)
 }
 
-/// The Option E eligible thread ids for one reader, resolved inside the caller's
+/// The Reading List engine eligible thread ids for one reader, resolved inside the caller's
 /// transaction so placement uses the same authority the next Roll offer draws
 /// from. Sorted so the SQL parameter array is deterministic.
 async fn eligible_thread_ids(

@@ -28,7 +28,7 @@
 
 **Test:** Inspect a QA list with known strict/loose gates after the Reading List model is active and compare Roll offers.
 
-**Expected:** Result honors the list's actual gates and prerequisites; ordinary loose-list adjacency is never silently compiled into hard blocks. **Only Option E Reading Lists determine execution**. Old continuity-plan detail pages and dependency rows cannot declare an unread issue available, blocked, or eligible by inventing a second evaluator. Test the actual canonical list frontier, overlap constraints, holds, exclusions, and prerequisites; orphaned/legacy Plan display retirement belongs to [#3678](https://github.com/JoshCLWren/comic-pile/issues/3678).
+**Expected:** Result honors the list's actual gates and prerequisites; ordinary loose-list adjacency is never silently compiled into hard blocks. **Only Reading List engine Reading Lists determine execution**. Old continuity-plan detail pages and dependency rows cannot declare an unread issue available, blocked, or eligible by inventing a second evaluator. Test the actual canonical list frontier, overlap constraints, holds, exclusions, and prerequisites; orphaned/legacy Plan display retirement belongs to [#3678](https://github.com/JoshCLWren/comic-pile/issues/3678).
 
 ## MQA-CBL-005: Same-name adoption cannot overwrite an existing list
 

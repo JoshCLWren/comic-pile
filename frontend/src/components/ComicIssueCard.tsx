@@ -198,7 +198,7 @@ export function ComicIssueIdentity({
   )
 }
 
-/** Advisory-only Option E/CBL context. It never gates the manual actions. */
+/** Advisory-only Reading List engine/CBL context. It never gates the manual actions. */
 export function ComicIssueAvailability({ advisory }: { advisory: string | null | undefined }) {
   if (!advisory) return null
   return (

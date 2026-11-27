@@ -2163,7 +2163,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Option E plan projected from its authoritative Reading List",
+            "description": "Reading List engine plan projected from its authoritative Reading List",
             "content": {
               "application/json": {
                 "schema": {
@@ -3158,7 +3158,7 @@
           "dependencies"
         ],
         "summary": "Documentation-only operation for the mounted dependency create.",
-        "description": "Create one owner-scoped issue-level reader dependency after combined reading-graph preflight. The complete projected Option E graph is validated inside the write transaction before commit; a cyclic edge is rejected with the named series/issues and nothing is changed.",
+        "description": "Create one owner-scoped issue-level reader dependency after combined reading-graph preflight. The complete projected Reading List engine graph is validated inside the write transaction before commit; a cyclic edge is rejected with the named series/issues and nothing is changed.",
         "operationId": "create_dependency_documentation",
         "requestBody": {
           "content": {
@@ -4571,7 +4571,7 @@
           "reading-graph"
         ],
         "summary": "Documentation-only operation for the mounted reading-graph read.",
-        "description": "Owner-scoped projection of the complete Option E graph. A persisted cycle is isolated to its affected Threads and Reading Lists; every cycle edge names its series, issue and stored origin. The read-only frontier audit names current unread frontiers that Option E would offer while inert legacy or converted dependency evidence still records possible reader intent; the report is manual-review evidence only (#4198).",
+        "description": "Owner-scoped projection of the complete Reading List engine graph. A persisted cycle is isolated to its affected Threads and Reading Lists; every cycle edge names its series, issue and stored origin. The read-only frontier audit names current unread frontiers that Reading List engine would offer while inert legacy or converted dependency evidence still records possible reader intent; the report is manual-review evidence only (#4198).",
         "operationId": "reading_graph_documentation",
         "responses": {
           "200": {
@@ -7895,7 +7895,7 @@
           "issues"
         ],
         "summary": "Documentation-only operation for the mounted issue-order resource.",
-        "description": "Replace the complete issue order atomically. The projected Option E graph is validated before commit, so a manual reorder cannot introduce a strict-list/series-order cycle.",
+        "description": "Replace the complete issue order atomically. The projected Reading List engine graph is validated before commit, so a manual reorder cannot introduce a strict-list/series-order cycle.",
         "operationId": "issue_order_documentation",
         "parameters": [
           {
@@ -9491,7 +9491,7 @@
       },
       "BoundaryEvaluator": {
         "type": "string",
-        "description": "Deployment-level capability for the canonical evaluator behind this batch.\n\nIt mirrors the same `AppState::option_e` switch every handler resolves, so\na client that has already observed one batch can skip the canonical read\nentirely on later loads when the evaluator cannot answer (`unavailable`)\nand consult the legacy blocking authority directly.",
+        "description": "Deployment-level capability for the canonical evaluator behind this batch.\n\nIt mirrors the same `AppState::reading_lists` switch every handler resolves, so\na client that has already observed one batch can skip the canonical read\nentirely on later loads when the evaluator cannot answer (`unavailable`)\nand consult the legacy blocking authority directly.",
         "enum": [
           "enabled",
           "unavailable"
@@ -13858,7 +13858,7 @@
           },
           "frontiers_protected": {
             "type": "integer",
-            "description": "Examined frontiers an actionable Option E constraint currently blocks\n(reader prerequisite or list order).",
+            "description": "Examined frontiers an actionable Reading List engine constraint currently blocks\n(reader prerequisite or list order).",
             "minimum": 0
           },
           "inert_evidence_counts": {
@@ -13883,7 +13883,7 @@
           },
           "unprotected_frontiers": {
             "type": "integer",
-            "description": "Examined frontiers with no actionable Option E constraint while inert\nlegacy evidence records possible reader intent: the reported gaps.",
+            "description": "Examined frontiers with no actionable Reading List engine constraint while inert\nlegacy evidence records possible reader intent: the reported gaps.",
             "minimum": 0
           }
         }
@@ -16351,7 +16351,7 @@
       },
       "PoolReason": {
         "type": "string",
-        "description": "Why the Roll pool has no in-play faces.\n\nDerived from the already-loaded Option E inputs and the eligible frontier\nset. This is a single reason, never a list or a whole-library report, and it\nadds no database work: it exists so a genuinely non-empty library does not\nrender the false \"reading queue is empty\" state (#4441).",
+        "description": "Why the Roll pool has no in-play faces.\n\nDerived from the already-loaded Reading List engine inputs and the eligible frontier\nset. This is a single reason, never a list or a whole-library report, and it\nadds no database work: it exists so a genuinely non-empty library does not\nrender the false \"reading queue is empty\" state (#4441).",
         "enum": [
           "ready",
           "no_series",
@@ -17537,7 +17537,7 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/FrontierAuditReport",
-                "description": "Read-only frontier audit (#4198): current unread frontiers that Option E\nwould offer while inert legacy/converted dependency evidence still\nrecords possible reader intent. `null` while the graph is invalid or in\nrepair previews, which project in-memory states rather than stored data."
+                "description": "Read-only frontier audit (#4198): current unread frontiers that Reading List engine\nwould offer while inert legacy/converted dependency evidence still\nrecords possible reader intent. `null` while the graph is invalid or in\nrepair previews, which project in-memory states rather than stored data."
               },
               {
                 "type": "null"
@@ -19435,7 +19435,7 @@
           },
           "pool_reason": {
             "$ref": "#/components/schemas/PoolReason",
-            "description": "Why an empty in-play pool has no faces, when it does.\nDerived from the already-loaded Option E inputs and the eligible\nfrontiers before the die bound and browser snoozes, exactly as\n`GET /api/v2/roll/bootstrap` reports it. `ready` means at least one\nfrontier is eligible; the other variants name why an empty pool has\nno in-play faces (`no_series`, `all_blocked`, `all_completed`,\n`all_out_of_pool`). It never carries a list or whole-library report."
+            "description": "Why an empty in-play pool has no faces, when it does.\nDerived from the already-loaded Reading List engine inputs and the eligible\nfrontiers before the die bound and browser snoozes, exactly as\n`GET /api/v2/roll/bootstrap` reports it. `ready` means at least one\nfrontier is eligible; the other variants name why an empty pool has\nno in-play faces (`no_series`, `all_blocked`, `all_completed`,\n`all_out_of_pool`). It never carries a list or whole-library report."
           },
           "thread_ids": {
             "type": "array",

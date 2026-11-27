@@ -133,7 +133,7 @@ test.describe('Reading Plan reader surface', () => {
 })
 
 // The ordinary lane proves disabled-mode safety; an enabled local fixture also proves strict execution.
-test('Option E explains strict Julix blockers consistently and supports direct list reading', async ({ authenticatedPage: page }) => {
+test('Reading List engine explains strict Julix blockers consistently and supports direct list reading', async ({ authenticatedPage: page }) => {
   const headers = await authHeaders(page)
   const first = await createThread(page, { title: 'Julix Dead Remembered', format: 'Comics', issues_remaining: 1, total_issues: 1 })
   const later = await createThread(page, { title: 'Julix King of Fear', format: 'Comics', issues_remaining: 1, total_issues: 1 })
@@ -147,8 +147,8 @@ test('Option E explains strict Julix blockers consistently and supports direct l
   expect(reader.ok(), await reader.text()).toBeTruthy()
   // SAFETY: the owned reader endpoint returns execution_mode; no other response fields are read.
   const projection = await reader.json() as { execution_mode: string }
-  expect(projection.execution_mode).toBe(process.env.OPTION_E_EXPECTED_MODE ?? 'legacy')
-  const enabled = projection.execution_mode === 'option_e'
+  expect(projection.execution_mode).toBe(process.env.READING_LISTS_EXPECTED_MODE ?? 'legacy')
+  const enabled = projection.execution_mode === 'reading_lists'
   const dependency = await page.request.post('/api/v2/dependencies/', { headers, data: { source_type: 'issue', source_id: firstIssue, target_type: 'issue', target_id: laterIssue } })
   expect(dependency.ok(), await dependency.text()).toBeTruthy()
   const createPlan = await page.request.post('/api/v2/continuity-plans/', { headers, data: { name: 'Reader entry point', lanes: [{ id: 'main', name: 'Main', order: 0 }], nodes: [] } })
@@ -185,7 +185,7 @@ test('Option E explains strict Julix blockers consistently and supports direct l
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
     const theme = width === 390 ? 'classic' : width === 768 ? 'ink-gold' : 'command-center'
     await page.evaluate((name) => document.documentElement.setAttribute('data-theme', name), theme)
-    await listReader.screenshot({ path: `test-results/option-e-reader-${width}-${theme}.png` })
+    await listReader.screenshot({ path: `test-results/reading-lists-reader-${width}-${theme}.png` })
   }
   if (!enabled) {
     const marked = await page.request.post(`/api/v2/issues/${firstIssue}/read-markers`, { headers })

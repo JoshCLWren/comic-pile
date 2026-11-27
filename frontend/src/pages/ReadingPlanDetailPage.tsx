@@ -315,7 +315,7 @@ export default function ReadingPlanDetailPage() {
             {view.name}
           </h1>
           <p className="mt-2 text-sm text-[var(--theme-text-muted)]">
-            {view.execution_mode === 'option_e'
+            {view.execution_mode === 'reading_lists'
               ? 'Availability follows your Reading Lists, series order, collection exclusions and explicit prerequisites, just as Roll and Queue do.'
               : isStrict
               ? 'Strict records intent for selected hard prerequisites; compiling them from plan order is not active yet. Source reading order is not a blocker by itself.'
@@ -342,7 +342,7 @@ export default function ReadingPlanDetailPage() {
             >
               Edit reading order
             </button>
-          ) : view.execution_mode === 'option_e' ? (
+          ) : view.execution_mode === 'reading_lists' ? (
             <p role="alert" className="text-sm text-[var(--theme-danger)]">
               The linked Reading List could not be resolved. Editing is unavailable.
             </p>
@@ -486,7 +486,7 @@ export default function ReadingPlanDetailPage() {
           </h2>
           <p className="mt-1 text-xs font-black text-[var(--theme-continuity-accent)]">CBL-backed</p>
           <p className="mt-1 text-sm text-[var(--theme-text-muted)]">
-            {view.execution_mode === 'option_e'
+            {view.execution_mode === 'reading_lists'
               ? 'This linked Reading List controls reading eligibility in Roll, Queue, and this plan.'
               : 'Where this plan’s source material came from. Source order does not add hard blockers in legacy mode.'}
           </p>
@@ -514,7 +514,7 @@ export default function ReadingPlanDetailPage() {
         </section>
       )}
 
-      {view.execution_mode === 'option_e' ? (
+      {view.execution_mode === 'reading_lists' ? (
         <section aria-label="Add reading material" className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-4">
           <h2 className="text-base font-bold text-[var(--theme-text-primary)]">Add to reading order</h2>
           <p className="mt-1 text-sm text-[var(--theme-text-muted)]">

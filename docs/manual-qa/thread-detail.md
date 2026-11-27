@@ -50,7 +50,7 @@
 
 **Test:** On a blocked or out-of-pool QA issue, use Mark Read and rating from the issue card.
 
-**Expected:** The owned issue can be read and rated; Option E decides automatic eligibility only. Source: #4405 and #4708.
+**Expected:** The owned issue can be read and rated; Reading List engine decides automatic eligibility only. Source: #4405 and #4708.
 
 ## MQA-THREAD-SYNC: Thread "Next issue" line follows a rename promptly
 

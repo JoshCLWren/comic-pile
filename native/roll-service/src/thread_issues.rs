@@ -691,7 +691,7 @@ async fn display_position(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,
     thread_id: i32,
-    option_e: bool,
+    reading_lists: bool,
 ) -> Result<i32, ApiError> {
     let rows = tx
         .query(
@@ -702,7 +702,7 @@ async fn display_position(
         )
         .await
         .map_err(db::query_error)?;
-    let candidates: Option<HashSet<i32>> = if option_e {
+    let candidates: Option<HashSet<i32>> = if reading_lists {
         let validated = option_inputs::load_validated_contained_in_transaction(tx, user).await?;
         let frontiers = validated
             .eligible_frontiers()
@@ -739,7 +739,7 @@ async fn thread_response(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,
     thread_id: i32,
-    option_e: bool,
+    reading_lists: bool,
 ) -> Result<ThreadResponse, ApiError> {
     let sql = format!(
         "SELECT t.title, t.format, t.issues_remaining, t.status, t.last_rating, {last_activity}, \
@@ -763,7 +763,7 @@ async fn thread_response(
     } else {
         row.get(2)
     };
-    let queue_position = display_position(tx, user, thread_id, option_e).await?;
+    let queue_position = display_position(tx, user, thread_id, reading_lists).await?;
     let credits: Option<String> = row.get(13);
     Ok(ThreadResponse {
         id: thread_id,
@@ -1486,7 +1486,7 @@ pub(crate) async fn migrate_to_issues(
         .await
         .map_err(db::query_error)?;
     }
-    let response = thread_response(&tx, user, thread_id, state.option_e).await?;
+    let response = thread_response(&tx, user, thread_id, state.reading_lists).await?;
     tx.commit().await.map_err(db::tx_error)?;
     Ok(Json(response).into_response())
 }
@@ -1585,7 +1585,7 @@ pub(crate) async fn migrate_to_issues_simple(
     )
     .await
     .map_err(db::query_error)?;
-    let response = thread_response(&tx, user, thread_id, state.option_e).await?;
+    let response = thread_response(&tx, user, thread_id, state.reading_lists).await?;
     tx.commit().await.map_err(db::tx_error)?;
     Ok(Json(response).into_response())
 }
@@ -1603,7 +1603,7 @@ pub(crate) async fn set_current_issue(
 ) -> Result<Response, ApiError> {
     let thread_id = thread_ordering::parse_int_text(raw_id).ok_or_else(validation_failed)?;
     let requested = parse_set_current_body(body)?;
-    let option_e = state.option_e;
+    let reading_lists = state.reading_lists;
 
     // Reject before any session side effect, exactly as Python orders it.
     {
@@ -1623,7 +1623,7 @@ pub(crate) async fn set_current_issue(
                 "Thread {thread_id} is not active"
             )));
         }
-        if !option_e && total.is_none() {
+        if !reading_lists && total.is_none() {
             return Err(ApiError::BadRequest(format!(
                 "Thread {thread_id} does not use issue tracking"
             )));
@@ -1650,7 +1650,7 @@ pub(crate) async fn set_current_issue(
             "Thread {thread_id} is not active"
         )));
     }
-    if !option_e && thread.total_issues.is_none() {
+    if !reading_lists && thread.total_issues.is_none() {
         return Err(ApiError::BadRequest(format!(
             "Thread {thread_id} does not use issue tracking"
         )));
@@ -1710,7 +1710,7 @@ pub(crate) async fn set_current_issue(
     .await
     .map_err(db::query_error)?;
 
-    let queue_position = display_position(&tx, user, thread_id, option_e).await?;
+    let queue_position = display_position(&tx, user, thread_id, reading_lists).await?;
     let meta = tx
         .query_one(
             "SELECT title, format FROM threads WHERE id = $1",
@@ -1721,7 +1721,7 @@ pub(crate) async fn set_current_issue(
     let title: String = meta.get(0);
     let format = normalize_format_value(&meta.get::<_, String>(1));
 
-    if option_e {
+    if reading_lists {
         select_manual_pick(
             &tx,
             user,
@@ -1751,7 +1751,7 @@ pub(crate) async fn set_current_issue(
     .into_response())
 }
 
-/// Option E tail of `set_current_issue`: verify the corrected frontier is the
+/// Reading List engine tail of `set_current_issue`: verify the corrected frontier is the
 /// thread's derived next issue, then perform the manual selection
 /// (`thread_service.set_pending_thread`): unsnooze, manual roll event and the
 /// session pending pair.

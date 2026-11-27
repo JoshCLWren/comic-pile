@@ -5,7 +5,7 @@
 //! prospective graph a reader would get by adopting (or updating a list from) a
 //! CBL selection. It reconciles the source list with the same code as the
 //! adoption plan, substitutes the proposed list into the reader's complete
-//! owner snapshot, and evaluates it with a pure Option E evaluator
+//! owner snapshot, and evaluates it with a pure Reading List engine evaluator
 //! (`reading_preview_eval`) plus the stored-constraint cycle validator. Series
 //! are exact Comic Vine volumes, overlap questions carry both choice effects,
 //! and nothing is written. All reads share one repeatable-read read-only

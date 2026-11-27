@@ -1,6 +1,6 @@
 # Reading plans and Reading Lists
 
-**Execution authority (owner decision 2026-11-20):** Option E is the **only** reading execution model. Its reader-owned Reading Lists are canonical; `strict` and `loose` are **modes of a Reading List**, not separate types of Reading Plans. The `/continuity-plans`, `/continuity-plans/new`, `/continuity-plans/:id` and editor routes are legacy transition/retirement surfaces, **not** feature targets. Follow the [accepted Reading List execution ADR](../READING_LIST_EXECUTION_ADR.md) and retirement [#3678](https://github.com/JoshCLWren/comic-pile/issues/3678). Verify preserved issue IDs, list ordering, gates, prerequisites, exclusions, read/rating history, and deep links on migration. Never report a defect solely because an obsolete Plan editor does not support new authoring.
+**Execution authority (owner decision 2026-11-20):** Reading List engine is the **only** reading execution model. Its reader-owned Reading Lists are canonical; `strict` and `loose` are **modes of a Reading List**, not separate types of Reading Plans. The `/continuity-plans`, `/continuity-plans/new`, `/continuity-plans/:id` and editor routes are legacy transition/retirement surfaces, **not** feature targets. Follow the [accepted Reading List execution ADR](../READING_LIST_EXECUTION_ADR.md) and retirement [#3678](https://github.com/JoshCLWren/comic-pile/issues/3678). Verify preserved issue IDs, list ordering, gates, prerequisites, exclusions, read/rating history, and deep links on migration. Never report a defect solely because an obsolete Plan editor does not support new authoring.
 
 ## MQA-LIST-001: List editing preserves order and identity
 
@@ -12,7 +12,7 @@
 
 **Issue search (owner issue #4725):** Searching the Reading List editor for an issue (e.g. `Mutant X #1`) lists each canonical issue once; the database already forbids a duplicate issue number within one series, so the only look-alike rows are distinct series sharing a title. Those stay separate rows (the editor groups them by series) and show a `Series ID` label so they can be told apart. Search deliberately remains click/Enter-driven ("Find issues"): live as-you-type suggestions are not offered, to avoid one request per keystroke against the issue table; revisit only with debounced, cancelled requests. Each result now displays the exact owned issue cover from one bounded batch, or the shared placeholder. Adding a result does not commit an unsaved list or mutate reading state; keyboard focus and duplicate-series disambiguation remain correct.
 
-**Reading List cover check (#5433):** In the authoritative Reading List editor, mapped issues with available covers use the shared issue-cover component and the exact owned Issue identity. Unmapped issues show the shared placeholder. A conceptual crossover marker must never fabricate an issue cover. Reordering and Save preserve list membership, stable IDs, and Option E gates; do **not** resurrect the old continuity-plan editor, lanes, or compiler to satisfy image coverage.
+**Reading List cover check (#5433):** In the authoritative Reading List editor, mapped issues with available covers use the shared issue-cover component and the exact owned Issue identity. Unmapped issues show the shared placeholder. A conceptual crossover marker must never fabricate an issue cover. Reordering and Save preserve list membership, stable IDs, and Reading List engine gates; do **not** resurrect the old continuity-plan editor, lanes, or compiler to satisfy image coverage.
 
 ## MQA-LIST-002: Strict means earlier remaining entries first
 
@@ -54,7 +54,7 @@
 
 **Expected:** Each surface agrees on next unread and eligibility, explains actual named blockers and updates when satisfied.
 
-**Authority check:** Derive eligibility only from the Option E evaluator and its active Reading Lists, natural series position, explicit reader prerequisites, holds, and exclusions. An unread issue is **not automatically available** merely because a retired Plan detail screen names no legacy blocker; strict order, loose-list gates, overlapping lists and frontier position all matter. Never derive availability from legacy Plan order, `reading_plan_dependencies`, or compiled edges. QA case [#5622](https://github.com/JoshCLWren/comic-pile/issues/5622) exposed contradictory old-plan copy; its proposed legacy eligibility implementation [PR #5627](https://github.com/JoshCLWren/comic-pile/pull/5627) conflicts with this contract.
+**Authority check:** Derive eligibility only from the Reading List engine evaluator and its active Reading Lists, natural series position, explicit reader prerequisites, holds, and exclusions. An unread issue is **not automatically available** merely because a retired Plan detail screen names no legacy blocker; strict order, loose-list gates, overlapping lists and frontier position all matter. Never derive availability from legacy Plan order, `reading_plan_dependencies`, or compiled edges. QA case [#5622](https://github.com/JoshCLWren/comic-pile/issues/5622) exposed contradictory old-plan copy; its proposed legacy eligibility implementation [PR #5627](https://github.com/JoshCLWren/comic-pile/pull/5627) conflicts with this contract.
 
 ## MQA-LIST-007: Durable exclusion versus local skip
 
@@ -90,11 +90,11 @@
 
 **Authority:** [Reading List execution ADR](../READING_LIST_EXECUTION_ADR.md), with the owner-approved series/issue selection design. The checkbox selection controls list membership; the separate overlap exception changes strict eligibility only for an explicitly approved pair.
 
-Some deployed legacy Plan pages may still exist pending the safe, gated retirement in #3678. Test them for data preservation, secure migration/redirects, truthful diagnostics, and noninterference with Option E, **not** as a competing execution model. Do not reopen or extend old Plan authoring/eligibility code.
+Some deployed legacy Plan pages may still exist pending the safe, gated retirement in #3678. Test them for data preservation, secure migration/redirects, truthful diagnostics, and noninterference with Reading List engine, **not** as a competing execution model. Do not reopen or extend old Plan authoring/eligibility code.
 
 ## MQA-LIST-011: An empty Reading Plan can be opened and edited
 
-**Status: Retired (2026-11-20).** The old zero-lane Reading Plan creation/editor requirement was superseded by the owner's Option E-only decision. Legacy Plan UI is being safely retired in #3678; see #5614.
+**Status: Retired (2026-11-20).** The old zero-lane Reading Plan creation/editor requirement was superseded by the owner's Reading List engine-only decision. Legacy Plan UI is being safely retired in #3678; see #5614.
 
 **Test:** Create a plan with no lanes and no steps, save, then open it from the plans list and reload. Add an issue with the legacy editor, save, and reopen both the detail page and the edit route. For a plan whose Reading List was removed, open the recovery screen and click "open the Plan authoring UI".
 
@@ -152,7 +152,7 @@ Some deployed legacy Plan pages may still exist pending the safe, gated retireme
 
 **Setup:** A strict authoritative Reading List and a loose authoritative Reading List. Include an old saved Plan that had a contradictory display-mode field, if legacy deep links still exist.
 
-**Test:** Open the authoritative list, reload and navigate away/back; follow any supported old Plan deep-link redirect or explicit migration/relink, and compare the visible mode with actual Option E Roll/Queue eligibility.
+**Test:** Open the authoritative list, reload and navigate away/back; follow any supported old Plan deep-link redirect or explicit migration/relink, and compare the visible mode with actual Reading List engine Roll/Queue eligibility.
 
 **Expected:** The visible strict/loose mode is the **saved canonical Reading List mode**, not an obsolete `strict_sequential`/`informational` Plan label. A legacy Plan's old mode must never silently override the linked List or create a second eligibility source. Explicit list-mode edits persist; strict/loose evaluation, blockers and explanations agree everywhere. Historical #4724 was legacy presentation compatibility, not permission to preserve parallel Plan execution.
 

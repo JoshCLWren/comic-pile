@@ -1,6 +1,6 @@
 //! Owner-scoped reading-graph diagnostics and safe constraint repair.
 //!
-//! The graph is projected from the same single-statement Option E snapshot that
+//! The graph is projected from the same single-statement Reading List engine snapshot that
 //! Roll, Queue and the reading-boundary resources use. Nothing here performs a
 //! second eligibility interpretation: the Rust constraint validator is the one
 //! authority that both rejects new cycles and isolates a persisted one.
@@ -91,7 +91,7 @@ pub struct ReadingGraphResponse {
     pub repairs: Vec<ReadingGraphRepairOption>,
     /// Total count of unresolved references.
     pub unresolved_reference_count: usize,
-    /// Read-only frontier audit (#4198): current unread frontiers that Option E
+    /// Read-only frontier audit (#4198): current unread frontiers that Reading List engine
     /// would offer while inert legacy/converted dependency evidence still
     /// records possible reader intent. `null` while the graph is invalid or in
     /// repair previews, which project in-memory states rather than stored data.
@@ -914,7 +914,7 @@ pub async fn repair(
     get,
     path = "/api/v2/reading-graph",
     tag = "reading-graph",
-    description = "Owner-scoped projection of the complete Option E graph. A persisted cycle is isolated to its affected Threads and Reading Lists; every cycle edge names its series, issue and stored origin. The read-only frontier audit names current unread frontiers that Option E would offer while inert legacy or converted dependency evidence still records possible reader intent; the report is manual-review evidence only (#4198).",
+    description = "Owner-scoped projection of the complete Reading List engine graph. A persisted cycle is isolated to its affected Threads and Reading Lists; every cycle edge names its series, issue and stored origin. The read-only frontier audit names current unread frontiers that Reading List engine would offer while inert legacy or converted dependency evidence still records possible reader intent; the report is manual-review evidence only (#4198).",
     responses(
         (status = 200, description = "Graph status, cycles and safe repair options", body = ReadingGraphResponse),
         (status = 401, description = "Not authenticated"),
@@ -1050,7 +1050,7 @@ mod tests {
     #[test]
     fn reading_graph_response_carries_the_frontier_audit() {
         use crate::option_inputs::LegacyDependencyRow;
-        // Acyclic fixture: the strict list holds only the frontier, so Option E
+        // Acyclic fixture: the strict list holds only the frontier, so Reading List engine
         // offers issue 11 today while the inert legacy edge from unread issue
         // 14 still records possible reader intent.
         let source = {
@@ -1276,12 +1276,12 @@ mod tests {
         assert_eq!(audit.actionable_reader_prerequisites, 1);
         assert_eq!(audit.frontiers_protected, 1);
 
-        // The exact Option E authority blocks #361 and leaves X-Men #80
+        // The exact Reading List engine authority blocks #361 and leaves X-Men #80
         // eligible.
         let validated =
             option_inputs::load_option_inputs_contained(&state, AuthenticatedUser::for_test(9101))
                 .await
-                .expect("validated Option E inputs");
+                .expect("validated Reading List engine inputs");
         let eligible: Vec<i32> = validated
             .eligible_frontiers()
             .expect("eligibility")

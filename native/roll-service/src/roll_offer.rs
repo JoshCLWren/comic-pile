@@ -1,8 +1,8 @@
-//! Sessionless Roll/Reroll offer over the Option E candidate pool.
+//! Sessionless Roll/Reroll offer over the Reading List engine candidate pool.
 //!
 //! The logical die comes from the owner-scoped dice event history, never from
 //! the legacy session die. Selection is uniform among the highest-ranked `N`
-//! eligible Option E frontiers, where `N` is that die. Pressing Roll while an
+//! eligible Reading List engine frontiers, where `N` is that die. Pressing Roll while an
 //! offer is pending records one snooze event, steps the die up, excludes the
 //! previous offer, and immediately selects again.
 use crate::{
@@ -88,7 +88,7 @@ fn empty_pool(has_candidates: bool) -> ApiError {
         }.to_string())
 }
 
-/// Cookie IDs are exclusion hints only. Intersecting with the live Option E
+/// Cookie IDs are exclusion hints only. Intersecting with the live Reading List engine
 /// frontier keeps them from granting or removing anything else, and clearing
 /// the cookie restores the thread without touching die history.
 fn cookie_exclusions(snoozed: &[i32], eligible: &HashSet<i32>) -> HashSet<i32> {
@@ -112,12 +112,12 @@ struct OfferMetadata {
 }
 
 /// Load the retained thread projection only. Issue identity always comes from
-/// the live Option E frontier, never from the denormalized stored pointer.
+/// the live Reading List engine frontier, never from the denormalized stored pointer.
 async fn offer_metadata(
     conn: &tokio_postgres::Client,
     user: AuthenticatedUser,
     thread_id: i32,
-    option_e: bool,
+    reading_lists: bool,
     candidates: Vec<i32>,
 ) -> Result<OfferMetadata, ApiError> {
     // The pending Roll view must show the same canonical display position as
@@ -134,7 +134,7 @@ async fn offer_metadata(
           WHERE t.id=$1 AND t.user_id=$2",
     );
     let row = conn
-        .query_opt(&sql, &[&thread_id, &user.id(), &option_e, &candidates])
+        .query_opt(&sql, &[&thread_id, &user.id(), &reading_lists, &candidates])
         .await
         .map_err(db::query_error)?
         .ok_or_else(|| ApiError::Internal("Roll offer unavailable".to_string()))?;
@@ -328,13 +328,13 @@ pub async fn offer(
         SessionPolicy::default(),
     )
     .await?;
-    // Compute the read-only Option E snapshot before taking the write
+    // Compute the read-only Reading List engine snapshot before taking the write
     // connection so this request never nests two pool checkouts.
     let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
     // The canonical position shown for a pending Roll comes from the same
-    // Option E ordering the Queue list and Thread Detail use.
-    let option_e = state.option_e;
-    let eligible_ids = if option_e {
+    // Reading List engine ordering the Queue list and Thread Detail use.
+    let reading_lists = state.reading_lists;
+    let eligible_ids = if reading_lists {
         crate::threads::eligible_candidate_ids(&validated)?
     } else {
         Vec::new()
@@ -378,7 +378,7 @@ pub async fn offer(
             &*pending.connection(),
             user,
             stored.thread_id,
-            option_e,
+            reading_lists,
             eligible_ids.clone(),
         )
         .await?;
@@ -504,7 +504,7 @@ pub async fn offer(
         &*pending.connection(),
         user,
         selected.thread_id,
-        option_e,
+        reading_lists,
         eligible_ids,
     )
     .await?;
@@ -563,11 +563,11 @@ pub async fn unsnooze(
 ) -> Result<Json<UnsnoozeResponse>, ApiError> {
     let active = reading_session::bootstrap(&state, user, None, SessionPolicy::default()).await?;
 
-    // Compute the read-only Option E snapshot before taking the write
+    // Compute the read-only Reading List engine snapshot before taking the write
     // connection so this request never nests two pool checkouts.
     let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
-    let option_e = state.option_e;
-    let eligible_ids = if option_e {
+    let reading_lists = state.reading_lists;
+    let eligible_ids = if reading_lists {
         crate::threads::eligible_candidate_ids(&validated)?
     } else {
         Vec::new()
@@ -703,7 +703,7 @@ pub async fn unsnooze(
         &*pending.connection(),
         user,
         snoozed_thread,
-        option_e,
+        reading_lists,
         eligible_ids,
     )
     .await?;

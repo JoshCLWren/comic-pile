@@ -538,7 +538,7 @@ export default function RollPage() {
               selectedThreadId={state.selectedThreadId}
               // Empty-pool explanation migration (#4719): the scoped eligible
               // resource carries the server-computed reason from the same
-              // Option E inputs as bootstrap, so it is authoritative once
+              // Reading List engine inputs as bootstrap, so it is authoritative once
               // settled. Bootstrap remains the fallback while the scoped
               // query is pending or failed. The copy and CTA stay exactly the
               // same four-way variants `ThreadPool` already renders.

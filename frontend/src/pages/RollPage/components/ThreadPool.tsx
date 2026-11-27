@@ -13,7 +13,7 @@ interface ThreadPoolProps {
   isRatingView: boolean
   selectedThreadId: number | null
   /**
-   * Minimal empty-pool explanation from the same Option E inputs. It never
+   * Minimal empty-pool explanation from the same Reading List engine inputs. It never
    * carries a list or whole-library report, only why the dice have no faces.
    */
   emptyPoolReason?: RollPoolReason

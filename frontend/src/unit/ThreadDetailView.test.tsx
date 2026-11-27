@@ -930,7 +930,7 @@ it('uses canonical list blockers even when explicit connected prerequisites are 
 it('falls back to the legacy availability explanation when canonical boundaries are unavailable', async () => {
   vi.mocked(readingBoundariesApi.batch).mockResolvedValue({
     evaluator: 'unavailable',
-    threads: { 1: { thread_id: 1, state: 'unavailable', summary: 'Option E is not active for Saga.', blockers: [] } },
+    threads: { 1: { thread_id: 1, state: 'unavailable', summary: 'Reading List engine is not active for Saga.', blockers: [] } },
   })
   vi.mocked(dependenciesApi.getBatchBlockingInfo).mockResolvedValue({
     threads: {

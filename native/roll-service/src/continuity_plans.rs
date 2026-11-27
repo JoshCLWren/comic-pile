@@ -487,7 +487,7 @@ async fn validate_node_ownership(
 impl ContinuityPlanWrite {
     /// Port of Python `ContinuityPlanWrite.validate_structure` (422 on failure).
     ///
-    /// Enforces the cross-field invariants that keep downstream Option E
+    /// Enforces the cross-field invariants that keep downstream Reading List engine
     /// compiled-rule semantics well defined. Field-level constraints that
     /// Pydantic enforces before this validator (lengths, enums, positive ids)
     /// are checked here as well so the native path cannot persist invalid plans.
@@ -1957,7 +1957,7 @@ pub async fn create_continuity_plan(
     // Compile the plan's strict/checkpoint/convergence intent into rules and
     // canonical edges, and rebuild normalized membership, in this transaction.
     // Python also calls `ensure_new_plan_has_authority` here, but that adapter
-    // is gated on `OPTION_E_ENABLED` (default false) plus an owner-approved
+    // is gated on `READING_LISTS_ENABLED` (default false) plus an owner-approved
     // preview; it is a no-op in the deployed configuration and the native
     // service deliberately does not expose that experimental switch.
     if let Err(error) = compile_plan_rules(

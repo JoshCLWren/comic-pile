@@ -79,7 +79,7 @@ export function createIssueCardsApi(client: HttpClient) {
 
     /**
      * Apply one authenticated direct read/rate intent to an exact owned issue.
-     * No Option E eligibility gate: blocked, later, excluded, inactive or
+     * No Reading List engine eligibility gate: blocked, later, excluded, inactive or
      * out-of-Roll issues remain writable by their owner.
      */
     patchIssue: async (issueId: number, mutation: DirectIssueMutation): Promise<IssueReadRateResponse> => {

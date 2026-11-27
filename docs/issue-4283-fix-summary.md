@@ -11,7 +11,7 @@ When a user adopts a CBL source (creating a plan and a linked Reading List), the
 
 ### Root Cause
 
-The `list_continuity_plan_items` function in `app/services/continuity_plan_writer.py` enforces that every plan must have an authoritative Reading List when Option E is enabled. After a linked list is deleted, the plan becomes orphaned (no ReadingPlanSource row), causing the function to raise a 409 error: <!-- docs-path-check: ignore -->
+The `list_continuity_plan_items` function in `app/services/continuity_plan_writer.py` enforces that every plan must have an authoritative Reading List when Reading List engine is enabled. After a linked list is deleted, the plan becomes orphaned (no ReadingPlanSource row), causing the function to raise a 409 error: <!-- docs-path-check: ignore -->
 
 ```python
 if len(authorities) != len(ordered):
@@ -66,11 +66,11 @@ if get_reading_execution_settings().enabled and ordered:
     # Only reject when there are ambiguous or foreign list authorities.
 ```
 
-#### 2. `tests/test_option_e_plan_index.py` <!-- docs-path-check: ignore -->
+#### 2. `tests/test_reading_lists_plan_index.py` <!-- docs-path-check: ignore -->
 
-Updated the test `test_option_e_index_rejects_unlinked_plan_instead_of_showing_stale_order` to verify that orphaned plans are now allowed in the list index.
+Updated the test `test_reading_lists_index_rejects_unlinked_plan_instead_of_showing_stale_order` to verify that orphaned plans are now allowed in the list index.
 
-Added new test `test_option_e_index_rejects_multiple_authoritative_lists_for_same_plan` to ensure that ambiguous list authorities are still rejected (maintaining the original safeguard).
+Added new test `test_reading_lists_index_rejects_multiple_authoritative_lists_for_same_plan` to ensure that ambiguous list authorities are still rejected (maintaining the original safeguard).
 
 ### Behavior Changes
 
@@ -96,9 +96,9 @@ This allows users to see orphaned plans and potentially re-link them to a new li
 
 ### Unit Tests
 
-Updated and added tests in `tests/test_option_e_plan_index.py`: <!-- docs-path-check: ignore -->
-- `test_option_e_index_allows_orphaned_plan_after_list_deletion`: Verifies orphaned plans are listed
-- `test_option_e_index_rejects_multiple_authoritative_lists_for_same_plan`: Verifies ambiguity is still rejected
+Updated and added tests in `tests/test_reading_lists_plan_index.py`: <!-- docs-path-check: ignore -->
+- `test_reading_lists_index_allows_orphaned_plan_after_list_deletion`: Verifies orphaned plans are listed
+- `test_reading_lists_index_rejects_multiple_authoritative_lists_for_same_plan`: Verifies ambiguity is still rejected
 
 ### Manual Verification Steps
 
@@ -131,7 +131,7 @@ This change is backward compatible:
 
 - Issue #4283: Reading Plans list page returns 409 with no entries after an adopted list is deleted
 - Issue #4255: MQA-CBL-005 / Reading Lists follow-up (parent issue for acceptance)
-- Option E contract: `docs/READING_PLAN_CANONICAL_MODEL.md`
+- Reading List engine contract: `docs/READING_PLAN_CANONICAL_MODEL.md`
 
 ## Migration Notes
 

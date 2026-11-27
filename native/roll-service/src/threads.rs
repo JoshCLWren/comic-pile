@@ -10,14 +10,14 @@
 //!
 //! Two execution authorities are preserved from the Python service:
 //!
-//! * Legacy (production default, `OPTION_E_ENABLED` off) uses the stored
+//! * Legacy (production default, `READING_LISTS_ENABLED` off) uses the stored
 //!   `threads.is_blocked` flag for readable/blocked grouping. Authentication,
 //!   the page, the whole-queue total, tags, mapping health and series identity
 //!   are one PostgreSQL statement, including the token's revocation and
 //!   credential-epoch check.
-//! * The owner-activated Option E preview evaluates the reading graph in Rust
+//! * The owner-activated Reading List engine preview evaluates the reading graph in Rust
 //!   and uses that result for grouping, availability, frontier and blocking
-//!   reasons. It needs the bounded Option E input snapshot in addition to the
+//!   reasons. It needs the bounded Reading List engine input snapshot in addition to the
 //!   page statement, so the default path is the only one-statement path.
 //!
 //! `POST /api/v2/threads` is the paired AIP-133 standard Create (#5702); its
@@ -191,10 +191,10 @@ fn normalize_search(search: Option<&str>) -> String {
 /// Canonical SQL expression that groups blocked rows last in display order.
 ///
 /// The Queue list, the single-thread detail and the pending Roll offer all use
-/// this expression, so the owner-approved Option E preview (evaluated reading
+/// this expression, so the owner-approved Reading List engine preview (evaluated reading
 /// eligibility) cannot drift from the stored `is_blocked` grouping. `bool_param`
 /// and `ids_param` are the calling statement's bind placeholders for the
-/// Option E flag and the sorted eligible-thread id array.
+/// Reading List engine flag and the sorted eligible-thread id array.
 pub(crate) fn blocked_order_expr(bool_param: &str, ids_param: &str) -> String {
     format!(
         "(CASE WHEN {bool_param}::boolean THEN NOT (t.id = ANY({ids_param}::int[])) ELSE t.is_blocked END)"
@@ -224,12 +224,12 @@ pub(crate) fn display_position_expr(
     )
 }
 
-/// Sorted Option E eligible thread ids for the canonical block-grouping
+/// Sorted Reading List engine eligible thread ids for the canonical block-grouping
 /// expression, built from the same projection the Queue list uses.
 pub(crate) fn eligible_candidate_ids(
     validated: &crate::reading_constraints::ValidatedReadingInputs,
 ) -> Result<Vec<i32>, ApiError> {
-    let projection = OptionEProjection::build(validated)?;
+    let projection = ReadingOrderProjection::build(validated)?;
     let mut ids: Vec<i32> = projection.candidates.into_iter().collect();
     ids.sort_unstable();
     Ok(ids)
@@ -352,8 +352,8 @@ pub async fn list_threads(
         return Err(unprocessable("search must be at least 1 character"));
     }
     let search = normalize_search(raw_search);
-    let option_e = state.option_e;
-    let execution = if option_e { "option_e" } else { "legacy" };
+    let reading_lists = state.reading_lists;
+    let execution = if reading_lists { "reading_lists" } else { "legacy" };
     let cursor = query
         .page_token
         .as_deref()
@@ -361,15 +361,15 @@ pub async fn list_threads(
         .map(|token| decode_cursor(token, sort, &search, execution))
         .transpose()?;
 
-    // Option E grouping, availability and frontier require the evaluated graph
+    // Reading List engine grouping, availability and frontier require the evaluated graph
     // before the page can be ordered or sliced. The legacy/default authority
     // needs no second statement.
-    let mut option_e_state = None;
+    let mut reading_lists_state = None;
     let mut preauthenticated = None;
-    if option_e {
+    if reading_lists {
         let user = crate::auth::authenticate_claims(&state, &claims).await?;
         let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
-        option_e_state = Some(OptionEProjection::build(&validated)?);
+        reading_lists_state = Some(ReadingOrderProjection::build(&validated)?);
         preauthenticated = Some(user.id());
     }
 
@@ -377,8 +377,8 @@ pub async fn list_threads(
         &state,
         &claims,
         preauthenticated,
-        option_e,
-        option_e_state.as_ref(),
+        reading_lists,
+        reading_lists_state.as_ref(),
         search.as_str(),
         sort,
         page_size,
@@ -386,10 +386,10 @@ pub async fn list_threads(
         "active",
     )
     .await?;
-    if option_e_state.is_none() {
+    if reading_lists_state.is_none() {
         validate_auth(&claims, &auth)?;
     }
-    let option_e_reasons = option_e_state
+    let reading_lists_reasons = reading_lists_state
         .as_ref()
         .map(|projection| projection.reasons(&list_names));
 
@@ -403,7 +403,7 @@ pub async fn list_threads(
             search,
             values: match sort {
                 "position" => vec![
-                    if option_e_state
+                    if reading_lists_state
                         .as_ref()
                         .map_or(last.is_blocked, |projection| {
                             !projection.candidates.contains(&last.id)
@@ -436,7 +436,7 @@ pub async fn list_threads(
 
     let threads: Vec<ThreadListItem> = rows
         .into_iter()
-        .map(|row| row.into_item(option_e_state.as_ref(), option_e_reasons.as_ref()))
+        .map(|row| row.into_item(reading_lists_state.as_ref(), reading_lists_reasons.as_ref()))
         .collect::<Result<Vec<_>, ApiError>>()?;
 
     Ok(Json(ThreadListResponse {
@@ -454,11 +454,11 @@ pub async fn get_thread_detail(
     axum::extract::Path(thread_id): axum::extract::Path<i32>,
 ) -> Result<Json<ThreadDetailResponse>, ApiError> {
     // The detail must rank by the same blocked expression as the Queue list,
-    // otherwise a stored `is_blocked` flag that disagrees with the Option E
+    // otherwise a stored `is_blocked` flag that disagrees with the Reading List engine
     // evaluation gives the two views different positions for the same thread.
-    let option_e = state.option_e;
+    let reading_lists = state.reading_lists;
     let mut candidates: Vec<i32> = Vec::new();
-    if option_e {
+    if reading_lists {
         let user = crate::auth::authenticate_claims(&state, &claims).await?;
         let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
         candidates = eligible_candidate_ids(&validated)?;
@@ -494,7 +494,7 @@ pub async fn get_thread_detail(
                 &claims.jti(),
                 &claims.expected_epoch()?,
                 &thread_id,
-                &option_e,
+                &reading_lists,
                 &candidates,
             ],
         )
@@ -511,10 +511,10 @@ pub async fn get_thread_detail(
     let computed_position: Option<i32> = row.get(17);
     let stored_position: i32 = row.get(4);
     let queue_position = computed_position.unwrap_or(stored_position);
-    // Position and visibility must use the same Option E answer as Queue. A
+    // Position and visibility must use the same Reading List engine answer as Queue. A
     // stale stored flag must not make a strictly blocked frontier look readable
     // when the reader opens its Thread Detail.
-    let is_blocked = if option_e {
+    let is_blocked = if reading_lists {
         !candidates.contains(&thread_id)
     } else {
         row.get(10)
@@ -811,14 +811,14 @@ struct PageRow {
 impl PageRow {
     fn into_item(
         self,
-        option_e: Option<&OptionEProjection>,
+        reading_lists: Option<&ReadingOrderProjection>,
         reasons: Option<&HashMap<i32, Vec<String>>>,
     ) -> Result<ThreadListItem, ApiError> {
         let mut is_blocked = self.is_blocked;
         let mut blocking_reasons = Vec::new();
         let mut issues_remaining = self.issues_remaining;
         let mut next_unread_issue_number = self.next_issue_number;
-        if let Some(projection) = option_e {
+        if let Some(projection) = reading_lists {
             is_blocked = !projection.candidates.contains(&self.id);
             blocking_reasons = reasons
                 .and_then(|reasons| reasons.get(&self.id))
@@ -1002,8 +1002,8 @@ struct BlockerGate {
     issue_ids: Vec<i32>,
 }
 
-/// Evaluated Option E projection for the active queue rows.
-struct OptionEProjection {
+/// Evaluated Reading List engine projection for the active queue rows.
+struct ReadingOrderProjection {
     candidates: HashSet<i32>,
     unread_counts: HashMap<i32, i32>,
     frontiers: HashMap<i32, Option<i32>>,
@@ -1013,7 +1013,7 @@ struct OptionEProjection {
     gates: HashMap<i32, Vec<BlockerGate>>,
 }
 
-impl OptionEProjection {
+impl ReadingOrderProjection {
     fn build(
         validated: &crate::reading_constraints::ValidatedReadingInputs,
     ) -> Result<Self, ApiError> {
@@ -1378,8 +1378,8 @@ async fn query_page(
     state: &AppState,
     claims: &VerifiedAccessClaims,
     preauthenticated: Option<i32>,
-    option_e: bool,
-    projection: Option<&OptionEProjection>,
+    reading_lists: bool,
+    projection: Option<&ReadingOrderProjection>,
     search: &str,
     sort: &str,
     page_size: i64,
@@ -1387,7 +1387,7 @@ async fn query_page(
     status: &str,
 ) -> Result<(Option<AuthRow>, i32, i32, Vec<ListName>, Vec<PageRow>), ApiError> {
     // Reference both mode parameters unconditionally so the statement keeps a
-    // stable bind count whether the Option E preview is active or not.
+    // stable bind count whether the Reading List engine preview is active or not.
     let blocked = blocked_order_expr("$7", "$8");
     let order = match sort {
         "title" => "t.title, t.id".to_string(),
@@ -1428,7 +1428,7 @@ async fn query_page(
         Param::Text(search.to_string()),
         Param::BigInt(page_size + 1),
         Param::OptionalInt(preauthenticated),
-        Param::Bool(option_e),
+        Param::Bool(reading_lists),
         Param::IntArray(candidates),
     ];
     params.extend(cursor_bindings);
@@ -1733,7 +1733,7 @@ mod tests {
             "Queue page token does not match current search or sort"
         );
         assert_eq!(
-            decode_cursor(&token, "position", "saga", "option_e")
+            decode_cursor(&token, "position", "saga", "reading_lists")
                 .unwrap_err()
                 .detail(),
             "Queue ordering changed; reload the Queue"

@@ -1,4 +1,4 @@
-//! Option E eligibility evaluation for native Rust.
+//! Reading List engine eligibility evaluation for native Rust.
 //! Mirrors Python's reading_list_evaluator.evaluate() function.
 
 use crate::reading_constraints::{

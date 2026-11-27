@@ -11,7 +11,7 @@
  * Two deployment shapes are asserted because the legacy blocking fallback only
  * runs when the canonical evaluator reports `unavailable`:
  * - canonical available: 7 reads before, 6 after (catalog removed)
- * - Option-E off (`unavailable`): 8 reads before, 7 after (catalog removed)
+ * - Reading-List off (`unavailable`): 8 reads before, 7 after (catalog removed)
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom'
@@ -179,7 +179,7 @@ function groupsCalls(calls: RecordedCall[]): RecordedCall[] {
 }
 
 describe('Thread detail request budget', () => {
-  it('Option-E off: cold-loads each read exactly once and skips the closed tag catalog', async () => {
+  it('Reading-List off: cold-loads each read exactly once and skips the closed tag catalog', async () => {
     const { calls, client } = createRequestRecorder(makeHandler('unavailable'))
     setDefaultHttpClient(client)
 

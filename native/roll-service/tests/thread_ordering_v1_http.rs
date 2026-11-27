@@ -43,10 +43,10 @@ async fn setup_user(
     setup_user_with(prefix, false).await
 }
 
-/// `option_e` is injected into the state's config; nothing touches the process env.
+/// `reading_lists` is injected into the state's config; nothing touches the process env.
 async fn setup_user_with(
     prefix: &str,
-    option_e: bool,
+    reading_lists: bool,
 ) -> (
     Arc<AppState>,
     String,
@@ -60,8 +60,8 @@ async fn setup_user_with(
             "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-roll-routes-secret".into()),
             "RUST_ROLL_POOL_SIZE" => Some("2".into()),
-            "OPTION_E_ENABLED" if option_e => Some("true".into()),
-            "OPTION_E_APPROVED_PREVIEW" if option_e => Some("injected-by-test".into()),
+            "READING_LISTS_ENABLED" if reading_lists => Some("true".into()),
+            "READING_LISTS_APPROVED_PREVIEW" if reading_lists => Some("injected-by-test".into()),
             _ => None,
         })
         .unwrap(),
@@ -361,7 +361,7 @@ async fn blocking_info_reports_canonical_unread_blockers_with_isolation() {
 }
 
 #[tokio::test]
-async fn blocking_info_contains_option_e_cycles_and_preserves_healthy_threads() {
+async fn blocking_info_contains_reading_lists_cycles_and_preserves_healthy_threads() {
     let (state, token, csrf, user_id, _guard) = setup_user_with("tord-cycle", true).await;
     let conn = state.pool.get().await.unwrap();
     let a = thread(&conn, user_id, "Series A").await;
@@ -903,8 +903,8 @@ async fn thread_detail_completed_thread_keeps_stored_position() {
 }
 
 #[tokio::test]
-async fn thread_detail_blocked_order_matches_queue_list_under_option_e() {
-    // With the Option E preview active the Queue list groups by evaluated
+async fn thread_detail_blocked_order_matches_queue_list_under_reading_lists() {
+    // With the Reading List engine preview active the Queue list groups by evaluated
     // eligibility, not the stored is_blocked flag. Thread Detail must use that
     // same expression or the two views disagree for the same thread.
     let (state, token, csrf, user_id, _guard) = setup_user_with("tord-blk", true).await;
@@ -932,7 +932,7 @@ async fn thread_detail_blocked_order_matches_queue_list_under_option_e() {
     .await
     .unwrap();
 
-    // Stored unblocked but no unread issue, so not an Option E candidate.
+    // Stored unblocked but no unread issue, so not an Reading List engine candidate.
     let no_unread = thread(&conn, user_id, "NoUnread").await;
     conn.execute(
         "UPDATE threads SET queue_position = 1 WHERE id = $1",
@@ -954,7 +954,7 @@ async fn thread_detail_blocked_order_matches_queue_list_under_option_e() {
             .unwrap()
     };
 
-    // Both eligible threads are unblocked under Option E despite the stored
+    // Both eligible threads are unblocked under Reading List engine despite the stored
     // flag; NoUnread is grouped last despite its lower stored position.
     assert_eq!(list_position(eligible_low), 1, "{list_body:?}");
     assert_eq!(list_position(eligible_high), 2, "{list_body:?}");
@@ -1278,7 +1278,7 @@ async fn julix_strict_order_is_shared_by_roll_queue_reader_and_explanations() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{reader:?}");
-    assert_eq!(reader["execution_mode"], "option_e");
+    assert_eq!(reader["execution_mode"], "reading_lists");
     let reader_entries = reader["entries"].as_array().unwrap();
     assert_eq!(reader_entries.len(), 33);
     let reader_entry = |issue_id: i32| {

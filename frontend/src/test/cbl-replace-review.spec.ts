@@ -1,4 +1,4 @@
-// Run with the local fixture backend's Option E execution enabled.
+// Run with the local fixture backend's Reading List engine execution enabled.
 import { test, expect } from './fixtures'
 import type { ReadingListPredecessorChange } from '../services/api-custom-cbl'
 import type { Page } from '@playwright/test'

@@ -1,5 +1,5 @@
 //! Native, authenticated PATCH /api/v2/issues/{issue_id}.
-//! Manual completion validates ownership, not Option E eligibility.
+//! Manual completion validates ownership, not Reading List engine eligibility.
 use crate::{
     auth::AuthenticatedUser,
     db,

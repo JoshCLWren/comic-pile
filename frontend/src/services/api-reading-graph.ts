@@ -1,7 +1,7 @@
 /**
  * Read-only prospective reading graph used while adopting a CBL source (#4020).
  *
- * The graph is computed by the server from the same Option E evaluator and cycle
+ * The graph is computed by the server from the same Reading List engine evaluator and cycle
  * validator that execute the reading list (#1615, #4016, #4017, #4019). This
  * module never re-derives eligibility: it only transports the server's series
  * nodes, conflict questions, and the prospective effects of each choice. The

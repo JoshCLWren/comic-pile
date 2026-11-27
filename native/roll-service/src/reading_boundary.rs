@@ -129,14 +129,14 @@ pub struct ReadingBoundaryExplanationV2 {
 
 /// Deployment-level capability for the canonical evaluator behind this batch.
 ///
-/// It mirrors the same `AppState::option_e` switch every handler resolves, so
+/// It mirrors the same `AppState::reading_lists` switch every handler resolves, so
 /// a client that has already observed one batch can skip the canonical read
 /// entirely on later loads when the evaluator cannot answer (`unavailable`)
 /// and consult the legacy blocking authority directly.
 #[derive(Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum BoundaryEvaluator {
-    /// Option E evaluated every requested thread in this batch.
+    /// Reading List engine evaluated every requested thread in this batch.
     Enabled,
     /// The evaluator is not effective for this deployment: every explanation
     /// in this batch carries `state: unavailable` and the stored
@@ -761,7 +761,7 @@ async fn get_reading_boundary_explanations(
 ) -> Result<ReadingBoundaryBatchResponseV2, ApiError> {
     validate_thread_ids(&thread_ids)?;
     let requested: HashSet<i32> = thread_ids.iter().copied().collect();
-    // One RepeatableRead read-only snapshot for labels + Option E inputs so a
+    // One RepeatableRead read-only snapshot for labels + Reading List engine inputs so a
     // concurrent reading-list mutation cannot produce an internally
     // inconsistent explanation (#4347).
     let mut pending = crate::dice_api::Pending::new(db::checkout(state).await?);
@@ -783,7 +783,7 @@ async fn get_reading_boundary_explanations(
             tx.rollback().await.map_err(db::query_error)?;
             return Err(ApiError::NotFound(format!("Thread {thread_id} not found")));
         }
-        let validated = if state.option_e {
+        let validated = if state.reading_lists {
             Some(option_inputs::load_validated_contained_in_transaction(&tx, user).await?)
         } else {
             None
@@ -821,7 +821,7 @@ async fn get_reading_boundary_explanations(
                 ReadingBoundaryExplanationV2 {
                     thread_id,
                     state: BoundaryState::Unavailable,
-                    summary: format!("Option E is not active for {}.", thread.title),
+                    summary: format!("Reading List engine is not active for {}.", thread.title),
                     next: None,
                     blockers: vec![],
                 },
@@ -844,7 +844,7 @@ async fn get_reading_boundary_explanations(
 
     Ok(ReadingBoundaryBatchResponseV2 {
         threads,
-        evaluator: if state.option_e {
+        evaluator: if state.reading_lists {
             BoundaryEvaluator::Enabled
         } else {
             BoundaryEvaluator::Unavailable

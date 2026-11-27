@@ -47,7 +47,7 @@ pub mod issue_service;
 pub mod legacy_dependencies;
 pub mod metrics;
 pub mod openapi;
-pub mod option_e_setting;
+pub mod reading_lists_setting;
 pub mod option_inputs;
 pub mod outbound;
 pub(crate) mod plan_rule_compiler;
@@ -143,9 +143,9 @@ pub struct AppState {
     /// fake that never opens a socket, so no test can reach the network
     /// (#5339). See [`outbound`].
     pub outbound: Arc<dyn outbound::OutboundHttp>,
-    /// Effective Option E setting (see [`option_e_setting`]); injectable so
+    /// Effective Reading List engine setting (see [`reading_lists_setting`]); injectable so
     /// tests choose it per state instead of mutating process environment.
-    pub option_e: bool,
+    pub reading_lists: bool,
     /// Cache, rolling budget and cooldown for browser-called ComicVine routes.
     pub comicvine_limits: comicvine_limits::ComicVineLimits,
 }
@@ -232,7 +232,7 @@ impl AppState {
             environment: config.environment,
             connection_recovery: true,
             outbound,
-            option_e: config.option_e,
+            reading_lists: config.reading_lists,
             comicvine_limits: comicvine_limits::ComicVineLimits::default(),
         })
     }

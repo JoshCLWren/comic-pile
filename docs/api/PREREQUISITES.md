@@ -7,7 +7,7 @@
 <!-- docs-path-check: historical -->
 
 `/api/v1/prerequisites/` authors stable Issue-to-Issue requirements on the existing
-`dependencies` table. It does not activate Option E, convert historical rows, or
+`dependencies` table. It does not activate Reading List engine, convert historical rows, or
 change reading progress. A requirement has no owning list: list placement, reordering,
 skipping and deletion do not rewrite its endpoints.
 
@@ -31,7 +31,7 @@ including constraints involving already-read Issues. Cycle errors include paths 
 The additive migration leaves historical origin, classification and provenance NULL.
 NULL means unconverted historical data, never reader approval. A reviewed future
 conversion may use `origin=converted` with class A/B/C/D and original-source provenance;
-class D preserves archive information, but does not govern Option E execution.
+class D preserves archive information, but does not govern Reading List engine execution.
 Only an explicit validated reader POST promotes an existing pair to an effective
 prerequisite; the API does not accept client-supplied classification or provenance.
 
@@ -40,4 +40,4 @@ scopes that pair to its reader; the API rejects cross-reader endpoints. Multiple
 can refer to either endpoint without claiming ownership of the requirement.
 
 This is the additive authoring boundary from #3669. The legacy dependency APIs and
-runtime remain transitional until the separately guarded Option E cutover (#3673/#3676).
+runtime remain transitional until the separately guarded Reading List engine cutover (#3673/#3676).

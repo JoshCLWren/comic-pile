@@ -579,7 +579,7 @@ pub struct EligibleFrontier {
     pub queue_position: i32,
 }
 
-/// One active queued Thread's live frontier plus every unsatisfied Option E
+/// One active queued Thread's live frontier plus every unsatisfied Reading List engine
 /// edge that targets it. Shared by [`ValidatedReadingInputs::eligible_frontiers`]
 /// and the read-only frontier audit (#4198) so both read one frontier authority.
 #[derive(Debug, Clone)]
@@ -592,7 +592,7 @@ pub struct FrontierBlockers {
 
 /// Why the Roll pool has no in-play faces.
 ///
-/// Derived from the already-loaded Option E inputs and the eligible frontier
+/// Derived from the already-loaded Reading List engine inputs and the eligible frontier
 /// set. This is a single reason, never a list or a whole-library report, and it
 /// adds no database work: it exists so a genuinely non-empty library does not
 /// render the false "reading queue is empty" state (#4441).
@@ -1158,7 +1158,7 @@ impl ValidatedReadingInputs {
         Ok(unsatisfied.into_iter().collect())
     }
 
-    /// Live Option E frontiers. Ignore stale stored blocked/frontier fields:
+    /// Live Reading List engine frontiers. Ignore stale stored blocked/frontier fields:
     /// the validated dependency graph and issue statuses are authoritative.
     /// Exactly one next unread issue per active queue thread can be eligible.
     pub fn eligible_frontiers(&self) -> Result<Vec<EligibleFrontier>, ValidationError> {
@@ -1174,9 +1174,9 @@ impl ValidatedReadingInputs {
             .collect())
     }
 
-    /// Every active queued Thread's live frontier with the unsatisfied Option E
+    /// Every active queued Thread's live frontier with the unsatisfied Reading List engine
     /// edges that target it. The frontier set, the edge set and the candidate
-    /// filters come from this evaluator — the one Option E authority — so the
+    /// filters come from this evaluator — the one Reading List engine authority — so the
     /// read-only frontier audit (#4198) sees exactly what Roll, Queue and the
     /// reading-boundary resources see, including which frontiers stay blocked.
     pub fn frontier_blockers(&self) -> Result<Vec<FrontierBlockers>, ValidationError> {
@@ -1279,7 +1279,7 @@ mod tests {
         }
     }
     #[test]
-    fn option_e_frontier_uses_live_graph_and_next_unread_not_stale_stored_flags() {
+    fn reading_lists_frontier_uses_live_graph_and_next_unread_not_stale_stored_flags() {
         use crate::reading_inputs::StoredThreadEligibility;
         fn fixture(strict: bool, skipped: bool, exclude_other: bool) -> OptionInputs {
             let mut source = inputs();

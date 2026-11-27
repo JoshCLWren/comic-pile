@@ -1,4 +1,4 @@
-//! Complete owner-scoped Option E loader inputs, detached from eligibility evaluation.
+//! Complete owner-scoped Reading List engine loader inputs, detached from eligibility evaluation.
 use crate::{
     auth::AuthenticatedUser,
     db,
@@ -110,7 +110,7 @@ fn volume_key(provider: &str, external_id: &str) -> Option<String> {
 
 // Collect independent, owner-scoped datasets without multiplying list entries by
 // issues or prerequisites. This is one PostgreSQL statement, not nine sequential
-// network round trips. Eligibility remains exclusively in the Rust Option E evaluator.
+// network round trips. Eligibility remains exclusively in the Rust Reading List engine evaluator.
 //
 // MEMORY CONSIDERATION: This query aggregates all owner-scoped data into a single JSONB response.
 // For users with thousands of threads/issues/lists/entries, this could produce large responses
@@ -233,7 +233,7 @@ fn preauthenticated_statement() -> &'static str {
 
 /// The snapshot statement plus the inert legacy/converted dependency evidence
 /// for the read-only frontier audit (#4198), in one statement over the same
-/// owner-scoped CTEs. The rows never enter the evaluator: the Option E
+/// owner-scoped CTEs. The rows never enter the evaluator: the Reading List engine
 /// snapshot keeps loading only `origin='reader'` prerequisites, so converted
 /// and legacy edges stay inert (#2366, #3676).
 fn frontier_diagnostics_statement() -> &'static str {
@@ -341,7 +341,7 @@ struct IssueVolumeRow {
 
 /// One inert legacy/converted dependency row that points at an owned unread
 /// issue from a source that is not read (or is foreign). Loaded for the
-/// read-only frontier audit only (#4198): these rows never enter the Option E
+/// read-only frontier audit only (#4198): these rows never enter the Reading List engine
 /// evaluator, which keeps converted and legacy edges inert (#2366, #3676).
 #[derive(Debug, Clone, Deserialize)]
 pub struct LegacyDependencyRow {
@@ -356,7 +356,7 @@ pub struct LegacyDependencyRow {
 }
 
 /// Read-only owner diagnostics plus the inert legacy dependency evidence the
-/// Option E snapshot deliberately ignores.
+/// Reading List engine snapshot deliberately ignores.
 #[derive(Debug)]
 pub struct OptionDiagnostics {
     pub inputs: OptionInputs,
@@ -373,7 +373,7 @@ async fn load_transaction(
         .map_err(db::query_error)?;
     let encoded: String = row.try_get(0).map_err(db::query_error)?;
     let snapshot: SnapshotRows = serde_json::from_str(&encoded).map_err(|error| {
-        tracing::error!(%error, "Invalid Option E snapshot response");
+        tracing::error!(%error, "Invalid Reading List engine snapshot response");
         ApiError::Internal("Invalid reading snapshot".to_string())
     })?;
     assemble_snapshot(snapshot)
@@ -392,7 +392,7 @@ async fn load_frontier_diagnostics_transaction(
         .map_err(db::query_error)?;
     let encoded: String = row.try_get(0).map_err(db::query_error)?;
     let snapshot: SnapshotRows = serde_json::from_str(&encoded).map_err(|error| {
-        tracing::error!(%error, "Invalid Option E snapshot response");
+        tracing::error!(%error, "Invalid Reading List engine snapshot response");
         ApiError::Internal("Invalid reading snapshot".to_string())
     })?;
     let inputs = assemble_snapshot(snapshot)?;
@@ -408,7 +408,7 @@ async fn load_frontier_diagnostics_transaction(
     })
 }
 
-/// Assemble the validated Option E inputs from one decoded snapshot.
+/// Assemble the validated Reading List engine inputs from one decoded snapshot.
 ///
 /// The caller owns the statement that produced the snapshot; this only turns
 /// the owner-scoped rows into the evaluator's inputs and fails closed on a
@@ -584,7 +584,7 @@ impl Drop for Pending {
         }
     }
 }
-/// Read all Option E constraints in one SQL statement inside a bounded, repeatable-read, read-only transaction.
+/// Read all Reading List engine constraints in one SQL statement inside a bounded, repeatable-read, read-only transaction.
 /// Diagnostics contain owned entry/dependency IDs only, never foreign titles or metadata.
 /// Diagnostic-only: preserves unresolved IDs for comparison, never for execution.
 pub async fn load_option_diagnostics(
@@ -625,7 +625,7 @@ pub async fn load_option_diagnostics(
                 query_count = 1,
                 elapsed_us = started.elapsed().as_micros() as u64,
                 unresolved_count = inputs.unresolved.len(),
-                "Option E inputs loaded"
+                "Reading List engine inputs loaded"
             );
             Ok(inputs)
         }
@@ -673,7 +673,7 @@ pub(crate) fn validated_contained(
     })
 }
 
-/// Read the Option E constraints plus the inert legacy dependency evidence in
+/// Read the Reading List engine constraints plus the inert legacy dependency evidence in
 /// one SQL statement inside a bounded, repeatable-read, read-only transaction.
 /// Diagnostic-only: the legacy rows feed the read-only frontier audit (#4198)
 /// and never the evaluator; converted and legacy edges stay inert.
@@ -716,7 +716,7 @@ pub async fn load_frontier_diagnostics(
                 elapsed_us = started.elapsed().as_micros() as u64,
                 unresolved_count = diagnostics.inputs.unresolved.len(),
                 legacy_dependency_rows = diagnostics.legacy_dependencies.len(),
-                "Option E frontier diagnostics loaded"
+                "Reading List engine frontier diagnostics loaded"
             );
             Ok(diagnostics)
         }
@@ -828,7 +828,7 @@ mod tests {
         );
     }
     #[test]
-    fn cte_snapshot_preserves_option_e_order_exclusions_and_provenance() {
+    fn cte_snapshot_preserves_reading_lists_order_exclusions_and_provenance() {
         let snapshot: SnapshotRows = serde_json::from_value(serde_json::json!({
             "threads": [
                 {"id": 1, "status": "active", "title": "Alpha",

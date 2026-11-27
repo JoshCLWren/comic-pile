@@ -278,7 +278,7 @@ test('MQA-LIST-004 explicit prerequisite and history survive canonical Reading L
   expect(await getReadingList(page, guardedList.id)).toEqual(beforeGuardedList)
 
   const beforeSurvivingReader = await getReadingListReader(page, survivingList.id)
-  expect(beforeSurvivingReader.execution_mode).toBe('option_e')
+  expect(beforeSurvivingReader.execution_mode).toBe('reading_lists')
   const blockedEntry = beforeSurvivingReader.entries.find(
     (entry) => entry.issue_id === blockedTargetIssueId,
   )

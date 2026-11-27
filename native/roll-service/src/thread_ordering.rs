@@ -23,7 +23,7 @@
 //! * Blocking explanations follow the two Python execution authorities. The
 //!   legacy default reads the canonical `Dependency` rows (notes beginning
 //!   `cbl-order:` are inert) for each thread's unread frontier; the
-//!   owner-approved Option E preview projects live blockers from the evaluated
+//!   owner-approved Reading List engine preview projects live blockers from the evaluated
 //!   reading graph with reader-facing origins and issue links.
 //! * The batch response is a JSON object keyed by thread id in request order
 //!   (Python dict insertion order), so it is serialized through an ordered
@@ -320,8 +320,8 @@ fn describe_origin(
     format!("{kind} in {list}")
 }
 
-/// Option E authority: live blockers from the evaluated reading graph.
-async fn option_e_explanations(
+/// Reading List engine authority: live blockers from the evaluated reading graph.
+async fn reading_lists_explanations(
     state: &AppState,
     user: AuthenticatedUser,
     thread_ids: &[i32],
@@ -396,8 +396,8 @@ async fn blocking_details(
     user: AuthenticatedUser,
     thread_ids: &[i32],
 ) -> Result<Vec<(i32, BlockingExplanation)>, ApiError> {
-    if state.option_e {
-        return option_e_explanations(state, user, thread_ids).await;
+    if state.reading_lists {
+        return reading_lists_explanations(state, user, thread_ids).await;
     }
     let connection = db::checkout(state).await?;
     legacy_explanations(&**connection, user, thread_ids).await
@@ -783,7 +783,7 @@ pub async fn get_thread_connected_threads(
     let connection = db::checkout(&state).await?;
     require_owned_thread(&**connection, user, thread_id).await?;
 
-    let reader_only = state.option_e;
+    let reader_only = state.reading_lists;
     let blocking = dependency_rows(
         &connection
             .query(CONNECTED_BLOCKING_SQL, &[&thread_id, &reader_only])

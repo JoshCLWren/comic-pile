@@ -1,6 +1,6 @@
 //! Authenticated native HTTP entry for user-selected logical dice.
 //!
-//! Rerolls and ratings require Option E and progress validation within their
+//! Rerolls and ratings require Reading List engine and progress validation within their
 //! enclosing transaction; do not expose them through this standalone route.
 use crate::{
     auth::AuthenticatedUser,
