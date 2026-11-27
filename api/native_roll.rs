@@ -509,6 +509,10 @@ fn app() -> Router {
             get(native_dispatch),
         )
         .route("/api/v1/issues/{issue_id}/comicvine", get(native_dispatch))
+        // Canonical v2 CBL source catalog resource (#5712).
+        .route("/api/v2/cblSources", get(native_dispatch))
+        .route("/api/v2/cblSources/{source_id}", get(native_dispatch))
+        .route("/api/v2/cblOccurrences", get(native_dispatch))
         .route("/api/v1/issue-identity/cbl-sources", get(native_dispatch))
         .route(
             "/api/v1/issue-identity/cbl-sources/browse",
@@ -1138,6 +1142,9 @@ mod tests {
                 "POST",
                 "/api/v2/reading-lists/26/reading-plans/7/adoption-commits",
             ),
+            ("GET", "/api/v2/cblSources?filter=all&page_size=1"),
+            ("GET", "/api/v2/cblSources/26"),
+            ("GET", "/api/v2/cblOccurrences?filter=4000-1"),
         ];
         for (method, uri) in cases {
             let mut router = app();
