@@ -36,6 +36,9 @@ use utoipa::OpenApi;
         crate::auth::dto::forgot_password_documentation,
         crate::auth::dto::reset_password_documentation,
         crate::catalog_commit::commit_documentation,
+        // #5716: stateless AIP-136 preview, deliberately separate from the
+        // durable commit operation registered above.
+        crate::catalog_series_mapping_preview::preview_series_mappings_v2_documentation,
         crate::issue_identity::cbl_adoption_commit_documentation,
         crate::issue_identity::cbl_targeted_adoption_commit_documentation,
         crate::activity::list_activity_documentation,
@@ -292,6 +295,14 @@ use utoipa::OpenApi;
         crate::catalog_commit::CommitRequest,
         crate::catalog_commit::CommitResponse,
         crate::catalog_commit::CommitSeriesMapping,
+        // #5716: the preview DTOs are shared by the retained v1 alias, but the
+        // canonical v2 custom method must publish them in the v2 contract too.
+        crate::catalog_series_mapping_preview::SeriesMappingPreviewRequest,
+        crate::catalog_series_mapping_preview::SeriesMappingPreviewResponse,
+        crate::catalog_series_mapping_preview::SeriesMappingPreviewRow,
+        crate::catalog_series_mapping_preview::SeriesMappingPreviewScope,
+        crate::catalog_series_mapping_preview::SeriesMappingPreviewCounts,
+        crate::catalog_series_mapping_preview::SeriesMappingPreviewProviderSeries,
         crate::issue_identity::CommitSeriesDecision,
         crate::issue_identity::CommitEntryOverride,
         crate::issue_identity::CblAdoptionCommitRequest,
