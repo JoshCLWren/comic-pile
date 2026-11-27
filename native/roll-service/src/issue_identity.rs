@@ -5274,3 +5274,156 @@ impl utoipa::Modify for IssueIdentitySecurityAddon {
         }
     }
 }
+
+#[cfg(test)]
+mod guard_db_tests {
+    use super::*;
+    use crate::{db, test_support};
+    use serde_json::json;
+
+    /// Synthetic two-reader fixture: reader A owns one catalog-only issue and
+    /// one confirmed-mapping issue; reader B owns a catalog-only issue reusing
+    /// the same catalog identity. Only reader A has a volume exclusion.
+    async fn fixture() -> (Arc<AppState>, tokio::sync::MutexGuard<'static, ()>) {
+        let state = test_support::test_state(2)
+            .await
+            .expect("RUST_ROLL_TEST_DATABASE_URL is required");
+        let guard = test_support::reset_for_test(&state).await;
+        let conn = db::checkout(&state).await.expect("fixture connection");
+        conn.batch_execute(
+            r#"
+            INSERT INTO users (id, username, created_at) VALUES
+                (9101, 'guard-a', NOW()), (9102, 'guard-b', NOW());
+            INSERT INTO external_identities
+                (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+            VALUES
+                (8001, 'comicvine', 'series', '4050-1000', '{}'::json, NOW(), NOW()),
+                (8101, 'comicvine', 'issue', '4000-1', '{}'::json, NOW(), NOW());
+            INSERT INTO catalog_series (id, canonical_external_identity_id, created_at, updated_at)
+            VALUES (1001, 8001, NOW(), NOW());
+            INSERT INTO catalog_issues
+                (id, canonical_external_identity_id, catalog_series_id, created_at, updated_at)
+            VALUES (9001, 8101, 1001, NOW(), NOW());
+            INSERT INTO threads
+                (id, user_id, title, format, issues_remaining, queue_position, status,
+                 created_at, catalog_series_id)
+            VALUES
+                (9201, 9101, 'A catalog thread', 'comic', 1, 1, 'active', NOW(), 1001),
+                (9202, 9101, 'A confirmed thread', 'comic', 1, 2, 'active', NOW(), NULL),
+                (9401, 9102, 'B catalog thread', 'comic', 1, 1, 'active', NOW(), 1001);
+            INSERT INTO issues
+                (id, thread_id, issue_number, status, created_at, position, catalog_issue_id)
+            VALUES
+                (9301, 9201, '1', 'unread', NOW(), 1, 9001),
+                (9302, 9202, '1', 'unread', NOW(), 1, NULL),
+                (9501, 9401, '1', 'unread', NOW(), 1, 9001);
+            INSERT INTO thread_external_series_mappings
+                (id, thread_id, external_identity_id, status, evidence_source, created_at, updated_at)
+            VALUES (9601, 9202, 8001, 'confirmed', 'test', NOW(), NOW());
+            INSERT INTO issue_external_identity_mappings
+                (id, issue_id, external_identity_id, status, evidence_source, evidence_json,
+                 created_at, updated_at)
+            VALUES (9602, 9302, 8001, 'confirmed', 'test', '{}'::json, NOW(), NOW());
+            INSERT INTO collection_exclusions
+                (id, user_id, provider, external_volume_id, created_at)
+            VALUES (9701, 9101, 'comicvine', '4050-1000', NOW());
+            "#,
+        )
+        .await
+        .expect("seed guard fixture");
+        drop(conn);
+        (state, guard)
+    }
+
+    fn fact(
+        issue_id: Option<i32>,
+        thread_id: Option<i32>,
+    ) -> serde_json::Map<String, JsonValue> {
+        let mut fact = serde_json::Map::new();
+        if let Some(id) = issue_id {
+            fact.insert("resolved_issue_id".into(), json!(id));
+        }
+        if let Some(id) = thread_id {
+            fact.insert("thread_id".into(), json!(id));
+        }
+        fact
+    }
+
+    #[tokio::test]
+    async fn guard_state_preserves_confirmed_catalog_and_cross_reader_evidence() {
+        let (state, _guard) = fixture().await;
+        let mut conn = db::checkout(&state).await.expect("guard connection");
+        let tx = conn
+            .build_transaction()
+            .read_only(true)
+            .start()
+            .await
+            .expect("guard transaction");
+
+        // Confirmed issue mapping: series entity_type yields a volume key.
+        let confirmed = vec![fact(Some(9302), None)];
+        let confirmed_state = load_collection_guard_state(&tx, 9101, &confirmed)
+            .await
+            .expect("confirmed guard state");
+        assert!(confirmed_state
+            .issue_volumes
+            .get(&9302)
+            .is_some_and(|v| v.contains(&("comicvine".to_string(), "1000".to_string()))));
+        assert_eq!(
+            guard_check(&confirmed_state, &confirmed[0]).map(|(reason, _)| reason),
+            Some("collection_volume_excluded".to_string())
+        );
+
+        // Catalog-only issue: no confirmed mapping, canonical identity survives.
+        let catalog_only = vec![fact(Some(9301), None)];
+        let catalog_state = load_collection_guard_state(&tx, 9101, &catalog_only)
+            .await
+            .expect("catalog guard state");
+        assert!(catalog_state
+            .issue_volumes
+            .get(&9301)
+            .is_some_and(|v| v.contains(&("comicvine".to_string(), "1000".to_string()))));
+        assert_eq!(
+            guard_check(&catalog_state, &catalog_only[0]).map(|(reason, _)| reason),
+            Some("collection_volume_excluded".to_string())
+        );
+
+        // Missing mapping fails closed for review instead of silently allowing.
+        let missing = vec![fact(Some(9999), None)];
+        let missing_state = load_collection_guard_state(&tx, 9101, &missing)
+            .await
+            .expect("missing guard state");
+        assert!(missing_state.issue_volumes.is_empty());
+        assert_eq!(
+            guard_check(&missing_state, &missing[0]).map(|(reason, _)| reason),
+            Some("collection_identity_requires_review".to_string())
+        );
+
+        // Catalog-only thread identity (not an issue-level fact).
+        let thread = vec![fact(None, Some(9201))];
+        let thread_state = load_collection_guard_state(&tx, 9101, &thread)
+            .await
+            .expect("thread guard state");
+        assert!(thread_state
+            .thread_identities
+            .get(&9201)
+            .is_some_and(|v| v.contains(&("comicvine".to_string(), "1000".to_string()))));
+        assert_eq!(
+            guard_check(&thread_state, &thread[0]).map(|(reason, _)| reason),
+            Some("collection_volume_excluded".to_string())
+        );
+
+        // Cross-reader isolation: reader B uses the same catalog issue but A's
+        // volume exclusion must not apply to B's fact.
+        let other = vec![fact(Some(9501), Some(9401))];
+        let other_state = load_collection_guard_state(&tx, 9102, &other)
+            .await
+            .expect("other reader guard state");
+        assert!(
+            guard_check(&other_state, &other[0]).is_none(),
+            "foreign exclusion leaked"
+        );
+
+        tx.rollback().await.expect("rollback guard transaction");
+    }
+}
