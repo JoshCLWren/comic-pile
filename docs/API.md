@@ -71,11 +71,7 @@ response schemas, bounds, and status codes come from the generated contracts.
 | Reading constraints | `POST /api/v2/reading-boundaries`; `GET`/`PUT /api/v2/reading-mode`; reading-mode suggestion/dismissal resources |
 | Dependencies | Writes and blocked-list reads under `/api/v2/dependencies...`; retained thread-dependency reads in the same-path contract |
 | Reading history | Canonical AIP-122 collection `GET`/`POST /api/v2/readingSessions` (List/Create), `GET /api/v2/readingSessions/{session_id}` (event-derived Get), `/{session_id}/details` and `/{session_id}/snapshots`; undo snapshots and restore under `/api/v2/undo/{session_id}/snapshots...` |
-<<<<<<< HEAD
 | Continuity plans | Canonical plan CRUD, reader/recovery, release sources, and projection under `/api/v2/continuityPlans...`; retained project-preview and continuity-rule paths in the same-path contract |
-=======
-| Continuity plans | Canonical plan CRUD, reader/recovery, release sources, and projection under `/api/v2/continuity-plans...`; retained project-preview and continuity-rule paths in the same-path contract |
->>>>>>> main
 | ComicVine and CBL | Search, resolve, series import/status/roster, issue import, identity, and metadata correction resources under `/api/v2/comicvine...`; retained CBL source/adoption previews under `/api/v1/issue-identity/...`; commits use `/api/v2/reading-lists/{list_id}/adoption-commits` |
 | Creators, tags, releases | Creator reads under `/api/v2/creators...`; tag CRUD/usage/effective tags/assignments under `/api/v2/tags...`; `GET /api/v2/releases` plus retained release operations in the same-path contract |
 | Demo | `GET /api/v2/demo-roll` (public fabricated fixture, no database reads or writes) |
