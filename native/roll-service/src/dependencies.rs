@@ -18,8 +18,8 @@
 //! owner-scoped and never touch issues, read state, ratings or history.
 
 use crate::{
-    auth::AuthenticatedUser, db, issue_service, reading_order_inputs,
-    reading_constraints::ValidatedReadingInputs, ApiError, AppState,
+    auth::AuthenticatedUser, db, issue_service, reading_constraints::ValidatedReadingInputs,
+    reading_order_inputs, ApiError, AppState,
 };
 use axum::{
     extract::{Path, State},

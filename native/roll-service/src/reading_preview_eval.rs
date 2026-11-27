@@ -6,8 +6,8 @@
 //! only) that may even contain a cycle, so it cannot use the stored-state
 //! `ValidatedReadingInputs` pipeline. Everything here is pure: no I/O.
 
-use crate::reading_order_inputs::{ReadingOrderInputs, Prerequisite, ReadingEntry, ReadingList};
 use crate::reading_constraints::{Blocker, ThreadEligibility};
+use crate::reading_order_inputs::{Prerequisite, ReadingEntry, ReadingList, ReadingOrderInputs};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 /// One reader-approved `(continuing_volume_id, waiting_volume_id)` exception.

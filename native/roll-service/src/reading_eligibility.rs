@@ -283,8 +283,8 @@ pub fn evaluate(
 mod tests {
     use super::*;
     use crate::{
-        reading_order_inputs::ReadingOrderInputs,
         reading_inputs::{CoreReadingInputs, ReadingIssue, ReadingThread, StoredThreadEligibility},
+        reading_order_inputs::ReadingOrderInputs,
     };
     use std::collections::{BTreeMap, BTreeSet};
 

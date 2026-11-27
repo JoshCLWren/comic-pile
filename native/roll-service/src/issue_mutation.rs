@@ -7,7 +7,7 @@
 //! prerequisite or plan dangling is refused with the owning names.
 
 use crate::{
-    auth::AuthenticatedUser, db, reading_order_inputs, reading_constraints::ValidatedReadingInputs,
+    auth::AuthenticatedUser, db, reading_constraints::ValidatedReadingInputs, reading_order_inputs,
     thread_issues::natural_issue_order, ApiError, AppState,
 };
 use axum::{

@@ -529,7 +529,13 @@ async fn current_active_thread(
     let row = conn
         .query_opt(
             &sql,
-            &[&thread_id, &session_id, &user.id(), &reading_lists, &candidates],
+            &[
+                &thread_id,
+                &session_id,
+                &user.id(),
+                &reading_lists,
+                &candidates,
+            ],
         )
         .await
         .map_err(db::query_error)?
@@ -1304,9 +1310,9 @@ pub fn initialize_session_documentation() {}
 mod recovery_diagnostic_tests {
     use super::recovery_chains;
     use crate::{
-        reading_order_inputs::ReadingOrderInputs,
         reading_constraints::ConstraintEdge,
         reading_inputs::{CoreReadingInputs, ReadingIssue, ReadingThread},
+        reading_order_inputs::ReadingOrderInputs,
     };
     use std::collections::{BTreeMap, BTreeSet, HashSet};
 

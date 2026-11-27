@@ -6,7 +6,7 @@ use crate::{
     auth::AuthenticatedUser,
     db,
     dice_mutation::{self, DiceCommand},
-    dice_state, reading_order_inputs, queue, roll_exclusions, ApiError,
+    dice_state, queue, reading_order_inputs, roll_exclusions, ApiError,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};

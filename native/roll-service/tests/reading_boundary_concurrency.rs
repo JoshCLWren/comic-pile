@@ -49,7 +49,9 @@ fn state(url: &str, reading_lists: bool) -> Arc<AppState> {
     Arc::new(state)
 }
 
-async fn database(reading_lists: bool) -> Option<(Arc<AppState>, tokio::sync::MutexGuard<'static, ()>)> {
+async fn database(
+    reading_lists: bool,
+) -> Option<(Arc<AppState>, tokio::sync::MutexGuard<'static, ()>)> {
     let url = test_support::database_url().await;
     let state = state(&url, reading_lists);
     let guard = test_support::reset_for_test(&state).await;
@@ -258,7 +260,10 @@ async fn reading_lists_off_marks_every_boundary_unavailable() {
     assert_eq!(body["evaluator"], "unavailable", "{body}");
     let explanation = &body["threads"][thread.to_string()];
     assert_eq!(explanation["state"], "unavailable", "{body}");
-    assert_eq!(explanation["summary"], "Reading List engine is not active for JLI.");
+    assert_eq!(
+        explanation["summary"],
+        "Reading List engine is not active for JLI."
+    );
     assert_eq!(explanation["next"], Value::Null, "{body}");
     assert_eq!(explanation["blockers"], json!([]), "{body}");
 }

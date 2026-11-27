@@ -37,8 +37,8 @@
 #![forbid(unsafe_code)]
 
 use crate::{
-    auth::AuthenticatedUser, db, reading_order_inputs, reading_blocker_projection, reading_eligibility,
-    thread_issues, ApiError, AppState,
+    auth::AuthenticatedUser, db, reading_blocker_projection, reading_eligibility,
+    reading_order_inputs, thread_issues, ApiError, AppState,
 };
 use axum::{
     extract::{rejection::PathRejection, Path, State},

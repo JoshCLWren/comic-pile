@@ -22,8 +22,8 @@
 #![forbid(unsafe_code)]
 
 use crate::{
-    reading_order_inputs::{LegacyDependencyRow, ReadingOrderInputs},
     reading_constraints::ValidatedReadingInputs,
+    reading_order_inputs::{LegacyDependencyRow, ReadingOrderInputs},
 };
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -283,11 +283,11 @@ fn count_classes(legacy: &[LegacyDependencyRow]) -> BTreeMap<String, usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::reading_order_inputs::{OverlapDecision, Prerequisite, ReadingEntry, ReadingList};
     use crate::reading_constraints::ValidatedReadingInputs;
     use crate::reading_inputs::{
         CoreReadingInputs, ReadingIssue, ReadingThread, StoredThreadEligibility,
     };
+    use crate::reading_order_inputs::{OverlapDecision, Prerequisite, ReadingEntry, ReadingList};
     use std::collections::BTreeSet;
 
     /// The issue #4198 fixture chain:

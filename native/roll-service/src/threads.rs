@@ -25,7 +25,7 @@
 use axum::http::StatusCode;
 
 use crate::{
-    auth::VerifiedAccessClaims, db, reading_order_inputs, reading_eligibility, ApiError, AppState,
+    auth::VerifiedAccessClaims, db, reading_eligibility, reading_order_inputs, ApiError, AppState,
 };
 use axum::{
     extract::{Query, State},
@@ -352,7 +352,11 @@ pub async fn list_threads(
     }
     let search = normalize_search(raw_search);
     let reading_lists = state.reading_lists;
-    let execution = if reading_lists { "reading_lists" } else { "legacy" };
+    let execution = if reading_lists {
+        "reading_lists"
+    } else {
+        "legacy"
+    };
     let cursor = query
         .page_token
         .as_deref()
@@ -367,7 +371,8 @@ pub async fn list_threads(
     let mut preauthenticated = None;
     if reading_lists {
         let user = crate::auth::authenticate_claims(&state, &claims).await?;
-        let validated = reading_order_inputs::load_reading_order_inputs_contained(&state, user).await?;
+        let validated =
+            reading_order_inputs::load_reading_order_inputs_contained(&state, user).await?;
         reading_lists_state = Some(ReadingOrderProjection::build(&validated)?);
         preauthenticated = Some(user.id());
     }
@@ -459,7 +464,8 @@ pub async fn get_thread_detail(
     let mut candidates: Vec<i32> = Vec::new();
     if reading_lists {
         let user = crate::auth::authenticate_claims(&state, &claims).await?;
-        let validated = reading_order_inputs::load_reading_order_inputs_contained(&state, user).await?;
+        let validated =
+            reading_order_inputs::load_reading_order_inputs_contained(&state, user).await?;
         candidates = eligible_candidate_ids(&validated)?;
     }
     let position = display_position_expr("(SELECT user_id FROM auth)", "$4", "$5", "$6");

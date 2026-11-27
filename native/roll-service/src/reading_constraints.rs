@@ -1240,10 +1240,10 @@ impl ValidatedReadingInputs {
 mod tests {
     use super::*;
     use crate::{
+        reading_inputs::{CoreReadingInputs, ReadingIssue, ReadingThread, StoredThreadEligibility},
         reading_order_inputs::{
             Prerequisite as OptionPrerequisite, ReadingEntry, ReadingList, UnresolvedReference,
         },
-        reading_inputs::{CoreReadingInputs, ReadingIssue, ReadingThread, StoredThreadEligibility},
     };
     fn inputs() -> ReadingOrderInputs {
         ReadingOrderInputs {

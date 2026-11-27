@@ -12,8 +12,8 @@
 //! Issue, read state, rating, history event, or another reader's row.
 
 use crate::{
-    auth::AuthenticatedUser, db, reading_order_inputs, reading_order_inputs::ReadingOrderInputs,
-    reading_constraints::ValidationError, ApiError, AppState,
+    auth::AuthenticatedUser, db, reading_constraints::ValidationError, reading_order_inputs,
+    reading_order_inputs::ReadingOrderInputs, ApiError, AppState,
 };
 use axum::{extract::State, http::StatusCode, Json};
 use serde::{Deserialize, Serialize};
@@ -950,8 +950,8 @@ pub fn repair_documentation() {}
 mod tests {
     use super::*;
     use crate::{
-        reading_order_inputs::{OverlapDecision, Prerequisite, ReadingEntry, ReadingList},
         reading_inputs::{CoreReadingInputs, ReadingIssue, ReadingThread, StoredThreadEligibility},
+        reading_order_inputs::{OverlapDecision, Prerequisite, ReadingEntry, ReadingList},
         test_support,
     };
 
@@ -1278,10 +1278,12 @@ mod tests {
 
         // The exact Reading List engine authority blocks #361 and leaves X-Men #80
         // eligible.
-        let validated =
-            reading_order_inputs::load_reading_order_inputs_contained(&state, AuthenticatedUser::for_test(9101))
-                .await
-                .expect("validated Reading List engine inputs");
+        let validated = reading_order_inputs::load_reading_order_inputs_contained(
+            &state,
+            AuthenticatedUser::for_test(9101),
+        )
+        .await
+        .expect("validated Reading List engine inputs");
         let eligible: Vec<i32> = validated
             .eligible_frontiers()
             .expect("eligibility")

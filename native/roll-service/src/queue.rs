@@ -306,7 +306,8 @@ async fn eligible_thread_ids(
     if !state.reading_lists {
         return Ok(None);
     }
-    let validated = crate::reading_order_inputs::load_reading_order_inputs_contained(state, user).await?;
+    let validated =
+        crate::reading_order_inputs::load_reading_order_inputs_contained(state, user).await?;
     Ok(Some(evaluated_eligible_ids(&validated)?))
 }
 
@@ -530,9 +531,11 @@ async fn reposition(
     // keeps the grouping consistent with the serialized move and avoids a second
     // pool checkout while this request holds its write connection.
     let eligible = if state.reading_lists {
-        let validated =
-            crate::reading_order_inputs::load_validated_contained_in_transaction(&transaction, user)
-                .await?;
+        let validated = crate::reading_order_inputs::load_validated_contained_in_transaction(
+            &transaction,
+            user,
+        )
+        .await?;
         Some(evaluated_eligible_ids(&validated)?)
     } else {
         None
@@ -1038,7 +1041,9 @@ mod tests {
         stored_blocked: bool,
         issue_id: Option<i32>,
     ) {
-        let connection = db::checkout(db).await.expect("Reading Lists seed connection");
+        let connection = db::checkout(db)
+            .await
+            .expect("Reading Lists seed connection");
         connection
             .execute(
                 "INSERT INTO users (id, username) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
@@ -1768,10 +1773,7 @@ mod tests {
         // Stored: 1,2 readable then 3 blocked. Evaluated: 2,3 readable then 1.
         let legacy = [(1, 1), (2, 2), (3, 3)];
         let evaluated = [(1, 3), (2, 1), (3, 2)];
-        let cases: [(bool, [(i32, i32); 3]); 2] = [
-            (false, legacy),
-            (true, evaluated),
-        ];
+        let cases: [(bool, [(i32, i32); 3]); 2] = [(false, legacy), (true, evaluated)];
         for (reading_lists, expected) in cases {
             let case_state = state_with_reading_lists_values(&url, 2, true, reading_lists);
             for (thread_id, position) in expected {
@@ -2094,8 +2096,14 @@ mod tests {
             Json(QueueEntryPatch { position: 2 }),
         );
         let (first, second) = tokio::join!(first, second);
-        assert!(first.is_ok(), "first concurrent Reading List engine move failed");
-        assert!(second.is_ok(), "second concurrent Reading List engine move failed");
+        assert!(
+            first.is_ok(),
+            "first concurrent Reading List engine move failed"
+        );
+        assert!(
+            second.is_ok(),
+            "second concurrent Reading List engine move failed"
+        );
 
         let mut ranks: Vec<i32> = positions(&state, 7)
             .await

@@ -2,7 +2,7 @@
 //! Implements the same contract as Python's POST /api/v2/reading-boundaries.
 
 use crate::{
-    auth::AuthenticatedUser, db, reading_order_inputs, reading_constraints::ValidatedReadingInputs,
+    auth::AuthenticatedUser, db, reading_constraints::ValidatedReadingInputs, reading_order_inputs,
     ApiError, AppState,
 };
 use axum::{
