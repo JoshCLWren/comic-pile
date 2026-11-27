@@ -217,6 +217,8 @@ describe('manual read surface roll parity', () => {
         { ...issue, id: 93, issue_number: '5', status: 'read' },
       ],
       next_page_token: null,
+      page_size: 50,
+      total_count: 2,
     })
     setup()
 
