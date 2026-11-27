@@ -117,6 +117,8 @@ fn bad_filter(detail: &str) -> ApiError {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum SourceFilter {
+    /// Whole shared catalog, used by discovery when no search term is supplied.
+    All,
     Folder(String),
     Search(String),
 }
@@ -124,6 +126,7 @@ enum SourceFilter {
 impl SourceFilter {
     fn canonical(&self) -> String {
         match self {
+            Self::All => "all".to_string(),
             Self::Folder(folder) => format!("folder:{folder}"),
             Self::Search(term) => format!("q:{term}"),
         }
@@ -140,6 +143,9 @@ fn parse_source_filter(raw: Option<&str>) -> Result<SourceFilter, ApiError> {
     }
     if value.chars().count() > MAX_FILTER_LENGTH {
         return Err(bad_filter("filter must be at most 1000 characters"));
+    }
+    if value.eq_ignore_ascii_case("all") || value == "*" {
+        return Ok(SourceFilter::All);
     }
     if let Some(rest) = value.strip_prefix("folder:") {
         let folder = cbl_catalog::normalize_folder(Some(rest.trim()))
@@ -310,6 +316,34 @@ async fn query_source_page(
     offset: i64,
 ) -> Result<(Vec<CBLCatalogListItem>, i64, i64), ApiError> {
     match filter {
+        SourceFilter::All => {
+            let count_row = conn
+                .query_one(
+                    "SELECT COUNT(*)::bigint, COUNT(*)::bigint
+                     FROM cbl_source_lists l
+                     WHERE l.active IS TRUE",
+                    &[],
+                )
+                .await
+                .map_err(db::query_error)?;
+            let total: i64 = count_row.get(0);
+            let catalog_total: i64 = count_row.get(1);
+            let sql = format!(
+                "SELECT l.id, l.name, l.source_path, s.repository AS source_repository,
+                        l.declared_issue_count, l.content_hash, l.revision_sha
+                 FROM cbl_source_lists l
+                 JOIN cbl_sources s ON s.id = l.source_id
+                 WHERE l.active IS TRUE
+                 ORDER BY {}
+                 LIMIT $1::bigint OFFSET $2::bigint",
+                order_by_sql(order_by)
+            );
+            let rows = conn
+                .query(&sql, &[&page_size, &offset])
+                .await
+                .map_err(db::query_error)?;
+            Ok((rows.iter().map(cbl_catalog::map_item).collect(), total, catalog_total))
+        }
         SourceFilter::Search(term) => {
             let pattern = format!("%{}%", cbl_catalog::escape_like(term));
             let count_row = conn
@@ -417,6 +451,13 @@ pub async fn list_cbl_sources(
     let conn = db::checkout(&state).await?;
 
     let (folders, scope, response_folder, response_query, response_breadcrumbs) = match &filter {
+        SourceFilter::All => (
+            Vec::new(),
+            "search".to_string(),
+            String::new(),
+            None,
+            cbl_catalog::breadcrumbs(""),
+        ),
         SourceFilter::Search(term) => (
             Vec::new(),
             "search".to_string(),
@@ -660,6 +701,14 @@ mod tests {
         assert_eq!(
             parse_source_filter(None).expect("default filter"),
             SourceFilter::Folder(String::new())
+        );
+        assert_eq!(
+            parse_source_filter(Some("all")).expect("whole catalog"),
+            SourceFilter::All
+        );
+        assert_eq!(
+            parse_source_filter(Some("*")).expect("whole catalog alias"),
+            SourceFilter::All
         );
         assert_eq!(
             parse_source_filter(Some("folder:DC/Mister Miracle")).expect("folder"),
