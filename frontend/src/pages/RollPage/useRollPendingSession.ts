@@ -112,6 +112,7 @@ export function useRollPendingSession({ state, bootstrap, rollPool, pending }: U
     setIsOverrideOpen(false)
     setIsDieModalOpen(false)
   }, [
+    bootstrap?.pending_thread_id,
     pending?.thread_id,
     pending?.result,
     pending?.issue_id,

@@ -167,12 +167,9 @@ test.describe('ROLL-001: Roll selection', () => {
       page.getByText(/failed to move series to front/i),
     ).not.toBeVisible()
 
-    // Exactly one bootstrap refresh per move — owned by the move mutation's
-    // queue-movement invalidation. The session was already resolved by the
-    // cold Roll load, so the refresh is the read-only GET alone (#4276): the
-    // retired explicit `refetchBootstrap()` used to append one more POST
-    // /v2/readingSessions and one more GET /v2/roll/bootstrap per move.
-    expect(ledger.count('GET', '/api/v2/roll/bootstrap') - before.bootstrap).toBe(1)
+    // The move refreshes scoped Roll inputs, not the retired aggregate/session
+    // operations (#4350).
+    expect(ledger.count('GET', '/api/v2/roll/bootstrap') - before.bootstrap).toBe(0)
     expect(ledger.count('POST', '/api/v2/readingSessions') - before.sessionPost).toBe(0)
     expect(ledger.count('PATCH', `/api/v2/queue-entries/${beta.id}`) - before.movePatch).toBe(1)
   })
@@ -221,13 +218,10 @@ test.describe('ROLL-001: Roll selection', () => {
     await expect(poolRows).toHaveCount(2)
     await expect(page.getByTestId('shuffle-queue-error')).not.toBeVisible()
 
-    // One whole-queue shuffle POST and one authoritative bootstrap refresh —
-    // a refresh of the already-resolved session, so the read-only GET alone
-    // (#4276). The retired explicit `refetchBootstrap()` after the mutation
-    // used to spend a second refresh (POST /v2/readingSessions + GET
-    // /v2/roll/bootstrap).
+    // One whole-queue shuffle POST, with no retired aggregate/session request
+    // (#4350).
     expect(ledger.count('POST', '/api/v2/queue-orders') - before.orders).toBe(1)
-    expect(ledger.count('GET', '/api/v2/roll/bootstrap') - before.bootstrap).toBe(1)
+    expect(ledger.count('GET', '/api/v2/roll/bootstrap') - before.bootstrap).toBe(0)
     expect(ledger.count('POST', '/api/v2/readingSessions') - before.sessionPost).toBe(0)
   })
 })
