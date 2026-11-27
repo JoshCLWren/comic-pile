@@ -435,8 +435,10 @@ export default function SessionPage() {
         ) : (
           <div className="space-y-3 min-w-0">
             {details.events.map((event) => (
-              // Legacy events are rendered as text; the shared card appears only
-              // when the owner projection supplies a canonical numeric issue id.
+              // SAFETY: session-detail events carry display-only fields beyond
+              // the native `SessionEvent` schema; a canonical owned issue id is
+              // required before any shared card mounts, so legacy events with
+              // only a title/number hint stay text-only.
               <EventRecord
                 key={event.id}
                 event={event as DisplayEvent}
