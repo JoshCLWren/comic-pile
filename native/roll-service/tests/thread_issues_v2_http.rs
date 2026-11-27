@@ -283,7 +283,7 @@ async fn v2_issues_are_ordered_enriched_filtered_and_paginated() {
     );
     assert_eq!(issues[1]["id"], ids[1]);
     assert_eq!(issues[1]["mapping_state"], "unmapped");
-    assert!(issues[1]["has_confirmed_identity"].as_bool().unwrap() == false);
+    assert!(!issues[1]["has_confirmed_identity"].as_bool().unwrap());
     assert!(issues[1]["comicvine_issue_id"].is_null());
     assert!(issues[1]["cover_image_url"].is_null());
     let next = body["next_page_token"].as_str().unwrap().to_owned();
