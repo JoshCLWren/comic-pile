@@ -1645,7 +1645,9 @@ mod tests {
                 response.status()
             );
         }
-    }    async fn edit_series_preview_ingress_reaches_rust_and_never_hits_json_404() {
+    }
+#[tokio::test]
+    async fn edit_series_preview_ingress_reaches_rust_and_never_hits_json_404() {
         // #5863: Edit Series Add posted to the inner-router-only preview paths,
         // so the Vercel ingress returned its JSON 404 ("Not Found") instead of
         // previewing Annual/Special/fractional input. An unauthenticated request
@@ -1698,9 +1700,108 @@ mod tests {
             );
         }
     }
+#[tokio::test]
+    async fn check_duplicates_v2_ingress_reaches_rust_and_never_hits_json_404() {
+        // #5705: `POST /api/v2/threads:checkDuplicates` is registered in the
+        // inner service router, but the Vercel entry owns a separate route
+        // table. Without a matching route here a deployed request falls
+        // through to native_not_found and returns the Rust JSON 404. An
+        // unauthenticated request must reach native_dispatch (401 when the
+        // inner router has state, 503 on cold start), never the 404 fallback.
+        let mut router = app();
+        let response = router
+            .call(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v2/threads:checkDuplicates")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"title":"Amazing Spider-Man","format":"Comic"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .expect("duplicate-check ingress response");
+        assert!(
+            response.status() == StatusCode::UNAUTHORIZED
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+            "v2 duplicate check must reach Rust dispatch, not the 404 fallback, got {}",
+            response.status()
+        );
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime").unwrap(),
+            "rust",
+            "v2 duplicate check must be served by the native ingress"
+        );
+        let bytes = to_bytes(response.into_body(), 8192)
+            .await
+            .expect("body bytes");
+        let text = String::from_utf8_lossy(&bytes);
+        assert_ne!(
+            text, r#"{"detail":"Not Found"}"#,
+            "v2 duplicate check must not hit native_not_found: {text}"
+        );
+    }
+#[tokio::test]
+    async fn reading_order_projection_ingress_reaches_rust_and_retires_v1_paths() {
+        // #5715: the canonical v2 preview and thread-order reads must be
+        // registered on the Vercel ingress. An unauthenticated request must
+        // reach Rust dispatch (401, or 503 on cold start), never the
+        // `native_not_found` JSON 404. The retired v1 paths must fall through.
+        for (method, uri, body) in [
+            (
+                "POST",
+                "/api/v2/continuityPlans/101:previewReadingOrderProjection",
+                r#"{"reading_order_id":7}"#,
+            ),
+            ("GET", "/api/v2/threads/102/readingOrders", ""),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .header("content-type", "application/json")
+                        .body(Body::from(body))
+                        .unwrap(),
+                )
+                .await
+                .expect("preview ingress response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{uri} must reach Rust dispatch, not the 404 fallback, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{uri} must be served by the native ingress"
+            );
+        }
 
-    #[tokio::test]
-usCode::NOT_FOUND,
+        for (method, uri) in [
+            (
+                "POST",
+                "/api/v1/continuity-plans/101/reading-orders/project-preview",
+            ),
+            ("GET", "/api/v1/threads/102/reading-orders"),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("retired ingress response");
+            assert_eq!(
+                response.status(),
+                StatusCode::NOT_FOUND,
                 "{uri} must no longer be registered"
             );
         }
