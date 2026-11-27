@@ -1,5 +1,5 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
-import type { BugReportResponse } from '../types'
+import type { BugReportV2Response } from '../types'
 
 /**
  * Build the bug reports service bound to an HTTP client.
@@ -9,8 +9,10 @@ import type { BugReportResponse } from '../types'
  */
 export function createBugReportsApi(client: HttpClient) {
   return {
+    // Canonical AIP-133 Create (#5718): no trailing slash and no `:submit`
+    // custom-method alias. The response carries the stable resource name/id.
     create: (data: { title: string; description: string; diagnostics?: unknown }) =>
-      client.post<BugReportResponse>('/v1/bug-reports/', data),
+      client.post<BugReportV2Response>('/v2/bugReports', data),
   }
 }
 
