@@ -777,8 +777,63 @@ mod tests {
         assert!(!result[&1].eligible);
         assert_eq!(result[&1].blockers[0].kind, "reading_cycle");
         assert!(result[&1].blockers[0].waiting_on_issue_ids.contains(&10));
+        assert_eq!(
+            result[&1].next_issue_id,
+            Some(11),
+            "the earliest cyclic Issue is read; the unread frontier must survive containment"
+        );
         // The unrelated series keeps its normal live frontier.
         assert!(result[&3].eligible);
         assert_eq!(result[&3].next_issue_id, Some(30));
+    }
+
+    #[test]
+    fn contained_cycle_never_exposes_an_excluded_or_fully_read_frontier() {
+        let mut excluded = test_inputs();
+        excluded.core.issues[1].status = "unread".into();
+        excluded.excluded_issue_ids.insert(11);
+        excluded.lists.push(crate::option_inputs::ReadingList {
+            list_id: 1,
+            mode: "strict".into(),
+            name: "Curated".into(),
+            entries: vec![
+                crate::option_inputs::ReadingEntry {
+                    issue_id: 11,
+                    gate: "none".into(),
+                    skipped: false,
+                },
+                crate::option_inputs::ReadingEntry {
+                    issue_id: 10,
+                    gate: "none".into(),
+                    skipped: false,
+                },
+            ],
+            overlap_decisions: vec![],
+        });
+        let validated = ValidatedReadingInputs::contained(excluded, &BTreeMap::new()).unwrap();
+        assert_eq!(evaluate(&validated).unwrap()[&1].next_issue_id, None);
+
+        let mut completed = test_inputs();
+        completed.core.issues[1].status = "read".into();
+        completed.lists.push(crate::option_inputs::ReadingList {
+            list_id: 1,
+            mode: "strict".into(),
+            name: "Curated".into(),
+            entries: vec![
+                crate::option_inputs::ReadingEntry {
+                    issue_id: 11,
+                    gate: "none".into(),
+                    skipped: false,
+                },
+                crate::option_inputs::ReadingEntry {
+                    issue_id: 10,
+                    gate: "none".into(),
+                    skipped: false,
+                },
+            ],
+            overlap_decisions: vec![],
+        });
+        let validated = ValidatedReadingInputs::contained(completed, &BTreeMap::new()).unwrap();
+        assert_eq!(evaluate(&validated).unwrap()[&1].next_issue_id, None);
     }
 }
