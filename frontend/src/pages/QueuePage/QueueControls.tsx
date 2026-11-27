@@ -79,7 +79,7 @@ function QueueControlsInner({
           <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase">
             Queue
           </h1>
-          <p className="text-base font-semibold text-stone-500">
+          <p className="text-base font-semibold text-[var(--theme-text-muted)]">
             Your upcoming comics
           </p>
         </div>
@@ -95,7 +95,7 @@ function QueueControlsInner({
           <button
             type="button"
             onClick={onAddFromComicVine}
-            className="hidden md:flex h-12 px-5 rounded-xl bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] text-stone-200 font-semibold whitespace-nowrap hover:bg-[var(--theme-bg-hover)] items-center gap-2"
+            className="hidden md:flex h-12 px-5 rounded-xl bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] text-[var(--theme-text-primary)] font-semibold whitespace-nowrap hover:bg-[var(--theme-bg-hover)] items-center gap-2"
             data-testid="queue-add-comicvine-desktop"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
