@@ -1,10 +1,15 @@
-//! Same-path Rust cutover for the bug-report family (#4852, parent #4335).
+//! Bug-report family: same-path Rust cutover plus the canonical v2 Create.
 //!
 //! Serves the retired Python `app/api/bug_report.py` wire contract at the
 //! same HTTP methods and exact paths (`POST /api/bug-reports/` and
 //! `POST /api/v1/bug-reports/`); only the implementation moved from Python
-//! FastAPI to the native Roll binary (Python handler deleted in #5162). No
-//! frontend URL changes.
+//! FastAPI to the native Roll binary (Python handler deleted in #5162).
+//!
+//! The browser now uses the canonical AIP-133 Create `POST /api/v2/bugReports`
+//! (#5718), which shares the validated submit flow and returns the created
+//! resource with a stable AIP-122 `name`/`id` and a `Location` header. The old
+//! paths stay mounted until authenticated production proof allows retiring
+//! them; they are not a v2 alias.
 //!
 //! Parity with the retired Python oracle (`app/api/bug_report.py` +
 //! `app/services/github_issue_rate_limit.py`, since removed; the shared
@@ -2612,6 +2617,54 @@ mod tests {
         assert!(document["components"]["schemas"]["BugReportResponse"].is_object());
     }
 
+    #[test]
+    fn v2_create_uses_stable_aip_122_resource_name_and_id() {
+        let response = created_v2_response("https://github.com/acme/repo/issues/98765")
+            .expect("a GitHub issue URL carries a stable numeric id");
+        assert_eq!(response.status(), StatusCode::CREATED);
+        assert_eq!(
+            response
+                .headers()
+                .get("Location")
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "/api/v2/bugReports/98765"
+        );
+        assert_eq!(
+            issue_resource("https://github.com/acme/repo/issues/98765").unwrap(),
+            ("98765".to_string(), "bugReports/98765".to_string())
+        );
+    }
+
+    #[test]
+    fn v2_create_rejects_url_without_stable_issue_id() {
+        let error = created_v2_response("https://github.com/acme/repo/issues/not-a-number")
+            .expect_err("a non-numeric issue segment cannot name a stable resource");
+        assert_eq!(error.status(), StatusCode::BAD_GATEWAY);
+    }
+
+    #[test]
+    fn v2_openapi_declares_standard_create_only() {
+        let document = serde_json::to_value(BugReportsV2Api::openapi()).expect("v2 openapi");
+        let paths = document["paths"].as_object().expect("paths");
+        assert_eq!(paths.len(), 1, "v2 contract must not republish v1 aliases");
+        let operation = &document["paths"]["/api/v2/bugReports"]["post"];
+        assert_eq!(operation["operationId"], "create_bug_report");
+        assert!(operation["requestBody"]["content"]["application/json"]["schema"]["$ref"]
+            .as_str()
+            .is_some_and(|reference| reference.ends_with("/BugReportCreate")));
+        assert_eq!(
+            operation["responses"]["201"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/BugReportV2Response"
+        );
+        assert!(operation["security"].is_array());
+        let schema = &document["components"]["schemas"]["BugReportV2Response"];
+        for field in ["name", "id", "issue_url"] {
+            assert!(schema["properties"][field].is_object(), "missing {field}");
+        }
+    }
+
     /// Set configured GitHub env vars for the current test process, restoring
     /// any previous values on drop so parallel test threads observe the
     /// original environment.
@@ -2772,6 +2825,72 @@ mod tests {
         );
     }
 
+    /// The canonical v2 Create shares the same submit flow but returns an
+    /// AIP-133 resource with a stable `name`/`id` and a `Location` header.
+    #[tokio::test]
+    async fn v2_create_returns_stable_resource_in_disposable_postgres() {
+        use crate::{db, test_support};
+
+        let state = test_support::test_state(2)
+            .await
+            .expect("RUST_ROLL_TEST_DATABASE_URL is required");
+        let _guard = test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("fixture connection");
+        connection
+            .batch_execute(
+                "INSERT INTO users (id, username, is_admin) VALUES (1103, 'bug-reports-v2-test', false);",
+            )
+            .await
+            .expect("seed v2 bug reports user");
+        drop(connection);
+
+        let _env = TempGitHubEnv::install();
+        let response = create_v2_with_issuer(
+            &state,
+            1103,
+            Bytes::from(r#"{"title":"Bug","description":"Details"}"#),
+            &|_: GithubSettings, _: String, _: String, _: Vec<String>| -> GithubFuture {
+                Box::pin(async {
+                    Ok("https://github.com/comic-pile-test/synthetic/issues/314".to_string())
+                })
+            },
+        )
+        .await
+        .expect("v2 create must succeed through the shared flow");
+        assert_eq!(response.status(), StatusCode::CREATED);
+        assert_eq!(
+            response
+                .headers()
+                .get("Location")
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "/api/v2/bugReports/314"
+        );
+        let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024)
+            .await
+            .expect("read v2 response body");
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&bytes).unwrap(),
+            serde_json::json!({
+                "name": "bugReports/314",
+                "id": "314",
+                "issue_url": "https://github.com/comic-pile-test/synthetic/issues/314",
+            })
+        );
+
+        let connection = db::checkout(&state).await.expect("verify connection");
+        let consumed: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM github_issue_submission_limits WHERE user_id = $1 AND last_submitted_at IS NOT NULL",
+                &[&1103],
+            )
+            .await
+            .expect("verify claim committed")
+            .get(0);
+        assert_eq!(consumed, 1, "a successful v2 create consumes the allowance");
+    }
+
     #[tokio::test]
     async fn bug_reports_require_auth_through_service_router() {
         use crate::{config::Config, router};
@@ -2785,7 +2904,11 @@ mod tests {
         })
         .unwrap();
         let app = router(Arc::new(AppState::new(config).unwrap()));
-        for uri in ["/api/bug-reports/", "/api/v1/bug-reports/"] {
+        for uri in [
+            "/api/bug-reports/",
+            "/api/v1/bug-reports/",
+            "/api/v2/bugReports",
+        ] {
             let response = app
                 .clone()
                 .oneshot(
