@@ -70,7 +70,7 @@ test.describe('Issue #2104 zero readiness network requests', () => {
     })
     const issueIds = await getIssueIds(page, token, thread.id)
 
-    const groupResponse = await page.request.post('/api/v2/readingOrderGroups', {
+    const groupResponse = await page.request.post('/api/v1/reading-order-groups/', {
       headers,
       data: { name: 'Zero Readiness Crossover' },
     })

@@ -920,39 +920,6 @@ export type ReadingBoundaryBatchResponse = components['schemas']['ReadingBoundar
 
 export type ReadingGraphResponse = components['schemas']['ReadingGraphResponse']
 
-export interface ReadingOrderGroupsCreateRequest {
-  body: components['schemas']['DependencyGroupCreateRequest']
-}
-
-export type ReadingOrderGroupsCreateResponse = components['schemas']['NativeDependencyGroupResponse']
-
-export interface ReadingOrderGroupsDeleteRequest {
-  path: {
-    group_id: number
-  }
-}
-
-export type ReadingOrderGroupsDeleteResponse = void
-
-export interface ReadingOrderGroupsGetRequest {
-  path: {
-    group_id: number
-  }
-}
-
-export type ReadingOrderGroupsGetResponse = components['schemas']['NativeDependencyGroupDetailResponse']
-
-export type ReadingOrderGroupsListResponse = Array<components['schemas']['NativeDependencyGroupResponse']>
-
-export interface ReadingOrderGroupsUpdateRequest {
-  path: {
-    group_id: number
-  }
-  body: components['schemas']['DependencyGroupUpdateRequest']
-}
-
-export type ReadingOrderGroupsUpdateResponse = components['schemas']['NativeDependencyGroupResponse']
-
 export interface ReadingOrdersInsertItemRequest {
   path: {
     reading_order_id: number
@@ -1468,11 +1435,6 @@ export interface NativeV2Client {
   readReadingList(args: ReadReadingListRequest): Promise<ReadReadingListResponse>
   readingBoundaryBatch(args: ReadingBoundaryBatchRequest): Promise<ReadingBoundaryBatchResponse>
   readingGraph(): Promise<ReadingGraphResponse>
-  readingOrderGroupsCreate(args: ReadingOrderGroupsCreateRequest): Promise<ReadingOrderGroupsCreateResponse>
-  readingOrderGroupsDelete(args: ReadingOrderGroupsDeleteRequest): Promise<ReadingOrderGroupsDeleteResponse>
-  readingOrderGroupsGet(args: ReadingOrderGroupsGetRequest): Promise<ReadingOrderGroupsGetResponse>
-  readingOrderGroupsList(): Promise<ReadingOrderGroupsListResponse>
-  readingOrderGroupsUpdate(args: ReadingOrderGroupsUpdateRequest): Promise<ReadingOrderGroupsUpdateResponse>
   readingOrdersInsertItem(args: ReadingOrdersInsertItemRequest): Promise<ReadingOrdersInsertItemResponse>
   readingOrdersList(): Promise<ReadingOrdersListResponse>
   readingPlanSync(args: ReadingPlanSyncRequest): Promise<ReadingPlanSyncResponse>
@@ -2154,31 +2116,6 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     readingGraph() {
       return client.get<ReadingGraphResponse>("/v2/reading-graph")
-    },
-    readingOrderGroupsCreate(args: ReadingOrderGroupsCreateRequest) {
-      return client.post<ReadingOrderGroupsCreateResponse, ReadingOrderGroupsCreateRequest['body']>(
-        "/v2/readingOrderGroups",
-        args.body,
-      )
-    },
-    readingOrderGroupsDelete(args: ReadingOrderGroupsDeleteRequest) {
-      return client.delete<ReadingOrderGroupsDeleteResponse>(
-        `/v2/readingOrderGroups/${encodeURIComponent(String(args.path.group_id))}`,
-      )
-    },
-    readingOrderGroupsGet(args: ReadingOrderGroupsGetRequest) {
-      return client.get<ReadingOrderGroupsGetResponse>(
-        `/v2/readingOrderGroups/${encodeURIComponent(String(args.path.group_id))}`,
-      )
-    },
-    readingOrderGroupsList() {
-      return client.get<ReadingOrderGroupsListResponse>("/v2/readingOrderGroups")
-    },
-    readingOrderGroupsUpdate(args: ReadingOrderGroupsUpdateRequest) {
-      return client.patch<ReadingOrderGroupsUpdateResponse, ReadingOrderGroupsUpdateRequest['body']>(
-        `/v2/readingOrderGroups/${encodeURIComponent(String(args.path.group_id))}`,
-        args.body,
-      )
     },
     readingOrdersInsertItem(args: ReadingOrdersInsertItemRequest) {
       return client.post<ReadingOrdersInsertItemResponse, ReadingOrdersInsertItemRequest['body']>(

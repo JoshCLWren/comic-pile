@@ -56,7 +56,7 @@ async function seedThread(page: Page): Promise<number> {
 
 async function seedSingleMemberGroup(page: Page, threadId: number): Promise<number> {
   const headers = await authHeaders(page)
-  const createResponse = await page.request.post('/api/v2/readingOrderGroups', {
+  const createResponse = await page.request.post('/api/v1/reading-order-groups/', {
     headers,
     data: { name: GROUP_NAME },
   })

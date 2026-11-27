@@ -819,6 +819,11 @@ pub fn router(state: Arc<AppState>) -> Router {
                 .delete(thread_lifecycle::delete_thread_v2),
         )
         .route(
+            "/api/v1/threads/{thread_id}",
+            get(threads::get_thread_detail),
+        )
+        .route("/api/threads/{thread_id}", get(threads::get_thread_detail))
+        .route(
             "/api/v1/threads/{thread_id}/issues",
             get(issue_read::list_thread_issues),
         )
@@ -889,10 +894,18 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/threads/{thread_id}/reading-orders",
             get(thread_ordering::get_thread_reading_orders),
         )
+        .route(
+            "/api/v1/threads/completed/threads",
+            get(threads::list_completed_threads),
+        )
         .route("/api/v1/threads/", post(thread_lifecycle::create_thread))
         .route(
             "/api/v1/threads/check-duplicates",
             post(thread_lifecycle::check_potential_duplicates),
+        )
+        .route(
+            "/api/v1/threads/excluded/threads",
+            get(thread_lifecycle::list_excluded_threads),
         )
         // The retired batch URL would otherwise be captured as a
         // `/api/v1/threads/{thread_id}` action. Pin it to an explicit 404 so
@@ -908,6 +921,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/threads/reactivate",
             post(thread_lifecycle::reactivate_thread),
+        )
+        .route(
+            "/api/v1/threads/stale",
+            get(thread_lifecycle::list_stale_threads),
         )
         .route(
             "/api/v1/threads/{thread_id}",
@@ -1404,28 +1421,29 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/reading-mode/suggestions",
             post(reading_mode::suggest_reading_mode),
         )
-        // #5710: the v2 collection is the single reading-order-group CRUD
-        // authority. The retired v1 list/Get/PATCH/DELETE/detail paths are no
-        // longer mounted and terminate at the Rust JSON 404 fallback.
         .route(
-            "/api/v2/readingOrderGroups",
-            get(dependency_groups::list_groups_v2),
+            "/api/v1/reading-order-groups/",
+            get(dependency_groups::list_groups),
         )
         .route(
-            "/api/v2/readingOrderGroups",
-            post(dependency_groups::create_group_v2),
+            "/api/v1/reading-order-groups/",
+            post(dependency_groups::create_group),
         )
         .route(
-            "/api/v2/readingOrderGroups/{group_id}",
-            get(dependency_groups::get_group_v2),
+            "/api/v1/reading-order-groups/{group_id}",
+            get(dependency_groups::get_group),
         )
         .route(
-            "/api/v2/readingOrderGroups/{group_id}",
-            patch(dependency_groups::update_group_v2),
+            "/api/v1/reading-order-groups/{group_id}",
+            patch(dependency_groups::update_group),
         )
         .route(
-            "/api/v2/readingOrderGroups/{group_id}",
-            delete(dependency_groups::delete_group_v2),
+            "/api/v1/reading-order-groups/{group_id}",
+            delete(dependency_groups::delete_group),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/detail",
+            get(dependency_groups::get_group_detail),
         )
         .route(
             "/api/v1/reading-order-groups/{group_id}/order",
@@ -1554,63 +1572,6 @@ mod tests {
             ("POST", "/api/v1/reading-order-groups/7/members"),
             ("POST", "/api/v1/reading-order-groups/7/issue-ranges"),
             ("DELETE", "/api/v1/reading-order-groups/7/members/10"),
-        ] {
-            let response = router(Arc::clone(&state))
-                .oneshot(
-                    Request::builder()
-                        .method(method)
-                        .uri(uri)
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{method} {uri}");
-            let bytes = to_bytes(response.into_body(), 1024).await.unwrap();
-            assert_eq!(
-                String::from_utf8_lossy(&bytes),
-                r#"{"detail":"Not Found"}"#,
-                "{method} {uri}"
-            );
-        }
-    }
-
-    #[tokio::test]
-    async fn v2_group_crud_is_mounted_and_retired_v1_crud_returns_404_in_inner_router() {
-        let config = Config::from_lookup(|name| match name {
-            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
-            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
-            _ => None,
-        })
-        .unwrap();
-        let state = Arc::new(AppState::new(config).unwrap());
-        for (method, uri) in [
-            ("GET", "/api/v2/readingOrderGroups"),
-            ("POST", "/api/v2/readingOrderGroups"),
-            ("GET", "/api/v2/readingOrderGroups/7"),
-            ("PATCH", "/api/v2/readingOrderGroups/7"),
-            ("DELETE", "/api/v2/readingOrderGroups/7"),
-        ] {
-            let response = router(Arc::clone(&state))
-                .oneshot(
-                    Request::builder()
-                        .method(method)
-                        .uri(uri)
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-            assert_ne!(response.status(), StatusCode::NOT_FOUND, "{method} {uri}");
-        }
-        for (method, uri) in [
-            ("GET", "/api/v1/reading-order-groups/"),
-            ("POST", "/api/v1/reading-order-groups/"),
-            ("GET", "/api/v1/reading-order-groups/7"),
-            ("PATCH", "/api/v1/reading-order-groups/7"),
-            ("DELETE", "/api/v1/reading-order-groups/7"),
-            ("GET", "/api/v1/reading-order-groups/7/detail"),
-            ("GET", "/api/v2/readingOrderGroups/7/detail"),
         ] {
             let response = router(Arc::clone(&state))
                 .oneshot(

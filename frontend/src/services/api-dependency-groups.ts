@@ -67,27 +67,27 @@ export type DependencyGroupMemberTarget =
 export function createDependencyGroupsApi(client: HttpClient) {
   return {
     list: async (): Promise<DependencyGroup[]> => {
-      return client.get<DependencyGroup[]>('/v2/readingOrderGroups')
+      return client.get<DependencyGroup[]>('/v1/reading-order-groups/')
     },
 
     create: async (name: string): Promise<DependencyGroup> => {
-      return client.post<DependencyGroup>('/v2/readingOrderGroups', { name })
+      return client.post<DependencyGroup>('/v1/reading-order-groups/', { name })
     },
 
-    /**
-     * Canonical v2 Get. The server folds the enriched detail view into this
-     * single resource read, so there is no separate `/detail` call.
-     */
-    get: async (groupId: number): Promise<DependencyGroupDetail> => {
-      return client.get<DependencyGroupDetail>(`/v2/readingOrderGroups/${groupId}`)
+    get: async (groupId: number): Promise<DependencyGroup> => {
+      return client.get<DependencyGroup>(`/v1/reading-order-groups/${groupId}`)
+    },
+
+    getDetail: async (groupId: number): Promise<DependencyGroupDetail> => {
+      return client.get<DependencyGroupDetail>(`/v1/reading-order-groups/${groupId}/detail`)
     },
 
     rename: async (groupId: number, name: string): Promise<DependencyGroup> => {
-      return client.patch<DependencyGroup>(`/v2/readingOrderGroups/${groupId}`, { name })
+      return client.patch<DependencyGroup>(`/v1/reading-order-groups/${groupId}`, { name })
     },
 
     delete: async (groupId: number): Promise<void> => {
-      await client.delete(`/v2/readingOrderGroups/${groupId}`)
+      await client.delete(`/v1/reading-order-groups/${groupId}`)
     },
 
     listForThread: async (threadId: number): Promise<DependencyGroupSummary[]> => {

@@ -150,7 +150,7 @@ async fn reading_order_group_routes_round_trip_over_http() {
     // Empty list, then create.
     let (status, body) = send(
         &state,
-        authed("GET", "/api/v2/readingOrderGroups", &token, &csrf, None),
+        authed("GET", "/api/v1/reading-order-groups/", &token, &csrf, None),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
@@ -160,7 +160,7 @@ async fn reading_order_group_routes_round_trip_over_http() {
         &state,
         authed(
             "POST",
-            "/api/v2/readingOrderGroups",
+            "/api/v1/reading-order-groups/",
             &token,
             &csrf,
             Some(json!({"name": "Crossover"})),
@@ -171,7 +171,7 @@ async fn reading_order_group_routes_round_trip_over_http() {
     let group_id = body["id"].as_i64().unwrap() as i32;
 
     // Single-group read before any memberships exist.
-    let path = format!("/api/v2/readingOrderGroups/{group_id}");
+    let path = format!("/api/v1/reading-order-groups/{group_id}");
     let (status, body) = send(&state, authed("GET", &path, &token, &csrf, None)).await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(body["name"], json!("Crossover"));
@@ -218,15 +218,10 @@ async fn reading_order_group_routes_round_trip_over_http() {
     assert_eq!(body["added_issue_ids"].as_array().unwrap().len(), 2);
     let issue_id = body["added_issue_ids"][0].as_i64().unwrap();
 
-    // Canonical Get folds the detail view: enriched memberships, authoritative
-    // ordering and linked plans arrive on the resource read with no `/detail`.
-    let path = format!("/api/v2/readingOrderGroups/{group_id}");
+    // Detail enrichment, authoritative ordering and linked plans.
+    let path = format!("/api/v1/reading-order-groups/{group_id}/detail");
     let (status, body) = send(&state, authed("GET", &path, &token, &csrf, None)).await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
-    assert_eq!(body["name"], json!("Crossover"));
-    assert!(body["memberships"].is_array(), "{body:?}");
-    assert!(body["linked_plans"].is_array(), "{body:?}");
-    assert_eq!(body["memberships"][0]["membership"]["id"], json!(member_id));
 
     let path = format!("/api/v1/reading-order-groups/{group_id}/order");
     let (status, body) = send(
@@ -252,7 +247,7 @@ async fn reading_order_group_routes_round_trip_over_http() {
         &state,
         authed(
             "PATCH",
-            &format!("/api/v2/readingOrderGroups/{group_id}"),
+            &format!("/api/v1/reading-order-groups/{group_id}"),
             &token,
             &csrf,
             Some(json!({"name": "Renamed"})),
@@ -279,7 +274,7 @@ async fn reading_order_group_routes_round_trip_over_http() {
         &state,
         authed(
             "DELETE",
-            &format!("/api/v2/readingOrderGroups/{group_id}"),
+            &format!("/api/v1/reading-order-groups/{group_id}"),
             &token,
             &csrf,
             None,
@@ -292,7 +287,7 @@ async fn reading_order_group_routes_round_trip_over_http() {
         &state,
         authed(
             "GET",
-            &format!("/api/v2/readingOrderGroups/{group_id}"),
+            &format!("/api/v1/reading-order-groups/{group_id}"),
             &token,
             &csrf,
             None,
@@ -331,7 +326,7 @@ async fn reading_order_group_validation_uses_python_422_body() {
         &state,
         authed(
             "POST",
-            "/api/v2/readingOrderGroups",
+            "/api/v1/reading-order-groups/",
             &token,
             &csrf,
             Some(json!({"name": "Crossover"})),
@@ -346,7 +341,7 @@ async fn reading_order_group_validation_uses_python_422_body() {
         &state,
         authed(
             "GET",
-            "/api/v2/readingOrderGroups/not-an-int",
+            "/api/v1/reading-order-groups/not-an-int",
             &token,
             &csrf,
             None,
@@ -920,7 +915,7 @@ async fn delete_group_serializes_with_sibling_issue_write() {
         let state = state.clone();
         let token = token.clone();
         let csrf = csrf.clone();
-        let path = format!("/api/v2/readingOrderGroups/{group_id}");
+        let path = format!("/api/v1/reading-order-groups/{group_id}");
         tokio::spawn(
             async move { send(&state, authed("DELETE", &path, &token, &csrf, None)).await },
         )
@@ -936,98 +931,4 @@ async fn delete_group_serializes_with_sibling_issue_write() {
         "{s_status} {s_body:?}"
     );
     assert_eq!(d_status, StatusCode::NO_CONTENT, "{d_status} {d_body:?}");
-}
-
-/// The v2 collection CRUD is the only group collection authority (#5710):
-/// validation and conflict semantics survive the path change, and the retired
-/// v1 collection/Get/detail paths plus a v2 `/detail` action all 404.
-#[tokio::test]
-async fn reading_order_groups_v2_crud_validates_and_retires_v1_collection() {
-    let (state, token, csrf, _user_id, _guard) = setup_user("rog-v2-crud").await;
-
-    for (name, detail) in [
-        ("", "Validation failed"),
-        ("   \t", "Group name must not be blank"),
-    ] {
-        let (status, body) = send(
-            &state,
-            authed(
-                "POST",
-                "/api/v2/readingOrderGroups",
-                &token,
-                &csrf,
-                Some(json!({"name": name})),
-            ),
-        )
-        .await;
-        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body:?}");
-        assert_eq!(body, json!({"detail": detail}));
-    }
-
-    let (status, body) = send(
-        &state,
-        authed(
-            "POST",
-            "/api/v2/readingOrderGroups",
-            &token,
-            &csrf,
-            Some(json!({"name": "  Cosmic Clash  "})),
-        ),
-    )
-    .await;
-    assert_eq!(status, StatusCode::CREATED, "{body:?}");
-    assert_eq!(body["name"], json!("Cosmic Clash"));
-    let group_id = body["id"].as_i64().unwrap();
-
-    let (status, body) = send(
-        &state,
-        authed(
-            "POST",
-            "/api/v2/readingOrderGroups",
-            &token,
-            &csrf,
-            Some(json!({"name": "Cosmic Clash"})),
-        ),
-    )
-    .await;
-    assert_eq!(status, StatusCode::CONFLICT, "{body:?}");
-    assert_eq!(
-        body["detail"],
-        json!("A group with this name already exists")
-    );
-
-    let (status, body) = send(
-        &state,
-        authed("GET", "/api/v2/readingOrderGroups", &token, &csrf, None),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK, "{body:?}");
-    assert_eq!(body.as_array().unwrap().len(), 1);
-
-    for retired in [
-        "/api/v1/reading-order-groups/",
-        "/api/v1/reading-order-groups/1",
-        "/api/v1/reading-order-groups/1/detail",
-        "/api/v2/readingOrderGroups/1/detail",
-    ] {
-        let (status, _) = send(&state, authed("GET", retired, &token, &csrf, None)).await;
-        assert_eq!(
-            status,
-            StatusCode::NOT_FOUND,
-            "retired group path must 404: {retired}"
-        );
-    }
-
-    let (status, _) = send(
-        &state,
-        authed(
-            "DELETE",
-            &format!("/api/v2/readingOrderGroups/{group_id}"),
-            &token,
-            &csrf,
-            None,
-        ),
-    )
-    .await;
-    assert_eq!(status, StatusCode::NO_CONTENT);
 }
