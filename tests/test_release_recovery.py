@@ -305,7 +305,7 @@ def test_github_request_accepts_absolute_github_api_url(
     """A full GitHub API URL is accepted without double-prefixing the host."""
 
     class _Response:
-        def __enter__(self) -> "_Response":
+        def __enter__(self) -> _Response:
             return self
 
         def __exit__(self, *args: object) -> None:
