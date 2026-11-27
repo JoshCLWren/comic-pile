@@ -3392,6 +3392,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/threads/{thread_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Delete an owned Thread (AIP-135). A second delete, or a delete of a foreign or already deleted Thread, returns 404. Never 403. */
+        delete: operations["delete_thread_v2_documentation"];
+        options?: never;
+        head?: never;
+        /** @description Partially update an owned Thread (AIP-134). Omitted fields are preserved. When `update_mask` is supplied only its fields are applied; a masked field missing from the body is cleared. An `expected` precondition that no longer matches the committed row returns 409 with `detail.code = thread_edit_conflict` and the current values. Foreign or deleted Threads return 404, never 403. */
+        patch: operations["patch_thread_documentation"];
+        trace?: never;
+    };
     "/api/v2/threads/{thread_id}/issue-order": {
         parameters: {
             query?: never;
@@ -6899,7 +6917,7 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
-        /** @description Python `ThreadResponse`. */
+        /** @description The Python `ThreadResponse` projection every lifecycle writer returns. */
         NativeThreadResponse: {
             blocking_reasons: string[];
             created_at: string;
@@ -6913,7 +6931,7 @@ export interface components {
             last_activity_at?: string | null;
             /** Format: double */
             last_rating?: number | null;
-            manual_creator_credits: Record<string, never>[];
+            manual_creator_credits: unknown;
             /** Format: int32 */
             next_unread_issue_id?: number | null;
             next_unread_issue_number?: string | null;
@@ -9359,6 +9377,48 @@ export interface components {
             filtered_count?: number | null;
             next_page_token?: string | null;
             threads: components["schemas"]["ThreadListItem"][];
+        };
+        /** @description Committed values a stale client read before issuing a Thread patch. */
+        ThreadPatchPrecondition: {
+            /** @description Format observed by the client. */
+            format?: string | null;
+            /** @description Manual creator credits observed by the client. */
+            manual_creator_credits?: unknown[] | null;
+            /** @description Notes observed by the client; `null` means it observed no notes. */
+            notes?: string | null;
+            /** @description Title observed by the client. */
+            title?: string | null;
+        };
+        /**
+         * @description Body of `PATCH /api/v2/threads/{thread_id}`.
+         *
+         *     `update_mask` follows AIP-134: when supplied, only the named fields are
+         *     applied; a named field missing from the body is explicitly cleared. When it
+         *     is omitted or empty, every field present in the body is applied and every
+         *     omitted field is preserved (the legacy partial-update behavior).
+         */
+        ThreadPatchRequest: {
+            expected?: components["schemas"]["ThreadPatchPrecondition"] | null;
+            /** @description New format; normalized to the reader's canonical vocabulary. */
+            format?: string | null;
+            /** @description Test-series flag. Omit to preserve it. */
+            is_test?: boolean | null;
+            /**
+             * Format: int32
+             * @description Manual issue counter for untracked series (legacy queue transition).
+             */
+            issues_remaining?: number | null;
+            /** @description Manual creator credits. `null` clears them; names and roles are bounded. */
+            manual_creator_credits?: unknown[] | null;
+            /** @description Notes. `null` or a blank string clears the stored value; omit to keep it. */
+            notes?: string | null;
+            /** @description New series title. Omitted fields are preserved. */
+            title?: string | null;
+            /**
+             * @description Explicit field mask (AIP-134). Either an array of field names or one
+             *     comma-separated string. Omit for presence-based partial update.
+             */
+            update_mask?: string[] | null;
         };
         ThreadProgress: {
             /** Format: int32 */
@@ -18830,6 +18890,110 @@ export interface operations {
                 content?: never;
             };
             /** @description Invalid bounds or retired collection_id */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_thread_v2_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The database refused the deletion */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    patch_thread_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThreadPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated thread */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeThreadResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found (including another reader's thread) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale `expected` precondition; reload before retrying */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
