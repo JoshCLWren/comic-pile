@@ -1854,8 +1854,6 @@ mod tests {
     }
 
     #[tokio::test]
-<<<<<<< HEAD
-=======
     async fn reading_order_v2_routes_reach_rust_and_never_hit_json_404() {
         // #5715: both canonical routes are registered in the inner service,
         // but this Vercel entry keeps its own route table. An unauthenticated
@@ -1904,7 +1902,6 @@ mod tests {
     }
 
     #[tokio::test]
->>>>>>> origin/main
     async fn unknown_api_route_returns_rust_json_404_without_database() {
         let mut router = app();
         let response = router
