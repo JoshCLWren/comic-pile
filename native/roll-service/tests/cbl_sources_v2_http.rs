@@ -156,7 +156,8 @@ async fn list_browses_root_and_continues_with_an_opaque_token() {
     assert_eq!(first["has_next"], true);
     let cursor = first["next_page_token"].as_str().unwrap().to_owned();
     // Tokens are opaque, not a readable page number or SQL fragment.
-    assert!(!cursor.contains('1'));
+    assert!(cursor.len() > 4);
+    assert_ne!(cursor, "2");
     assert!(!cursor.contains("SELECT"));
 
     let (status, second) = get(
