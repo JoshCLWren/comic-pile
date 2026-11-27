@@ -770,23 +770,22 @@ fn app() -> Router {
         )
         .route("/api/bug-reports/", post(native_dispatch))
         .route("/api/v1/bug-reports/", post(native_dispatch))
-        .route("/api/v1/reading-order-groups/", get(native_dispatch))
-        .route("/api/v1/reading-order-groups/", post(native_dispatch))
+        // #5710: the v2 collection is the only group CRUD authority at the
+        // Vercel ingress. Retired v1 list/Get/PATCH/DELETE/detail routes fall
+        // through to the Rust JSON 404 instead of reaching any handler.
+        .route("/api/v2/readingOrderGroups", get(native_dispatch))
+        .route("/api/v2/readingOrderGroups", post(native_dispatch))
         .route(
-            "/api/v1/reading-order-groups/{group_id}",
+            "/api/v2/readingOrderGroups/{group_id}",
             get(native_dispatch),
         )
         .route(
-            "/api/v1/reading-order-groups/{group_id}",
+            "/api/v2/readingOrderGroups/{group_id}",
             patch(native_dispatch),
         )
         .route(
-            "/api/v1/reading-order-groups/{group_id}",
+            "/api/v2/readingOrderGroups/{group_id}",
             delete(native_dispatch),
-        )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}/detail",
-            get(native_dispatch),
         )
         .route(
             "/api/v1/reading-order-groups/{group_id}/order",
@@ -1456,6 +1455,74 @@ mod tests {
                 response.status(),
                 StatusCode::NOT_FOUND,
                 "{method} {uri} must reach Rust dispatch, not the 404 fallback"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn reading_order_groups_v2_ingress_reaches_rust_and_v1_crud_is_gone() {
+        // #5710: the v2 collection is mounted in the Vercel ingress table as
+        // well as the library router; the retired v1 CRUD/detail paths and a
+        // v2 `/detail` action are not.
+        for (method, uri) in [
+            ("GET", "/api/v2/readingOrderGroups"),
+            ("POST", "/api/v2/readingOrderGroups"),
+            ("GET", "/api/v2/readingOrderGroups/42"),
+            ("PATCH", "/api/v2/readingOrderGroups/42"),
+            ("DELETE", "/api/v2/readingOrderGroups/42"),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .header("content-type", "application/json")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{method} {uri} runtime header"
+            );
+            assert_ne!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "{method} {uri} must reach Rust dispatch, not native_not_found"
+            );
+        }
+
+        for (method, uri) in [
+            ("GET", "/api/v1/reading-order-groups/"),
+            ("POST", "/api/v1/reading-order-groups/"),
+            ("GET", "/api/v1/reading-order-groups/42"),
+            ("PATCH", "/api/v1/reading-order-groups/42"),
+            ("DELETE", "/api/v1/reading-order-groups/42"),
+            ("GET", "/api/v1/reading-order-groups/42/detail"),
+            ("GET", "/api/v2/readingOrderGroups/42/detail"),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert_eq!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "retired {method} {uri} must not be mounted at ingress"
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust"
             );
         }
     }
