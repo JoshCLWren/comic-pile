@@ -42,7 +42,6 @@ export { useTasteDiscoveries } from './useTasteDiscoveries'
 export { useCreatorDiscoveries } from './useCreatorDiscoveries'
 export { useRollBootstrap, resolveBrowserTimezone } from './useRollBootstrap'
 export { useRollPrerequisiteSwitch } from './useRollPrerequisiteSwitch'
-export { usePreferences, useUpdatePreferences, PreferencesSync } from './usePreferences'
 export { useQueueBlockingInfo } from './useQueueBlockingInfo'
 export { useReleases, releasesQueryOptions, RELEASES_PAGE_SIZE } from './useReleases'
 export {

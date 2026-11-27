@@ -28,7 +28,6 @@ import type { AuthUser } from './types'
 import { useBugReport } from './hooks/useBugReport'
 import { useScrollRestoration } from './hooks/useScrollRestoration'
 import ReadingPlanEditRoute from './pages/ReadingPlanEditRoute'
-import { PreferencesSync } from './hooks/usePreferences'
 import { useAuthDegradedState, ServiceUnavailableWrapper } from './hooks/useAuthDegradedState'
 import type { DiagnosticData } from './hooks/useDiagnostics'
 import { ToastProvider } from './contexts/ToastProvider'
@@ -539,7 +538,6 @@ function AuthenticatedLayout({ children, onBugReportSubmit, wide = false }: { ch
     >
       <Navigation onBugReportSubmit={onBugReportSubmit} />
       <main className={`container mx-auto min-w-0 px-3 md:px-4 py-4 md:py-6 ${maxWidthClass} pb-28 md:pb-6`}>
-        <PreferencesSync isAuthenticated={true} />
         {children}
       </main>
     </div>
