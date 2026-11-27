@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-27T02:29:58+00:00",
+  "generated_at": "2026-11-27T02:49:25.593698+00:00",
   "models": [
     {
       "health": {
@@ -2651,14 +2651,14 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 10,
+          "failed": 9,
           "failures": {
             "agent_timeout": 5,
-            "control_plane_failure": 3,
+            "control_plane_failure": 2,
             "provider_throttle": 2
           },
           "idle": 0,
-          "runs": 10
+          "runs": 9
         }
       }
     },
@@ -3062,14 +3062,13 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 5,
+          "failed": 4,
           "failures": {
-            "control_plane_failure": 1,
             "provider_failure": 1,
             "work_failure": 3
           },
           "idle": 1,
-          "runs": 6
+          "runs": 5
         }
       }
     },
@@ -3100,8 +3099,8 @@
             "provider_throttle": 1,
             "work_failure": 11
           },
-          "idle": 46,
-          "runs": 62
+          "idle": 43,
+          "runs": 59
         }
       }
     },
@@ -4230,66 +4229,57 @@
     },
     {
       "health": {
-        "cooldown_until": null,
-        "last_outcome": "control_plane_failure",
-        "status": "healthy"
+        "cooldown_until": "2026-11-27T02:39:57+00:00",
+        "last_outcome": "provider_throttle",
+        "status": "cooling"
       },
       "model": "beam-free",
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 13,
-          "delivered": 9,
-          "failed": 12,
+          "completed": 11,
+          "delivered": 8,
+          "failed": 23,
           "failures": {
-            "control_plane_failure": 7,
-            "provider_throttle": 1,
-            "work_failure": 4
+            "control_plane_failure": 18,
+            "provider_throttle": 2,
+            "work_failure": 3
           },
-          "idle": 1,
+          "idle": 0,
           "kinds": {
-            "implement": {
-              "completed": 0,
-              "delivered": 0,
-              "failed": 1,
-              "failures": {
-                "work_failure": 1
-              },
-              "idle": 0,
-              "runs": 1
-            },
             "merge-conflict": {
-              "completed": 3,
-              "delivered": 3,
+              "completed": 1,
+              "delivered": 1,
               "failed": 1,
               "failures": {
                 "provider_throttle": 1
               },
-              "idle": 1,
-              "runs": 5
+              "idle": 0,
+              "runs": 2
             },
             "review": {
               "completed": 10,
-              "delivered": 6,
-              "failed": 10,
+              "delivered": 7,
+              "failed": 22,
               "failures": {
-                "control_plane_failure": 7,
+                "control_plane_failure": 18,
+                "provider_throttle": 1,
                 "work_failure": 3
               },
               "idle": 0,
-              "runs": 20
+              "runs": 32
             }
           },
-          "runs": 26
+          "runs": 34
         },
         "7d": {
-          "completed": 44,
-          "delivered": 30,
-          "failed": 47,
+          "completed": 46,
+          "delivered": 32,
+          "failed": 59,
           "failures": {
-            "control_plane_failure": 12,
+            "control_plane_failure": 23,
             "provider_failure": 1,
-            "provider_throttle": 2,
+            "provider_throttle": 3,
             "work_failure": 32
           },
           "idle": 17,
@@ -4315,15 +4305,16 @@
               "runs": 12
             },
             "review": {
-              "completed": 36,
-              "delivered": 22,
-              "failed": 25,
+              "completed": 38,
+              "delivered": 24,
+              "failed": 37,
               "failures": {
-                "control_plane_failure": 11,
+                "control_plane_failure": 22,
+                "provider_throttle": 1,
                 "work_failure": 14
               },
               "idle": 1,
-              "runs": 62
+              "runs": 76
             },
             "review-findings": {
               "completed": 1,
@@ -4336,7 +4327,7 @@
               "runs": 5
             }
           },
-          "runs": 108
+          "runs": 122
         }
       }
     },
@@ -5244,7 +5235,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-27T01:27:21+00:00",
+        "cooldown_until": "2026-11-27T02:34:08+00:00",
         "last_outcome": "provider_throttle",
         "status": "cooling"
       },
@@ -5344,18 +5335,18 @@
         "status": "healthy"
       },
       "kept_hot": {
-        "successes": 324,
-        "trials": 437
+        "successes": 329,
+        "trials": 443
       },
       "model": "hy4-flash-free",
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 242,
-          "delivered": 122,
-          "failed": 72,
+          "completed": 240,
+          "delivered": 120,
+          "failed": 79,
           "failures": {
-            "control_plane_failure": 16,
+            "control_plane_failure": 23,
             "model_policy_violation": 2,
             "provider_throttle": 1,
             "work_failure": 53
@@ -5363,15 +5354,15 @@
           "idle": 25,
           "kinds": {
             "implement": {
-              "completed": 50,
-              "delivered": 50,
+              "completed": 49,
+              "delivered": 49,
               "failed": 4,
               "failures": {
                 "control_plane_failure": 1,
                 "work_failure": 3
               },
               "idle": 0,
-              "runs": 54
+              "runs": 53
             },
             "merge-conflict": {
               "completed": 10,
@@ -5386,18 +5377,18 @@
             "review": {
               "completed": 133,
               "delivered": 15,
-              "failed": 56,
+              "failed": 63,
               "failures": {
-                "control_plane_failure": 14,
+                "control_plane_failure": 21,
                 "model_policy_violation": 2,
                 "work_failure": 40
               },
               "idle": 1,
-              "runs": 190
+              "runs": 197
             },
             "review-findings": {
-              "completed": 48,
-              "delivered": 47,
+              "completed": 47,
+              "delivered": 46,
               "failed": 5,
               "failures": {
                 "control_plane_failure": 1,
@@ -5405,7 +5396,7 @@
                 "work_failure": 3
               },
               "idle": 10,
-              "runs": 63
+              "runs": 62
             },
             "split": {
               "completed": 1,
@@ -5418,19 +5409,19 @@
               "runs": 2
             }
           },
-          "runs": 339
+          "runs": 344
         },
         "7d": {
-          "completed": 324,
-          "delivered": 162,
-          "failed": 140,
+          "completed": 329,
+          "delivered": 164,
+          "failed": 148,
           "failures": {
-            "control_plane_failure": 27,
+            "control_plane_failure": 34,
             "model_policy_violation": 2,
             "provider_failure": 3,
             "provider_throttle": 1,
             "unknown_failure": 2,
-            "work_failure": 105
+            "work_failure": 106
           },
           "idle": 35,
           "kinds": {
@@ -5456,22 +5447,22 @@
               "runs": 40
             },
             "review": {
-              "completed": 188,
-              "delivered": 28,
-              "failed": 78,
+              "completed": 192,
+              "delivered": 29,
+              "failed": 86,
               "failures": {
-                "control_plane_failure": 17,
+                "control_plane_failure": 24,
                 "model_policy_violation": 2,
                 "provider_failure": 2,
                 "unknown_failure": 1,
-                "work_failure": 56
+                "work_failure": 57
               },
               "idle": 1,
-              "runs": 267
+              "runs": 279
             },
             "review-findings": {
-              "completed": 66,
-              "delivered": 65,
+              "completed": 67,
+              "delivered": 66,
               "failed": 7,
               "failures": {
                 "control_plane_failure": 1,
@@ -5479,7 +5470,7 @@
                 "work_failure": 5
               },
               "idle": 13,
-              "runs": 86
+              "runs": 87
             },
             "split": {
               "completed": 1,
@@ -5492,38 +5483,39 @@
               "runs": 2
             }
           },
-          "runs": 499
+          "runs": 512
         }
       }
     },
     {
       "health": {
         "cooldown_until": null,
-        "last_outcome": "work_failure",
+        "last_outcome": "control_plane_failure",
         "status": "healthy"
       },
       "model": "iceman-contributor-free",
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 27,
-          "delivered": 25,
-          "failed": 19,
+          "completed": 23,
+          "delivered": 21,
+          "failed": 20,
           "failures": {
+            "control_plane_failure": 1,
             "model_policy_violation": 1,
             "work_failure": 18
           },
           "idle": 0,
           "kinds": {
             "implement": {
-              "completed": 16,
-              "delivered": 16,
+              "completed": 12,
+              "delivered": 12,
               "failed": 4,
               "failures": {
                 "work_failure": 4
               },
               "idle": 0,
-              "runs": 20
+              "runs": 16
             },
             "merge-conflict": {
               "completed": 5,
@@ -5548,22 +5540,23 @@
             "review-findings": {
               "completed": 3,
               "delivered": 3,
-              "failed": 1,
+              "failed": 2,
               "failures": {
+                "control_plane_failure": 1,
                 "model_policy_violation": 1
               },
               "idle": 0,
-              "runs": 4
+              "runs": 5
             }
           },
-          "runs": 46
+          "runs": 43
         },
         "7d": {
           "completed": 72,
           "delivered": 69,
-          "failed": 165,
+          "failed": 166,
           "failures": {
-            "control_plane_failure": 28,
+            "control_plane_failure": 29,
             "model_policy_violation": 2,
             "provider_failure": 6,
             "provider_quota": 1,
@@ -5609,16 +5602,17 @@
             "review-findings": {
               "completed": 6,
               "delivered": 6,
-              "failed": 5,
+              "failed": 6,
               "failures": {
+                "control_plane_failure": 1,
                 "model_policy_violation": 1,
                 "work_failure": 4
               },
               "idle": 1,
-              "runs": 12
+              "runs": 13
             }
           },
-          "runs": 301
+          "runs": 302
         }
       }
     },
@@ -6656,7 +6650,7 @@
       "source": "openrouter-free",
       "windows": {
         "24h": {
-          "completed": 5,
+          "completed": 6,
           "delivered": 2,
           "failed": 0,
           "failures": {},
@@ -6679,18 +6673,18 @@
               "runs": 4
             },
             "split": {
-              "completed": 2,
+              "completed": 3,
               "delivered": 0,
               "failed": 0,
               "failures": {},
               "idle": 0,
-              "runs": 2
+              "runs": 3
             }
           },
-          "runs": 7
+          "runs": 8
         },
         "7d": {
-          "completed": 8,
+          "completed": 9,
           "delivered": 4,
           "failed": 0,
           "failures": {},
@@ -6729,15 +6723,15 @@
               "runs": 6
             },
             "split": {
-              "completed": 2,
+              "completed": 3,
               "delivered": 0,
               "failed": 0,
               "failures": {},
               "idle": 0,
-              "runs": 2
+              "runs": 3
             }
           },
-          "runs": 11
+          "runs": 12
         }
       }
     },
@@ -23659,9 +23653,9 @@
         "7d": {
           "completed": 68,
           "delivered": 67,
-          "failed": 520,
-          "idle": 241,
-          "runs": 829
+          "failed": 518,
+          "idle": 238,
+          "runs": 824
         }
       }
     },
@@ -23688,18 +23682,18 @@
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 286,
-          "delivered": 159,
-          "failed": 104,
-          "idle": 27,
-          "runs": 417
+          "completed": 278,
+          "delivered": 152,
+          "failed": 123,
+          "idle": 26,
+          "runs": 427
         },
         "7d": {
-          "completed": 475,
-          "delivered": 289,
-          "failed": 516,
+          "completed": 482,
+          "delivered": 293,
+          "failed": 537,
           "idle": 134,
-          "runs": 1125
+          "runs": 1153
         }
       }
     },
@@ -23707,18 +23701,18 @@
       "source": "openrouter-free",
       "windows": {
         "24h": {
-          "completed": 6,
+          "completed": 7,
           "delivered": 3,
           "failed": 6,
           "idle": 3,
-          "runs": 15
+          "runs": 16
         },
         "7d": {
-          "completed": 11,
+          "completed": 12,
           "delivered": 7,
           "failed": 49,
           "idle": 6,
-          "runs": 66
+          "runs": 67
         }
       }
     },
@@ -23823,9 +23817,9 @@
     "24h": "24 hours",
     "7d": "7 days"
   },
-  "counts_generated_at": "2026-11-27T01:54:22.561984+00:00",
+  "counts_generated_at": "2026-11-27T02:49:25.593698+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-27T02:29:59Z",
+    "generated_at": "2026-11-27T02:49:26Z",
     "sources": {
       "nvidia": [
         "google/diffusiongemma-26b-a4b-it",
@@ -23844,10 +23838,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-27T02:29:59.171847+00:00",
-    "days_elapsed": 26.104,
+    "checked_at": "2026-11-27T02:49:26.160403+00:00",
+    "days_elapsed": 26.118,
     "days_in_month": 30.0,
-    "days_left": 3.9,
+    "days_left": 3.88,
     "in_use": true,
     "label": "",
     "metrics": {
@@ -23863,31 +23857,31 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 50412501,
-        "organization": 50412501,
+        "database": 50520327,
+        "organization": 50520327,
         "owner_target": 50000000,
-        "projected_database": 57936524,
-        "projected_organization": 57936524,
-        "projected_share": 0.1159,
-        "share_used": 0.1008
+        "projected_database": 58029321,
+        "projected_organization": 58029321,
+        "projected_share": 0.1161,
+        "share_used": 0.101
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 194490,
-        "organization": 194490,
+        "database": 194999,
+        "organization": 194999,
         "owner_target": 1000000,
-        "projected_database": 223517,
-        "projected_organization": 223517,
+        "projected_database": 223982,
+        "projected_organization": 223982,
         "projected_share": 0.0224,
-        "share_used": 0.0194
+        "share_used": 0.0195
       },
       "storage_bytes": {
         "allowance": 5000000000,
-        "database": 23150592,
-        "organization": 23150592,
+        "database": 23187456,
+        "organization": 23187456,
         "owner_target": 250000000,
-        "projected_database": 23150592,
-        "projected_organization": 23150592,
+        "projected_database": 23187456,
+        "projected_organization": 23187456,
         "projected_share": 0.0046,
         "share_used": 0.0046
       }
@@ -23903,7 +23897,7 @@
     "status": "warn"
   },
   "schema": {
-    "checked_at": "2026-11-27T02:30:01+00:00",
+    "checked_at": "2026-11-27T02:49:29+00:00",
     "code_version": 6,
     "last_upgrade": {
       "at": "2026-11-25T18:11:07+00:00",
@@ -24081,7 +24075,7 @@
     "stored_version": 6
   },
   "crashes": {
-    "generated_at": "2026-11-27T02:30:01Z",
+    "generated_at": "2026-11-27T02:49:29Z",
     "groups": [
       {
         "count": 12,
@@ -24180,11 +24174,11 @@
         ]
       },
       {
-        "count": 2,
+        "count": 1,
         "exception_type": "ValueError",
         "fatal": true,
         "fingerprint": "cbe373c915bf",
-        "first_at": "2026-11-26T02:47:36Z",
+        "first_at": "2026-11-26T04:30:24Z",
         "function": "validate_assignment",
         "kind": "python",
         "last_at": "2026-11-26T04:30:24Z",
@@ -24193,8 +24187,7 @@
         "message": "Assignment PR is waiting or no longer executable",
         "script": "factory-work-controller.py",
         "times": [
-          "2026-11-26T04:30:24Z",
-          "2026-11-26T02:47:36Z"
+          "2026-11-26T04:30:24Z"
         ],
         "workflow": "free-model-factory-entry.yml",
         "workflows": [
@@ -24207,13 +24200,22 @@
   },
   "ready": {
     "cycles": [],
-    "generated_at": "2026-11-27T02:29:02+00:00",
+    "generated_at": "2026-11-27T02:31:46+00:00",
     "items": [
+      {
+        "action": "review",
+        "lane": 3,
+        "priority": 0,
+        "rank": 1,
+        "stage": "factory:review",
+        "target": "pr:5871",
+        "title": "[Muse QA] Reading List editor issue search shows No cover for an issue that has a cover, and no Series ID label"
+      },
       {
         "action": "review-findings",
         "lane": 3,
         "priority": 0,
-        "rank": 1,
+        "rank": 2,
         "stage": "factory:changes-requested",
         "target": "pr:5887",
         "title": "V2 API 05: Thread duplicate check, make it a scoped custom method"
@@ -24222,7 +24224,7 @@
         "action": "review-findings",
         "lane": 3,
         "priority": 0,
-        "rank": 2,
+        "rank": 3,
         "stage": "factory:changes-requested",
         "target": "pr:5889",
         "title": "V2 API 11: Reading-order group memberships, issue ranges and batch lookups"
@@ -24231,7 +24233,7 @@
         "action": "review",
         "lane": 3,
         "priority": 0,
-        "rank": 3,
+        "rank": 4,
         "stage": "factory:review",
         "target": "pr:5895",
         "title": "V2 API 01: Thread Get and filtered List, retire v1 completed/excluded/stale reads"
@@ -24240,7 +24242,7 @@
         "action": "review-findings",
         "lane": 3,
         "priority": 0,
-        "rank": 4,
+        "rank": 5,
         "stage": "factory:changes-requested",
         "target": "pr:5896",
         "title": "V2 API 09: Canonical dependency diagnostics, blockers and connected threads"
@@ -24249,7 +24251,7 @@
         "action": "review",
         "lane": 3,
         "priority": 0,
-        "rank": 5,
+        "rank": 6,
         "stage": "factory:review",
         "target": "pr:5897",
         "title": "V2 API 15: Reading-order projection preview and Thread order reads"
@@ -24257,87 +24259,9 @@
     ]
   },
   "gh_usage": {
-    "generated_at": "2026-11-27T02:30:02Z",
+    "generated_at": "2026-11-27T02:49:30Z",
     "jobs": {
       "dispatch": [
-        {
-          "at": 1795745371,
-          "buckets": {
-            "reader": 0,
-            "workflow": 17
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 1149,
-            "reset": 1795745648
-          },
-          "cache_hits": 0,
-          "github": 17,
-          "label": "dispatch pr:5890",
-          "paginated": 4,
-          "top": [
-            [
-              "api GET repos/R/issues/N",
-              4
-            ],
-            [
-              "api GET repos/R/issues",
-              3
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ],
-            [
-              "api GET repos/R/pulls",
-              1
-            ],
-            [
-              "api GET rate_limit",
-              1
-            ]
-          ],
-          "writes": 0
-        },
-        {
-          "at": 1795745766,
-          "buckets": {
-            "reader": 0,
-            "workflow": 173
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 4515,
-            "reset": 1795749249
-          },
-          "cache_hits": 8,
-          "github": 173,
-          "label": "dispatch roster",
-          "paginated": 32,
-          "top": [
-            [
-              "api GET repos/R/issues/N",
-              54
-            ],
-            [
-              "api GET repos/R/issues/N/comments paginate",
-              21
-            ],
-            [
-              "api GET repos/R/issues",
-              19
-            ],
-            [
-              "api GET repos/R/pulls/N",
-              17
-            ],
-            [
-              "gh pr checks",
-              14
-            ]
-          ],
-          "writes": 15
-        },
         {
           "at": 1795745804,
           "buckets": {
@@ -24727,87 +24651,87 @@
             ]
           ],
           "writes": 13
+        },
+        {
+          "at": 1795746607,
+          "buckets": {
+            "reader": 0,
+            "workflow": 56
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 1627,
+            "reset": 1795749249
+          },
+          "cache_hits": 0,
+          "github": 56,
+          "label": "dispatch roster",
+          "paginated": 10,
+          "top": [
+            [
+              "api GET repos/R/pulls/N",
+              13
+            ],
+            [
+              "api GET repos/R/issues",
+              12
+            ],
+            [
+              "api GET rate_limit",
+              5
+            ],
+            [
+              "api POST graphql",
+              5
+            ],
+            [
+              "api GET repos/R/issues/N/comments paginate",
+              3
+            ]
+          ],
+          "writes": 5
+        },
+        {
+          "at": 1795746707,
+          "buckets": {
+            "reader": 0,
+            "workflow": 91
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 1162,
+            "reset": 1795749249
+          },
+          "cache_hits": 4,
+          "github": 91,
+          "label": "dispatch roster",
+          "paginated": 15,
+          "top": [
+            [
+              "api GET repos/R/issues/N",
+              23
+            ],
+            [
+              "api GET repos/R/issues",
+              16
+            ],
+            [
+              "api GET repos/R/pulls/N",
+              13
+            ],
+            [
+              "gh pr checks",
+              9
+            ],
+            [
+              "api GET repos/R/issues/N/comments paginate",
+              6
+            ]
+          ],
+          "writes": 5
         }
       ],
       "merge": [
-        {
-          "at": 1795742947,
-          "buckets": {
-            "reader": 608,
-            "workflow": 11
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 4475,
-            "reset": 1795745648
-          },
-          "cache_hits": 0,
-          "github": 619,
-          "label": "merge drain",
-          "paginated": 170,
-          "top": [
-            [
-              "api GET repos/R/issues/N/events paginate",
-              75
-            ],
-            [
-              "api GET repos/R/issues/N/comments paginate",
-              52
-            ],
-            [
-              "gh pr view",
-              51
-            ],
-            [
-              "gh issue view",
-              42
-            ],
-            [
-              "gh pr list",
-              40
-            ]
-          ],
-          "writes": 5
-        },
-        {
-          "at": 1795743398,
-          "buckets": {
-            "reader": 614,
-            "workflow": 11
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 4209,
-            "reset": 1795745648
-          },
-          "cache_hits": 0,
-          "github": 625,
-          "label": "merge drain",
-          "paginated": 172,
-          "top": [
-            [
-              "api GET repos/R/issues/N/events paginate",
-              75
-            ],
-            [
-              "api GET repos/R/issues/N/comments paginate",
-              52
-            ],
-            [
-              "gh pr view",
-              51
-            ],
-            [
-              "gh issue view",
-              42
-            ],
-            [
-              "api GET repos/R/pulls/N/files paginate",
-              41
-            ]
-          ],
-          "writes": 5
-        },
         {
           "at": 1795743700,
           "buckets": {
@@ -25194,6 +25118,84 @@
             [
               "gh pr list",
               40
+            ]
+          ],
+          "writes": 4
+        },
+        {
+          "at": 1795746807,
+          "buckets": {
+            "reader": 0,
+            "workflow": 604
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 834,
+            "reset": 1795749249
+          },
+          "cache_hits": 0,
+          "github": 604,
+          "label": "merge drain",
+          "paginated": 166,
+          "top": [
+            [
+              "api GET repos/R/issues/N/events paginate",
+              73
+            ],
+            [
+              "api GET repos/R/issues/N/comments paginate",
+              51
+            ],
+            [
+              "gh pr view",
+              48
+            ],
+            [
+              "gh issue view",
+              40
+            ],
+            [
+              "gh pr list",
+              39
+            ]
+          ],
+          "writes": 4
+        },
+        {
+          "at": 1795747076,
+          "buckets": {
+            "reader": 594,
+            "workflow": 10
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 627,
+            "reset": 1795749249
+          },
+          "cache_hits": 0,
+          "github": 604,
+          "label": "merge drain",
+          "paginated": 166,
+          "top": [
+            [
+              "api GET repos/R/issues/N/events paginate",
+              73
+            ],
+            [
+              "api GET repos/R/issues/N/comments paginate",
+              51
+            ],
+            [
+              "gh pr view",
+              48
+            ],
+            [
+              "gh issue view",
+              40
+            ],
+            [
+              "gh pr list",
+              39
             ]
           ],
           "writes": 4
