@@ -44,7 +44,8 @@ interface ThreadPoolProps {
   onResetDice?: () => void | Promise<boolean>
   resetDicePending?: boolean
   resetDiceError?: string
-  presentation: RollPresentationProps
+  /** Optional in isolated unit fixtures; the page always supplies it. */
+  presentation?: RollPresentationProps
 }
 
 export function ThreadPool({
@@ -74,6 +75,14 @@ export function ThreadPool({
   const navigate = useNavigate()
   const { isMobile } = useResponsive()
   const wasRatingView = useRef(isRatingView)
+  const view: RollPresentationProps = presentation ?? {
+    dieSides: dieSize ?? 6,
+    isRolling: false,
+    rolledValue: 1,
+    hasRolled: false,
+    mainDieRef: { current: null },
+    onRoll: () => {},
+  }
   const snoozedTotal = snoozedCount ?? snoozedThreads.length
   // The scoped eligible query applies the browser-owned snooze cookie that
   // bootstrap cannot see. Treat either source as snooze-backed emptiness so the
@@ -259,13 +268,13 @@ export function ThreadPool({
           <MobileGallery
             pool={displayPool}
             cardByIssueId={cardByIssueId}
-            dieSides={presentation.dieSides}
-            isRolling={presentation.isRolling}
-            rolledValue={presentation.rolledValue}
-            hasRolled={presentation.hasRolled}
+            dieSides={view.dieSides}
+            isRolling={view.isRolling}
+            rolledValue={view.rolledValue}
+            hasRolled={view.hasRolled}
             winningThreadId={selectedThreadId != null ? Number(selectedThreadId) : null}
-            mainDieRef={presentation.mainDieRef}
-            onRoll={presentation.onRoll}
+            mainDieRef={view.mainDieRef}
+            onRoll={view.onRoll}
             onThreadClick={onThreadClick}
           />
         ) : (
@@ -273,13 +282,13 @@ export function ThreadPool({
             pool={displayPool}
             cardByIssueId={cardByIssueId}
             dieSize={dieSize ?? displayPool.length}
-            dieSides={presentation.dieSides}
-            isRolling={presentation.isRolling}
-            rolledValue={presentation.rolledValue}
-            hasRolled={presentation.hasRolled}
+            dieSides={view.dieSides}
+            isRolling={view.isRolling}
+            rolledValue={view.rolledValue}
+            hasRolled={view.hasRolled}
             selectedThreadId={selectedThreadId}
-            mainDieRef={presentation.mainDieRef}
-            onRoll={presentation.onRoll}
+            mainDieRef={view.mainDieRef}
+            onRoll={view.onRoll}
             onThreadClick={onThreadClick}
           />
         )}
