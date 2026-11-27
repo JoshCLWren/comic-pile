@@ -2827,9 +2827,8 @@ pub fn list_excluded_threads_documentation() {}
 #[allow(dead_code)]
 pub fn check_potential_duplicates_documentation() {}
 
-/// Documentation-only operation for the v2 advisory custom method. The DTOs
-/// are shared with the retained v1 path; only the path and operation identity
-/// are new (#5705).
+// The v2 DTOs are shared with the retained v1 path (#5705); only the path and
+// operation identity are new, so no second set of types is declared here.
 #[utoipa::path(
     post,
     path = "/api/v2/threads:checkDuplicates",
