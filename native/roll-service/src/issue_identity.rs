@@ -283,7 +283,7 @@ pub(crate) fn public_cbl_repository(repository: &str) -> String {
     PUBLIC_REPOSITORY_FALLBACK.to_string()
 }
 
-fn public_cbl_source_path(source_path: &str) -> String {
+pub(crate) fn public_cbl_source_path(source_path: &str) -> String {
     let normalized = source_path.trim().replace('\\', "/");
     if normalized.is_empty() {
         return source_path.to_string();
@@ -308,7 +308,7 @@ fn public_cbl_source_path(source_path: &str) -> String {
     source_path.to_string()
 }
 
-fn public_cbl_source_ref(repository: &str, source_path: &str) -> String {
+pub(crate) fn public_cbl_source_ref(repository: &str, source_path: &str) -> String {
     format!(
         "{}:{}",
         public_cbl_repository(repository),
@@ -429,6 +429,21 @@ pub async fn get_cbl_source_list(
     };
 
     let pool = checkout(&state).await?;
+    Ok(Json(
+        load_cbl_source_detail(&pool, list_id, offset, limit).await?,
+    ))
+}
+
+/// Load one active shared source list and one bounded page of its ordered
+/// occurrences. Shared by the retained v1 path and the canonical v2 Get (#5712).
+/// Ownership-free: only the shared catalog tables are read, never a reader-owned
+/// list, so no private list can leak through either path.
+pub(crate) async fn load_cbl_source_detail(
+    pool: &deadpool_postgres::Object,
+    list_id: i32,
+    offset: i64,
+    limit: i64,
+) -> Result<CblSourceListDetail, ApiError> {
     let list_row = pool
         .run_query_opt(
             r#"
@@ -518,7 +533,7 @@ pub async fn get_cbl_source_list(
         })?
         .get(0);
 
-    Ok(Json(CblSourceListDetail {
+    Ok(CblSourceListDetail {
         id,
         name,
         source_path,
@@ -531,7 +546,7 @@ pub async fn get_cbl_source_list(
         entries_offset: offset as i32,
         entries_limit: limit as i32,
         entries,
-    }))
+    })
 }
 
 /// `GET /api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}`
@@ -574,6 +589,22 @@ pub async fn find_cbl_sources_by_comicvine_issue(
     };
 
     let pool = checkout(&state).await?;
+    Ok(Json(
+        load_cbl_comicvine_occurrences(&pool, &normalized_issue_id, offset, limit).await?,
+    ))
+}
+
+/// Load every active shared source occurrence that holds one exact Comic Vine
+/// issue identity. Shared by the retained v1 path and the canonical v2
+/// `/cblOccurrences` List (#5712). The subquery matches the persisted external
+/// identity by provider and entity type, so a coincidental string match from
+/// another provider can never leak into the result.
+pub(crate) async fn load_cbl_comicvine_occurrences(
+    pool: &deadpool_postgres::Object,
+    comicvine_issue_id: &str,
+    offset: i64,
+    limit: i64,
+) -> Result<CblComicvineOccurrencePage, ApiError> {
     let rows = pool
         .run_query(
             r#"
@@ -597,7 +628,7 @@ pub async fn find_cbl_sources_by_comicvine_issue(
                  cse.position ASC, cse.id ASC
         LIMIT $2 OFFSET $3
         "#,
-            &[&normalized_issue_id, &limit, &offset],
+            &[&comicvine_issue_id, &limit, &offset],
         )
         .await
         .map_err(|error| {
@@ -625,7 +656,7 @@ pub async fn find_cbl_sources_by_comicvine_issue(
                 issue_number: row.get(7),
                 volume_year: row.get(8),
                 publication_year: row.get(9),
-                comicvine_issue_id: normalized_issue_id.clone(),
+                comicvine_issue_id: comicvine_issue_id.to_string(),
                 comicvine_volume_id: row.get(10),
             }
         })
@@ -645,7 +676,7 @@ pub async fn find_cbl_sources_by_comicvine_issue(
                 AND ei.external_id = $1
           )
         "#,
-            &[&normalized_issue_id],
+            &[&comicvine_issue_id],
         )
         .await
         .map_err(|error| {
@@ -659,14 +690,14 @@ pub async fn find_cbl_sources_by_comicvine_issue(
     let occurrences_total: i64 = totals.get(0);
     let lists_total: i64 = totals.get(1);
 
-    Ok(Json(CblComicvineOccurrencePage {
-        comicvine_issue_id: normalized_issue_id,
+    Ok(CblComicvineOccurrencePage {
+        comicvine_issue_id: comicvine_issue_id.to_string(),
         occurrences_total: occurrences_total as i32,
         lists_total: lists_total as i32,
         occurrences_offset: offset as i32,
         occurrences_limit: limit as i32,
         occurrences,
-    }))
+    })
 }
 
 // ---------------------------------------------------------------------------
