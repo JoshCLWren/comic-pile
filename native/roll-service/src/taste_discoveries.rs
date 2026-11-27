@@ -1116,10 +1116,9 @@ mod tests {
     async fn v2_dismiss_is_owner_scoped_verdict_safe_and_idempotent() {
         let (state, user, _guard) = database_fixture().await;
         for _ in 0..2 {
-            let Json(response) =
-                dismiss_taste_discovery_v2(State(state.clone()), user.clone(), Path(8001))
-                    .await
-                    .expect("v2 dismiss");
+            let Json(response) = dismiss_taste_discovery_v2(State(state.clone()), user, Path(8001))
+                .await
+                .expect("v2 dismiss");
             assert!(response.dismissed, "duplicate dismiss stays idempotent");
         }
 
