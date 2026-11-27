@@ -1793,7 +1793,6 @@ mod tests {
     }
 
     #[tokio::test]
->>>>>>> origin/main
     async fn unknown_api_route_returns_rust_json_404_without_database() {
         let mut router = app();
         let response = router
