@@ -7,6 +7,7 @@ import {test} from 'node:test';
 import {
   findRetiredTerminology,
   REPO_ROOT,
+  RETIRED_IDENTIFIER,
   RETIRED_TERMINOLOGY,
   trackedSourceFiles,
 } from './check_reading_lists_terminology.mjs';
@@ -23,6 +24,12 @@ test('boundary-aware pattern matches every retired spelling variant', () => {
   ]) {
     assert.match(text, RETIRED_TERMINOLOGY, text);
   }
+});
+
+test('snake_case identifier pattern catches retired derived symbols', () => {
+  assert.match('option' + '_inputs snapshot', RETIRED_IDENTIFIER);
+  assert.match('crate::option' + '_e_setting', RETIRED_IDENTIFIER);
+  assert.doesNotMatch('reading_order_inputs snapshot', RETIRED_IDENTIFIER);
 });
 
 test('boundary-aware pattern ignores unrelated adoption words', () => {

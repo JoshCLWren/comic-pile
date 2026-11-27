@@ -35,6 +35,9 @@ export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url
 export const RETIRED_TERMINOLOGY =
   /(?<![A-Za-z])[Oo][Pp][Tt][Ii][Oo][Nn][\s_-]?[Ee](?![a-z])/;
 
+/** Snake_case implementation identifiers derived from the retired name. */
+export const RETIRED_IDENTIFIER = /(?<![A-Za-z])option_[a-z]/;
+
 const EXCLUDED_PREFIXES = [
   '.rotisserie/',
   'frontend/src/generated/',
@@ -82,7 +85,7 @@ export function findRetiredTerminology(root = REPO_ROOT) {
     }
     if (!text.includes('ption')) continue;
     text.split(/\r?\n/).forEach((line, index) => {
-      if (RETIRED_TERMINOLOGY.test(line)) {
+      if (RETIRED_TERMINOLOGY.test(line) || RETIRED_IDENTIFIER.test(line)) {
         findings.push({file, line: index + 1, text: line.trim()});
       }
     });
