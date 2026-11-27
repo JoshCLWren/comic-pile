@@ -269,11 +269,11 @@ describe('Thread detail request budget', () => {
     await screen.findByRole('group', { name: 'Issue #2 in Saga' })
 
     const expectedIssueReads = {
-      'GET /v1/threads/42/issues?page_size=100': 1,
-      'GET /v1/threads/42/issues?page_size=100&page_token=next': 1,
+      'GET /v2/threads/42/issues?page_size=100': 1,
+      'GET /v2/threads/42/issues?page_size=100&page_token=next': 1,
     }
     const issueReads = () => Object.fromEntries(
-      Object.entries(requestCounts(calls)).filter(([key]) => key.includes('/v1/threads/42/issues?')),
+      Object.entries(requestCounts(calls)).filter(([key]) => key.includes('/v2/threads/42/issues?')),
     )
     expect(issueReads()).toEqual(expectedIssueReads)
 
