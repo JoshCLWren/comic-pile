@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-27T01:54:22.561984+00:00",
+  "generated_at": "2026-11-27T01:57:17+00:00",
   "models": [
     {
       "health": {
@@ -23825,7 +23825,7 @@
   },
   "counts_generated_at": "2026-11-27T01:54:22.561984+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-27T01:54:23Z",
+    "generated_at": "2026-11-27T01:57:18Z",
     "sources": {
       "nvidia": [
         "google/diffusiongemma-26b-a4b-it",
@@ -23835,9 +23835,6 @@
         "nvidia/nemotron-3-nano-30b-a3b",
         "stepfun-ai/step-3.7-flash",
         "z-ai/glm-5.3"
-      ],
-      "opencode-free": [
-        "hy4-flash-free"
       ]
     }
   },
@@ -23847,8 +23844,8 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-27T01:54:23.230743+00:00",
-    "days_elapsed": 26.079,
+    "checked_at": "2026-11-27T01:57:18.306662+00:00",
+    "days_elapsed": 26.081,
     "days_in_month": 30.0,
     "days_left": 3.92,
     "in_use": true,
@@ -23866,31 +23863,31 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 49909382,
-        "organization": 49909382,
+        "database": 49973646,
+        "organization": 49973646,
         "owner_target": 50000000,
-        "projected_database": 57413300,
-        "projected_organization": 57413300,
-        "projected_share": 0.1148,
-        "share_used": 0.0998
+        "projected_database": 57482818,
+        "projected_organization": 57482818,
+        "projected_share": 0.115,
+        "share_used": 0.0999
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 192334,
-        "organization": 192334,
+        "database": 192679,
+        "organization": 192679,
         "owner_target": 1000000,
-        "projected_database": 221252,
-        "projected_organization": 221252,
-        "projected_share": 0.0221,
-        "share_used": 0.0192
+        "projected_database": 221631,
+        "projected_organization": 221631,
+        "projected_share": 0.0222,
+        "share_used": 0.0193
       },
       "storage_bytes": {
         "allowance": 5000000000,
-        "database": 22994944,
-        "organization": 22994944,
+        "database": 23031808,
+        "organization": 23031808,
         "owner_target": 250000000,
-        "projected_database": 22994944,
-        "projected_organization": 22994944,
+        "projected_database": 23031808,
+        "projected_organization": 23031808,
         "projected_share": 0.0046,
         "share_used": 0.0046
       }
@@ -23906,7 +23903,7 @@
     "status": "warn"
   },
   "schema": {
-    "checked_at": "2026-11-27T01:54:26+00:00",
+    "checked_at": "2026-11-27T01:57:21+00:00",
     "code_version": 6,
     "last_upgrade": {
       "at": "2026-11-25T18:11:07+00:00",
@@ -24084,7 +24081,7 @@
     "stored_version": 6
   },
   "crashes": {
-    "generated_at": "2026-11-27T01:54:26Z",
+    "generated_at": "2026-11-27T01:57:21Z",
     "groups": [
       {
         "count": 2,
@@ -24164,7 +24161,7 @@
   },
   "ready": {
     "cycles": [],
-    "generated_at": "2026-11-27T01:52:59+00:00",
+    "generated_at": "2026-11-27T01:55:03+00:00",
     "items": [
       {
         "action": "review",
@@ -24203,10 +24200,19 @@
         "title": "V2 API 08: Reading-session list/get, keep History without legacy sessions"
       },
       {
-        "action": "review-findings",
+        "action": "review",
         "lane": 3,
         "priority": 0,
         "rank": 5,
+        "stage": "factory:review",
+        "target": "pr:5894",
+        "title": "V2 API 10: Reading-order group collection CRUD"
+      },
+      {
+        "action": "review-findings",
+        "lane": 3,
+        "priority": 0,
+        "rank": 6,
         "stage": "factory:changes-requested",
         "target": "pr:5897",
         "title": "V2 API 15: Reading-order projection preview and Thread order reads"
@@ -24214,87 +24220,9 @@
     ]
   },
   "gh_usage": {
-    "generated_at": "2026-11-27T01:54:27Z",
+    "generated_at": "2026-11-27T01:57:21Z",
     "jobs": {
       "dispatch": [
-        {
-          "at": 1795743207,
-          "buckets": {
-            "reader": 26,
-            "workflow": 8
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 4378,
-            "reset": 1795745648
-          },
-          "cache_hits": 0,
-          "github": 34,
-          "label": "dispatch split:4456",
-          "paginated": 0,
-          "top": [
-            [
-              "api GET repos/R/pulls/N",
-              14
-            ],
-            [
-              "api GET repos/R/issues",
-              6
-            ],
-            [
-              "api GET repos/R/issues/N",
-              4
-            ],
-            [
-              "api GET repos/R/pulls",
-              1
-            ],
-            [
-              "api GET repos/R/actions/runs",
-              1
-            ]
-          ],
-          "writes": 1
-        },
-        {
-          "at": 1795743396,
-          "buckets": {
-            "reader": 235,
-            "workflow": 5
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 4218,
-            "reset": 1795745648
-          },
-          "cache_hits": 0,
-          "github": 240,
-          "label": "dispatch pr:5893",
-          "paginated": 3,
-          "top": [
-            [
-              "api GET repos/R/issues",
-              155
-            ],
-            [
-              "api GET repos/R/issues/N",
-              75
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ],
-            [
-              "api GET repos/R/pulls",
-              1
-            ],
-            [
-              "api GET repos/R/actions/runs",
-              1
-            ]
-          ],
-          "writes": 0
-        },
         {
           "at": 1795743488,
           "buckets": {
@@ -24684,6 +24612,84 @@
             ]
           ],
           "writes": 16
+        },
+        {
+          "at": 1795744504,
+          "buckets": {
+            "reader": 49,
+            "workflow": 31
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 3223,
+            "reset": 1795745648
+          },
+          "cache_hits": 0,
+          "github": 80,
+          "label": "dispatch roster",
+          "paginated": 11,
+          "top": [
+            [
+              "api GET repos/R/pulls/N",
+              14
+            ],
+            [
+              "api GET repos/R/issues",
+              12
+            ],
+            [
+              "api GET repos/R/issues/N",
+              8
+            ],
+            [
+              "api POST repos/R/issues",
+              6
+            ],
+            [
+              "api GET rate_limit",
+              4
+            ]
+          ],
+          "writes": 20
+        },
+        {
+          "at": 1795744583,
+          "buckets": {
+            "reader": 15,
+            "workflow": 5
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 3210,
+            "reset": 1795745648
+          },
+          "cache_hits": 0,
+          "github": 20,
+          "label": "dispatch pr:5894",
+          "paginated": 4,
+          "top": [
+            [
+              "api GET repos/R/issues",
+              4
+            ],
+            [
+              "api GET repos/R/issues/N",
+              4
+            ],
+            [
+              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
+              2
+            ],
+            [
+              "api GET repos/R/pulls",
+              1
+            ],
+            [
+              "api GET repos/R/actions/runs",
+              1
+            ]
+          ],
+          "writes": 0
         }
       ],
       "merge": [
