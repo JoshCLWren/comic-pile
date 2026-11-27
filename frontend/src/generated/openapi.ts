@@ -3438,6 +3438,27 @@ export interface paths {
         patch: operations["patch_thread_documentation"];
         trace?: never;
     };
+    "/api/v2/threads/{thread_id}/creatorCredits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documentation-only operation for the canonical v2 thread-scoped credit
+         *     projection (#5706). The v1 bulk creator URL stays on the legacy response;
+         *     this v2 operation adds bounded pagination around the same stored credits.
+         */
+        get: operations["thread_creator_credits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/threads/{thread_id}/issue-order": {
         parameters: {
             query?: never;
@@ -3465,7 +3486,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Documentation-only operation for the canonical v2 thread issue collection
+         *     (#5706). The v2 path is mounted to the same owner-scoped, paginated handler
+         *     as the retained v1 same-path read, so both URLs share one wire contract.
+         */
+        get: operations["list_thread_issues_v2"];
         put?: never;
         /**
          * Documentation-only operation for the mounted issue-create resource.
@@ -9338,6 +9364,24 @@ export interface components {
             title: string;
             /** Format: int32 */
             total_issues?: number | null;
+        };
+        /**
+         * @description Bounded, paginated thread-scoped issue-credit projection for #5706.
+         *
+         *     Keeps the frozen per-issue `issue_id`/`creators` wire shape of the legacy
+         *     bulk creator read and adds standard page fields. The `issues` array omits
+         *     unmapped issues and issues without stored credits, exactly like the legacy
+         *     response, while `total_count` counts the matching credited issue rows.
+         */
+        ThreadCreatorCreditsResponse: {
+            issues: components["schemas"]["NativeIssueCreatorsEntry"][];
+            next_page_token?: string | null;
+            /** Format: int64 */
+            page_size: number;
+            /** Format: int32 */
+            thread_id: number;
+            /** Format: int64 */
+            total_count: number;
         };
         /**
          * @description Wire parity with Python `ThreadDependenciesResponse`
@@ -19215,6 +19259,69 @@ export interface operations {
             };
         };
     };
+    thread_creator_credits: {
+        parameters: {
+            query?: {
+                /** @description 1-100 credited issues (default 100) */
+                page_size?: number;
+                /** @description issue_id continuation cursor */
+                page_token?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated stored creator credits per mapped issue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadCreatorCreditsResponse"];
+                };
+            };
+            /** @description Invalid page token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     issue_order_documentation: {
         parameters: {
             query?: never;
@@ -19261,6 +19368,71 @@ export interface operations {
             };
             /** @description Projected reading graph would cycle; nothing was changed */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_thread_issues_v2: {
+        parameters: {
+            query?: {
+                /** @description Optional read or unread filter */
+                status?: string;
+                /** @description 1-100 issues (default 50) */
+                page_size?: number;
+                /** @description position,id continuation cursor */
+                page_token?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Owned thread ID */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped, paginated issues */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadIssueListResponse"];
+                };
+            };
+            /** @description Invalid page token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
