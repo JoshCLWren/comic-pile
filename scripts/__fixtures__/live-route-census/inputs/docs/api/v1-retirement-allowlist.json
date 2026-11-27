@@ -48,7 +48,9 @@
       "rollout_status": "slice-open",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": []
+      "consumers": [
+        "frontend/src/test/api.spec.ts"
+      ]
     },
     {
       "method": "POST",

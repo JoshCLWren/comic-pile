@@ -78,8 +78,10 @@
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
-      "consumers": [],
-      "caller_count": 0,
+      "consumers": [
+        "frontend/src/test/api.spec.ts"
+      ],
+      "caller_count": 1,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4832,

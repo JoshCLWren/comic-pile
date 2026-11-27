@@ -79,7 +79,7 @@ test('caller scan excludes generated, type and fixture references', () => {
   assert.ok(callers.some(caller => caller.file === 'frontend/src/test/api.spec.ts'));
   assert.equal(
     callers.filter(caller => caller.drift_checked).length,
-    4,
+    3,
     'generated/fixture references and synthetic spec data are not drift sources',
   );
 });
