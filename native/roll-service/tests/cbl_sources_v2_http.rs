@@ -154,7 +154,10 @@ async fn list_browses_root_and_continues_with_an_opaque_token() {
     assert_eq!(first["page"], 1);
     assert_eq!(first["page_size"], 1);
     assert_eq!(first["catalog_total"], 5, "inactive list must be excluded");
-    assert_eq!(first["total"], 2, "root browse selects direct children only");
+    assert_eq!(
+        first["total"], 2,
+        "root browse selects direct children only"
+    );
     assert_eq!(first["items"].as_array().unwrap().len(), 1);
     assert!(!first["folders"].as_array().unwrap().is_empty());
     assert_eq!(first["breadcrumbs"][0]["name"], "All CBLs");
