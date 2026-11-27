@@ -363,7 +363,11 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
                 }
                 "NumIssues" if capture == Some(CapturedField::NumIssues) => {
                     capture = None;
-                    declared_issue_count = Some(parse_optional_int(&captured_text)?);
+                    declared_issue_count = if captured_text.trim().is_empty() {
+                        None
+                    } else {
+                        Some(parse_optional_int(&captured_text)?)
+                    };
                 }
                 "Book" => {
                     let book = current_book
@@ -860,11 +864,12 @@ pub async fn sync_cbl_lists<C: GenericClient>(
     )
     .await?;
     let list_ids = upsert_lists(client, source_id, &pending, &revision_sha, synced_at).await?;
-    let list_ids: Vec<i32> = list_ids.into_values().collect();
-    delete_entries(client, &list_ids).await?;
+    let changed_ids: Vec<i32> = list_ids.values().copied().collect();
+    delete_entries(client, &changed_ids).await?;
     let identities_upserted = upsert_identities(client, &pending, synced_at).await?;
-    let identity_ids = lookup_identities(client).await?;
-    let entries_written = insert_entries(client, &pending, &list_ids, &identity_ids, synced_at).await?;
+    let identity_ids = resolve_identity_ids(client, &pending).await?;
+    let entries_written =
+        insert_entries(client, &pending, &list_ids, &identity_ids, synced_at).await?;
     let keep_paths: Vec<&str> = keep_paths.into_iter().collect();
     let deactivated_applied = client
         .execute(
@@ -1084,26 +1089,6 @@ struct IdentityIds {
     issues: HashMap<String, i32>,
 }
 
-async fn lookup_identities<C: GenericClient>(
-    client: &C,
-) -> Result<IdentityIds, IngestError> {
-    let rows = client
-        .query(
-            "SELECT e.id, e.entity_type, e.external_id
-             FROM external_identities e
-             WHERE e.provider = 'comicvine'
-               AND ((e.entity_type = 'series' AND e.external_id = ANY($1::text[]))
-                 OR (e.entity_type = 'issue' AND e.external_id = ANY($2::text[])))",
-            &[&Vec::<String>::new(), &Vec::<String>::new()],
-        )
-        .await
-        .map_err(|error| IngestError::new(format!("cbl identity lookup failed: {error}")))?;
-    // The broad lookup above is replaced below by the keys actually used by
-    // this import; the empty-parameter query is never issued (see below).
-    let _ = rows;
-    Ok(IdentityIds::default())
-}
-
 async fn resolve_identity_ids<C: GenericClient>(
     client: &C,
     pending: &[&CBLList],
@@ -1162,23 +1147,75 @@ async fn resolve_identity_ids<C: GenericClient>(
 async fn insert_entries<C: GenericClient>(
     client: &C,
     pending: &[&CBLList],
-    list_ids: &[i32],
+    list_ids: &HashMap<String, i32>,
     identity_ids: &IdentityIds,
     synced_at: DateTime<Utc>,
 ) -> Result<usize, IngestError> {
-    let mut lists_by_path: HashMap<&str, i32> = HashMap::new();
+    let mut list_ids_column = Vec::new();
+    let mut positions = Vec::new();
+    let mut series_names = Vec::new();
+    let mut issue_numbers = Vec::new();
+    let mut volume_years = Vec::new();
+    let mut publication_years = Vec::new();
+    let mut series_identity_ids = Vec::new();
+    let mut issue_identity_ids = Vec::new();
     for list in pending {
-        if let Some(id) = list_ids
-            .iter()
-            .find(|id| **id > 0 && lists_by_path.values().all(|used| used != id))
-        {
-            let _ = id;
+        let Some(list_id) = list_ids.get(&list.source_path) else {
+            return Err(IngestError::new("upserted CBL list has no id"));
+        };
+        for book in &list.books {
+            list_ids_column.push(*list_id);
+            positions.push(book.position);
+            series_names.push(book.series.clone());
+            issue_numbers.push(book.issue_number.clone());
+            volume_years.push(book.volume_year);
+            publication_years.push(book.publication_year);
+            series_identity_ids.push(
+                book.comicvine_series_id
+                    .as_ref()
+                    .and_then(|id| identity_ids.series.get(id).copied()),
+            );
+            issue_identity_ids.push(
+                book.comicvine_issue_id
+                    .as_ref()
+                    .and_then(|id| identity_ids.issues.get(id).copied()),
+            );
         }
     }
-    // `upsert_lists` returns ids keyed by path; rebuild the same mapping from
-    // the unique path/id pairs supplied by the caller via the reserved slot.
-    let _ = &mut lists_by_path;
-    Ok(0)
+    let mut written = 0;
+    let total = list_ids_column.len();
+    for start in (0..total).step_by(BATCH_SIZE) {
+        let end = start.saturating_add(BATCH_SIZE).min(total);
+        let count = client
+            .execute(
+                "INSERT INTO cbl_source_entries
+                    (list_id, position, series_name, issue_number, volume_year,
+                     publication_year, external_series_identity_id,
+                     external_issue_identity_id, created_at)
+                 SELECT input.list_id, input.position, input.series_name, input.issue_number,
+                        input.volume_year, input.publication_year,
+                        input.series_identity_id, input.issue_identity_id, $9::timestamptz
+                 FROM unnest($1::int[], $2::int[], $3::text[], $4::text[], $5::int[],
+                             $6::int[], $7::int[], $8::int[])
+                      AS input(list_id, position, series_name, issue_number, volume_year,
+                               publication_year, series_identity_id, issue_identity_id)",
+                &[
+                    &list_ids_column[start..end],
+                    &positions[start..end],
+                    &series_names[start..end],
+                    &issue_numbers[start..end],
+                    &volume_years[start..end],
+                    &publication_years[start..end],
+                    &series_identity_ids[start..end],
+                    &issue_identity_ids[start..end],
+                    &synced_at,
+                ],
+            )
+            .await
+            .map_err(|error| IngestError::new(format!("cbl entry insert failed: {error}")))?;
+        written += usize::try_from(count).unwrap_or(0);
+    }
+    Ok(written)
 }
 
 #[cfg(test)]

@@ -8,6 +8,7 @@ pub mod bug_reports;
 pub mod catalog_commit;
 pub mod catalog_series_mapping_preview;
 pub mod cbl_catalog;
+pub mod cbl_ingest;
 pub mod comicvine_issue;
 pub mod comicvine_limits;
 pub mod comicvine_matching;
