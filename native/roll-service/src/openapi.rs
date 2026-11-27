@@ -167,6 +167,8 @@ use utoipa::OpenApi;
         crate::creators_v2::rating_distribution_documentation,
         crate::creators_v2::role_documentation,
         crate::creators_v2::series_documentation,
+        // AIP-136 collection custom method for the advisory duplicate lookup (#5705).
+        crate::thread_lifecycle::check_potential_duplicates_v2_documentation,
     ),
     components(schemas(
         crate::auth::dto::RegisterRequest,
