@@ -2515,7 +2515,6 @@ mod tests {
         assert_eq!(expected.trim_end(), generated.trim_end());
     }
 
-<<<<<<< HEAD
     /// The v2 collection CRUD contract must expose the five standard methods
     /// with canonical Get carrying the enriched detail view and no `/detail`
     /// action path (#5710).
@@ -2590,7 +2589,9 @@ mod tests {
                     ["schema"]["$ref"],
                 schema
             );
-=======
+        }
+    }
+
     #[test]
     fn v2_contract_documents_all_six_membership_operations() {
         let document = serde_json::to_value(dependency_groups_v2_openapi()).unwrap();
@@ -2603,7 +2604,6 @@ mod tests {
             "/api/v2/reading-order-groups/{group_id}/members/{member_id}",
         ] {
             assert!(document["paths"].get(path).is_some(), "{path}");
->>>>>>> origin/main
         }
     }
 }
