@@ -176,7 +176,7 @@ pub async fn get_issue_dependencies(
     }))
 }
 
-/// `GET /api/v1/threads/{thread_id}/issue-dependencies` — bounded issue-edge batch.
+/// `GET /api/v2/threads/{thread_id}/issueDependencies` — bounded issue-edge batch (#5709).
 pub async fn get_thread_issue_dependencies(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -720,7 +720,8 @@ mod tests {
             "/api/v2/issues/7",
             "/api/v1/issues/7/comicvine",
             "/api/v2/issues/7/dependencies",
-            "/api/v1/threads/7/issue-dependencies",
+            "/api/v2/threads/7/issueDependencies",
+            "/api/v2/threads/7/dependencies",
             "/api/v1/threads/7/issues",
         ] {
             let response = app

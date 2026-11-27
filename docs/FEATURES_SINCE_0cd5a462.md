@@ -138,8 +138,11 @@ New/expanded endpoints relevant to these features:
   - `GET /api/v1/dependencies/blocked`
   - `POST /api/v1/dependencies/`
   - `DELETE /api/v1/dependencies/{dependency_id}`
-  - `GET /api/v1/threads/{thread_id}/dependencies`
-  - `POST /api/v1/threads/{thread_id}:getBlockingInfo`
+  - `GET /api/v2/threads/{thread_id}/dependencies` (reader-authored edges only, #5709)
+  - `GET /api/v2/threads/{thread_id}/issueDependencies` (#5709)
+  - `GET /api/v2/threads/{thread_id}/eligibility` (#5709)
+  - `POST /api/v2/threads:explainEligibility` (#5709)
+  - `GET /api/v2/threads/{thread_id}/connections` (#5709)
 - Issues:
   - `GET /api/v1/threads/{thread_id}/issues`
   - `POST /api/v1/threads/{thread_id}/issues`

@@ -7,9 +7,15 @@
 //! `app/services/reading_order_service.py`) at the identical HTTP methods and
 //! paths:
 //!
-//! * `POST /api/v1/threads/{thread_id}:getBlockingInfo`
-//! * `POST /api/v1/threads:getBlockingInfo`
-//! * `GET  /api/v1/threads/{thread_id}/connected`
+//! The dependency/blocking diagnosis reads moved to canonical v2 resources in
+//! #5709 (`GET /api/v2/threads/{thread_id}/eligibility`,
+//! `POST /api/v2/threads:explainEligibility`,
+//! `GET /api/v2/threads/{thread_id}/connections`, plus the thread dependency
+//! collections in `dependencies.rs` and `issue_read.rs`). Their v1 aliases are
+//! retired and return the Rust JSON 404.
+//!
+//! The retained same-path reads are:
+//!
 //! * `GET  /api/v1/threads/{thread_id}/dependency-order-check`
 //! * `GET  /api/v1/threads/{thread_id}/issues:validateOrder`
 //! * `GET  /api/v1/threads/{thread_id}/reading-orders`
