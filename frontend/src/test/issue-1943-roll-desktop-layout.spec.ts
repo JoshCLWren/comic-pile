@@ -214,7 +214,7 @@ const RATING_STATES = {
 } satisfies Record<string, RatingStateRoutes>
 
 async function installRatingRoutes(page: Page, state: RatingStateRoutes): Promise<void> {
-  await page.route('**/v1/threads/*/reading-orders', (route) =>
+  await page.route('**/v2/threads/*/readingOrders', (route) =>
     route.fulfill({ json: { reading_orders: state.readingOrders } }),
   )
   await page.route('**/v1/threads/*/connected', (route) =>

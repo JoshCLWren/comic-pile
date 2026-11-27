@@ -10,7 +10,9 @@
 //! * Returns snapshots in reverse chronological order (newest first).
 //! * Timestamps emitted as UTC `...Z` strings.
 //!
-//! Bounded reads: one session ownership check + one aggregated snapshots query.
+//! Bounded read: one owner-scoped aggregated snapshots query. Ownership is
+//! part of the same statement that projects the rows, so a foreign or missing
+//! session is indistinguishable and no second lookup can race it.
 
 #![forbid(unsafe_code)]
 
@@ -20,12 +22,12 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::ToSchema;
 
 /// Snapshot item in the list response.
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct UndoSnapshotItem {
     pub id: i32,
     pub session_id: i32,
@@ -41,8 +43,21 @@ pub struct UndoSnapshotsResponse {
     pub snapshots: Vec<UndoSnapshotItem>,
 }
 
-const SESSION_OWNERSHIP_SQL: &str = "SELECT 1 FROM sessions WHERE id = $1 AND user_id = $2";
-const SNAPSHOTS_SQL: &str = "SELECT id, session_id, to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), description, event_id FROM snapshots WHERE session_id = $1 ORDER BY created_at DESC, id DESC";
+/// One bounded statement: verify session ownership and project its snapshots
+/// without a second, unscoped lookup. The `[]` fallback preserves the Python
+/// wire contract for an owned session with no restore points.
+const OWNED_SNAPSHOTS_SQL: &str = "SELECT COALESCE((
+     SELECT json_agg(json_build_object(
+         'id', s.id,
+         'session_id', s.session_id,
+         'created_at', to_char(s.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
+         'description', s.description,
+         'event_id', s.event_id
+     ) ORDER BY s.created_at DESC, s.id DESC)
+     FROM snapshots s WHERE s.session_id = rs.id
+ ), '[]'::json)::text
+ FROM sessions rs
+ WHERE rs.id = $1 AND rs.user_id = $2";
 
 fn not_found() -> ApiError {
     ApiError::with_status(StatusCode::NOT_FOUND, "Session not found".to_string())
@@ -62,58 +77,21 @@ pub async fn list_undo_snapshots(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<UndoSnapshotsResponse>, ApiError> {
     let connection = db::checkout(&state).await?;
-
-    // Verify session ownership
-    let owned = connection
-        .query_opt(SESSION_OWNERSHIP_SQL, &[&session_id, &user.id()])
-        .await
-        .map_err(db::query_error)?
-        .is_some();
-
-    if !owned {
-        return Err(not_found());
-    }
-
-    // Fetch snapshots
-    let snapshot_rows = connection
-        .query(SNAPSHOTS_SQL, &[&session_id])
-        .await
-        .map_err(db::query_error)?;
-
-    let mut snapshots = Vec::with_capacity(snapshot_rows.len());
-    for row in snapshot_rows {
-        let id: i32 = row.try_get(0).map_err(|e| {
-            tracing::debug!(
-                error_kind = crate::error_kind(&e),
-                "preserved underlying error before mapping"
-            );
-            internal()
-        })?;
-        let session_id: i32 = row.try_get(1).map_err(|e| {
-            tracing::debug!(
-                error_kind = crate::error_kind(&e),
-                "preserved underlying error before mapping"
-            );
-            internal()
-        })?;
-        let created_at: String = row.try_get(2).map_err(|e| {
-            tracing::debug!(
-                error_kind = crate::error_kind(&e),
-                "preserved underlying error before mapping"
-            );
-            internal()
-        })?;
-        let description: Option<String> = row.try_get(3).ok();
-        let event_id: Option<i32> = row.try_get(4).ok();
-
-        snapshots.push(UndoSnapshotItem {
-            id,
-            session_id,
-            created_at,
-            description,
-            event_id,
-        });
-    }
+    let row = db::query_one_optional(
+        &state,
+        connection,
+        OWNED_SNAPSHOTS_SQL,
+        &[&session_id, &user.id()],
+    )
+    .await?
+    .ok_or_else(not_found)?;
+    let snapshots: Vec<UndoSnapshotItem> = serde_json::from_str(row.get(0)).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        internal()
+    })?;
 
     Ok(Json(UndoSnapshotsResponse {
         session_id,
@@ -229,6 +207,30 @@ mod tests {
         assert_eq!(
             response.snapshots[1].description,
             Some("Session start".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn list_undo_snapshots_emits_empty_array_for_owned_session_without_snapshots() {
+        let (state, user, _guard) = database_fixture().await;
+        let connection = db::checkout(&state).await.expect("fixture connection");
+        connection
+            .execute(
+                "INSERT INTO sessions (id, user_id, started_at, ended_at, start_die, manual_die)
+                 VALUES (9303, 9101, NOW(), NULL, 6, NULL)",
+                &[],
+            )
+            .await
+            .expect("seed owned session without snapshots");
+        drop(connection);
+
+        let Json(response) = list_undo_snapshots(Path(9303), user, State(state.clone()))
+            .await
+            .expect("list snapshots");
+        assert_eq!(response.session_id, 9303);
+        assert!(
+            response.snapshots.is_empty(),
+            "Python emits [] for an owned session with no restore points"
         );
     }
 

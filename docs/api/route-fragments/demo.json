@@ -11,7 +11,7 @@
       "bucket": "operations",
       "method": "GET",
       "path": "/api/v2/demo-roll",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "src": "^/api/v2/demo-roll$",
       "runtime": "native-rust",
       "status": "target",

@@ -57,7 +57,7 @@ it('refreshes and retries a request after an expired access token', async () => 
   post.mockResolvedValue({ access_token: 'refreshed-token' })
   transport.request.mockResolvedValue({ refreshed: true })
 
-  const originalRequest = { url: '/v1/threads/42/reading-orders', headers: {} }
+  const originalRequest = { url: '/v2/threads/42/readingOrders', headers: {} }
   const result = await responseInterceptor({ config: originalRequest, response: { status: 401 } })
 
   expect(post).toHaveBeenCalledWith('/v2/auth/refresh')
