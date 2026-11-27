@@ -1910,292 +1910,6 @@
         ]
       }
     },
-<<<<<<< HEAD
-    "/api/v1/reading-order-groups/": {
-      "get": {
-        "tags": [
-          "reading-order-groups"
-        ],
-        "summary": "Documentation-only operation for listing reading-order groups.",
-        "operationId": "dependency_groups_list",
-        "responses": {
-          "200": {
-            "description": "Owned groups with memberships",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/DependencyGroupResponse"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "post": {
-        "tags": [
-          "reading-order-groups"
-        ],
-        "summary": "Documentation-only operation for creating a reading-order group.",
-        "operationId": "dependency_groups_create",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DependencyGroupCreateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Created group",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "409": {
-            "description": "A group with this name already exists"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/reading-order-groups/{group_id}": {
-      "get": {
-        "tags": [
-          "reading-order-groups"
-        ],
-        "summary": "Documentation-only operation for fetching one group.",
-        "operationId": "dependency_groups_get",
-        "parameters": [
-          {
-            "name": "group_id",
-            "in": "path",
-            "description": "Owned group identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Owned group",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Group not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "delete": {
-        "tags": [
-          "reading-order-groups"
-        ],
-        "summary": "Documentation-only operation for deleting one group.",
-        "operationId": "dependency_groups_delete",
-        "parameters": [
-          {
-            "name": "group_id",
-            "in": "path",
-            "description": "Owned group identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Group deleted"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Group not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "patch": {
-        "tags": [
-          "reading-order-groups"
-        ],
-        "summary": "Documentation-only operation for renaming one group.",
-        "operationId": "dependency_groups_update",
-        "parameters": [
-          {
-            "name": "group_id",
-            "in": "path",
-            "description": "Owned group identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DependencyGroupUpdateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Renamed group",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Group not found"
-          },
-          "409": {
-            "description": "A group with this name already exists"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/reading-order-groups/{group_id}/detail": {
-      "get": {
-        "tags": [
-          "reading-order-groups"
-        ],
-        "summary": "Documentation-only operation for fetching enriched group detail.",
-        "operationId": "dependency_groups_get_detail",
-        "parameters": [
-          {
-            "name": "group_id",
-            "in": "path",
-            "description": "Owned group identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Owned group detail",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupDetailResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Group not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-=======
->>>>>>> origin/main
     "/api/v1/reading-order-groups/{group_id}/order": {
       "put": {
         "tags": [
@@ -9090,43 +8804,6 @@
         ]
       }
     },
-<<<<<<< HEAD
-    "/api/v2/readingSessions": {
-      "get": {
-        "tags": [
-          "sessions"
-        ],
-        "summary": "Documentation-only List operation for the canonical collection.",
-        "operationId": "list_reading_sessions_documentation",
-        "parameters": [
-          {
-            "name": "page_size",
-            "in": "query",
-            "description": "Bounded page size (1-100, default 50)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "page_token",
-            "in": "query",
-            "description": "Opaque continuation token",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "One page of event-derived reading sessions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ListReadingSessionsResponse"
-=======
     "/api/v2/readingOrderGroups": {
       "get": {
         "tags": [
@@ -9144,17 +8821,10 @@
                   "items": {
                     "$ref": "#/components/schemas/DependencyGroupResponse"
                   }
->>>>>>> origin/main
                 }
               }
             }
           },
-<<<<<<< HEAD
-          "400": {
-            "description": "Invalid page size or token"
-          },
-=======
->>>>>>> origin/main
           "401": {
             "description": "Not authenticated"
           },
@@ -9170,8 +8840,6 @@
       },
       "post": {
         "tags": [
-<<<<<<< HEAD
-=======
           "reading-order-groups"
         ],
         "summary": "Documentation-only operation for creating a v2 reading-order group.",
@@ -9427,7 +9095,6 @@
       },
       "post": {
         "tags": [
->>>>>>> origin/main
           "readingSessions"
         ],
         "summary": "Documentation-only operation for the mounted v2 reading-session initializer.",
@@ -11212,7 +10879,6 @@
         ]
       }
     },
-<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/readingOrders": {
       "get": {
         "tags": [
@@ -11260,8 +10926,6 @@
         ]
       }
     },
-=======
->>>>>>> origin/main
     "/api/v2/undo/{session_id}/snapshots": {
       "get": {
         "tags": [
