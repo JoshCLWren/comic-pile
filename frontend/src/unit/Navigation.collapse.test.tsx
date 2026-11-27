@@ -72,7 +72,6 @@ function renderNavigation(initialEntry = '/') {
 
 describe('navigation collapse behavior (#2285)', () => {
   beforeEach(() => {
-    document.documentElement.removeAttribute('data-theme')
     localStorage.clear()
     mocks.get.mockReset()
     mocks.post.mockReset()
@@ -198,7 +197,7 @@ describe('navigation collapse behavior (#2285)', () => {
     expect(desktopNav).toHaveAttribute('data-nav-collapsed', 'true')
   })
 
-  it('keeps themes, identity, and logout reachable inside the compact rail', async () => {
+  it('keeps identity and logout reachable inside the compact rail', async () => {
     setViewport(800)
     renderNavigation()
 
@@ -207,19 +206,10 @@ describe('navigation collapse behavior (#2285)', () => {
       expect(within(desktopNav).getByRole('button', { name: /expand navigation/i }))
         .toBeInTheDocument()
     })
-    await waitFor(() => {
-      expect(within(desktopNav).getByRole('group', { name: /appearance/i })).toBeInTheDocument()
-    })
 
-    for (const name of ['Classic theme', 'Ink-gold theme', 'Command center theme']) {
-      expect(within(desktopNav).getByRole('button', { name })).toBeInTheDocument()
-    }
     expect(within(desktopNav).getByRole('button', { name: /log out/i })).toBeInTheDocument()
-
-    const themeButtons = within(desktopNav)
-      .getByRole('group', { name: /appearance/i })
-      .querySelectorAll('button[data-theme]')
-    expect(themeButtons).toHaveLength(3)
+    expect(within(desktopNav).queryByRole('group', { name: /appearance/i })).toBeNull()
+    expect(desktopNav.querySelectorAll('[data-theme]')).toHaveLength(0)
   })
 
   it('toggles with the keyboard', async () => {

@@ -1,13 +1,17 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
 
 export interface UserPreferencesResponse {
-  theme: 'classic' | 'ink-gold' | 'command-center'
   user_id: number
+  /** Legacy server field. Night Shift is the only identity; clients ignore it (#5980). */
+  theme?: string
 }
 
-export interface UserPreferencesPatchRequest {
-  theme?: 'classic' | 'ink-gold' | 'command-center' | null
-}
+/**
+ * No appearance field is writable: Night Shift is fixed and there is no theme
+ * preference to persist. The endpoint remains part of the API surface for any
+ * future unrelated preference fields.
+ */
+export type UserPreferencesPatchRequest = Record<string, never>
 
 /**
  * Build the user preferences service bound to an HTTP client.

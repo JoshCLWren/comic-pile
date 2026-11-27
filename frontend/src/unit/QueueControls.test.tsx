@@ -180,7 +180,8 @@ describe('QueueControls', () => {
     expect(screen.getByRole('button', { name: 'Shuffle' })).toBeInTheDocument()
     expect(screen.getByTestId('queue-add-thread-desktop')).toBeInTheDocument()
     const active = screen.getByRole('button', { name: 'Recently added' })
-    expect(active.className).toContain('amber')
+    expect(active.className).toContain('text-[var(--theme-comic-accent)]')
+    expect(active.className).not.toMatch(/amber|stone-/)
   })
 
   it('carries the same danger signal as the Roll shuffle control (#3261)', () => {

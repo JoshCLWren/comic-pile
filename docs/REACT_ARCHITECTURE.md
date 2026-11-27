@@ -344,12 +344,11 @@ Locally, Vite serves the same app with HMR on `:5173`. See
 ## Styling Approach
 
 The canonical visual contract is [`FRONTEND_VISUAL_GRAMMAR.md`](FRONTEND_VISUAL_GRAMMAR.md) —
-semantic `data-theme` roles (`--theme-*` tokens) in `frontend/src/styles.css`,
-standard spacing scale, mobile-first responsive pairs, and the three live themes
-(`classic`, `ink-gold`, `command-center`). Theme persistence matches
-[`frontend/src/services/theme.ts`](../frontend/src/services/theme.ts)
-(`restoreStoredTheme` in `main.tsx` renders the locally persisted theme before
-network/auth work). New visual values must follow the grammar's incremental
+semantic `--theme-*` roles in the single `:root` token set in
+`frontend/src/styles.css`, standard spacing scale, and mobile-first responsive
+pairs. Night Shift is the only visual identity (#5980): there is no `data-theme`
+switch, appearance selector, or theme persistence, and obsolete saved values
+never affect rendering. New visual values must follow the grammar's incremental
 migration policy rather than inventing a local dialect.
 
 ## 3D Dice Component

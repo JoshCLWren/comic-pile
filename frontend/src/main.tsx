@@ -3,14 +3,12 @@ import { createRoot } from 'react-dom/client'
 import AppErrorBoundary from './components/AppErrorBoundary'
 import { ToastProvider } from './contexts/ToastProvider'
 import { startBootstrapShellLifecycle } from './bootstrapShell'
-import { restoreStoredTheme } from './services/theme'
 import './index.css'
 import App from './App'
 
-// Render the locally persisted theme before any network/auth work so the
-// chosen appearance survives reloads even when the preferences API is
-// unavailable (issue #1611).
-restoreStoredTheme()
+// Night Shift is the only visual identity (#5980), so the canonical palette in
+// styles.css applies from first paint. There is no appearance preference to
+// restore and no `data-theme` attribute to flash.
 
 const rootElement = document.getElementById('root')
 

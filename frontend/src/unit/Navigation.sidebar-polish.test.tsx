@@ -1,12 +1,10 @@
 /**
- * Roll sidebar polish regressions (#3011).
+ * Shared sidebar polish regressions (#3011, updated for #5980).
  *
- * The desktop navigation is shared by every authenticated screen, so these
- * assertions guard the two product changes that reach all of them:
- * - the appearance control no longer dominates the sidebar footer, and keeps
- *   the same compact treatment as the collapsed rail;
- * - the brand and user blocks share one horizontal gutter, expanded and
- *   collapsed, and never sit flush against the viewport edge.
+ * Night Shift removed the appearance control, so these assertions now guard
+ * the remaining product behavior: the brand list and the sidebar footer share
+ * one horizontal gutter, the footer stays free of theme-only controls, and
+ * the compact rail keeps identity, bug report and logout reachable.
  */
 import { render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
@@ -41,14 +39,6 @@ vi.mock('../services/api', () => {
     isSessionRefreshRejected: () => false,
   }
 })
-
-vi.mock('../services/api-preferences', () => ({
-  preferencesApi: {
-    get: (options?: { timeout?: number; skipAuthRedirect?: boolean }) =>
-      mocks.get('/v2/users/me/preferences', options),
-    patch: (data: { theme?: string | null }) => mocks.patch('/v2/users/me/preferences', data),
-  },
-}))
 
 function setViewport(width: number) {
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
@@ -85,15 +75,12 @@ function renderNavigation() {
 async function expandedSidebar() {
   renderNavigation()
   const sidebar = await screen.findByRole('navigation', { name: 'Desktop navigation' })
-  await waitFor(() =>
-    expect(within(sidebar).getByRole('button', { name: 'Classic theme' })).toBeInTheDocument(),
-  )
+  await waitFor(() => expect(within(sidebar).getByText('reader')).toBeInTheDocument())
   return sidebar
 }
 
-describe('Roll sidebar appearance control stays compact (#3011)', () => {
+describe('shared sidebar footer stays compact (#3011, #5980)', () => {
   beforeEach(() => {
-    document.documentElement.removeAttribute('data-theme')
     localStorage.clear()
     queryClient.clear()
     mocks.get.mockReset()
@@ -107,50 +94,26 @@ describe('Roll sidebar appearance control stays compact (#3011)', () => {
     setViewport(1280)
   })
 
-  it('keeps the expanded appearance control on one non-wrapping row', async () => {
-    const sidebar = await expandedSidebar()
-    const group = within(sidebar).getByRole('group', { name: 'Appearance' })
-    const buttons = within(group).getAllByRole('button')
-    expect(buttons).toHaveLength(3)
-
-    // The control must not wrap or reflow: no `flex-wrap` on the group, and no
-    // nested wrapper that could push the options onto a second line.
-    expect(group.className).not.toContain('flex-wrap')
-    expect(group.querySelectorAll('button')).toHaveLength(3)
-    expect(group.textContent).toContain('Theme')
-  })
-
-  it('gives the compact theme options a legible, full-size hit target', async () => {
-    const sidebar = await expandedSidebar()
-    const group = within(sidebar).getByRole('group', { name: 'Appearance' })
-    const buttons = within(group).getAllByRole('button')
-
-    for (const button of buttons) {
-      // The expanded control and the collapsed rail are the same control in two
-      // states, so they share one typographic and hit-target treatment.
-      expect(button.className).toContain('h-7')
-      expect(button.className).toContain('w-7')
-      expect(button.className).toContain('text-[10px]')
-      expect(button.className).not.toMatch(/text-\[[0-9]px\]/)
-      // Abbreviated glyphs need a full accessible name and a tooltip.
-      expect(button).toHaveAccessibleName()
-      expect(button.getAttribute('title')).toBe(button.getAttribute('aria-label'))
-    }
-  })
-
   it('keeps one horizontal gutter for the brand list and the sidebar footer', async () => {
     const sidebar = await expandedSidebar()
 
     const brand = within(sidebar).getByText('Comic Pile')
     const [scroller, footer] = Array.from(sidebar.querySelectorAll(':scope > div'))
 
-    // Brand block and nav list share the expanded gutter...
     expect(brand.closest('div')?.parentElement).toBe(scroller)
     expect(scroller?.className).toContain('px-4')
-    // ...and the footer below the divider uses the same one, so the username,
-    // appearance control, bug report, and logout all align with the brand.
     expect(footer?.className).toContain('px-4')
     expect(footer?.className).not.toContain('px-2')
     expect(within(sidebar).getByText('reader').className).toContain('truncate')
+  })
+
+  it('keeps logout available without a theme-only control in the footer', async () => {
+    const sidebar = await expandedSidebar()
+    const [scroller, footer] = Array.from(sidebar.querySelectorAll(':scope > div'))
+
+    expect(within(sidebar).getByRole('button', { name: 'Log out' })).toBeInTheDocument()
+    expect(footer?.querySelectorAll('button[data-theme]')).toHaveLength(0)
+    expect(within(sidebar).queryByRole('group', { name: /appearance/i })).toBeNull()
+    expect(scroller?.textContent).not.toMatch(/Classic|Ink.Gold|Command.Center/)
   })
 })

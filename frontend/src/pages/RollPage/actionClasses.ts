@@ -36,10 +36,9 @@ export const rollPrimaryActionClass = [
  * keeps the same `px-4` inline padding at every width.
  *
  * The label uses `--theme-text-primary` rather than `--theme-text-muted` on
- * purpose. `--theme-text-muted` is a pale cyan in the `command-center` theme, so
- * a muted-text secondary read as an unrelated accent inside the navy/gold
- * system; hierarchy here comes from the surface treatment, not from dimming the
- * label into a different hue.
+ * purpose. In Night Shift, muted text is a cool blue-gray that would read as a
+ * secondary accent beside the cyan action palette; hierarchy here comes from
+ * the surface treatment, not from dimming the label into a different hue.
  */
 export const rollSecondaryActionClass = [
   'min-h-11 min-w-28 flex-1 rounded-xl border border-[var(--theme-border)]',

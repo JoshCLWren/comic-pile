@@ -7,8 +7,8 @@
  * counts (not `Set`s) make a duplicate in-flight or retry call fail.
  *
  * The shell case records the identity-inbox read at the Axios adapter because
- * that service module still uses the default Axios instance; the other shell
- * read (preferences) goes through the service transport seam.
+ * that service module still uses the default Axios instance. Night Shift no
+ * longer performs a shell appearance-preference read.
  */
 import { StrictMode, useEffect, type ReactNode } from 'react'
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
@@ -32,7 +32,6 @@ import { AuthContext } from '../contexts/AuthContext'
 import { NavCollapseProvider } from '../contexts/NavCollapseContext'
 import type { AuthState } from '../services/authState'
 import Navigation from '../components/Navigation'
-import { PreferencesSync } from '../hooks/usePreferences'
 import { QueueControls } from '../pages/QueuePage/QueueControls'
 import { useQueueCrossovers } from '../pages/QueuePage/useQueueCrossovers'
 import { useExcludedThreads, useMoveToFront, useQueueThreads } from '../hooks/useQueue'
@@ -388,7 +387,6 @@ function renderShell(): ReactNode {
             <BugReportRestoreProvider>
               <ToastProvider>
                 <Navigation onBugReportSubmit={async () => undefined} />
-                <PreferencesSync isAuthenticated />
               </ToastProvider>
             </BugReportRestoreProvider>
           </NavCollapseProvider>
@@ -447,31 +445,24 @@ afterEach(() => {
 })
 
 describe('core route request budgets', () => {
-  it('authenticated shell loads preferences and inbox once, then reuses them across remounts', async () => {
+  it('authenticated shell makes no appearance-preference request and reads the inbox once', async () => {
     installAdapterRecorder()
-    const { calls, client } = createRequestRecorder((call) => {
-      if (call.url === '/v2/users/me/preferences') return { theme: 'classic', user_id: 1 }
-      return {}
-    })
+    const { calls, client } = createRequestRecorder(() => ({}))
     setDefaultHttpClient(client)
 
     const view = render(renderShell())
 
-    await waitFor(() =>
-      expect(calls.some((call) => call.url === '/v2/users/me/preferences')).toBe(true),
-    )
     await waitFor(() => expect(adapterCalls.length).toBeGreaterThan(0))
     await drainSettledWork()
 
     // Route elements remount the shell, but TanStack's fresh cache entries must
-    // prevent another preferences read or inbox probe on warm navigation.
+    // prevent another inbox probe on warm navigation. Night Shift has no
+    // appearance preference to load, so no preferences request may appear.
     view.unmount()
     render(renderShell())
     await drainSettledWork()
 
-    expect(requestCounts(calls)).toEqual({
-      'GET /v2/users/me/preferences': 1,
-    })
+    expect(requestCounts(calls)).toEqual({})
     expect(requestCounts(adapterCalls)).toEqual({
       'GET /v2/identity-inbox?limit=1&offset=0': 1,
     })

@@ -5,13 +5,9 @@ import type { ReportType } from './BugReportModal'
 import { useAuth } from '../App'
 import { useNavCollapse } from '../contexts/NavCollapseContext'
 import api from '../services/api'
-import { useToast } from '../contexts/useToast'
 import { useIdentityInboxStatus } from '../hooks/useIdentityInbox'
-import { DEFAULT_THEME, getAppliedTheme, isSupportedTheme, readStoredThemePreference, selectTheme } from '../services/theme'
-import type { ThemeId } from '../services/theme'
 import type { DiagnosticData } from '../hooks/useDiagnostics'
 import { useResponsive } from '../utils/responsive'
-import { useUpdatePreferences } from '../hooks/usePreferences'
 import OverlayPortal from './OverlayPortal'
 
 type BugReportSubmit = (
@@ -60,12 +56,6 @@ const SECONDARY_NAV_ITEMS: NavItem[] = [
   { path: '/whats-new', label: "What's new", icon: 'new', ariaLabel: "What's new page" },
   { path: '/glossary', label: 'Glossary', icon: 'glossary', ariaLabel: 'Glossary page' },
   { path: '/identity-inbox', label: 'Identity Inbox', icon: 'identity-inbox', ariaLabel: 'Identity Inbox page' },
-]
-
-const APPEARANCE_OPTIONS: Array<{ id: ThemeId; label: string; ariaLabel: string; mobileClassName: string }> = [
-  { id: 'classic', label: 'Classic theme', ariaLabel: 'Classic theme', mobileClassName: 'classic:text-stone-100 ink-gold:text-stone-900 command-center:text-stone-100' },
-  { id: 'ink-gold', label: 'Ink Gold theme', ariaLabel: 'Ink-gold theme', mobileClassName: 'classic:text-stone-400 ink-gold:text-stone-100 command-center:text-stone-400' },
-  { id: 'command-center', label: 'Command Center theme', ariaLabel: 'Command center theme', mobileClassName: 'classic:text-stone-400 ink-gold:text-stone-400 command-center:text-stone-100' },
 ]
 
 function NavIcon({ name }: { name: NavIconName }) {
@@ -173,14 +163,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   const { collapsed, toggleCollapsed } = useNavCollapse()
   const navigate = useNavigate()
   const { isMobile } = useResponsive()
-  const { showToast } = useToast()
-  const updatePreferences = useUpdatePreferences(() => {
-    showToast('Theme applied for this session, but saving your preference failed.', 'error')
-  })
   const [isMoreOpen, setIsMoreOpen] = useState(false)
-  const [activeTheme, setActiveTheme] = useState<ThemeId>(
-    () => getAppliedTheme() ?? readStoredThemePreference() ?? DEFAULT_THEME,
-  )
   const { data: inboxTotal, isError: inboxStatusError } = useIdentityInboxStatus(authState.status === 'authenticated')
   const showIdentityInbox = inboxTotal !== undefined && !inboxStatusError && inboxTotal > 0
   const visibleSecondaryNavItems = showIdentityInbox
@@ -188,16 +171,6 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
     : SECONDARY_NAV_ITEMS.filter((item) => item.path !== '/identity-inbox')
   const moreButtonRef = useRef<HTMLButtonElement>(null)
   const moreMenuRef = useRef<HTMLElement>(null)
-
-  useEffect(() => {
-    const root = document.documentElement
-    const observer = new MutationObserver(() => {
-      const applied = getAppliedTheme()
-      if (applied) setActiveTheme(applied)
-    })
-    observer.observe(root, { attributes: true, attributeFilter: ['data-theme'] })
-    return () => observer.disconnect()
-  }, [])
 
   useEffect(() => {
     setIsMoreOpen(false)
@@ -231,20 +204,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
     (path === '/continuity-plans' && (location.pathname === '/reading-lists' || location.pathname.startsWith('/reading-lists/')))
   const isMoreRoute = visibleSecondaryNavItems.some((item) => isActive(item.path))
 
-  const toggleMoreMenu = () => {
-    if (!isMoreOpen) {
-      const themeAttr = document.documentElement.getAttribute('data-theme')
-      setActiveTheme(isSupportedTheme(themeAttr) ? themeAttr : DEFAULT_THEME)
-    }
-    setIsMoreOpen(value => !value)
-  }
-
-  const setTheme = (themeId: string) => {
-    const applied = selectTheme(themeId)
-    if (applied === null) return
-    setActiveTheme(applied)
-    updatePreferences.mutate({ theme: applied })
-  }
+  const toggleMoreMenu = () => setIsMoreOpen(value => !value)
 
   const handleLogout = useCallback(async () => {
     try {
@@ -260,14 +220,16 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
 
   const navItemClass = (active: boolean) =>
     `nav-item flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center gap-1 py-1 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-focus-ring)] ${
-      active ? 'active' : 'hover:bg-white/5'
+      active ? 'active' : 'hover:bg-[var(--theme-bg-hover)]'
     }`
 
   const mobileNavLabelClass = 'nav-label max-w-full break-words text-center text-xs font-bold uppercase leading-tight tracking-wide'
 
   const desktopNavItemClass = (active: boolean) =>
     `desktop-nav-item flex w-full items-center rounded-lg transition-all duration-200 ${
-      active ? 'bg-white/10 text-amber-400' : 'text-stone-400 hover:bg-white/5'
+      active
+        ? 'bg-[var(--theme-bg-hover)] text-[var(--theme-comic-accent)]'
+        : 'text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg-hover)]'
     } ${collapsed ? 'justify-center px-0 py-2' : 'gap-3 px-3 py-2'}`
 
   const renderNavItem = (item: NavItem, active: boolean, isDesktop = false) => {
@@ -303,7 +265,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   return (
     <>
       <nav
-        className={`sticky top-0 z-40 hidden h-screen flex-col border-r border-[var(--glass-border)] bg-[var(--bg-darker)] transition-[width] duration-200 md:flex ${
+        className={`sticky top-0 z-40 hidden h-screen flex-col border-r border-[var(--theme-border)] bg-[var(--theme-bg-panel)] transition-[width] duration-200 md:flex ${
           collapsed ? 'w-16' : 'w-72'
         }`}
         role="navigation"
@@ -322,7 +284,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
               onClick={toggleCollapsed}
               aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
               aria-expanded={!collapsed}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--theme-text-muted)] transition-colors hover:bg-white/5 hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--theme-text-muted)] transition-colors hover:bg-[var(--theme-bg-hover)] hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
               data-nav-toggle
             >
               <svg
@@ -340,46 +302,22 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
             </button>
           </div>
           {MAIN_NAV_ITEMS.map((item) => renderNavItem(item, isActive(item.path), true))}
-          <div className="my-2 border-t border-[var(--glass-border)]" aria-hidden="true" />
+          <div className="my-2 border-t border-[var(--theme-border)]" aria-hidden="true" />
           {visibleSecondaryNavItems.map((item) => renderNavItem(item, isActive(item.path), true))}
         </div>
-        <div className={`border-t border-[var(--glass-border)] ${collapsed ? 'px-3 py-3' : 'px-4 py-3'}`}>
+        <div className={`border-t border-[var(--theme-border)] ${collapsed ? 'px-3 py-3' : 'px-4 py-3'}`}>
           {collapsed ? (
             <div className="flex flex-col items-center gap-2">
               {authState.isLoading ? (
                 <span className="text-xs font-medium text-[var(--theme-text-muted)]">…</span>
               ) : authState.user?.username ? (
                 <span
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-xs font-bold uppercase text-[var(--theme-text-primary)]"
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--theme-bg-hover)] text-xs font-bold uppercase text-[var(--theme-text-primary)]"
                   title={authState.user?.username}
                 >
                   {authState.user?.username.charAt(0)}
                 </span>
               ) : null}
-              <div
-                className="flex flex-col items-center gap-1"
-                role="group"
-                aria-label="Appearance"
-              >
-                {APPEARANCE_OPTIONS.map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    data-theme={option.id}
-                    onClick={() => setTheme(option.id)}
-                    aria-pressed={activeTheme === option.id}
-                    aria-label={option.ariaLabel}
-                    title={option.label}
-                    className={`h-7 w-7 rounded-md text-[10px] font-bold transition-colors ${
-                      activeTheme === option.id
-                        ? 'bg-white/10 text-[var(--theme-text-primary)] ring-1 ring-[var(--theme-focus-ring)]'
-                        : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
-                    }`}
-                  >
-                    {option.id === 'classic' ? 'C' : option.id === 'ink-gold' ? 'IG' : 'CC'}
-                  </button>
-                ))}
-              </div>
               {authState.status === 'authenticated' && (
                 <div className="flex w-8">
                   <BugReportButton onSubmit={onBugReportSubmit} variant="sidebar" collapsed />
@@ -390,7 +328,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
                 onClick={handleLogout}
                 aria-label="Log out"
                 title="Log out"
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--theme-text-muted)] transition-colors hover:bg-white/5 hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--theme-text-muted)] transition-colors hover:bg-[var(--theme-bg-hover)] hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
               >
                 <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M18 6l-6 6 6 6"></path>
@@ -405,42 +343,17 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
               ) : authState.user?.username ? (
                 <span className="block truncate text-xs font-medium text-[var(--theme-text-muted)]">{authState.user?.username}</span>
               ) : null}
-              <div
-                className="mt-2 flex items-center justify-center gap-1 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-1"
-                role="group"
-                aria-label="Appearance"
-              >
-                <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--theme-text-muted)' }}>Theme</span>
-                {APPEARANCE_OPTIONS.map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    data-theme={option.id}
-                    onClick={() => setTheme(option.id)}
-                    aria-pressed={activeTheme === option.id}
-                    aria-label={option.label}
-                    title={option.label}
-                    className={`h-7 w-7 rounded-md text-[10px] font-bold transition-colors ${
-                      activeTheme === option.id
-                        ? 'bg-white/10 text-[var(--theme-text-primary)]'
-                        : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
-                    }`}
-                  >
-                    {option.id === 'classic' ? 'C' : option.id === 'ink-gold' ? 'IG' : 'CC'}
-                  </button>
-                ))}
-              </div>
               {authState.status === 'authenticated' && (
                 <div className="mt-2 w-full">
                   <BugReportButton onSubmit={onBugReportSubmit} variant="sidebar" />
                 </div>
               )}
               {/* Issue #3009: logging out ends a session but destroys nothing, so it is
-                  a quiet utility peer of the theme control rather than a loud red action.
-                  Danger semantics belong to destructive outcomes, not to simply exiting. */}
+                  a quiet utility action rather than a loud red one. Danger semantics
+                  belong to destructive outcomes, not to simply exiting. */}
               <button
                 onClick={handleLogout}
-                className="mt-2 w-full rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-1.5 text-left text-xs font-medium text-[var(--theme-text-muted)] transition-colors hover:bg-white/5 hover:text-[var(--theme-text-primary)]"
+                className="mt-2 w-full rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-1.5 text-left text-xs font-medium text-[var(--theme-text-muted)] transition-colors hover:bg-[var(--theme-bg-hover)] hover:text-[var(--theme-text-primary)]"
                 aria-label="Log out"
               >
                 Log out
@@ -502,24 +415,6 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
               </svg>
               <span>Sign out</span>
             </button>
-          </div>
-          <div className="mt-3 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
-            <span>Appearance</span>
-          </div>
-          <div id="appearance-menu" className="mt-2 select-none">
-            {APPEARANCE_OPTIONS.map((option) => (
-              <button
-                key={option.id}
-                data-theme={option.id}
-                onClick={() => setTheme(option.id)}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-left hover:bg-[var(--theme-bg-panel)] transition-colors text-[var(--theme-text-primary)] ${option.mobileClassName}`}
-                aria-label={option.ariaLabel}
-                aria-pressed={activeTheme === option.id}
-              >
-                <span>{option.label}</span>
-                {activeTheme === option.id && <span aria-hidden="true">✓</span>}
-              </button>
-            ))}
           </div>
           </nav>
         </OverlayPortal>

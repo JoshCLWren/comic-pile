@@ -98,7 +98,6 @@ describe('auxiliary route network budgets', () => {
       'GET /api/v2/auth/csrf x1',
       'GET /api/v2/auth/me x1',
       'GET /api/v2/identity-inbox?limit=1&offset=0 x1',
-      'GET /api/v2/users/me/preferences x1',
     ])
   })
 })

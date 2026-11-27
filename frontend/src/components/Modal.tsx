@@ -233,18 +233,18 @@ export default function Modal({
           aria-labelledby={titleId}
         >
           <div className="flex justify-center pt-2 pb-1 md:hidden shrink-0">
-            <div className="w-10 h-1 bg-white/20 rounded-full" />
+            <div className="w-10 h-1 bg-[var(--theme-border)] rounded-full" />
           </div>
           {/* Desktop keeps symmetric vertical padding so the close control never sits
               flush against the dialog's top edge (issue #3922). */}
           <div className="flex items-start justify-between gap-2 md:gap-4 px-4 md:px-6 pt-2 pb-3 md:py-4 shrink-0">
-            <h2 id={titleId} className="min-w-0 flex-1 text-base md:text-xl font-black tracking-tight text-stone-200 uppercase">{title}</h2>
+            <h2 id={titleId} className="min-w-0 flex-1 text-base md:text-xl font-black tracking-tight text-[var(--theme-text-primary)] uppercase">{title}</h2>
             <button
               ref={closeButtonRef}
               type="button"
               onClick={onClose}
               disabled={closeDisabled}
-              className="text-stone-500 hover:text-stone-300 transition-colors text-2xl leading-none py-1 disabled:opacity-50"
+              className="text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors text-2xl leading-none py-1 disabled:opacity-50"
               aria-label="Close modal"
             >
               &times;

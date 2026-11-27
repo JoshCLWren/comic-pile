@@ -1,18 +1,20 @@
 # Comic Pile frontend visual grammar
 
-This document is the canonical visual contract for Comic Pile frontend work. It describes the product's existing visual language and the constraints that keep new work from inventing a fresh dialect on every page.
+This document is the canonical visual contract for Comic Pile frontend work. It describes the product's visual language and the constraints that keep new work from inventing a fresh dialect on every page.
 
 It is a decision guide, not a mandate to rewrite every historical class. Existing variation should be migrated only through focused issues backed by rendered or static audit evidence.
 
 ## Product character
 
-Comic Pile is a dense personal reading cockpit, not a generic SaaS dashboard. The interface should feel dark, tactile, comic-adjacent, and information-rich without becoming visually noisy. Theme personality comes from semantic accents and surfaces, while layout and interaction behavior should remain consistent across themes.
+Comic Pile is a dense personal reading cockpit, not a generic SaaS dashboard. The interface should feel dark, tactile, comic-adjacent, and information-rich without becoming visually noisy. Visual identity comes from one approved semantic palette, while layout and interaction behavior remain consistent across every surface.
 
-The three existing themes are `classic`, `ink-gold`, and `command-center`. New feature code should consume semantic theme roles rather than reproduce a theme's literal colors.
+**Night Shift is the single application-wide visual identity (#5980).** Classic, Ink Gold, and Command Center are retired. There is no selectable theme, appearance control, compatibility palette, feature flag, `data-theme` attribute, or stored appearance preference. Fresh loads, reloads, stale saved values and navigation all render the same Night Shift palette. New feature code consumes semantic roles rather than reproducing literal colors.
+
+The approved [Night Shift prototype](../docs/design/comicpile-night-shift.html) defines the palette. Preview controls and sample comic data in that prototype are design tools, not product features.
 
 ## Canonical semantic color and surface roles
 
-`frontend/src/styles.css` owns the canonical theme roles applied by `data-theme`:
+`frontend/src/styles.css` owns the canonical Night Shift roles in a single `:root` token set:
 
 | Role | Token | Purpose |
 | --- | --- | --- |
@@ -35,12 +37,30 @@ The three existing themes are `classic`, `ink-gold`, and `command-center`. New f
 | Success | `--theme-success` | Positive end of the graded scale: a resolved or still-rollable outcome |
 | Error | `--theme-error` | Failed-operation feedback that is not a destructive action |
 | Focus ring | `--theme-focus-ring` | Keyboard/focus visibility |
+| Dice highlight | `--die-light` | Lit faces and primary-action glow on the die |
+| Dice shadow | `--die-dark` | Shaded faces of the die |
 
-The older `--bg-*`, `--text-*`, `--accent-*`, and `--glass-*` variables are compatibility aliases. The `--glass-*` variables are deprecated and new work should prefer the `--theme-*` semantic vocabulary. The short `--theme-text` alias resolves to `--theme-text-primary`. New surface styling should use semantic classes like `.surface-panel`, `.surface-glass`, and `.surface-modal` instead of effect-based approaches.
+The Night Shift values for these roles are fixed by the owner-approved prototype:
+
+| Role | Value |
+| --- | --- |
+| Page background | `#20242D` |
+| Panel / surface | `#303644` |
+| Primary text | `#EEF1F4` |
+| Muted text | `#B2BDCB` |
+| Primary action / comic emphasis | `#9CDBE9` |
+| Reading List / continuity emphasis | `#C1A7F5` |
+| Border | `#4D5767` |
+| Primary action foreground | `#111111` |
+| Dice highlight / shadow | `#C2E9F1` / `#658E97` |
+
+Hover, dim, focus, personal, warning, error, danger and success roles are derived from this palette. Text roles must retain WCAG AA contrast (4.5:1 for normal text) on page and panel surfaces, and status must never be carried by color alone.
+
+The older `--bg-*`, `--text-*`, `--accent-*`, and `--glass-*` variables are compatibility aliases that resolve to the same Night Shift roles. The `--glass-*` variables are deprecated and new work should prefer the `--theme-*` semantic vocabulary. The short `--theme-text` alias resolves to `--theme-text-primary`. New surface styling should use semantic classes like `.surface-panel`, `.surface-glass`, and `.surface-modal` instead of effect-based approaches.
 
 The state roles form a graded scale. `--theme-danger` carries destructive or cancel semantics, `--theme-warning` carries caution and the middle of the scale, and `--theme-success` carries the positive end: an outcome that resolved cleanly or may keep progressing. `--theme-error` reports a failed operation that is not itself a destructive action, so a failed load does not have to borrow cancel styling. Use the role for the product meaning, and pair it with text so color is never the only carrier of status.
 
-`frontend/src/index.css` contains older root-level theme values such as `--theme-primary` and `--theme-bg-card`. Do not treat those as a second design system or add parallel tokens there. A new semantic role belongs with the `data-theme` token sets in `styles.css` and must be defined for every theme.
+`frontend/src/index.css` imports Tailwind and `styles.css`; it must not define another palette. A new semantic role belongs in the single `:root` token set in `styles.css`, documented in this file, and covered by the semantic contract tests.
 
 ### Raw colors
 
@@ -126,7 +146,7 @@ Use semantic surface classes to ensure consistent styling across the application
 - `.surface-glass`: Surfaces with backdrop blur for overlays and modals where transparency improves readability
 - `.surface-modal`: Elevated dialog surfaces with stronger shadows and opaque backgrounds
 
-These classes use the semantic theme tokens (`--theme-bg-panel`, `--theme-border`) and ensure proper layering and readability across all themes.
+These classes use the semantic Night Shift tokens (`--theme-bg-panel`, `--theme-border`) and ensure proper layering and readability.
 
 ## Icons
 
@@ -255,7 +275,7 @@ A genuinely new visual role is allowed when all of the following are true:
 
 1. the existing vocabulary cannot express a distinct product meaning or interaction requirement;
 2. the variation is expected to recur or is important enough to name explicitly;
-3. it works across themes and supported viewport classes;
+3. it works across authenticated and unauthenticated shells and supported viewport classes;
 4. accessibility and interaction behavior are defined with it;
 5. the new role is documented here, or a focused architecture issue explicitly owns that update.
 
@@ -280,7 +300,7 @@ When changing frontend visuals, ask in review:
 - Does optional content disappear cleanly without leaving geometry behind?
 - Does the layout reflow rather than overlap or horizontally escape?
 - Are important actions reachable at the supported viewport sizes?
-- Does the change work in all themes and with keyboard/focus behavior?
+- Does the change use Night Shift semantic roles (not a new palette or a theme switch) and preserve keyboard/focus behavior?
 
 ## Migration policy
 
