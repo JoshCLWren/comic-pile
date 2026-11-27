@@ -243,7 +243,11 @@ fn resolve_list_query(query: &ThreadListQuery) -> Result<ResolvedListQuery, ApiE
         "completed" => ThreadFilter::Completed,
         "stale" => ThreadFilter::Stale,
         "excluded" => ThreadFilter::Excluded,
-        _ => return Err(bad_request("filter must be active, completed, stale or excluded")),
+        _ => {
+            return Err(bad_request(
+                "filter must be active, completed, stale or excluded",
+            ))
+        }
     };
     if let (Some(order_by), Some(sort)) = (query.order_by.as_deref(), query.sort.as_deref()) {
         if order_by != sort {
@@ -274,9 +278,7 @@ fn resolve_list_query(query: &ThreadListQuery) -> Result<ResolvedListQuery, ApiE
             // when an old client carries the Queue's default sort.
             "last_activity".to_string()
         }
-        (ThreadFilter::Stale, "last_activity" | "title" | "created") => {
-            requested_order.to_string()
-        }
+        (ThreadFilter::Stale, "last_activity" | "title" | "created") => requested_order.to_string(),
         _ => {
             return Err(bad_request(
                 "order_by must be one of: position, title, created, last_activity",
@@ -2117,12 +2119,12 @@ mod tests {
         let variants = document["components"]["schemas"]["ThreadListResult"]["oneOf"]
             .as_array()
             .expect("filter-specific response");
-        assert!(variants.iter().any(|variant| {
-            variant["$ref"] == "#/components/schemas/ThreadListResponse"
-        }));
-        assert!(variants.iter().any(|variant| {
-            variant["$ref"] == "#/components/schemas/StaleThreadListResponse"
-        }));
+        assert!(variants
+            .iter()
+            .any(|variant| { variant["$ref"] == "#/components/schemas/ThreadListResponse" }));
+        assert!(variants
+            .iter()
+            .any(|variant| { variant["$ref"] == "#/components/schemas/StaleThreadListResponse" }));
         let names: Vec<&str> = operation["parameters"]
             .as_array()
             .expect("parameters")

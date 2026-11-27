@@ -2052,13 +2052,15 @@ fn encode_stale_cursor(cursor: &StaleCursor) -> String {
 
 fn decode_stale_cursor(token: &str) -> Result<StaleCursor, ApiError> {
     let invalid = || ApiError::BadRequest("Invalid stale page token".to_string());
-    let raw = URL_SAFE_NO_PAD.decode(token.trim_end_matches('=')).map_err(|e| {
-        tracing::debug!(
-            error_kind = crate::error_kind(&e),
-            "preserved underlying error before mapping"
-        );
-        invalid()
-    })?;
+    let raw = URL_SAFE_NO_PAD
+        .decode(token.trim_end_matches('='))
+        .map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            invalid()
+        })?;
     let payload: Value = serde_json::from_slice(&raw).map_err(|e| {
         tracing::debug!(
             error_kind = crate::error_kind(&e),
@@ -2972,8 +2974,8 @@ mod tests {
             decode_stale_cursor("not-base64").unwrap_err().detail(),
             "Invalid stale page token"
         );
-        let queue_cursor = URL_SAFE_NO_PAD
-            .encode(br#"{"sort":"position","search":"","values":["0","1","2"]}"#);
+        let queue_cursor =
+            URL_SAFE_NO_PAD.encode(br#"{"sort":"position","search":"","values":["0","1","2"]}"#);
         assert_eq!(
             decode_stale_cursor(&queue_cursor).unwrap_err().detail(),
             "Invalid stale page token"

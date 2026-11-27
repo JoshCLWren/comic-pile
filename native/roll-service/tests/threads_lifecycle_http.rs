@@ -2893,7 +2893,10 @@ async fn v2_thread_detail_is_owner_scoped_and_keeps_the_legacy_projection() {
         "next_unread_issue_number",
         "manual_creator_credits",
     ] {
-        assert!(body.get(field).is_some(), "detail omitted {field}: {body:?}");
+        assert!(
+            body.get(field).is_some(),
+            "detail omitted {field}: {body:?}"
+        );
     }
 
     let (status, body) = send(
@@ -2969,7 +2972,12 @@ async fn v2_thread_list_filters_completed_and_excluded_without_cross_owner_rows(
 
     let (status, body) = call(&ctx, "GET", "/api/v2/threads?filter=archived", None).await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
-    for query in ["days=7", "search=", "order_by=title&sort=created", "page_size=201"] {
+    for query in [
+        "days=7",
+        "search=",
+        "order_by=title&sort=created",
+        "page_size=201",
+    ] {
         let (status, _) = call(&ctx, "GET", &format!("/api/v2/threads?{query}"), None).await;
         assert!(
             status == StatusCode::BAD_REQUEST || status == StatusCode::UNPROCESSABLE_ENTITY,
@@ -3028,21 +3036,17 @@ async fn v2_thread_list_stale_filter_is_canonical_and_cursor_paginated() {
     let (status, second) = call(
         &ctx,
         "GET",
-        &format!(
-            "/api/v2/threads?filter=stale&days=60&page_size=1&page_token={token}"
-        ),
+        &format!("/api/v2/threads?filter=stale&days=60&page_size=1&page_token={token}"),
         None,
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{second:?}");
     assert_eq!(second["threads"][0]["id"], old);
-    assert!(
-        second["threads"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .all(|thread| thread["id"] != fresh && thread["id"] != foreign)
-    );
+    assert!(second["threads"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|thread| thread["id"] != fresh && thread["id"] != foreign));
 
     let (status, bad) = call(
         &ctx,
