@@ -2262,6 +2262,19 @@
       "verified_against": "vercel.json"
     },
     {
+      "method": "POST",
+      "path": "/api/v2/seriesMappings:preview",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5716,
+      "consumers": [
+        "frontend/src/services/api-series-mapping.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4844,
@@ -2536,6 +2549,19 @@
         "proof_reference": "native/roll-service/src/issue_mutation.rs",
         "measurement_status": "pending-fixture"
       },
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/threads/{thread_id}/readingOrders",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5715,
+      "consumers": [
+        "frontend/src/services/api-reading-orders.ts"
+      ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
       "verified_against": "vercel.json"
