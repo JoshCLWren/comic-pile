@@ -39,14 +39,11 @@ use utoipa::OpenApi;
         // #5716: stateless AIP-136 preview, deliberately separate from the
         // durable commit operation registered above.
         crate::catalog_series_mapping_preview::preview_series_mappings_v2_documentation,
-<<<<<<< HEAD
-=======
         // #5715: canonical AIP-136 projection preview and AIP-122 thread
         // reading-order collection. The retained v1 aliases stay in the
         // same-path contract only and must not be published here.
         crate::continuity_plans_project_preview::preview_reading_order_projection_v2_documentation,
         crate::thread_ordering::thread_reading_orders_v2_documentation,
->>>>>>> origin/main
         crate::issue_identity::cbl_adoption_commit_documentation,
         crate::issue_identity::cbl_targeted_adoption_commit_documentation,
         crate::activity::list_activity_documentation,
@@ -537,8 +534,6 @@ mod tests {
         );
     }
 
-<<<<<<< HEAD
-=======
     /// #5715: the canonical projection preview is an AIP-136 custom method on
     /// the lowerCamelCase `continuityPlans` resource, and the thread collection
     /// read is an AIP-122 nested collection. Both publish the frozen wire DTOs;
@@ -594,7 +589,6 @@ mod tests {
         );
     }
 
->>>>>>> origin/main
     /// The issue read-state and reader-context operations moved from their
     /// `/api/v1/issues/{id}:action` URLs to v2 resources. Every method must stay
     /// in both the domain document and the aggregate runtime contract with its
