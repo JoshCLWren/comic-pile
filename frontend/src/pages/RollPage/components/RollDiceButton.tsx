@@ -1,4 +1,4 @@
-import type { RefObject } from 'react'
+import type { KeyboardEvent, RefObject } from 'react'
 import LazyDice3D from '../../../components/LazyDice3D'
 import { isDiceSide } from '../../../components/diceTypes'
 
@@ -37,6 +37,15 @@ export function RollDiceButton({
   const hint = isCoin ? 'Tap or click to flip' : 'Tap or click to roll'
   const boundedValue = Math.max(1, Math.min(value || 1, displaySides))
 
+  // Native buttons already synthesize a click for Enter/Space. Handling the
+  // keys explicitly and preventing the default keeps one activation per press
+  // in every runtime (including jsdom) without a second roll mutation.
+  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
+    if (!disabled && !isRolling) onRoll()
+  }
+
   return (
     <div className="roll-dice-zone">
       <button
@@ -44,6 +53,7 @@ export function RollDiceButton({
         ref={dieRef}
         type="button"
         onClick={onRoll}
+        onKeyDown={handleKeyDown}
         disabled={disabled || isRolling}
         aria-label={label}
         aria-busy={isRolling}
