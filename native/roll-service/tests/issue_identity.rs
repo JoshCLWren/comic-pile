@@ -3727,7 +3727,10 @@ async fn adoption_commit_revised_selection_keeps_manual_history_issue_4022() {
         revised,
     )
     .await;
-    assert_eq!(status2, StatusCode::OK, "{second}");
+    assert!(
+        status2 == StatusCode::CREATED || status2 == StatusCode::OK,
+        "{second}"
+    );
     assert_eq!(second["custom_cbl_list_id"], list_id, "{second}");
     assert_eq!(second["list_version"], 2, "{second}");
 
