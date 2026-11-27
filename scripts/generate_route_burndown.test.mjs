@@ -246,12 +246,23 @@ test('real custom CBL source retains native reading-list route ownership', () =>
 
 test('real taste and bug-report fragments cannot regress to Python ingress', () => {
   const taste = liveFragment('taste-discoveries');
-  assert.equal(taste.operations.length, 2);
+  assert.equal(taste.operations.length, 4);
   liveOperation(taste, 'GET', '/api/v1/taste/discoveries');
   liveOperation(taste, 'POST', '/api/v1/taste/discoveries/{signal_id}/dismiss');
+  liveOperation(taste, 'GET', '/api/v2/users/me/tasteDiscoveries');
+  liveOperation(taste, 'POST', '/api/v2/users/me/tasteDiscoveries/{signal_id}:dismiss');
   assert.ok(!taste.operations.some(op => op.method === 'OPTIONS'));
   assert.equal(taste.defaults.runtime, 'native-rust');
   for (const op of taste.operations) assert.equal(op.dest, '/api/native_roll.rs', op.path);
+  for (const [method, route] of [
+    ['GET', '/api/v2/users/me/tasteDiscoveries'],
+    ['POST', '/api/v2/users/me/tasteDiscoveries/{signal_id}:dismiss'],
+  ]) {
+    const op = liveOperation(taste, method, route);
+    assert.equal(op.runtime, 'native-rust', route);
+    assert.equal(op.status, 'target', route);
+    assert.equal(op.owning_issue, 5717, route);
+  }
 
   const bugs = liveFragment('bug-reports');
   assert.deepEqual(
