@@ -218,7 +218,11 @@ enum SubmitOutcome {
 /// segment is rejected as an invalid provider response so no fabricated
 /// resource name is ever published.
 fn issue_resource(issue_url: &str) -> Result<(String, String), BugReportError> {
-    let segment = issue_url.trim_end_matches('/').rsplit('/').next().unwrap_or("");
+    let segment = issue_url
+        .trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .unwrap_or("");
     if !segment.is_empty() && segment.bytes().all(|byte| byte.is_ascii_digit()) {
         Ok((segment.to_string(), format!("bugReports/{segment}")))
     } else {
@@ -1501,11 +1505,9 @@ async fn create_with_issuer(
     .map_err(|e| e.sanitized_for(environment))?;
     match outcome {
         SubmitOutcome::RateLimited(response) => Ok(response),
-        SubmitOutcome::Created(issue_url) => Ok((
-            StatusCode::CREATED,
-            Json(BugReportResponse { issue_url }),
-        )
-            .into_response()),
+        SubmitOutcome::Created(issue_url) => {
+            Ok((StatusCode::CREATED, Json(BugReportResponse { issue_url })).into_response())
+        }
     }
 }
 
@@ -2651,9 +2653,11 @@ mod tests {
         assert_eq!(paths.len(), 1, "v2 contract must not republish v1 aliases");
         let operation = &document["paths"]["/api/v2/bugReports"]["post"];
         assert_eq!(operation["operationId"], "create_bug_report");
-        assert!(operation["requestBody"]["content"]["application/json"]["schema"]["$ref"]
-            .as_str()
-            .is_some_and(|reference| reference.ends_with("/BugReportCreate")));
+        assert!(
+            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"]
+                .as_str()
+                .is_some_and(|reference| reference.ends_with("/BugReportCreate"))
+        );
         assert_eq!(
             operation["responses"]["201"]["content"]["application/json"]["schema"]["$ref"],
             "#/components/schemas/BugReportV2Response"
