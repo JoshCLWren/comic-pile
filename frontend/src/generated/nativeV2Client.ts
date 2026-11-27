@@ -1293,15 +1293,6 @@ export type SwitchPrerequisiteResponse = components['schemas']['RollPrerequisite
 
 export type TeamChemistryResponse = components['schemas']['CreatorTeamChemistryResponse']
 
-<<<<<<< HEAD
-export interface ThreadOrderingReadingOrdersRequest {
-  path: {
-    thread_id: number
-  }
-}
-
-export type ThreadOrderingReadingOrdersResponse = components['schemas']['ThreadReadingOrdersResponse']
-=======
 export interface ThreadCreatorCreditsRequest {
   path: {
     thread_id: number
@@ -1313,7 +1304,14 @@ export interface ThreadCreatorCreditsRequest {
 }
 
 export type ThreadCreatorCreditsResponse = components['schemas']['ThreadCreatorCreditsResponse']
->>>>>>> origin/main
+
+export interface ThreadOrderingReadingOrdersRequest {
+  path: {
+    thread_id: number
+  }
+}
+
+export type ThreadOrderingReadingOrdersResponse = components['schemas']['ThreadReadingOrdersResponse']
 
 export interface UnassignTagRequest {
   path: {
@@ -1555,11 +1553,8 @@ export interface NativeV2Client {
   summaries(args?: SummariesRequest): Promise<SummariesResponse>
   switchPrerequisite(args: SwitchPrerequisiteRequest): Promise<SwitchPrerequisiteResponse>
   teamChemistry(): Promise<TeamChemistryResponse>
-<<<<<<< HEAD
-  threadOrderingReadingOrders(args: ThreadOrderingReadingOrdersRequest): Promise<ThreadOrderingReadingOrdersResponse>
-=======
   threadCreatorCredits(args: ThreadCreatorCreditsRequest): Promise<ThreadCreatorCreditsResponse>
->>>>>>> origin/main
+  threadOrderingReadingOrders(args: ThreadOrderingReadingOrdersRequest): Promise<ThreadOrderingReadingOrdersResponse>
   unassignTag(args: UnassignTagRequest): Promise<UnassignTagResponse>
   undoToSnapshot(args: UndoToSnapshotRequest): Promise<UndoToSnapshotResponse>
   unsnooze(args: UnsnoozeRequest): Promise<UnsnoozeResponse>
@@ -2462,16 +2457,15 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     teamChemistry() {
       return client.get<TeamChemistryResponse>("/v2/creators/team-chemistry")
     },
-<<<<<<< HEAD
-    threadOrderingReadingOrders(args: ThreadOrderingReadingOrdersRequest) {
-      return client.get<ThreadOrderingReadingOrdersResponse>(
-        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/readingOrders`,
-=======
     threadCreatorCredits(args: ThreadCreatorCreditsRequest) {
       return client.get<ThreadCreatorCreditsResponse>(
         `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/creatorCredits`,
         { params: compactQuery(args.query) },
->>>>>>> origin/main
+      )
+    },
+    threadOrderingReadingOrders(args: ThreadOrderingReadingOrdersRequest) {
+      return client.get<ThreadOrderingReadingOrdersResponse>(
+        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/readingOrders`,
       )
     },
     unassignTag(args: UnassignTagRequest) {
