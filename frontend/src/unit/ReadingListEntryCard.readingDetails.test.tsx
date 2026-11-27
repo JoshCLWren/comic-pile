@@ -28,7 +28,6 @@ const entry: CustomCBLEntry = {
   gate: 'none',
   skipped: false,
   is_checkpoint: false,
-  availability: 'available',
   checkpoint_target_issue_ids: [],
 }
 
