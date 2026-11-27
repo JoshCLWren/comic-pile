@@ -15,7 +15,6 @@ import {
   parseRouterRoutes,
   pathsMatch,
   scanCallers,
-  SET_PENDING_OWNER,
 } from './generate_live_route_census.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -46,12 +45,12 @@ test('router parser records live registrations and ignores test-module strings',
   const source = readFileSync(path.join(inputsRoot, 'native/roll-service/src/lib.rs'), 'utf8');
   const routes = parseRouterRoutes(source);
   assert.equal(routes.length, 6);
-  const setPending = routes.find(route => route.path.endsWith('/set-pending'));
+  const restore = routes.find(route => route.path.endsWith('/restore'));
   assert.deepEqual(
-    {method: setPending.method, handler: setPending.handler, line: setPending.line},
-    {method: 'POST', handler: 'thread_lifecycle::set_pending_thread', line: 7},
+    {method: restore.method, handler: restore.handler, line: restore.line},
+    {method: 'POST', handler: 'thread_lifecycle::restore_thread', line: 7},
   );
-  assert.ok(!routes.some(route => route.path === '/api/v1/threads/7/set-pending'));
+  assert.ok(!routes.some(route => route.path === '/api/v1/threads/7/restore'));
   const inline = routes.find(route => route.path === '/health');
   assert.equal(inline.handler, '<inline>');
   const {census} = generate(inputsRoot);
@@ -59,15 +58,15 @@ test('router parser records live registrations and ignores test-module strings',
 });
 
 test('path and HTTP-method matching are independent and deterministic', () => {
-  assert.equal(normalizeCallerPath('/v1/threads/${id}/set-pending'), '/api/v1/threads/{param}/set-pending');
+  assert.equal(normalizeCallerPath('/v1/threads/${id}/restore'), '/api/v1/threads/{param}/restore');
   assert.equal(normalizeCallerPath('/api/v1/threads/stale?page=2'), '/api/v1/threads/stale');
-  assert.ok(pathsMatch('/api/v1/threads/{param}/set-pending', '/api/v1/threads/{thread_id}/set-pending'));
-  assert.ok(!pathsMatch('/api/v1/threads/stale', '/api/v1/threads/{thread_id}/set-pending'));
+  assert.ok(pathsMatch('/api/v1/threads/{param}/restore', '/api/v1/threads/{thread_id}/restore'));
+  assert.ok(!pathsMatch('/api/v1/threads/stale', '/api/v1/threads/{thread_id}/restore'));
   assert.ok(!pathsMatch('/api/v1/threads/stale/extra', '/api/v1/threads/stale'));
-  const route = {method: 'POST', path: '/api/v1/threads/{thread_id}/set-pending'};
-  assert.ok(callerMatchesRoute({method: 'POST', path: '/api/v1/threads/{param}/set-pending'}, route));
-  assert.ok(!callerMatchesRoute({method: 'GET', path: '/api/v1/threads/{param}/set-pending'}, route));
-  assert.ok(callerMatchesRoute({method: '', path: '/api/v1/threads/7/set-pending'}, route));
+  const route = {method: 'POST', path: '/api/v1/threads/{thread_id}/restore'};
+  assert.ok(callerMatchesRoute({method: 'POST', path: '/api/v1/threads/{param}/restore'}, route));
+  assert.ok(!callerMatchesRoute({method: 'GET', path: '/api/v1/threads/{param}/restore'}, route));
+  assert.ok(callerMatchesRoute({method: '', path: '/api/v1/threads/7/restore'}, route));
 });
 
 test('caller scan excludes generated, type and fixture references', () => {

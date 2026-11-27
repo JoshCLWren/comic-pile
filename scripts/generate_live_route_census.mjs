@@ -744,8 +744,7 @@ export function renderReport(census, allowlist, dispositions = {}) {
     '`node scripts/generate_live_route_census.mjs --check` regenerates the '
     + 'matrix, compares the checked-in artifacts byte-for-byte, and fails on '
     + 'duplicate registrations, unowned new routes, unknown ingress/runtime, '
-    + 'stale allowlist entries, or a new first-party v1 call. The regression '
-    + `\`${SET_PENDING_KEY}\` must always be present with owner #${SET_PENDING_OWNER}.`,
+    + 'stale allowlist entries, or a new first-party v1 call.',
   );
   lines.push('');
   return lines.join('\n');

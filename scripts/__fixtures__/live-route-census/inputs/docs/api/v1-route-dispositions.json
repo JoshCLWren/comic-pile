@@ -17,12 +17,5 @@
       "rollout_status": "compatibility-alias-debt"
     }
   ],
-  "overrides": {
-    "POST /api/v1/threads/{thread_id}/set-pending": {
-      "owner_issue": 4344,
-      "replacement": "retire-without-replacement",
-      "rollout_status": "owner-issue-open",
-      "notes": "Fixture regression: Rust implementation does not retire v1."
-    }
-  }
+  "overrides": {}
 }

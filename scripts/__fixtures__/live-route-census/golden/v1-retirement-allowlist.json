@@ -41,17 +41,14 @@
     },
     {
       "method": "POST",
-      "path": "/api/v1/threads/{thread_id}/set-pending",
+      "path": "/api/v1/threads/{thread_id}/restore",
       "version": "v1",
-      "owner_issue": 4344,
-      "disposition": "retire-without-replacement",
-      "rollout_status": "owner-issue-open",
+      "owner_issue": 4832,
+      "disposition": "GET|POST|PATCH|DELETE /api/v2/threads[/{thread_id}]",
+      "rollout_status": "slice-open",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": [
-        "frontend/src/services/api-threads.ts",
-        "frontend/src/test/api.spec.ts"
-      ]
+      "consumers": []
     },
     {
       "method": "POST",

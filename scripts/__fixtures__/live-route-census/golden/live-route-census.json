@@ -24,7 +24,7 @@
     "v1_with_owner": 2,
     "v1_needing_owner": 0,
     "unknown_ingress": 0,
-    "first_party_call_sites": 5,
+    "first_party_call_sites": 4,
     "stale_aip_baseline_entries": 0
   },
   "routes": [
@@ -71,25 +71,22 @@
     },
     {
       "method": "POST",
-      "path": "/api/v1/threads/{thread_id}/set-pending",
-      "handler": "thread_lifecycle::set_pending_thread",
+      "path": "/api/v1/threads/{thread_id}/restore",
+      "handler": "thread_lifecycle::restore_thread",
       "handler_kind": "function",
       "router_line": 7,
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
-      "consumers": [
-        "frontend/src/services/api-threads.ts",
-        "frontend/src/test/api.spec.ts"
-      ],
-      "caller_count": 2,
+      "consumers": [],
+      "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
-      "owner_issue": 4344,
+      "owner_issue": 4832,
       "needs_owner_issue": false,
-      "disposition": "retire-without-replacement",
-      "rollout_status": "owner-issue-open",
-      "notes": "Fixture regression: Rust implementation does not retire v1."
+      "disposition": "GET|POST|PATCH|DELETE /api/v2/threads[/{thread_id}]",
+      "rollout_status": "slice-open",
+      "notes": ""
     },
     {
       "method": "GET",

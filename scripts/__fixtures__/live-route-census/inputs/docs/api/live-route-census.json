@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "generated_by": "scripts/generate_live_route_census.mjs",
+  "issue": 5719,
+  "sources": {
+    "router": "native/roll-service/src/lib.rs",
+    "ingress": "vercel.json",
+    "consumers": [
+      "docs/api/v2-route-inventory.json",
+      "frontend/src",
+      "scripts/ops",
+      "native/roll-service/parity"
+    ],
+    "dispositions": "docs/api/v1-route-dispositions.json",
+    "aip_baseline": "docs/api/v2-aip-shapes-baseline.json"
+  },
+  "summary": {
+    "total_routes": 5,
+    "by_version": {
+      "v1": 2,
+      "v2": 2,
+      "unversioned": 1
+    },
+    "v1_with_owner": 2,
+    "v1_needing_owner": 0,
+    "unknown_ingress": 0,
+    "first_party_call_sites": 4,
+    "stale_aip_baseline_entries": 0
+  },
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/api/threads/{thread_id}",
+      "handler": "threads::get_thread_detail",
+      "handler_kind": "function",
+      "router_line": 14,
+      "version": "unversioned",
+      "runtime": "native-rust",
+      "runtime_source": "native-router",
+      "consumers": [],
+      "caller_count": 0,
+      "ingress_destination": "/api/native_roll.rs",
+      "ingress_source": "vercel-route",
+      "owner_issue": 5701,
+      "needs_owner_issue": false,
+      "disposition": "GET /api/v2/threads/{thread_id}",
+      "rollout_status": "compatibility-alias-debt",
+      "notes": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/threads/stale",
+      "handler": "thread_lifecycle::list_stale_threads",
+      "handler_kind": "function",
+      "router_line": 11,
+      "version": "v1",
+      "runtime": "native-rust",
+      "runtime_source": "native-router",
+      "consumers": [
+        "frontend/src/services/api-threads.ts",
+        "scripts/ops/cli.mjs"
+      ],
+      "caller_count": 2,
+      "ingress_destination": "/api/native_roll.rs",
+      "ingress_source": "vercel-route",
+      "owner_issue": 4832,
+      "needs_owner_issue": false,
+      "disposition": "GET|POST|PATCH|DELETE /api/v2/threads[/{thread_id}]",
+      "rollout_status": "slice-open",
+      "notes": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}/restore",
+      "handler": "thread_lifecycle::restore_thread",
+      "handler_kind": "function",
+      "router_line": 7,
+      "version": "v1",
+      "runtime": "native-rust",
+      "runtime_source": "native-router",
+      "consumers": [],
+      "caller_count": 0,
+      "ingress_destination": "/api/native_roll.rs",
+      "ingress_source": "vercel-route",
+      "owner_issue": 4832,
+      "needs_owner_issue": false,
+      "disposition": "GET|POST|PATCH|DELETE /api/v2/threads[/{thread_id}]",
+      "rollout_status": "slice-open",
+      "notes": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/threads",
+      "handler": "threads_v2::list_threads",
+      "handler_kind": "function",
+      "router_line": 12,
+      "version": "v2",
+      "runtime": "native-rust",
+      "runtime_source": "native-router",
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
+      ],
+      "caller_count": 1,
+      "ingress_destination": "/api/native_roll.rs",
+      "ingress_source": "vercel-route",
+      "owner_issue": 5701,
+      "needs_owner_issue": false,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "notes": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/threads:preview",
+      "handler": "threads_v2::preview_threads",
+      "handler_kind": "function",
+      "router_line": 13,
+      "version": "v2",
+      "runtime": "native-rust",
+      "runtime_source": "native-router",
+      "consumers": [],
+      "caller_count": 0,
+      "ingress_destination": "/api/native_roll.rs",
+      "ingress_source": "vercel-route",
+      "owner_issue": 5705,
+      "needs_owner_issue": false,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "notes": ""
+    }
+  ],
+  "retired_cross_references": []
+}

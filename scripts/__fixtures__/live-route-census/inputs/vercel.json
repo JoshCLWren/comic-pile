@@ -1,7 +1,7 @@
 {
   "routes": [
     {
-      "src": "^/api/v1/threads/[^/]+/set-pending$",
+      "src": "^/api/v1/threads/[^/]+/restore$",
       "methods": ["POST"],
       "dest": "/api/native_roll.rs"
     },

@@ -17,7 +17,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 - v1 routes with a named retirement owner: 2.
 - v1 routes needing an owner issue: 0 (visible baseline debt, not a pass).
 - Routes with unresolved production ingress: 0.
-- Scanned first-party call sites: 5.
+- Scanned first-party call sites: 4.
 - Stale AIP baseline entries (no live route): 0.
 - Allowlist entries: 4 (owner 4, baseline debt 0, nonconforming v2 1).
 
@@ -27,13 +27,13 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | GET | `/api/threads/{thread_id}` | `threads::get_thread_detail` | unversioned | none | /api/native_roll.rs | #5701 | GET /api/v2/threads/{thread_id} | compatibility-alias-debt |
 | GET | `/api/v1/threads/stale` | `thread_lifecycle::list_stale_threads` | v1 | frontend/src/services/api-threads.ts, scripts/ops/cli.mjs | /api/native_roll.rs | #4832 | GET\|POST\|PATCH\|DELETE /api/v2/threads[/{thread_id}] | slice-open |
-| POST | `/api/v1/threads/{thread_id}/set-pending` | `thread_lifecycle::set_pending_thread` | v1 | frontend/src/services/api-threads.ts, frontend/src/test/api.spec.ts | /api/native_roll.rs | #4344 | retire-without-replacement | owner-issue-open |
+| POST | `/api/v1/threads/{thread_id}/restore` | `thread_lifecycle::restore_thread` | v1 | none | /api/native_roll.rs | #4832 | GET\|POST\|PATCH\|DELETE /api/v2/threads[/{thread_id}] | slice-open |
 | GET | `/api/v2/threads` | `threads_v2::list_threads` | v2 | frontend/src/services/api-threads.ts | /api/native_roll.rs | #5701 | canonical-v2 | live-target |
 | POST | `/api/v2/threads:preview` | `threads_v2::preview_threads` | v2 | none | /api/native_roll.rs | #5705 | canonical-v2 | live-target |
 
 ## Owner issue cross-reference
 
-Existing owner/disposition issues resolved for this census: #4344, #4832, #5701, #5705.
+Existing owner/disposition issues resolved for this census: #4832, #5701, #5705.
 No new backlog issue is created by this tooling task: every current live v1 method resolves to an existing owner issue and an AIP destination or an explicit retire-without-replacement decision.
 
 Non-browser / helper / infrastructure surface included in the census:
@@ -46,4 +46,4 @@ None. Every live v1 method has an owner or an explicit disposition.
 
 ## Verification
 
-`node scripts/generate_live_route_census.mjs --check` regenerates the matrix, compares the checked-in artifacts byte-for-byte, and fails on duplicate registrations, unowned new routes, unknown ingress/runtime, stale allowlist entries, or a new first-party v1 call. The regression `POST /api/v1/threads/{thread_id}/set-pending` must always be present with owner #4344.
+`node scripts/generate_live_route_census.mjs --check` regenerates the matrix, compares the checked-in artifacts byte-for-byte, and fails on duplicate registrations, unowned new routes, unknown ingress/runtime, stale allowlist entries, or a new first-party v1 call.
