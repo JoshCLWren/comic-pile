@@ -328,10 +328,7 @@ fn app() -> Router {
         // method. The inner service registers it too, but this Vercel entry
         // owns a separate route table: without a matching route here the
         // fallback returns the Rust JSON 404 before the handler runs.
-        .route(
-            "/api/v2/threads:checkDuplicates",
-            post(native_dispatch),
-        )
+        .route("/api/v2/threads:checkDuplicates", post(native_dispatch))
         .route("/api/v1/threads/{thread_id}", get(native_dispatch))
         .route("/api/v1/threads/{thread_id}", post(native_dispatch))
         .route("/api/v1/threads:getBlockingInfo", post(native_dispatch))
