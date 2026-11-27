@@ -62,6 +62,7 @@ use http_body_util::BodyExt;
 use serde::{Deserialize, Serialize};
 use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 use tokio_postgres::Transaction;
+use utoipa::OpenApi;
 
 const MAX_TITLE_CHARS: usize = 200;
 const MAX_DESCRIPTION_CHARS: usize = 2000;
