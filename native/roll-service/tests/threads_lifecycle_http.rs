@@ -168,6 +168,23 @@ async fn send(state: &Arc<AppState>, request: Request<Body>) -> (StatusCode, Val
     )
 }
 
+/// Same as `send`, but keeps the response headers so the AIP-133 `Location`
+/// contract of `POST /api/v2/threads` can be asserted (#5702).
+async fn send_with_headers(
+    state: &Arc<AppState>,
+    request: Request<Body>,
+) -> (StatusCode, axum::http::HeaderMap, Value) {
+    let response = router(state.clone()).oneshot(request).await.unwrap();
+    let status = response.status();
+    let headers = response.headers().clone();
+    let bytes = to_bytes(response.into_body(), 256 * 1024).await.unwrap();
+    (
+        status,
+        headers,
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+    )
+}
+
 fn authed(method: &str, path: &str, token: &str, csrf: &str, body: Option<Value>) -> Request<Body> {
     let builder = Request::builder()
         .method(method)
@@ -326,9 +343,10 @@ async fn every_lifecycle_route_requires_auth() {
     let ctx = setup("lcauth").await;
     let routes = [
         ("POST", "/api/v1/threads/"),
+        ("POST", "/api/v2/threads"),
         ("POST", "/api/v1/threads/check-duplicates"),
         ("GET", "/api/v1/threads/excluded/threads"),
-        ("POST", "/api/v1/threads/groups:batch"),
+        ("POST", "/api/v2/reading-order-groups:resolveMemberships"),
         ("POST", "/api/v1/threads/reactivate"),
         ("GET", "/api/v1/threads/stale"),
         ("DELETE", "/api/v1/threads/1"),
@@ -584,6 +602,209 @@ async fn create_validation_matches_the_fastapi_422_envelope() {
         .unwrap()
         .get(0);
     assert_eq!(count, 0, "rejected requests must not write");
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/v2/threads — AIP-133 standard Create (#5702)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn create_v2_returns_201_with_location_and_owner_scoped_thread() {
+    let ctx = setup("lcv2create").await;
+    let (status, headers, body) = send_with_headers(
+        &ctx.state,
+        authed(
+            "POST",
+            "/api/v2/threads",
+            &ctx.token,
+            &ctx.csrf,
+            Some(json!({
+                "title": "V2 Saga",
+                "format": "comics",
+                "issues_remaining": 4,
+                "notes": "  keep "
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    assert_eq!(body["format"], "Comic");
+    assert_eq!(body["status"], "active");
+    assert_eq!(body["queue_position"], 1);
+    assert_eq!(body["notes"], "  keep ");
+    let id = body["id"].as_i64().unwrap() as i32;
+    assert_eq!(
+        headers
+            .get(header::LOCATION)
+            .and_then(|value| value.to_str().ok()),
+        Some(format!("/api/v2/threads/{id}").as_str()),
+        "AIP-133 Create must name the created collection member"
+    );
+
+    let conn = ctx.state.pool.get().await.unwrap();
+    let row = conn
+        .query_one(
+            "SELECT user_id, queue_position FROM threads WHERE id = $1",
+            &[&id],
+        )
+        .await
+        .unwrap();
+    let owner: i32 = row.get(0);
+    let position: i32 = row.get(1);
+    assert_eq!(owner, ctx.user_id, "owner must be the authenticated reader");
+    assert_eq!(position, 1);
+    let side_effects: i64 = conn
+        .query_one(
+            "SELECT (SELECT count(*) FROM issues WHERE thread_id = $1)
+                  + (SELECT count(*) FROM dependencies)
+                  + (SELECT count(*) FROM continuity_plans)",
+            &[&id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        side_effects, 0,
+        "v2 create must not create issues, Plans or dependencies"
+    );
+}
+
+#[tokio::test]
+async fn create_v2_keeps_duplicate_merge_and_validation_contract() {
+    let ctx = setup("lcv2dupe").await;
+    let payload = json!({"title": "V2 Double Click", "format": "Comic", "issues_remaining": 3});
+    let (first_status, _, first) = send_with_headers(
+        &ctx.state,
+        authed(
+            "POST",
+            "/api/v2/threads",
+            &ctx.token,
+            &ctx.csrf,
+            Some(payload.clone()),
+        ),
+    )
+    .await;
+    let (second_status, _, second) = send_with_headers(
+        &ctx.state,
+        authed(
+            "POST",
+            "/api/v2/threads",
+            &ctx.token,
+            &ctx.csrf,
+            Some(json!({"title": "v2 double click", "format": "comics", "issues_remaining": 3})),
+        ),
+    )
+    .await;
+    assert_eq!(first_status, StatusCode::CREATED);
+    assert_eq!(second_status, StatusCode::CREATED);
+    assert_eq!(first["id"], second["id"], "double-submit must still merge");
+
+    let (invalid_status, _, invalid) = send_with_headers(
+        &ctx.state,
+        authed(
+            "POST",
+            "/api/v2/threads",
+            &ctx.token,
+            &ctx.csrf,
+            Some(json!({"title": "   ", "format": "", "issues_remaining": -1})),
+        ),
+    )
+    .await;
+    assert_eq!(
+        invalid_status,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "{invalid:?}"
+    );
+    assert_eq!(invalid["detail"], "Validation failed");
+
+    let count: i64 = ctx
+        .state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one(
+            "SELECT count(*) FROM threads WHERE user_id = $1",
+            &[&ctx.user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(count, 1, "merge and rejected writes must leave one thread");
+}
+
+#[tokio::test]
+async fn create_v2_assigns_mapped_and_unmapped_series_to_their_owners() {
+    let ctx = setup("lcv2owners").await;
+    let (other_token, other_csrf, other_id) = second_user(&ctx).await;
+
+    let (mapped_status, _, mapped) = send_with_headers(
+        &ctx.state,
+        authed(
+            "POST",
+            "/api/v2/threads",
+            &ctx.token,
+            &ctx.csrf,
+            Some(json!({
+                "title": "Mapped Series",
+                "format": "Comic",
+                "issues_remaining": 6,
+                "manual_creator_credits": [{"name": "Brian K. Vaughan", "roles": ["Writer"]}]
+            })),
+        ),
+    )
+    .await;
+    assert_eq!(mapped_status, StatusCode::CREATED, "{mapped:?}");
+    assert_eq!(
+        mapped["manual_creator_credits"],
+        json!([{"name": "Brian K. Vaughan", "roles": ["Writer"]}])
+    );
+    let mapped_id = mapped["id"].as_i64().unwrap() as i32;
+
+    let (unmapped_status, _, unmapped) = send_with_headers(
+        &ctx.state,
+        authed(
+            "POST",
+            "/api/v2/threads",
+            &other_token,
+            &other_csrf,
+            Some(json!({"title": "Unmapped Series", "format": "Digital", "issues_remaining": 2})),
+        ),
+    )
+    .await;
+    assert_eq!(unmapped_status, StatusCode::CREATED, "{unmapped:?}");
+    let unmapped_id = unmapped["id"].as_i64().unwrap() as i32;
+    assert_ne!(mapped_id, unmapped_id);
+
+    let conn = ctx.state.pool.get().await.unwrap();
+    let owners: Vec<i32> = conn
+        .query(
+            "SELECT user_id FROM threads WHERE id = ANY($1) ORDER BY id",
+            &[&vec![mapped_id, unmapped_id]],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| row.get(0))
+        .collect();
+    assert_eq!(owners, vec![ctx.user_id, other_id]);
+
+    let (_, _, own) = send_with_headers(
+        &ctx.state,
+        authed("GET", "/api/v2/threads", &ctx.token, &ctx.csrf, None),
+    )
+    .await;
+    let visible: Vec<i32> = own["threads"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|thread| thread["id"].as_i64().unwrap() as i32)
+        .collect();
+    assert_eq!(
+        visible,
+        vec![mapped_id],
+        "the v2 collection must stay owner-scoped"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -2513,7 +2734,7 @@ async fn groups_batch_maps_threads_to_groups_in_request_order() {
     let (status, body) = call(
         &ctx,
         "POST",
-        "/api/v1/threads/groups:batch",
+        "/api/v2/reading-order-groups:resolveMemberships",
         Some(json!({"thread_ids": [second, first, first, lonely]})),
     )
     .await;
@@ -2536,7 +2757,7 @@ async fn groups_batch_maps_threads_to_groups_in_request_order() {
     let response = router(ctx.state.clone())
         .oneshot(authed(
             "POST",
-            "/api/v1/threads/groups:batch",
+            "/api/v2/reading-order-groups:resolveMemberships",
             &ctx.token,
             &ctx.csrf,
             Some(json!({"thread_ids": [second, first, first, lonely]})),
@@ -2559,7 +2780,7 @@ async fn groups_batch_maps_threads_to_groups_in_request_order() {
     let (status, body) = call(
         &ctx,
         "POST",
-        "/api/v1/threads/groups:batch",
+        "/api/v2/reading-order-groups:resolveMemberships",
         Some(json!({"thread_ids": [first, theirs]})),
     )
     .await;
@@ -2569,7 +2790,7 @@ async fn groups_batch_maps_threads_to_groups_in_request_order() {
     let (status, body) = call(
         &ctx,
         "POST",
-        "/api/v1/threads/groups:batch",
+        "/api/v2/reading-order-groups:resolveMemberships",
         Some(json!({"thread_ids": []})),
     )
     .await;
@@ -2578,7 +2799,7 @@ async fn groups_batch_maps_threads_to_groups_in_request_order() {
     let (status, _) = call(
         &ctx,
         "POST",
-        "/api/v1/threads/groups:batch",
+        "/api/v2/reading-order-groups:resolveMemberships",
         Some(json!({"thread_ids": (1..=201).collect::<Vec<i32>>()})),
     )
     .await;

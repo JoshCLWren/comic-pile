@@ -37,7 +37,7 @@ async function installCoverRoutes(page: Page): Promise<void> {
   await page.route('**/v1/threads/*/connected', (route) =>
     route.fulfill({ json: { connected_threads: [] } }),
   )
-  await page.route('**/v1/reading-order-groups/threads/*/groups', (route) =>
+  await page.route('**/v2/threads/*/reading-order-group-memberships', (route) =>
     route.fulfill({ json: [] }),
   )
   await page.route('**/v2/issues/*/reader-context', (route) =>

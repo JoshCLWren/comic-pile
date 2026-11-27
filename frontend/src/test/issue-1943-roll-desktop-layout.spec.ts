@@ -220,7 +220,7 @@ async function installRatingRoutes(page: Page, state: RatingStateRoutes): Promis
   await page.route('**/v1/threads/*/connected', (route) =>
     route.fulfill({ json: { connected_threads: state.connectedThreads } }),
   )
-  await page.route('**/v1/reading-order-groups/threads/*/groups', (route) =>
+  await page.route('**/v2/threads/*/reading-order-group-memberships', (route) =>
     route.fulfill({ json: state.groups }),
   )
   await page.route('**/v2/issues/*/reader-context', (route) =>
