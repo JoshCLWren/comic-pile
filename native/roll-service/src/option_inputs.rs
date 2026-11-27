@@ -164,7 +164,7 @@ volume_evidence AS (
     -- Read-only catalog fallback: a confirmed mapping is the authority, but a
     -- thread whose canonical series identity exists only in catalog_series must
     -- keep its existing volume evidence until the #3221/#3231 census proves no
-    -- such reader rows remain. Bounded by owned_threads; no title inference.
+    -- such reader rows remain. Bounded by owned_threads and owner scope, with no title inference.
     SELECT t.id AS thread_id, e.provider, e.external_id, e.entity_type
     FROM owned_threads t
     JOIN catalog_series s ON s.id = t.catalog_series_id
@@ -210,7 +210,7 @@ issue_volume_rows AS (
     -- Read-only catalog fallback for catalog-only links: an issue that has no
     -- confirmed issue/thread mapping still carries canonical volume evidence
     -- through catalog_issues -> catalog_series -> canonical external identity.
-    -- Retained until the #3221/#3231 census/rehearsal proves none remain; the
+    -- Retained until the #3221/#3231 census/rehearsal proves none remain. The
     -- UNION deduplicates identical evidence already derived from mappings.
     SELECT i.id AS issue_id, e.provider, e.external_id
     FROM owned_issues i
