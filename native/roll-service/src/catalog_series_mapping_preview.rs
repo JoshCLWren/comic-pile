@@ -1349,9 +1349,10 @@ mod tests {
         );
         let mut shortened = approved;
         shortened.pop();
-        let changed = v2_commit(state.clone(), 9104, token, "v2-ntt-33", shortened)
-            .await
-            .expect_err("same key with changed rows must conflict");
+        let changed = match v2_commit(state.clone(), 9104, token, "v2-ntt-33", shortened).await {
+            Ok(_) => panic!("same key with changed rows must conflict"),
+            Err(error) => error,
+        };
         assert_eq!(changed.detail(), "idempotency_conflict");
         crate::test_support::clear_test_volume_roster(volume);
     }
