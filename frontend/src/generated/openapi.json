@@ -29987,22 +29987,6 @@
         ]
       }
     },
-<<<<<<< HEAD
-    "/api/v2/threads:checkDuplicates": {
-      "post": {
-        "description": "Advisory AIP-136 collection custom method: report existing volumes that may be the proposed series. Does not create a Thread. Results are owner-scoped, exclude a named thread, and are capped at five matches.",
-        "operationId": "check_duplicates",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CheckDuplicatesRequest"
-              }
-            }
-          },
-          "required": true
-        },
-=======
     "/api/v2/threads/{thread_id}/reading-order-group-memberships": {
       "get": {
         "operationId": "dependency_groups_v2_list_thread_group_memberships",
@@ -30018,19 +30002,11 @@
             }
           }
         ],
->>>>>>> origin/main
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-<<<<<<< HEAD
-                  "$ref": "#/components/schemas/CheckDuplicatesResponse"
-                }
-              }
-            },
-            "description": "Possible existing volumes"
-=======
                   "items": {
                     "$ref": "#/components/schemas/NativeDependencyGroupSummary"
                   },
@@ -30039,15 +30015,10 @@
               }
             },
             "description": "Groups containing the thread or its issues"
->>>>>>> origin/main
           },
           "401": {
             "description": "Not authenticated"
           },
-<<<<<<< HEAD
-          "422": {
-            "description": "Validation failed"
-=======
           "404": {
             "description": "Thread not found"
           },
@@ -30056,7 +30027,6 @@
           },
           "503": {
             "description": "Database temporarily unavailable"
->>>>>>> origin/main
           }
         },
         "security": [
@@ -30064,14 +30034,51 @@
             "HTTPBearer": []
           }
         ],
-<<<<<<< HEAD
-        "tags": [
-          "threads"
-=======
         "summary": "Documentation-only operation for listing a thread's group memberships (v2).",
         "tags": [
           "reading-order-groups"
->>>>>>> origin/main
+        ]
+      }
+    },
+    "/api/v2/threads:checkDuplicates": {
+      "post": {
+        "description": "Advisory AIP-136 collection custom method: report existing volumes that may be the proposed series. Does not create a Thread. Results are owner-scoped, exclude a named thread, and are capped at five matches.",
+        "operationId": "check_duplicates",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckDuplicatesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckDuplicatesResponse"
+                }
+              }
+            },
+            "description": "Possible existing volumes"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "threads"
         ]
       }
     },
