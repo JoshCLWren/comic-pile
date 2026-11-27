@@ -1342,10 +1342,12 @@ fn parse_credit_query(raw: Option<&str>) -> Result<(i64, Option<String>), ApiErr
 /// issue-credit projection over the caller's own thread (#5706).
 ///
 /// The response keeps the legacy `{thread_id, issues: [{issue_id, creators}]}`
-/// shape, so expanding a thread's issue list still needs one bulk request
-/// instead of one provider-intelligence request per issue. Credits are read
-/// only from stored ComicVine metadata: no refresh, no reading-eligibility
-/// veto, and no unmapped-issue placeholder rows.
+/// shape, so expanding a thread's issue list still needs one bounded bulk
+/// request instead of one provider-intelligence request per issue. Credits are
+/// read only from stored ComicVine metadata: no refresh, no
+/// reading-eligibility veto, and no unmapped-issue placeholder rows.
+/// `total_count` counts confirmed-mapping issue rows before the empty-credit
+/// filter, so a page token always advances even when a row has no credits.
 pub async fn list_thread_creator_credits(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
