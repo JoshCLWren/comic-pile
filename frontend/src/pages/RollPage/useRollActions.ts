@@ -313,6 +313,7 @@ export function useRollActions({
             if (status === 409) {
               const recovered = await recoverPendingRollConflict()
               if (!recovered) {
+                rollGuardRef.current = false
                 setErrorMessage(
                   detail || 'A roll is already pending. Rate, snooze, or cancel it before rolling again.',
                 )
@@ -321,6 +322,7 @@ export function useRollActions({
               return
             }
             console.error('Roll failed:', error)
+            rollGuardRef.current = false
             setErrorMessage(detail || 'Failed to roll')
             setIsRolling(false)
           }
