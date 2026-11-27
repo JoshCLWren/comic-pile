@@ -471,3 +471,17 @@ async fn v2_creator_credits_are_bulk_paginated_and_owner_scoped() {
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(body["detail"], format!("Thread {thread} not found"));
 }
+
+/// The retired v1 issue reads (#5706) must no longer serve data: the collection
+/// path keeps only its POST write (so GET is rejected), and the bulk creator
+/// path has no handler at all (so it falls through to the JSON 404).
+#[tokio::test]
+async fn retired_v1_thread_issue_reads_are_not_served() {
+    let (state, token, csrf, _user_id, _guard) = setup_user("tiss-v2-retired").await;
+    let (status, body) = send(&state, "/api/v1/threads/1/issues", &token, &csrf).await;
+    assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED, "{body}");
+
+    let (status, body) = send(&state, "/api/v1/threads/1/issues/creators", &token, &csrf).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
+    assert_eq!(body["detail"], "Not Found");
+}
