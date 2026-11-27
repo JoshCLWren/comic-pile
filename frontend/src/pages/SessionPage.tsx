@@ -1,6 +1,10 @@
+import { useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSessionDetails, useSessionSnapshots } from '../hooks/useSession'
+import CompactIssueCardTrigger from '../components/CompactIssueCardTrigger'
+import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
+import type { IssueCard } from '../services/issueCardsApi'
 import { useUndo } from '../hooks/useUndo'
 import { formatDateTime, formatDateTimeWithSeconds } from '../utils/dateFormat'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -23,6 +27,8 @@ type DisplayEvent = {
   die_after?: number | null
   selection_method?: string | null
   issue_number?: string | null
+  /** Canonical owned issue id. Legacy events omit it and stay text-only. */
+  issue_id?: number | null
 }
 
 interface EventLabelMap extends Record<string, string> {}
@@ -158,7 +164,13 @@ function isThreadlessEvent(event: DisplayEvent): boolean {
   return THREADLESS_EVENT_TYPES.has(event.type)
 }
 
-function EventRecord({ event }: { event: DisplayEvent }) {
+function EventRecord({
+  event,
+  cardsByIssue,
+}: {
+  event: DisplayEvent
+  cardsByIssue: ReadonlyMap<number, IssueCard>
+}) {
   const metadata = [
     event.issues_read != null ? `${event.issues_read} ${event.issues_read === 1 ? 'issue' : 'issues'} read` : null,
     event.die != null ? `d${event.die}` : null,
@@ -230,6 +242,21 @@ function EventRecord({ event }: { event: DisplayEvent }) {
       {event.queue_move && (
         <p className="mt-1 break-words text-xs text-stone-500">Queue move: {event.queue_move}</p>
       )}
+      {/* A legacy session event carries only a title/number hint, which is not
+          an owned issue identity. Mount the shared card only when the owner
+          projection supplies a canonical issue id; otherwise keep the text
+          record without fabricating a cover or a mapping target. */}
+      {event.issue_id != null && (
+        <div className="mt-2">
+          <CompactIssueCardTrigger
+            issueId={event.issue_id}
+            threadTitle={event.thread_title ?? 'Deleted series'}
+            issueNumber={event.issue_number ?? '?'}
+            card={cardsByIssue.get(event.issue_id) ?? null}
+            hideTitle
+          />
+        </div>
+      )}
     </article>
   )
 }
@@ -243,6 +270,20 @@ export default function SessionPage() {
   const undoMutation = useUndo()
 
   const snapshots = snapshotsData?.snapshots ?? []
+
+  // One bounded batch for the only events that actually carry a canonical
+  // owned issue id. Hooks run before the early returns so hook order stays
+  // stable across loading/error states.
+  const sessionIssueIds = useMemo(
+    () => (details?.events ?? [])
+      .map((event) => (event as DisplayEvent).issue_id)
+      .filter((id): id is number => id != null),
+    [details],
+  )
+  const cardsQuery = useIssueCards(sessionIssueIds, {
+    enabled: sessionIssueIds.length > 0,
+  })
+  const cardsByIssue = useMemo(() => indexIssueCards(cardsQuery.data), [cardsQuery.data])
 
   if (isPending) {
     return <LoadingSpinner fullScreen />
@@ -391,7 +432,11 @@ export default function SessionPage() {
           <div className="space-y-3 min-w-0">
             {details.events.map((event) => (
               // SAFETY: the session details endpoint returns enriched events with the display-only fields beyond SessionEvent.
-              <EventRecord key={event.id} event={event as DisplayEvent} />
+              <EventRecord
+                key={event.id}
+                event={event as DisplayEvent}
+                cardsByIssue={cardsByIssue}
+              />
             ))}
           </div>
         )}

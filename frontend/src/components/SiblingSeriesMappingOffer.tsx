@@ -280,31 +280,45 @@ export default function SiblingSeriesMappingOffer({
                 key={row.row_id}
                 data-testid="sibling-mapping-row"
                 data-classification={row.classification}
-                className="flex items-center gap-3 rounded-xl bg-stone-800/50 border border-stone-700/50 p-3"
+                className="space-y-2 rounded-xl bg-stone-800/50 border border-stone-700/50 p-3"
               >
-                {isApprovable ? (
-                  <input
-                    id={checkboxId}
-                    type="checkbox"
-                    className="h-5 w-5 shrink-0 accent-amber-500"
-                    checked={selectedRowIds.includes(row.row_id)}
-                    onChange={(event) => toggleRow(row.row_id, event.target.checked)}
+                <div className="flex items-center gap-3">
+                  {isApprovable ? (
+                    <input
+                      id={checkboxId}
+                      type="checkbox"
+                      className="h-5 w-5 shrink-0 accent-amber-500"
+                      checked={selectedRowIds.includes(row.row_id)}
+                      onChange={(event) => toggleRow(row.row_id, event.target.checked)}
+                    />
+                  ) : (
+                    <span aria-hidden="true" className="h-5 w-5 shrink-0" />
+                  )}
+                  <label
+                    htmlFor={isApprovable ? checkboxId : undefined}
+                    className="min-w-0 flex-1 text-sm text-stone-100"
+                  >
+                    <span className="font-bold">{issueNumberLabel(row)}</span>
+                    {row.title ? <span className="text-stone-300"> {row.title}</span> : null}
+                  </label>
+                  <span
+                    className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${STATUS_ACCENT_CLASS[row.classification]}`}
+                  >
+                    {row.metadata_refresh_required ? 'Missing details' : STATUS_LABEL[row.classification]}
+                  </span>
+                </div>
+                {/* Reading stays independent of the one-step mapping approval.
+                    The shared card exposes read/rate/map for this exact owned
+                    issue even before a sibling is confirmed. */}
+                <div className="pl-8">
+                  <CompactIssueCardTrigger
+                    issueId={row.issue_id}
+                    threadTitle={row.thread_title ?? seriesLabel}
+                    issueNumber={row.issue_number}
+                    card={cardsByIssue.get(row.issue_id) ?? null}
+                    hideTitle
                   />
-                ) : (
-                  <span aria-hidden="true" className="h-5 w-5 shrink-0" />
-                )}
-                <label
-                  htmlFor={isApprovable ? checkboxId : undefined}
-                  className="min-w-0 flex-1 text-sm text-stone-100"
-                >
-                  <span className="font-bold">{issueNumberLabel(row)}</span>
-                  {row.title ? <span className="text-stone-300"> {row.title}</span> : null}
-                </label>
-                <span
-                  className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${STATUS_ACCENT_CLASS[row.classification]}`}
-                >
-                  {row.metadata_refresh_required ? 'Missing details' : STATUS_LABEL[row.classification]}
-                </span>
+                </div>
               </li>
             )
           })}
