@@ -521,7 +521,7 @@ fn app() -> Router {
         )
         .route("/api/v2/cblSources:compare", post(native_dispatch))
         .route(
-            "/api/v2/reading-lists/{list_id}/cbl-candidates",
+            "/api/v2/readingLists/{list_id}/cblCandidates",
             get(native_dispatch),
         )
         .route(
