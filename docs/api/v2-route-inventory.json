@@ -701,6 +701,19 @@
       "verified_against": "vercel.json"
     },
     {
+      "method": "POST",
+      "path": "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5715,
+      "consumers": [
+        "frontend/src/services/api-reading-orders.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4838,
