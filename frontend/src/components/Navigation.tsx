@@ -220,14 +220,16 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
 
   const navItemClass = (active: boolean) =>
     `nav-item flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center gap-1 py-1 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--theme-focus-ring)] ${
-      active ? 'active' : 'hover:bg-white/5'
+      active ? 'active' : 'hover:bg-[var(--theme-bg-hover)]'
     }`
 
   const mobileNavLabelClass = 'nav-label max-w-full break-words text-center text-xs font-bold uppercase leading-tight tracking-wide'
 
   const desktopNavItemClass = (active: boolean) =>
     `desktop-nav-item flex w-full items-center rounded-lg transition-all duration-200 ${
-      active ? 'bg-white/10 text-amber-400' : 'text-stone-400 hover:bg-white/5'
+      active
+        ? 'bg-[var(--theme-bg-hover)] text-[var(--theme-comic-accent)]'
+        : 'text-[var(--theme-text-muted)] hover:bg-[var(--theme-bg-hover)]'
     } ${collapsed ? 'justify-center px-0 py-2' : 'gap-3 px-3 py-2'}`
 
   const renderNavItem = (item: NavItem, active: boolean, isDesktop = false) => {
@@ -263,7 +265,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   return (
     <>
       <nav
-        className={`sticky top-0 z-40 hidden h-screen flex-col border-r border-[var(--glass-border)] bg-[var(--bg-darker)] transition-[width] duration-200 md:flex ${
+        className={`sticky top-0 z-40 hidden h-screen flex-col border-r border-[var(--theme-border)] bg-[var(--theme-bg-panel)] transition-[width] duration-200 md:flex ${
           collapsed ? 'w-16' : 'w-72'
         }`}
         role="navigation"
@@ -282,7 +284,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
               onClick={toggleCollapsed}
               aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
               aria-expanded={!collapsed}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--theme-text-muted)] transition-colors hover:bg-white/5 hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--theme-text-muted)] transition-colors hover:bg-[var(--theme-bg-hover)] hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
               data-nav-toggle
             >
               <svg
@@ -300,17 +302,17 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
             </button>
           </div>
           {MAIN_NAV_ITEMS.map((item) => renderNavItem(item, isActive(item.path), true))}
-          <div className="my-2 border-t border-[var(--glass-border)]" aria-hidden="true" />
+          <div className="my-2 border-t border-[var(--theme-border)]" aria-hidden="true" />
           {visibleSecondaryNavItems.map((item) => renderNavItem(item, isActive(item.path), true))}
         </div>
-        <div className={`border-t border-[var(--glass-border)] ${collapsed ? 'px-3 py-3' : 'px-4 py-3'}`}>
+        <div className={`border-t border-[var(--theme-border)] ${collapsed ? 'px-3 py-3' : 'px-4 py-3'}`}>
           {collapsed ? (
             <div className="flex flex-col items-center gap-2">
               {authState.isLoading ? (
                 <span className="text-xs font-medium text-[var(--theme-text-muted)]">…</span>
               ) : authState.user?.username ? (
                 <span
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-xs font-bold uppercase text-[var(--theme-text-primary)]"
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--theme-bg-hover)] text-xs font-bold uppercase text-[var(--theme-text-primary)]"
                   title={authState.user?.username}
                 >
                   {authState.user?.username.charAt(0)}
@@ -326,7 +328,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
                 onClick={handleLogout}
                 aria-label="Log out"
                 title="Log out"
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--theme-text-muted)] transition-colors hover:bg-white/5 hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--theme-text-muted)] transition-colors hover:bg-[var(--theme-bg-hover)] hover:text-[var(--theme-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
               >
                 <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M18 6l-6 6 6 6"></path>
@@ -347,11 +349,11 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
                 </div>
               )}
               {/* Issue #3009: logging out ends a session but destroys nothing, so it is
-                  a quiet utility peer of the theme control rather than a loud red action.
-                  Danger semantics belong to destructive outcomes, not to simply exiting. */}
+                  a quiet utility action rather than a loud red one. Danger semantics
+                  belong to destructive outcomes, not to simply exiting. */}
               <button
                 onClick={handleLogout}
-                className="mt-2 w-full rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-1.5 text-left text-xs font-medium text-[var(--theme-text-muted)] transition-colors hover:bg-white/5 hover:text-[var(--theme-text-primary)]"
+                className="mt-2 w-full rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-3 py-1.5 text-left text-xs font-medium text-[var(--theme-text-muted)] transition-colors hover:bg-[var(--theme-bg-hover)] hover:text-[var(--theme-text-primary)]"
                 aria-label="Log out"
               >
                 Log out
@@ -413,24 +415,6 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
               </svg>
               <span>Sign out</span>
             </button>
-          </div>
-          <div className="mt-3 text-sm" style={{ color: 'var(--theme-text-muted)' }}>
-            <span>Appearance</span>
-          </div>
-          <div id="appearance-menu" className="mt-2 select-none">
-            {APPEARANCE_OPTIONS.map((option) => (
-              <button
-                key={option.id}
-                data-theme={option.id}
-                onClick={() => setTheme(option.id)}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-left hover:bg-[var(--theme-bg-panel)] transition-colors text-[var(--theme-text-primary)] ${option.mobileClassName}`}
-                aria-label={option.ariaLabel}
-                aria-pressed={activeTheme === option.id}
-              >
-                <span>{option.label}</span>
-                {activeTheme === option.id && <span aria-hidden="true">✓</span>}
-              </button>
-            ))}
           </div>
           </nav>
         </OverlayPortal>
