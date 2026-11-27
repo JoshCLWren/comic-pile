@@ -335,13 +335,8 @@ describe('Thread detail request budget', () => {
   it('unknown thread id batches once and never surfaces a crossover error', async () => {
     const handler = makeHandler('unavailable')
     const { calls, client } = createRequestRecorder((call) => {
-<<<<<<< ours
-      if (call.url === '/v1/threads/999') return Promise.reject(new Error('404'))
-      if (call.url === '/v2/reading-order-groups:resolveMemberships') return Promise.reject(new Error('404'))
-=======
       if (call.url === '/v2/threads/999') return Promise.reject(new Error('404'))
-      if (call.url === '/v1/threads/groups:batch') return Promise.reject(new Error('404'))
->>>>>>> theirs
+      if (call.url === '/v2/reading-order-groups:resolveMemberships') return Promise.reject(new Error('404'))
       return handler(call)
     })
     setDefaultHttpClient(client)

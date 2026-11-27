@@ -58,11 +58,7 @@ export function createThreadsApi(client: HttpClient) {
       })
       return response
     },
-<<<<<<< ours
-    get: (id: number) => client.get<Thread>(`/v1/threads/${id}`),
-=======
     get: (id: number) => client.get<Thread>(`/v2/threads/${id}`),
->>>>>>> theirs
     create: (data: ThreadCreatePayload) => client.post<Thread, ThreadCreatePayload>('/v2/threads', data),
     update: (id: number, data: ThreadUpdatePayload) =>
       client.put<Thread, ThreadUpdatePayload>(`/v1/threads/${id}`, data),

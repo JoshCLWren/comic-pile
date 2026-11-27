@@ -40,8 +40,6 @@
     },
     {
       "bucket": "operations",
-<<<<<<< ours
-=======
       "method": "GET",
       "path": "/api/v2/threads/{thread_id}",
       "dest": "/api/native_roll.rs",
@@ -55,7 +53,6 @@
     },
     {
       "bucket": "operations",
->>>>>>> theirs
       "method": "POST",
       "path": "/api/v2/threads",
       "dest": "/api/native_roll.rs",
