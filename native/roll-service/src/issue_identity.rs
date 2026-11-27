@@ -2891,7 +2891,7 @@ async fn replay_cbl_adoption_receipt(
         created_positions: Vec::new(),
         excluded_positions: Vec::new(),
         unresolved_positions: Vec::new(),
-        custom_cbl_list_id,
+        custom_cbl_list_id: canonical_list_id,
         list_version,
         selections,
         overlap_decisions,
