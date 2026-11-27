@@ -63,10 +63,15 @@ export function liveV1Operations(inventory) {
   return operations;
 }
 
+/** Return whether a value parsed from JSON is a string, without runtime typeof narrowing. */
+function isString(value) {
+  return Object.prototype.toString.call(value) === '[object String]';
+}
+
 /** Runtime label for an inventory operation, accepting either shape used by the generators. */
 export function operationRuntime(operation) {
   const runtime = operation?.runtime ?? operation?.ingress_runtime ?? operation?.ingress;
-  return typeof runtime === 'string' ? runtime : '';
+  return isString(runtime) ? runtime : '';
 }
 
 /** Find instructions to add a new v1 consumer in one document body. */
