@@ -1384,6 +1384,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route("/api/bug-reports/", post(bug_reports::create))
         .route("/api/v1/bug-reports/", post(bug_reports::create))
+        // #5718: canonical AIP-133 Create; the browser posts here with no
+        // trailing slash and no custom-method alias. The v1/unversioned
+        // handlers above stay mounted until production proof retires them.
+        .route("/api/v2/bugReports", post(bug_reports::create_v2))
         .route("/api/v1/releases/", put(releases::publish))
         .route("/api/v2/releases", get(releases::list))
         .route("/api/v1/releases/source", get(releases::reconcile))

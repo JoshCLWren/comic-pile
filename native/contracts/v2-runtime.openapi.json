@@ -963,6 +963,57 @@
         }
       }
     },
+    "/api/v2/bugReports": {
+      "post": {
+        "tags": [
+          "bug-reports"
+        ],
+        "summary": "Documentation-only operation for the canonical AIP-133 Create (#5718).",
+        "operationId": "create_bug_report",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BugReportCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Bug report created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BugReportV2Response"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Invalid or blank title/description, or invalid diagnostics"
+          },
+          "429": {
+            "description": "Non-admin bug report rate limit reached"
+          },
+          "502": {
+            "description": "GitHub issue creation failed"
+          },
+          "503": {
+            "description": "GitHub integration not configured"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/comicvine/issues/{issue_id}/identity": {
       "get": {
         "tags": [
@@ -9468,6 +9519,101 @@
           "unavailable"
         ]
       },
+      "BugReportCreate": {
+        "type": "object",
+        "description": "Request schema for creating a bug report or feature request.",
+        "required": [
+          "title",
+          "description"
+        ],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "diagnostics": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BugReportDiagnostics"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "report_type": {
+            "$ref": "#/components/schemas/ReportType"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "BugReportDiagnostics": {
+        "type": "object",
+        "description": "Structured browser diagnostics (`userAgent` alias on the wire).",
+        "required": [
+          "timestamp",
+          "url",
+          "userAgent",
+          "screen",
+          "viewport",
+          "scroll",
+          "performance",
+          "errors"
+        ],
+        "properties": {
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticError"
+            }
+          },
+          "performance": {
+            "$ref": "#/components/schemas/DiagnosticPerformance"
+          },
+          "screen": {
+            "$ref": "#/components/schemas/DiagnosticScreen"
+          },
+          "scroll": {
+            "$ref": "#/components/schemas/DiagnosticScroll"
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "userAgent": {
+            "type": "string"
+          },
+          "viewport": {
+            "$ref": "#/components/schemas/DiagnosticViewport"
+          }
+        }
+      },
+      "BugReportV2Response": {
+        "type": "object",
+        "description": "AIP-133 Create response for `POST /api/v2/bugReports` (#5718).\n\nThe created GitHub issue is the resource: `id` is its stable issue number\nand `name` is the AIP-122 collection-qualified resource name. `issue_url`\nremains on the wire so the feedback UI and downstream issue/email behavior\nkeep working unchanged.",
+        "required": [
+          "name",
+          "id",
+          "issue_url"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Stable resource id: the GitHub issue number."
+          },
+          "issue_url": {
+            "type": "string",
+            "description": "HTML URL of the created GitHub issue (retained from the v1 contract)."
+          },
+          "name": {
+            "type": "string",
+            "description": "AIP-122 resource name, `bugReports/<issue number>`."
+          }
+        }
+      },
       "BulkAssignRequest": {
         "type": "object",
         "required": [
@@ -13561,6 +13707,95 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "DiagnosticError": {
+        "type": "object",
+        "description": "A captured console error entry.",
+        "required": [
+          "message",
+          "timestamp"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        }
+      },
+      "DiagnosticPerformance": {
+        "type": "object",
+        "description": "Performance timing diagnostic information (both fields optional).",
+        "properties": {
+          "domContentLoaded": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "loadComplete": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          }
+        }
+      },
+      "DiagnosticScreen": {
+        "type": "object",
+        "description": "Screen diagnostic information (`pixelRatio` alias on the wire).",
+        "required": [
+          "width",
+          "height",
+          "pixelRatio"
+        ],
+        "properties": {
+          "height": {
+            "type": "integer"
+          },
+          "pixelRatio": {
+            "type": "number",
+            "format": "double"
+          },
+          "width": {
+            "type": "integer"
+          }
+        }
+      },
+      "DiagnosticScroll": {
+        "type": "object",
+        "description": "Scroll position diagnostic information.",
+        "required": [
+          "x",
+          "y"
+        ],
+        "properties": {
+          "x": {
+            "type": "integer"
+          },
+          "y": {
+            "type": "integer"
+          }
+        }
+      },
+      "DiagnosticViewport": {
+        "type": "object",
+        "description": "Viewport diagnostic information.",
+        "required": [
+          "width",
+          "height"
+        ],
+        "properties": {
+          "height": {
+            "type": "integer"
+          },
+          "width": {
+            "type": "integer"
           }
         }
       },
@@ -19012,6 +19247,14 @@
             ]
           }
         }
+      },
+      "ReportType": {
+        "type": "string",
+        "description": "Report kind, mirroring Python `ReportType = Literal[\"bug\", \"feature\"]`.",
+        "enum": [
+          "bug",
+          "feature"
+        ]
       },
       "ResetDiceRequest": {
         "type": "object",

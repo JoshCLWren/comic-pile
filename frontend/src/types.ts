@@ -37,3 +37,4 @@ export type ThreadDependenciesResponse = components['schemas']['ThreadDependenci
 export type IssueDependencyEdge = components['schemas']['IssueDependencyEdge']
 export type IssueDependenciesResponse = components['schemas']['IssueDependenciesResponse']
 export type BugReportResponse = components['schemas']['BugReportResponse']
+export type BugReportV2Response = components['schemas']['BugReportV2Response']

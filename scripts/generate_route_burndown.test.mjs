@@ -256,13 +256,26 @@ test('real taste and bug-report fragments cannot regress to Python ingress', () 
   const bugs = liveFragment('bug-reports');
   assert.deepEqual(
     new Set(bugs.operations.map(op => op.method + ' ' + op.path)),
-    new Set(['POST /api/bug-reports/', 'POST /api/v1/bug-reports/']),
+    new Set([
+      'POST /api/bug-reports/',
+      'POST /api/v1/bug-reports/',
+      'POST /api/v2/bugReports',
+    ]),
   );
   for (const op of bugs.operations) {
     assert.equal(op.dest, '/api/native_roll.rs', op.path);
+  }
+  // Retained same-path aliases stay excluded from the live inventory until
+  // production proof allows their retirement (#5718). The canonical v2 Create
+  // is an inventoried native-rust target.
+  for (const op of bugs.operations.filter(op => op.path !== '/api/v2/bugReports')) {
     assert.equal(op.exclude_from_inventory, true, op.path);
     assert.equal(op.owning_issue, 4852, op.path);
   }
+  const v2 = liveOperation(bugs, 'POST', '/api/v2/bugReports');
+  assert.equal(v2.runtime, 'native-rust');
+  assert.equal(v2.status, 'target');
+  assert.equal(v2.owning_issue, 5718);
 });
 
 test('real session and undo fragments retain native-only supported operations', () => {

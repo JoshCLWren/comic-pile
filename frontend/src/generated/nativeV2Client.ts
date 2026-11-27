@@ -253,6 +253,12 @@ export interface ContinuityRulesUpdateRequest {
 
 export type ContinuityRulesUpdateResponse = components['schemas']['ContinuityRuleResponse']
 
+export interface CreateBugReportRequest {
+  body: components['schemas']['BugReportCreate']
+}
+
+export type CreateBugReportResponse = components['schemas']['BugReportV2Response']
+
 export interface CreateDependencyRequest {
   body: components['schemas']['DependencyCreateRequest']
 }
@@ -1401,6 +1407,7 @@ export interface NativeV2Client {
   continuityRulesGet(args: ContinuityRulesGetRequest): Promise<ContinuityRulesGetResponse>
   continuityRulesList(): Promise<ContinuityRulesListResponse>
   continuityRulesUpdate(args: ContinuityRulesUpdateRequest): Promise<ContinuityRulesUpdateResponse>
+  createBugReport(args: CreateBugReportRequest): Promise<CreateBugReportResponse>
   createDependency(args: CreateDependencyRequest): Promise<CreateDependencyResponse>
   createIssues(args: CreateIssuesRequest): Promise<CreateIssuesResponse>
   createQueueOrder(args: CreateQueueOrderRequest): Promise<CreateQueueOrderResponse>
@@ -1714,6 +1721,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     continuityRulesUpdate(args: ContinuityRulesUpdateRequest) {
       return client.put<ContinuityRulesUpdateResponse, ContinuityRulesUpdateRequest['body']>(
         `/v1/continuity-rules/${encodeURIComponent(String(args.path.rule_id))}`,
+        args.body,
+      )
+    },
+    createBugReport(args: CreateBugReportRequest) {
+      return client.post<CreateBugReportResponse, CreateBugReportRequest['body']>(
+        "/v2/bugReports",
         args.body,
       )
     },

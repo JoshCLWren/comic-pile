@@ -416,7 +416,10 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::dependency_groups::dependency_groups_v2_openapi())
         // #5710: canonical v2 reading-order-group collection CRUD; the retired
         // v1 paths are no longer part of the deployed contract.
-        .merge_from(crate::dependency_groups::reading_order_groups_v2_openapi());
+        .merge_from(crate::dependency_groups::reading_order_groups_v2_openapi())
+        // #5718: canonical AIP-133 Create for bug reports. The retained v1
+        // same-path contract is published only in same_path_openapi().
+        .merge_from(crate::bug_reports::bug_reports_v2_openapi());
     // The aggregate artifact is the deployed v2 runtime contract. The
     // completed-threads v1 operation has its own same-path contract and must
     // not expand the v2 inventory.

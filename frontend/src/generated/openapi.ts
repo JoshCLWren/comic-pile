@@ -1461,6 +1461,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/bugReports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the canonical AIP-133 Create (#5718). */
+        post: operations["create_bug_report"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/comicvine/issues/{issue_id}/identity": {
         parameters: {
             query?: never;
@@ -4244,6 +4261,22 @@ export interface components {
         /** @description Response after successfully creating a GitHub issue. */
         BugReportResponse: {
             issue_url: string;
+        };
+        /**
+         * @description AIP-133 Create response for `POST /api/v2/bugReports` (#5718).
+         *
+         *     The created GitHub issue is the resource: `id` is its stable issue number
+         *     and `name` is the AIP-122 collection-qualified resource name. `issue_url`
+         *     remains on the wire so the feedback UI and downstream issue/email behavior
+         *     keep working unchanged.
+         */
+        BugReportV2Response: {
+            /** @description Stable resource id: the GitHub issue number. */
+            id: string;
+            /** @description HTML URL of the created GitHub issue (retained from the v1 contract). */
+            issue_url: string;
+            /** @description AIP-122 resource name, `bugReports/<issue number>`. */
+            name: string;
         };
         BulkAssignRequest: {
             target_ids: number[];
@@ -13457,6 +13490,65 @@ export interface operations {
                 content?: never;
             };
             /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_bug_report: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BugReportCreate"];
+            };
+        };
+        responses: {
+            /** @description Bug report created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BugReportV2Response"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid or blank title/description, or invalid diagnostics */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Non-admin bug report rate limit reached */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description GitHub issue creation failed */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description GitHub integration not configured */
             503: {
                 headers: {
                     [name: string]: unknown;

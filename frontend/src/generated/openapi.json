@@ -1225,6 +1225,29 @@
         ],
         "type": "object"
       },
+      "BugReportV2Response": {
+        "description": "AIP-133 Create response for `POST /api/v2/bugReports` (#5718).\n\nThe created GitHub issue is the resource: `id` is its stable issue number\nand `name` is the AIP-122 collection-qualified resource name. `issue_url`\nremains on the wire so the feedback UI and downstream issue/email behavior\nkeep working unchanged.",
+        "properties": {
+          "id": {
+            "description": "Stable resource id: the GitHub issue number.",
+            "type": "string"
+          },
+          "issue_url": {
+            "description": "HTML URL of the created GitHub issue (retained from the v1 contract).",
+            "type": "string"
+          },
+          "name": {
+            "description": "AIP-122 resource name, `bugReports/<issue number>`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "id",
+          "issue_url"
+        ],
+        "type": "object"
+      },
       "BulkAssignRequest": {
         "properties": {
           "target_ids": {
@@ -23496,6 +23519,57 @@
         "summary": "Documentation-only operation for the mounted v2 reset-password handler.",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v2/bugReports": {
+      "post": {
+        "operationId": "create_bug_report",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BugReportCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BugReportV2Response"
+                }
+              }
+            },
+            "description": "Bug report created"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Invalid or blank title/description, or invalid diagnostics"
+          },
+          "429": {
+            "description": "Non-admin bug report rate limit reached"
+          },
+          "502": {
+            "description": "GitHub issue creation failed"
+          },
+          "503": {
+            "description": "GitHub integration not configured"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the canonical AIP-133 Create (#5718).",
+        "tags": [
+          "bug-reports"
         ]
       }
     },

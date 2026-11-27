@@ -3723,6 +3723,57 @@
         }
       }
     },
+    "/api/v2/bugReports": {
+      "post": {
+        "tags": [
+          "bug-reports"
+        ],
+        "summary": "Documentation-only operation for the canonical AIP-133 Create (#5718).",
+        "operationId": "create_bug_report",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BugReportCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Bug report created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BugReportV2Response"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Invalid or blank title/description, or invalid diagnostics"
+          },
+          "429": {
+            "description": "Non-admin bug report rate limit reached"
+          },
+          "502": {
+            "description": "GitHub issue creation failed"
+          },
+          "503": {
+            "description": "GitHub integration not configured"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/comicvine/issues/{issue_id}/identity": {
       "get": {
         "tags": [
@@ -12549,6 +12600,29 @@
         "properties": {
           "issue_url": {
             "type": "string"
+          }
+        }
+      },
+      "BugReportV2Response": {
+        "type": "object",
+        "description": "AIP-133 Create response for `POST /api/v2/bugReports` (#5718).\n\nThe created GitHub issue is the resource: `id` is its stable issue number\nand `name` is the AIP-122 collection-qualified resource name. `issue_url`\nremains on the wire so the feedback UI and downstream issue/email behavior\nkeep working unchanged.",
+        "required": [
+          "name",
+          "id",
+          "issue_url"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Stable resource id: the GitHub issue number."
+          },
+          "issue_url": {
+            "type": "string",
+            "description": "HTML URL of the created GitHub issue (retained from the v1 contract)."
+          },
+          "name": {
+            "type": "string",
+            "description": "AIP-122 resource name, `bugReports/<issue number>`."
           }
         }
       },

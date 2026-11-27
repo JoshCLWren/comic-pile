@@ -788,6 +788,10 @@ fn app() -> Router {
         )
         .route("/api/bug-reports/", post(native_dispatch))
         .route("/api/v1/bug-reports/", post(native_dispatch))
+        // #5718: canonical AIP-133 Create. The Vercel entry keeps its own
+        // route table, so without this outer registration a deployed POST
+        // would terminate at the Rust JSON 404 before reaching the handler.
+        .route("/api/v2/bugReports", post(native_dispatch))
         // #5710: the v2 collection is the only group CRUD authority at the
         // Vercel ingress. Retired v1 list/Get/PATCH/DELETE/detail routes fall
         // through to the Rust JSON 404 instead of reaching any handler.
@@ -1323,7 +1327,11 @@ mod tests {
 
     #[tokio::test]
     async fn bug_report_ingress_preserves_same_paths_and_requires_auth() {
-        for uri in ["/api/bug-reports/", "/api/v1/bug-reports/"] {
+        for uri in [
+            "/api/bug-reports/",
+            "/api/v1/bug-reports/",
+            "/api/v2/bugReports",
+        ] {
             let mut router = app();
             let response = router
                 .call(

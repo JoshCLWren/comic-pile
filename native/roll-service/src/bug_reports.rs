@@ -1,10 +1,15 @@
-//! Same-path Rust cutover for the bug-report family (#4852, parent #4335).
+//! Bug-report family: same-path Rust cutover plus the canonical v2 Create.
 //!
 //! Serves the retired Python `app/api/bug_report.py` wire contract at the
 //! same HTTP methods and exact paths (`POST /api/bug-reports/` and
 //! `POST /api/v1/bug-reports/`); only the implementation moved from Python
-//! FastAPI to the native Roll binary (Python handler deleted in #5162). No
-//! frontend URL changes.
+//! FastAPI to the native Roll binary (Python handler deleted in #5162).
+//!
+//! The browser now uses the canonical AIP-133 Create `POST /api/v2/bugReports`
+//! (#5718), which shares the validated submit flow and returns the created
+//! resource with a stable AIP-122 `name`/`id` and a `Location` header. The old
+//! paths stay mounted until authenticated production proof allows retiring
+//! them; they are not a v2 alias.
 //!
 //! Parity with the retired Python oracle (`app/api/bug_report.py` +
 //! `app/services/github_issue_rate_limit.py`, since removed; the shared
@@ -57,6 +62,7 @@ use http_body_util::BodyExt;
 use serde::{Deserialize, Serialize};
 use std::{future::Future, pin::Pin, sync::Arc, time::Duration};
 use tokio_postgres::Transaction;
+use utoipa::OpenApi;
 
 const MAX_TITLE_CHARS: usize = 200;
 const MAX_DESCRIPTION_CHARS: usize = 2000;
@@ -180,6 +186,70 @@ impl ReportType {
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct BugReportResponse {
     pub issue_url: String,
+}
+
+/// AIP-133 Create response for `POST /api/v2/bugReports` (#5718).
+///
+/// The created GitHub issue is the resource: `id` is its stable issue number
+/// and `name` is the AIP-122 collection-qualified resource name. `issue_url`
+/// remains on the wire so the feedback UI and downstream issue/email behavior
+/// keep working unchanged.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct BugReportV2Response {
+    /// AIP-122 resource name, `bugReports/<issue number>`.
+    pub name: String,
+    /// Stable resource id: the GitHub issue number.
+    pub id: String,
+    /// HTML URL of the created GitHub issue (retained from the v1 contract).
+    pub issue_url: String,
+}
+
+/// Outcome of the shared submit flow: either the created issue URL or the
+/// rate-limit response (which carries `Retry-After` / `X-RateLimit-Reset`).
+enum SubmitOutcome {
+    Created(String),
+    RateLimited(Response),
+}
+
+/// Derive the stable AIP-122 resource name and id from a GitHub issue URL.
+///
+/// GitHub issue HTML URLs end in `/issues/{number}`; that number is the stable
+/// identifier for the created bug report. A payload without a numeric issue
+/// segment is rejected as an invalid provider response so no fabricated
+/// resource name is ever published.
+fn issue_resource(issue_url: &str) -> Result<(String, String), BugReportError> {
+    let segment = issue_url
+        .trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .unwrap_or("");
+    if !segment.is_empty() && segment.bytes().all(|byte| byte.is_ascii_digit()) {
+        Ok((segment.to_string(), format!("bugReports/{segment}")))
+    } else {
+        Err(BugReportError::Api(ApiError::with_status(
+            StatusCode::BAD_GATEWAY,
+            "Failed to create GitHub issue: invalid provider payload".to_string(),
+        )))
+    }
+}
+
+/// Build the AIP-133 `201 Created` response for the v2 collection, including
+/// the `Location` header naming the new resource member.
+fn created_v2_response(issue_url: &str) -> Result<Response, BugReportError> {
+    let (id, name) = issue_resource(issue_url)?;
+    let mut response = (
+        StatusCode::CREATED,
+        Json(BugReportV2Response {
+            name,
+            id: id.clone(),
+            issue_url: issue_url.to_string(),
+        }),
+    )
+        .into_response();
+    if let Ok(location) = HeaderValue::from_str(&format!("/api/v2/bugReports/{id}")) {
+        response.headers_mut().insert("Location", location);
+    }
+    Ok(response)
 }
 
 /// Error for the bug-report handler.
@@ -1329,7 +1399,7 @@ async fn submit_with_issuer(
     request: BugReportCreate,
     settings: GithubSettings,
     issuer: &GithubIssuer<'_>,
-) -> Result<Response, BugReportError> {
+) -> Result<SubmitOutcome, BugReportError> {
     let (title, description) = validate_create(&request)?;
     if !settings.is_configured() {
         return Err(BugReportError::Api(not_configured()));
@@ -1351,7 +1421,7 @@ async fn submit_with_issuer(
             .map_err(|detail| {
                 BugReportError::Api(ApiError::with_status(StatusCode::BAD_GATEWAY, detail))
             })?;
-        return Ok((StatusCode::CREATED, Json(BugReportResponse { issue_url })).into_response());
+        return Ok(SubmitOutcome::Created(issue_url));
     }
 
     let mut connection = db::checkout(state).await?;
@@ -1372,7 +1442,9 @@ async fn submit_with_issuer(
             None => Utc::now() + chrono::Duration::seconds(WINDOW_SECONDS),
         };
         let retry = retry_after_seconds(resets_at, Utc::now());
-        return Ok(rate_limit_response(retry, resets_at));
+        return Ok(SubmitOutcome::RateLimited(rate_limit_response(
+            retry, resets_at,
+        )));
     }
     let issue_url = match issuer(settings, title, body, labels).await {
         Ok(url) => url,
@@ -1387,7 +1459,42 @@ async fn submit_with_issuer(
     let submitted_at_seconds = Utc::now().timestamp_micros() as f64 / 1_000_000.0;
     record_success(&tx, user_id, submitted_at_seconds).await?;
     tx.commit().await.map_err(db::query_error)?;
-    Ok((StatusCode::CREATED, Json(BugReportResponse { issue_url })).into_response())
+    Ok(SubmitOutcome::Created(issue_url))
+}
+
+/// The issuer resolves through the app's outbound seam (#5339): production
+/// uses the real HTTPS GitHub client, test-configured apps hold a recording
+/// fake. The `GithubIssuer` closure shape is unchanged so focused tests can
+/// still inject their own issuer through the `*_with_issuer` helpers.
+fn production_issuer(
+    state: &Arc<AppState>,
+) -> impl Fn(GithubSettings, String, String, Vec<String>) -> GithubFuture + Send + Sync + '_ {
+    let outbound = state.outbound.clone();
+    move |settings, title, body, labels| {
+        Box::pin(create_github_issue(
+            outbound.clone(),
+            settings,
+            title,
+            body,
+            labels,
+        ))
+    }
+}
+
+/// Parse, validate shape and load the authenticated owner before any GitHub
+/// work. Shared by the retained same-path handler and the canonical v2 Create
+/// so diagnostic sanitization and ownership checks cannot drift between them.
+async fn prepare_submission(
+    state: &Arc<AppState>,
+    body: &Bytes,
+    user_id: i32,
+) -> Result<(BugReportCreate, String, bool, GithubSettings), BugReportError> {
+    let environment = state.environment;
+    let request = parse_request(body).map_err(|e| e.sanitized_for(environment))?;
+    let (username, is_admin) = load_user(state, user_id)
+        .await
+        .map_err(|e| BugReportError::from(e).sanitized_for(environment))?;
+    Ok((request, username, is_admin, github_settings()))
 }
 
 /// Same create flow as the axum handler with an explicitly injected issuer.
@@ -1396,22 +1503,23 @@ async fn submit_with_issuer(
 /// pass an in-process fake so no network request is ever made while still
 /// exercising parsing, validation, rate limiting and transaction semantics.
 async fn create_with_issuer(
-    state: Arc<AppState>,
+    state: &Arc<AppState>,
     user_id: i32,
     body: Bytes,
     issuer: &GithubIssuer<'_>,
 ) -> Result<Response, BugReportError> {
-    let environment = state.environment;
-    let request = parse_request(&body).map_err(|e| e.sanitized_for(environment))?;
-    let (username, is_admin) = load_user(&state, user_id)
-        .await
-        .map_err(|e| BugReportError::from(e).sanitized_for(environment))?;
-    let settings = github_settings();
-    submit_with_issuer(
-        &state, user_id, username, is_admin, request, settings, issuer,
+    let (request, username, is_admin, settings) = prepare_submission(state, &body, user_id).await?;
+    let outcome = submit_with_issuer(
+        state, user_id, username, is_admin, request, settings, issuer,
     )
     .await
-    .map_err(|e| e.sanitized_for(environment))
+    .map_err(|e| e.sanitized_for(state.environment))?;
+    match outcome {
+        SubmitOutcome::RateLimited(response) => Ok(response),
+        SubmitOutcome::Created(issue_url) => {
+            Ok((StatusCode::CREATED, Json(BugReportResponse { issue_url })).into_response())
+        }
+    }
 }
 
 /// `POST /api/bug-reports/` and `POST /api/v1/bug-reports/`.
@@ -1425,25 +1533,45 @@ pub async fn create(
     user: AuthenticatedUser,
     body: Bytes,
 ) -> Result<Response, BugReportError> {
-    // The issuer resolves through the app's outbound seam (#5339): production
-    // uses the real HTTPS GitHub client, test-configured apps hold a recording
-    // fake. The `GithubIssuer` closure shape is unchanged so focused tests can
-    // still inject their own issuer through `create_with_issuer`.
-    let outbound = state.outbound.clone();
-    let issuer = move |settings: GithubSettings,
-                       title: String,
-                       body: String,
-                       labels: Vec<String>|
-          -> GithubFuture {
-        Box::pin(create_github_issue(
-            outbound.clone(),
-            settings,
-            title,
-            body,
-            labels,
-        ))
-    };
-    create_with_issuer(state, user.id(), body, &issuer).await
+    let issuer = production_issuer(&state);
+    create_with_issuer(&state, user.id(), body, &issuer).await
+}
+
+/// `POST /api/v2/bugReports` — AIP-133 standard Create for the bug-report
+/// collection (#5718).
+///
+/// The write path is shared with the retained same-path handlers so
+/// validation, diagnostic sanitization, rate limiting, authenticated ownership,
+/// the GitHub issue body and downstream behavior stay identical. The only
+/// difference is the v2 wire resource: a `201` carrying the AIP-122 `name`,
+/// stable `id` and `issue_url`, plus a `Location` header. There is no trailing
+/// slash and no `:submit` custom-method alias.
+async fn create_v2_with_issuer(
+    state: &Arc<AppState>,
+    user_id: i32,
+    body: Bytes,
+    issuer: &GithubIssuer<'_>,
+) -> Result<Response, BugReportError> {
+    let (request, username, is_admin, settings) = prepare_submission(state, &body, user_id).await?;
+    let outcome = submit_with_issuer(
+        state, user_id, username, is_admin, request, settings, issuer,
+    )
+    .await
+    .map_err(|e| e.sanitized_for(state.environment))?;
+    match outcome {
+        SubmitOutcome::RateLimited(response) => Ok(response),
+        SubmitOutcome::Created(issue_url) => created_v2_response(&issue_url),
+    }
+}
+
+/// Mounted handler for `POST /api/v2/bugReports`.
+pub async fn create_v2(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    body: Bytes,
+) -> Result<Response, BugReportError> {
+    let issuer = production_issuer(&state);
+    create_v2_with_issuer(&state, user.id(), body, &issuer).await
 }
 
 /// Documentation-only operation for the mounted unversioned create.
@@ -1484,6 +1612,26 @@ pub fn create_documentation() {}
 #[allow(dead_code)]
 pub fn create_v1_documentation() {}
 
+/// Documentation-only operation for the canonical AIP-133 Create (#5718).
+#[utoipa::path(
+    post,
+    path = "/api/v2/bugReports",
+    tag = "bug-reports",
+    operation_id = "create_bug_report",
+    request_body = BugReportCreate,
+    responses(
+        (status = 201, description = "Bug report created", body = BugReportV2Response),
+        (status = 401, description = "Not authenticated"),
+        (status = 422, description = "Invalid or blank title/description, or invalid diagnostics"),
+        (status = 429, description = "Non-admin bug report rate limit reached"),
+        (status = 502, description = "GitHub issue creation failed"),
+        (status = 503, description = "GitHub integration not configured")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn create_v2_documentation() {}
+
 /// OpenAPI document for the bug-report same-path surface.
 #[derive(utoipa::OpenApi)]
 #[openapi(
@@ -1502,6 +1650,32 @@ pub fn create_v1_documentation() {}
     modifiers(&BugReportsSecurityAddon)
 )]
 pub struct BugReportsApi;
+
+/// OpenAPI document for the canonical v2 bug-report collection. Kept separate
+/// from [`BugReportsApi`] so the same-path v1/unversioned aliases never leak
+/// into the deployed `/api/v2` contract.
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    paths(create_v2_documentation),
+    components(schemas(
+        ReportType,
+        DiagnosticScreen,
+        DiagnosticViewport,
+        DiagnosticScroll,
+        DiagnosticPerformance,
+        DiagnosticError,
+        BugReportDiagnostics,
+        BugReportCreate,
+        BugReportV2Response
+    )),
+    modifiers(&BugReportsSecurityAddon)
+)]
+pub struct BugReportsV2Api;
+
+/// Mergeable v2 contract consumed by the canonical native OpenAPI aggregate.
+pub fn bug_reports_v2_openapi() -> utoipa::openapi::OpenApi {
+    BugReportsV2Api::openapi()
+}
 
 struct BugReportsSecurityAddon;
 
@@ -1528,7 +1702,6 @@ mod tests {
         atomic::{AtomicUsize, Ordering},
         Mutex,
     };
-    use utoipa::OpenApi;
 
     /// Records issuer calls so a handler-boundary test can prove the in-process
     /// fake ran and that `create_github_issue` (real network) was never used.
@@ -2377,7 +2550,7 @@ mod tests {
 
         for (name, body) in cases {
             let error = create_with_issuer(
-                state.clone(),
+                &state,
                 1,
                 Bytes::from(body),
                 &|_: GithubSettings, _: String, _: String, _: Vec<String>| -> GithubFuture {
@@ -2450,6 +2623,56 @@ mod tests {
         }
         assert!(document["components"]["schemas"]["BugReportCreate"].is_object());
         assert!(document["components"]["schemas"]["BugReportResponse"].is_object());
+    }
+
+    #[test]
+    fn v2_create_uses_stable_aip_122_resource_name_and_id() {
+        let response = created_v2_response("https://github.com/acme/repo/issues/98765")
+            .expect("a GitHub issue URL carries a stable numeric id");
+        assert_eq!(response.status(), StatusCode::CREATED);
+        assert_eq!(
+            response
+                .headers()
+                .get("Location")
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "/api/v2/bugReports/98765"
+        );
+        assert_eq!(
+            issue_resource("https://github.com/acme/repo/issues/98765").unwrap(),
+            ("98765".to_string(), "bugReports/98765".to_string())
+        );
+    }
+
+    #[test]
+    fn v2_create_rejects_url_without_stable_issue_id() {
+        let error = created_v2_response("https://github.com/acme/repo/issues/not-a-number")
+            .expect_err("a non-numeric issue segment cannot name a stable resource");
+        assert_eq!(error.status(), StatusCode::BAD_GATEWAY);
+    }
+
+    #[test]
+    fn v2_openapi_declares_standard_create_only() {
+        let document = serde_json::to_value(BugReportsV2Api::openapi()).expect("v2 openapi");
+        let paths = document["paths"].as_object().expect("paths");
+        assert_eq!(paths.len(), 1, "v2 contract must not republish v1 aliases");
+        let operation = &document["paths"]["/api/v2/bugReports"]["post"];
+        assert_eq!(operation["operationId"], "create_bug_report");
+        assert!(
+            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"]
+                .as_str()
+                .is_some_and(|reference| reference.ends_with("/BugReportCreate"))
+        );
+        assert_eq!(
+            operation["responses"]["201"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/BugReportV2Response"
+        );
+        assert!(operation["security"].is_array());
+        let schema = &document["components"]["schemas"]["BugReportV2Response"];
+        for field in ["name", "id", "issue_url"] {
+            assert!(schema["properties"][field].is_object(), "missing {field}");
+        }
     }
 
     /// Set configured GitHub env vars for the current test process, restoring
@@ -2581,7 +2804,7 @@ mod tests {
         let _env = TempGitHubEnv::install();
         let probe = IssuerProbe::new();
         let error = create_with_issuer(
-            state.clone(),
+            &state,
             1102,
             Bytes::from(
                 br#"{"title":"Bug","description":"Details","diagnostics":{"timestamp":"t","url":"u","userAgent":"a","screen":{"width":"5","height":true,"pixelRatio":"2.5"},"viewport":{"width":3.0,"height":"4"},"scroll":{"x":"0","y":5.0},"performance":{"domContentLoaded":"2","loadComplete":true},"errors":[]}}"#
@@ -2612,6 +2835,72 @@ mod tests {
         );
     }
 
+    /// The canonical v2 Create shares the same submit flow but returns an
+    /// AIP-133 resource with a stable `name`/`id` and a `Location` header.
+    #[tokio::test]
+    async fn v2_create_returns_stable_resource_in_disposable_postgres() {
+        use crate::{db, test_support};
+
+        let state = test_support::test_state(2)
+            .await
+            .expect("RUST_ROLL_TEST_DATABASE_URL is required");
+        let _guard = test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("fixture connection");
+        connection
+            .batch_execute(
+                "INSERT INTO users (id, username, is_admin) VALUES (1103, 'bug-reports-v2-test', false);",
+            )
+            .await
+            .expect("seed v2 bug reports user");
+        drop(connection);
+
+        let _env = TempGitHubEnv::install();
+        let response = create_v2_with_issuer(
+            &state,
+            1103,
+            Bytes::from(r#"{"title":"Bug","description":"Details"}"#),
+            &|_: GithubSettings, _: String, _: String, _: Vec<String>| -> GithubFuture {
+                Box::pin(async {
+                    Ok("https://github.com/comic-pile-test/synthetic/issues/314".to_string())
+                })
+            },
+        )
+        .await
+        .expect("v2 create must succeed through the shared flow");
+        assert_eq!(response.status(), StatusCode::CREATED);
+        assert_eq!(
+            response
+                .headers()
+                .get("Location")
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "/api/v2/bugReports/314"
+        );
+        let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024)
+            .await
+            .expect("read v2 response body");
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&bytes).unwrap(),
+            serde_json::json!({
+                "name": "bugReports/314",
+                "id": "314",
+                "issue_url": "https://github.com/comic-pile-test/synthetic/issues/314",
+            })
+        );
+
+        let connection = db::checkout(&state).await.expect("verify connection");
+        let consumed: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM github_issue_submission_limits WHERE user_id = $1 AND last_submitted_at IS NOT NULL",
+                &[&1103],
+            )
+            .await
+            .expect("verify claim committed")
+            .get(0);
+        assert_eq!(consumed, 1, "a successful v2 create consumes the allowance");
+    }
+
     #[tokio::test]
     async fn bug_reports_require_auth_through_service_router() {
         use crate::{config::Config, router};
@@ -2625,7 +2914,11 @@ mod tests {
         })
         .unwrap();
         let app = router(Arc::new(AppState::new(config).unwrap()));
-        for uri in ["/api/bug-reports/", "/api/v1/bug-reports/"] {
+        for uri in [
+            "/api/bug-reports/",
+            "/api/v1/bug-reports/",
+            "/api/v2/bugReports",
+        ] {
             let response = app
                 .clone()
                 .oneshot(

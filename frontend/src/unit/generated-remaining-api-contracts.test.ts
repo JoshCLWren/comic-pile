@@ -3,6 +3,7 @@ import { describe, expectTypeOf, it } from 'vitest'
 import type { components } from '../generated/openapi'
 import type {
   BugReportResponse,
+  BugReportV2Response,
   IssueDependenciesResponse,
   IssueDependencyEdge,
 } from '../types'
@@ -20,6 +21,9 @@ describe('remaining generated API contracts', () => {
   it('keeps bug report responses identical to OpenAPI', () => {
     expectTypeOf<BugReportResponse>().toEqualTypeOf<
       components['schemas']['BugReportResponse']
+    >()
+    expectTypeOf<BugReportV2Response>().toEqualTypeOf<
+      components['schemas']['BugReportV2Response']
     >()
   })
 })
