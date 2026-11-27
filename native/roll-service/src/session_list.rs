@@ -11,8 +11,8 @@
 //! ## Bounded reads
 //!
 //! One statement fetches the page, its event aggregates and its snapshot
-//! counts with `= ANY($n)` set-based joins, so a page never issues a query per
-//! row. The keyset cursor is `(started_at, id)`; every page is owner-scoped by
+//! counts with CTE joins bounded by the page itself, so a page never issues a
+//! query per row. The keyset cursor is `(started_at, id)`; every page is owner-scoped by
 //! `sessions.user_id`. A missing or foreign session is indistinguishable and
 //! returns 404 with the established `"Session not found"` detail.
 
