@@ -935,6 +935,9 @@ it('falls back to the legacy availability explanation when canonical boundaries 
   vi.mocked(dependenciesApi.explainEligibility).mockResolvedValue({
     threads: {
       1: {
+        thread_id: 1,
+        eligible: false,
+        next_issue_id: null,
         is_blocked: true,
         blocking_reasons: ['Hold in Ultimate: waiting on One Year In #1'],
         blocking_dependencies: [
