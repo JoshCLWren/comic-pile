@@ -24,7 +24,7 @@ export interface ThreadIssueCreditsParams {
 export interface ThreadIssueCreatorsResponse {
   thread_id: number
   issues: { issue_id: number; creators: ThreadIssueCreatorCredit[] }[]
-  /** Total number of matching credited issue rows, independent of the page. */
+  /** Total confirmed-mapping issue rows (including rows without stored credits), independent of the page. */
   total_count?: number
   /** Size of this page (1-100, default 100). */
   page_size?: number
