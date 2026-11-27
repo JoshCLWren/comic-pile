@@ -6,11 +6,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useThreadBlockingInfo } from '../hooks/useDependencies'
 import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
 import type { QueueBlockingInfoApi } from '../hooks/useQueueBlockingInfo'
-import type { BatchBlockingInfoResponse } from '../types'
+import type { BatchEligibilityResponse } from '../types'
 
-const getBatchBlockingInfo = vi.fn<QueueBlockingInfoApi['getBatchBlockingInfo']>()
+const explainEligibility = vi.fn<QueueBlockingInfoApi['explainEligibility']>()
 
-const api: QueueBlockingInfoApi = { getBatchBlockingInfo }
+const api: QueueBlockingInfoApi = { explainEligibility }
 
 function createWrapper(client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -22,29 +22,32 @@ function createWrapper(client = new QueryClient({
 
 describe('useQueueBlockingInfo', () => {
   beforeEach(() => {
-    getBatchBlockingInfo.mockReset()
+    explainEligibility.mockReset()
   })
 
   it('returns an empty map without fetching when the queue has no threads', () => {
     const { result } = renderHook(() => useQueueBlockingInfo([], api), { wrapper: createWrapper() })
     expect(result.current).toEqual({})
-    expect(getBatchBlockingInfo).not.toHaveBeenCalled()
+    expect(explainEligibility).not.toHaveBeenCalled()
   })
 
   it('batch-loads named blockers keyed by numeric thread id', async () => {
-    const response: BatchBlockingInfoResponse = {
+    const response: BatchEligibilityResponse = {
       threads: {
-        '12': { blocking_reasons: ['Blocked'], is_blocked: true, blocking_dependencies: [] },
+        '12': { thread_id: 12, eligible: false, is_blocked: true, next_issue_id: null, blocking_reasons: ['Blocked'], blocking_dependencies: [] },
         '7': {
-          blocking_reasons: [],
+          thread_id: 7,
+          eligible: false,
           is_blocked: true,
+          next_issue_id: 70,
+          blocking_reasons: ['Read Prequel first'],
           blocking_dependencies: [
             { thread_id: 3, thread_title: 'Prequel', issue_number: '2', label: 'Read Prequel first' },
           ],
         },
       },
     }
-    getBatchBlockingInfo.mockResolvedValue(response)
+    explainEligibility.mockResolvedValue(response)
     const { result } = renderHook(() => useQueueBlockingInfo([12, 7], api), { wrapper: createWrapper() })
 
     await waitFor(() =>
@@ -53,24 +56,24 @@ describe('useQueueBlockingInfo', () => {
       ]),
     )
     expect(result.current[12]).toEqual([])
-    expect(getBatchBlockingInfo).toHaveBeenCalledTimes(1)
-    expect(getBatchBlockingInfo).toHaveBeenCalledWith([7, 12])
+    expect(explainEligibility).toHaveBeenCalledTimes(1)
+    expect(explainEligibility).toHaveBeenCalledWith([7, 12])
   })
 
   it('degrades to an empty map when the batch request fails', async () => {
-    getBatchBlockingInfo.mockRejectedValue(new Error('blocking batch unavailable'))
+    explainEligibility.mockRejectedValue(new Error('blocking batch unavailable'))
     const { result } = renderHook(() => useQueueBlockingInfo([5], api), { wrapper: createWrapper() })
     await waitFor(() => expect(result.current).toEqual({}))
-    expect(getBatchBlockingInfo).toHaveBeenCalledTimes(1)
+    expect(explainEligibility).toHaveBeenCalledTimes(1)
   })
 })
 
 
 it('shares the raw batch response when navigating from Queue to thread details', async () => {
-  const response: BatchBlockingInfoResponse = {
-    threads: { 7: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] } },
+  const response: BatchEligibilityResponse = {
+    threads: { 7: { thread_id: 7, eligible: true, is_blocked: false, next_issue_id: 70, blocking_reasons: [], blocking_dependencies: [] } },
   }
-  getBatchBlockingInfo.mockResolvedValue(response)
+  explainEligibility.mockResolvedValue(response)
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } })
   const wrapper = createWrapper(client)
   const queue = renderHook(() => useQueueBlockingInfo([7], api), { wrapper })
@@ -79,5 +82,5 @@ it('shares the raw batch response when navigating from Queue to thread details',
   const detail = renderHook(() => useThreadBlockingInfo(7), { wrapper })
   expect(detail.result.current.data).toEqual(response)
   expect(detail.result.current.data?.threads[7]?.is_blocked).toBe(false)
-  expect(getBatchBlockingInfo).toHaveBeenCalledTimes(1)
+  expect(explainEligibility).toHaveBeenCalledTimes(1)
 })

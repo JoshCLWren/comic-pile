@@ -178,8 +178,8 @@ vi.mock('../services/api', () => ({
   threadsApi: { setPending: spies.setPending, list: vi.fn().mockResolvedValue({ threads: [], next_page_token: null }) },
   dependenciesApi: {
     getConnectedThreads: relatedApi.connectedThreads,
-    getBlockingInfo: relatedApi.blockingInfo,
-    getBatchBlockingInfo: relatedApi.batchBlockingInfo,
+    getThreadEligibility: relatedApi.blockingInfo,
+    explainEligibility: relatedApi.batchBlockingInfo,
   },
 }))
 vi.mock('../services/api-reading-orders', () => ({

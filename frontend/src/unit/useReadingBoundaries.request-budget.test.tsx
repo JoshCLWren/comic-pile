@@ -57,7 +57,7 @@ describe('reading boundary evaluator request budget', () => {
         }]))
         return { threads, evaluator: 'unavailable' }
       }
-      if (call.url === '/v1/threads:getBlockingInfo') {
+      if (call.url === '/v1/threads:getThreadEligibility') {
         const threads = Object.fromEntries(requestedThreadIds(call).map((id) => [id, {
           is_blocked: false,
           blocking_reasons: [],
@@ -78,10 +78,10 @@ describe('reading boundary evaluator request budget', () => {
     await waitFor(() => expect(thread.result.current.legacy.data?.threads[8]).toBeDefined())
     expect(requestCounts(calls)).toEqual({
       'POST /v2/reading-boundaries': 1,
-      'POST /v1/threads:getBlockingInfo': 2,
+      'POST /v1/threads:getThreadEligibility': 2,
     })
     expect(calls.filter((call) => call.url === '/v2/reading-boundaries').map(requestedThreadIds)).toEqual([[7]])
-    expect(calls.filter((call) => call.url === '/v1/threads:getBlockingInfo').map(requestedThreadIds)).toEqual([[7], [8]])
+    expect(calls.filter((call) => call.url === '/v1/threads:getThreadEligibility').map(requestedThreadIds)).toEqual([[7], [8]])
 
     const beforeWarmRemount = calls.length
     thread.unmount()
@@ -91,10 +91,10 @@ describe('reading boundary evaluator request budget', () => {
 
     await client.invalidateQueries({ queryKey: queryKeys.dependencies.readingBoundariesAll() })
     await client.invalidateQueries({ queryKey: queryKeys.dependencies.blockingBatchAll() })
-    await waitFor(() => expect(requestCounts(calls)['POST /v1/threads:getBlockingInfo']).toBe(3))
+    await waitFor(() => expect(requestCounts(calls)['POST /v1/threads:getThreadEligibility']).toBe(3))
     expect(requestCounts(calls)).toEqual({
       'POST /v2/reading-boundaries': 1,
-      'POST /v1/threads:getBlockingInfo': 3,
+      'POST /v1/threads:getThreadEligibility': 3,
     })
   })
 

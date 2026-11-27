@@ -537,7 +537,7 @@ describe('core route request budgets', () => {
     } as never)
     vi.spyOn(dependencyGroupsApi, 'listForThreads').mockResolvedValue({})
     // SAFETY: the blocking fixture supplies the batch map shape read by the hook.
-    const batchBlocking = vi.spyOn(dependenciesApi, 'getBatchBlockingInfo').mockResolvedValue({
+    const batchBlocking = vi.spyOn(dependenciesApi, 'explainEligibility').mockResolvedValue({
       threads: {
         1: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] },
         2: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] },

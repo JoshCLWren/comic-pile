@@ -76,7 +76,7 @@ it('refetches the thread Next-issue projections after a rename invalidation (#54
   // SAFETY: the projection payload is opaque to this invalidation test.
   const batch = vi.spyOn(readingBoundariesApi, 'batch').mockResolvedValue({ threads: {} } as never)
   // SAFETY: the projection payload is opaque to this invalidation test.
-  const blocking = vi.spyOn(dependenciesApi, 'getBatchBlockingInfo').mockResolvedValue({ threads: {} } as never)
+  const blocking = vi.spyOn(dependenciesApi, 'explainEligibility').mockResolvedValue({ threads: {} } as never)
   const client = createAppQueryClient()
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -93,7 +93,7 @@ it('refetches the thread Next-issue projections after a rename invalidation (#54
 
 it('refetches the thread blocking projection when the tab regains focus (#5486)', async () => {
   // SAFETY: the projection payload is opaque to this focus test.
-  const blocking = vi.spyOn(dependenciesApi, 'getBatchBlockingInfo').mockResolvedValue({ threads: {} } as never)
+  const blocking = vi.spyOn(dependenciesApi, 'explainEligibility').mockResolvedValue({ threads: {} } as never)
   const { result } = renderHook(() => useThreadBlockingInfo(6), { wrapper: setup() })
   await waitFor(() => expect(result.current.isSuccess).toBe(true))
   await refocus()

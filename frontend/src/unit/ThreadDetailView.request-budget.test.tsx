@@ -118,7 +118,7 @@ function makeHandler(state: BoundaryState): Responder {
       return { target_type: 'Thread', target_id: 43, direct_tags: [], effective_tags: [] }
     }
     if (call.url === '/v2/tags') return { tags: [] }
-    if (call.url === '/v1/threads:getBlockingInfo') {
+    if (call.url === '/v1/threads:getThreadEligibility') {
       const threads: Record<string, BlockingSummary> = {}
       for (const id of requestedThreadIds(call)) {
         threads[id] = { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] }
@@ -187,7 +187,7 @@ describe('Thread detail request budget', () => {
 
     await waitFor(() => expect(groupsCalls(calls)).toHaveLength(1))
     await waitFor(() =>
-      expect(calls.some((call) => call.url === '/v1/threads:getBlockingInfo')).toBe(true),
+      expect(calls.some((call) => call.url === '/v1/threads:getThreadEligibility')).toBe(true),
     )
     await new Promise((resolve) => setTimeout(resolve, 100))
 
@@ -198,7 +198,7 @@ describe('Thread detail request budget', () => {
       'GET /v2/reading-graph': 1,
       'GET /v2/tags/effective/threads/42': 1,
       'POST /v1/threads/groups:batch': 1,
-      'POST /v1/threads:getBlockingInfo': 1,
+      'POST /v1/threads:getThreadEligibility': 1,
     })
     expect(calls.some((call) => call.url === '/v2/tags')).toBe(false)
 

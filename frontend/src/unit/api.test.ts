@@ -126,13 +126,13 @@ it('calls queue resource endpoints with expected paths', async () => {
 it('calls dependency endpoints with expected paths', async () => {
   await dependenciesApi.listBlockedThreadIds()
   await dependenciesApi.listThreadDependencies(11)
-  await dependenciesApi.getBlockingInfo(12)
+  await dependenciesApi.getThreadEligibility(12)
   await dependenciesApi.createDependency({ sourceId: 1, targetId: 2 })
   await dependenciesApi.deleteDependency(7)
 
   expect(get).toHaveBeenCalledWith('/v2/dependencies/blocked')
   expect(get).toHaveBeenCalledWith('/v1/threads/11/dependencies')
-  expect(post).toHaveBeenCalledWith('/v1/threads/12:getBlockingInfo')
+  expect(post).toHaveBeenCalledWith('/v1/threads/12:getThreadEligibility')
   expect(post).toHaveBeenCalledWith('/v2/dependencies/', {
     source_type: 'thread',
     source_id: 1,

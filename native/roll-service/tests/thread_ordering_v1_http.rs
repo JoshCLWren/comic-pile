@@ -220,9 +220,9 @@ fn post(path: &str, token: &str, csrf: &str, body: Option<Value>) -> Request<Bod
 async fn every_operation_requires_authentication() {
     let (state, _token, _csrf, _user_id, _guard) = setup_user("tord-auth").await;
     for (method, path) in [
-        ("POST", "/api/v1/threads/1:getBlockingInfo"),
-        ("POST", "/api/v1/threads:getBlockingInfo"),
-        ("GET", "/api/v1/threads/1/connected"),
+        ("GET", "/api/v2/threads/1/eligibility"),
+        ("POST", "/api/v2/threads:explainEligibility"),
+        ("GET", "/api/v2/threads/1/connections"),
         ("GET", "/api/v1/threads/1/dependency-order-check"),
         ("GET", "/api/v1/threads/1/issues:validateOrder"),
         ("GET", "/api/v1/threads/1/reading-orders"),

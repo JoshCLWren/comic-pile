@@ -44,7 +44,7 @@ vi.mock('../services/api-dependencies', async (importOriginal) => {
   return {
     ...actual,
     dependenciesApi: {
-      getBatchBlockingInfo: vi.fn().mockResolvedValue({ threads: { 1: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] } } }),
+      explainEligibility: vi.fn().mockResolvedValue({ threads: { 1: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] } } }),
       getIssueDependencies: vi.fn().mockResolvedValue({ incoming: [], outgoing: [] }),
       getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),
     },
@@ -108,8 +108,8 @@ beforeEach(() => {
   mockedIssuesApiListCreators.mockReset()
   // SAFETY: the bulk response matches the endpoint contract; issues without stored credits are omitted
   mockedIssuesApiListCreators.mockResolvedValue({ thread_id: 1, issues: [] })
-  vi.mocked(dependenciesApi.getBatchBlockingInfo).mockReset()
-  vi.mocked(dependenciesApi.getBatchBlockingInfo).mockResolvedValue({ threads: { 1: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] } } })
+  vi.mocked(dependenciesApi.explainEligibility).mockReset()
+  vi.mocked(dependenciesApi.explainEligibility).mockResolvedValue({ threads: { 1: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] } } })
   mockedConnectedThreads.mockReset()
   mockedConnectedThreads.mockResolvedValue({ thread_id: 1, connected_threads: [] })
   mockedThreadIssuesTags.mockReset()
@@ -360,7 +360,7 @@ it('refreshes the Next issue title on tab visibility and focus after another-tab
 
   // The canonical boundary is available, so the legacy blocking batch is
   // disabled; a focus refetch must not run its queryFn with a null thread id.
-  const blockingCalls = vi.mocked(dependenciesApi.getBatchBlockingInfo).mock.calls
+  const blockingCalls = vi.mocked(dependenciesApi.explainEligibility).mock.calls
   expect(
     blockingCalls.every(([threadIds]) =>
       threadIds.every((threadId) => Number.isInteger(threadId) && threadId > 0),
@@ -932,7 +932,7 @@ it('falls back to the legacy availability explanation when canonical boundaries 
     evaluator: 'unavailable',
     threads: { 1: { thread_id: 1, state: 'unavailable', summary: 'Option E is not active for Saga.', blockers: [] } },
   })
-  vi.mocked(dependenciesApi.getBatchBlockingInfo).mockResolvedValue({
+  vi.mocked(dependenciesApi.explainEligibility).mockResolvedValue({
     threads: {
       1: {
         is_blocked: true,
@@ -958,14 +958,14 @@ it('falls back to the legacy availability explanation when canonical boundaries 
     '/thread/2?issue=9#issue-9',
   )
   expect(screen.queryByText('Reading boundaries are unavailable.')).not.toBeInTheDocument()
-  expect(dependenciesApi.getBatchBlockingInfo).toHaveBeenCalledWith([1])
+  expect(dependenciesApi.explainEligibility).toHaveBeenCalledWith([1])
 })
 
 it('does not request legacy availability while canonical boundaries answer', async () => {
   renderPage()
 
   expect(await screen.findByText('Available now')).toBeVisible()
-  expect(dependenciesApi.getBatchBlockingInfo).not.toHaveBeenCalled()
+  expect(dependenciesApi.explainEligibility).not.toHaveBeenCalled()
 })
 
 it('opens the exact required issue after loading its later page', async () => {

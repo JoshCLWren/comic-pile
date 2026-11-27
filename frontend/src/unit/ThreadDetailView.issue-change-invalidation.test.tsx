@@ -36,7 +36,7 @@ vi.mock('../services/api-dependencies', async (importOriginal) => {
   return {
     ...actual,
     dependenciesApi: {
-      getBatchBlockingInfo: vi.fn().mockResolvedValue({ threads: { 1: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] } } }),
+      explainEligibility: vi.fn().mockResolvedValue({ threads: { 1: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] } } }),
       getIssueDependencies: vi.fn().mockResolvedValue({ incoming: [], outgoing: [] }),
       getConnectedThreads: vi.fn().mockResolvedValue({ thread_id: 1, connected_threads: [] }),
     },
@@ -96,7 +96,7 @@ beforeEach(() => {
   } as never)
   mockedIssuesApiList.mockResolvedValue({ issues: [], next_page_token: null, total_count: 0, page_size: 100 })
   mockedIssuesApiListCreators.mockResolvedValue({ thread_id: 1, issues: [] })
-  vi.mocked(dependenciesApi.getBatchBlockingInfo).mockResolvedValue({
+  vi.mocked(dependenciesApi.explainEligibility).mockResolvedValue({
     threads: { 1: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] } },
   })
   vi.mocked(dependenciesApi.getConnectedThreads).mockResolvedValue({ thread_id: 1, connected_threads: [] })
