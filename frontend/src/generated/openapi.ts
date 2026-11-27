@@ -5892,7 +5892,7 @@ export interface components {
              */
             unprotected_frontiers: number;
         };
-        /** @description Body of `POST /api/v1/threads/groups:batch`. */
+        /** @description Body of `POST /api/v2/reading-order-groups:resolveMemberships`. */
         GroupsBatchRequest: {
             thread_ids: number[];
         };
