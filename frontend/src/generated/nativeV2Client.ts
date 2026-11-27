@@ -673,6 +673,19 @@ export type ListSessionSnapshotsResponse = components['schemas']['SessionSnapsho
 
 export type ListTagsResponse = components['schemas']['TagListResponse']
 
+export interface ListThreadCreatorCreditsV2Request {
+  path: {
+    thread_id: number
+  }
+  query?: {
+    status?: string
+    page_size?: number
+    page_token?: string
+  }
+}
+
+export type ListThreadCreatorCreditsV2Response = components['schemas']['ThreadCreatorCreditsPage']
+
 export interface ListThreadIssuesRequest {
   path: {
     thread_id: number
@@ -685,6 +698,19 @@ export interface ListThreadIssuesRequest {
 }
 
 export type ListThreadIssuesResponse = components['schemas']['ThreadIssueListResponse']
+
+export interface ListThreadIssuesV2Request {
+  path: {
+    thread_id: number
+  }
+  query?: {
+    status?: string
+    page_size?: number
+    page_token?: string
+  }
+}
+
+export type ListThreadIssuesV2Response = components['schemas']['ThreadIssuesV2Page']
 
 export interface ListThreadsRequest {
   query?: {
@@ -1303,7 +1329,9 @@ export interface NativeV2Client {
   listReadingLists(): Promise<ListReadingListsResponse>
   listSessionSnapshots(args: ListSessionSnapshotsRequest): Promise<ListSessionSnapshotsResponse>
   listTags(): Promise<ListTagsResponse>
+  listThreadCreatorCreditsV2(args: ListThreadCreatorCreditsV2Request): Promise<ListThreadCreatorCreditsV2Response>
   listThreadIssues(args: ListThreadIssuesRequest): Promise<ListThreadIssuesResponse>
+  listThreadIssuesV2(args: ListThreadIssuesV2Request): Promise<ListThreadIssuesV2Response>
   listThreads(args?: ListThreadsRequest): Promise<ListThreadsResponse>
   listUndoSnapshots(args: ListUndoSnapshotsRequest): Promise<ListUndoSnapshotsResponse>
   login(args: LoginRequest): Promise<LoginResponse>
@@ -1835,9 +1863,21 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     listTags() {
       return client.get<ListTagsResponse>("/v2/tags")
     },
+    listThreadCreatorCreditsV2(args: ListThreadCreatorCreditsV2Request) {
+      return client.get<ListThreadCreatorCreditsV2Response>(
+        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/creatorCredits`,
+        { params: compactQuery(args.query) },
+      )
+    },
     listThreadIssues(args: ListThreadIssuesRequest) {
       return client.get<ListThreadIssuesResponse>(
         `/v1/threads/${encodeURIComponent(String(args.path.thread_id))}/issues`,
+        { params: compactQuery(args.query) },
+      )
+    },
+    listThreadIssuesV2(args: ListThreadIssuesV2Request) {
+      return client.get<ListThreadIssuesV2Response>(
+        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/issues`,
         { params: compactQuery(args.query) },
       )
     },

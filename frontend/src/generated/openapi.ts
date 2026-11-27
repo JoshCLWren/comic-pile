@@ -3392,6 +3392,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/threads/{thread_id}/creatorCredits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documentation-only v2 thread-scoped credit projection.
+         * @description Bounded, owner-scoped, paginated per-issue creator credits for one thread. Issues without a confirmed ComicVine mapping are omitted; no per-issue HTTP fanout.
+         */
+        get: operations["list_thread_creator_credits_v2_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/threads/{thread_id}/issue-order": {
         parameters: {
             query?: never;
@@ -3419,7 +3439,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Documentation-only v2 collection operation; the mounted handlers above
+         *     delegate to the same DTOs and query parser.
+         * @description Owner-scoped, paginated thread issue collection with read state, rating, mapping and cover projection. Never applies a reading-eligibility veto to a read.
+         */
+        get: operations["list_thread_issues_v2_documentation"];
         put?: never;
         /**
          * Documentation-only operation for the mounted issue-create resource.
@@ -9233,6 +9258,22 @@ export interface components {
             total_issues?: number | null;
         };
         /**
+         * @description Paginated thread-scoped creator-credit projection.
+         *
+         *     `issues` contains only rows with stored credits, matching the legacy bulk
+         *     read; callers fall back to the series' manual credits for absent issues.
+         */
+        ThreadCreatorCreditsPage: {
+            issues: components["schemas"]["NativeIssueCreatorsEntry"][];
+            next_page_token?: string | null;
+            /** Format: int64 */
+            page_size: number;
+            /** Format: int32 */
+            thread_id: number;
+            /** Format: int64 */
+            total_count: number;
+        };
+        /**
          * @description Wire parity with Python `ThreadDependenciesResponse`
          *     (`app/schemas/dependency.py`): the `blocking` list holds edges where this
          *     thread's issues block others, `blocked_by` holds edges where this thread's
@@ -9312,10 +9353,54 @@ export interface components {
             /** Format: int64 */
             total_count: number;
         };
+        /**
+         * @description One owner-scoped issue row in the v2 thread collection.
+         *
+         *     The base fields are the frozen Python `IssueResponse` shape. The projection
+         *     adds the reader-visible card data (rating, mapping state, provider issue id
+         *     and exact stored cover URL) so listing a thread never needs a second
+         *     per-issue request. Unmapped issues are kept with `mapping_state = "unmapped"`
+         *     and null identity fields; no reading-eligibility veto applies to a read.
+         */
+        ThreadIssueV2Item: {
+            /** @description Confirmed provider identifier; candidates never expose provider identity. */
+            comicvine_issue_id?: string | null;
+            /** @description Exact provider-supplied cover URL; null for missing or unconfirmed mapping. */
+            cover_image_url?: string | null;
+            created_at: string;
+            /** @description Whether a confirmed ComicVine issue identity exists. */
+            has_confirmed_identity: boolean;
+            /** Format: int32 */
+            id: number;
+            issue_number: string;
+            issue_number_alias?: string | null;
+            /** @description `unmapped`, `candidate`, `confirmed`, or another stored mapping state. */
+            mapping_state: string;
+            /** Format: int32 */
+            position: number;
+            /**
+             * Format: double
+             * @description Effective saved rating, ignoring ratings reversed by an Undo snapshot.
+             */
+            rating?: number | null;
+            read_at?: string | null;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
         ThreadIssuesEffectiveTagsResponse: {
             issues: components["schemas"]["EffectiveTagsResponse"][];
             /** Format: int32 */
             thread_id: number;
+        };
+        /** @description Paginated owner-scoped issue collection for one thread. */
+        ThreadIssuesV2Page: {
+            issues: components["schemas"]["ThreadIssueV2Item"][];
+            next_page_token?: string | null;
+            /** Format: int64 */
+            page_size: number;
+            /** Format: int64 */
+            total_count: number;
         };
         /** @description One reader threads collection item. */
         ThreadListItem: {
@@ -18838,6 +18923,71 @@ export interface operations {
             };
         };
     };
+    list_thread_creator_credits_v2_documentation: {
+        parameters: {
+            query?: {
+                /** @description Optional unread or read filter */
+                status?: string;
+                /** @description 1-100 issues (default 50) */
+                page_size?: number;
+                /** @description position,id continuation cursor */
+                page_token?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Owned thread ID */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated thread creator credits */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadCreatorCreditsPage"];
+                };
+            };
+            /** @description Invalid page token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     issue_order_documentation: {
         parameters: {
             query?: never;
@@ -18884,6 +19034,71 @@ export interface operations {
             };
             /** @description Projected reading graph would cycle; nothing was changed */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_thread_issues_v2_documentation: {
+        parameters: {
+            query?: {
+                /** @description Optional unread or read filter */
+                status?: string;
+                /** @description 1-100 issues (default 50) */
+                page_size?: number;
+                /** @description position,id continuation cursor */
+                page_token?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Owned thread ID */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated owner-scoped issues */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadIssuesV2Page"];
+                };
+            };
+            /** @description Invalid page token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
