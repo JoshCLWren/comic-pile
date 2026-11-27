@@ -9371,7 +9371,7 @@ export interface components {
          *     Keeps the frozen per-issue `issue_id`/`creators` wire shape of the legacy
          *     bulk creator read and adds standard page fields. The `issues` array omits
          *     unmapped issues and issues without stored credits, exactly like the legacy
-         *     response, while `total_count` counts the matching credited issue rows.
+         *     response, while `total_count` counts matching confirmed-mapping issue rows.
          */
         ThreadCreatorCreditsResponse: {
             issues: components["schemas"]["NativeIssueCreatorsEntry"][];
