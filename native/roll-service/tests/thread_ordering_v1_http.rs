@@ -721,6 +721,18 @@ async fn thread_reading_orders_are_enriched_ordered_and_owner_scoped() {
         "Alpha"
     );
 
+    let (_, v2_body) = send(
+        &state,
+        get(
+            &format!("/api/v2/threads/{a}/readingOrders"),
+            &token2,
+            &csrf2,
+        ),
+    )
+    .await;
+    assert_eq!(v2_body["reading_orders"].as_array().unwrap().len(), 1);
+    assert_eq!(v2_body["reading_orders"][0]["name"], "Theirs");
+
     let (status, body) = send(
         &state,
         get("/api/v1/threads/999999/reading-orders", &token, &csrf),
@@ -728,9 +740,22 @@ async fn thread_reading_orders_are_enriched_ordered_and_owner_scoped() {
     .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body, json!({"reading_orders": []}));
+    let (status, v2_body) = send(
+        &state,
+        get("/api/v2/threads/999999/readingOrders", &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(v2_body, json!({"reading_orders": []}));
     let (status, _) = send(
         &state,
         get("/api/v1/threads/x/reading-orders", &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let (status, _) = send(
+        &state,
+        get("/api/v2/threads/x/readingOrders", &token, &csrf),
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
