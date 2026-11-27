@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   details: vi.fn(),
   snapshots: vi.fn(),
   undo: vi.fn(),
-  fetchCards: vi.fn(async () => []),
+  fetchCards: vi.fn(async (): Promise<unknown[]> => []),
 }))
 
 vi.mock('../hooks/useSession', () => ({
@@ -146,6 +146,8 @@ describe('session event issue-card gate (#5904)', () => {
     const card = await screen.findByTestId('comic-issue-card')
     expect(screen.getByTestId('comic-issue-cover-placeholder')).toBeVisible()
     expect(screen.getByTestId('shared-map-action')).toHaveTextContent('909')
-    expect(await userEvent.setup().click(screen.getByRole('button', { name: 'Read now' }))).toBeUndefined()
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'Read now' }))
+    expect(screen.getByTestId('comic-issue-rating-editor')).toBeVisible()
   })
 })
