@@ -284,18 +284,11 @@ pub async fn list_reading_sessions(
     }
     let next_page_token = if has_more {
         rows.last().map(|session| {
-            let started = DateTime::parse_from_rfc3339(&session.started_at)
-                .map(|value| value.with_timezone(&Utc))
-                .and_then(|value| {
-                    DateTime::<Utc>::from_timestamp_micros(
-                        value.timestamp_micros(),
-                    )
-                    .ok_or(())
-                })
+            let micros = DateTime::parse_from_rfc3339(&session.started_at)
                 .map(|value| value.timestamp_micros())
                 .unwrap_or(0);
             encode_page_token(PageKey {
-                micros: started,
+                micros,
                 id: session.session_id,
             })
         })
