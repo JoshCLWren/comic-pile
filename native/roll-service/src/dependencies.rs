@@ -84,6 +84,10 @@ const THREAD_BLOCKING_SQL: &str = "SELECT d.id, d.source_issue_id, d.target_issu
 
 const THREAD_BLOCKED_BY_SQL: &str = "SELECT d.id, d.source_issue_id, d.target_issue_id, d.created_at, d.note, si.thread_id, ti.thread_id, st.title, si.issue_number, tt.title, ti.issue_number FROM dependencies d JOIN issues si ON si.id = d.source_issue_id JOIN threads st ON st.id = si.thread_id JOIN issues ti ON ti.id = d.target_issue_id JOIN threads tt ON tt.id = ti.thread_id WHERE ti.thread_id = $1 AND st.user_id = $2 AND tt.user_id = $2 ORDER BY d.id";
 
+const THREAD_BLOCKING_READER_SQL: &str = "SELECT d.id, d.source_issue_id, d.target_issue_id, d.created_at, d.note, si.thread_id, ti.thread_id, st.title, si.issue_number, tt.title, ti.issue_number FROM dependencies d JOIN issues si ON si.id = d.source_issue_id JOIN threads st ON st.id = si.thread_id JOIN issues ti ON ti.id = d.target_issue_id JOIN threads tt ON tt.id = ti.thread_id WHERE si.thread_id = $1 AND st.user_id = $2 AND tt.user_id = $2 AND d.origin = 'reader' ORDER BY d.id";
+
+const THREAD_BLOCKED_BY_READER_SQL: &str = "SELECT d.id, d.source_issue_id, d.target_issue_id, d.created_at, d.note, si.thread_id, ti.thread_id, st.title, si.issue_number, tt.title, ti.issue_number FROM dependencies d JOIN issues si ON si.id = d.source_issue_id JOIN threads st ON st.id = si.thread_id JOIN issues ti ON ti.id = d.target_issue_id JOIN threads tt ON tt.id = ti.thread_id WHERE ti.thread_id = $1 AND st.user_id = $2 AND tt.user_id = $2 AND d.origin = 'reader' ORDER BY d.id";
+
 fn format_dependency_created_at(created_at: DateTime<Utc>) -> String {
     let precision = if created_at.timestamp_subsec_micros() == 0 {
         SecondsFormat::Secs
@@ -392,6 +396,38 @@ pub async fn get_thread_dependencies(
     let blocking = blocking_rows.iter().map(thread_row_to_response).collect();
     let blocked_by_rows = connection
         .query(THREAD_BLOCKED_BY_SQL, &[&thread_id, &user.id()])
+        .await
+        .map_err(db::query_error)?;
+    let blocked_by = blocked_by_rows.iter().map(thread_row_to_response).collect();
+    Ok(Json(ThreadDependenciesResponse {
+        blocking,
+        blocked_by,
+    }))
+}
+
+/// `GET /api/v2/threads/{thread_id}/dependencies`
+///
+/// Reader-authored edges only. Owner-scoped; missing or foreign thread is 404.
+pub async fn get_thread_dependencies_v2(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(thread_id): Path<i32>,
+) -> Result<Json<ThreadDependenciesResponse>, ApiError> {
+    let connection = db::checkout(&state).await?;
+    let owned = connection
+        .query_opt(THREAD_OWNED_SQL, &[&thread_id, &user.id()])
+        .await
+        .map_err(db::query_error)?;
+    if owned.is_none() {
+        return Err(ApiError::NotFound(format!("Thread {thread_id} not found")));
+    }
+    let blocking_rows = connection
+        .query(THREAD_BLOCKING_READER_SQL, &[&thread_id, &user.id()])
+        .await
+        .map_err(db::query_error)?;
+    let blocking = blocking_rows.iter().map(thread_row_to_response).collect();
+    let blocked_by_rows = connection
+        .query(THREAD_BLOCKED_BY_READER_SQL, &[&thread_id, &user.id()])
         .await
         .map_err(db::query_error)?;
     let blocked_by = blocked_by_rows.iter().map(thread_row_to_response).collect();

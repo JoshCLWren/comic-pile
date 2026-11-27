@@ -255,6 +255,85 @@ pub async fn get_thread_issue_dependencies(
     Ok(Json(ThreadIssueDependenciesResponse { thread_id, issues }))
 }
 
+/// `GET /api/v2/threads/{thread_id}/issueDependencies` — bounded issue-edge batch.
+pub async fn get_thread_issue_dependencies_v2(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(thread_id): Path<i32>,
+) -> Result<Json<ThreadIssueDependenciesResponse>, ApiError> {
+    let connection = db::checkout(&state).await?;
+    let owned = connection
+        .query_opt(THREAD_SQL, &[&thread_id, &user.id()])
+        .await
+        .map_err(db::query_error)?;
+    if owned.is_none() {
+        return Err(ApiError::with_status(
+            StatusCode::NOT_FOUND,
+            format!("Thread {thread_id} not found"),
+        ));
+    }
+
+    let issue_rows = connection
+        .query(THREAD_ISSUES_SQL, &[&thread_id])
+        .await
+        .map_err(db::query_error)?;
+    let issue_ids: Vec<i32> = issue_rows.iter().map(|row| row.get(0)).collect();
+    if issue_ids.is_empty() {
+        return Ok(Json(ThreadIssueDependenciesResponse {
+            thread_id,
+            issues: vec![],
+        }));
+    }
+
+    let mut incoming = std::collections::HashMap::<i32, Vec<IssueDependencyEdge>>::new();
+    for row in connection
+        .query(THREAD_INCOMING_SQL, &[&issue_ids, &user.id()])
+        .await
+        .map_err(db::query_error)?
+    {
+        let target_issue_id: i32 = row.get(1);
+        incoming
+            .entry(target_issue_id)
+            .or_default()
+            .push(IssueDependencyEdge {
+                dependency_id: row.get(0),
+                source_issue_id: row.get(2),
+                source_issue_number: row.get(3),
+                source_thread_id: row.get(4),
+                source_thread_title: row.get(5),
+            });
+    }
+
+    let mut outgoing = std::collections::HashMap::<i32, Vec<IssueDependencyEdge>>::new();
+    for row in connection
+        .query(THREAD_OUTGOING_SQL, &[&issue_ids, &user.id()])
+        .await
+        .map_err(db::query_error)?
+    {
+        let source_issue_id: i32 = row.get(1);
+        outgoing
+            .entry(source_issue_id)
+            .or_default()
+            .push(IssueDependencyEdge {
+                dependency_id: row.get(0),
+                source_issue_id: row.get(2),
+                source_issue_number: row.get(3),
+                source_thread_id: row.get(4),
+                source_thread_title: row.get(5),
+            });
+    }
+
+    let issues = issue_ids
+        .into_iter()
+        .map(|issue_id| IssueDependenciesResponse {
+            issue_id,
+            incoming: incoming.remove(&issue_id).unwrap_or_default(),
+            outgoing: outgoing.remove(&issue_id).unwrap_or_default(),
+        })
+        .collect();
+    Ok(Json(ThreadIssueDependenciesResponse { thread_id, issues }))
+}
+
 // Browser-hot thread issue listing cut over from Python by #4832.
 // The ownership check, filtered count and bounded page run in one SQL
 // statement regardless of how many issues a reader has. The same-path
