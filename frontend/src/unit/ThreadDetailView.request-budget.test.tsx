@@ -193,7 +193,7 @@ describe('Thread detail request budget', () => {
 
     expect(requestCounts(calls)).toEqual({
       'POST /v2/reading-boundaries': 1,
-      'GET /v1/threads/42': 1,
+      'GET /v2/threads/42': 1,
       'GET /v1/threads/42/connected': 1,
       'GET /v2/reading-graph': 1,
       'GET /v2/tags/effective/threads/42': 1,
@@ -221,7 +221,7 @@ describe('Thread detail request budget', () => {
 
     expect(requestCounts(calls)).toEqual({
       'POST /v2/reading-boundaries': 1,
-      'GET /v1/threads/42': 1,
+      'GET /v2/threads/42': 1,
       'GET /v1/threads/42/connected': 1,
       'GET /v2/reading-graph': 1,
       'GET /v2/tags/effective/threads/42': 1,
@@ -335,7 +335,7 @@ describe('Thread detail request budget', () => {
   it('unknown thread id batches once and never surfaces a crossover error', async () => {
     const handler = makeHandler('unavailable')
     const { calls, client } = createRequestRecorder((call) => {
-      if (call.url === '/v1/threads/999') return Promise.reject(new Error('404'))
+      if (call.url === '/v2/threads/999') return Promise.reject(new Error('404'))
       if (call.url === '/v1/threads/groups:batch') return Promise.reject(new Error('404'))
       return handler(call)
     })
