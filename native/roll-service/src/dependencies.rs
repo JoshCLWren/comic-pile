@@ -80,9 +80,13 @@ pub struct ThreadDependenciesResponse {
 
 const THREAD_OWNED_SQL: &str = "SELECT t.id FROM threads t WHERE t.id = $1 AND t.user_id = $2";
 
-const THREAD_BLOCKING_SQL: &str = "SELECT d.id, d.source_issue_id, d.target_issue_id, d.created_at, d.note, si.thread_id, ti.thread_id, st.title, si.issue_number, tt.title, ti.issue_number FROM dependencies d JOIN issues si ON si.id = d.source_issue_id JOIN threads st ON st.id = si.thread_id JOIN issues ti ON ti.id = d.target_issue_id JOIN threads tt ON tt.id = ti.thread_id WHERE si.thread_id = $1 AND st.user_id = $2 AND tt.user_id = $2 ORDER BY d.id";
+// #5709: the v2 thread-dependency collection exposes only reader-authored
+// edges. Converted/legacy rows and historical `cbl-order:` notes are audit data
+// with no execution authority (see `reading_constraints::authoritative_prerequisites`)
+// and must never be presented as authoring edges to the Dependency Builder.
+const THREAD_BLOCKING_SQL: &str = "SELECT d.id, d.source_issue_id, d.target_issue_id, d.created_at, d.note, si.thread_id, ti.thread_id, st.title, si.issue_number, tt.title, ti.issue_number FROM dependencies d JOIN issues si ON si.id = d.source_issue_id JOIN threads st ON st.id = si.thread_id JOIN issues ti ON ti.id = d.target_issue_id JOIN threads tt ON tt.id = ti.thread_id WHERE si.thread_id = $1 AND st.user_id = $2 AND tt.user_id = $2 AND d.origin = 'reader' AND (d.note IS NULL OR d.note NOT LIKE 'cbl-order:%') ORDER BY d.id";
 
-const THREAD_BLOCKED_BY_SQL: &str = "SELECT d.id, d.source_issue_id, d.target_issue_id, d.created_at, d.note, si.thread_id, ti.thread_id, st.title, si.issue_number, tt.title, ti.issue_number FROM dependencies d JOIN issues si ON si.id = d.source_issue_id JOIN threads st ON st.id = si.thread_id JOIN issues ti ON ti.id = d.target_issue_id JOIN threads tt ON tt.id = ti.thread_id WHERE ti.thread_id = $1 AND st.user_id = $2 AND tt.user_id = $2 ORDER BY d.id";
+const THREAD_BLOCKED_BY_SQL: &str = "SELECT d.id, d.source_issue_id, d.target_issue_id, d.created_at, d.note, si.thread_id, ti.thread_id, st.title, si.issue_number, tt.title, ti.issue_number FROM dependencies d JOIN issues si ON si.id = d.source_issue_id JOIN threads st ON st.id = si.thread_id JOIN issues ti ON ti.id = d.target_issue_id JOIN threads tt ON tt.id = ti.thread_id WHERE ti.thread_id = $1 AND st.user_id = $2 AND tt.user_id = $2 AND d.origin = 'reader' AND (d.note IS NULL OR d.note NOT LIKE 'cbl-order:%') ORDER BY d.id";
 
 fn format_dependency_created_at(created_at: DateTime<Utc>) -> String {
     let precision = if created_at.timestamp_subsec_micros() == 0 {
@@ -365,13 +369,15 @@ pub async fn delete_dependency(
     Ok(Json(serde_json::json!({"message": "Dependency deleted"})))
 }
 
-/// `GET /api/v1/threads/{thread_id}/dependencies`
+/// `GET /api/v2/threads/{thread_id}/dependencies` (#5709)
 ///
-/// Lists dependencies where this thread blocks others (`blocking`) and where
-/// it is blocked (`blocked_by`). Owner-scoped: a missing or foreign thread is
-/// a 404 with the Python detail text. Each direction is one bounded JOIN
-/// ordered by dependency id; labels mirror Python `enrich_dependencies`
-/// (`"{title} #{issue_number}"`, `is_issue_level=true`).
+/// Lists reader-authored dependencies where this thread blocks others
+/// (`blocking`) and where it is blocked (`blocked_by`). Owner-scoped: a
+/// missing or foreign thread is a 404 with the stable detail text. Each
+/// direction is one bounded JOIN ordered by dependency id; labels keep the
+/// established `"{title} #{issue_number}"` shape with `is_issue_level=true`.
+/// Historical converted edges and inert `cbl-order:` rows are excluded so
+/// diagnostics cannot be mistaken for authoring state.
 pub async fn get_thread_dependencies(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -441,12 +447,13 @@ pub fn create_dependency_documentation() {}
 #[allow(dead_code)]
 pub fn delete_dependency_documentation() {}
 
-/// Documentation-only operation for the mounted thread-dependencies read.
+/// Documentation-only operation for the mounted v2 thread-dependencies read.
 #[utoipa::path(
     get,
-    path = "/api/v1/threads/{thread_id}/dependencies",
+    path = "/api/v2/threads/{thread_id}/dependencies",
     tag = "dependencies",
-    description = "List owner-scoped dependency edges where one thread blocks others and where it is blocked. Wire parity with Python GET /api/v1/threads/{thread_id}/dependencies: {blocking, blocked_by} of enriched DependencyResponse entries ordered by dependency id.",
+    operation_id = "dependencies_list_thread_dependencies",
+    description = "List owner-scoped reader-authored dependency edges where one thread blocks others and where it is blocked. Returns {blocking, blocked_by} of enriched DependencyResponse entries ordered by dependency id; historical converted rows and inert cbl-order notes are excluded.",
     params(
         ("thread_id" = i32, Path, description = "Owned thread identifier")
     ),
