@@ -1474,7 +1474,7 @@ pub async fn list_thread_issues_v2(
         .ok_or_else(|| thread_not_found(thread_id))?;
     let payload: String = row.get(1);
     let mut issues: Vec<ThreadIssueV2Item> = serde_json::from_str(&payload)
-        .map_err(|_| ApiError::Internal("Internal Server Error".into()))?;
+        .map_err(|error| ApiError::Internal(format!("DIAG {error} payload={payload}")))?;
     let next_page_token = if issues.len() as i64 > page_size {
         issues.truncate(page_size as usize);
         issues.last().map(|issue| format!("{},{}", issue.position, issue.id))
@@ -1554,7 +1554,6 @@ pub async fn list_thread_creator_credits_v2(
     // The page query fetches one extra row to detect continuation. The extra
     // row may also carry credits, so the public projection is cut back to the
     // requested size before it is returned.
-    let mut issues = issues;
     issues.truncate(page_size as usize);
     Ok(Json(ThreadCreatorCreditsPage {
         thread_id,
