@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { ReadingListReader } from '../components/ReadingListReader'
 import { customCBLApi, type ReadingListReader as ReaderView } from '../services/api-custom-cbl'
-import { tagsApi, type EffectiveTagsResponse } from '../services/api-tags'
+import { tagsApi } from '../services/api-tags'
 import { comicVineApi, type ComicVineIssueIntelligence } from '../services/api-comicvine'
 import { issuesApi } from '../services/api-issues'
 import { queueApi } from '../services/api-queue'
@@ -108,6 +108,17 @@ it('shows every blocker, exact issue links and list-local skip while keeping blo
   expect(screen.getAllByRole('button', { name: 'Read now' })).toHaveLength(2)
   expect(screen.getAllByRole('button', { name: 'Move to front' })).toHaveLength(1)
   await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith([10, 20, 30]))
+})
+
+it('opens the rolled-comic creator details from a Reading List row without requesting untouched rows', async () => {
+  mount()
+  await screen.findByText('Julix · Strict order')
+  expect(getIntelligence).not.toHaveBeenCalled()
+
+  await userEvent.click(firstCard().getByRole('button', { name: 'Read now' }))
+
+  expect(await screen.findByText('Fiona Staples')).toBeVisible()
+  expect(getIntelligence).toHaveBeenCalledExactlyOnceWith(10)
 })
 
 it('marks the exact offered issue and refreshes the reader plus other eligibility surfaces', async () => {
