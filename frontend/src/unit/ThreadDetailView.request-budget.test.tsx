@@ -100,8 +100,8 @@ function makeHandler(state: BoundaryState): Responder {
         frontier_audit: null,
       }
     }
-    if (call.url === '/v1/threads/42') return THREADS[42]
-    if (call.url === '/v1/threads/43') return THREADS[43]
+    if (call.url === '/v2/threads/42') return THREADS[42]
+    if (call.url === '/v2/threads/43') return THREADS[43]
     if (call.url === '/v1/threads/42/connected' || call.url === '/v1/threads/43/connected') {
       const id = call.url.includes('/43/') ? 43 : 42
       return { thread_id: id, connected_threads: [] }
@@ -193,7 +193,7 @@ describe('Thread detail request budget', () => {
 
     expect(requestCounts(calls)).toEqual({
       'POST /v2/reading-boundaries': 1,
-      'GET /v1/threads/42': 1,
+      'GET /v2/threads/42': 1,
       'GET /v1/threads/42/connected': 1,
       'GET /v2/reading-graph': 1,
       'GET /v2/tags/effective/threads/42': 1,
@@ -221,7 +221,7 @@ describe('Thread detail request budget', () => {
 
     expect(requestCounts(calls)).toEqual({
       'POST /v2/reading-boundaries': 1,
-      'GET /v1/threads/42': 1,
+      'GET /v2/threads/42': 1,
       'GET /v1/threads/42/connected': 1,
       'GET /v2/reading-graph': 1,
       'GET /v2/tags/effective/threads/42': 1,
@@ -233,7 +233,7 @@ describe('Thread detail request budget', () => {
   it('loads each expanded issue cursor once and reuses both pages on warm reopen', async () => {
     const handler = makeHandler('available')
     const { calls, client } = createRequestRecorder((call) => {
-      if (call.url === '/v1/threads/42') return { ...THREADS[42], total_issues: 2 }
+      if (call.url === '/v2/threads/42') return { ...THREADS[42], total_issues: 2 }
       if (call.url === '/v1/threads/42/issues') {
         const secondPage = call.params?.page_token === 'next'
         return {
@@ -287,7 +287,7 @@ describe('Thread detail request budget', () => {
     const threadResponse = deferred<typeof THREADS[42]>()
     const handler = makeHandler('available')
     const { calls, client } = createRequestRecorder((call) => {
-      if (call.url === '/v1/threads/42') return threadResponse.promise
+      if (call.url === '/v2/threads/42') return threadResponse.promise
       return handler(call)
     })
     setDefaultHttpClient(client)
@@ -297,7 +297,7 @@ describe('Thread detail request budget', () => {
     // The route id is authoritative: the batch must start while the thread
     // detail is still unresolved.
     await waitFor(() => expect(groupsCalls(calls)).toHaveLength(1))
-    expect(calls.some((call) => call.url === '/v1/threads/42')).toBe(true)
+    expect(calls.some((call) => call.url === '/v2/threads/42')).toBe(true)
 
     threadResponse.resolve(THREADS[42])
     await waitFor(() =>
@@ -325,18 +325,23 @@ describe('Thread detail request budget', () => {
     expect(screen.getByText('Group 43')).toBeInTheDocument()
     expect(screen.queryByText('Group 42')).not.toBeInTheDocument()
     expect(
-      calls.filter((call) => call.url === '/v1/threads/42'),
+      calls.filter((call) => call.url === '/v2/threads/42'),
     ).toHaveLength(1)
     expect(
-      calls.filter((call) => call.url === '/v1/threads/43'),
+      calls.filter((call) => call.url === '/v2/threads/43'),
     ).toHaveLength(1)
   })
 
   it('unknown thread id batches once and never surfaces a crossover error', async () => {
     const handler = makeHandler('unavailable')
     const { calls, client } = createRequestRecorder((call) => {
+<<<<<<< ours
       if (call.url === '/v1/threads/999') return Promise.reject(new Error('404'))
       if (call.url === '/v2/reading-order-groups:resolveMemberships') return Promise.reject(new Error('404'))
+=======
+      if (call.url === '/v2/threads/999') return Promise.reject(new Error('404'))
+      if (call.url === '/v1/threads/groups:batch') return Promise.reject(new Error('404'))
+>>>>>>> theirs
       return handler(call)
     })
     setDefaultHttpClient(client)

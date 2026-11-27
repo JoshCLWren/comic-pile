@@ -8,6 +8,7 @@ import type {
   ReactivateThreadPayload,
   RollResponse,
   SetCurrentIssueResponse,
+  StaleThreadListResponse,
   Thread,
   ThreadCreatePayload,
   ThreadListResponse,
@@ -33,31 +34,35 @@ export function createThreadsApi(client: HttpClient) {
       })
       return response
     },
-    listCompleted: async (search?: string, sort?: string, pageToken?: string | null, pageSize?: number): Promise<ThreadListResponse> => {
-      const queryParams: Record<string, string | number> = {};
+    listCompleted: async (search?: string, sort?: ThreadQueryParams['order_by'], pageToken?: string | null, pageSize?: number): Promise<ThreadListResponse> => {
+      const queryParams: ThreadQueryParams = { filter: 'completed' };
       if (search) queryParams.search = search;
-      if (sort) queryParams.sort = sort;
+      if (sort) queryParams.order_by = sort;
       if (pageSize) queryParams.page_size = pageSize;
       if (pageToken) queryParams.page_token = pageToken;
 
-      const response = await client.get<ThreadListResponse>('/v1/threads/completed/threads', {
-        params: Object.keys(queryParams).length ? queryParams : undefined,
+      const response = await client.get<ThreadListResponse>('/v2/threads', {
+        params: queryParams,
       })
       return response
     },
-    listExcluded: async (search?: string, sort?: string, pageToken?: string | null, pageSize?: number): Promise<ThreadListResponse> => {
-      const queryParams: Record<string, string | number> = {};
+    listExcluded: async (search?: string, sort?: ThreadQueryParams['order_by'], pageToken?: string | null, pageSize?: number): Promise<ThreadListResponse> => {
+      const queryParams: ThreadQueryParams = { filter: 'excluded' };
       if (search) queryParams.search = search;
-      if (sort) queryParams.sort = sort;
+      if (sort) queryParams.order_by = sort;
       if (pageSize) queryParams.page_size = pageSize;
       if (pageToken) queryParams.page_token = pageToken;
 
-      const response = await client.get<ThreadListResponse>('/v1/threads/excluded/threads', {
-        params: Object.keys(queryParams).length ? queryParams : undefined,
+      const response = await client.get<ThreadListResponse>('/v2/threads', {
+        params: queryParams,
       })
       return response
     },
+<<<<<<< ours
     get: (id: number) => client.get<Thread>(`/v1/threads/${id}`),
+=======
+    get: (id: number) => client.get<Thread>(`/v2/threads/${id}`),
+>>>>>>> theirs
     create: (data: ThreadCreatePayload) => client.post<Thread, ThreadCreatePayload>('/v2/threads', data),
     update: (id: number, data: ThreadUpdatePayload) =>
       client.put<Thread, ThreadUpdatePayload>(`/v1/threads/${id}`, data),
@@ -97,7 +102,14 @@ export function createThreadsApi(client: HttpClient) {
       client.post<BulkQueueRestoreResponse>(`/v2/queue-exclusion-groups/${groupId}/restore`),
     reactivate: (data: ReactivateThreadPayload) =>
       client.post<Thread, ReactivateThreadPayload>('/v1/threads/reactivate', data),
-    listStale: (days = 30) => client.get<Thread[]>('/v1/threads/stale', { params: { days } }),
+    /**
+     * Canonical stale read: the v2 collection filter keeps the detail-shaped
+     * projection of the retired v1 stale array in `threads`.
+     */
+    listStale: (days = 30) =>
+      client.get<StaleThreadListResponse>('/v2/threads', {
+        params: { filter: 'stale', days },
+      }),
     setPending: (id: number, expectedIssueId?: number) =>
       client.post<RollResponse, { expected_issue_id: number }>(
         `/v1/threads/${id}/set-pending`,

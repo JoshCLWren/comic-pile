@@ -64,8 +64,8 @@ response schemas, bounds, and status codes come from the generated contracts.
 | --- | --- |
 | Health | `GET /api/v2/health` (public process liveness) |
 | Auth | `POST /api/v2/auth/register`, `login`, `refresh`, `logout`, `forgot-password`, `reset-password`; `GET /api/v2/auth/csrf`, `me` |
-| Queue | `GET /api/v2/threads`; `GET`/`PATCH /api/v2/queue-entries/{thread_id}`; `POST /api/v2/queue-orders`; queue-exclusion resources under `/api/v2/queue-exclusions*` |
-| Threads and issues | Retained lifecycle/detail calls under `/api/v1/threads...`; issue creation at `POST /api/v2/threads/{thread_id}/issues`; ordering at `PUT /api/v2/threads/{thread_id}/issue-order`; issue cards and direct read/rate at `POST /api/v2/issues/cards` and `PATCH /api/v2/issues/{issue_id}` |
+| Queue | `GET /api/v2/threads` (with collection filters); `GET`/`PATCH /api/v2/queue-entries/{thread_id}`; `POST /api/v2/queue-orders`; queue-exclusion resources under `/api/v2/queue-exclusions*` |
+| Threads and issues | `GET /api/v2/threads/{thread_id}` (standard Get); retained lifecycle calls under `/api/v1/threads...` pending retirement; issue creation at `POST /api/v2/threads/{thread_id}/issues`; ordering at `PUT /api/v2/threads/{thread_id}/issue-order`; issue cards and direct read/rate at `POST /api/v2/issues/cards` and `PATCH /api/v2/issues/{issue_id}` |
 | Roll | `GET /api/v2/roll/bootstrap`; `POST /api/v2/roll/offer`, `override`, `dice-command`, `reset`, `unsnooze`, `dismiss-pending`, `switch-prerequisite`; `GET /api/v2/roll/die-state`, `eligible-issue-ids` |
 | Reading Lists | `GET`/`POST /api/v2/reading-lists`; list CRUD, `reader`, export, issue candidates, overlap decisions, and adoption commits under `/api/v2/reading-lists/{list_id}/...` |
 | Reading constraints | `POST /api/v2/reading-boundaries`; `GET`/`PUT /api/v2/reading-mode`; reading-mode suggestion/dismissal resources |
@@ -75,6 +75,47 @@ response schemas, bounds, and status codes come from the generated contracts.
 | ComicVine and CBL | Search, resolve, series import/status/roster, issue import, identity, and metadata correction resources under `/api/v2/comicvine...`; retained CBL source/adoption previews under `/api/v1/issue-identity/...`; commits use `/api/v2/reading-lists/{list_id}/adoption-commits` |
 | Creators, tags, releases | Creator reads under `/api/v2/creators...`; tag CRUD/usage/effective tags/assignments under `/api/v2/tags...`; `GET /api/v2/releases` plus retained release operations in the same-path contract |
 | Demo | `GET /api/v2/demo-roll` (public fabricated fixture, no database reads or writes) |
+
+### Threads collection filters (v2)
+
+`GET /api/v2/threads` is the canonical List method for the reader's threads.
+`GET /api/v2/threads/{thread_id}` is its standard Get method; ownership failures
+are `404`. Both are owner-scoped and keep the established wire projections.
+
+The List method accepts documented AIP-132 parameters:
+
+- `filter`: `active` (default), `completed`, `stale`, or `excluded`.
+- `order_by`: `position`, `title`, or `created` (`last_activity` is the stale
+  default). The older `sort` spelling is accepted while clients migrate; supplying
+  both with different values is `400`.
+- `search`: case-insensitive title search; not supported for `stale`.
+- `days`: stale age threshold in days (`0..3650`, default `30`); rejected for
+  other filters.
+- `page_size` (`1..200`) and `page_token`: bounded keyset pagination. The token
+  is bound to the filter, search, ordering and execution projection.
+
+Reads are idempotent. An invalid filter, conflicting `order_by`/`sort` pair or
+malformed page token is `400`; out-of-bounds parameters and the retired
+`collection_id` are `422`; an unauthenticated request is `401`; and a detail
+resource that is missing or not owned by the reader is `404`.
+
+Active, completed and excluded pages keep the queue-list item projection and
+their original count semantics (`active_count` is the whole active queue only on
+the active filter; completed/excluded return `0` and omit `filtered_count`).
+`filter=stale` keeps the detail-shaped projection of the retired v1 stale array
+inside a `threads` page envelope; it has no whole-queue count. Stale candidates
+use the canonical reading-graph eligibility evaluator, never the stored
+`threads.is_blocked` column.
+
+Exclusions are a collection filter, not a duplicate contract:
+`filter=excluded` enumerates the same reader-owned `status = 'excluded'` rows as
+the authoritative `/api/v2/queue-exclusions` resource. That resource mutates
+membership or checks a supplied id set (`.../status:check`) and does not paginate
+a library of excluded threads; the list filter is its enumeration view and
+includes bulk-exclusion provenance (`queue_exclusion_group`). First-party callers
+use the filter via `frontend/src/services/api-threads.ts`. The v1 detail,
+completed, excluded and stale URLs are retained server-side only until the
+migration is proven in production; new code must not call them.
 
 ### Retired or absent surfaces
 

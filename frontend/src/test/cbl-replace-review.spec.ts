@@ -588,7 +588,7 @@ test.describe('CBL replacement review', () => {
       data: { status: 'read', rating: 4.5, idempotency_key: `test-cbl-${ratedIssueId}-${Date.now()}`, source: 'direct' },
     })
     expect(rating.ok(), await rating.text()).toBeTruthy()
-    const threadAfterRating = await page.request.get(`/api/v1/threads/${rated.id}`, { headers })
+    const threadAfterRating = await page.request.get(`/api/v2/threads/${rated.id}`, { headers })
     expect(threadAfterRating.ok(), await threadAfterRating.text()).toBeTruthy()
     // SAFETY: the test reads only last_rating from the thread detail
     expect(((await threadAfterRating.json()) as { last_rating: number | null }).last_rating).toBe(4.5)
@@ -656,7 +656,7 @@ test.describe('CBL replacement review', () => {
       builder.getByRole('list', { name: 'Custom CBL ordered issues' }),
     ).toContainText(manualTitle)
 
-    const threadAfterUndo = await page.request.get(`/api/v1/threads/${rated.id}`, { headers })
+    const threadAfterUndo = await page.request.get(`/api/v2/threads/${rated.id}`, { headers })
     expect(threadAfterUndo.ok(), await threadAfterUndo.text()).toBeTruthy()
     // SAFETY: the test reads only last_rating from the thread detail
     expect(((await threadAfterUndo.json()) as { last_rating: number | null }).last_rating).toBe(4.5)

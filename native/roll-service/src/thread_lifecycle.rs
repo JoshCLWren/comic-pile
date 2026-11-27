@@ -53,6 +53,7 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde::{ser::SerializeMap, Serialize, Serializer};
 use serde_json::{json, Value};
 use std::{
@@ -2053,14 +2054,110 @@ pub async fn list_stale_threads(
     check.finish(Value::Null)?;
     let days = days.unwrap_or(30);
     let page_size = page_size.unwrap_or(200);
+    let page = list_stale_page(&state, user, days, page_size, None).await?;
+    // The v1 read published a bare array; keep it byte-compatible until the
+    // route is retired. First-party callers now use the v2 collection filter.
+    Ok(json_response(StatusCode::OK, page.threads))
+}
+
+/// Opaque keyset cursor for the stale collection filter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct StaleCursor {
+    /// ISO-8601 activity timestamp of the last row; empty means NULL activity.
+    activity: String,
+    id: i32,
+}
+
+fn encode_stale_cursor(cursor: &StaleCursor) -> String {
+    let payload = serde_json::json!({
+        "kind": "stale",
+        "activity": cursor.activity,
+        "id": cursor.id,
+    });
+    #[allow(clippy::expect_used)]
+    URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).expect("serializable stale cursor"))
+}
+
+fn decode_stale_cursor(token: &str) -> Result<StaleCursor, ApiError> {
+    let invalid = || ApiError::BadRequest("Invalid stale page token".to_string());
+    let raw = URL_SAFE_NO_PAD
+        .decode(token.trim_end_matches('='))
+        .map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            invalid()
+        })?;
+    let payload: Value = serde_json::from_slice(&raw).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        invalid()
+    })?;
+    let object = payload.as_object().ok_or_else(invalid)?;
+    if object.get("kind").and_then(Value::as_str) != Some("stale") {
+        return Err(invalid());
+    }
+    let activity = object
+        .get("activity")
+        .and_then(Value::as_str)
+        .ok_or_else(invalid)?
+        .to_string();
+    // The cursor binds this value as a timestamptz. Validate it here so a
+    // forged token cannot turn a client error into a PostgreSQL cast failure.
+    if !activity.is_empty() && chrono::DateTime::parse_from_rfc3339(&activity).is_err() {
+        return Err(invalid());
+    }
+    let id = object
+        .get("id")
+        .and_then(Value::as_i64)
+        .filter(|id| *id > 0 && *id <= i32::MAX as i64)
+        .ok_or_else(invalid)? as i32;
+    Ok(StaleCursor { activity, id })
+}
+
+/// Build one owner-scoped stale page for the canonical v2 filter and the v1 alias.
+///
+/// The evaluated snapshot is always authoritative (#5525 A16/A17): stored
+/// `is_blocked` never decides which threads are stale candidates. The cursor is
+/// keyset-based on `(last_activity_at, id)`, matching the oldest-first display
+/// order, so pagination neither skips nor repeats NULL-activity rows.
+pub(crate) async fn list_stale_page(
+    state: &AppState,
+    user: AuthenticatedUser,
+    days: i64,
+    page_size: i64,
+    page_token: Option<&str>,
+) -> Result<threads::StaleThreadListResponse, ApiError> {
+    let cursor = page_token
+        .filter(|token| !token.is_empty())
+        .map(decode_stale_cursor)
+        .transpose()?;
     let user_id = user.id();
     // The evaluated snapshot is always authoritative (#5525 A16/A17): stored
     // `is_blocked` never decides which threads are stale candidates. Load it
     // before taking the write connection (the loader owns its own checkout).
-    let canonical = canonical_eligibility_inputs(&state, user).await?;
+    let canonical = canonical_eligibility_inputs(state, user).await?;
     let available_ids: HashSet<i32> = canonical_available_ids(&canonical)?;
     let available_list: Vec<i32> = available_ids.iter().copied().collect();
-    let views = with_tx!(&state, tx, db::tx_error, {
+    let cursor_activity = cursor
+        .as_ref()
+        .map(|cursor| cursor.activity.clone())
+        .unwrap_or_default();
+    let cursor_id = cursor.as_ref().map_or(0, |cursor| cursor.id);
+    let cursor_sql = if cursor.is_some() {
+        " AND (($6::text = '' AND ((last_activity_at IS NULL AND id > $7::int) \
+         OR last_activity_at IS NOT NULL)) \
+         OR ($6::text <> '' AND (last_activity_at > ($6::text)::timestamptz \
+         OR (last_activity_at = ($6::text)::timestamptz AND id > $7::int))))"
+    } else {
+        ""
+    };
+    let days = days as i32;
+    let limit = page_size + 1;
+    let views = with_tx!(state, tx, db::tx_error, {
         let session = tx
             .query_opt(
                 "SELECT snoozed_thread_ids::text FROM sessions
@@ -2079,32 +2176,56 @@ pub async fn list_stale_threads(
         let mut snoozed: Vec<i32> = current.into_iter().chain(derived).collect();
         snoozed.sort_unstable();
         snoozed.dedup();
-        let ids: Vec<i32> = tx
-            .query(
-                "SELECT id FROM threads
+        let sql = format!(
+            "SELECT id FROM threads
              WHERE user_id = $1 AND status = 'active'
                AND id = ANY($5::int[])
                AND (last_activity_at < NOW() - make_interval(days => $2::int)
                     OR last_activity_at IS NULL)
                AND NOT (id = ANY($3::int[]))
+               {cursor_sql}
              ORDER BY last_activity_at ASC NULLS FIRST, id
-             LIMIT $4",
-                &[
-                    &user_id,
-                    &(days as i32),
-                    &snoozed,
-                    &page_size,
-                    &available_list,
-                ],
-            )
+             LIMIT $4"
+        );
+        let mut bindings: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> =
+            vec![&user_id, &days, &snoozed, &limit, &available_list];
+        if cursor.is_some() {
+            bindings.push(&cursor_activity);
+            bindings.push(&cursor_id);
+        }
+        let ids: Vec<i32> = tx
+            .query(&sql, &bindings)
             .await
             .map_err(db::tx_error)?
             .iter()
             .map(|row| row.get(0))
             .collect();
         Ok(load_views(&*tx, user_id, &ids, Some(&available_ids)).await?)
+    })
+    .map_err(|error| match error {
+        LifecycleError::Api(api) => api,
+        LifecycleError::Validation { .. } => {
+            ApiError::Internal("Internal Server Error".to_string())
+        }
     })?;
-    Ok(json_response(StatusCode::OK, views))
+    let mut views = views;
+    let next_page_token = if views.len() > page_size as usize {
+        views.truncate(page_size as usize);
+        views.last().map(|last| {
+            encode_stale_cursor(&StaleCursor {
+                activity: last.last_activity_at.clone().unwrap_or_default(),
+                id: last.id,
+            })
+        })
+    } else {
+        None
+    };
+    Ok(threads::StaleThreadListResponse {
+        threads: views,
+        next_page_token,
+        active_count: 0,
+        filtered_count: None,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -2846,6 +2967,46 @@ pub fn check_potential_duplicates_documentation() {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stale_cursor_round_trips_activity_and_null_anchor() {
+        let cursor = StaleCursor {
+            activity: "2026-01-02T03:04:05Z".to_string(),
+            id: 17,
+        };
+        assert_eq!(
+            decode_stale_cursor(&encode_stale_cursor(&cursor)).expect("valid cursor"),
+            cursor
+        );
+        let null_anchor = StaleCursor {
+            activity: String::new(),
+            id: 3,
+        };
+        assert_eq!(
+            decode_stale_cursor(&encode_stale_cursor(&null_anchor)).expect("valid cursor"),
+            null_anchor
+        );
+    }
+
+    #[test]
+    fn stale_cursor_rejects_foreign_or_malformed_tokens() {
+        assert_eq!(
+            decode_stale_cursor("not-base64").unwrap_err().detail(),
+            "Invalid stale page token"
+        );
+        let queue_cursor =
+            URL_SAFE_NO_PAD.encode(br#"{"sort":"position","search":"","values":["0","1","2"]}"#);
+        assert_eq!(
+            decode_stale_cursor(&queue_cursor).unwrap_err().detail(),
+            "Invalid stale page token"
+        );
+        let forged =
+            URL_SAFE_NO_PAD.encode(br#"{"kind":"stale","activity":"not-a-timestamp","id":3}"#);
+        assert_eq!(
+            decode_stale_cursor(&forged).unwrap_err().detail(),
+            "Invalid stale page token"
+        );
+    }
 
     #[test]
     fn title_similarity_matches_python_ladder() {

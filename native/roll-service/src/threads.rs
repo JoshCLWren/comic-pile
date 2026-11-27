@@ -132,6 +132,34 @@ pub struct ThreadListResponse {
     pub filtered_count: Option<i32>,
 }
 
+/// Stale threads page returned by `filter=stale` on the v2 collection.
+///
+/// Stale rows are still active queue rows, but the legacy stale read projects
+/// the full detail-shaped `ThreadResponse` instead of the queue-list item. The
+/// distinction is kept on the wire so callers of the retired v1 stale read can
+/// migrate without losing fields; counts stay zero/absent because the stale
+/// read never published a whole-queue total.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct StaleThreadListResponse {
+    pub threads: Vec<crate::thread_lifecycle::ThreadResponse>,
+    pub next_page_token: Option<String>,
+    /// Always zero: a stale page is not a whole-active-queue read.
+    pub active_count: i32,
+    /// Always absent: the stale read never measured a filtered whole-queue total.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filtered_count: Option<i32>,
+}
+
+/// One v2 threads list response. The active/completed/excluded filters keep the
+/// queue-list projection; the stale filter keeps the legacy detail-shaped
+/// projection. Both are emitted inline (no envelope variant key).
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(untagged)]
+pub enum ThreadListResult {
+    Page(ThreadListResponse),
+    Stale(StaleThreadListResponse),
+}
+
 /// The legacy single-thread response retained for the v1 and bare aliases.
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct ThreadDetailResponse {
@@ -159,11 +187,139 @@ pub struct ThreadDetailResponse {
 #[derive(Debug, Default, Deserialize)]
 pub struct ThreadListQuery {
     pub search: Option<String>,
+    /// Canonical AIP-132 ordering parameter.
+    pub order_by: Option<String>,
+    /// Legacy spelling of `order_by`, accepted while browser callers migrate.
     pub sort: Option<String>,
     pub page_size: Option<i64>,
     pub page_token: Option<String>,
+    /// AIP-132 resource filter: `active` (default), `completed`, `stale` or `excluded`.
+    pub filter: Option<String>,
+    /// Age threshold in days; only meaningful with `filter=stale`.
+    pub days: Option<i64>,
     /// Retired v1 filter: reject it instead of silently changing its meaning.
     pub collection_id: Option<String>,
+}
+
+/// Canonical collection filter for the v2 threads List method.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ThreadFilter {
+    Active,
+    Completed,
+    Stale,
+    Excluded,
+}
+
+/// Fully validated and normalized parameters for one v2 threads List request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ResolvedListQuery {
+    filter: ThreadFilter,
+    order_by: String,
+    search: String,
+    days: i64,
+    page_size: i64,
+    page_token: Option<String>,
+}
+
+/// Bound the stale-age threshold without changing the legacy default (#5420).
+const MAX_STALE_DAYS: i64 = 3650;
+
+/// Resolve and validate the documented v2 List parameters.
+///
+/// `order_by` is canonical and `sort` remains an accepted legacy alias, but a
+/// request that supplies both with different values is rejected rather than
+/// silently choosing one. `days` only applies to the stale filter so an old
+/// caller cannot change an active/completed page by carrying the parameter.
+fn resolve_list_query(query: &ThreadListQuery) -> Result<ResolvedListQuery, ApiError> {
+    if query.collection_id.is_some() {
+        return Err(unprocessable("collection_id is retired"));
+    }
+    let filter = match query
+        .filter
+        .as_deref()
+        .map(str::trim)
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+        .unwrap_or("active")
+    {
+        "active" => ThreadFilter::Active,
+        "completed" => ThreadFilter::Completed,
+        "stale" => ThreadFilter::Stale,
+        "excluded" => ThreadFilter::Excluded,
+        _ => {
+            return Err(bad_request(
+                "filter must be active, completed, stale or excluded",
+            ))
+        }
+    };
+    if let (Some(order_by), Some(sort)) = (query.order_by.as_deref(), query.sort.as_deref()) {
+        if order_by != sort {
+            return Err(bad_request("order_by and sort disagree"));
+        }
+    }
+    let requested_order = query
+        .order_by
+        .as_deref()
+        .or(query.sort.as_deref())
+        .unwrap_or(match filter {
+            ThreadFilter::Active => "position",
+            ThreadFilter::Completed | ThreadFilter::Excluded => "created",
+            ThreadFilter::Stale => "last_activity",
+        });
+    let order_by = match (filter, requested_order) {
+        (ThreadFilter::Active, "position" | "title" | "created") => requested_order.to_string(),
+        (ThreadFilter::Completed | ThreadFilter::Excluded, "position") => {
+            // Off the active queue `position` has no meaning; the legacy reads
+            // have always fallen back to creation order.
+            "created".to_string()
+        }
+        (ThreadFilter::Completed | ThreadFilter::Excluded, "title" | "created") => {
+            requested_order.to_string()
+        }
+        (ThreadFilter::Stale, "last_activity" | "position") => {
+            // Stale rows are always oldest-activity-first. `position` is the
+            // Queue's default sort and is mapped to that ordering for old
+            // clients; title/created ordering is not defined for stale rows.
+            "last_activity".to_string()
+        }
+        _ => return Err(bad_request("order_by is not supported with this filter")),
+    };
+    let raw_search = query.search.as_deref();
+    if raw_search.is_some_and(str::is_empty) {
+        return Err(unprocessable("search must be at least 1 character"));
+    }
+    if filter == ThreadFilter::Stale && raw_search.is_some() {
+        return Err(unprocessable("search is not supported for filter=stale"));
+    }
+    let search = normalize_search(raw_search);
+    let days = match query.days {
+        Some(days) => {
+            if filter != ThreadFilter::Stale {
+                return Err(unprocessable("days is only valid for filter=stale"));
+            }
+            if !(0..=MAX_STALE_DAYS).contains(&days) {
+                return Err(unprocessable("days must be between 0 and 3650"));
+            }
+            days
+        }
+        None => 30,
+    };
+    let page_size = query.page_size.unwrap_or(if filter == ThreadFilter::Stale {
+        200
+    } else {
+        DEFAULT_PAGE_SIZE
+    });
+    if !(1..=MAX_PAGE_SIZE).contains(&page_size) {
+        return Err(unprocessable("page_size must be between 1 and 200"));
+    }
+    Ok(ResolvedListQuery {
+        filter,
+        order_by,
+        search,
+        days,
+        page_size,
+        page_token: query.page_token.clone(),
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -330,31 +486,56 @@ fn decode_cursor(
     })
 }
 
-/// Read one page of the authenticated reader's active threads.
+/// Read one page of the authenticated reader's v2 threads collection.
+///
+/// `filter` selects the resource state (`active`, `completed`, `stale` or
+/// `excluded`); `order_by` is the AIP-132 ordering parameter and `sort` is
+/// accepted as a legacy alias. Every filter is owner-scoped and uses the same
+/// opaque continuation token contract as the original Queue reads.
 pub async fn list_threads(
     State(state): State<Arc<AppState>>,
     claims: VerifiedAccessClaims,
     Query(query): Query<ThreadListQuery>,
-) -> Result<Json<ThreadListResponse>, ApiError> {
-    if query.collection_id.is_some() {
-        return Err(unprocessable("collection_id is retired"));
+) -> Result<Json<ThreadListResult>, ApiError> {
+    let resolved = resolve_list_query(&query)?;
+    match resolved.filter {
+        ThreadFilter::Active => Ok(Json(ThreadListResult::Page(
+            active_page(&state, &claims, &resolved).await?,
+        ))),
+        ThreadFilter::Completed => Ok(Json(ThreadListResult::Page(
+            completed_page(&state, &claims, &resolved).await?,
+        ))),
+        ThreadFilter::Excluded => Ok(Json(ThreadListResult::Page(
+            excluded_page(&state, &claims, &resolved).await?,
+        ))),
+        ThreadFilter::Stale => {
+            let user = crate::auth::authenticate_claims(&state, &claims).await?;
+            Ok(Json(ThreadListResult::Stale(
+                crate::thread_lifecycle::list_stale_page(
+                    &state,
+                    user,
+                    resolved.days,
+                    resolved.page_size,
+                    resolved.page_token.as_deref(),
+                )
+                .await?,
+            )))
+        }
     }
-    let sort = query.sort.as_deref().unwrap_or("position");
-    if !matches!(sort, "position" | "title" | "created") {
-        return Err(bad_request("sort must be one of: position, title, created"));
-    }
-    let page_size = query.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
-    if !(1..=MAX_PAGE_SIZE).contains(&page_size) {
-        return Err(unprocessable("page_size must be between 1 and 200"));
-    }
-    let raw_search = query.search.as_deref();
-    if raw_search.is_some_and(str::is_empty) {
-        return Err(unprocessable("search must be at least 1 character"));
-    }
-    let search = normalize_search(raw_search);
+}
+
+/// Read one page of the authenticated reader's active threads.
+async fn active_page(
+    state: &AppState,
+    claims: &VerifiedAccessClaims,
+    resolved: &ResolvedListQuery,
+) -> Result<ThreadListResponse, ApiError> {
+    let sort = resolved.order_by.as_str();
+    let page_size = resolved.page_size;
+    let search = resolved.search.clone();
     let option_e = state.option_e;
     let execution = if option_e { "option_e" } else { "legacy" };
-    let cursor = query
+    let cursor = resolved
         .page_token
         .as_deref()
         .filter(|token| !token.is_empty())
@@ -367,19 +548,19 @@ pub async fn list_threads(
     let mut option_e_state = None;
     let mut preauthenticated = None;
     if option_e {
-        let user = crate::auth::authenticate_claims(&state, &claims).await?;
-        let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
+        let user = crate::auth::authenticate_claims(state, claims).await?;
+        let validated = option_inputs::load_option_inputs_contained(state, user).await?;
         option_e_state = Some(OptionEProjection::build(&validated)?);
         preauthenticated = Some(user.id());
     }
 
     let (auth, active_count, filtered_count, list_names, rows) = query_page(
-        &state,
-        &claims,
+        state,
+        claims,
         preauthenticated,
         option_e,
         option_e_state.as_ref(),
-        search.as_str(),
+        &search,
         sort,
         page_size,
         cursor.as_ref(),
@@ -387,7 +568,7 @@ pub async fn list_threads(
     )
     .await?;
     if option_e_state.is_none() {
-        validate_auth(&claims, &auth)?;
+        validate_auth(claims, &auth)?;
     }
     let option_e_reasons = option_e_state
         .as_ref()
@@ -439,12 +620,12 @@ pub async fn list_threads(
         .map(|row| row.into_item(option_e_state.as_ref(), option_e_reasons.as_ref()))
         .collect::<Result<Vec<_>, ApiError>>()?;
 
-    Ok(Json(ThreadListResponse {
+    Ok(ThreadListResponse {
         threads,
         next_page_token,
         active_count,
         filtered_count: Some(filtered_count),
-    }))
+    })
 }
 
 /// Read one owned thread using the exact legacy ThreadDetail wire contract.
@@ -547,38 +728,39 @@ pub async fn get_thread_detail(
 }
 
 /// Read one page of the authenticated reader's completed threads.
+///
+/// Retained v1 alias. First-party callers now use
+/// `GET /api/v2/threads?filter=completed`; this handler keeps the frozen wire
+/// response until the v1 route is retired after migration and production proof.
 pub async fn list_completed_threads(
     State(state): State<Arc<AppState>>,
     claims: VerifiedAccessClaims,
     Query(query): Query<ThreadListQuery>,
 ) -> Result<Json<ThreadListResponse>, ApiError> {
-    let requested_sort = query.sort.as_deref().unwrap_or("created");
-    if !matches!(requested_sort, "position" | "title" | "created") {
-        return Err(bad_request("sort must be one of: position, title, created"));
-    }
-    let sort = if requested_sort == "position" {
-        "created"
-    } else {
-        requested_sort
-    };
-    let page_size = query.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
-    if !(1..=MAX_PAGE_SIZE).contains(&page_size) {
-        return Err(unprocessable("page_size must be between 1 and 200"));
-    }
-    let raw_search = query.search.as_deref();
-    if raw_search.is_some_and(str::is_empty) {
-        return Err(unprocessable("search must be at least 1 character"));
-    }
-    let search = normalize_search(raw_search);
-    let cursor = query
+    let mut resolved = query;
+    resolved.filter = Some("completed".to_string());
+    let resolved = resolve_list_query(&resolved)?;
+    Ok(Json(completed_page(&state, &claims, &resolved).await?))
+}
+
+/// Build the completed-threads page shared by the v1 alias and the v2 filter.
+async fn completed_page(
+    state: &AppState,
+    claims: &VerifiedAccessClaims,
+    resolved: &ResolvedListQuery,
+) -> Result<ThreadListResponse, ApiError> {
+    let sort = resolved.order_by.as_str();
+    let page_size = resolved.page_size;
+    let search = resolved.search.clone();
+    let cursor = resolved
         .page_token
         .as_deref()
         .filter(|token| !token.is_empty())
         .map(|token| decode_cursor(token, sort, &search, "legacy"))
         .transpose()?;
     let (auth, _active_count, _filtered_count, _list_names, rows) = query_page(
-        &state,
-        &claims,
+        state,
+        claims,
         None,
         false,
         None,
@@ -589,7 +771,7 @@ pub async fn list_completed_threads(
         "completed",
     )
     .await?;
-    validate_auth(&claims, &auth)?;
+    validate_auth(claims, &auth)?;
     let mut rows = rows;
     let next_page_token = if rows.len() > page_size as usize {
         rows.truncate(page_size as usize);
@@ -614,12 +796,12 @@ pub async fn list_completed_threads(
         .into_iter()
         .map(|row| row.into_item(None, None))
         .collect::<Result<Vec<_>, ApiError>>()?;
-    Ok(Json(ThreadListResponse {
+    Ok(ThreadListResponse {
         threads,
         next_page_token,
         active_count: 0,
         filtered_count: None,
-    }))
+    })
 }
 
 /// Read one validated page of the authenticated reader's excluded threads.
@@ -698,6 +880,37 @@ pub(crate) async fn list_excluded_page(
         active_count: 0,
         filtered_count: None,
     }))
+}
+
+/// Build the excluded-threads page for `GET /api/v2/threads?filter=excluded`.
+///
+/// This collection filter is the read counterpart of the authoritative
+/// `/api/v2/queue-exclusions` resource. The resource endpoints mutate or check
+/// membership for a supplied id set; this filter enumerates the same
+/// `status = 'excluded'` rows with stable pagination, search and bulk-exclusion
+/// provenance. No duplicate exclusion contract is introduced.
+async fn excluded_page(
+    state: &AppState,
+    claims: &VerifiedAccessClaims,
+    resolved: &ResolvedListQuery,
+) -> Result<ThreadListResponse, ApiError> {
+    let raw_search = if resolved.search.is_empty() {
+        None
+    } else {
+        // Search was case-folded by `resolve_list_query`; `list_excluded_page`
+        // folds once more, which is idempotent for Unicode case folding.
+        Some(resolved.search.as_str())
+    };
+    Ok(list_excluded_page(
+        state,
+        claims,
+        raw_search,
+        &resolved.order_by,
+        resolved.page_size,
+        resolved.page_token.as_deref(),
+    )
+    .await?
+    .0)
 }
 
 /// Attach bulk exclusion provenance to excluded thread list items in one query.
@@ -1528,12 +1741,19 @@ fn cursor_clause(sort: &str, cursor: Option<&QueueCursor>) -> (String, Vec<Param
 #[openapi(
     paths(
         list_threads_documentation,
+<<<<<<< ours
+=======
+        get_thread_v2_documentation,
+>>>>>>> theirs
         create_thread_v2_documentation,
         list_completed_threads_documentation
     ),
     components(schemas(
         ThreadListItem,
         ThreadListResponse,
+        ThreadDetailResponse,
+        StaleThreadListResponse,
+        ThreadListResult,
         ThreadTag,
         ComicVineMappingHealth,
         QueueSeriesMetadata,
@@ -1566,22 +1786,44 @@ impl utoipa::Modify for ThreadsSecurityAddon {
     path = "/api/v2/threads",
     tag = "threads",
     params(
-        ("search" = Option<String>, Query, description = "Case-insensitive title search"),
-        ("sort" = Option<String>, Query, description = "position, title, or created"),
-        ("page_size" = Option<i64>, Query, description = "1-200 rows per page (default 50)"),
-        ("page_token" = Option<String>, Query, description = "Opaque continuation cursor")
+        ("filter" = Option<String>, Query, description = "Resource filter: active (default), completed, stale, excluded"),
+        ("order_by" = Option<String>, Query, description = "Canonical ordering: position, title, created; last_activity for stale"),
+        ("sort" = Option<String>, Query, description = "Legacy alias of order_by; supplying both with different values is rejected"),
+        ("search" = Option<String>, Query, description = "Case-insensitive title search; unsupported for filter=stale"),
+        ("days" = Option<i64>, Query, description = "Stale age threshold in days (0-3650, default 30); only with filter=stale"),
+        ("page_size" = Option<i64>, Query, description = "1-200 rows per page (default 50, 200 for stale)"),
+        ("page_token" = Option<String>, Query, description = "Opaque continuation cursor bound to filter, search and order_by")
     ),
     responses(
-        (status = 200, description = "Owner-scoped active threads page", body = ThreadListResponse),
-        (status = 400, description = "Invalid sort or page token"),
+        (status = 200, description = "Owner-scoped threads page; stale rows keep the detail-shaped projection", body = ThreadListResult),
+        (status = 400, description = "Invalid filter, order_by, sort or page token"),
         (status = 401, description = "Not authenticated"),
-        (status = 422, description = "Invalid bounds or retired collection_id")
+        (status = 422, description = "Invalid bounds, unsupported parameter or retired collection_id")
     ),
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
 pub(crate) fn list_threads_documentation() {}
 
+<<<<<<< ours
+=======
+/// Standard resource Get for one owned Thread.
+#[utoipa::path(
+    get,
+    path = "/api/v2/threads/{thread_id}",
+    tag = "threads",
+    params(("thread_id" = i32, Path, description = "Owned Thread identifier")),
+    responses(
+        (status = 200, description = "Owner-scoped thread detail", body = ThreadDetailResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Thread not found or not owned by the reader")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub(crate) fn get_thread_v2_documentation() {}
+
+>>>>>>> theirs
 /// Documentation-only operation for the AIP-133 standard Create on the v2
 /// threads collection (#5702). The handler lives in `thread_lifecycle` and
 /// shares the legacy write path; only the URL and the `Location` response
@@ -1710,6 +1952,136 @@ mod tests {
     }
 
     #[test]
+    fn v2_list_query_defaults_to_owner_active_queue() {
+        let resolved = resolve_list_query(&ThreadListQuery::default()).expect("default query");
+        assert_eq!(resolved.filter, ThreadFilter::Active);
+        assert_eq!(resolved.order_by, "position");
+        assert_eq!(resolved.page_size, DEFAULT_PAGE_SIZE);
+        assert_eq!(resolved.days, 30);
+        assert_eq!(resolved.search, "");
+    }
+
+    #[test]
+    fn v2_list_query_accepts_document_filters_and_canonical_ordering() {
+        let completed = resolve_list_query(&ThreadListQuery {
+            filter: Some("completed".to_string()),
+            order_by: Some("created".to_string()),
+            ..ThreadListQuery::default()
+        })
+        .expect("completed query");
+        assert_eq!(completed.filter, ThreadFilter::Completed);
+        assert_eq!(completed.order_by, "created");
+
+        // `position` has no meaning off the active queue; the legacy reads used
+        // creation order. Preserve that mapping instead of changing the cursor.
+        let excluded = resolve_list_query(&ThreadListQuery {
+            filter: Some("excluded".to_string()),
+            sort: Some("position".to_string()),
+            ..ThreadListQuery::default()
+        })
+        .expect("excluded query");
+        assert_eq!(excluded.order_by, "created");
+
+        let stale = resolve_list_query(&ThreadListQuery {
+            filter: Some("stale".to_string()),
+            days: Some(60),
+            ..ThreadListQuery::default()
+        })
+        .expect("stale query");
+        assert_eq!(stale.filter, ThreadFilter::Stale);
+        assert_eq!(stale.order_by, "last_activity");
+        assert_eq!(stale.page_size, 200);
+        assert_eq!(stale.days, 60);
+    }
+
+    #[test]
+    fn v2_list_query_rejects_ambiguous_or_unsupported_parameters() {
+        let disagree = resolve_list_query(&ThreadListQuery {
+            order_by: Some("title".to_string()),
+            sort: Some("created".to_string()),
+            ..ThreadListQuery::default()
+        })
+        .unwrap_err();
+        assert_eq!(disagree.detail(), "order_by and sort disagree");
+
+        let unknown_filter = resolve_list_query(&ThreadListQuery {
+            filter: Some("archived".to_string()),
+            ..ThreadListQuery::default()
+        })
+        .unwrap_err();
+        assert_eq!(
+            unknown_filter.detail(),
+            "filter must be active, completed, stale or excluded"
+        );
+
+        let stale_search = resolve_list_query(&ThreadListQuery {
+            filter: Some("stale".to_string()),
+            search: Some("Batman".to_string()),
+            ..ThreadListQuery::default()
+        })
+        .unwrap_err();
+        assert_eq!(
+            stale_search.detail(),
+            "search is not supported for filter=stale"
+        );
+
+        let active_days = resolve_list_query(&ThreadListQuery {
+            days: Some(7),
+            ..ThreadListQuery::default()
+        })
+        .unwrap_err();
+        assert_eq!(active_days.detail(), "days is only valid for filter=stale");
+
+        let too_old = resolve_list_query(&ThreadListQuery {
+            filter: Some("stale".to_string()),
+            days: Some(MAX_STALE_DAYS + 1),
+            ..ThreadListQuery::default()
+        })
+        .unwrap_err();
+        assert_eq!(too_old.detail(), "days must be between 0 and 3650");
+
+        let stale_order = resolve_list_query(&ThreadListQuery {
+            filter: Some("stale".to_string()),
+            order_by: Some("title".to_string()),
+            ..ThreadListQuery::default()
+        })
+        .unwrap_err();
+        assert_eq!(
+            stale_order.detail(),
+            "order_by is not supported with this filter"
+        );
+
+        let too_large = resolve_list_query(&ThreadListQuery {
+            page_size: Some(MAX_PAGE_SIZE + 1),
+            ..ThreadListQuery::default()
+        })
+        .unwrap_err();
+        assert_eq!(too_large.detail(), "page_size must be between 1 and 200");
+
+        let retired = resolve_list_query(&ThreadListQuery {
+            collection_id: Some("1".to_string()),
+            ..ThreadListQuery::default()
+        })
+        .unwrap_err();
+        assert_eq!(retired.detail(), "collection_id is retired");
+    }
+
+    #[test]
+    fn v2_list_result_emits_stale_rows_inline() {
+        let stale = ThreadListResult::Stale(StaleThreadListResponse {
+            threads: Vec::new(),
+            next_page_token: None,
+            active_count: 0,
+            filtered_count: None,
+        });
+        let value = serde_json::to_value(stale).expect("serializable stale page");
+        assert_eq!(value["threads"], serde_json::json!([]));
+        assert_eq!(value["active_count"], 0);
+        assert!(value.get("next_page_token").is_some());
+        assert!(value.get("variant").is_none());
+    }
+
+    #[test]
     fn cursor_round_trip_binds_search_sort_and_execution() {
         let cursor = QueueCursor {
             sort: "position".to_string(),
@@ -1786,7 +2158,62 @@ mod tests {
         let operation = &document["paths"]["/api/v2/threads"]["get"];
         assert_eq!(operation["operationId"], "list_threads_documentation");
         let response = &operation["responses"]["200"]["content"]["application/json"]["schema"];
-        assert_eq!(response["$ref"], "#/components/schemas/ThreadListResponse");
+        assert_eq!(response["$ref"], "#/components/schemas/ThreadListResult");
+        let variants = document["components"]["schemas"]["ThreadListResult"]["oneOf"]
+            .as_array()
+            .expect("filter-specific response");
+        assert!(variants
+            .iter()
+            .any(|variant| { variant["$ref"] == "#/components/schemas/ThreadListResponse" }));
+        assert!(variants
+            .iter()
+            .any(|variant| { variant["$ref"] == "#/components/schemas/StaleThreadListResponse" }));
+        let names: Vec<&str> = operation["parameters"]
+            .as_array()
+            .expect("parameters")
+            .iter()
+            .map(|parameter| parameter["name"].as_str().expect("name"))
+            .collect();
+        for expected in ["filter", "order_by", "page_size", "page_token"] {
+            assert!(names.contains(&expected), "missing {expected} parameter");
+        }
+    }
+
+    #[test]
+    fn threads_openapi_documents_the_v2_detail_read() {
+        use utoipa::OpenApi;
+        let document = serde_json::to_value(ThreadsApi::openapi()).expect("threads OpenAPI");
+        let operation = &document["paths"]["/api/v2/threads/{thread_id}"]["get"];
+        assert_eq!(operation["operationId"], "get_thread_v2_documentation");
+        assert_eq!(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ThreadDetailResponse"
+        );
+        assert!(operation["responses"]["404"].is_object());
+    }
+
+    #[test]
+    fn threads_openapi_documents_the_v2_standard_create() {
+        use utoipa::OpenApi;
+        let document = serde_json::to_value(ThreadsApi::openapi()).expect("threads OpenAPI");
+        let operation = &document["paths"]["/api/v2/threads"]["post"];
+        assert_eq!(operation["operationId"], "create_thread_v2_documentation");
+        assert_eq!(
+            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ThreadCreateRequest"
+        );
+        assert_eq!(
+            operation["responses"]["201"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ThreadResponse"
+        );
+        assert!(
+            operation["description"]
+                .as_str()
+                .is_some_and(|description| description.contains("Location")),
+            "the 201 Location/name contract must be documented"
+        );
+        assert!(document["components"]["schemas"]["ThreadCreateRequest"].is_object());
+        assert!(document["components"]["schemas"]["ThreadResponse"].is_object());
     }
 
     #[test]

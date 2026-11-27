@@ -803,6 +803,13 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/threads",
             get(threads::list_threads).post(thread_lifecycle::create_thread_v2),
         )
+<<<<<<< ours
+=======
+        .route(
+            "/api/v2/threads/{thread_id}",
+            get(threads::get_thread_detail),
+        )
+>>>>>>> theirs
         .route(
             "/api/v1/threads/{thread_id}",
             get(threads::get_thread_detail),

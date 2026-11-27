@@ -42,9 +42,8 @@ test.describe('Auth Outage Recovery', () => {
    * button) that collides with the degraded overlay's locators.
    */
   function mockShellRequests(mockApi: MockApi): void {
+    // One canonical v2 collection covers active, completed and excluded reads.
     mockApi.get('/api/v2/threads').as('threads').replyAlways(200, { threads: [], next_page_token: null })
-    mockApi.get('/api/v1/threads/completed/threads').as('completedThreads').replyAlways(200, { threads: [], next_page_token: null })
-    mockApi.get('/api/v1/threads/excluded/threads').as('excludedThreads').replyAlways(200, { threads: [], next_page_token: null })
     mockApi.get('/api/v2/identity-inbox').as('identityInbox').replyAlways(200, { items: [], total: 0, offset: 0, limit: 50 })
     mockApi.get('/api/v2/reading-graph').as('readingGraph').replyAlways(200, {
       status: 'ok',

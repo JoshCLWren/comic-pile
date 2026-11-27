@@ -324,6 +324,7 @@ fn app() -> Router {
             post(native_dispatch),
         )
         .route("/api/v2/threads", get(native_dispatch))
+        .route("/api/v2/threads/{thread_id}", get(native_dispatch))
         .route("/api/v1/threads/{thread_id}", get(native_dispatch))
         .route("/api/v1/threads/{thread_id}", post(native_dispatch))
         .route("/api/v1/threads:getBlockingInfo", post(native_dispatch))

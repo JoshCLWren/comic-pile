@@ -158,6 +158,16 @@ function countRequests(calls: RecordedCall[], method: string, url: string): numb
   return calls.filter((call) => call.method === method && call.url === url).length
 }
 
+/** Count one canonical v2 thread collection filter by its documented query param. */
+function countThreadFilter(calls: RecordedCall[], filter: string): number {
+  return calls.filter(
+    (call) =>
+      call.method === 'GET'
+      && call.url === '/v2/threads'
+      && (filter === 'active' ? !call.params?.filter : call.params?.filter === filter),
+  ).length
+}
+
 const budgetNavigate = vi.fn()
 const budgetEnterRatingView = vi.fn()
 
@@ -611,13 +621,8 @@ describe('core route request budgets', () => {
   it('Queue page reads pending-roll state from the Roll bootstrap and never calls sessions/current (#4343)', async () => {
     const { calls, client } = createRequestRecorder((call) => {
       if (call.url === '/v2/threads') {
-        return { threads: queueThreads, next_page_token: null, active_count: 2 }
-      }
-      if (call.url === '/v1/threads/excluded/threads') {
-        return { threads: [], next_page_token: null, active_count: 0 }
-      }
-      if (call.url === '/v1/threads/completed/threads') {
-        return { threads: [], next_page_token: null, active_count: 0 }
+        const threads = call.params?.filter ? [] : queueThreads
+        return { threads, next_page_token: null, active_count: threads.length }
       }
       if (call.url === '/v2/reading-graph') return { status: 'ok' }
       if (call.url === '/v2/reading-sessions') return { session_id: 1, created: false }
@@ -725,10 +730,8 @@ describe('core route request budgets', () => {
   it('Queue row native reroll replaces Python snooze with one bounded refresh (#4589)', async () => {
     const { calls, client } = createRequestRecorder((call) => {
       if (call.url === '/v2/threads') {
-        return { threads: queueThreads, next_page_token: null, active_count: 2 }
-      }
-      if (call.url === '/v1/threads/excluded/threads') {
-        return { threads: [], next_page_token: null, active_count: 0 }
+        const threads = call.params?.filter ? [] : queueThreads
+        return { threads, next_page_token: null, active_count: threads.length }
       }
       if (call.url === '/v2/roll/offer') return { ...stubRollResponse }
       if (call.url === '/v2/reading-sessions') return { session_id: 1, created: false }
@@ -739,7 +742,7 @@ describe('core route request budgets', () => {
 
     render(renderSharedProbe(<QueueSnoozeBudgetProbe />))
     await waitFor(() => expect(queueSnoozeHandle).not.toBeNull())
-    await waitFor(() => expect(countRequests(calls, 'GET', '/v2/threads')).toBe(1))
+    await waitFor(() => expect(countThreadFilter(calls, 'active')).toBe(1))
     const coldLoads = calls.length
 
     await act(async () => {
@@ -759,9 +762,11 @@ describe('core route request budgets', () => {
     expect(countRequests(calls, 'GET', '/v1/sessions/current/')).toBe(0)
     expect(countRequests(calls, 'POST', '/v2/reading-sessions')).toBe(0)
     expect(countRequests(calls, 'GET', '/v2/roll/bootstrap')).toBe(0)
-    // One bounded queue-page refresh after the reset (cold + reconciled first page).
-    expect(countRequests(calls, 'GET', '/v2/threads')).toBe(2)
-    expect(countRequests(calls, 'GET', '/v1/threads/excluded/threads')).toBe(2)
+    // One bounded refresh of each canonical collection filter: the active
+    // queue page (cold + reconciled) and the excluded library page.
+    expect(countThreadFilter(calls, 'active')).toBe(2)
+    expect(countThreadFilter(calls, 'excluded')).toBe(2)
+    expect(calls.some((call) => call.url.startsWith('/v1/threads/excluded'))).toBe(false)
     // No other request classes entered the budget beyond the probed surface.
     expect(calls.length).toBeGreaterThan(coldLoads)
   })

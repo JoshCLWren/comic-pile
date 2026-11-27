@@ -167,9 +167,10 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
       .getByTestId('queue-thread-item')
       .filter({ hasText: pendingThreadName })
     await expect(threadItem).toBeVisible()
+    // The Queue and excluded reads are both canonical v2 collection filters
+    // now; one bounded refresh of each model means two v2 list requests.
     const before = {
-      queuePages: ledger.count('GET', '/api/v2/threads'),
-      excluded: ledger.count('GET', '/api/v1/threads/excluded/threads'),
+      threads: ledger.count('GET', '/api/v2/threads'),
     }
 
     // Arm the settle signal BEFORE the user action so the reconciliation
@@ -189,10 +190,11 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
     // handler-layer invalidation of the same key would trip these budgets.
     // The retired current-session read is never requested (#4343).
     expect(ledger.count('GET', '/api/v1/sessions/current/')).toBe(0)
-    expect(ledger.count('GET', '/api/v2/threads') - before.queuePages).toBe(1)
-    expect(
-      ledger.count('GET', '/api/v1/threads/excluded/threads') - before.excluded,
-    ).toBe(1)
+    expect(ledger.count('GET', '/api/v2/threads') - before.threads).toBe(2)
+    // No retired Thread read may be called by the Queue snooze path.
+    expect(ledger.count('GET', '/api/v1/threads/excluded/threads')).toBe(0)
+    expect(ledger.count('GET', '/api/v1/threads/completed/threads')).toBe(0)
+    expect(ledger.count('GET', '/api/v1/threads/stale')).toBe(0)
 
     // Mutation feedback stays reserved for failures.
     await expect(page.getByText(/failed to snooze thread/i).first()).not.toBeVisible()
