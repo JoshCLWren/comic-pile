@@ -150,7 +150,7 @@ function responseFor(method: string, path: string, query: CanonicalQuery) {
   if (path === '/api/v2/threads' || path === '/api/v1/threads/') {
     return { threads: [], next_page_token: null, total: 0 }
   }
-  if (path === '/api/v1/reading-order-groups/') return []
+  if (path === '/api/v2/readingOrderGroups') return []
   if (path === '/api/v2/reading-lists') {
     return [{ id: 7, name: 'List Seven', description: null, mode: 'strict', issue_count: 0, updated_at: '2026-08-12T00:00:00Z' }]
   }
@@ -193,9 +193,15 @@ const GET = (path: string, params: Record<string, string | number> = {}) =>
 
 const CONTINUITY_INDEX = GET('/api/v2/continuityPlans/')
 const THREADS_PAGE = GET('/api/v2/threads', { page_size: 100 })
+<<<<<<< HEAD
 const DEPENDENCY_GROUPS = GET('/api/v1/reading-order-groups/')
 const PLAN_READER = GET('/api/v2/continuityPlans/7/reader')
 const PLAN_DETAIL = GET('/api/v2/continuityPlans/7')
+=======
+const DEPENDENCY_GROUPS = GET('/api/v2/readingOrderGroups')
+const PLAN_READER = GET('/api/v2/continuity-plans/7/reader')
+const PLAN_DETAIL = GET('/api/v2/continuity-plans/7')
+>>>>>>> origin/main
 const PLAN_TAGS = GET('/api/v2/tags/effective/plans/7')
 const TAGS_CATALOG = GET('/api/v2/tags')
 const CUSTOM_LISTS = GET('/api/v2/reading-lists')
