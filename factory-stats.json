@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-27T14:07:56+00:00",
+  "generated_at": "2026-11-27T14:09:51+00:00",
   "models": [
     {
       "health": {
@@ -23765,7 +23765,7 @@
   },
   "counts_generated_at": "2026-11-27T13:16:05.205895+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-27T14:07:57Z",
+    "generated_at": "2026-11-27T14:09:52Z",
     "sources": {
       "nvidia": [
         "google/diffusiongemma-26b-a4b-it",
@@ -23787,8 +23787,8 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-27T14:07:57.115832+00:00",
-    "days_elapsed": 26.589,
+    "checked_at": "2026-11-27T14:09:52.405086+00:00",
+    "days_elapsed": 26.59,
     "days_in_month": 30.0,
     "days_left": 3.41,
     "in_use": true,
@@ -23806,31 +23806,31 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 60122965,
-        "organization": 60122965,
+        "database": 60198617,
+        "organization": 60198617,
         "owner_target": 50000000,
-        "projected_database": 67835908,
-        "projected_organization": 67835908,
-        "projected_share": 0.1357,
-        "share_used": 0.1202
+        "projected_database": 67918710,
+        "projected_organization": 67918710,
+        "projected_share": 0.1358,
+        "share_used": 0.1204
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 220812,
-        "organization": 220812,
+        "database": 220980,
+        "organization": 220980,
         "owner_target": 1000000,
-        "projected_database": 249139,
-        "projected_organization": 249139,
+        "projected_database": 249319,
+        "projected_organization": 249319,
         "projected_share": 0.0249,
         "share_used": 0.0221
       },
       "storage_bytes": {
         "allowance": 5000000000,
-        "database": 24801280,
-        "organization": 24801280,
+        "database": 24821760,
+        "organization": 24821760,
         "owner_target": 250000000,
-        "projected_database": 24801280,
-        "projected_organization": 24801280,
+        "projected_database": 24821760,
+        "projected_organization": 24821760,
         "projected_share": 0.005,
         "share_used": 0.005
       }
@@ -23846,7 +23846,7 @@
     "status": "warn"
   },
   "schema": {
-    "checked_at": "2026-11-27T14:07:59+00:00",
+    "checked_at": "2026-11-27T14:09:55+00:00",
     "code_version": 6,
     "last_upgrade": {
       "at": "2026-11-25T18:11:07+00:00",
@@ -24024,7 +24024,7 @@
     "stored_version": 6
   },
   "crashes": {
-    "generated_at": "2026-11-27T14:07:59Z",
+    "generated_at": "2026-11-27T14:09:55Z",
     "groups": [
       {
         "count": 5,
@@ -24146,7 +24146,7 @@
   },
   "ready": {
     "cycles": [],
-    "generated_at": "2026-11-27T14:05:55+00:00",
+    "generated_at": "2026-11-27T14:08:48+00:00",
     "items": [
       {
         "action": "merge-conflict",
@@ -24169,48 +24169,9 @@
     ]
   },
   "gh_usage": {
-    "generated_at": "2026-11-27T14:08:00Z",
+    "generated_at": "2026-11-27T14:09:56Z",
     "jobs": {
       "dispatch": [
-        {
-          "at": 1795787183,
-          "buckets": {
-            "reader": 11,
-            "workflow": 5
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 4285,
-            "reset": 1795789099
-          },
-          "cache_hits": 0,
-          "github": 16,
-          "label": "dispatch pr:5942",
-          "paginated": 4,
-          "top": [
-            [
-              "api GET repos/R/issues/N",
-              3
-            ],
-            [
-              "api GET repos/R/issues",
-              2
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ],
-            [
-              "api GET repos/R/pulls",
-              1
-            ],
-            [
-              "api GET repos/R/actions/runs",
-              1
-            ]
-          ],
-          "writes": 0
-        },
         {
           "at": 1795787289,
           "buckets": {
@@ -24639,48 +24600,48 @@
             ]
           ],
           "writes": 2
-        }
-      ],
-      "merge": [
+        },
         {
-          "at": 1795786104,
+          "at": 1795788528,
           "buckets": {
-            "reader": 18,
-            "workflow": 6
+            "reader": 93,
+            "workflow": 30
           },
           "budget": {
             "limit": 5000,
-            "remaining": 4691,
+            "remaining": 3517,
             "reset": 1795789099
           },
-          "cache_hits": 0,
-          "github": 24,
-          "label": "merge drain",
-          "paginated": 13,
+          "cache_hits": 2,
+          "github": 123,
+          "label": "dispatch roster",
+          "paginated": 30,
           "top": [
             [
-              "api GET repos/R/issues/N/comments paginate",
-              10
-            ],
-            [
               "api GET repos/R/issues",
-              2
+              18
             ],
             [
-              "api GET repos/R/pulls paginate",
-              2
+              "api GET repos/R/issues/N",
+              18
             ],
             [
-              "api GET repos/R/actions/workflows/ci.yml/runs",
-              2
+              "api GET repos/R/issues/N/comments paginate",
+              15
             ],
             [
-              "api GET repos/R/pulls",
-              1
+              "api GET repos/R/pulls/N",
+              13
+            ],
+            [
+              "api GET rate_limit",
+              10
             ]
           ],
-          "writes": 0
-        },
+          "writes": 10
+        }
+      ],
+      "merge": [
         {
           "at": 1795786297,
           "buckets": {
@@ -25106,6 +25067,45 @@
             [
               "api GET repos/R/actions/runs",
               1
+            ]
+          ],
+          "writes": 0
+        },
+        {
+          "at": 1795788528,
+          "buckets": {
+            "reader": 19,
+            "workflow": 10
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 3517,
+            "reset": 1795789099
+          },
+          "cache_hits": 0,
+          "github": 29,
+          "label": "merge drain",
+          "paginated": 14,
+          "top": [
+            [
+              "api GET repos/R/issues/N/comments paginate",
+              10
+            ],
+            [
+              "gh workflow run",
+              4
+            ],
+            [
+              "api GET repos/R/pulls paginate",
+              3
+            ],
+            [
+              "api GET repos/R/issues",
+              2
+            ],
+            [
+              "api GET repos/R/actions/workflows/ci.yml/runs",
+              2
             ]
           ],
           "writes": 0
