@@ -9014,6 +9014,25 @@
         ],
         "type": "object"
       },
+      "ManualCreatorCredit": {
+        "description": "One manual creator credit entry preserved on thread responses.",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "roles"
+        ],
+        "type": "object"
+      },
       "ManualDieRequest": {
         "oneOf": [
           {
@@ -10616,7 +10635,7 @@
           },
           "manual_creator_credits": {
             "items": {
-              "type": "object"
+              "$ref": "#/components/schemas/ManualCreatorCredit"
             },
             "type": "array"
           },
@@ -17653,7 +17672,7 @@
           },
           "manual_creator_credits": {
             "items": {
-              "type": "object"
+              "$ref": "#/components/schemas/ManualCreatorCredit"
             },
             "type": "array"
           },
@@ -17880,7 +17899,7 @@
           },
           "manual_creator_credits": {
             "items": {
-              "type": "object"
+              "$ref": "#/components/schemas/ManualCreatorCredit"
             },
             "type": "array"
           },

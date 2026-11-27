@@ -6452,6 +6452,11 @@ export interface components {
             password: string;
             username: string;
         };
+        /** @description One manual creator credit entry preserved on thread responses. */
+        ManualCreatorCredit: {
+            name: string;
+            roles: string[];
+        };
         ManualDieRequest: {
             /** Format: int32 */
             die: number;
@@ -6929,7 +6934,7 @@ export interface components {
             last_activity_at?: string | null;
             /** Format: double */
             last_rating?: number | null;
-            manual_creator_credits: Record<string, never>[];
+            manual_creator_credits: components["schemas"]["ManualCreatorCredit"][];
             /** Format: int32 */
             next_unread_issue_id?: number | null;
             next_unread_issue_number?: string | null;
@@ -9286,7 +9291,7 @@ export interface components {
             last_activity_at?: string | null;
             /** Format: double */
             last_rating?: number | null;
-            manual_creator_credits: Record<string, never>[];
+            manual_creator_credits: components["schemas"]["ManualCreatorCredit"][];
             /** Format: int32 */
             next_unread_issue_id?: number | null;
             next_unread_issue_number?: string | null;
@@ -9353,7 +9358,7 @@ export interface components {
             /** Format: int32 */
             issues_remaining: number;
             last_activity_at?: string | null;
-            manual_creator_credits: Record<string, never>[];
+            manual_creator_credits: components["schemas"]["ManualCreatorCredit"][];
             next_unread_issue_number?: string | null;
             notes?: string | null;
             queue_exclusion_group?: components["schemas"]["QueueExclusionGroupRef"] | null;
