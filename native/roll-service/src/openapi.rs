@@ -416,7 +416,7 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::dependency_groups::dependency_groups_v2_openapi())
         // #5709: canonical eligibility, batch explanations and reader-authored
         // connections are v2-only; the v1 diagnostics were retired outright.
-        .merge_from(crate::thread_ordering::thread_ordering_v2_openapi())        // #5710: canonical v2 reading-order-group collection CRUD; the retired
+        .merge_from(crate::thread_ordering::thread_ordering_v2_openapi()) // #5710: canonical v2 reading-order-group collection CRUD; the retired
         // v1 paths are no longer part of the deployed contract.
         .merge_from(crate::dependency_groups::reading_order_groups_v2_openapi());
     // The aggregate artifact is the deployed v2 runtime contract. The
