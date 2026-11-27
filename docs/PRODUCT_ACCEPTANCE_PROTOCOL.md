@@ -73,6 +73,9 @@ This protocol does not apply to ordinary implementation issues that have self-co
 
 Integrated parent product acceptance is human/interactive controlled. Autonomous factory workers may implement narrow children and produce evidence, but they do not select a parent PRD/epic as ordinary factory work and do not issue the deciding acceptance verdict.
 
+**Owner execution-boundary decision (2026-11-27):** Agents independently perform all safe engineering, investigations, local tests, read-only verification using already-authorized access, and evidence collection against approved contracts. Do not mark an entire task manual-only merely because one later action needs approval. Identify the specific gated action, required evidence, and actual missing authorization or capability; keep independently executable work selectable. A no-diff verification may complete only when its full criterion is actually verified through the existing trusted completion path; do not manufacture code changes or a PR. Coordination-only parents, unresolved product decisions, unavailable credentials, explicit reservations and destructive or otherwise specifically restricted operations retain their gates. Independent review, exact-head CI, deployed evidence, and parent acceptance safeguards remain unchanged; neither a merged child nor an agent's self-certification closes an integrated parent. Use existing scoped owners and respect issue-creation and lease rules. No new direct production database access. Ordinary non-destructive public CBL catalog ingestion (#4171) is authorized through existing trusted workflow credentials and gates; destructive cleanup and personal reader-data repairs require specific authorization. CI schema-fixture comparisons use disposable local PostgreSQL, not new production credentials (#4735). This decision does not alter session/undo behavior, Option E retirement gates or Muse operating permissions.
+
+
 ## Requirements
 
 ### For parent PRD/epic issues
