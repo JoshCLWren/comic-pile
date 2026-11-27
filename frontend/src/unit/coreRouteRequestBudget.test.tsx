@@ -488,6 +488,7 @@ describe('core route request budgets', () => {
       if (call.url === '/v2/issues/cards') {
         return { items: [] }
       }
+      if (call.url === '/v2/reading-graph') return { status: 'ok' }
       return {}
     })
     setDefaultHttpClient(client)
@@ -698,21 +699,16 @@ describe('core route request budgets', () => {
       await rollMoveHandle!.act('move-front')
     })
 
-    // The move mutation's queue-movement invalidation refetches the active
-    // bootstrap once. This probe seeds the cache instead of cold-loading, so
-    // this refresh is also the first resolution of the client-lifetime session
-    // (#4276): exactly one session POST and one bootstrap GET. The retired
-    // explicit `refetchBootstrap()` in `handleAction` used to append a second
-    // bootstrap refresh per move action.
+    // One queue-entry PATCH, with the scoped pool refreshed through its own
+    // query keys. No bootstrap aggregate and no session initialization (#4350).
     await waitFor(() =>
       expect(countRequests(calls, 'PATCH', `/v2/queue-entries/${poolThread.id}`)).toBe(1),
     )
-    await waitFor(() => expect(countRequests(calls, 'GET', '/v2/roll/bootstrap')).toBe(1))
     await drainSettledWork()
 
     expect(countRequests(calls, 'PATCH', `/v2/queue-entries/${poolThread.id}`)).toBe(1)
-    expect(countRequests(calls, 'GET', '/v2/roll/bootstrap')).toBe(1)
-    expect(countRequests(calls, 'POST', '/v2/readingSessions')).toBe(1)
+    expect(countRequests(calls, 'GET', '/v2/roll/bootstrap')).toBe(0)
+    expect(countRequests(calls, 'POST', '/v2/readingSessions')).toBe(0)
   })
 
   it('Queue row native reroll replaces Python snooze with one bounded refresh (#4589)', async () => {
