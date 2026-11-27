@@ -784,27 +784,6 @@ export interface ListThreadIssuesV2Request {
   path: {
     thread_id: number
   }
-<<<<<<< HEAD
-=======
-  query?: {
-    status?: string
-    page_size?: number
-    page_token?: string
-  }
-}
-
-export type ListThreadIssuesV2Response = components['schemas']['ThreadIssueListResponse']
-
-export interface ListThreadReadingOrdersRequest {
-  path: {
-    thread_id: number
-  }
-}
-
-export type ListThreadReadingOrdersResponse = components['schemas']['ThreadReadingOrdersResponse']
-
-export interface ListThreadsRequest {
->>>>>>> origin/main
   query?: {
     status?: string
     page_size?: number
