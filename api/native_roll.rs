@@ -771,7 +771,6 @@ fn app() -> Router {
         .route("/api/v2/readingOrderGroups", get(native_dispatch))
         .route("/api/v2/readingOrderGroups", post(native_dispatch))
         .route(
-<<<<<<< HEAD
             "/api/v2/readingOrderGroups/{group_id}",
             get(native_dispatch),
         )
@@ -784,24 +783,6 @@ fn app() -> Router {
             delete(native_dispatch),
         )
         .route(
-=======
-            "/api/v1/reading-order-groups/{group_id}",
-            get(native_dispatch),
-        )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}",
-            patch(native_dispatch),
-        )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}",
-            delete(native_dispatch),
-        )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}/detail",
-            get(native_dispatch),
-        )
-        .route(
->>>>>>> origin/main
             "/api/v1/reading-order-groups/{group_id}/order",
             put(native_dispatch),
         )
