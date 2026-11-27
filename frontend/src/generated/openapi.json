@@ -17021,41 +17021,6 @@
         ],
         "type": "object"
       },
-      "StaleThreadListResponse": {
-        "description": "Stale threads page returned by `filter=stale` on the v2 collection.\n\nStale rows are still active queue rows, but the legacy stale read projects\nthe full detail-shaped `ThreadResponse` instead of the queue-list item. The\ndistinction is kept on the wire so callers of the retired v1 stale read can\nmigrate without losing fields; counts stay zero/absent because the stale\nread never published a whole-queue total.",
-        "properties": {
-          "active_count": {
-            "description": "Always zero: a stale page is not a whole-active-queue read.",
-            "format": "int32",
-            "type": "integer"
-          },
-          "filtered_count": {
-            "description": "Always absent: the stale read never measured a filtered whole-queue total.",
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "next_page_token": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "threads": {
-            "items": {
-              "$ref": "#/components/schemas/NativeThreadResponse"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "threads",
-          "active_count"
-        ],
-        "type": "object"
-      },
       "StartupMetricsResponse": {
         "properties": {
           "startup_duration": {
@@ -18282,20 +18247,6 @@
         ],
         "type": "object"
       },
-<<<<<<< HEAD
-      "ThreadListResult": {
-        "description": "One v2 threads list response. The active/completed/excluded filters keep the\nqueue-list projection; the stale filter keeps the legacy detail-shaped\nprojection. Both are emitted inline (no envelope variant key).",
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/ThreadListResponse"
-          },
-          {
-            "$ref": "#/components/schemas/StaleThreadListResponse"
-          }
-        ]
-      },
-=======
->>>>>>> origin/main
       "ThreadPatchPrecondition": {
         "description": "Committed values a stale client read before issuing a Thread patch.",
         "properties": {
@@ -30343,34 +30294,7 @@
         "operationId": "list_threads_documentation",
         "parameters": [
           {
-            "description": "Resource filter: active (default), completed, stale, excluded",
-            "in": "query",
-            "name": "filter",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Canonical ordering: position, title, created; last_activity for stale",
-            "in": "query",
-            "name": "order_by",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Legacy alias of order_by; supplying both with different values is rejected",
-            "in": "query",
-            "name": "sort",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Case-insensitive title search; unsupported for filter=stale",
+            "description": "Case-insensitive title search",
             "in": "query",
             "name": "search",
             "required": false,
@@ -30379,17 +30303,16 @@
             }
           },
           {
-            "description": "Stale age threshold in days (0-3650, default 30); only with filter=stale",
+            "description": "position, title, or created",
             "in": "query",
-            "name": "days",
+            "name": "sort",
             "required": false,
             "schema": {
-              "format": "int64",
-              "type": "integer"
+              "type": "string"
             }
           },
           {
-            "description": "1-200 rows per page (default 50, 200 for stale)",
+            "description": "1-200 rows per page (default 50)",
             "in": "query",
             "name": "page_size",
             "required": false,
@@ -30399,7 +30322,7 @@
             }
           },
           {
-            "description": "Opaque continuation cursor bound to filter, search and order_by",
+            "description": "Opaque continuation cursor",
             "in": "query",
             "name": "page_token",
             "required": false,
@@ -30413,20 +30336,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ThreadListResult"
+                  "$ref": "#/components/schemas/ThreadListResponse"
                 }
               }
             },
-            "description": "Owner-scoped threads page; stale rows keep the detail-shaped projection"
+            "description": "Owner-scoped active threads page"
           },
           "400": {
-            "description": "Invalid filter, order_by, sort or page token"
+            "description": "Invalid sort or page token"
           },
           "401": {
             "description": "Not authenticated"
           },
           "422": {
-            "description": "Invalid bounds, unsupported parameter or retired collection_id"
+            "description": "Invalid bounds or retired collection_id"
           }
         },
         "security": [
@@ -30523,51 +30446,6 @@
           "threads"
         ]
       },
-<<<<<<< HEAD
-      "get": {
-        "operationId": "get_thread_v2_documentation",
-        "parameters": [
-          {
-            "description": "Owned Thread identifier",
-            "in": "path",
-            "name": "thread_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ThreadDetailResponse"
-                }
-              }
-            },
-            "description": "Owner-scoped thread detail"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Thread not found or not owned by the reader"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Standard resource Get for one owned Thread.",
-        "tags": [
-          "threads"
-        ]
-      },
-=======
->>>>>>> origin/main
       "patch": {
         "description": "Partially update an owned Thread (AIP-134). Omitted fields are preserved. When `update_mask` is supplied only its fields are applied; a masked field missing from the body is cleared. An `expected` precondition that no longer matches the committed row returns 409 with `detail.code = thread_edit_conflict` and the current values. Foreign or deleted Threads return 404, never 403.",
         "operationId": "patch_thread_documentation",
@@ -31077,8 +30955,6 @@
         ]
       }
     },
-<<<<<<< HEAD
-=======
     "/api/v2/threads/{thread_id}/readingOrders": {
       "get": {
         "description": "List the authenticated reader's reading orders that contain the given thread. A foreign or unknown thread is an empty collection.",
@@ -31126,7 +31002,6 @@
         ]
       }
     },
->>>>>>> origin/main
     "/api/v2/threads:checkDuplicates": {
       "post": {
         "description": "Advisory AIP-136 collection custom method: report existing volumes that may be the proposed series. Does not create a Thread. Results are owner-scoped, exclude a named thread, and are capped at five matches.",

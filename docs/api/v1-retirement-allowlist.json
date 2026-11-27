@@ -282,15 +282,10 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-<<<<<<< HEAD
-        "frontend/src/services/api-reading-orders.ts",
-        "frontend/src/unit/api-reading-orders.test.ts"
-=======
         "frontend/src/services/api-cbl-sources.ts",
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-graph.ts",
         "frontend/src/services/api-reading-orders.ts"
->>>>>>> origin/main
       ]
     },
     {
@@ -623,14 +618,6 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-<<<<<<< HEAD
-        "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-dependency-groups.ts",
-        "frontend/src/services/api-issues.ts",
-        "frontend/src/services/api-migration.ts",
-        "frontend/src/services/api-reading-orders.ts",
-=======
->>>>>>> origin/main
         "frontend/src/services/api-threads.ts"
       ]
     },
@@ -644,14 +631,10 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-<<<<<<< HEAD
-        "frontend/src/test/p0-snooze-unsnooze.spec.ts"
-=======
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/p0-auth-outage-recovery.spec.ts",
         "frontend/src/unit/api.test.ts",
         "frontend/src/unit/coreRouteRequestBudget.test.tsx"
->>>>>>> origin/main
       ]
     },
     {
@@ -664,16 +647,12 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-<<<<<<< HEAD
-        "frontend/src/test/p0-snooze-unsnooze.spec.ts"
-=======
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/p0-auth-outage-recovery.spec.ts",
         "frontend/src/test/p0-snooze-unsnooze.spec.ts",
         "frontend/src/unit/api.test.ts",
         "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
         "frontend/src/unit/coreRouteRequestBudget.test.tsx"
->>>>>>> origin/main
       ]
     },
     {
@@ -685,13 +664,9 @@
       "rollout_status": "pinned-404",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-<<<<<<< HEAD
-      "consumers": []
-=======
       "consumers": [
         "frontend/src/services/api-threads.ts"
       ]
->>>>>>> origin/main
     },
     {
       "method": "POST",
@@ -716,12 +691,8 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-<<<<<<< HEAD
-        "frontend/src/test/p0-snooze-unsnooze.spec.ts"
-=======
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts"
->>>>>>> origin/main
       ]
     },
     {
@@ -738,19 +709,11 @@
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
-<<<<<<< HEAD
-        "frontend/src/test/p0-snooze-unsnooze.spec.ts",
-        "frontend/src/unit/api-issues-coverage.test.ts",
-        "frontend/src/unit/api-issues.test.ts",
-        "frontend/src/unit/api.test.ts",
-        "frontend/src/unit/coreRouteRequestBudget.test.tsx"
-=======
         "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
         "frontend/src/unit/api-auth-failure-isolation.test.ts",
         "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
         "frontend/src/unit/api.test.ts"
->>>>>>> origin/main
       ]
     },
     {
@@ -768,19 +731,11 @@
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
-<<<<<<< HEAD
-        "frontend/src/test/p0-snooze-unsnooze.spec.ts",
-        "frontend/src/unit/api-issues-coverage.test.ts",
-        "frontend/src/unit/api-issues.test.ts",
-        "frontend/src/unit/api.test.ts",
-        "frontend/src/unit/coreRouteRequestBudget.test.tsx"
-=======
         "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
         "frontend/src/unit/api-auth-failure-isolation.test.ts",
         "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
         "frontend/src/unit/api.test.ts"
->>>>>>> origin/main
       ]
     },
     {
@@ -797,19 +752,11 @@
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
-<<<<<<< HEAD
-        "frontend/src/test/p0-snooze-unsnooze.spec.ts",
-        "frontend/src/unit/api-issues-coverage.test.ts",
-        "frontend/src/unit/api-issues.test.ts",
-        "frontend/src/unit/api.test.ts",
-        "frontend/src/unit/coreRouteRequestBudget.test.tsx"
-=======
         "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
         "frontend/src/unit/api-auth-failure-isolation.test.ts",
         "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
         "frontend/src/unit/api.test.ts"
->>>>>>> origin/main
       ]
     },
     {
@@ -826,19 +773,11 @@
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
-<<<<<<< HEAD
-        "frontend/src/test/p0-snooze-unsnooze.spec.ts",
-        "frontend/src/unit/api-issues-coverage.test.ts",
-        "frontend/src/unit/api-issues.test.ts",
-        "frontend/src/unit/api.test.ts",
-        "frontend/src/unit/coreRouteRequestBudget.test.tsx"
-=======
         "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
         "frontend/src/unit/api-auth-failure-isolation.test.ts",
         "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
         "frontend/src/unit/api.test.ts"
->>>>>>> origin/main
       ]
     },
     {
@@ -994,15 +933,7 @@
       "rollout_status": "slice-open",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-<<<<<<< HEAD
-      "consumers": [
-        "frontend/src/services/api-reading-orders.ts",
-        "frontend/src/unit/api-reading-orders.test.ts",
-        "frontend/src/unit/api.test.ts"
-      ]
-=======
       "consumers": []
->>>>>>> origin/main
     },
     {
       "method": "POST",
