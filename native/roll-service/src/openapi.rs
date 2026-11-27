@@ -414,12 +414,9 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         // retired `/api/v1` aliases were unmounted. Publish them here so the
         // generated frontend client stays aligned with the live ingress.
         .merge_from(crate::dependency_groups::dependency_groups_v2_openapi())
-<<<<<<< HEAD
         // #5709: canonical eligibility, batch explanations and reader-authored
         // connections are v2-only; the v1 diagnostics were retired outright.
         .merge_from(crate::thread_ordering::thread_ordering_v2_openapi())
-=======
->>>>>>> origin/main
         // #5710: canonical v2 reading-order-group collection CRUD; the retired
         // v1 paths are no longer part of the deployed contract.
         .merge_from(crate::dependency_groups::reading_order_groups_v2_openapi());
@@ -485,8 +482,6 @@ mod tests {
         );
     }
 
-<<<<<<< HEAD
-=======
     /// #5716: the canonical preview is an AIP-136 stateless collection custom
     /// method on the lowerCamelCase `seriesMappings` collection. It must not be
     /// published as a v1 same-path operation in the v2 contract, and it must
@@ -528,7 +523,6 @@ mod tests {
         );
     }
 
->>>>>>> origin/main
     /// The issue read-state and reader-context operations moved from their
     /// `/api/v1/issues/{id}:action` URLs to v2 resources. Every method must stay
     /// in both the domain document and the aggregate runtime contract with its
