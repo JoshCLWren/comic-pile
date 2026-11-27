@@ -779,16 +779,13 @@ async fn completed_page(
             encode_cursor(&QueueCursor {
                 sort: sort.to_string(),
                 search,
-                values: match sort {
-                    "title" => vec![last.title.clone(), last.id.to_string()],
-                    _ => vec![
-                        last.created_at
-                            .strip_suffix('Z')
-                            .map(|value| format!("{value}+00:00"))
-                            .unwrap_or_else(|| last.created_at.clone()),
-                        last.id.to_string(),
-                    ],
-                },
+                values: vec![
+                    last.created_at
+                        .strip_suffix('Z')
+                        .map(|value| format!("{value}+00:00"))
+                        .unwrap_or_else(|| last.created_at.clone()),
+                    last.id.to_string(),
+                ],
                 execution: "completed".to_string(),
             })
         })
