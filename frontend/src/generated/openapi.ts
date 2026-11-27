@@ -382,23 +382,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/issue-identity/cbl-sources/compare": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Documentation-only operation for CBL source comparison. */
-        post: operations["compare_cbl_sources_documentation"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/issue-identity/cbl-sources/folders": {
         parameters: {
             query?: never;
@@ -476,23 +459,6 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["preview_cbl_reading_graph_api_v1_issue_identity_cbl__list_id__reading_graph_preview_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Documentation-only operation for reading-list CBL candidates. */
-        get: operations["find_cbl_candidates_for_reading_list_documentation"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1455,6 +1421,23 @@ export interface paths {
         put?: never;
         /** Documentation-only operation for the mounted v2 reset-password handler. */
         post: operations["reset_password_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/cblSources:compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for CBL source comparison (v2, #5713). */
+        post: operations["compare_cbl_sources_v2_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2946,6 +2929,23 @@ export interface paths {
             cookie?: never;
         };
         get: operations["reading_plan_sync_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/readingLists/{list_id}/cblCandidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for reading-list CBL candidates (v2, #5713). */
+        get: operations["find_cbl_candidates_for_reading_list_v2_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -10826,42 +10826,6 @@ export interface operations {
             };
         };
     };
-    compare_cbl_sources_documentation: {
-        parameters: {
-            query?: {
-                /** @description Maximum ranked candidates, 1-100 (default 50) */
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CblSourceComparisonRequest"];
-            };
-        };
-        responses: {
-            /** @description Ranked coverage comparison */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CblSourceComparisonResponse"];
-                };
-            };
-            /** @description Request or query failed validation */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ValidationErrorResponse"];
-                };
-            };
-        };
-    };
     list_cbl_source_folders: {
         parameters: {
             query?: never;
@@ -11091,48 +11055,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    find_cbl_candidates_for_reading_list_documentation: {
-        parameters: {
-            query?: {
-                /** @description Maximum ranked candidates, 1-100 (default 50) */
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                /** @description Owned custom CBL list identifier */
-                list_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Reading-list gaps and ranked CBL candidates */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CblReadingListCandidatesResponse"];
-                };
-            };
-            /** @description Custom CBL not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Query failed validation */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ValidationErrorResponse"];
-                };
             };
         };
     };
@@ -13443,6 +13365,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    compare_cbl_sources_v2_documentation: {
+        parameters: {
+            query?: {
+                /** @description Maximum ranked candidates, 1-100 (default 50) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CblSourceComparisonRequest"];
+            };
+        };
+        responses: {
+            /** @description Ranked coverage comparison */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CblSourceComparisonResponse"];
+                };
+            };
+            /** @description Request or query failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
+                };
             };
         };
     };
@@ -17945,6 +17903,48 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    find_cbl_candidates_for_reading_list_v2_documentation: {
+        parameters: {
+            query?: {
+                /** @description Maximum ranked candidates, 1-100 (default 50) */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Owned custom CBL list identifier */
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reading-list gaps and ranked CBL candidates */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CblReadingListCandidatesResponse"];
+                };
+            };
+            /** @description Custom CBL not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Query failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
+                };
             };
         };
     };
