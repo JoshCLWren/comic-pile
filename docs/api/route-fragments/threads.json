@@ -3,7 +3,7 @@
   "owned_path_patterns": [
     "^/api/v1/threads(?::.*|/.*)?$",
     "^/api/threads(?:/.*)?$",
-    "^/api/v2/threads(?:/.*)?$"
+    "^/api/v2/threads(?::.*|/.*)?$"
   ],
   "defaults": {
     "runtime": "python-fastapi",
@@ -117,6 +117,71 @@
       "owning_issue": 4841
     },
     {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/threads/{thread_id}/dependencies",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/threads/[^/]+/dependencies$",
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts"
+      ],
+      "owning_issue": 5709
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/threads/{thread_id}/issueDependencies",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/threads/[^/]+/issueDependencies$",
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts"
+      ],
+      "owning_issue": 5709
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/threads/{thread_id}/eligibility",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/threads/[^/]+/eligibility$",
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts"
+      ],
+      "owning_issue": 5709
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/threads:explainEligibility",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/threads:explainEligibility$",
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts"
+      ],
+      "owning_issue": 5709
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/threads/{thread_id}/connections",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/threads/[^/]+/connections$",
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts"
+      ],
+      "owning_issue": 5709
+    },
+    {
       "bucket": "unversioned_operations",
       "method": "GET",
       "path": "/api/threads/{thread_id}",
@@ -205,17 +270,6 @@
     {
       "bucket": "v1_operations",
       "method": "GET",
-      "path": "/api/v1/threads/{thread_id}/connected",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/threads/[^/]+/connected$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "GET",
       "path": "/api/v1/threads/{thread_id}/dependency-order-check",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/threads/[^/]+/dependency\\-order\\-check$",
@@ -275,17 +329,6 @@
     {
       "bucket": "v1_operations",
       "method": "POST",
-      "path": "/api/v1/threads/{thread_id}:getBlockingInfo",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/threads/[^/]+:getBlockingInfo$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "POST",
       "path": "/api/v1/threads/{thread_id}:migrateToIssues",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/threads/[^/]+:migrateToIssues$",
@@ -322,12 +365,9 @@
       "path": "/api/v1/threads:getBlockingInfo",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/threads:getBlockingInfo$",
-      "consumers": [
-        "frontend/src/services/api-dependencies.ts"
-      ],
       "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
+      "status": "retired",
+      "owning_issue": 5709,
       "exclude_from_inventory": true
     }
   ]
