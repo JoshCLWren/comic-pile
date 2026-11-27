@@ -114,7 +114,12 @@ async fn reactivate_thread(
     operation_id = "reactivate_thread_v2",
     request_body = ReactivateThreadRequest,
     responses(
-        (status = 200, description = "Completed thread reactivated with the requested unread issues", body = thread_lifecycle::ThreadResponse),
+        // Reuse the canonical typed `ThreadResponse` declared by the thread
+        // issue family. The lifecycle DTO derives the same component name from
+        // a raw `serde_json::Value`, which would emit `{}` for
+        // `manual_creator_credits` and erase the frozen array-of-objects wire
+        // type from the generated client (#5704 review finding).
+        (status = 200, description = "Completed thread reactivated with the requested unread issues", body = crate::thread_issues::ThreadResponse),
         (status = 400, description = "Thread is not completed"),
         (status = 404, description = "Thread not found for this reader"),
         (status = 422, description = "Validation failed"),
@@ -172,7 +177,17 @@ mod tests {
         let operation = &document["paths"]["/api/v2/threads/{thread_id}:reactivate"]["post"];
         assert_eq!(operation["operationId"], "reactivate_thread_v2");
         assert!(operation["responses"]["200"].is_object());
+        assert_eq!(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ThreadResponse"
+        );
         assert!(document["components"]["schemas"]["ReactivateThreadRequest"].is_object());
+        // The canonical component keeps the frozen Python field type: an array
+        // of creator-credit objects, never an untyped `{}` schema.
+        let credits =
+            &document["components"]["schemas"]["ThreadResponse"]["properties"]["manual_creator_credits"];
+        assert_eq!(credits["type"], "array");
+        assert!(credits["items"].is_object());
     }
 
     /// The regeneration command for this artifact lives in `native/contracts/README.md`.
