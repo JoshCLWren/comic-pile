@@ -687,6 +687,13 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
             post(continuity_plans_project_preview::preview_plan_projection_handler),
         )
+        // #5715: canonical AIP-136 stateless resource custom method. The v1
+        // preview alias stays mounted only until production proof retires it;
+        // no new caller may use it.
+        .route(
+            "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection",
+            post(continuity_plans_project_preview::preview_reading_order_projection_v2),
+        )
         .route(
             "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
             get(issue_identity_adoption_preview::api_cbl_adoption_preview_handler),
@@ -905,6 +912,12 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/threads/{thread_id}/reading-orders",
             get(thread_ordering::get_thread_reading_orders),
+        )
+        // #5715: canonical AIP-122 collection spelling for the same
+        // owner-scoped read. The v1 alias remains only for legacy callers.
+        .route(
+            "/api/v2/threads/{thread_id}/readingOrders",
+            get(thread_ordering::get_thread_reading_orders_v2),
         )
         .route(
             "/api/v1/threads/completed/threads",

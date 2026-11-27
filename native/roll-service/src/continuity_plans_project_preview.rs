@@ -438,6 +438,46 @@ pub async fn preview_plan_projection_handler(
     }))
 }
 
+// ---------------------------------------------------------------------------
+// POST /api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection
+// ---------------------------------------------------------------------------
+
+/// Canonical v2 entry point: an AIP-136 stateless resource custom method.
+///
+/// It shares the read-only implementation with the retained v1 alias, so the
+/// wire response, owner scoping, validation and deterministic conflict set
+/// stay identical. Preview recomputes from the persisted plan JSON on every
+/// call and writes no state; the durable confirmation remains
+/// `POST /api/v2/continuity-plans/{plan_id}/reading-orders/project`, which
+/// revalidates the current plan under the continuity-graph lock.
+pub async fn preview_reading_order_projection_v2(
+    state: State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    plan_id: Result<Path<String>, PathRejection>,
+    body: Bytes,
+) -> Result<Json<ReadingOrderProjectPreviewResponse>, PreviewError> {
+    preview_plan_projection_handler(state, user, plan_id, body).await
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection",
+    operation_id = "preview_reading_order_projection",
+    tag = "reading-orders",
+    description = "Stateless AIP-136 custom method: deterministically preview how a continuity plan would project into a reading order. No plan, reading order or item is written; confirmation is a separate durable v2 operation that revalidates the plan.",
+    request_body = ReadingOrderProjectPreviewRequest,
+    params(("plan_id" = i64, Path, description = "Continuity plan id")),
+    responses(
+        (status = 200, description = "Deterministic projection preview", body = ReadingOrderProjectPreviewResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Plan or reading order not found"),
+        (status = 409, description = "Malformed plan"),
+        (status = 422, description = "Validation failed"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+pub fn preview_reading_order_projection_v2_documentation() {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
