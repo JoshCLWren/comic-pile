@@ -253,6 +253,36 @@ export interface CBLOverlapDecision {
   choice: 'protect_order' | 'continue_series'
 }
 
+/** Canonical AIP-122 collection segments for the shared CBL catalog (#5712). */
+const CBL_SOURCES_PATH = '/v2/cblSources'
+const CBL_OCCURRENCES_PATH = '/v2/cblOccurrences'
+
+/**
+ * Build the opaque continuation cursor for a requested one-based page.
+ *
+ * The server issues the same shape in `next_page_token` and rejects a token
+ * whose filter/ordering/page size no longer matches the request. Encoding the
+ * initial cursor here lets the browser keep its deep-linkable numeric page
+ * position without sending a non-canonical `page=` parameter.
+ */
+function encodeSourcePageToken(
+  page: number,
+  filter: string,
+  orderBy: string,
+  pageSize: number,
+): string {
+  const payload = JSON.stringify({ p: page, f: filter, o: orderBy, s: pageSize })
+  return btoa(payload).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+/** Fold the browser's folder/search position into one canonical `filter`. */
+function sourceFilter(options: { folder?: string; query?: string }): string {
+  const query = options.query?.trim()
+  if (query) return `q:${query}`
+  const folder = options.folder?.trim()
+  return folder ? `folder:${folder}` : ''
+}
+
 /**
  * Build the CBL source service bound to an HTTP client.
  *
@@ -300,33 +330,47 @@ export function createCblSourcesApi(client: HttpClient) {
     }
   }
   return {
-    discover: (query: string, limit = 25) =>
-      client.get<CBLSourceListDiscoveryItem[]>('/v1/issue-identity/cbl-sources', {
-        params: { q: query, limit },
-      }),
+    /**
+     * Discover shared sources for the Add-material picker. The canonical List
+     * collection returns a bounded page; callers receive only its items so the
+     * existing picker contract stays an array.
+     */
+    discover: async (query: string, limit = 25) => {
+      const page = await client.get<CBLCatalogBrowsePage>(CBL_SOURCES_PATH, {
+        params: {
+          filter: query.trim() ? `q:${query.trim()}` : '',
+          order_by: 'name',
+          page_size: limit,
+        },
+      })
+      return page.items as CBLSourceListDiscoveryItem[]
+    },
     /**
      * Read one page of the shared CBL catalog.
      *
      * A blank query browses the immediate contents of `folder` (root when
      * omitted). A non-blank query searches names and source paths across the
-     * whole catalog, ignoring folder scope. Pages are one-based and bounded by
-     * the API at 100 items, while `total` and `total_pages` describe the whole
-     * matching set so the browser can page beyond the first 100 sources.
+     * whole catalog, ignoring folder scope. The one-based browser position is
+     * carried as an opaque `page_token`; the API bounds pages at 100 items and
+     * `total`/`total_pages` still describe the whole matching set.
      */
     browse: (options: { folder?: string; query?: string; page?: number; pageSize?: number }) => {
-      const query = options.query?.trim()
-      return client.get<CBLCatalogBrowsePage>('/v1/issue-identity/cbl-sources/browse', {
-        params: {
-          folder: options.folder ?? '',
-          q: query ? query : undefined,
-          page: options.page ?? 1,
-          page_size: options.pageSize,
-        },
-      })
+      const page = options.page ?? 1
+      const pageSize = options.pageSize ?? 50
+      const filter = sourceFilter(options)
+      const params: Record<string, string | number> = {
+        filter,
+        order_by: 'name',
+        page_size: pageSize,
+      }
+      if (page > 1) {
+        params.page_token = encodeSourcePageToken(page, filter, 'name', pageSize)
+      }
+      return client.get<CBLCatalogBrowsePage>(CBL_SOURCES_PATH, { params })
     },
     /** Read one shared source list and its ordered occurrences (read-only). */
     detail: (listId: number, options?: { offset?: number; limit?: number }) =>
-      client.get<CBLSourceListDetail>(`/v1/issue-identity/cbl-sources/${listId}`, {
+      client.get<CBLSourceListDetail>(`${CBL_SOURCES_PATH}/${listId}`, {
         params: options,
       }),
     /** Find every shared source occurrence that holds one exact Comic Vine issue ID. */
@@ -334,10 +378,12 @@ export function createCblSourcesApi(client: HttpClient) {
       comicvineIssueId: string,
       options?: { offset?: number; limit?: number },
     ) =>
-      client.get<CBLComicvineOccurrencePage>(
-        `/v1/issue-identity/cbl-sources/by-comicvine-issue/${encodeURIComponent(comicvineIssueId)}`,
-        { params: options },
-      ),
+      client.get<CBLComicvineOccurrencePage>(CBL_OCCURRENCES_PATH, {
+        params: {
+          filter: `comicvine_issue_id:${comicvineIssueId}`,
+          ...options,
+        },
+      }),
     /** Rank shared sources by distinct coverage and relative order. */
     compare: (comicvineIssueIds: string[], limit = 50) =>
       client.post<CBLSourceComparisonResponse>(
