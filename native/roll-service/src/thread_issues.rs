@@ -1249,6 +1249,171 @@ pub async fn list_thread_issue_creators(
 }
 
 // ---------------------------------------------------------------------------
+// GET /api/v2/threads/{thread_id}/creatorCredits (#5706)
+// ---------------------------------------------------------------------------
+
+const DEFAULT_CREDIT_PAGE_SIZE: i64 = 100;
+const MAX_CREDIT_PAGE_SIZE: i64 = 100;
+
+/// One raw credit row from the set-based projection query.
+#[derive(Debug, Deserialize)]
+struct CreditRow {
+    issue_id: i32,
+    person_credits: Option<String>,
+    creator_credits: Option<String>,
+}
+
+/// One bounded CTE over confirmed ComicVine issue identities: a total count and
+/// the requested page of issue ids. No per-issue SQL or provider fan-out; the
+/// owner check below is the only other statement.
+const THREAD_CREATOR_CREDITS_SQL: &str = "
+WITH matched AS (
+    SELECT DISTINCT ON (i.id) i.id AS issue_id,
+           (ei.metadata_json::jsonb -> 'person_credits')::text AS person_credits,
+           (ei.metadata_json::jsonb -> 'creator_credits')::text AS creator_credits
+    FROM issues i
+    JOIN issue_external_identity_mappings iem ON iem.issue_id = i.id
+    JOIN external_identities ei ON ei.id = iem.external_identity_id
+    WHERE i.thread_id = $1 AND iem.status = 'confirmed'
+      AND ei.provider = 'comicvine' AND ei.entity_type = 'issue'
+    ORDER BY i.id, iem.confidence DESC NULLS LAST, ei.id
+), totals AS (
+    SELECT count(*)::bigint AS total_count FROM matched
+), paged AS (
+    SELECT m.issue_id, m.person_credits, m.creator_credits
+    FROM matched m
+    WHERE ($2::integer IS NULL OR m.issue_id > $2)
+    ORDER BY m.issue_id
+    LIMIT $3
+)
+SELECT totals.total_count,
+       COALESCE((SELECT jsonb_agg(to_jsonb(p) ORDER BY p.issue_id)::text FROM paged p), '[]')
+FROM totals
+";
+
+fn credit_validation_failed() -> ApiError {
+    ApiError::Unprocessable("Validation failed".into())
+}
+
+fn decode_credit_cursor(token: &str) -> Result<i32, ApiError> {
+    token
+        .parse::<i32>()
+        .map_err(|_| ApiError::BadRequest("Invalid page_token format".into()))
+}
+
+fn parse_credit_query(raw: Option<&str>) -> Result<(i64, Option<String>), ApiError> {
+    let mut page_size = DEFAULT_CREDIT_PAGE_SIZE;
+    let mut page_token: Option<String> = None;
+    let mut seen_page_size = false;
+    let mut seen_page_token = false;
+
+    if let Some(raw) = raw {
+        // RawQuery is not form-decoded; decode exactly as axum's Query would.
+        for (key, value) in form_urlencoded::parse(raw.as_bytes()) {
+            match key.as_ref() {
+                "page_size" => {
+                    if seen_page_size {
+                        return Err(credit_validation_failed());
+                    }
+                    seen_page_size = true;
+                    let parsed = value.parse::<i64>().map_err(|_| credit_validation_failed())?;
+                    if !(1..=MAX_CREDIT_PAGE_SIZE).contains(&parsed) {
+                        return Err(credit_validation_failed());
+                    }
+                    page_size = parsed;
+                }
+                "page_token" => {
+                    if seen_page_token {
+                        return Err(credit_validation_failed());
+                    }
+                    seen_page_token = true;
+                    page_token = Some(value.into_owned());
+                }
+                _ => {}
+            }
+        }
+    }
+    Ok((page_size, page_token))
+}
+
+/// `GET /api/v2/threads/{thread_id}/creatorCredits` — a bounded, paginated
+/// issue-credit projection over the caller's own thread (#5706).
+///
+/// The response keeps the legacy `{thread_id, issues: [{issue_id, creators}]}`
+/// shape, so expanding a thread's issue list still needs one bulk request
+/// instead of one provider-intelligence request per issue. Credits are read
+/// only from stored ComicVine metadata: no refresh, no reading-eligibility
+/// veto, and no unmapped-issue placeholder rows.
+pub async fn list_thread_creator_credits(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    thread_id: Result<Path<String>, PathRejection>,
+    raw_query: axum::extract::RawQuery,
+) -> Result<Json<ThreadCreatorCreditsResponse>, ApiError> {
+    let Path(thread_id) = thread_id.map_err(|_| credit_validation_failed())?;
+    let thread_id: i32 = thread_id.parse().map_err(|_| credit_validation_failed())?;
+    let (page_size, page_token) = parse_credit_query(raw_query.0.as_deref())?;
+    let cursor = page_token
+        .as_deref()
+        .filter(|token| !token.is_empty())
+        .map(decode_credit_cursor)
+        .transpose()?;
+
+    let connection = db::checkout(&state).await?;
+    let owned = connection
+        .query_opt(
+            "SELECT 1 FROM threads WHERE id = $1 AND user_id = $2",
+            &[&thread_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    if owned.is_none() {
+        return Err(thread_not_found(thread_id));
+    }
+
+    let row = connection
+        .query_one(
+            THREAD_CREATOR_CREDITS_SQL,
+            &[&thread_id, &cursor, &(page_size + 1)],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let total_count: i64 = row.get(0);
+    let payload: String = row.get(1);
+    let mut rows: Vec<CreditRow> = serde_json::from_str(&payload)
+        .map_err(|_| ApiError::Internal("Internal Server Error".into()))?;
+    let has_more = rows.len() > page_size as usize;
+    rows.truncate(page_size as usize);
+    let next_page_token = if has_more {
+        rows.last().map(|row| row.issue_id.to_string())
+    } else {
+        None
+    };
+
+    let mut issues = Vec::new();
+    for row in rows {
+        let person = parse_credit_array(row.person_credits);
+        let creator = parse_credit_array(row.creator_credits);
+        let mut creators = merge_creators(person.as_ref(), creator.as_ref());
+        creators.truncate(MAX_BULK_CREDITS_PER_ISSUE);
+        if creators.is_empty() {
+            continue;
+        }
+        issues.push(IssueCreatorsEntry {
+            issue_id: row.issue_id,
+            creators,
+        });
+    }
+    Ok(Json(ThreadCreatorCreditsResponse {
+        thread_id,
+        issues,
+        total_count,
+        page_size,
+        next_page_token,
+    }))
+}
+
+// ---------------------------------------------------------------------------
 // :migrateToIssues
 // ---------------------------------------------------------------------------
 
@@ -1729,6 +1894,32 @@ pub fn create_issues_documentation() {}
 )]
 #[allow(dead_code)]
 pub fn creators_documentation() {}
+
+/// Documentation-only operation for the canonical v2 thread-scoped credit
+/// projection (#5706). The v1 bulk creator URL stays on the legacy response;
+/// this v2 operation adds bounded pagination around the same stored credits.
+#[utoipa::path(
+    get,
+    path = "/api/v2/threads/{thread_id}/creatorCredits",
+    tag = "issues",
+    operation_id = "thread_creator_credits",
+    params(
+        ("thread_id" = i32, Path, description = "Owned Thread identifier"),
+        ("page_size" = Option<i64>, Query, description = "1-100 credited issues (default 100)"),
+        ("page_token" = Option<String>, Query, description = "issue_id continuation cursor")
+    ),
+    responses(
+        (status = 200, description = "Paginated stored creator credits per mapped issue", body = ThreadCreatorCreditsResponse),
+        (status = 400, description = "Invalid page token"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Thread not found"),
+        (status = 422, description = "Validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn creator_credits_documentation() {}
 
 /// Documentation-only operation for issue reordering.
 #[utoipa::path(
