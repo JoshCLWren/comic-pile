@@ -9014,25 +9014,6 @@
         ],
         "type": "object"
       },
-      "ManualCreatorCredit": {
-        "description": "One manual creator credit entry preserved on thread responses.",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "roles": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "name",
-          "roles"
-        ],
-        "type": "object"
-      },
       "ManualDieRequest": {
         "oneOf": [
           {
@@ -10633,12 +10614,7 @@
               "null"
             ]
           },
-          "manual_creator_credits": {
-            "items": {
-              "$ref": "#/components/schemas/ManualCreatorCredit"
-            },
-            "type": "array"
-          },
+          "manual_creator_credits": {},
           "next_unread_issue_id": {
             "format": "int32",
             "type": [
@@ -17670,12 +17646,7 @@
               "null"
             ]
           },
-          "manual_creator_credits": {
-            "items": {
-              "$ref": "#/components/schemas/ManualCreatorCredit"
-            },
-            "type": "array"
-          },
+          "manual_creator_credits": {},
           "next_unread_issue_id": {
             "format": "int32",
             "type": [
@@ -17897,12 +17868,7 @@
               "null"
             ]
           },
-          "manual_creator_credits": {
-            "items": {
-              "$ref": "#/components/schemas/ManualCreatorCredit"
-            },
-            "type": "array"
-          },
+          "manual_creator_credits": {},
           "next_unread_issue_number": {
             "type": [
               "string",

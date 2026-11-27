@@ -377,91 +377,9 @@ impl utoipa::Modify for NativeSecurityAddon {
 pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
     let mut openapi = NativeSurfaceApi::openapi()
         .merge_from(crate::queue::QueueApi::openapi())
-        .merge_from(crate::threads::ThreadsApi::openapi());
-
-    // Preserve the existing canonical ThreadResponse component before merging
-    // the v2 thread custom-method surface. Merging ThreadsV2Api pulls in
-    // `thread_lifecycle::ThreadResponse` via utoipa path references; if that
-    // ToSchema-derived component is emitted with an empty manual_creator_credits
-    // schema, it overwrites the previously typed canonical component. Snapshot
-    // and restore so the aggregate/runtime contract keeps the canonical shape.
-    let canonical_thread_response = openapi
-        .components
-        .as_ref()
-        .and_then(|c| c.schemas.get("ThreadResponse").cloned());
-    let canonical_native_thread_response = openapi
-        .components
-        .as_ref()
-        .and_then(|c| c.schemas.get("NativeThreadResponse").cloned());
-
-    openapi = openapi
+        .merge_from(crate::threads::ThreadsApi::openapi())
         .merge_from(crate::threads_v2::ThreadsV2Api::openapi())
-        .merge_from(crate::issue_service::IssueApi::openapi());
-
-    if let Some(components) = openapi.components.as_mut() {
-        if let Some(schema) = canonical_thread_response {
-            components
-                .schemas
-                .insert("ThreadResponse".to_string(), schema);
-        }
-        if let Some(schema) = canonical_native_thread_response {
-            components
-                .schemas
-                .insert("NativeThreadResponse".to_string(), schema);
-        }
-        // If no canonical component existed before merge, ensure the merged
-        // component has a typed manual_creator_credits array (never {}).
-        for name in ["ThreadResponse", "NativeThreadResponse"] {
-            let Some(schema_ref) = components.schemas.get_mut(name) else {
-                continue;
-            };
-            let utoipa::openapi::RefOr::T(schema) = schema_ref else {
-                continue;
-            };
-            let utoipa::openapi::Schema::Object(obj) = schema else {
-                continue;
-            };
-            let mcc = obj.properties.get("manual_creator_credits");
-            let needs_fix = match mcc {
-                None => true,
-                Some(utoipa::openapi::RefOr::T(utoipa::openapi::Schema::Object(o))) => !matches!(
-                    o.schema_type,
-                    utoipa::openapi::schema::SchemaType::Type(utoipa::openapi::schema::Type::Array)
-                ),
-                Some(utoipa::openapi::RefOr::T(utoipa::openapi::Schema::Array(_))) => false,
-                _ => true,
-            };
-            if needs_fix {
-                use utoipa::openapi::schema::{ArrayBuilder, ObjectBuilder, SchemaType, Type};
-                let credit_item = ObjectBuilder::new()
-                    .schema_type(SchemaType::Type(Type::Object))
-                    .property(
-                        "name",
-                        ObjectBuilder::new().schema_type(SchemaType::Type(Type::String)),
-                    )
-                    .required("name")
-                    .property(
-                        "roles",
-                        ArrayBuilder::new().items(
-                            ObjectBuilder::new().schema_type(SchemaType::Type(Type::String)),
-                        ),
-                    )
-                    .required("roles");
-                obj.properties.insert(
-                    "manual_creator_credits".to_string(),
-                    utoipa::openapi::RefOr::T(utoipa::openapi::Schema::Array(
-                        ArrayBuilder::new()
-                            .items(utoipa::openapi::RefOr::T(utoipa::openapi::Schema::Object(
-                                credit_item.build(),
-                            )))
-                            .build(),
-                    )),
-                );
-            }
-        }
-    }
-
-    openapi = openapi
+        .merge_from(crate::issue_service::IssueApi::openapi())
         .merge_from(crate::issue_read_state::IssueReadStateApi::openapi())
         .merge_from(crate::comicvine_issue::ComicVineIssueApi::openapi())
         .merge_from(crate::custom_cbl::CustomCblApi::openapi())
@@ -574,27 +492,6 @@ mod tests {
         let body = &operation["requestBody"]["content"]["application/json"]["schema"]["$ref"];
         assert_eq!(body, "#/components/schemas/ReactivateThreadRequest");
         assert!(aggregate["components"]["schemas"]["ReactivateThreadRequest"].is_object());
-
-        // Merging ThreadsV2Api must not overwrite the canonical ThreadResponse
-        // manual_creator_credits schema with an empty object (#5704 review).
-        let response_ref = operation["responses"]["200"]["content"]["application/json"]["schema"]
-            ["$ref"]
-            .as_str()
-            .expect("reactivate 200 response schema $ref");
-        let schema_name = response_ref
-            .rsplit('/')
-            .next()
-            .expect("ThreadResponse component name");
-        let mcc = &aggregate["components"]["schemas"][schema_name]["properties"]
-            ["manual_creator_credits"];
-        assert_eq!(
-            mcc["type"], "array",
-            "manual_creator_credits must remain an array in {schema_name}"
-        );
-        assert!(
-            mcc["items"].is_object(),
-            "manual_creator_credits items must be an object schema in {schema_name}"
-        );
     }
 
     /// Generated clients must be able to page the inbox, search issue matches

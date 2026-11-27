@@ -81,13 +81,6 @@ pub(crate) const MAX_ISSUES_TO_ADD: i64 = 10_000;
 // Wire types
 // ---------------------------------------------------------------------------
 
-/// One manual creator credit entry preserved on thread responses.
-#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
-pub struct ManualCreatorCredit {
-    pub name: String,
-    pub roles: Vec<String>,
-}
-
 /// The Python `ThreadResponse` projection every lifecycle writer returns.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct ThreadResponse {
@@ -108,7 +101,6 @@ pub struct ThreadResponse {
     pub reading_progress: Option<String>,
     pub next_unread_issue_id: Option<i32>,
     pub next_unread_issue_number: Option<String>,
-    #[schema(value_type = Vec<ManualCreatorCredit>)]
     pub manual_creator_credits: Value,
 }
 

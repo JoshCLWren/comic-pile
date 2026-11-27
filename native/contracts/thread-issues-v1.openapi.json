@@ -497,25 +497,6 @@
           }
         }
       },
-      "ManualCreatorCredit": {
-        "type": "object",
-        "description": "One manual creator credit entry preserved on thread responses.",
-        "required": [
-          "name",
-          "roles"
-        ],
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "roles": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
       "MigrateToIssuesRequest": {
         "type": "object",
         "description": "Request body of `POST /api/v1/threads/{thread_id}:migrateToIssues`.",
@@ -738,7 +719,7 @@
           "manual_creator_credits": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ManualCreatorCredit"
+              "type": "object"
             }
           },
           "next_unread_issue_id": {
