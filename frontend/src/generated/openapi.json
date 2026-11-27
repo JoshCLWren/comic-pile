@@ -30273,6 +30273,7 @@
         ]
       }
     },
+<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/connections": {
       "get": {
         "description": "List owner-scoped threads connected through reader-authored dependencies, with circularity derived from the effective reading precedence graph.",
@@ -30324,6 +30325,8 @@
         ]
       }
     },
+=======
+>>>>>>> origin/main
     "/api/v2/threads/{thread_id}/creatorCredits": {
       "get": {
         "operationId": "thread_creator_credits",
@@ -30396,6 +30399,7 @@
         ]
       }
     },
+<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/dependencies": {
       "get": {
         "description": "List owner-scoped reader-authored dependency edges where one thread blocks others and where it is blocked. Returns {blocking, blocked_by} of enriched DependencyResponse entries ordered by dependency id; historical converted rows and inert cbl-order notes are excluded.",
@@ -30495,6 +30499,8 @@
         ]
       }
     },
+=======
+>>>>>>> origin/main
     "/api/v2/threads/{thread_id}/issue-order": {
       "put": {
         "description": "Replace the complete issue order atomically. The projected Option E graph is validated before commit, so a manual reorder cannot introduce a strict-list/series-order cycle.",
@@ -30963,6 +30969,7 @@
         ]
       }
     },
+<<<<<<< HEAD
     "/api/v2/threads:explainEligibility": {
       "post": {
         "description": "Explain eligibility for 1..500 owner-scoped threads in one canonical graph evaluation. Explanations use strict/loose/hold/prerequisite/exclusion logic and isolate cycles.",
@@ -31012,6 +31019,8 @@
         ]
       }
     },
+=======
+>>>>>>> origin/main
     "/api/v2/undo/{session_id}/snapshots": {
       "get": {
         "operationId": "list_undo_snapshots_documentation",

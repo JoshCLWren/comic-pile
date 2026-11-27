@@ -1302,6 +1302,7 @@ export interface ThreadCreatorCreditsRequest {
 
 export type ThreadCreatorCreditsResponse = components['schemas']['ThreadCreatorCreditsResponse']
 
+<<<<<<< HEAD
 export interface ThreadOrderingExplainEligibilityRequest {
   body: components['schemas']['BatchBlockingExplanationRequest']
 }
@@ -1324,6 +1325,8 @@ export interface ThreadOrderingThreadConnectionsRequest {
 
 export type ThreadOrderingThreadConnectionsResponse = components['schemas']['ThreadConnectedResponse']
 
+=======
+>>>>>>> origin/main
 export interface UnassignTagRequest {
   path: {
     tag_id: number
@@ -1565,9 +1568,12 @@ export interface NativeV2Client {
   switchPrerequisite(args: SwitchPrerequisiteRequest): Promise<SwitchPrerequisiteResponse>
   teamChemistry(): Promise<TeamChemistryResponse>
   threadCreatorCredits(args: ThreadCreatorCreditsRequest): Promise<ThreadCreatorCreditsResponse>
+<<<<<<< HEAD
   threadOrderingExplainEligibility(args: ThreadOrderingExplainEligibilityRequest): Promise<ThreadOrderingExplainEligibilityResponse>
   threadOrderingGetThreadEligibility(args: ThreadOrderingGetThreadEligibilityRequest): Promise<ThreadOrderingGetThreadEligibilityResponse>
   threadOrderingThreadConnections(args: ThreadOrderingThreadConnectionsRequest): Promise<ThreadOrderingThreadConnectionsResponse>
+=======
+>>>>>>> origin/main
   unassignTag(args: UnassignTagRequest): Promise<UnassignTagResponse>
   undoToSnapshot(args: UndoToSnapshotRequest): Promise<UndoToSnapshotResponse>
   unsnooze(args: UnsnoozeRequest): Promise<UnsnoozeResponse>
@@ -2476,6 +2482,7 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         { params: compactQuery(args.query) },
       )
     },
+<<<<<<< HEAD
     threadOrderingExplainEligibility(args: ThreadOrderingExplainEligibilityRequest) {
       return client.post<ThreadOrderingExplainEligibilityResponse, ThreadOrderingExplainEligibilityRequest['body']>(
         "/v2/threads:explainEligibility",
@@ -2492,6 +2499,8 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/connections`,
       )
     },
+=======
+>>>>>>> origin/main
     unassignTag(args: UnassignTagRequest) {
       return client.delete<UnassignTagResponse>(
         `/v2/tags/${encodeURIComponent(String(args.path.tag_id))}/assignments/${encodeURIComponent(String(args.path.target_type))}/${encodeURIComponent(String(args.path.target_id))}`,
