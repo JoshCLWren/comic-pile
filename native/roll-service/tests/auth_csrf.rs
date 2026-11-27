@@ -98,15 +98,12 @@ async fn protected_native_mutations_require_a_matching_double_submit_pair() {
 
 #[tokio::test]
 async fn bootstrap_and_recovery_endpoints_stay_csrf_exempt() {
+    // #4549: only canonical v2 auth paths remain. The retired v1/bare aliases
+    // are no longer CSRF-exempt because they are no longer registered at all.
     for path in [
         "/api/v2/auth/login",
         "/api/v2/auth/register",
         "/api/v2/auth/refresh",
-        "/api/v2/auth/forgot-password",
-        "/api/v2/auth/reset-password",
-        "/api/v2/auth/login",
-        "/api/v2/auth/forgot-password",
-        "/api/v2/auth/reset-password",
         "/api/v2/auth/forgot-password",
         "/api/v2/auth/reset-password",
     ] {
@@ -120,11 +117,54 @@ async fn bootstrap_and_recovery_endpoints_stay_csrf_exempt() {
 }
 
 #[tokio::test]
-async fn logout_requires_a_csrf_pair_on_the_live_alias() {
+async fn logout_requires_a_csrf_pair_on_the_canonical_v2_route() {
     let (status, _) = status_and_body(None, None, "/api/v2/auth/logout").await;
     assert_eq!(
         status,
         StatusCode::FORBIDDEN,
         "logout mutates server-side auth state and must stay CSRF-protected"
     );
+}
+
+#[tokio::test]
+async fn retired_auth_aliases_are_not_registered_in_the_native_router() {
+    // #4549: a retired alias must terminate at the router fallback with a JSON
+    // 404, never at an auth handler and never with a CSRF 403 that would imply
+    // the alias is still a live, protected authority.
+    for (method, path) in [
+        ("GET", "/api/v1/auth/csrf"),
+        ("GET", "/api/v1/auth/me"),
+        ("POST", "/api/v1/auth/register"),
+        ("POST", "/api/v1/auth/login"),
+        ("POST", "/api/v1/auth/refresh"),
+        ("POST", "/api/v1/auth/logout"),
+        ("POST", "/api/v1/auth/forgot-password"),
+        ("POST", "/api/v1/auth/reset-password"),
+        ("GET", "/api/auth/csrf"),
+        ("GET", "/api/auth/me"),
+        ("POST", "/api/auth/register"),
+        ("POST", "/api/auth/login"),
+        ("POST", "/api/auth/refresh"),
+        ("POST", "/api/auth/logout"),
+        ("POST", "/api/auth/forgot-password"),
+        ("POST", "/api/auth/reset-password"),
+    ] {
+        let response = router(state())
+            .oneshot(
+                Request::builder()
+                    .method(method)
+                    .uri(path)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND, "{method} {path}");
+        let body = to_bytes(response.into_body(), 1024).await.unwrap();
+        assert_eq!(
+            serde_json::from_slice::<Value>(&body).unwrap(),
+            serde_json::json!({"detail": "Not Found"}),
+            "{method} {path} must hit the native router fallback"
+        );
+    }
 }
