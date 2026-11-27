@@ -136,10 +136,16 @@ describe('PlanProjectionDialog', () => {
     renderDialog()
     await waitFor(() => expect(screen.getByRole('radio', { name: /Alpha/ })).toBeInTheDocument())
     await userEvent.click(screen.getByRole('radio', { name: /Alpha/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Preview projection' }))
+    await waitFor(() => expect(readingOrdersApi.previewProjection).toHaveBeenCalled())
     await userEvent.click(screen.getByRole('button', { name: 'Confirm projection' }))
 
     await waitFor(() => expect(screen.getByText(/Projection applied/)).toBeInTheDocument())
-    expect(readingOrdersApi.confirmProjection).toHaveBeenCalledWith(9, 3)
+    expect(readingOrdersApi.confirmProjection).toHaveBeenCalledWith(
+      9,
+      3,
+      '2026-01-01T00:00:00Z',
+    )
     expect(screen.getByText(/2 added/)).toBeInTheDocument()
   })
 

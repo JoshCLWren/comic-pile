@@ -59,6 +59,17 @@ it('confirms a projection with the plan id and selected reading order', async ()
   )
 })
 
+it('carries the preview revision token into confirmation', async () => {
+  client.post.mockResolvedValue({ plan_id: 9, reading_order_id: 3, added_count: 1, updated_count: 0, kept_count: 0, total_positions: 1 })
+
+  await readingOrdersApi.confirmProjection(9, 3, '2026-01-01T00:00:00Z')
+
+  expect(client.post).toHaveBeenCalledWith(
+    '/v2/continuity-plans/9/reading-orders/project',
+    { reading_order_id: 3, plan_updated_at: '2026-01-01T00:00:00Z' },
+  )
+})
+
 it('inserts an item at a position within a reading order', async () => {
   const response: InsertReadingOrderItemResponse = {
     reading_order_id: 1,

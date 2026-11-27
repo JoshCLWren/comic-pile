@@ -54,7 +54,7 @@ for (const count of [1, 25]) {
       if (path.includes('/tags')) return route.fulfill({ json: { tags: [], direct_tags: [], effective_tags: [] } })
       if (path.endsWith('/comicvine')) return route.fulfill({ json: null })
       if (path.endsWith('/reader-context')) return route.fulfill({ json: null })
-      if (path.endsWith('/reading-orders')) return route.fulfill({ json: { reading_orders: [] } })
+      if (path.endsWith('/readingOrders')) return route.fulfill({ json: { reading_orders: [] } })
       if (path.endsWith('/connected')) return route.fulfill({ json: { connected_threads: [] } })
       if (/\/threads\/\d+$/.test(path)) return route.fulfill({ json: thread(pending || 1) })
       return route.fulfill({ json: [] })
