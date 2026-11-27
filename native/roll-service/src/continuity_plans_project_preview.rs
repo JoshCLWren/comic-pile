@@ -555,7 +555,7 @@ mod tests {
         let error = preview_plan_projection_handler(
             State(state),
             crate::auth::AuthenticatedUser::for_test(9_001),
-            Ok(Path("9001001".to_string())),
+            Ok(Path("9001001:previewReadingOrderProjection".to_string())),
             Bytes::from_static(br#"{"reading_order_id": 9001001}"#),
         )
         .await
@@ -576,7 +576,7 @@ mod tests {
         let error = preview_plan_projection_handler(
             State(state.clone()),
             crate::auth::AuthenticatedUser::for_test(9_001),
-            Ok(Path(beyond_int4.to_string())),
+            Ok(Path(format!("{beyond_int4}:previewReadingOrderProjection"))),
             Bytes::from(format!(r#"{{"reading_order_id": {beyond_int4}}}"#)),
         )
         .await
@@ -588,7 +588,7 @@ mod tests {
         let error = preview_plan_projection_handler(
             State(state),
             crate::auth::AuthenticatedUser::for_test(9_001),
-            Ok(Path("9001001".to_string())),
+            Ok(Path("9001001:previewReadingOrderProjection".to_string())),
             Bytes::from(format!(r#"{{"reading_order_id": {beyond_int4}}}"#)),
         )
         .await
