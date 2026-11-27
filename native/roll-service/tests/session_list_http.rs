@@ -8,6 +8,7 @@ use axum::{
     body::{to_bytes, Body},
     http::{header, Request, StatusCode},
 };
+use chrono::{DateTime, Utc};
 use comicpile_roll_service::{config::Config, router, test_support, AppState};
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -104,11 +105,14 @@ async fn send(
 }
 
 async fn insert_session(state: &Arc<AppState>, user_id: i32, started: &str, die: i32) -> i32 {
+    let started_at: DateTime<Utc> = DateTime::parse_from_rfc3339(started)
+        .expect("fixture timestamp")
+        .with_timezone(&Utc);
     let conn = state.pool.get().await.unwrap();
     conn.query_one(
         "INSERT INTO sessions (user_id, started_at, start_die)
-         VALUES ($1, $2::timestamptz, $3) RETURNING id",
-        &[&user_id, &started, &die],
+         VALUES ($1, $2, $3) RETURNING id",
+        &[&user_id, &started_at, &die],
     )
     .await
     .unwrap()
@@ -129,17 +133,19 @@ async fn canonical_session_list_and_get_are_owner_scoped_and_paginated() {
     let foreign = insert_session(&state, other_id, "2026-11-28T01:00:00Z", 12).await;
 
     let conn = state.pool.get().await.unwrap();
+    let event_at: DateTime<Utc> = "2026-11-27T01:05:00Z".parse().unwrap();
     conn.execute(
         "INSERT INTO events (type, timestamp, session_id, user_id, die_after, context)
-         VALUES ('rate', $1::timestamptz, $2, $3, 12, '{}'::json)",
-        &[&"2026-11-27T01:05:00Z", &third, &owner_id],
+         VALUES ('rate', $1, $2, $3, 12, '{}'::json)",
+        &[&event_at, &third, &owner_id],
     )
     .await
     .unwrap();
+    let snapshot_at: DateTime<Utc> = "2026-11-27T01:06:00Z".parse().unwrap();
     conn.execute(
         "INSERT INTO snapshots (session_id, event_id, thread_states, created_at)
-         VALUES ($1, NULL, '{}'::json, $2::timestamptz)",
-        &[&third, &"2026-11-27T01:06:00Z"],
+         VALUES ($1, NULL, '{}'::json, $2)",
+        &[&third, &snapshot_at],
     )
     .await
     .unwrap();
