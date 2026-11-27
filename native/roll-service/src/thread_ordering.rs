@@ -138,7 +138,13 @@ pub struct BatchEligibilityRequest {
 }
 
 /// `(eligible, is_blocked, next_issue_id, reasons, dependencies)` from the canonical evaluator.
-type CanonicalExplanationParts = (bool, bool, Option<i32>, Vec<String>, Vec<BlockingDependency>);
+type CanonicalExplanationParts = (
+    bool,
+    bool,
+    Option<i32>,
+    Vec<String>,
+    Vec<BlockingDependency>,
+);
 
 /// Python `ConnectedThreadInfo`.
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
@@ -367,16 +373,7 @@ fn build_canonical_explanation(
     thread_titles: &HashMap<i32, &str>,
     issues: &HashMap<i32, (i32, &str)>,
     list_names: &HashMap<i32, String>,
-) -> Result<
-    (
-        bool,
-        bool,
-        Option<i32>,
-        Vec<String>,
-        Vec<BlockingDependency>,
-    ),
-    ApiError,
-> {
+) -> Result<CanonicalExplanationParts, ApiError> {
     let mut reasons = Vec::new();
     let mut dependencies = Vec::new();
     let Some(thread_state) = thread_state else {

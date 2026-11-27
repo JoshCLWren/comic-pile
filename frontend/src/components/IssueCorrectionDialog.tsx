@@ -33,7 +33,7 @@ export interface IssueCorrectionIssuesApi {
 }
 
 export interface IssueCorrectionDependenciesApi {
-  // Real `/v1/threads/{thread_id}/issue-dependencies` wire shape: each issue
+  // Real `/v2/threads/{thread_id}/issueDependencies` wire shape: each issue
   // carries `incoming`/`outgoing` edges, not a flat `dependencies` array.
   listForThread: (threadId: number) => Promise<{
     issues?: Array<{
