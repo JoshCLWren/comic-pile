@@ -40,3 +40,35 @@ describe('threadsApi.checkExcludedStatus', () => {
     expect(result).toEqual({ excluded_thread_ids: [7], active_thread_ids: [] })
   })
 })
+
+describe('threadsApi.checkPotentialDuplicates', () => {
+  it('posts the advisory lookup to the v2 collection custom method', async () => {
+    const client = createHttpClientStub()
+    const request = {
+      title: 'Amazing Spider-Man',
+      format: 'Comic',
+      comicvine_volume_id: 4050,
+      exclude_thread_id: 12,
+    }
+    client.post.mockResolvedValueOnce({ matches: [] })
+
+    const api = createThreadsApi(client)
+    const result = await api.checkPotentialDuplicates(request)
+
+    expect(client.post).toHaveBeenCalledWith('/v2/threads:checkDuplicates', request)
+    expect(result).toEqual({ matches: [] })
+  })
+
+  it('sends only the fields the caller supplied', async () => {
+    const client = createHttpClientStub()
+    client.post.mockResolvedValueOnce({ matches: [] })
+
+    const api = createThreadsApi(client)
+    await api.checkPotentialDuplicates({ title: 'Saga', format: 'Comic' })
+
+    expect(client.post).toHaveBeenCalledWith('/v2/threads:checkDuplicates', {
+      title: 'Saga',
+      format: 'Comic',
+    })
+  })
+})

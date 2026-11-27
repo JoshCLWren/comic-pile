@@ -3472,6 +3472,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/threads:checkDuplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Advisory AIP-136 collection custom method: report existing volumes that may be the proposed series. Does not create a Thread. Results are owner-scoped, exclude a named thread, and are capped at five matches. */
+        post: operations["check_duplicates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/undo/{session_id}/snapshots": {
         parameters: {
             query?: never;
@@ -4424,6 +4441,19 @@ export interface components {
              */
             source_path: string;
             source_repository: string;
+        };
+        /** @description Body of `POST /api/v1/threads/check-duplicates`. */
+        CheckDuplicatesRequest: {
+            /** Format: int32 */
+            comicvine_volume_id?: number | null;
+            /** Format: int32 */
+            exclude_thread_id?: number | null;
+            format: string;
+            title: string;
+        };
+        /** @description Response of `POST /api/v1/threads/check-duplicates`. */
+        CheckDuplicatesResponse: {
+            matches: components["schemas"]["NativePotentialDuplicateMatch"][];
         };
         /**
          * CheckPotentialDuplicatesRequest
@@ -6629,6 +6659,23 @@ export interface components {
         /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssuesSimple`. */
         NativeMigrateToIssuesSimpleRequest: {
             issue_number: string;
+        };
+        /** @description One possible existing volume. */
+        NativePotentialDuplicateMatch: {
+            /** Format: int64 */
+            comicvine_volume_id?: number | null;
+            format: string;
+            /** Format: int32 */
+            issues_remaining: number;
+            match_type: string;
+            /** Format: int32 */
+            start_year?: number | null;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
         };
         /** @description Confirmed provider series metadata for one queue row. */
         NativeQueueSeriesMetadata: {
@@ -19070,6 +19117,44 @@ export interface operations {
             };
             /** @description Database temporarily unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    check_duplicates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckDuplicatesRequest"];
+            };
+        };
+        responses: {
+            /** @description Possible existing volumes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckDuplicatesResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
