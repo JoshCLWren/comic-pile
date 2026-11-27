@@ -20412,32 +20412,6 @@
           }
         }
       },
-<<<<<<< HEAD
-      "ThreadEligibilityResponse": {
-        "type": "object",
-        "description": "`GET /api/v2/threads/{thread_id}/eligibility`: derived singleton resource.\n\n`state` is one of `available`, `blocked`, `complete` or `unavailable`.\n`manual_read_now_allowed` is derived from the unread frontier, never from\nthe denormalized `threads.is_blocked` flag or historical converted edges:\nan explicit Read Now is a reader action and automatic eligibility does not\nauthorize or veto it.",
-        "required": [
-          "thread_id",
-          "eligible",
-          "state",
-          "manual_read_now_allowed",
-          "blockers"
-        ],
-        "properties": {
-          "blockers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/EligibilityBlockerInfo"
-            }
-          },
-          "eligible": {
-            "type": "boolean"
-          },
-          "manual_read_now_allowed": {
-            "type": "boolean"
-          },
-          "next_issue_id": {
-=======
       "ThreadDetailResponse": {
         "type": "object",
         "description": "The legacy single-thread response retained for the v1 and bare aliases.",
@@ -20496,20 +20470,12 @@
           },
           "manual_creator_credits": {},
           "next_unread_issue_id": {
->>>>>>> origin/main
             "type": [
               "integer",
               "null"
             ],
             "format": "int32"
           },
-<<<<<<< HEAD
-          "state": {
-            "type": "string"
-          },
-          "thread_id": {
-            "type": "integer",
-=======
           "next_unread_issue_number": {
             "type": [
               "string",
@@ -20543,7 +20509,45 @@
               "integer",
               "null"
             ],
->>>>>>> origin/main
+            "format": "int32"
+          }
+        }
+      },
+      "ThreadEligibilityResponse": {
+        "type": "object",
+        "description": "`GET /api/v2/threads/{thread_id}/eligibility`: derived singleton resource.\n\n`state` is one of `available`, `blocked`, `complete` or `unavailable`.\n`manual_read_now_allowed` is derived from the unread frontier, never from\nthe denormalized `threads.is_blocked` flag or historical converted edges:\nan explicit Read Now is a reader action and automatic eligibility does not\nauthorize or veto it.",
+        "required": [
+          "thread_id",
+          "eligible",
+          "state",
+          "manual_read_now_allowed",
+          "blockers"
+        ],
+        "properties": {
+          "blockers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EligibilityBlockerInfo"
+            }
+          },
+          "eligible": {
+            "type": "boolean"
+          },
+          "manual_read_now_allowed": {
+            "type": "boolean"
+          },
+          "next_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "state": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
             "format": "int32"
           }
         }
