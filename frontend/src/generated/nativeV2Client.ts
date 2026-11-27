@@ -280,6 +280,12 @@ export interface CreateTagRequest {
 
 export type CreateTagResponse = components['schemas']['CreateTagResponse']
 
+export interface CreateThreadV2Request {
+  body: components['schemas']['ThreadCreateRequest']
+}
+
+export type CreateThreadV2Response = components['schemas']['NativeThreadResponse']
+
 export interface CreatorsListRequest {
   query?: {
     search?: string
@@ -1246,6 +1252,7 @@ export interface NativeV2Client {
   createQueueOrder(args: CreateQueueOrderRequest): Promise<CreateQueueOrderResponse>
   createReadingList(args: CreateReadingListRequest): Promise<CreateReadingListResponse>
   createTag(args: CreateTagRequest): Promise<CreateTagResponse>
+  createThreadV2(args: CreateThreadV2Request): Promise<CreateThreadV2Response>
   creatorsList(args?: CreatorsListRequest): Promise<CreatorsListResponse>
   csrf(): Promise<CsrfResponse>
   defer(args: DeferRequest): Promise<DeferResponse>
@@ -1559,6 +1566,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     createTag(args: CreateTagRequest) {
       return client.post<CreateTagResponse, CreateTagRequest['body']>(
         "/v2/tags",
+        args.body,
+      )
+    },
+    createThreadV2(args: CreateThreadV2Request) {
+      return client.post<CreateThreadV2Response, CreateThreadV2Request['body']>(
+        "/v2/threads",
         args.body,
       )
     },

@@ -798,7 +798,7 @@ mod tests {
             "/api/v2/issues/7",
             "/api/v1/issues/7/comicvine",
             "/api/v2/issues/7/dependencies",
-            "/api/v1/threads/7/issue-dependencies",
+            "/api/v2/threads/7/issueDependencies",
             "/api/v1/threads/7/issues",
         ] {
             let response = app
@@ -818,5 +818,24 @@ mod tests {
                 "{uri} must require auth through the service router"
             );
         }
+
+        // #5709 retires the v1 batch read: the old path must fall through to the
+        // Rust catch-all 404, not be resurrected as a v1 alias.
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/threads/7/issue-dependencies")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status(),
+            StatusCode::NOT_FOUND,
+            "retired /api/v1/threads/7/issue-dependencies must 404 (#5709)"
+        );
     }
 }

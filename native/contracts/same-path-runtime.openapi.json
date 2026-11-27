@@ -10281,6 +10281,47 @@
             "HTTPBearer": []
           }
         ]
+      },
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Documentation-only operation for the AIP-133 standard Create on the v2\nthreads collection (#5702). The handler lives in `thread_lifecycle` and\nshares the legacy write path; only the URL and the `Location` response\nheader differ.",
+        "description": "Create a thread at the end of the authenticated reader's queue. The created resource (including its stable `id`) is returned at 201 with a `Location` header naming the v2 collection member. The write preserves owner assignment, the five-second duplicate-merge guard and the Python validation envelope; it creates no Plan, dependency or issue rows.",
+        "operationId": "create_thread_v2_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThreadCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created (or the duplicate created seconds earlier)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/v2/threads/{thread_id}/connections": {
@@ -25833,6 +25874,47 @@
           }
         }
       },
+      "ThreadCreateRequest": {
+        "type": "object",
+        "description": "Body of `POST /api/v1/threads/`.",
+        "required": [
+          "title",
+          "format",
+          "issues_remaining"
+        ],
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "is_test": {
+            "type": "boolean"
+          },
+          "issues_remaining": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "manual_creator_credits": {
+            "type": "array",
+            "items": {}
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "ThreadDependenciesResponse": {
         "type": "object",
         "description": "Wire parity with Python `ThreadDependenciesResponse`\n(`app/schemas/dependency.py`): the `blocking` list holds edges where this\nthread's issues block others, `blocked_by` holds edges where this thread's\nissues are blocked. Each entry is the enriched `DependencyResponse`.",
@@ -26352,7 +26434,7 @@
       },
       "ThreadResponse": {
         "type": "object",
-        "description": "Python `ThreadResponse`.",
+        "description": "The Python `ThreadResponse` projection every lifecycle writer returns.",
         "required": [
           "id",
           "title",
@@ -26406,12 +26488,7 @@
             ],
             "format": "double"
           },
-          "manual_creator_credits": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
-          },
+          "manual_creator_credits": {},
           "next_unread_issue_id": {
             "type": [
               "integer",
