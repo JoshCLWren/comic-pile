@@ -65,6 +65,19 @@
       ]
     },
     {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/threads/{thread_id}/readingOrders",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/threads/[0-9]+/readingOrders$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5715,
+      "consumers": [
+        "frontend/src/services/api-reading-orders.ts"
+      ]
+    },
+    {
       "bucket": "unversioned_operations",
       "method": "GET",
       "path": "/api/threads/{thread_id}",

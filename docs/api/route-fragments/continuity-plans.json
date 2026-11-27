@@ -1,7 +1,8 @@
 {
   "family": "continuity-plans",
   "owned_path_patterns": [
-    "^/api/v2/continuity-plans(?:/.*)?$"
+    "^/api/v2/continuity-plans(?:/.*)?$",
+    "^/api/v2/continuityPlans(?:/.*)?$"
   ],
   "defaults": {
     "runtime": "native-rust",
