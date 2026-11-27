@@ -1,5 +1,10 @@
 # AGENTS.md
 
+## Binding product target
+
+Owner directive (2026-11-27): ComicPile has one real user. The target is Rust v2 only (zero v1 or obsolete unversioned application routes, clients, rewrites or compatibility shims), one canonical Reading List execution engine (Option E, not a selectable mode), and no reading sessions anywhere (including v2 List/Get/detail/snapshot/undo APIs and session-keyed runtime/storage). Remove obsolete behavior instead of porting or preserving it. No non-Option-E parity, shadow mode, fallback, Codex reservation, or arbitrary two-week waiting period. Verify the actual canonical application, use ordinary exact-head CI/review/deployment, and preserve authored lists, explicit prerequisites, exclusions, issue identity, reading history, progress, ratings, notes, and supported individual operation corrections. Authentication/security and ownership checks remain; authentication sessions are not reading sessions. No direct production DB credentials for agents; only specifically restricted destructive production operations or actual personal-data repair need existing authorization. Do not invent a new approval stage. #5958, #3677–#3679, #3230 and #5886 own final removal.
+
+
 Guidelines for AI agents working in this codebase.
 
 ## Rust-cutover backlog freeze (owner direction, 2026-11-15)
