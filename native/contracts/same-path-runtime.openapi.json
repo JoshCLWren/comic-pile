@@ -8074,67 +8074,6 @@
         ]
       }
     },
-    "/api/v2/readingLists/{list_id}/cblCandidates": {
-      "get": {
-        "tags": [
-          "issue-identity"
-        ],
-        "summary": "Documentation-only operation for reading-list CBL candidates (v2, #5713).",
-        "operationId": "find_cbl_candidates_for_reading_list_v2_documentation",
-        "parameters": [
-          {
-            "name": "list_id",
-            "in": "path",
-            "description": "Owned custom CBL list identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Maximum ranked candidates, 1-100 (default 50)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Reading-list gaps and ranked CBL candidates",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CblReadingListCandidatesResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Custom CBL not found"
-          },
-          "422": {
-            "description": "Query failed validation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/v2/reading-lists/{list_id}/export": {
       "get": {
         "tags": [
@@ -9125,6 +9064,67 @@
           },
           "503": {
             "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/readingLists/{list_id}/cblCandidates": {
+      "get": {
+        "tags": [
+          "issue-identity"
+        ],
+        "summary": "Documentation-only operation for reading-list CBL candidates (v2, #5713).",
+        "operationId": "find_cbl_candidates_for_reading_list_v2_documentation",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "description": "Owned custom CBL list identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum ranked candidates, 1-100 (default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reading-list gaps and ranked CBL candidates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CblReadingListCandidatesResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Custom CBL not found"
+          },
+          "422": {
+            "description": "Query failed validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
           }
         },
         "security": [
