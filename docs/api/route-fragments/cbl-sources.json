@@ -1,0 +1,39 @@
+{
+  "family": "cbl-sources",
+  "owned_path_patterns": [
+    "^/api/v2/cblSources$",
+    "^/api/v2/cblSources/[^/]+$",
+    "^/api/v2/cblOccurrences$"
+  ],
+  "defaults": {
+    "runtime": "native-rust",
+    "status": "target",
+    "owning_issue": 5712,
+    "consumers": [
+      "frontend/src/services/api-cbl-sources.ts"
+    ]
+  },
+  "operations": [
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/cblSources",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/cblSources$"
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/cblSources/{source_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/cblSources/[^/]+$"
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/cblOccurrences",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/cblOccurrences$"
+    }
+  ]
+}
