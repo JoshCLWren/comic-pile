@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   GALLERY_SWIPE_THRESHOLD,
   PRODUCTION_DICE_SIDES,
+  allocateCoverFaces,
   carouselOffset,
   carouselTransform,
   computeCoverBoardLayout,
@@ -30,6 +31,20 @@ describe('Night Shift cover-first board geometry (#5981)', () => {
       // The die sits between the left and right halves of the middle row;
       // a d2/d4 with an empty middle row has its die between the outer rows.
       expect(Math.abs(top - bottom)).toBeLessThanOrEqual(1)
+    }
+  })
+
+  it('trims partial pools without reordering faces or leaving empty rows', () => {
+    expect(allocateCoverFaces(6, [2, 2, 2])).toEqual([2, 2, 2])
+    expect(allocateCoverFaces(4, [2, 2, 2])).toEqual([2, 2, 0])
+    expect(allocateCoverFaces(1, [0, 2, 0])).toEqual([0, 1, 0])
+    expect(allocateCoverFaces(0, [3, 2, 3])).toEqual([0, 0, 0])
+    for (const die of PRODUCTION_DICE_SIDES) {
+      const arrangement = getCoverArrangement(die)
+      for (let count = 0; count <= die; count++) {
+        const rows = allocateCoverFaces(count, arrangement)
+        expect(rows[0] + rows[1] + rows[2]).toBe(count)
+      }
     }
   })
 

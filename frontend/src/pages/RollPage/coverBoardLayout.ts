@@ -61,6 +61,36 @@ export function getCoverArrangement(value: number): CoverArrangement {
   return ARRANGEMENTS[resolveProductionDie(value)]
 }
 
+/**
+ * Trim a die-sized row plan down to the actual eligible face count without
+ * changing the left-to-right face order or moving the die out of the middle.
+ * Bottom row goes first, then top, then middle: a partial pool still reads as
+ * a centered board instead of leaving empty tracks behind.
+ */
+export function allocateCoverFaces(
+  faceCount: number,
+  arrangement: CoverArrangement,
+): [number, number, number] {
+  const [top, middle, bottom] = arrangement
+  let remaining = Math.max(0, top + middle + bottom - Math.max(0, faceCount))
+  let nextTop = top
+  let nextMiddle = middle
+  let nextBottom = bottom
+  const trim = (row: 'bottom' | 'top' | 'middle') => {
+    if (row === 'bottom' && nextBottom > 0) nextBottom -= 1
+    else if (row === 'top' && nextTop > 0) nextTop -= 1
+    else if (row === 'middle' && nextMiddle > 0) nextMiddle -= 1
+    else return false
+    remaining -= 1
+    return true
+  }
+  while (remaining > 0) {
+    const trimmed = trim('bottom') || trim('top') || trim('middle')
+    if (!trimmed) break
+  }
+  return [nextTop, nextMiddle, nextBottom]
+}
+
 export interface CoverBoardLayout {
   arrangement: CoverArrangement
   /** Gap between covers and between the die and its neighboring covers. */
