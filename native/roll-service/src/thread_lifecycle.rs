@@ -2827,6 +2827,26 @@ pub fn list_excluded_threads_documentation() {}
 #[allow(dead_code)]
 pub fn check_potential_duplicates_documentation() {}
 
+/// Documentation-only operation for the v2 advisory custom method. The DTOs
+/// are shared with the retained v1 path; only the path and operation identity
+/// are new (#5705).
+#[utoipa::path(
+    post,
+    path = "/api/v2/threads:checkDuplicates",
+    tag = "threads",
+    description = "Advisory AIP-136 collection custom method: report existing volumes that may be the proposed series. Does not create a Thread. Results are owner-scoped, exclude a named thread, and are capped at five matches.",
+    operation_id = "check_duplicates",
+    request_body = CheckDuplicatesRequest,
+    responses(
+        (status = 200, description = "Possible existing volumes", body = CheckDuplicatesResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 422, description = "Validation failed")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn check_potential_duplicates_v2_documentation() {}
+
 #[utoipa::path(
     post,
     path = "/api/v1/threads/groups:batch",

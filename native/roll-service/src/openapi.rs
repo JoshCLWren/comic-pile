@@ -165,6 +165,8 @@ use utoipa::OpenApi;
         crate::creators_v2::rating_distribution_documentation,
         crate::creators_v2::role_documentation,
         crate::creators_v2::series_documentation,
+        // AIP-136 collection custom method for the advisory duplicate lookup (#5705).
+        crate::thread_lifecycle::check_potential_duplicates_v2_documentation,
     ),
     components(schemas(
         crate::auth::dto::RegisterRequest,
@@ -347,6 +349,10 @@ use utoipa::OpenApi;
         crate::creators_v2::CreatorMetricIssue,
         crate::creators_v2::CreatorMetricPagination,
         crate::creators_v2::CreatorMetricDrilldown,
+        // Advisory duplicate-check DTOs shared with the retained v1 path (#5705).
+        crate::thread_lifecycle::CheckDuplicatesRequest,
+        crate::thread_lifecycle::CheckDuplicatesResponse,
+        crate::thread_lifecycle::PotentialDuplicateMatch,
     )),
     modifiers(&NativeSecurityAddon)
 )]
@@ -403,6 +409,34 @@ mod tests {
 
     fn document() -> Value {
         serde_json::to_value(canonical_openapi()).expect("canonical OpenAPI document")
+    }
+
+    /// The advisory duplicate check is a v2 AIP-136 collection custom method
+    /// (#5705). It must be published with its own operation identity and DTOs,
+    /// without adding a POST to the `GET /api/v2/threads` collection read that
+    /// owns the `search`/filter contract.
+    #[test]
+    fn check_duplicates_custom_method_is_in_v2_contract() {
+        let doc = document();
+        let operation = &doc["paths"]["/api/v2/threads:checkDuplicates"]["post"];
+        assert_eq!(operation["operationId"], "check_duplicates");
+        assert_eq!(
+            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/CheckDuplicatesRequest"
+        );
+        assert_eq!(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/CheckDuplicatesResponse"
+        );
+        for schema in ["CheckDuplicatesRequest", "CheckDuplicatesResponse"] {
+            assert!(
+                doc["components"]["schemas"][schema].is_object(),
+                "missing {schema} in v2 contract"
+            );
+        }
+        // The collection read is unchanged: search stays a GET query parameter.
+        assert!(doc["paths"]["/api/v2/threads"]["get"].is_object());
+        assert!(doc["paths"]["/api/v2/threads"]["post"].is_null());
     }
 
     /// The issue read-state and reader-context operations moved from their
