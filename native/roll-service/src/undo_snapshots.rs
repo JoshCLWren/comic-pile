@@ -211,6 +211,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn list_undo_snapshots_emits_empty_array_for_owned_session_without_snapshots() {
+        let (state, user, _guard) = database_fixture().await;
+        let connection = db::checkout(&state).await.expect("fixture connection");
+        connection
+            .execute(
+                "INSERT INTO sessions (id, user_id, started_at, ended_at, start_die, manual_die)
+                 VALUES (9303, 9101, NOW(), NULL, 6, NULL)",
+                &[],
+            )
+            .await
+            .expect("seed owned session without snapshots");
+        drop(connection);
+
+        let Json(response) = list_undo_snapshots(Path(9303), user, State(state.clone()))
+            .await
+            .expect("list snapshots");
+        assert_eq!(response.session_id, 9303);
+        assert!(
+            response.snapshots.is_empty(),
+            "Python emits [] for an owned session with no restore points"
+        );
+    }
+
+    #[tokio::test]
     async fn list_undo_snapshots_rejects_foreign_session() {
         let (state, user, _guard) = database_fixture().await;
         let missing = list_undo_snapshots(Path(9999), user, State(state.clone()))
