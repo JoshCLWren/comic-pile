@@ -61,7 +61,7 @@ function setViewport(width: number) {
 let authenticated = false
 
 function AuthStatus() {
-  authenticated = useAuth().status === 'authenticated'
+  authenticated = useAuth().authState.status === 'authenticated'
   return null
 }
 
