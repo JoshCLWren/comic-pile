@@ -1602,6 +1602,25 @@
               "null"
             ]
           },
+          "list_version": {
+            "description": "Expected version of the owner-scoped canonical Reading List. When the\nsource has already been adopted, a mismatch fails the whole commit with\n409 before any row is written, so a stale preview cannot overwrite a\nlist the reader edited after the preview was produced.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "overlap_decisions": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Value",
+                "description": "Overlap decisions the reader approved for this commit. Persisted with\nthe selections so a reopened list restores them instead of silently\ndropping the reader's choices."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "revision_sha": {
             "type": "string"
           },
@@ -1636,6 +1655,11 @@
             },
             "type": "array"
           },
+          "custom_cbl_list_id": {
+            "description": "Stable ID of the canonical owner-scoped `custom_cbl_lists` row. This is\nthe identity a caller must use to reopen or update the adopted list;\nthe legacy Plan `id` above is kept only for the compatibility projection.",
+            "format": "int32",
+            "type": "integer"
+          },
           "excluded_positions": {
             "items": {
               "format": "int32",
@@ -1650,6 +1674,11 @@
           "lanes": {
             "type": "object"
           },
+          "list_version": {
+            "description": "Version of the canonical list after this commit. Pass it back as\n`list_version` to guard a later commit against a stale list.",
+            "format": "int32",
+            "type": "integer"
+          },
           "name": {
             "type": "string"
           },
@@ -1659,12 +1688,34 @@
           "ordering_mode": {
             "type": "string"
           },
+          "overlap_decisions": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Value",
+                "description": "Committed overlap decisions, restored on reopen."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "reused_positions": {
             "items": {
               "format": "int32",
               "type": "integer"
             },
             "type": "array"
+          },
+          "selections": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Value",
+                "description": "Committed checkbox decisions, restored on reopen."
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "unresolved_positions": {
             "items": {
@@ -13428,11 +13479,34 @@
             "format": "int32",
             "type": "integer"
           },
+          "list_version": {
+            "description": "Monotonic version of this owner-scoped list. A later CBL adoption must\necho it as `list_version` or be rejected as stale (#4022).",
+            "format": "int32",
+            "type": "integer"
+          },
           "mode": {
             "type": "string"
           },
           "name": {
             "type": "string"
+          },
+          "overlap_decisions": {
+            "description": "Overlap decisions approved with the last commit."
+          },
+          "selections": {
+            "description": "Committed checkbox decisions restored when the CBL editor reopens."
+          },
+          "source_content_hash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_revision_sha": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "updated_at": {
             "type": "string"
@@ -19235,7 +19309,8 @@
           "detail"
         ],
         "type": "object"
-      }
+      },
+      "Value": {}
     },
     "securitySchemes": {
       "HTTPBearer": {
