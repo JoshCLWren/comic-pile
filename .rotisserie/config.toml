@@ -28,3 +28,12 @@ reserved = [679, 1093, 1109]
 
 [dashboard]
 auth_url = "https://comic-pile.vercel.app/api/v2/factory/github"
+
+# Refinery applies native/migrate/migrations in version order and rejects a
+# version below the last applied one, so the factory serializes these PRs and
+# denies a merge whose version is already used or is not above main's highest.
+[[migrations]]
+family = "refinery"
+directory = "native/migrate/migrations/"
+version = '^V(?P<version>[0-9]+)__[A-Za-z0-9_]+\.sql$'
+increasing = true
