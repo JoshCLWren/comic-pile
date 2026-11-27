@@ -1741,11 +1741,8 @@ fn cursor_clause(sort: &str, cursor: Option<&QueueCursor>) -> (String, Vec<Param
 #[openapi(
     paths(
         list_threads_documentation,
-<<<<<<< HEAD
         get_thread_v2_documentation,
-=======
         create_thread_v2_documentation,
->>>>>>> origin/main
         list_completed_threads_documentation
     ),
     components(schemas(
@@ -1805,7 +1802,6 @@ impl utoipa::Modify for ThreadsSecurityAddon {
 #[allow(dead_code)]
 pub(crate) fn list_threads_documentation() {}
 
-<<<<<<< HEAD
 /// Standard resource Get for one owned Thread.
 #[utoipa::path(
     get,
@@ -1816,7 +1812,12 @@ pub(crate) fn list_threads_documentation() {}
         (status = 200, description = "Owner-scoped thread detail", body = ThreadDetailResponse),
         (status = 401, description = "Not authenticated"),
         (status = 404, description = "Thread not found or not owned by the reader")
-=======
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub(crate) fn get_thread_v2_documentation() {}
+
 /// Documentation-only operation for the AIP-133 standard Create on the v2
 /// threads collection (#5702). The handler lives in `thread_lifecycle` and
 /// shares the legacy write path; only the URL and the `Location` response
@@ -1835,16 +1836,11 @@ pub(crate) fn list_threads_documentation() {}
         (status = 201, description = "Created (or the duplicate created seconds earlier)", body = crate::thread_lifecycle::ThreadResponse),
         (status = 401, description = "Not authenticated"),
         (status = 422, description = "Validation failed")
->>>>>>> origin/main
     ),
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-<<<<<<< HEAD
-pub(crate) fn get_thread_v2_documentation() {}
-=======
 pub(crate) fn create_thread_v2_documentation() {}
->>>>>>> origin/main
 
 #[utoipa::path(
     get,
