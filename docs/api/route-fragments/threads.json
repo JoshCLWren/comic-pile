@@ -3,7 +3,7 @@
   "owned_path_patterns": [
     "^/api/v1/threads(?::.*|/.*)?$",
     "^/api/threads(?:/.*)?$",
-    "^/api/v2/threads(?:/.*)?$"
+    "^/api/v2/threads(?::.*|/.*)?$"
   ],
   "defaults": {
     "runtime": "python-fastapi",
