@@ -1,12 +1,15 @@
-//! Native cutover of browser-called users/me preferences (v2) and same-path
-//! Taste Bank signal operations (v1, #4834, parent #4335).
+//! Native cutover of browser-called users/me preferences (v2), same-path
+//! Taste Bank signal operations (v1, #4834, parent #4335) and the canonical
+//! v2 Taste Bank signal resource (#5717).
 //!
 //! Preferences are served as Rust `/api/v2/users/me/preferences`; the frontend
-//! no longer calls `/api/v1/users/me/preferences`. Taste Bank signals remain
-//! same-path v1 until their own v2 migration:
+//! no longer calls `/api/v1/users/me/preferences`. Taste Bank signals are also
+//! served as the canonical v2 resource; the retained v1 spellings stay mounted
+//! until production acceptance retires them:
 //!
 //! * `GET /api/v2/users/me/preferences`
 //! * `PATCH /api/v2/users/me/preferences`
+//! * `PATCH /api/v2/users/me/tasteSignals/{signal_name}`
 //! * `GET /api/v1/users/me/taste-signals`
 //! * `PUT /api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict`
 //!
@@ -26,10 +29,13 @@
 
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{
+    body::Bytes,
     extract::{Path, State},
+    http::StatusCode,
     Json,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc,
@@ -96,10 +102,46 @@ pub struct TasteSignalListResponse {
     pub signals: Vec<TasteSignalResponse>,
 }
 
-/// Explicit user verdict on one Taste Bank signal.
+/// Explicit user verdict on one Taste Bank signal (retained v1 spelling).
 #[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 pub struct TasteVerdictRequest {
     pub verdict: String,
+}
+
+/// AIP-134 partial update of the canonical v2 Taste Bank signal resource.
+///
+/// Only `user_verdict` is patchable. An explicit `update_mask` restricts the
+/// write to the named field; a masked field missing from the body clears the
+/// verdict. Without a mask, an omitted verdict leaves the signal untouched.
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct TasteSignalPatchRequest {
+    pub user_verdict: Option<String>,
+    pub update_mask: Option<Vec<String>>,
+}
+
+/// The only field a caller may name in a Taste Bank signal `update_mask`.
+pub const TASTE_SIGNAL_PATCH_FIELDS: [&str; 1] = ["user_verdict"];
+
+/// Canonical stable name for the composite `(signal_type, external_key)`
+/// identity. The whole name is one path segment, URL-encoded by the client;
+/// a `:` separator keeps colon-shaped external keys intact (#5717).
+pub fn taste_signal_name(signal_type: &str, external_key: &str) -> String {
+    format!("{signal_type}:{external_key}")
+}
+
+/// Decode a canonical signal name into its two typed identity parts.
+///
+/// Splitting at the *first* colon is deliberate: external keys such as
+/// `creator:writer:alan-moore` are themselves colon-shaped. Both parts keep the
+/// v1 validators, so the v2 resource reports the same 422 details for an
+/// unknown type or an oversized key.
+pub fn parse_taste_signal_name(raw: &str) -> Result<(String, String), ApiError> {
+    let (signal_type, external_key) = raw.split_once(':').ok_or_else(|| {
+        unprocessable("signal_name must be <signal_type>:<external_key>")
+    })?;
+    validate_signal_type(signal_type)?;
+    validate_external_key(external_key)?;
+    Ok((signal_type.to_owned(), external_key.to_owned()))
 }
 
 fn unprocessable(detail: &str) -> ApiError {
@@ -362,6 +404,180 @@ pub async fn set_taste_signal_verdict(
     TASTE_STATEMENTS_ISSUED.fetch_add(1, Ordering::Relaxed);
     Ok(Json(taste_signal_from_row(&row)))
 }
+
+/// Resolved v2 PATCH intent for the single patchable field.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum VerdictPatch {
+    /// No effective field was named: read the current resource, write nothing.
+    Unchanged,
+    /// Set (or replace) the explicit verdict.
+    Set(String),
+    /// Clear the explicit verdict on an existing signal.
+    Clear,
+}
+
+/// Parse the AIP-134 PATCH body. Both the array and canonical comma-separated
+/// `update_mask` forms are accepted; an unsupported mask field is a 422.
+fn parse_taste_signal_patch(body: &[u8]) -> Result<VerdictPatch, ApiError> {
+    let value: Value =
+        serde_json::from_slice(body).map_err(|_| unprocessable("Validation failed"))?;
+    let map = value
+        .as_object()
+        .ok_or_else(|| unprocessable("Validation failed"))?;
+
+    let mask = match map.get("update_mask") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(text)) => {
+            let names: Vec<String> = text
+                .split(',')
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+                .map(str::to_owned)
+                .collect();
+            Some(names)
+        }
+        Some(Value::Array(items)) => {
+            let mut names = Vec::with_capacity(items.len());
+            for item in items {
+                let name = item
+                    .as_str()
+                    .ok_or_else(|| unprocessable("Validation failed"))?;
+                names.push(name.to_owned());
+            }
+            Some(names)
+        }
+        Some(_) => return Err(unprocessable("Validation failed")),
+    };
+    if let Some(names) = &mask {
+        for name in names {
+            if !TASTE_SIGNAL_PATCH_FIELDS.contains(&name.as_str()) {
+                return Err(unprocessable(&format!("Unsupported field mask: {name}")));
+            }
+        }
+    }
+    let masked = mask
+        .as_ref()
+        .is_some_and(|names| names.iter().any(|name| name == "user_verdict"));
+
+    let verdict_value = map.get("user_verdict");
+    let verdict_present = verdict_value.is_some_and(|value| !value.is_null());
+    match (mask.as_ref(), masked, verdict_present) {
+        (None, _, true) | (Some(_), true, true) => {
+            let verdict = verdict_value
+                .and_then(Value::as_str)
+                .ok_or_else(|| unprocessable("Validation failed"))?;
+            validate_verdict(verdict)?;
+            Ok(VerdictPatch::Set(verdict.to_owned()))
+        }
+        (Some(_), true, false) => Ok(VerdictPatch::Clear),
+        _ => Ok(VerdictPatch::Unchanged),
+    }
+}
+
+/// `PATCH /api/v2/users/me/tasteSignals/{signal_name}`
+///
+/// The resource name is one stable string segment (`<signal_type>:<external_key>`)
+/// rather than two untyped identity segments. Ownership is part of every
+/// `WHERE` clause, so a name belonging to another reader cannot be observed or
+/// changed. Repeated identical verdicts are idempotent: `verdict_at` and
+/// `updated_at` are not churned, and inferred evidence columns are never
+/// written. No reading-history or rating table is touched.
+pub async fn patch_taste_signal_v2(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(raw_name): Path<String>,
+    body: Bytes,
+) -> Result<Json<TasteSignalResponse>, ApiError> {
+    let (signal_type, external_key) = parse_taste_signal_name(&raw_name)?;
+    let patch = parse_taste_signal_patch(&body)?;
+    let display_name = display_name_for(&external_key);
+    let connection = db::checkout(&state).await?;
+
+    let row = match patch {
+        VerdictPatch::Set(verdict) => {
+            let sql = format!(
+                "INSERT INTO taste_signals \
+                 (user_id, signal_type, external_key, display_name, user_verdict, \
+                  verdict_at, first_observed_at, last_observed_at, \
+                  evidence_count, distinct_thread_count, created_at, updated_at) \
+                 VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), NOW(), 0, 0, NOW(), NOW()) \
+                 ON CONFLICT (user_id, signal_type, external_key) DO UPDATE \
+                 SET user_verdict = EXCLUDED.user_verdict, \
+                     verdict_at = CASE WHEN taste_signals.user_verdict IS DISTINCT FROM EXCLUDED.user_verdict \
+                         THEN NOW() ELSE taste_signals.verdict_at END, \
+                     updated_at = CASE WHEN taste_signals.user_verdict IS DISTINCT FROM EXCLUDED.user_verdict \
+                         THEN NOW() ELSE taste_signals.updated_at END \
+                 RETURNING {}",
+                taste_signal_columns()
+            );
+            connection
+                .query_opt(
+                    &sql,
+                    &[
+                        &user.id(),
+                        &signal_type,
+                        &external_key,
+                        &display_name,
+                        &verdict,
+                    ],
+                )
+                .await
+                .map_err(db::query_error)?
+        }
+        VerdictPatch::Clear => {
+            let sql = format!(
+                "UPDATE taste_signals SET user_verdict = NULL, verdict_at = NULL, updated_at = NOW() \
+                 WHERE user_id = $1 AND signal_type = $2 AND external_key = $3 \
+                 RETURNING {}",
+                taste_signal_columns()
+            );
+            connection
+                .query_opt(&sql, &[&user.id(), &signal_type, &external_key])
+                .await
+                .map_err(db::query_error)?
+        }
+        VerdictPatch::Unchanged => {
+            let sql = format!(
+                "SELECT {} FROM taste_signals \
+                 WHERE user_id = $1 AND signal_type = $2 AND external_key = $3",
+                taste_signal_columns()
+            );
+            connection
+                .query_opt(&sql, &[&user.id(), &signal_type, &external_key])
+                .await
+                .map_err(db::query_error)?
+        }
+    };
+    TASTE_STATEMENTS_ISSUED.fetch_add(1, Ordering::Relaxed);
+    let row = row.ok_or_else(|| {
+        ApiError::with_status(
+            StatusCode::NOT_FOUND,
+            format!("Taste signal {raw_name} not found"),
+        )
+    })?;
+    Ok(Json(taste_signal_from_row(&row)))
+}
+
+/// Documentation-only operation for the canonical v2 Taste Bank signal PATCH.
+#[utoipa::path(
+    patch,
+    path = "/api/v2/users/me/tasteSignals/{signal_name}",
+    tag = "taste",
+    operation_id = "patch_taste_signal_v2",
+    description = "Partially update one owned Taste Bank signal (AIP-134). The resource name is the stable composite <signal_type>:<external_key> encoded as one path segment. Only user_verdict is patchable; an update_mask restricts the write, and a masked-but-absent verdict clears it. Repeated identical verdicts are idempotent and inferred evidence is never mutated.",
+    params(("signal_name" = String, Path, description = "Stable composite signal name, URL-encoded")),
+    request_body = TasteSignalPatchRequest,
+    responses(
+        (status = 200, description = "Canonical signal after the patch", body = TasteSignalResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Taste signal not found"),
+        (status = 422, description = "Validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn patch_taste_signal_v2_documentation() {}
 
 /// OpenAPI document for the native same-path Taste Bank signal surface (v1).
 ///
