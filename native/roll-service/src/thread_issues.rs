@@ -47,7 +47,7 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -104,6 +104,21 @@ pub struct IssueCreatorsEntry {
 pub struct ThreadIssueCreatorsResponse {
     pub thread_id: i32,
     pub issues: Vec<IssueCreatorsEntry>,
+}
+
+/// Bounded, paginated thread-scoped issue-credit projection for #5706.
+///
+/// Keeps the frozen per-issue `issue_id`/`creators` wire shape of the legacy
+/// bulk creator read and adds standard page fields. The `issues` array omits
+/// unmapped issues and issues without stored credits, exactly like the legacy
+/// response, while `total_count` counts the matching credited issue rows.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct ThreadCreatorCreditsResponse {
+    pub thread_id: i32,
+    pub issues: Vec<IssueCreatorsEntry>,
+    pub total_count: i64,
+    pub page_size: i64,
+    pub next_page_token: Option<String>,
 }
 
 /// Python `ThreadResponse`.
