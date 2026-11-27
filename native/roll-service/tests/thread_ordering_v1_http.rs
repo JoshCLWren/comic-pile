@@ -2384,6 +2384,41 @@ async fn bootstrap_active_thread_exposes_authored_alias_and_confirmed_provider_n
 }
 
 #[tokio::test]
+async fn retired_v1_dependency_diagnostics_return_404() {
+    let (state, token, csrf, user_id, _guard) = setup_user("tord-retired-v1").await;
+    let conn = state.pool.get().await.unwrap();
+    let thread_id = thread(&conn, user_id, "Retired V1").await;
+
+    for request in [
+        get(
+            &format!("/api/v1/threads/{thread_id}/issue-dependencies"),
+            &token,
+            &csrf,
+        ),
+        get(
+            &format!("/api/v1/threads/{thread_id}/dependencies"),
+            &token,
+            &csrf,
+        ),
+        post(
+            &format!("/api/v1/threads/{thread_id}:getBlockingInfo"),
+            &token,
+            &csrf,
+            None,
+        ),
+        post("/api/v1/threads:getBlockingInfo", &token, &csrf, None),
+        get(
+            &format!("/api/v1/threads/{thread_id}/connected"),
+            &token,
+            &csrf,
+        ),
+    ] {
+        let (status, body) = send(&state, request).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
+    }
+}
+
+#[tokio::test]
 async fn v2_eligibility_uses_canonical_logic_and_batch_authorization() {
     let (state, token, csrf, user_id, _guard) = setup_user("tord-v2elig").await;
     let (_token2, _csrf2, user2) = register_extra_user(&state, "tord-v2elig2").await;
