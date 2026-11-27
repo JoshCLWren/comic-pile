@@ -39,6 +39,7 @@ FULL_PATH_REQUIRED_JOBS = (
     "factory-actionlint",
     "factory-shellcheck",
     "native-route-db-test-guard",
+    "reading-lists-terminology",
     "frontend-typecheck",
     "python-lint",
     "python-typecheck",

@@ -17,7 +17,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 - v1 routes with a named retirement owner: 65.
 - v1 routes needing an owner issue: 0 (visible baseline debt, not a pass).
 - Routes with unresolved production ingress: 0.
-- Scanned first-party call sites: 924.
+- Scanned first-party call sites: 923.
 - Stale AIP baseline entries (no live route): 4.
 - Allowlist entries: 175 (owner 175, baseline debt 0, nonconforming v2 98).
 
@@ -188,7 +188,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | GET | `/api/v2/issues/{issue_id}/comicvine` | `comicvine_issue::issue_intelligence` | v2 | frontend/src/services/api-comicvine.ts | /api/native_roll.rs | #4623 | canonical-v2 | live-target |
 | GET | `/api/v2/issues/{issue_id}/dependencies` | `issue_read::get_issue_dependencies` | v2 | frontend/src/services/api-dependencies.ts, frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts, frontend/src/test/p0-dependencies-reading-order.spec.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
 | PUT | `/api/v2/issues/{issue_id}/position` | `issue_read_state::put_issue_position` | v2 | frontend/src/services/api-issues.ts, frontend/src/unit/api-issues-coverage.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
-| POST | `/api/v2/issues/{issue_id}/read-markers` | `issue_read_state::create_read_marker` | v2 | frontend/src/services/api-issues.ts, frontend/src/test/helpers.ts, frontend/src/test/reading-plan-reader.spec.ts, frontend/src/unit/api-issues-coverage.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
+| POST | `/api/v2/issues/{issue_id}/read-markers` | `issue_read_state::create_read_marker` | v2 | frontend/src/services/api-issues.ts, frontend/src/test/helpers.ts, frontend/src/unit/api-issues-coverage.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
 | GET | `/api/v2/issues/{issue_id}/reader-context` | `reader_context::get_issue_reader_context` | v2 | frontend/src/services/api-issues.ts, frontend/src/services/api-reader-context.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
 | GET | `/api/v2/queue-entries/{thread_id}` | `queue::get_queue_entry` | v2 | frontend/src/test/p0-roll-selection.spec.ts, frontend/src/unit/api.test.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
 | PATCH | `/api/v2/queue-entries/{thread_id}` | `queue::update_queue_entry` | v2 | frontend/src/test/p0-roll-selection.spec.ts, frontend/src/unit/api.test.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |

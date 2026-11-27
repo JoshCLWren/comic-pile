@@ -1709,7 +1709,6 @@
       "consumers": [
         "frontend/src/services/api-issues.ts",
         "frontend/src/test/helpers.ts",
-        "frontend/src/test/reading-plan-reader.spec.ts",
         "frontend/src/unit/api-issues-coverage.test.ts"
       ]
     },

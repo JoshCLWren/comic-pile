@@ -710,7 +710,7 @@ jobs:
   check-all-jobs:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [factory-scope, factory-fast-contracts, build, build-fork, native-rust-roll, rust-ingress, route-fragment-guard, conflict-markers, dependency-integrity, docs-code-paths, script-checks, factory-actionlint, factory-shellcheck, native-route-db-test-guard, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health]
+    needs: [factory-scope, factory-fast-contracts, build, build-fork, native-rust-roll, rust-ingress, route-fragment-guard, conflict-markers, dependency-integrity, docs-code-paths, script-checks, factory-actionlint, factory-shellcheck, native-route-db-test-guard, reading-lists-terminology, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health]
     if: always()
     steps:
       - name: Check job results
@@ -748,6 +748,7 @@ jobs:
           echo "Workflow syntax: ${{ needs.factory-actionlint.result }}"
           echo "Shell scripts: ${{ needs.factory-shellcheck.result }}"
           echo "Native Route DB-Test Guard: ${{ needs.native-route-db-test-guard.result }}"
+          echo "Reading Lists Terminology Guard: ${{ needs.reading-lists-terminology.result }}"
           echo "Frontend Lint + Typecheck: ${{ needs.frontend-typecheck.result }}"
           echo "Python Lint (ruff): ${{ needs.python-lint.result }}"
           echo "Python Type Check (ty): ${{ needs.python-typecheck.result }}"
@@ -766,6 +767,7 @@ jobs:
              [ "${{ needs.factory-actionlint.result }}" != "success" ] || \
              [ "${{ needs.factory-shellcheck.result }}" != "success" ] || \
              [ "${{ needs.native-route-db-test-guard.result }}" != "success" ] || \
+             [ "${{ needs.reading-lists-terminology.result }}" != "success" ] || \
              [ "${{ needs.frontend-typecheck.result }}" != "success" ] || \
              [ "${{ needs.python-lint.result }}" != "success" ] || \
              [ "${{ needs.python-typecheck.result }}" != "success" ] || \
