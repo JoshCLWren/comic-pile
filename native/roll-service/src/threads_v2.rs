@@ -123,7 +123,7 @@ async fn reactivate_thread(
         ("thread_id" = i32, Path, description = "Identifier of the completed thread to reactivate"),
     ),
 )]
-pub(crate) fn reactivate_thread_documentation() {}
+pub fn reactivate_thread_documentation() {}
 
 /// Domain OpenAPI surface for canonical v2 Thread custom methods.
 #[derive(utoipa::OpenApi)]
