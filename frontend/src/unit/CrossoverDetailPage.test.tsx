@@ -175,7 +175,6 @@ describe('CrossoverDetailPage', () => {
     expect(await screen.findByRole('heading', { name: 'Annihilation' })).toBeInTheDocument()
     expect(mockedGroups.get).toHaveBeenCalledTimes(1)
     expect(mockedGroups.get).toHaveBeenCalledWith(7)
-    expect(mockedGroups.get).not.toHaveBeenCalled()
     expect(mockedGroups.listForThread).not.toHaveBeenCalled()
     expect(mockedGroups.plansForGroup).not.toHaveBeenCalled()
     expect(mockedThreads.get).not.toHaveBeenCalled()
