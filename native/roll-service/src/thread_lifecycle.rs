@@ -3255,7 +3255,6 @@ mod tests {
         let body = json!({
             "title": "A newer title",
             "format": "Comic",
-            "notes": "keep me",
             "update_mask": ["notes"]
         });
         let (input, expected) = parse_patch(&mut check, Some(body)).unwrap();
