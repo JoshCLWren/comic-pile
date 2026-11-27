@@ -136,9 +136,9 @@ pub fn taste_signal_name(signal_type: &str, external_key: &str) -> String {
 /// v1 validators, so the v2 resource reports the same 422 details for an
 /// unknown type or an oversized key.
 pub fn parse_taste_signal_name(raw: &str) -> Result<(String, String), ApiError> {
-    let (signal_type, external_key) = raw.split_once(':').ok_or_else(|| {
-        unprocessable("signal_name must be <signal_type>:<external_key>")
-    })?;
+    let (signal_type, external_key) = raw
+        .split_once(':')
+        .ok_or_else(|| unprocessable("signal_name must be <signal_type>:<external_key>"))?;
     validate_signal_type(signal_type)?;
     validate_external_key(external_key)?;
     Ok((signal_type.to_owned(), external_key.to_owned()))
@@ -763,15 +763,18 @@ mod tests {
 
     #[test]
     fn patch_body_supports_masks_and_preserves_aip134_semantics() {
-        let set = parse_taste_signal_patch(br#"{"user_verdict":"sometimes","update_mask":["user_verdict"]}"#)
-            .expect("masked set");
+        let set = parse_taste_signal_patch(
+            br#"{"user_verdict":"sometimes","update_mask":["user_verdict"]}"#,
+        )
+        .expect("masked set");
         assert_eq!(set, VerdictPatch::Set("sometimes".to_string()));
         assert_eq!(
             parse_taste_signal_patch(br#"{"user_verdict":"rejected"}"#).expect("presence set"),
             VerdictPatch::Set("rejected".to_string())
         );
         assert_eq!(
-            parse_taste_signal_patch(br#"{"update_mask":"user_verdict"}"#).expect("string mask clears"),
+            parse_taste_signal_patch(br#"{"update_mask":"user_verdict"}"#)
+                .expect("string mask clears"),
             VerdictPatch::Clear
         );
         assert_eq!(
@@ -1038,7 +1041,9 @@ mod tests {
             owner.get::<_, Option<String>>(0).as_deref(),
             Some("confirmed")
         );
-        assert!(owner.get::<_, Option<chrono::DateTime<chrono::Utc>>>(1).is_some());
+        assert!(owner
+            .get::<_, Option<chrono::DateTime<chrono::Utc>>>(1)
+            .is_some());
         assert_eq!(owner.get::<_, i32>(2), 4);
         assert_eq!(owner.get::<_, i32>(3), 2);
 

@@ -534,7 +534,9 @@ pub async fn list_taste_discoveries(
     RawQuery(raw_query): RawQuery,
     claims: VerifiedAccessClaims,
 ) -> Result<Json<TasteDiscoveryListResponse>, ApiError> {
-    Ok(Json(list_discoveries_for(&state, raw_query, &claims).await?))
+    Ok(Json(
+        list_discoveries_for(&state, raw_query, &claims).await?,
+    ))
 }
 
 /// `GET /api/v2/users/me/tasteDiscoveries` — canonical resource spelling of the
@@ -544,7 +546,9 @@ pub async fn list_taste_discoveries_v2(
     RawQuery(raw_query): RawQuery,
     claims: VerifiedAccessClaims,
 ) -> Result<Json<TasteDiscoveryListResponse>, ApiError> {
-    Ok(Json(list_discoveries_for(&state, raw_query, &claims).await?))
+    Ok(Json(
+        list_discoveries_for(&state, raw_query, &claims).await?,
+    ))
 }
 
 /// `POST /api/v1/taste/discoveries/{signal_id}/dismiss` — suppress without a verdict.
@@ -1074,7 +1078,10 @@ mod tests {
             .expect("verify v2 prompting write")
             .get(0);
         drop(connection);
-        assert!(prompted.is_some(), "v2 listing must record last_prompted_at");
+        assert!(
+            prompted.is_some(),
+            "v2 listing must record last_prompted_at"
+        );
 
         let Json(second) = list_taste_discoveries_v2(
             State(state.clone()),
@@ -1109,13 +1116,10 @@ mod tests {
     async fn v2_dismiss_is_owner_scoped_verdict_safe_and_idempotent() {
         let (state, user, _guard) = database_fixture().await;
         for _ in 0..2 {
-            let Json(response) = dismiss_taste_discovery_v2(
-                State(state.clone()),
-                user.clone(),
-                Path(8001),
-            )
-            .await
-            .expect("v2 dismiss");
+            let Json(response) =
+                dismiss_taste_discovery_v2(State(state.clone()), user.clone(), Path(8001))
+                    .await
+                    .expect("v2 dismiss");
             assert!(response.dismissed, "duplicate dismiss stays idempotent");
         }
 
