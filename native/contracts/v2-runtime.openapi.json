@@ -19057,25 +19057,6 @@
           }
         }
       },
-<<<<<<< HEAD
-      "ThreadCreatorCreditsPage": {
-        "type": "object",
-        "description": "Paginated thread-scoped creator-credit projection.\n\n`issues` contains only rows with stored credits, matching the legacy bulk\nread; callers fall back to the series' manual credits for absent issues.",
-        "required": [
-          "thread_id",
-          "issues",
-          "total_count",
-          "page_size"
-        ],
-        "properties": {
-          "issues": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/IssueCreatorsEntry"
-            }
-          },
-          "next_page_token": {
-=======
       "ThreadCreateRequest": {
         "type": "object",
         "description": "Body of `POST /api/v1/threads/`.",
@@ -19100,13 +19081,45 @@
             "items": {}
           },
           "notes": {
->>>>>>> origin/main
             "type": [
               "string",
               "null"
             ]
           },
-<<<<<<< HEAD
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ThreadCreatorCreditsPage": {
+        "type": "object",
+        "description": "Paginated thread-scoped creator-credit projection.\n\n`issues` contains only rows with stored credits, matching the legacy bulk\nread; callers fall back to the series' manual credits for absent issues.",
+        "required": [
+          "thread_id",
+          "issues",
+          "total_count",
+          "page_size"
+        ],
+        "properties": {
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueCreatorsEntry"
+            }
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "page_size": {
             "type": "integer",
             "format": "int64"
@@ -19118,17 +19131,6 @@
           "total_count": {
             "type": "integer",
             "format": "int64"
-=======
-          "title": {
-            "type": "string"
-          },
-          "total_issues": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
->>>>>>> origin/main
           }
         }
       },

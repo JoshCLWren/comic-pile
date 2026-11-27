@@ -18942,7 +18942,44 @@ export interface operations {
             };
         };
     };
-<<<<<<< HEAD
+    create_thread_v2_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThreadCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created (or the duplicate created seconds earlier) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeThreadResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_thread_creator_credits_v2_documentation: {
         parameters: {
             query?: {
@@ -18964,28 +19001,10 @@ export interface operations {
         responses: {
             /** @description Paginated thread creator credits */
             200: {
-=======
-    create_thread_v2_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ThreadCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description Created (or the duplicate created seconds earlier) */
-            201: {
->>>>>>> origin/main
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-<<<<<<< HEAD
                     "application/json": components["schemas"]["ThreadCreatorCreditsPage"];
                 };
             };
@@ -18996,11 +19015,6 @@ export interface operations {
                 };
                 content?: never;
             };
-=======
-                    "application/json": components["schemas"]["NativeThreadResponse"];
-                };
-            };
->>>>>>> origin/main
             /** @description Not authenticated */
             401: {
                 headers: {
@@ -19008,7 +19022,6 @@ export interface operations {
                 };
                 content?: never;
             };
-<<<<<<< HEAD
             /** @description Thread not found */
             404: {
                 headers: {
@@ -19016,8 +19029,6 @@ export interface operations {
                 };
                 content?: never;
             };
-=======
->>>>>>> origin/main
             /** @description Validation failed */
             422: {
                 headers: {
@@ -19025,7 +19036,6 @@ export interface operations {
                 };
                 content?: never;
             };
-<<<<<<< HEAD
             /** @description Database temporarily unavailable */
             503: {
                 headers: {
@@ -19033,8 +19043,6 @@ export interface operations {
                 };
                 content?: never;
             };
-=======
->>>>>>> origin/main
         };
     };
     issue_order_documentation: {
