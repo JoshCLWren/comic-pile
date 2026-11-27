@@ -13,11 +13,11 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 
 ## Coverage summary
 
-- Live API routes: 254 (v1 65, v2 177, unversioned 12).
+- Live API routes: 256 (v1 65, v2 179, unversioned 12).
 - v1 routes with a named retirement owner: 65.
 - v1 routes needing an owner issue: 0 (visible baseline debt, not a pass).
 - Routes with unresolved production ingress: 0.
-- Scanned first-party call sites: 924.
+- Scanned first-party call sites: 928.
 - Stale AIP baseline entries (no live route): 4.
 - Allowlist entries: 175 (owner 175, baseline debt 0, nonconforming v2 98).
 
@@ -61,9 +61,9 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | POST | `/api/v1/issue-identity/cbl-sources/compare` | `issue_identity::compare_cbl_sources` | v1 | frontend/src/services/api-cbl-sources.ts | /api/native_roll.rs | #5713 | POST /api/v2/cblSources:compare | slice-open |
 | GET | `/api/v1/issue-identity/cbl-sources/folders` | `cbl_catalog::list_cbl_source_folders` | v1 | frontend/src/services/api-cbl-sources.ts | /api/native_roll.rs | #5712 | GET /api/v2/cblSources | slice-open |
 | GET | `/api/v1/issue-identity/cbl-sources/{list_id}` | `issue_identity::get_cbl_source_list` | v1 | frontend/src/services/api-cbl-sources.ts | /api/native_roll.rs | #5712 | GET /api/v2/cblSources | slice-open |
-| POST | `/api/v1/issue-identity/cbl/{list_id}/adoption-plan` | `issue_identity::cbl_adoption_plan` | v1 | frontend/src/services/api-cbl-sources.ts | /api/native_roll.rs | #5714 | GET /api/v2/cblSources/{source_id}/adoptionPreview \| :planAdoption \| :previewReadingGraph | slice-open |
-| GET | `/api/v1/issue-identity/cbl/{list_id}/adoption-preview` | `issue_identity_adoption_preview::api_cbl_adoption_preview_handler` | v1 | frontend/src/services/api-cbl-sources.ts | /api/native_roll.rs | #5714 | GET /api/v2/cblSources/{source_id}/adoptionPreview \| :planAdoption \| :previewReadingGraph | slice-open |
-| POST | `/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview` | `issue_identity_cbl_reading_graph_preview::preview_cbl_reading_graph_handler` | v1 | frontend/src/services/api-reading-graph.ts | /api/native_roll.rs | #5714 | GET /api/v2/cblSources/{source_id}/adoptionPreview \| :planAdoption \| :previewReadingGraph | slice-open |
+| POST | `/api/v1/issue-identity/cbl/{list_id}/adoption-plan` | `issue_identity::cbl_adoption_plan` | v1 | none | /api/native_roll.rs | #5714 | GET /api/v2/cblSources/{source_id}/adoptionPreview \| :planAdoption \| :previewReadingGraph | slice-open |
+| GET | `/api/v1/issue-identity/cbl/{list_id}/adoption-preview` | `issue_identity_adoption_preview::api_cbl_adoption_preview_handler` | v1 | none | /api/native_roll.rs | #5714 | GET /api/v2/cblSources/{source_id}/adoptionPreview \| :planAdoption \| :previewReadingGraph | slice-open |
+| POST | `/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview` | `issue_identity_cbl_reading_graph_preview::preview_cbl_reading_graph_handler` | v1 | frontend/src/services/api-cbl-sources.ts, frontend/src/services/api-continuity-plans.ts, frontend/src/services/api-reading-graph.ts, frontend/src/services/api-reading-orders.ts | /api/native_roll.rs | #5714 | GET /api/v2/cblSources/{source_id}/adoptionPreview \| :planAdoption \| :previewReadingGraph | slice-open |
 | GET | `/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates` | `issue_identity::find_cbl_candidates_for_reading_list` | v1 | frontend/src/services/api-cbl-sources.ts | /api/native_roll.rs | #5713 | GET /api/v2/readingLists/{list_id}/cblCandidates | slice-open |
 | GET | `/api/v1/issues/{issue_id}/comicvine` | `comicvine_issue::issue_intelligence` | v1 | none | /api/native_roll.rs | #4623 | GET /api/v2/issues/{issue_id}/comicvine | migrated-awaiting-retirement |
 | PUT | `/api/v1/reading-order-groups/{group_id}/order` | `dependency_groups::set_group_order` | v1 | frontend/src/services/api-dependency-groups.ts | /api/native_roll.rs | #5711 | POST /api/v2/reading-order-groups/{group_id}/members \| /issue-ranges | slice-open |
@@ -111,6 +111,8 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | POST | `/api/v2/auth/refresh` | `auth::handlers::refresh` | v2 | frontend/src/services/api.ts, frontend/src/test/auth-account-switching.spec.ts, frontend/src/test/auth-fixtures.ts, frontend/src/test/fixtures.ts, frontend/src/test/issue-4527-roll-snoozes.spec.ts, frontend/src/test/network-budget/auth-public.spec.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/unit/api-auth-recovery.test.ts, frontend/src/unit/api-auth-v2.test.ts, frontend/src/unit/api-creators.test.ts, frontend/src/unit/api.test.ts, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4459 | canonical-v2 | live-target |
 | POST | `/api/v2/auth/register` | `auth::handlers::register` | v2 | frontend/src/pages/RegisterPage.tsx, frontend/src/services/api.ts, frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts, frontend/src/test/fixtures.ts, frontend/src/test/issue-3429-bootstrap-recovery.spec.ts, frontend/src/unit/api-auth-v2.test.ts, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/uncovered-pages.test.tsx | /api/native_roll.rs | #4459 | canonical-v2 | live-target |
 | POST | `/api/v2/auth/reset-password` | `auth::handlers::reset_password` | v2 | frontend/src/services/api-auth.ts, frontend/src/services/api.ts, frontend/src/test/network-budget/auth-public.spec.ts, frontend/src/unit/api-auth-v2.test.ts, frontend/src/unit/api.test.ts, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4459 | canonical-v2 | live-target |
+| POST | `/api/v2/cblSources/{source_id_action}` | `cbl_sources_v2::cbl_source_action_v2_handler` | v2 | frontend/src/services/api-cbl-sources.ts, frontend/src/services/api-reading-graph.ts, frontend/src/unit/api-cbl-sources.test.ts, frontend/src/unit/api-reading-graph.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
+| GET | `/api/v2/cblSources/{source_id}/adoptionPreview` | `cbl_sources_v2::adoption_preview_v2_handler` | v2 | frontend/src/services/api-cbl-sources.ts, frontend/src/unit/api-cbl-sources.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | GET | `/api/v2/comicvine/issues/{issue_id}/identity` | `comicvine_v2::get_issue_identity` | v2 | frontend/src/services/api-comicvine.ts | /api/native_roll.rs | #4835 | canonical-v2 | live-target |
 | POST | `/api/v2/comicvine/issues/{issue_id}/identity:confirm` | `comicvine_v2::confirm_identity` | v2 | frontend/src/services/api-comicvine.ts | /api/native_roll.rs | #4835 | canonical-v2 | live-target |
 | POST | `/api/v2/comicvine/issues/{issue_id}/identity:replace` | `comicvine_v2::replace_identity` | v2 | frontend/src/services/api-comicvine.ts | /api/native_roll.rs | #4835 | canonical-v2 | live-target |
