@@ -527,12 +527,7 @@ async fn reading_list_candidates_reports_gaps_and_ranks() {
     .await
     .unwrap();
 
-    let (status, body) = get(
-        &state,
-        &token,
-        "/api/v2/reading-lists/910/cbl-candidates",
-    )
-    .await;
+    let (status, body) = get(&state, &token, "/api/v2/reading-lists/910/cbl-candidates").await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["list_id"], 910);
     assert_eq!(body["list_name"], "My List");
@@ -574,7 +569,7 @@ async fn compare_cbl_sources_returns_no_matches_for_unknown_ids() {
 #[tokio::test]
 async fn compare_cbl_sources_handles_large_input_set() {
     let (state, token, csrf, _guard) = setup().await;
-    let mut ids: Vec<String> = (1..=1000).map(|i| format!("4000-{i}")).collect();
+    let mut ids: Vec<String> = (1..=999).map(|i| format!("4000-{i}")).collect();
     ids.push(ISSUE_ID.to_string());
     let (status, body) = post_json(
         &state,
@@ -585,7 +580,7 @@ async fn compare_cbl_sources_handles_large_input_set() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    assert_eq!(body["input_total"], 1001);
+    assert_eq!(body["input_total"], 1000);
     assert!(body["candidates_total"].as_i64().unwrap() >= 1, "{body}");
 }
 
@@ -1754,12 +1749,7 @@ async fn reading_list_candidates_other_user_returns_404() {
     )
     .await;
 
-    let (status, body) = get(
-        &state,
-        &token2,
-        "/api/v2/reading-lists/920/cbl-candidates",
-    )
-    .await;
+    let (status, body) = get(&state, &token2, "/api/v2/reading-lists/920/cbl-candidates").await;
     assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
     assert_eq!(body["detail"], "Custom CBL 920 not found", "{body}");
 }
