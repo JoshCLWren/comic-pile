@@ -243,10 +243,7 @@
       "rollout_status": "slice-open",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": [
-        "frontend/src/services/api-bug-reports.ts",
-        "frontend/src/unit/api.test.ts"
-      ]
+      "consumers": []
     },
     {
       "method": "POST",

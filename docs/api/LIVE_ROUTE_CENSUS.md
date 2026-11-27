@@ -13,7 +13,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 
 ## Coverage summary
 
-- Live API routes: 252 (v1 65, v2 175, unversioned 12).
+- Live API routes: 253 (v1 65, v2 176, unversioned 12).
 - v1 routes with a named retirement owner: 65.
 - v1 routes needing an owner issue: 0 (visible baseline debt, not a pass).
 - Routes with unresolved production ingress: 0.
@@ -45,7 +45,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | POST | `/api/v1/auth/refresh` | `auth::handlers::refresh` | v1 | none | /api/native_roll.rs | #4549 | POST\|GET /api/v2/auth/* | caller-migration-open |
 | POST | `/api/v1/auth/register` | `auth::handlers::register` | v1 | none | /api/native_roll.rs | #4549 | POST\|GET /api/v2/auth/* | caller-migration-open |
 | POST | `/api/v1/auth/reset-password` | `auth::handlers::reset_password` | v1 | none | /api/native_roll.rs | #4549 | POST\|GET /api/v2/auth/* | caller-migration-open |
-| POST | `/api/v1/bug-reports/` | `bug_reports::create` | v1 | frontend/src/services/api-bug-reports.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #5718 | POST /api/v2/bugReports | slice-open |
+| POST | `/api/v1/bug-reports/` | `bug_reports::create` | v1 | none | /api/native_roll.rs | #5718 | POST /api/v2/bugReports | slice-open |
 | POST | `/api/v1/catalog/series-mappings/preview` | `catalog_series_mapping_preview::preview_series_mapping_handler` | v1 | frontend/src/services/api-series-mapping.ts | /api/native_roll.rs | #5716 | POST /api/v2/seriesMappings:preview | slice-open |
 | GET | `/api/v1/comicvine/series/{comicvine_volume_id}/import-status` | `comicvine_resolution::series_import_status` | v1 | none | /api/native_roll.rs | #4835 | GET /api/v2/comicvine/series/{comicvine_volume_id}/import-status | slice-open |
 | POST | `/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview` | `continuity_plans_project_preview::preview_plan_projection_handler` | v1 | frontend/src/services/api-reading-orders.ts, frontend/src/unit/api-reading-orders.test.ts | /api/native_roll.rs | #5715 | POST /api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection | slice-open |
@@ -111,6 +111,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | POST | `/api/v2/auth/refresh` | `auth::handlers::refresh` | v2 | frontend/src/services/api.ts, frontend/src/test/auth-account-switching.spec.ts, frontend/src/test/auth-fixtures.ts, frontend/src/test/fixtures.ts, frontend/src/test/issue-4527-roll-snoozes.spec.ts, frontend/src/test/network-budget/auth-public.spec.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/unit/api-auth-recovery.test.ts, frontend/src/unit/api-auth-v2.test.ts, frontend/src/unit/api-creators.test.ts, frontend/src/unit/api.test.ts, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4459 | canonical-v2 | live-target |
 | POST | `/api/v2/auth/register` | `auth::handlers::register` | v2 | frontend/src/pages/RegisterPage.tsx, frontend/src/services/api.ts, frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts, frontend/src/test/fixtures.ts, frontend/src/test/issue-3429-bootstrap-recovery.spec.ts, frontend/src/unit/api-auth-v2.test.ts, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/uncovered-pages.test.tsx | /api/native_roll.rs | #4459 | canonical-v2 | live-target |
 | POST | `/api/v2/auth/reset-password` | `auth::handlers::reset_password` | v2 | frontend/src/services/api-auth.ts, frontend/src/services/api.ts, frontend/src/test/network-budget/auth-public.spec.ts, frontend/src/unit/api-auth-v2.test.ts, frontend/src/unit/api.test.ts, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4459 | canonical-v2 | live-target |
+| POST | `/api/v2/bugReports` | `bug_reports::create_v2` | v2 | frontend/src/services/api-bug-reports.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | GET | `/api/v2/comicvine/issues/{issue_id}/identity` | `comicvine_v2::get_issue_identity` | v2 | frontend/src/services/api-comicvine.ts | /api/native_roll.rs | #4835 | canonical-v2 | live-target |
 | POST | `/api/v2/comicvine/issues/{issue_id}/identity:confirm` | `comicvine_v2::confirm_identity` | v2 | frontend/src/services/api-comicvine.ts | /api/native_roll.rs | #4835 | canonical-v2 | live-target |
 | POST | `/api/v2/comicvine/issues/{issue_id}/identity:replace` | `comicvine_v2::replace_identity` | v2 | frontend/src/services/api-comicvine.ts | /api/native_roll.rs | #4835 | canonical-v2 | live-target |
