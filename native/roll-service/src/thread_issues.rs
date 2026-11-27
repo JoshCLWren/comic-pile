@@ -2246,6 +2246,34 @@ mod tests {
     }
 
     #[test]
+    fn v2_page_sql_is_owner_scoped_bounded_and_free_of_eligibility_veto() {
+        let sql = thread_issues_v2_page_sql();
+        assert!(sql.contains("threads WHERE id = $1 AND user_id = $2"));
+        assert!(sql.contains("LIMIT $6"));
+        assert!(sql.contains("COALESCE(id_map.status = 'confirmed', false) AS has_confirmed_identity"));
+        assert!(sql.contains("x.metadata_json->>'image_url'"));
+        assert!(!sql.contains("{cover}") && !sql.contains("{x}"));
+        assert!(!sql.contains("reading_eligibility"));
+        assert!(THREAD_CREDITS_V2_PAGE_SQL.contains("iem.status = 'confirmed'"));
+        assert!(THREAD_CREDITS_V2_PAGE_SQL.contains("LIMIT $6"));
+    }
+
+    #[test]
+    fn v2_page_query_parses_filter_and_cursor() {
+        let (status, size, token, position, id) = parse_v2_page_query(Some(
+            "status=%72ead&page_size=2%35&page_token=3%2C17",
+        ))
+        .unwrap();
+        assert_eq!(status.as_deref(), Some("read"));
+        assert_eq!(size, 25);
+        assert_eq!(token.as_deref(), Some("3,17"));
+        assert_eq!((position, id), (Some(3), Some(17)));
+        assert!(parse_v2_page_query(Some("page_token=bad")).is_err());
+        assert!(parse_v2_page_query(Some("page_size=101")).is_err());
+        assert!(parse_v2_page_query(Some("status=pending")).is_err());
+    }
+
+    #[test]
     fn range_parser_matches_python() {
         assert_eq!(
             parse_issue_ranges("1-3").unwrap(),
