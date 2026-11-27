@@ -1623,7 +1623,6 @@ mod tests {
     }
 
     #[tokio::test]
-<<<<<<< HEAD
     async fn v2_thread_dependency_diagnosis_ingress_reaches_rust_and_v1_is_404() {
         // #5709: the canonical dependency/blocking diagnosis resources moved
         // to v2 URLs. Register them in this Vercel entry table or the fallback
@@ -1636,16 +1635,6 @@ mod tests {
             ("GET", "/api/v2/threads/42/eligibility"),
             ("POST", "/api/v2/threads:explainEligibility"),
             ("GET", "/api/v2/threads/42/connections"),
-=======
-    async fn v2_thread_issue_read_ingress_reaches_rust_and_never_hits_json_404() {
-        // #5706: both canonical v2 reads must be registered in this Vercel
-        // entry table. An unauthenticated request must reach the dispatched
-        // handler (401) or a cold-start 503; it must never fall through to
-        // native_not_found with the Rust JSON 404.
-        for (method, uri) in [
-            ("GET", "/api/v2/threads/42/issues"),
-            ("GET", "/api/v2/threads/42/creatorCredits"),
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
         ] {
             let mut router = app();
             let response = router
@@ -1657,17 +1646,12 @@ mod tests {
                         .unwrap(),
                 )
                 .await
-<<<<<<< HEAD
                 .expect("router response");
-=======
-                .expect("thread issue read ingress response");
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
             assert_eq!(
                 response.headers().get("x-comicpile-api-runtime").unwrap(),
                 "rust",
                 "{method} {uri} runtime header"
             );
-<<<<<<< HEAD
             assert_ne!(
                 response.status(),
                 StatusCode::NOT_FOUND,
@@ -1707,13 +1691,41 @@ mod tests {
                 String::from_utf8_lossy(&bytes),
                 r#"{"detail":"Not Found"}"#,
                 "{method} {uri} must hit native_not_found"
-=======
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn v2_thread_issue_read_ingress_reaches_rust_and_never_hits_json_404() {
+        // #5706: both canonical v2 reads must be registered in this Vercel
+        // entry table. An unauthenticated request must reach the dispatched
+        // handler (401) or a cold-start 503; it must never fall through to
+        // native_not_found with the Rust JSON 404.
+        for (method, uri) in [
+            ("GET", "/api/v2/threads/42/issues"),
+            ("GET", "/api/v2/threads/42/creatorCredits"),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("thread issue read ingress response");
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{method} {uri} runtime header"
+            );
             assert!(
                 response.status() == StatusCode::UNAUTHORIZED
                     || response.status() == StatusCode::SERVICE_UNAVAILABLE,
                 "{method} {uri} must reach Rust dispatch, not the 404 fallback, got {}",
                 response.status()
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
             );
         }
     }
