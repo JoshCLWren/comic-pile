@@ -282,6 +282,12 @@ async fn v2_issues_are_ordered_enriched_filtered_and_paginated() {
         1.0,
     )
     .await;
+    candidate_issue_identity(
+        &conn,
+        ids[2],
+        json!({"image_url": "https://cdn.example.com/candidate.jpg"}),
+    )
+    .await;
     let path = format!("/api/v2/threads/{thread}/issues");
 
     let (status, body) = send(&state, &format!("{path}?page_size=2"), &token, &csrf).await;
@@ -327,6 +333,14 @@ async fn v2_issues_are_ordered_enriched_filtered_and_paginated() {
     assert_eq!(body["total_count"], 1);
     assert_eq!(body["issues"][0]["id"], ids[2]);
     assert_eq!(body["issues"][0]["status"], "read");
+    // A candidate mapping is visible as state but never exposes provider
+    // identity or the stored cover URL.
+    assert_eq!(body["issues"][0]["mapping_state"], "candidate");
+    assert!(!body["issues"][0]["has_confirmed_identity"]
+        .as_bool()
+        .unwrap());
+    assert!(body["issues"][0]["comicvine_issue_id"].is_null());
+    assert!(body["issues"][0]["cover_image_url"].is_null());
 
     let (status, body) = send(
         &state,
