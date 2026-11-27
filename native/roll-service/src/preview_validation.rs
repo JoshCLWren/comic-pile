@@ -26,6 +26,27 @@ pub(crate) fn parse_path_int(raw: Result<Path<String>, PathRejection>) -> Result
     trimmed.parse().map_err(|_| validation_failed())
 }
 
+/// Parse the id from an AIP-136 custom-method segment such as
+/// `42:previewReadingOrderProjection`.
+///
+/// axum 0.8 / matchit cannot register a route with both a `{param}` and a
+/// literal suffix in one segment, so the whole segment is captured and the
+/// method suffix is validated here. The public wire path and OpenAPI document
+/// keep the canonical `.../{id}:camelCaseMethod` spelling.
+pub(crate) fn parse_custom_method_path_int(
+    raw: Result<Path<String>, PathRejection>,
+    method: &str,
+) -> Result<i64, ApiError> {
+    let Path(raw) = raw.map_err(|_| validation_failed())?;
+    let Some((id, suffix)) = raw.rsplit_once(':') else {
+        return Err(validation_failed());
+    };
+    if suffix != method {
+        return Err(validation_failed());
+    }
+    parse_path_int(Ok(Path(id.to_string())))
+}
+
 /// Parse a request body that must be a JSON object.
 pub(crate) fn parse_body_object(body: &[u8]) -> Result<Map<String, Value>, ApiError> {
     match serde_json::from_slice::<Value>(body) {
@@ -62,6 +83,24 @@ mod tests {
         assert_eq!(parse_path_int(Ok(Path(" +7 ".into()))).unwrap(), 7);
         for bad in ["abc", "", "1.5", "-", "1e3", "99999999999999999999"] {
             let error = parse_path_int(Ok(Path(bad.into()))).unwrap_err();
+            assert_eq!(error.detail(), "Validation failed", "{bad}");
+        }
+    }
+
+    #[test]
+    fn custom_method_path_int_requires_the_exact_suffix() {
+        let method = "previewReadingOrderProjection";
+        assert_eq!(
+            parse_custom_method_path_int(Ok(Path(format!("12:{method}"))), method).unwrap(),
+            12
+        );
+        for bad in [
+            "12".to_string(),
+            format!("12:otherMethod"),
+            format!("abc:{method}"),
+            format!("{method}:12"),
+        ] {
+            let error = parse_custom_method_path_int(Ok(Path(bad.clone())), method).unwrap_err();
             assert_eq!(error.detail(), "Validation failed", "{bad}");
         }
     }

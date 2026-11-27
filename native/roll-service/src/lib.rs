@@ -1302,7 +1302,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             delete(continuity_plans::unlink_plan_dependency_edge),
         )
         .route(
-            "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection",
+            "/api/v2/continuityPlans/{plan_id_and_action}",
             post(continuity_plans_project_preview::preview_plan_projection_handler),
         )
         .route(

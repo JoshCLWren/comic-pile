@@ -284,7 +284,7 @@ fn app() -> Router {
             post(native_dispatch),
         )
         .route(
-            "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection",
+            "/api/v2/continuityPlans/{plan_id_and_action}",
             post(native_dispatch),
         )
         .route(

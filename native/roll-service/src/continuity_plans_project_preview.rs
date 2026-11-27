@@ -7,7 +7,9 @@
 use crate::{
     auth::AuthenticatedUser,
     db,
-    preview_validation::{parse_body_object, parse_path_int, required_int, validation_failed},
+    preview_validation::{
+        parse_body_object, parse_custom_method_path_int, required_int, validation_failed,
+    },
     ApiError, AppState,
 };
 use axum::{
@@ -268,7 +270,7 @@ pub async fn preview_plan_projection_handler(
     plan_id: Result<Path<String>, PathRejection>,
     body: Bytes,
 ) -> Result<Json<ReadingOrderProjectPreviewResponse>, PreviewError> {
-    let plan_id = parse_path_int(plan_id)?;
+    let plan_id = parse_custom_method_path_int(plan_id, "previewReadingOrderProjection")?;
     let request = parse_request(&body)?;
     let connection = db::checkout(&state).await?;
 
