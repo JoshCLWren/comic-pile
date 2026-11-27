@@ -1,6 +1,7 @@
 {
   "family": "reading-order-groups",
   "owned_path_patterns": [
+    "^/api/v2/readingOrderGroups(?:/.*)?$",
     "^/api/v1/reading\\-order\\-groups(?:/.*)?$"
   ],
   "defaults": {
@@ -13,18 +14,54 @@
   },
   "operations": [
     {
-      "bucket": "v1_operations",
+      "bucket": "operations",
       "method": "GET",
-      "path": "/api/v1/reading-order-groups/",
+      "path": "/api/v2/readingOrderGroups",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/reading\\-order\\-groups/$"
+      "src": "^/api/v2/readingOrderGroups$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5710
     },
     {
-      "bucket": "v1_operations",
+      "bucket": "operations",
       "method": "POST",
-      "path": "/api/v1/reading-order-groups/",
+      "path": "/api/v2/readingOrderGroups",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/reading\\-order\\-groups/$"
+      "src": "^/api/v2/readingOrderGroups$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5710
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/readingOrderGroups/{group_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/readingOrderGroups/[^/]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5710
+    },
+    {
+      "bucket": "operations",
+      "method": "PATCH",
+      "path": "/api/v2/readingOrderGroups/{group_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/readingOrderGroups/[^/]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5710
+    },
+    {
+      "bucket": "operations",
+      "method": "DELETE",
+      "path": "/api/v2/readingOrderGroups/{group_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/readingOrderGroups/[^/]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5710
     },
     {
       "bucket": "v1_operations",
@@ -32,34 +69,6 @@
       "path": "/api/v1/reading-order-groups/threads/{thread_id}/groups",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/reading\\-order\\-groups/threads/[^/]+/groups$"
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "DELETE",
-      "path": "/api/v1/reading-order-groups/{group_id}",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/reading\\-order\\-groups/[^/]+$"
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/reading-order-groups/{group_id}",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/reading\\-order\\-groups/[^/]+$"
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "PATCH",
-      "path": "/api/v1/reading-order-groups/{group_id}",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/reading\\-order\\-groups/[^/]+$"
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/reading-order-groups/{group_id}/detail",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/detail$"
     },
     {
       "bucket": "v1_operations",

@@ -1397,32 +1397,28 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(reading_mode::suggest_reading_mode),
         )
         .route(
-            "/api/v1/reading-order-groups/",
-            get(dependency_groups::list_groups),
+            "/api/v2/readingOrderGroups",
+            get(dependency_groups::list_groups_v2),
         )
         .route(
-            "/api/v1/reading-order-groups/",
-            post(dependency_groups::create_group),
+            "/api/v2/readingOrderGroups",
+            post(dependency_groups::create_group_v2),
+        )
+        .route(
+            "/api/v2/readingOrderGroups/{group_id}",
+            get(dependency_groups::get_group_v2),
+        )
+        .route(
+            "/api/v2/readingOrderGroups/{group_id}",
+            patch(dependency_groups::update_group_v2),
+        )
+        .route(
+            "/api/v2/readingOrderGroups/{group_id}",
+            delete(dependency_groups::delete_group_v2),
         )
         .route(
             "/api/v1/reading-order-groups/threads/{thread_id}/groups",
             get(dependency_groups::list_thread_groups),
-        )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}",
-            get(dependency_groups::get_group),
-        )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}",
-            patch(dependency_groups::update_group),
-        )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}",
-            delete(dependency_groups::delete_group),
-        )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}/detail",
-            get(dependency_groups::get_group_detail),
         )
         .route(
             "/api/v1/reading-order-groups/{group_id}/issue-ranges",

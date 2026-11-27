@@ -765,26 +765,22 @@ fn app() -> Router {
         )
         .route("/api/bug-reports/", post(native_dispatch))
         .route("/api/v1/bug-reports/", post(native_dispatch))
-        .route("/api/v1/reading-order-groups/", get(native_dispatch))
-        .route("/api/v1/reading-order-groups/", post(native_dispatch))
+        .route("/api/v2/readingOrderGroups", get(native_dispatch))
+        .route("/api/v2/readingOrderGroups", post(native_dispatch))
         .route(
-            "/api/v1/reading-order-groups/threads/{thread_id}/groups",
+            "/api/v2/readingOrderGroups/{group_id}",
             get(native_dispatch),
         )
         .route(
-            "/api/v1/reading-order-groups/{group_id}",
-            get(native_dispatch),
-        )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}",
+            "/api/v2/readingOrderGroups/{group_id}",
             patch(native_dispatch),
         )
         .route(
-            "/api/v1/reading-order-groups/{group_id}",
+            "/api/v2/readingOrderGroups/{group_id}",
             delete(native_dispatch),
         )
         .route(
-            "/api/v1/reading-order-groups/{group_id}/detail",
+            "/api/v1/reading-order-groups/threads/{thread_id}/groups",
             get(native_dispatch),
         )
         .route(

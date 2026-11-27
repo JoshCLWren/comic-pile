@@ -2436,10 +2436,7 @@ mod tests {
     fn contract_documents_every_operation_and_stays_current() {
         let document = serde_json::to_value(dependency_groups_openapi()).unwrap();
         for path in [
-            "/api/v1/reading-order-groups/",
             "/api/v1/reading-order-groups/threads/{thread_id}/groups",
-            "/api/v1/reading-order-groups/{group_id}",
-            "/api/v1/reading-order-groups/{group_id}/detail",
             "/api/v1/reading-order-groups/{group_id}/issue-ranges",
             "/api/v1/reading-order-groups/{group_id}/members",
             "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
@@ -2448,8 +2445,95 @@ mod tests {
         ] {
             assert!(document["paths"].get(path).is_some(), "{path}");
         }
+        for retired in [
+            "/api/v1/reading-order-groups/",
+            "/api/v1/reading-order-groups/{group_id}",
+            "/api/v1/reading-order-groups/{group_id}/detail",
+        ] {
+            assert!(
+                document["paths"].get(retired).is_none(),
+                "retired v1 CRUD path still documented: {retired}"
+            );
+        }
         let expected = include_str!("../../contracts/reading-order-groups-v1.openapi.json");
         let generated = dependency_groups_openapi().to_pretty_json().unwrap();
         assert_eq!(expected.trim_end(), generated.trim_end());
+    }
+
+    /// The v2 collection CRUD contract must expose the five standard methods
+    /// with canonical Get carrying the enriched detail view and no `/detail`
+    /// action path (#5710).
+    #[test]
+    fn v2_collection_crud_contract_folds_detail_into_get() {
+        let document = serde_json::to_value(reading_order_groups_v2_openapi()).unwrap();
+        for (path, method, operation_id, success) in [
+            (
+                "/api/v2/readingOrderGroups",
+                "get",
+                "reading_order_groups_list",
+                "200",
+            ),
+            (
+                "/api/v2/readingOrderGroups",
+                "post",
+                "reading_order_groups_create",
+                "201",
+            ),
+            (
+                "/api/v2/readingOrderGroups/{group_id}",
+                "get",
+                "reading_order_groups_get",
+                "200",
+            ),
+            (
+                "/api/v2/readingOrderGroups/{group_id}",
+                "patch",
+                "reading_order_groups_update",
+                "200",
+            ),
+            (
+                "/api/v2/readingOrderGroups/{group_id}",
+                "delete",
+                "reading_order_groups_delete",
+                "204",
+            ),
+        ] {
+            let operation = &document["paths"][path][method];
+            assert!(operation.is_object(), "missing {method} {path}");
+            assert_eq!(operation["operationId"], operation_id, "{method} {path}");
+            assert!(
+                operation["responses"][success].is_object(),
+                "{method} {path} missing {success}"
+            );
+        }
+        assert!(
+            document["paths"]
+                .get("/api/v2/readingOrderGroups/{group_id}/detail")
+                .is_none(),
+            "v2 must not expose a /detail action path"
+        );
+        assert_eq!(
+            document["paths"]["/api/v2/readingOrderGroups/{group_id}"]["get"]["responses"]["200"]
+                ["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/DependencyGroupDetailResponse"
+        );
+        for (path, method, schema) in [
+            (
+                "/api/v2/readingOrderGroups",
+                "post",
+                "#/components/schemas/DependencyGroupCreateRequest",
+            ),
+            (
+                "/api/v2/readingOrderGroups/{group_id}",
+                "patch",
+                "#/components/schemas/DependencyGroupUpdateRequest",
+            ),
+        ] {
+            assert_eq!(
+                document["paths"][path][method]["requestBody"]["content"]["application/json"]
+                    ["schema"]["$ref"],
+                schema
+            );
+        }
     }
 }
