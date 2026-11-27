@@ -894,6 +894,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(thread_lifecycle::list_thread_groups_batch),
         )
         .route(
+            "/api/v2/threads/{thread_id}/reading-order-group-memberships",
+            get(dependency_groups::list_thread_groups_v2),
+        )
+        .route(
             "/api/v1/threads/reactivate",
             post(thread_lifecycle::reactivate_thread),
         )
@@ -1443,6 +1447,26 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/reading-order-groups/{group_id}/plans",
             get(dependency_groups::list_crossover_plans),
+        )
+        .route(
+            "/api/v2/reading-order-groups:resolveMemberships",
+            post(thread_lifecycle::resolve_memberships_v2),
+        )
+        .route(
+            "/api/v2/reading-order-groups/{group_id}/reading-plans",
+            get(dependency_groups::list_crossover_plans_v2),
+        )
+        .route(
+            "/api/v2/reading-order-groups/{group_id}/members",
+            post(dependency_groups::add_member),
+        )
+        .route(
+            "/api/v2/reading-order-groups/{group_id}/issue-ranges",
+            post(dependency_groups::add_issue_range),
+        )
+        .route(
+            "/api/v2/reading-order-groups/{group_id}/members/{member_id}",
+            delete(dependency_groups::remove_member),
         )
         .fallback(|| async { ApiError::NotFound("Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {

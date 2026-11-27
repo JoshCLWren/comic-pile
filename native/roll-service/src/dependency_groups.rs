@@ -965,6 +965,15 @@ pub async fn list_thread_groups(
     Ok(Json(groups))
 }
 
+/// `GET /api/v2/threads/{thread_id}/reading-order-group-memberships`
+pub async fn list_thread_groups_v2(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    thread_id: Result<Path<String>, PathRejection>,
+) -> Result<Json<Vec<DependencyGroupSummary>>, ApiError> {
+    list_thread_groups(State(state), user, thread_id).await
+}
+
 /// `GET /api/v1/reading-order-groups/{group_id}`
 pub async fn get_group(
     State(state): State<Arc<AppState>>,
@@ -1632,6 +1641,15 @@ pub async fn list_crossover_plans(
     let _ = group;
     let plans = linked_plans(&connection, group_id, user.id()).await?;
     Ok(Json(plans))
+}
+
+/// `GET /api/v2/reading-order-groups/{group_id}/reading-plans`
+pub async fn list_crossover_plans_v2(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    group_id: Result<Path<String>, PathRejection>,
+) -> Result<Json<Vec<DependencyGroupSummary>>, ApiError> {
+    list_crossover_plans(State(state), user, group_id).await
 }
 
 // ---------------------------------------------------------------------------
