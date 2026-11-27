@@ -93,6 +93,7 @@ pub mod thread_ordering;
 pub mod thread_validation;
 pub mod threads;
 pub mod threads_v1_openapi;
+pub mod threads_v2;
 pub mod undo_apply;
 pub mod undo_snapshots;
 
@@ -799,9 +800,19 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/queue-exclusion-groups/{group_id}/restore",
             post(queue_exclusions::restore_group),
         )
+<<<<<<< ours
         .route(
             "/api/v2/threads",
             get(threads::list_threads).post(thread_lifecycle::create_thread_v2),
+=======
+        .route("/api/v2/threads", get(threads::list_threads))
+        // AIP-136 custom methods on the v2 Thread resource are dispatched on
+        // the `:{action}` suffix because matchit rejects a parameter followed
+        // by literal text (issue #5704).
+        .route(
+            "/api/v2/threads/{thread_id}",
+            post(threads_v2::post_thread_v2_action),
+>>>>>>> theirs
         )
         .route(
             "/api/v1/threads/{thread_id}",

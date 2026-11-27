@@ -41,12 +41,21 @@
     {
       "bucket": "operations",
       "method": "POST",
+<<<<<<< ours
       "path": "/api/v2/threads",
       "dest": "/api/native_roll.rs",
       "src": "/api/v2/threads",
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 5702,
+=======
+      "path": "/api/v2/threads/{thread_id}:reactivate",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/threads/[0-9]+:reactivate$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5704,
+>>>>>>> theirs
       "consumers": [
         "frontend/src/services/api-threads.ts"
       ]

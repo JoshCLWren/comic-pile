@@ -378,6 +378,7 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
     let mut openapi = NativeSurfaceApi::openapi()
         .merge_from(crate::queue::QueueApi::openapi())
         .merge_from(crate::threads::ThreadsApi::openapi())
+        .merge_from(crate::threads_v2::ThreadsV2Api::openapi())
         .merge_from(crate::issue_service::IssueApi::openapi())
         .merge_from(crate::issue_read_state::IssueReadStateApi::openapi())
         .merge_from(crate::comicvine_issue::ComicVineIssueApi::openapi())
@@ -481,6 +482,31 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// The AIP-136 reactivation custom method is a first-class v2 operation:
+    /// its path, operation id and request body reach the canonical runtime
+    /// contract the generated frontend client is built from (#5704).
+    #[test]
+    fn thread_reactivate_custom_method_is_in_runtime_contract() {
+        let aggregate = document();
+        let operation = &aggregate["paths"]["/api/v2/threads/{thread_id}:reactivate"]["post"];
+        assert_eq!(operation["operationId"], "reactivate_thread_v2");
+        assert!(operation["responses"]["200"].is_object());
+        let body = &operation["requestBody"]["content"]["application/json"]["schema"]["$ref"];
+        assert_eq!(body, "#/components/schemas/ReactivateThreadRequest");
+        assert!(aggregate["components"]["schemas"]["ReactivateThreadRequest"].is_object());
+        assert_eq!(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ThreadResponse"
+        );
+        // Merging the v2 Thread surface must not overwrite the canonical typed
+        // ThreadResponse with a ToSchema emission of a raw JSON `Value`. The
+        // frozen Python wire type is an array of creator-credit objects.
+        let credits = &aggregate["components"]["schemas"]["ThreadResponse"]["properties"]
+            ["manual_creator_credits"];
+        assert_eq!(credits["type"], "array");
+        assert!(credits["items"].is_object());
     }
 
     /// Generated clients must be able to page the inbox, search issue matches

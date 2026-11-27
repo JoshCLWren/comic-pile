@@ -33,7 +33,12 @@ pub struct BulkQueueExclusionRequest {
     /// Owned thread IDs to remove from the active queue.
     pub thread_ids: Vec<i32>,
     /// Container the removal was initiated from.
-    pub source: QueueExclusionSource,
+    ///
+    /// Omitted for a direct "Remove from Queue" action on a single thread: the
+    /// exclusion is still durable and reader-owned, but no container provenance
+    /// group is invented for it (#5704).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<QueueExclusionSource>,
 }
 
 /// Persisted exclusion group returned after a bulk removal.
@@ -249,6 +254,10 @@ async fn restore_locked_excluded_ids(
 
 /// Bulk-exclude active threads from the queue in one set-based write.
 ///
+/// A `source` attaches a restoration group for container bulk actions. When it
+/// is omitted (the direct per-thread "Remove from Queue" action), the durable
+/// `excluded` status is written without inventing provenance.
+///
 /// Only owned threads currently in `active` queue status are excluded; ids that
 /// are missing, foreign, already excluded, or not active are ignored so the
 /// operation is tolerant of stale selections. When no active threads remain to
@@ -258,7 +267,9 @@ pub async fn bulk_exclude(
     user: AuthenticatedUser,
     Json(request): Json<BulkQueueExclusionRequest>,
 ) -> Result<Json<BulkQueueExclusionResponse>, ApiError> {
-    validate_source(&request.source)?;
+    if let Some(source) = &request.source {
+        validate_source(source)?;
+    }
     validate_thread_id_count(request.thread_ids.len())?;
     let thread_ids = normalize_thread_ids(request.thread_ids);
     if thread_ids.is_empty() {
@@ -292,32 +303,44 @@ pub async fn bulk_exclude(
         }));
     }
 
-    let group_row = transaction
-        .query_one(
-            "INSERT INTO queue_exclusion_groups (user_id, source_kind, source_id, source_name) \
-             VALUES ($1, $2, $3, $4) \
-             RETURNING id, source_kind, source_id, source_name, \
-                       to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"')",
-            &[
-                &user.id(),
-                &request.source.kind,
-                &request.source.id,
-                &request.source.name.trim(),
-            ],
-        )
-        .await
-        .map_err(db::query_error)?;
+    // A direct row-level "Remove from Queue" has no container to attribute the
+    // removal to. Keep the exclusion durable but omit the provenance group
+    // instead of inventing one (#5704).
+    let group = match &request.source {
+        Some(source) => {
+            let group_row = transaction
+                .query_one(
+                    "INSERT INTO queue_exclusion_groups (user_id, source_kind, source_id, source_name) \
+                     VALUES ($1, $2, $3, $4) \
+                     RETURNING id, source_kind, source_id, source_name, \
+                               to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"')",
+                    &[
+                        &user.id(),
+                        &source.kind,
+                        &source.id,
+                        &source.name.trim(),
+                    ],
+                )
+                .await
+                .map_err(db::query_error)?;
+            Some(QueueExclusionGroup {
+                id: group_row.get(0),
+                source_kind: group_row.get(1),
+                source_id: group_row.get(2),
+                source_name: group_row.get(3),
+                created_at: group_row.get(4),
+            })
+        }
+        None => None,
+    };
+    let group_id = group.as_ref().map(|entry| entry.id);
 
     transaction
         .execute(
             "UPDATE threads SET status = 'excluded', queue_position = 0, \
                     queue_position_is_manual = false, queue_exclusion_group_id = $3 \
              WHERE user_id = $1 AND id = ANY($2::int[]) AND status = 'active'",
-            &[
-                &user.id(),
-                &excluded_thread_ids,
-                &group_row.get::<_, i32>(0),
-            ],
+            &[&user.id(), &excluded_thread_ids, &group_id],
         )
         .await
         .map_err(db::query_error)?;
@@ -326,13 +349,7 @@ pub async fn bulk_exclude(
     transaction.commit().await.map_err(db::query_error)?;
 
     Ok(Json(BulkQueueExclusionResponse {
-        group: Some(QueueExclusionGroup {
-            id: group_row.get(0),
-            source_kind: group_row.get(1),
-            source_id: group_row.get(2),
-            source_name: group_row.get(3),
-            created_at: group_row.get(4),
-        }),
+        group,
         excluded_thread_ids,
     }))
 }

@@ -63,7 +63,7 @@ use std::{
 use tokio_postgres::{IsolationLevel, Transaction};
 use unicode_casefold::UnicodeCaseFold;
 
-type HandlerResult = Result<Response, LifecycleError>;
+pub(crate) type HandlerResult = Result<Response, LifecycleError>;
 
 /// Maximum threads one `resolveMemberships` request may name.
 const MAX_BATCH_THREADS: usize = 200;
@@ -78,7 +78,7 @@ const MAX_MANUAL_ROLE_LENGTH: usize = 60;
 /// Coordinator-approved hardening for `POST /api/v1/threads/reactivate`: Python
 /// accepts any positive count, but the native set-based insert must never let a
 /// single request scale an unbounded insert. Counts above this are HTTP 422.
-const MAX_ISSUES_TO_ADD: i64 = 10_000;
+pub(crate) const MAX_ISSUES_TO_ADD: i64 = 10_000;
 
 // ---------------------------------------------------------------------------
 // Wire types
@@ -472,7 +472,7 @@ async fn load_views(
 }
 
 /// Read one committed thread back as the Python `ThreadResponse`.
-async fn respond_thread(
+pub(crate) async fn respond_thread(
     state: &AppState,
     user: AuthenticatedUser,
     thread_id: i32,
@@ -669,7 +669,7 @@ fn credits_field(check: &mut Check, value: Option<&Value>, nullable: bool) -> Op
     clean.then(|| items.clone())
 }
 
-fn to_i32(check: &mut Check, loc: &[&str], value: Option<i64>) -> Option<i32> {
+pub(crate) fn to_i32(check: &mut Check, loc: &[&str], value: Option<i64>) -> Option<i32> {
     value.and_then(|int| match i32::try_from(int) {
         Ok(value) => Some(value),
         Err(_) => {
@@ -1512,7 +1512,7 @@ pub async fn restore_thread(
     respond_thread(&state, user, id, StatusCode::OK).await
 }
 
-async fn reactivate_once(
+pub(crate) async fn reactivate_once(
     state: &AppState,
     user: AuthenticatedUser,
     thread_id: i32,

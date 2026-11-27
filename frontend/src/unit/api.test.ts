@@ -107,8 +107,8 @@ it('keeps queue removal and restore on their own non-destructive endpoints', asy
   await threadsApi.exclude(5)
   await threadsApi.restore(5)
 
-  expect(post).toHaveBeenCalledWith('/v1/threads/5/exclude')
-  expect(post).toHaveBeenCalledWith('/v1/threads/5/restore')
+  expect(post).toHaveBeenCalledWith('/v2/queue-exclusions', { thread_ids: [5] })
+  expect(post).toHaveBeenCalledWith('/v2/queue-exclusions/restore', { thread_ids: [5] })
 })
 
 it('calls queue resource endpoints with expected paths', async () => {

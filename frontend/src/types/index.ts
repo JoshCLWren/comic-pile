@@ -30,7 +30,8 @@ export type ThreadListItem = components['schemas']['QueueThreadListItem'] & {
 
 export interface BulkQueueExclusionRequest {
   thread_ids: number[]
-  source: {
+  /** Omitted for a direct per-thread removal, which has no container provenance. */
+  source?: {
     kind: 'reading_list' | 'reading_plan' | 'crossover'
     id: number
     name: string

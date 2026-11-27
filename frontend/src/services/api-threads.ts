@@ -62,8 +62,15 @@ export function createThreadsApi(client: HttpClient) {
     update: (id: number, data: ThreadUpdatePayload) =>
       client.put<Thread, ThreadUpdatePayload>(`/v1/threads/${id}`, data),
     delete: (id: number) => client.delete<void>(`/v1/threads/${id}`),
-    exclude: (id: number) => client.post<Thread>(`/v1/threads/${id}/exclude`),
-    restore: (id: number) => client.post<Thread>(`/v1/threads/${id}/restore`),
+    // Direct row-level exclusion/restoration use the same durable, reader-owned
+    // v2 queue-exclusion resource as container bulk actions, without a source
+    // group (#5704).
+    exclude: (id: number) =>
+      client.post<BulkQueueExclusionResponse>('/v2/queue-exclusions', { thread_ids: [id] }),
+    restore: (id: number) =>
+      client.post<BulkQueueRestoreResponse>('/v2/queue-exclusions/restore', {
+        thread_ids: [id],
+      }),
     bulkExclude: (data: BulkQueueExclusionRequest) =>
       client.post<BulkQueueExclusionResponse>('/v2/queue-exclusions', data),
     bulkRestore: (threadIds: number[]) =>
@@ -95,8 +102,13 @@ export function createThreadsApi(client: HttpClient) {
     },
     restoreExclusionGroup: (groupId: number) =>
       client.post<BulkQueueRestoreResponse>(`/v2/queue-exclusion-groups/${groupId}/restore`),
+    // AIP-136 custom method: the completed thread is the resource, the added
+    // issue count is the only body field (#5704).
     reactivate: (data: ReactivateThreadPayload) =>
-      client.post<Thread, ReactivateThreadPayload>('/v1/threads/reactivate', data),
+      client.post<Thread, { issues_to_add: number }>(
+        `/v2/threads/${data.thread_id}:reactivate`,
+        { issues_to_add: data.issues_to_add },
+      ),
     listStale: (days = 30) => client.get<Thread[]>('/v1/threads/stale', { params: { days } }),
     setPending: (id: number, expectedIssueId?: number) =>
       client.post<RollResponse, { expected_issue_id: number }>(

@@ -64,8 +64,8 @@ response schemas, bounds, and status codes come from the generated contracts.
 | --- | --- |
 | Health | `GET /api/v2/health` (public process liveness) |
 | Auth | `POST /api/v2/auth/register`, `login`, `refresh`, `logout`, `forgot-password`, `reset-password`; `GET /api/v2/auth/csrf`, `me` |
-| Queue | `GET /api/v2/threads`; `GET`/`PATCH /api/v2/queue-entries/{thread_id}`; `POST /api/v2/queue-orders`; queue-exclusion resources under `/api/v2/queue-exclusions*` |
-| Threads and issues | Retained lifecycle/detail calls under `/api/v1/threads...`; issue creation at `POST /api/v2/threads/{thread_id}/issues`; ordering at `PUT /api/v2/threads/{thread_id}/issue-order`; issue cards and direct read/rate at `POST /api/v2/issues/cards` and `PATCH /api/v2/issues/{issue_id}` |
+| Queue | `GET /api/v2/threads`; `GET`/`PATCH /api/v2/queue-entries/{thread_id}`; `POST /api/v2/queue-orders`; queue-exclusion resources under `/api/v2/queue-exclusions*` (including direct single-thread remove/restore) |
+| Threads and issues | `POST /api/v2/threads/{thread_id}:reactivate` (AIP-136 custom method for completed series); retained lifecycle/detail calls under `/api/v1/threads...`; issue creation at `POST /api/v2/threads/{thread_id}/issues`; ordering at `PUT /api/v2/threads/{thread_id}/issue-order`; issue cards and direct read/rate at `POST /api/v2/issues/cards` and `PATCH /api/v2/issues/{issue_id}` |
 | Roll | `GET /api/v2/roll/bootstrap`; `POST /api/v2/roll/offer`, `override`, `dice-command`, `reset`, `unsnooze`, `dismiss-pending`, `switch-prerequisite`; `GET /api/v2/roll/die-state`, `eligible-issue-ids` |
 | Reading Lists | `GET`/`POST /api/v2/reading-lists`; list CRUD, `reader`, export, issue candidates, overlap decisions, and adoption commits under `/api/v2/reading-lists/{list_id}/...` |
 | Reading constraints | `POST /api/v2/reading-boundaries`; `GET`/`PUT /api/v2/reading-mode`; reading-mode suggestion/dismissal resources |

@@ -54,3 +54,40 @@ describe('threadsApi.checkExcludedStatus', () => {
     expect(result).toEqual({ excluded_thread_ids: [7], active_thread_ids: [] })
   })
 })
+
+describe('threadsApi exclusion and restoration', () => {
+  it('routes a direct single-thread remove/restore through the v2 queue-exclusion resource', async () => {
+    const client = createHttpClientStub()
+    client.post.mockResolvedValueOnce({ excluded_thread_ids: [5] })
+    client.post.mockResolvedValueOnce({ restored_thread_ids: [5] })
+
+    const api = createThreadsApi(client)
+    await api.exclude(5)
+    await api.restore(5)
+
+    expect(client.post).toHaveBeenNthCalledWith(1, '/v2/queue-exclusions', {
+      thread_ids: [5],
+    })
+    expect(client.post).toHaveBeenNthCalledWith(2, '/v2/queue-exclusions/restore', {
+      thread_ids: [5],
+    })
+    expect(String(client.post.mock.calls[0][0])).not.toContain('/v1/threads/5/exclude')
+    expect(String(client.post.mock.calls[1][0])).not.toContain('/v1/threads/5/restore')
+  })
+})
+
+describe('threadsApi.reactivate', () => {
+  it('posts the AIP-136 custom method with only the issue count in the body', async () => {
+    const client = createHttpClientStub()
+    client.post.mockResolvedValueOnce({ id: 12, status: 'active' })
+
+    const api = createThreadsApi(client)
+    await api.reactivate({ thread_id: 12, issues_to_add: 3 })
+
+    expect(client.post).toHaveBeenCalledTimes(1)
+    expect(client.post).toHaveBeenCalledWith('/v2/threads/12:reactivate', {
+      issues_to_add: 3,
+    })
+    expect(String(client.post.mock.calls[0][0])).not.toContain('/v1/threads/reactivate')
+  })
+})
