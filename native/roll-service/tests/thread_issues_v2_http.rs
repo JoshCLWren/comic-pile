@@ -248,6 +248,29 @@ async fn candidate_issue_identity(conn: &Conn, issue_id: i32, metadata: Value) {
 }
 
 #[tokio::test]
+async fn v2_collection_reads_require_authentication() {
+    let (state, _token, _csrf, user_id, _guard) = setup_user("tiss-v2-auth").await;
+    let conn = state.pool.get().await.unwrap();
+    let thread = plain_thread(&conn, user_id, "V2 Auth").await;
+    for path in [
+        format!("/api/v2/threads/{thread}/issues"),
+        format!("/api/v2/threads/{thread}/creatorCredits"),
+    ] {
+        let response = router(state.clone())
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(&path)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{path}");
+    }
+}
+
+#[tokio::test]
 async fn v2_issues_are_ordered_enriched_filtered_and_paginated() {
     let (state, token, csrf, user_id, _guard) = setup_user("tiss-v2-issues").await;
     let (other_token, other_csrf) = register_extra_user(&state, "tiss-v2-issues-other").await;
