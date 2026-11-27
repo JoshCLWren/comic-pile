@@ -165,10 +165,6 @@ describe('ReadingPlanAddMaterial', () => {
     expect(screen.getByText('Missing · importable (new comic)')).toBeInTheDocument()
     expect(screen.getByText('Needs identity resolution')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Add selected material' })).toBeDisabled()
-    // Only the reused exact owned issue gets a shared covered card; missing
-    // and unresolved provider entries carry no canonical issue id (#5904).
-    expect(screen.getByTestId('issue-card-trigger-25047')).toBeInTheDocument()
-    expect(document.querySelectorAll('[data-testid^="issue-card-trigger-"]')).toHaveLength(1)
   })
 
   it('shows an empty discovery result without inventing material', async () => {

@@ -211,14 +211,4 @@ describe('ReadingGraphOverlapDialog', () => {
     )
     expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument()
   })
-
-  it('offers the shared covered card for blocked issues with a canonical owned id', () => {
-    renderDialog()
-    // JLI #2 is the current overlap's blocked exact issue (fixture id 105).
-    expect(screen.getByTestId('issue-card-trigger-105')).toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: 'Reading and mapping actions for Justice League International #2' }),
-    ).toBeInTheDocument()
-    expect(screen.queryByTestId('comic-issue-card')).not.toBeInTheDocument()
-  })
 })

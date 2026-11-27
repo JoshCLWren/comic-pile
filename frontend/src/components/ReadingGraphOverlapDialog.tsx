@@ -1,8 +1,6 @@
-import { forwardRef, useEffect, useMemo, useRef, useState } from 'react'
+import { forwardRef, useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import Modal from './Modal'
-import CompactIssueCardTrigger from './CompactIssueCardTrigger'
-import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 import type {
   ReadingGraphChoiceEffect,
   ReadingGraphOverlapChoiceId,
@@ -136,27 +134,6 @@ export default function ReadingGraphOverlapDialog({
     ? readingGraphIssueLabels(preview, overlap.blocked_issue_ids)
     : []
 
-  // Only issues the preview reports as concrete owned references get a card.
-  // Crossover/synthetic ids and providers not in the reader's library stay
-  // text-only; no canonical issue id is invented from a label.
-  const ownedIssueRefs = useMemo(
-    () => new Map(preview.issues.map((issue) => [issue.issue_id, issue])),
-    [preview.issues],
-  )
-  const blockedIssueIds = useMemo(() => {
-    const ids = new Set<number>()
-    if (isOpen && overlap) {
-      for (const id of overlap.blocked_issue_ids) {
-        if (ownedIssueRefs.has(id)) ids.add(id)
-      }
-    }
-    return [...ids]
-  }, [isOpen, overlap, ownedIssueRefs])
-  const cardsQuery = useIssueCards(blockedIssueIds, {
-    enabled: isOpen && blockedIssueIds.length > 0,
-  })
-  const cardsByIssue = useMemo(() => indexIssueCards(cardsQuery.data), [cardsQuery.data])
-
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (!overlap) return
     const focusedIndex = optionRefs.current.findIndex(
@@ -221,23 +198,6 @@ export default function ReadingGraphOverlapDialog({
                 <p className="mt-2 text-xs text-[var(--theme-text-muted)]">
                   Waiting right now: {blockedLabels.join(', ')}
                 </p>
-              )}
-              {blockedIssueIds.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2" aria-label="Waiting exact issues">
-                  {blockedIssueIds.map((id) => {
-                    const reference = ownedIssueRefs.get(id)!
-                    return (
-                      <CompactIssueCardTrigger
-                        key={id}
-                        issueId={id}
-                        threadTitle={reference.series_name}
-                        issueNumber={reference.issue_number}
-                        card={cardsByIssue.get(id) ?? null}
-                        hideTitle
-                      />
-                    )
-                  })}
-                </div>
               )}
             </div>
 

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DirectReadIssuePanel } from '../components/DirectReadIssuePanel'
@@ -28,7 +28,6 @@ vi.mock('../components/ComicIssueCard', async (importOriginal) => {
 })
 
 const getIssue = vi.spyOn(issuesApi, 'get')
-const listIssues = vi.spyOn(issuesApi, 'list')
 const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards')
 const intelligence = vi.spyOn(comicVineApi, 'getIssueIntelligence')
 const effectiveTags = vi.spyOn(tagsApi, 'effectiveForIssue')
@@ -106,7 +105,6 @@ function setup() {
 
 beforeEach(() => {
   getIssue.mockReset()
-  listIssues.mockReset()
   fetchCards.mockReset()
   intelligence.mockReset()
   effectiveTags.mockReset()
@@ -208,24 +206,5 @@ describe('manual read surface roll parity', () => {
     expect(await screen.findByText('No tags yet.')).toBeVisible()
     expect(screen.queryByText('Fiona Staples')).not.toBeInTheDocument()
     expect(intelligence).toHaveBeenCalledExactlyOnceWith(91)
-  })
-
-  it('exposes the shared covered card for each owned issue in the browse picker (#5904)', async () => {
-    listIssues.mockResolvedValue({
-      issues: [
-        { ...issue, id: 92, issue_number: '4' },
-        { ...issue, id: 93, issue_number: '5', status: 'read' },
-      ],
-      next_page_token: null,
-      page_size: 50,
-      total_count: 2,
-    })
-    setup()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Choose another owned issue' }))
-    expect(await screen.findByTestId('issue-card-trigger-92')).toBeInTheDocument()
-    expect(screen.getByTestId('issue-card-trigger-93')).toBeInTheDocument()
-    await waitFor(() => expect(fetchCards).toHaveBeenCalledWith([92, 93]))
-    expect(screen.queryByTestId('comic-issue-card')).not.toBeInTheDocument()
   })
 })

@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { scrollToTopSemantic } from '../../../scroll/scrollCoordinator'
 import { ThreadTagChips } from '../../../components/Tags/ThreadTagChips'
 import { ComicIssueCover } from '../../../components/ComicIssueCard'
-import CompactIssueCardTrigger from '../../../components/CompactIssueCardTrigger'
 import type { RollBootstrapThread, RollPoolReason } from '../../../types/rollBootstrap'
 import type { IssueCardsResponse } from '../../../generated/nativeV2Client'
 
@@ -271,34 +270,12 @@ export function ThreadPool({
                 <span className="text-lg font-black text-stone-500/50 group-hover:text-stone-400/50 transition-colors w-6 text-center">
                   {index + 1}
                 </span>
-                {/* A die face with a canonical owned issue exposes the same
-                    covered read/rate/map entrance as every other exact-issue
-                    row. Stop propagation so opening the card never selects the
-                    die face or rolls. Rows without an owned id keep the series
-                    representative cover and no fabricated issue action. */}
-                {thread.issue_id != null ? (
-                  <div
-                    className="shrink-0"
-                    onClick={(event) => event.stopPropagation()}
-                    onKeyDown={(event) => event.stopPropagation()}
-                  >
-                    <CompactIssueCardTrigger
-                      issueId={thread.issue_id}
-                      threadTitle={displayTitle}
-                      issueNumber={issueNumber ?? ''}
-                      status={card?.status === 'read' ? 'read' : 'unread'}
-                      card={card ?? null}
-                      hideTitle
-                    />
-                  </div>
-                ) : (
-                  <ComicIssueCover
-                    coverImageUrl={card?.cover_image_url ?? null}
-                    threadTitle={displayTitle}
-                    issueNumber={issueNumber ?? ''}
-                    variant="compact"
-                  />
-                )}
+                <ComicIssueCover
+                  coverImageUrl={card?.cover_image_url ?? null}
+                  threadTitle={displayTitle}
+                  issueNumber={issueNumber ?? ''}
+                  variant="compact"
+                />
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-stone-200 truncate text-sm">{displayTitle}</p>
                   <p className="truncate text-xs text-stone-400">

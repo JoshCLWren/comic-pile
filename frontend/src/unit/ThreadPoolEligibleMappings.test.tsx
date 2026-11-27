@@ -1,5 +1,4 @@
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { ThreadPool } from '../pages/RollPage/components/ThreadPool'
@@ -386,39 +385,5 @@ describe('ThreadPool eligible mappings', () => {
     expect(screen.queryByText(/Connected to:/)).toBeNull()
     const row = screen.getByRole('button', { name: /Die face 1: Amazing Adventures/i })
     expect(row).not.toHaveAccessibleName(/connected to/i)
-  })
-})
-
-describe('exact owned issue entry on die faces (#5904)', () => {
-  it('mounts the shared covered trigger without selecting or rolling the die face', async () => {
-    const onThreadClick = vi.fn()
-    render(
-      <MemoryRouter>
-        <ThreadPool
-          {...baseProps}
-          onThreadClick={onThreadClick}
-          pool={[{ id: 9, title: 'Saga', format: 'Comic', issue_id: 71, issue_number: '4' }]}
-        />
-      </MemoryRouter>,
-    )
-
-    expect(screen.getByTestId('issue-card-trigger-71')).toBeInTheDocument()
-    expect(screen.queryByTestId('comic-issue-card')).not.toBeInTheDocument()
-    await userEvent.click(
-      screen.getByRole('button', { name: 'Reading and mapping actions for Saga #4' }),
-    )
-    expect(onThreadClick).not.toHaveBeenCalled()
-  })
-
-  it('keeps a die face without a canonical owned id cover-only', () => {
-    render(
-      <MemoryRouter>
-        <ThreadPool
-          {...baseProps}
-          pool={[{ id: 9, title: 'Legacy series', format: 'Comic', issue_number: '4' }]}
-        />
-      </MemoryRouter>,
-    )
-    expect(document.querySelector('[data-testid^="issue-card-trigger-"]')).toBeNull()
   })
 })
