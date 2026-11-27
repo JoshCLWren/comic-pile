@@ -293,7 +293,10 @@ function sourceFilter(options: { folder?: string; query?: string }): string {
   const query = options.query?.trim()
   if (query) return `q:${query}`
   const folder = options.folder?.trim()
-  return folder ? `folder:${folder}` : ''
+  // The root folder must be spelled `folder:` rather than an empty string: the
+  // server parses both as `SourceFilter::Folder("")`, whose canonical form is
+  // `folder:`, and a page token whose `f` is empty is rejected with HTTP 400.
+  return folder ? `folder:${folder}` : 'folder:'
 }
 
 /**
