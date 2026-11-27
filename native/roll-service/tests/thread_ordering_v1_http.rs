@@ -2367,3 +2367,45 @@ async fn bootstrap_active_thread_exposes_authored_alias_and_confirmed_provider_n
     assert_eq!(active["issue_number_alias"].as_str(), Some("100"));
     assert_eq!(active["provider_issue_number"].as_str(), Some("101"));
 }
+
+#[tokio::test]
+async fn v2_eligibility_uses_canonical_logic_and_batch_authorization() {
+    let (state, token, csrf, user_id, _guard) = setup_user("tord-v2elig").await;
+    let (token2, csrf2, user2) = register_extra_user(&state, "tord-v2elig2").await;
+    let conn = state.pool.get().await.unwrap();
+    let a = thread(&conn, user_id, "Alpha").await;
+    let b = thread(&conn, user_id, "Beta").await;
+    let c = thread(&conn, user_id, "Gamma").await;
+    let ai = issue(&conn, a, "1", 1, "unread").await;
+    let bi = issue(&conn, b, "1", 1, "unread").await;
+    let ci = issue(&conn, c, "1", 1, "unread").await;
+    frontier(&conn, a, ai).await;
+    frontier(&conn, b, bi).await;
+    frontier(&conn, c, ci).await;
+    dependency(&conn, ai, bi, None).await; // b blocked by a (reader prereq)
+
+    // Single eligibility
+    let (status, body) = send(&state, get(&format!("/api/v2/threads/{b}/eligibility"), &token, &csrf)).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["thread_id"], b);
+    assert_eq!(body["is_blocked"], true);
+    assert_eq!(body["eligible"], false);
+    assert!(body["blocking_reasons"].as_array().unwrap().iter().any(|r| r.as_str().unwrap().contains("Alpha")));
+
+    // Batch preserves order and per-id authz
+    let (status, body) = send(&state, post("/api/v2/threads:explainEligibility", &token, &csrf, Some(json!({"thread_ids": [b, c, b]})))).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let keys: Vec<String> = body["threads"].as_object().unwrap().keys().cloned().collect();
+    assert_eq!(keys, vec![b.to_string(), c.to_string()]);
+    assert_eq!(body["threads"][b.to_string()]["is_blocked"], true);
+    assert_eq!(body["threads"][c.to_string()]["is_blocked"], false);
+
+    let foreign = thread(&conn, user2, "Foreign").await;
+    let (status, body) = send(&state, post("/api/v2/threads:explainEligibility", &token, &csrf, Some(json!({"thread_ids": [b, foreign]})))).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
+
+    // Connections v2
+    let (status, body) = send(&state, get(&format!("/api/v2/threads/{b}/connections"), &token, &csrf)).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["thread_id"], b);
+}
