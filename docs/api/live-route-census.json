@@ -5695,11 +5695,7 @@
       "caller_count": 3,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
-<<<<<<< HEAD
       "owner_issue": 5715,
-=======
-      "owner_issue": null,
->>>>>>> origin/main
       "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
