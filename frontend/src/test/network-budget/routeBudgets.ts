@@ -6,7 +6,8 @@
  *
  * These are exact counts, measured at the axios transport boundary on a cold
  * mount. They cover the shared auth bootstrap, the authenticated app shell
- * (preferences + Navigation identity-inbox badge), and each page's own reads.
+ * (Navigation identity-inbox badge), and each page's own reads. Night Shift
+ * removed the appearance-preference read that used to run on every shell mount.
  */
 
 /**

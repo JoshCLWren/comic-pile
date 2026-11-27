@@ -132,7 +132,7 @@ describe('Night Shift shared surfaces (#5980)', () => {
     renderNavigation()
     await waitFor(() => expect(authenticated).toBe(true))
 
-    const user = (await import('@testing-library/user-event')).default.setup()
+    const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: 'More pages' }))
     const tray = screen.getByRole('navigation', { name: 'More pages' })
 
