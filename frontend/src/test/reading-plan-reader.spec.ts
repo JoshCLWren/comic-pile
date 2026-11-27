@@ -183,9 +183,7 @@ test('Option E explains strict Julix blockers consistently and supports direct l
       await expect(listReader.getByRole('button', { name: 'Mark read', exact: true })).toHaveCount(0)
     }
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-    const theme = width === 390 ? 'classic' : width === 768 ? 'ink-gold' : 'command-center'
-    await page.evaluate((name) => document.documentElement.setAttribute('data-theme', name), theme)
-    await listReader.screenshot({ path: `test-results/option-e-reader-${width}-${theme}.png` })
+    await listReader.screenshot({ path: `test-results/option-e-reader-${width}-night-shift.png` })
   }
   if (!enabled) {
     const marked = await page.request.post(`/api/v2/issues/${firstIssue}/read-markers`, { headers })

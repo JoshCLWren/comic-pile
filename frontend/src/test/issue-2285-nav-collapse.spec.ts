@@ -182,7 +182,7 @@ test.describe('Authenticated navigation collapse (#2285)', () => {
     await expect(desktopNav).toHaveAttribute('data-nav-collapsed', 'true')
   })
 
-  test('compact rail keeps themes, identity, and logout reachable and keyboard operable', async ({
+  test('compact rail keeps identity and logout reachable and keyboard operable', async ({
     authenticatedPage,
   }) => {
     const page = authenticatedPage
@@ -192,17 +192,9 @@ test.describe('Authenticated navigation collapse (#2285)', () => {
     const desktopNav = page.getByRole('navigation', { name: 'Desktop navigation' })
     await expect(desktopNav).toHaveAttribute('data-nav-collapsed', 'true')
 
-    await expect(desktopNav.getByRole('group', { name: 'Appearance' })).toBeVisible()
-    for (const name of ['Classic theme', 'Ink-gold theme', 'Command center theme']) {
-      await expect(desktopNav.getByRole('button', { name })).toBeVisible()
-    }
     await expect(desktopNav.getByRole('button', { name: 'Log out' })).toBeVisible()
-
-    const inkGold = desktopNav.getByRole('button', { name: 'Ink-gold theme' })
-    await inkGold.click()
-    expect(await page.evaluate(() => document.documentElement.getAttribute('data-theme'))).toBe(
-      'ink-gold',
-    )
+    await expect(desktopNav.getByRole('group', { name: /appearance/i })).toHaveCount(0)
+    await expect(desktopNav.locator('[data-theme]')).toHaveCount(0)
 
     const toggle = desktopNav.getByRole('button', { name: 'Expand navigation' })
     await toggle.focus()

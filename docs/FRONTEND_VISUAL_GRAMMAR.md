@@ -1,18 +1,20 @@
 # Comic Pile frontend visual grammar
 
-This document is the canonical visual contract for Comic Pile frontend work. It describes the product's existing visual language and the constraints that keep new work from inventing a fresh dialect on every page.
+This document is the canonical visual contract for Comic Pile frontend work. It describes the product's visual language and the constraints that keep new work from inventing a fresh dialect on every page.
 
 It is a decision guide, not a mandate to rewrite every historical class. Existing variation should be migrated only through focused issues backed by rendered or static audit evidence.
 
 ## Product character
 
-Comic Pile is a dense personal reading cockpit, not a generic SaaS dashboard. The interface should feel dark, tactile, comic-adjacent, and information-rich without becoming visually noisy. Theme personality comes from semantic accents and surfaces, while layout and interaction behavior should remain consistent across themes.
+Comic Pile is a dense personal reading cockpit, not a generic SaaS dashboard. The interface should feel dark, tactile, comic-adjacent, and information-rich without becoming visually noisy. Visual identity comes from one approved semantic palette, while layout and interaction behavior remain consistent across every surface.
 
-The three existing themes are `classic`, `ink-gold`, and `command-center`. New feature code should consume semantic theme roles rather than reproduce a theme's literal colors.
+**Night Shift is the single application-wide visual identity (#5980).** Classic, Ink Gold, and Command Center are retired. There is no selectable theme, appearance control, compatibility palette, feature flag, `data-theme` attribute, or stored appearance preference. Fresh loads, reloads, stale saved values and navigation all render the same Night Shift palette. New feature code consumes semantic roles rather than reproducing literal colors.
+
+The approved [Night Shift prototype](../docs/design/comicpile-night-shift.html) defines the palette. Preview controls and sample comic data in that prototype are design tools, not product features.
 
 ## Canonical semantic color and surface roles
 
-`frontend/src/styles.css` owns the canonical theme roles applied by `data-theme`:
+`frontend/src/styles.css` owns the canonical Night Shift roles in a single `:root` token set:
 
 | Role | Token | Purpose |
 | --- | --- | --- |
