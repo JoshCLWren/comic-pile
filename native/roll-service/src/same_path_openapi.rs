@@ -88,9 +88,8 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::threads::ThreadsApi::openapi())
         .merge_from(crate::cbl_catalog::CblCatalogApi::openapi())
         .merge_from(crate::issue_identity::IssueIdentityApi::openapi())
-        // The browser still calls these v1 thread dependency URLs, which now
-        // run in Rust. Publishing their contract here keeps the generated TS
-        // client types after the shadowed Python handlers retire (#5440).
+        // The remaining v1 thread-ordering reads still run in Rust. #5709
+        // moved dependency/blocking/connection diagnostics to canonical v2.
         .merge_from(crate::thread_ordering::ThreadOrderingApi::openapi())
         .merge_from(crate::thread_issues::ThreadIssuesApi::openapi())
         .merge_from(crate::dependency_groups::DependencyGroupsApi::openapi())
@@ -121,22 +120,18 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
             }
         }
     }
+    // #5709: the thread dependency/blocking aliases are retired, not same-path
+    // operations. They must not be regenerated here after their v2 sources are
+    // published by the canonical runtime contract. The issue-dependency alias
+    // stays live because that v1 path is intentionally retained.
     for (source, alias) in [
         (
             "/api/v2/issues/{issue_id}/comicvine",
             "/api/v1/issues/{issue_id}/comicvine",
         ),
         (
-            "/api/v2/threads/{thread_id}/dependencies",
-            "/api/v1/threads/{thread_id}/dependencies",
-        ),
-        (
             "/api/v2/issues/{issue_id}/dependencies",
             "/api/v1/issues/{issue_id}/dependencies",
-        ),
-        (
-            "/api/v2/threads/{thread_id}/issue-dependencies",
-            "/api/v1/threads/{thread_id}/issue-dependencies",
         ),
     ] {
         if let Some(item) = document.paths.paths.get(source).cloned() {

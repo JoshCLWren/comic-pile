@@ -1274,6 +1274,12 @@ pub fn thread_ordering_openapi() -> utoipa::openapi::OpenApi {
     ThreadOrderingApi::openapi()
 }
 
+/// Emit the canonical v2 thread diagnosis contract.
+pub fn thread_ordering_v2_openapi() -> utoipa::openapi::OpenApi {
+    use utoipa::OpenApi;
+    ThreadOrderingV2Api::openapi()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1362,17 +1368,49 @@ mod tests {
     fn contract_documents_every_operation_and_stays_current() {
         let document = serde_json::to_value(thread_ordering_openapi()).unwrap();
         for path in [
-            "/api/v1/threads/{thread_id}:getBlockingInfo",
-            "/api/v1/threads:getBlockingInfo",
-            "/api/v1/threads/{thread_id}/connected",
             "/api/v1/threads/{thread_id}/dependency-order-check",
             "/api/v1/threads/{thread_id}/issues:validateOrder",
             "/api/v1/threads/{thread_id}/reading-orders",
         ] {
             assert!(document["paths"].get(path).is_some(), "{path}");
         }
+        for retired in [
+            "/api/v1/threads/{thread_id}:getBlockingInfo",
+            "/api/v1/threads:getBlockingInfo",
+            "/api/v1/threads/{thread_id}/connected",
+        ] {
+            assert!(document["paths"].get(retired).is_none(), "{retired} is retired");
+        }
         let expected = include_str!("../../contracts/thread-ordering-v1.openapi.json");
         let generated = thread_ordering_openapi().to_pretty_json().unwrap();
         assert_eq!(expected.trim_end(), generated.trim_end());
+    }
+
+    #[test]
+    fn v2_contract_documents_canonical_diagnosis_resources() {
+        let document = serde_json::to_value(thread_ordering_v2_openapi()).unwrap();
+        for path in [
+            "/api/v2/threads/{thread_id}/eligibility",
+            "/api/v2/threads:explainEligibility",
+            "/api/v2/threads/{thread_id}/connections",
+        ] {
+            assert!(document["paths"].get(path).is_some(), "{path}");
+        }
+        assert_eq!(
+            document["paths"]["/api/v2/threads/{thread_id}/eligibility"]["get"]["operationId"],
+            "thread_ordering_get_thread_eligibility"
+        );
+        assert_eq!(
+            document["paths"]["/api/v2/threads:explainEligibility"]["post"]["operationId"],
+            "thread_ordering_explain_eligibility"
+        );
+    }
+
+    #[test]
+    fn eligibility_state_never_uses_stored_blocked_flag() {
+        assert_eq!(eligibility_state("active", true, true), "available");
+        assert_eq!(eligibility_state("active", false, true), "blocked");
+        assert_eq!(eligibility_state("active", false, false), "complete");
+        assert_eq!(eligibility_state("excluded", false, false), "unavailable");
     }
 }

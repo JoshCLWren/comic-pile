@@ -816,6 +816,28 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/threads/{thread_id}",
             patch(thread_lifecycle::patch_thread).delete(thread_lifecycle::delete_thread_v2),
         )
+        // #5709: canonical dependency/blocking diagnosis is v2-only. The
+        // retired v1 aliases below terminate at the Rust JSON 404 fallback.
+        .route(
+            "/api/v2/threads/{thread_id}/dependencies",
+            get(dependencies::get_thread_dependencies),
+        )
+        .route(
+            "/api/v2/threads/{thread_id}/issueDependencies",
+            get(issue_read::get_thread_issue_dependencies),
+        )
+        .route(
+            "/api/v2/threads/{thread_id}/eligibility",
+            get(thread_ordering::get_thread_eligibility),
+        )
+        .route(
+            "/api/v2/threads:explainEligibility",
+            post(thread_ordering::explain_eligibility),
+        )
+        .route(
+            "/api/v2/threads/{thread_id}/connections",
+            get(thread_ordering::get_thread_connections),
+        )
         .route(
             "/api/v1/threads/{thread_id}",
             get(threads::get_thread_detail),
@@ -860,13 +882,12 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/issues/{issue_id}/reader-context",
             get(reader_context::get_issue_reader_context),
         )
+        // #5709: pin the retired batch alias so it cannot be swallowed by the
+        // generic `/api/v1/threads/{thread_id}` POST action route. A static
+        // segment wins in axum and returns the stable Rust JSON 404.
         .route(
             "/api/v1/threads:getBlockingInfo",
-            post(thread_ordering::get_threads_blocking_info),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}/connected",
-            get(thread_ordering::get_thread_connected_threads),
+            post(|| async { ApiError::NotFound("Not Found".to_string()) }),
         )
         .route(
             "/api/v1/threads/{thread_id}/dependency-order-check",
