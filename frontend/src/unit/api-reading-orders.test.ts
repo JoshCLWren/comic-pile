@@ -54,7 +54,7 @@ it('confirms a projection with the plan id and selected reading order', async ()
   await expect(readingOrdersApi.confirmProjection(9, 3)).resolves.toMatchObject({ plan_id: 9, added_count: 2 })
 
   expect(client.post).toHaveBeenCalledWith(
-    '/v2/continuity-plans/9/reading-orders/project',
+    '/v2/continuityPlans/9/reading-orders/project',
     { reading_order_id: 3 },
   )
 })
@@ -65,7 +65,7 @@ it('carries the preview revision token into confirmation', async () => {
   await readingOrdersApi.confirmProjection(9, 3, '2026-01-01T00:00:00Z')
 
   expect(client.post).toHaveBeenCalledWith(
-    '/v2/continuity-plans/9/reading-orders/project',
+    '/v2/continuityPlans/9/reading-orders/project',
     { reading_order_id: 3, plan_updated_at: '2026-01-01T00:00:00Z' },
   )
 })
@@ -110,7 +110,7 @@ it('adopts a legacy reading order into a canonical plan with all optional overri
 
   expect(result).toEqual(plan)
   expect(client.post).toHaveBeenCalledWith(
-    '/v2/continuity-plans/from-reading-order',
+    '/v2/continuityPlans/from-reading-order',
     {
       reading_order_id: 5,
       plan_name: 'Custom Plan',
@@ -137,7 +137,7 @@ it('adopts a reading order using schema defaults when optional fields are omitte
 
   expect(result).toEqual(plan)
   expect(client.post).toHaveBeenCalledWith(
-    '/v2/continuity-plans/from-reading-order',
+    '/v2/continuityPlans/from-reading-order',
     {
       reading_order_id: 9,
       plan_name: null,

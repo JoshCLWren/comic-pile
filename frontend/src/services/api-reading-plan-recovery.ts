@@ -12,10 +12,10 @@ export type PlanRelinkResult = components['schemas']['PlanRelinkResult']
 export function createReadingPlanRecoveryApi(client: HttpClient) {
   return {
     preview: (planId: number) =>
-      client.get<PlanRecoveryPreview>(`/v2/continuity-plans/${planId}/recovery`),
+      client.get<PlanRecoveryPreview>(`/v2/continuityPlans/${planId}/recovery`),
     relink: (planId: number, request: PlanRelinkRequest) =>
       client.post<PlanRelinkResult, PlanRelinkRequest>(
-        `/v2/continuity-plans/${planId}/recovery`,
+        `/v2/continuityPlans/${planId}/recovery`,
         request,
       ),
   }

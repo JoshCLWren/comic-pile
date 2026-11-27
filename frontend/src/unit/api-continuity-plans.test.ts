@@ -43,7 +43,7 @@ describe('continuityPlansApi', () => {
       nodes: basePlan.nodes,
     })).resolves.toEqual(basePlan)
 
-    expect(client.post).toHaveBeenCalledWith('/v2/continuity-plans/', {
+    expect(client.post).toHaveBeenCalledWith('/v2/continuityPlans/', {
       name: 'Kirby lane',
       ordering_mode: 'strict_sequential',
       lanes: basePlan.lanes,
@@ -75,7 +75,7 @@ describe('continuityPlansApi', () => {
     client.post.mockResolvedValueOnce(source)
 
     await expect(continuityPlansApi.createReleaseSource(payload)).resolves.toEqual(source)
-    expect(client.post).toHaveBeenCalledWith('/v2/continuity-plans/release-sources/', payload)
+    expect(client.post).toHaveBeenCalledWith('/v2/continuityPlans/release-sources/', payload)
   })
 
   it('loads a plan by id', async () => {
@@ -83,7 +83,7 @@ describe('continuityPlansApi', () => {
 
     await expect(continuityPlansApi.get(12)).resolves.toEqual(basePlan)
 
-    expect(client.get).toHaveBeenCalledWith('/v2/continuity-plans/12')
+    expect(client.get).toHaveBeenCalledWith('/v2/continuityPlans/12')
   })
 
   it('loads the reader view by id', async () => {
@@ -100,7 +100,7 @@ describe('continuityPlansApi', () => {
     client.get.mockResolvedValueOnce(reader)
 
     await expect(continuityPlansApi.getReader(12)).resolves.toEqual(reader)
-    expect(client.get).toHaveBeenCalledWith('/v2/continuity-plans/12/reader')
+    expect(client.get).toHaveBeenCalledWith('/v2/continuityPlans/12/reader')
   })
 
   it('replaces a plan with a full ordered payload', async () => {
@@ -113,7 +113,7 @@ describe('continuityPlansApi', () => {
       nodes: basePlan.nodes,
     })).resolves.toEqual(basePlan)
 
-    expect(client.put).toHaveBeenCalledWith('/v2/continuity-plans/12', {
+    expect(client.put).toHaveBeenCalledWith('/v2/continuityPlans/12', {
       name: 'Kirby lane',
       ordering_mode: 'strict_sequential',
       lanes: basePlan.lanes,
@@ -143,7 +143,7 @@ describe('continuityPlansApi', () => {
       nodes: parallelPlan.nodes,
     })).resolves.toEqual(parallelPlan)
 
-    expect(client.post).toHaveBeenCalledWith('/v2/continuity-plans/', {
+    expect(client.post).toHaveBeenCalledWith('/v2/continuityPlans/', {
       name: 'Parallel plan',
       ordering_mode: 'informational',
       lanes: parallelPlan.lanes,

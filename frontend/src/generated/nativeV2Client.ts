@@ -1537,38 +1537,38 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     continuityPlansAdoptReadingOrder(args: ContinuityPlansAdoptReadingOrderRequest) {
       return client.post<ContinuityPlansAdoptReadingOrderResponse, ContinuityPlansAdoptReadingOrderRequest['body']>(
-        "/v2/continuity-plans/from-reading-order",
+        "/v2/continuityPlans/from-reading-order",
         args.body,
       )
     },
     continuityPlansCreate(args: ContinuityPlansCreateRequest) {
       return client.post<ContinuityPlansCreateResponse, ContinuityPlansCreateRequest['body']>(
-        "/v2/continuity-plans/",
+        "/v2/continuityPlans/",
         args.body,
       )
     },
     continuityPlansDelete(args: ContinuityPlansDeleteRequest) {
       return client.delete<ContinuityPlansDeleteResponse>(
-        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}`,
+        `/v2/continuityPlans/${encodeURIComponent(String(args.path.plan_id))}`,
       )
     },
     continuityPlansGet(args: ContinuityPlansGetRequest) {
       return client.get<ContinuityPlansGetResponse>(
-        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}`,
+        `/v2/continuityPlans/${encodeURIComponent(String(args.path.plan_id))}`,
       )
     },
     continuityPlansLinkDependency(args: ContinuityPlansLinkDependencyRequest) {
       return client.post<ContinuityPlansLinkDependencyResponse, ContinuityPlansLinkDependencyRequest['body']>(
-        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
+        `/v2/continuityPlans/${encodeURIComponent(String(args.path.plan_id))}/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
         args.body,
       )
     },
     continuityPlansList() {
-      return client.get<ContinuityPlansListResponse>("/v2/continuity-plans/")
+      return client.get<ContinuityPlansListResponse>("/v2/continuityPlans/")
     },
     continuityPlansMembership(args: ContinuityPlansMembershipRequest) {
       return client.get<ContinuityPlansMembershipResponse>(
-        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/membership`,
+        `/v2/continuityPlans/${encodeURIComponent(String(args.path.plan_id))}/membership`,
       )
     },
     continuityPlansPreviewReadingOrderProjection(args: ContinuityPlansPreviewReadingOrderProjectionRequest) {
@@ -1579,18 +1579,18 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     continuityPlansProjectToReadingOrder(args: ContinuityPlansProjectToReadingOrderRequest) {
       return client.post<ContinuityPlansProjectToReadingOrderResponse, ContinuityPlansProjectToReadingOrderRequest['body']>(
-        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/reading-orders/project`,
+        `/v2/continuityPlans/${encodeURIComponent(String(args.path.plan_id))}/reading-orders/project`,
         args.body,
       )
     },
     continuityPlansUnlinkDependency(args: ContinuityPlansUnlinkDependencyRequest) {
       return client.delete<ContinuityPlansUnlinkDependencyResponse>(
-        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
+        `/v2/continuityPlans/${encodeURIComponent(String(args.path.plan_id))}/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
       )
     },
     continuityPlansUpdate(args: ContinuityPlansUpdateRequest) {
       return client.put<ContinuityPlansUpdateResponse, ContinuityPlansUpdateRequest['body']>(
-        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}`,
+        `/v2/continuityPlans/${encodeURIComponent(String(args.path.plan_id))}`,
         args.body,
       )
     },
@@ -2022,7 +2022,7 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     preview(args: PreviewRequest) {
       return client.get<PreviewResponse>(
-        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/recovery`,
+        `/v2/continuityPlans/${encodeURIComponent(String(args.path.plan_id))}/recovery`,
       )
     },
     previewIssueCreate(args: PreviewIssueCreateRequest) {
@@ -2045,7 +2045,7 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     read(args: ReadRequest) {
       return client.get<ReadResponse>(
-        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/reader`,
+        `/v2/continuityPlans/${encodeURIComponent(String(args.path.plan_id))}/reader`,
       )
     },
     readDemoRoll() {
@@ -2106,28 +2106,28 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     releaseSourcesCreate(args: ReleaseSourcesCreateRequest) {
       return client.post<ReleaseSourcesCreateResponse, ReleaseSourcesCreateRequest['body']>(
-        "/v2/continuity-plans/release-sources/",
+        "/v2/continuityPlans/release-sources/",
         args.body,
       )
     },
     releaseSourcesDelete(args: ReleaseSourcesDeleteRequest) {
       return client.delete<ReleaseSourcesDeleteResponse>(
-        `/v2/continuity-plans/release-sources/${encodeURIComponent(String(args.path.source_id))}`,
+        `/v2/continuityPlans/release-sources/${encodeURIComponent(String(args.path.source_id))}`,
       )
     },
     releaseSourcesList(args: ReleaseSourcesListRequest) {
       return client.get<ReleaseSourcesListResponse>(
-        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/release-sources/`,
+        `/v2/continuityPlans/${encodeURIComponent(String(args.path.plan_id))}/release-sources/`,
       )
     },
     releaseSourcesListReader(args: ReleaseSourcesListReaderRequest) {
       return client.get<ReleaseSourcesListReaderResponse>(
-        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/release-sources/reader`,
+        `/v2/continuityPlans/${encodeURIComponent(String(args.path.plan_id))}/release-sources/reader`,
       )
     },
     releaseSourcesUpdate(args: ReleaseSourcesUpdateRequest) {
       return client.patch<ReleaseSourcesUpdateResponse, ReleaseSourcesUpdateRequest['body']>(
-        `/v2/continuity-plans/release-sources/${encodeURIComponent(String(args.path.source_id))}`,
+        `/v2/continuityPlans/release-sources/${encodeURIComponent(String(args.path.source_id))}`,
         args.body,
       )
     },
@@ -2164,7 +2164,7 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     relink(args: RelinkRequest) {
       return client.post<RelinkResponse, RelinkRequest['body']>(
-        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/recovery`,
+        `/v2/continuityPlans/${encodeURIComponent(String(args.path.plan_id))}/recovery`,
         args.body,
       )
     },

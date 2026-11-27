@@ -295,12 +295,12 @@ export function createContinuityPlansApi(client: HttpClient) {
       ),
     updateReleaseSource: (sourceId: number, payload: ReleaseSourceUpdateRequest) =>
       client.patch<ReadingPlanReleaseSourceStatus>(
-        `/v2/continuity-plans/release-sources/${sourceId}`,
+        `/v2/continuityPlans/release-sources/${sourceId}`,
         payload,
       ),
     updateReleaseSourceEnabled: (sourceId: number, enabled: boolean) =>
       client.patch<ReadingPlanReleaseSourceStatus>(
-        `/v2/continuity-plans/release-sources/${sourceId}`,
+        `/v2/continuityPlans/release-sources/${sourceId}`,
         { enabled },
       ),
     getSyncStatus: () =>
