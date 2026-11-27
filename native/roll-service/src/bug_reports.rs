@@ -1694,7 +1694,6 @@ mod tests {
         atomic::{AtomicUsize, Ordering},
         Mutex,
     };
-    use utoipa::OpenApi;
 
     /// Records issuer calls so a handler-boundary test can prove the in-process
     /// fake ran and that `create_github_issue` (real network) was never used.
