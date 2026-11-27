@@ -269,6 +269,26 @@ function _mergeRouteFragments(inventory, fragments) {
       buckets[bucket].push(source);
     }
   }
+  if (nativeOperations !== null) {
+    const existingNative = new Map();
+    for (const bucket of Object.keys(buckets)) {
+      for (const operation of buckets[bucket]) {
+        if (operation.runtime === 'native-rust') {
+          existingNative.set(`${operation.method}\0${operation.path}`, operation);
+        }
+      }
+      // The real router is authoritative for live native operations. Fragment
+      // and prior-inventory entries without a registration are not live APIs.
+      buckets[bucket] = buckets[bucket].filter(operation => operation.runtime !== 'native-rust');
+    }
+    for (const operation of nativeOperations) {
+      const source = {...operation};
+      const bucket = source.bucket;
+      delete source.bucket;
+      const key = `${source.method}\0${source.path}`;
+      buckets[bucket].push({...(existingNative.get(key) ?? {}), ...source});
+    }
+  }
   buckets.operations.sort((a, b) => {
     if (a.path !== b.path) return a.path < b.path ? -1 : 1;
     if (a.method !== b.method) return a.method < b.method ? -1 : 1;
