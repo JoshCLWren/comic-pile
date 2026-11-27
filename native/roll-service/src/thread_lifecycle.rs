@@ -621,6 +621,9 @@ struct OwnedThread {
     reading_progress: Option<String>,
     status: String,
     queue_position: i32,
+    /// Read by the v2 patch precondition; unused by the v1 writers.
+    notes: Option<String>,
+    manual_creator_credits: Value,
 }
 
 async fn find_owned(
@@ -632,7 +635,7 @@ async fn find_owned(
     let id = i32::try_from(thread_id).map_err(|_| not_found(thread_id))?;
     let sql = format!(
         "SELECT id, title, format, issues_remaining, total_issues, reading_progress,
-                status, queue_position
+                status, queue_position, notes, manual_creator_credits
          FROM threads WHERE id = $1 AND user_id = $2{}",
         if for_update { " FOR UPDATE" } else { "" }
     );
@@ -650,6 +653,8 @@ async fn find_owned(
         reading_progress: row.get(5),
         status: row.get(6),
         queue_position: row.get(7),
+        notes: row.get(8),
+        manual_creator_credits: row.get(9),
     })
 }
 
@@ -987,7 +992,16 @@ fn parse_update(
         true,
         false,
     );
-    let credits = credits_field(check, map.get("manual_creator_credits"), true);
+    let credits = if map.contains_key("manual_creator_credits") {
+        match map.get("manual_creator_credits") {
+            Some(Value::Null) => Some(json!([])),
+            Some(_) => credits_field(check, map.get("manual_creator_credits"), true)
+                .map(|items| normalize_manual_creator_credits(&items)),
+            None => None,
+        }
+    } else {
+        None
+    };
     let is_test = match map.get("is_test") {
         None | Some(Value::Null) => None,
         Some(value) => match coerce_bool(value) {
@@ -1009,7 +1023,7 @@ fn parse_update(
             issues_remaining,
             notes_present: map.contains_key("notes"),
             notes,
-            credits: credits.map(|items| normalize_manual_creator_credits(&items)),
+            credits,
             is_test,
         },
         raw_body,
