@@ -13,7 +13,7 @@
 
 ComicPile duplicates reading intent across Custom CBLs, Reading Plans, plan JSON, plan memberships, ContinuityRules, dependency rows and cached Thread flags. Import and plan-save paths compile lossy copies, and obsolete enforced edges can survive later edits. Roll can consequently be blocked by rules no longer visible in the edited list.
 
-**Adopt Reading List engine:** a reader-owned **Reading List**, the existing issue's natural series position, and stable explicit **Prerequisites** are the only execution inputs. One live evaluator returns the eligibility of the first unread issue in each active Thread. The queue, Roll, list reader, thread page and explanations consume that single answer. **No compilation to dependency edges, generalized continuity runtime, or cached `is_blocked` as authority.**
+**Adopt the Reading List engine:** a reader-owned **Reading List**, the existing issue's natural series position, and stable explicit **Prerequisites** are the only execution inputs. One live evaluator returns the eligibility of the first unread issue in each active Thread. The queue, Roll, list reader, thread page and explanations consume that single answer. **No compilation to dependency edges, generalized continuity runtime, or cached `is_blocked` as authority.**
 
 Existing Custom CBLs become Reading Lists. They are **not regenerated from public sources** and are not discarded in favor of older Reading Plan copies. The user sees their intended sequences, not migration constructs.
 
@@ -89,7 +89,7 @@ def evaluate(snapshot: ReadingSnapshot) -> dict[int, ThreadEligibility]: ...
 **Phase 0: read-only production census.** Generate durable reports, not inferred cleanup:
 1. Every list-versus-plan discrepancy (both directions and ordering), unpaired lists/plans, excludes/skips, provenance and extra lanes.
 2. Every derived-vs-stored Thread frontier mismatch, including shell Threads and intervening unread issues.
-3. Every *explicitly reader-authored* prerequisite and its current impact, separately from legacy/compiled dependency artifacts that must not block Reading List engine. Identify missing deliberate prerequisites (e.g., Starman #55 before JSA), cycles, separate-Thread annuals without gates and collection exclusions. No provenance classification requirement for the historical archive.
+3. Every *explicitly reader-authored* prerequisite and its current impact, separately from legacy/compiled dependency artifacts that must not block the Reading List engine. Identify missing deliberate prerequisites (e.g., Starman #55 before JSA), cycles, separate-Thread annuals without gates and collection exclusions. No provenance classification requirement for the historical archive.
 
 On 2026-10-13 production, the known baseline included 18 Custom CBLs with 1,055 entries, 24 bad stored frontiers, 1,146 non-`cbl-order` dependencies (780 cross-Thread), and approximately 74,259 inert `cbl-order` rows. These are dated observations, **not** a target count. Absolute Custom CBL has 105 entries while its plan membership has 76; Mignolaverse has 466 vs 464. Do not resolve any difference by `updated_at`, a public source, or an issue title.
 
@@ -105,7 +105,7 @@ On 2026-10-13 production, the known baseline included 18 Custom CBLs with 1,055 
 
 ## Factory-sized work and authority boundaries
 
-- Split into narrowly testable issues, typically one bounded service, adapter or schema concern with focused tests; avoid a giant “implement Reading List engine” ticket.
+- Split into narrowly testable issues, typically one bounded service, adapter or schema concern with focused tests; avoid a giant “implement the Reading List engine” ticket.
 - Read-only census, pure evaluator, validators, non-destructive schema changes, shadow reporting and UI foundations are factory-executable when dependencies are ready.
 - **Manual-only:** approving changes to genuine reader intent and exclusions, resolving conflicting authored orders, app-wide production activation and destructive retirement. Do not require manual approval of historical provenance merely to ignore obsolete compiled edges.
 - No concurrent factory jobs rewriting the same Roll authority or migration engine. Use explicit sequencing and a single coordinator.
@@ -142,11 +142,11 @@ App-wide activation must exercise Queue **Read & Rate** (the `set-pending` API),
 
 The original text above is preserved as history. Amendments, with citations:
 
-- **Implementation status:** the header "implementation pending" is superseded. Reading List engine runs on the Rust v2 stack: canonical continuity-plan reader and release metadata (95e0fd8a2, Nov 5), v2 Reading List read/create/delete/reader and atomic owner-scoped replace with predecessor confirmation (172fc7203, dbc689713), retirement of the legacy v1 continuity-plan reader (#4346 / #4710), and removal of the shadowed Python handlers (#5405, #5399, #5402). Coordination issue: #2366.
+- **Implementation status:** the header "implementation pending" is superseded. The Reading List engine runs on the Rust v2 stack: canonical continuity-plan reader and release metadata (95e0fd8a2, Nov 5), v2 Reading List read/create/delete/reader and atomic owner-scoped replace with predecessor confirmation (172fc7203, dbc689713), retirement of the legacy v1 continuity-plan reader (#4346 / #4710), and removal of the shadowed Python handlers (#5405, #5399, #5402). Coordination issue: #2366.
 - **Dependency cycles:** a reading-dependency cycle caused a production outage (P0 #4759). Rust v2 now contains cycles with atomic graph preflight and owner-scoped recovery; CBL previews that contain only a cycle show the loop and a resolve path (#5379 / #5438).
 - **Orphaned plans:** plans whose Reading List identity was deleted are recovered by explicit preview and relink (#4684), and deletion of an authoritative list is refused (ddfd1cf13). Empty plans (0 lanes) still open to this recovery screen: open bug #5462.
 - **Plan tag inheritance:** plan tags flow to issues through the linked authoritative Reading List, including a plan's sole unread issue (#5265 / #5463).
-- **Roll behavior superseded:** the Roll contract is now sessionless and event-derived ([#4405](https://github.com/JoshCLWren/comic-pile/issues/4405), 2026-10-31): die ladder d2-d20, uniform selection, no reading-mode/bandwidth weighting, no snooze backfill. Reading List engine remains the only automatic-eligibility authority, but it never vetoes manual read/rate of an owned issue. "Read now selection acceptance" below is read in that light. Sessions v1 current and restore-session-start were retired (#4343 / #5442).
+- **Roll behavior superseded:** the Roll contract is now sessionless and event-derived ([#4405](https://github.com/JoshCLWren/comic-pile/issues/4405), 2026-10-31): die ladder d2-d20, uniform selection, no reading-mode/bandwidth weighting, no snooze backfill. The Reading List engine remains the only automatic-eligibility authority, but it never vetoes manual read/rate of an owned issue. "Read now selection acceptance" below is read in that light. Sessions v1 current and restore-session-start were retired (#4343 / #5442).
 - **Reading mode:** the quiz launcher is feature-flagged off (`frontend/src/config/features.ts`, #1945) and removed from the product direction by #4405.
 - **Crossovers:** the Crossovers list now redirects into Reading Plans (`/continuity-plans`, `/continuity-plans/events`); whether `/crossovers` and `/cbl-sources` get navigation entries or fold into Reading Lists is open under #5437.
 - **Not verified here:** custom CBL authoring and dependency-group behavior were not re-audited in this pass; no amendment is claimed for them.
