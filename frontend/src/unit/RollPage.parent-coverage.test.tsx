@@ -989,21 +989,6 @@ describe('RollPage parent handlers', () => {
 
   it('preserves complete issue metadata through the rating transition', async () => {
     const user = userEvent.setup()
-    const completeResponse = {
-      thread_id: 1,
-      title: 'Saga',
-      format: 'Comic',
-      issues_remaining: 2,
-      queue_position: 1,
-      total_issues: 10,
-      reading_progress: 0.4,
-      issue_id: 8,
-      issue_number: '4',
-      next_issue_id: 9,
-      next_issue_number: '5',
-      result: 3,
-      last_rolled_result: 3,
-    }
     render(<RollPage />)
     enterPendingRollRating()
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())

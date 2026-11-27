@@ -21,7 +21,6 @@ import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
 import { useReadingBoundaries } from '../hooks/useReadingBoundaries'
 import { useSnooze } from '../hooks/useSnooze'
-import { threadsApi } from '../services/api-threads'
 import { issueDependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
@@ -136,8 +135,6 @@ const mockedUseBugReportRestore = vi.mocked(useBugReportRestore) as any
 const mockedIssuesApi = vi.mocked(issuesApi) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedListForThread = vi.mocked(issueDependenciesApi).listForThread as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedThreadsApi = vi.mocked(threadsApi) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseSnooze = vi.mocked(useSnooze) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns

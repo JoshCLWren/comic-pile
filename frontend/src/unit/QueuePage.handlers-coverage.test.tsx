@@ -8,7 +8,6 @@ import { useMoveToBack, useMoveToFront, useMoveToPosition, useQueueThreads, useS
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { useCompletedThreads } from '../hooks/useCompletedThreads'
 import { useSnooze } from '../hooks/useSnooze'
-import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
 import { rollApi } from '../services/api-roll'
