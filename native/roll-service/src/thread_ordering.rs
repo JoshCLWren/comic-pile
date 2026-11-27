@@ -499,9 +499,6 @@ pub async fn post_thread_action(
 ) -> Result<Response, ApiError> {
     let Path(segment) = segment.map_err(|_| validation_failed())?;
     match segment.split_once(':') {
-        Some((raw_id, "getBlockingInfo")) => get_thread_blocking_info(&state, user, raw_id)
-            .await
-            .map(IntoResponse::into_response),
         Some((raw_id, "migrateToIssues")) => {
             thread_issues::migrate_to_issues(&state, user, raw_id, &body).await
         }

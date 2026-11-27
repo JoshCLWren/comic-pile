@@ -379,6 +379,19 @@ export type BlockingInfoResponse = components['schemas']['BlockingExplanation']
 
 export type BatchBlockingInfoResponse = components['schemas']['BatchBlockingExplanationResponse']
 
+export interface ThreadEligibilityResponse {
+  thread_id: number;
+  eligible: boolean;
+  is_blocked: boolean;
+  next_issue_id: number | null;
+  blocking_reasons: string[];
+  blocking_dependencies: BlockingDependency[];
+}
+
+export interface BatchEligibilityResponse {
+  threads: Record<string, ThreadEligibilityResponse>;
+}
+
 export interface DependencyCreatePayload {
   sourceType?: 'thread' | 'issue';
   sourceId: number;
