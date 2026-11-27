@@ -149,6 +149,12 @@ export function classifyV2Path(method, apiPath) {
         reasons.push(REASON_CUSTOM_MALFORMED);
         return;
       }
+      // AIP-136 attaches a custom method to a lowerCamelCase collection or a
+      // parameter segment. The resource half is still subject to AIP-122: an
+      // `:verbNoun` suffix must not hide a hyphenated collection from the guard.
+      if (!isParameterSegment(parts[0]) && !LOWER_CAMEL_CASE.test(parts[0])) {
+        reasons.push(REASON_SEGMENT);
+      }
       if (!isFinal) {
         reasons.push(REASON_CUSTOM_NOT_FINAL);
       }

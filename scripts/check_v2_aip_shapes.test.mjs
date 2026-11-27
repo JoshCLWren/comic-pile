@@ -79,6 +79,21 @@ test('rejects a newly introduced hyphenated collection', () => {
   ]);
 });
 
+test('rejects a custom method on a non-lowerCamelCase collection', () => {
+  assert.deepEqual(
+    classifyV2Path('POST', '/api/v2/reading-lists2:planAdoption'),
+    ['non-lowercamelcase-segment'],
+  );
+  assert.deepEqual(
+    classifyV2Path('POST', '/api/v2/reading_order_groups:resolveMemberships'),
+    ['non-lowercamelcase-segment'],
+  );
+  assert.deepEqual(
+    classifyV2Path('POST', '/api/v2/readingLists/{listId}:planAdoption'),
+    [],
+  );
+});
+
 test('rejects rejected shape variants', () => {
   assert.deepEqual(classifyV2Path('GET', '/api/v2/readingLists/'), [
     'trailing-slash',
