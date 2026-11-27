@@ -223,6 +223,7 @@ export type ComicVineHydrationOutcome =
   | 'rate_limited'
   | 'timeout'
   | 'invalid_response'
+  | 'persist_failed'
 
 export interface MetadataRefreshResponse {
   issue_id: number
