@@ -423,12 +423,10 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
             let needs_fix = match mcc {
                 None => true,
                 Some(utoipa::openapi::RefOr::T(utoipa::openapi::Schema::Object(o))) => {
-                    !matches!(o.schema_type, utoipa::openapi::schema::SchemaType::Array(_))
-                        && !matches!(
-                            &o.schema_type,
-                            utoipa::openapi::schema::SchemaType::Type(t)
-                                if matches!(t.as_ref(), utoipa::openapi::schema::Type::Array)
-                        )
+                    !matches!(
+                        o.schema_type,
+                        utoipa::openapi::schema::SchemaType::Type(utoipa::openapi::schema::Type::Array)
+                    )
                 }
                 Some(utoipa::openapi::RefOr::T(utoipa::openapi::Schema::Array(_))) => false,
                 _ => true,
