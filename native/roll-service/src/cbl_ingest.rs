@@ -293,7 +293,6 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
         ));
     }
     let mut reader = Reader::from_reader(raw);
-    reader.config_mut().trim_text(true);
     let mut buffer = Vec::new();
     let mut root_seen = false;
     let mut capture = None;
@@ -347,12 +346,12 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
                     let value = unescape(text.as_ref()).map_err(|error| {
                         IngestError::new(format!("invalid XML entity: {error}"))
                     })?;
-                    captured_text.push_str(value.trim());
+                    captured_text.push_str(&value);
                 }
             }
             Event::CData(ref text) => {
                 if capture.is_some() {
-                    captured_text.push_str(text.as_ref().trim());
+                    captured_text.push_str(text.as_ref());
                 }
             }
             Event::GeneralRef(reference) => {
