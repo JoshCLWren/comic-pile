@@ -1700,8 +1700,6 @@ mod tests {
     }
 
     #[tokio::test]
-=======
->>>>>>> origin/main
     async fn v2_thread_issue_read_ingress_reaches_rust_and_never_hits_json_404() {
         // #5706: both canonical v2 reads must be registered in this Vercel
         // entry table. An unauthenticated request must reach the dispatched

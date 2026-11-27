@@ -1688,8 +1688,6 @@ mod tests {
     }
 
     #[tokio::test]
-=======
->>>>>>> origin/main
     async fn v2_group_crud_is_mounted_and_retired_v1_crud_returns_404_in_inner_router() {
         let config = Config::from_lookup(|name| match name {
             "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
