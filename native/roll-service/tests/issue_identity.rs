@@ -3312,3 +3312,337 @@ async fn v2_reading_order_projection_preview_is_read_only_and_commit_is_idempote
         assert_eq!(rows, vec![(941, 1), (940, 2)]);
     }
 }
+
+// ---------------------------------------------------------------------------
+// #4022: source-linked, owner-scoped canonical Reading List adoption.
+// Every assertion below runs against real PostgreSQL through the mounted
+// router; the legacy continuity Plan is never the adoption identity.
+// ---------------------------------------------------------------------------
+
+async fn second_reader(state: &Arc<AppState>, label: &str) -> (String, String, i32) {
+    let (token, csrf) = create_test_user(state, label).await;
+    let (status, me) = get(state, &token, "/api/v1/auth/me").await;
+    assert_eq!(status, StatusCode::OK, "{me}");
+    (token, csrf, me["id"].as_i64().unwrap() as i32)
+}
+
+fn adoption_body(
+    include_positions: &[i32],
+    exclude_positions: &[i32],
+    revision_sha: &str,
+    content_hash: &str,
+) -> Value {
+    let mut overrides = Vec::new();
+    for position in include_positions {
+        overrides.push(json!({"cbl_position": position, "decision": "include"}));
+    }
+    for position in exclude_positions {
+        overrides.push(json!({"cbl_position": position, "decision": "exclude"}));
+    }
+    json!({
+        "entry_decisions": {},
+        "series_decisions": [],
+        "series_overrides": overrides,
+        "content_hash": content_hash,
+        "revision_sha": revision_sha,
+    })
+}
+
+#[tokio::test]
+async fn adoption_commit_source_link_is_the_canonical_identity_issue_4022() {
+    let (state, token, csrf, _guard) = setup().await;
+    let body = adoption_body(&[0], &[1], "rev-1", "h-mm");
+
+    let (status, first) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/adoption-commits",
+        body.clone(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{first}");
+    let list_id = first["custom_cbl_list_id"].as_i64().unwrap() as i32;
+    assert!(list_id > 0, "commit must return the canonical list ID: {first}");
+    assert_eq!(first["list_version"], 1, "{first}");
+
+    let conn = state.pool.get().await.unwrap();
+    let link = conn
+        .query_one(
+            "SELECT custom_cbl_list_id, list_version, source_revision_sha, source_content_hash
+             FROM custom_cbl_source_links WHERE cbl_source_list_id = 1",
+            &[],
+        )
+        .await
+        .unwrap();
+    assert_eq!(link.get::<_, i32>(0), list_id);
+    assert_eq!(link.get::<_, i32>(1), 1);
+    assert_eq!(link.get::<_, String>(2), "rev-1");
+    assert_eq!(link.get::<_, String>(3), "h-mm");
+
+    // An exact retry replays the receipt: same list, same version, no new rows.
+    let (status2, retry) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/adoption-commits",
+        body,
+    )
+    .await;
+    assert!(status2 == StatusCode::CREATED || status2 == StatusCode::OK, "{retry}");
+    assert_eq!(retry["custom_cbl_list_id"], list_id, "{retry}");
+    assert_eq!(retry["list_version"], 1, "{retry}");
+    let entry_count: i64 = conn
+        .query_one(
+            "SELECT COUNT(*)::bigint FROM custom_cbl_entries WHERE list_id = $1",
+            &[&list_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(entry_count, 1, "retry must not duplicate issues: {retry}");
+}
+
+#[tokio::test]
+async fn adoption_commit_revision_and_list_version_guards_are_atomic_issue_4022() {
+    let (state, token, csrf, _guard) = setup().await;
+    let (status, first) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/adoption-commits",
+        adoption_body(&[0], &[1], "rev-1", "h-mm"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{first}");
+    let list_id = first["custom_cbl_list_id"].as_i64().unwrap() as i32;
+    let conn = state.pool.get().await.unwrap();
+
+    // Source revision changed after the preview: reject before any write.
+    conn.execute(
+        "UPDATE cbl_source_lists SET revision_sha = 'rev-2' WHERE id = 1",
+        &[],
+    )
+    .await
+    .unwrap();
+    let (stale_status, stale) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/adoption-commits",
+        adoption_body(&[], &[0, 1], "rev-1", "h-mm"),
+    )
+    .await;
+    assert_eq!(stale_status, StatusCode::CONFLICT, "{stale}");
+    assert_eq!(stale["detail"]["code"], "stale_preview", "{stale}");
+    let version: i32 = conn
+        .query_one(
+            "SELECT list_version FROM custom_cbl_source_links WHERE cbl_source_list_id = 1",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(version, 1, "stale source must not bump the list version");
+    let entry_count: i64 = conn
+        .query_one(
+            "SELECT COUNT(*)::bigint FROM custom_cbl_entries WHERE list_id = $1",
+            &[&list_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(entry_count, 1, "stale source must not create partial rows");
+
+    // Restore the source, then send a stale owned-list version.
+    conn.execute(
+        "UPDATE cbl_source_lists SET revision_sha = 'rev-1' WHERE id = 1",
+        &[],
+    )
+    .await
+    .unwrap();
+    let mut changed = adoption_body(&[], &[0, 1], "rev-1", "h-mm");
+    changed["list_version"] = json!(0);
+    let (version_status, version_body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/adoption-commits",
+        changed,
+    )
+    .await;
+    assert_eq!(version_status, StatusCode::CONFLICT, "{version_body}");
+    assert_eq!(version_body["detail"]["code"], "stale_preview", "{version_body}");
+    let entry_count: i64 = conn
+        .query_one(
+            "SELECT COUNT(*)::bigint FROM custom_cbl_entries WHERE list_id = $1",
+            &[&list_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(entry_count, 1, "stale list must not create partial rows");
+}
+
+#[tokio::test]
+async fn adoption_commit_isolates_readers_and_same_name_sources_issue_4022() {
+    let (state, token, csrf, _guard) = setup().await;
+    let (status, first) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/adoption-commits",
+        adoption_body(&[0], &[1], "rev-1", "h-mm"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{first}");
+    let list_a = first["custom_cbl_list_id"].as_i64().unwrap() as i32;
+
+    // A second reader adopting the same source gets a distinct owner-scoped list.
+    let (token_b, csrf_b, user_b) = second_reader(&state, "issue-identity-b").await;
+    let (status_b, second) = post_json(
+        &state,
+        &token_b,
+        &csrf_b,
+        "/api/v2/reading-lists/1/adoption-commits",
+        adoption_body(&[0], &[1], "rev-1", "h-mm"),
+    )
+    .await;
+    assert_eq!(status_b, StatusCode::CREATED, "{second}");
+    let list_b = second["custom_cbl_list_id"].as_i64().unwrap() as i32;
+    assert_ne!(list_a, list_b, "readers must not share a source-linked list");
+
+    // Same display name, different source identity: still distinct lists.
+    let conn = state.pool.get().await.unwrap();
+    conn.batch_execute(
+        r#"
+        INSERT INTO cbl_source_lists
+          (id, source_id, source_path, name, declared_issue_count, content_hash,
+           revision_sha, active, created_at, updated_at)
+        VALUES (4, 1, 'DC/Duplicate/Mister Miracle.cbl', 'Mister Miracle 1989',
+                1, 'h-dup', 'rev-1', TRUE, NOW(), NOW());
+        INSERT INTO cbl_source_entries
+          (id, list_id, "position", series_name, issue_number, volume_year,
+           publication_year, external_issue_identity_id, external_series_identity_id, created_at)
+        VALUES (990004, 4, 0, 'Mister Miracle', '3', 1989, 1989, 1, 2, NOW());
+        "#,
+    )
+    .await
+    .unwrap();
+    drop(conn);
+    let (status_dup, duplicate) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/4/adoption-commits",
+        adoption_body(&[0], &[], "rev-1", "h-dup"),
+    )
+    .await;
+    assert_eq!(status_dup, StatusCode::CREATED, "{duplicate}");
+    let list_dup = duplicate["custom_cbl_list_id"].as_i64().unwrap() as i32;
+    assert_ne!(list_a, list_dup, "display name is not adoption identity");
+    assert_ne!(list_b, list_dup, "display name is not adoption identity");
+
+    let conn = state.pool.get().await.unwrap();
+    let owners: Vec<(i32, i32)> = conn
+        .query(
+            "SELECT user_id, custom_cbl_list_id FROM custom_cbl_source_links
+             WHERE cbl_source_list_id IN (1, 4) ORDER BY cbl_source_list_id, user_id",
+            &[],
+        )
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| (row.get(0), row.get(1)))
+        .collect();
+    assert_eq!(owners.len(), 3, "one link per reader+source: {owners:?}");
+    assert!(owners.iter().any(|(uid, lid)| *uid == user_b && *lid == list_b));
+}
+
+#[tokio::test]
+async fn adoption_commit_rejects_cross_owner_plan_and_leaves_no_rows_issue_4022() {
+    let (state, token, csrf, _guard) = setup().await;
+    let (_, _, user_b) = second_reader(&state, "issue-identity-owner").await;
+    let conn = state.pool.get().await.unwrap();
+    conn.execute(
+        "INSERT INTO continuity_plans
+           (id, user_id, name, ordering_mode, lanes_json, nodes_json, created_at, updated_at)
+         VALUES (40220, $1, 'Other reader plan', 'informational',
+                 '[{\"id\":\"default\",\"name\":\"Default\",\"order\":0}]'::jsonb,
+                 '[]'::jsonb, NOW(), NOW())",
+        &[&user_b],
+    )
+    .await
+    .unwrap();
+    drop(conn);
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/reading-plans/40220/adoption-commits",
+        adoption_body(&[0], &[1], "rev-1", "h-mm"),
+    )
+    .await;
+    assert!(
+        status == StatusCode::NOT_FOUND || status == StatusCode::UNPROCESSABLE_ENTITY,
+        "{status} {body}"
+    );
+    let conn = state.pool.get().await.unwrap();
+    let links: i64 = conn
+        .query_one(
+            "SELECT COUNT(*)::bigint FROM custom_cbl_source_links WHERE cbl_source_list_id = 1",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(links, 0, "cross-owner adoption must not create a source link");
+}
+
+#[tokio::test]
+async fn adoption_commit_restores_committed_choices_on_reopen_issue_4022() {
+    let (state, token, csrf, _guard) = setup().await;
+    let mut body = adoption_body(&[0], &[1], "rev-1", "h-mm");
+    body["series_decisions"] = json!([
+        {"series_name": "provider-series:comicvine:4050-9", "decision": "exclude"}
+    ]);
+    body["overlap_decisions"] = json!([
+        {"continuing_volume_id": "4050-9", "waiting_volume_id": "4050-10"}
+    ]);
+
+    let (status, committed) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/adoption-commits",
+        body,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{committed}");
+    assert_eq!(
+        committed["overlap_decisions"],
+        json!([{"continuing_volume_id": "4050-9", "waiting_volume_id": "4050-10"}]),
+        "{committed}"
+    );
+    let list_id = committed["custom_cbl_list_id"].as_i64().unwrap() as i32;
+
+    let (open_status, reopened) = get(
+        &state,
+        &token,
+        &format!("/api/v2/reading-lists/{list_id}"),
+    )
+    .await;
+    assert_eq!(open_status, StatusCode::OK, "{reopened}");
+    assert_eq!(reopened["list_version"], 1, "{reopened}");
+    assert_eq!(reopened["source_revision_sha"], "rev-1", "{reopened}");
+    assert_eq!(reopened["source_content_hash"], "h-mm", "{reopened}");
+    let selections = &reopened["selections"];
+    assert_eq!(selections["series_decisions"][0]["decision"], "exclude", "{reopened}");
+    assert_eq!(selections["series_overrides"][0]["cbl_position"], 0, "{reopened}");
+    assert_eq!(
+        reopened["overlap_decisions"][0]["waiting_volume_id"],
+        "4050-10",
+        "{reopened}"
+    );
+}
