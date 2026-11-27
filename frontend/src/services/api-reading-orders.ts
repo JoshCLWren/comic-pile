@@ -102,7 +102,7 @@ export function createReadingOrdersApi(client: HttpClient) {
       readingOrderId: number,
     ): Promise<ReadingOrderProjectionPreview> => {
       return client.post<ReadingOrderProjectionPreview>(
-        `/v1/continuity-plans/${planId}/reading-orders/project-preview`,
+        `/v2/continuityPlans/${planId}:previewReadingOrderProjection`,
         { reading_order_id: readingOrderId },
       )
     },
@@ -116,7 +116,7 @@ export function createReadingOrdersApi(client: HttpClient) {
       )
     },
     getForThread: async (threadId: number): Promise<ThreadReadingOrdersResponse> => {
-      return client.get<ThreadReadingOrdersResponse>(`/v1/threads/${threadId}/reading-orders`)
+      return client.get<ThreadReadingOrdersResponse>(`/v2/threads/${threadId}/readingOrders`)
     },
     adoptReadingOrder: async (params: {
       readingOrderId: number
