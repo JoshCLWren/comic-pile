@@ -294,7 +294,7 @@ pub struct ThreadIssueListResponse {
     pub next_page_token: Option<String>,
 }
 
-fn decode_thread_issue_cursor(token: &str) -> Result<(i32, i32), ApiError> {
+pub(crate) fn decode_thread_issue_cursor(token: &str) -> Result<(i32, i32), ApiError> {
     let mut parts = token.split(',');
     match (parts.next(), parts.next(), parts.next()) {
         (Some(position), Some(id), None) => match (position.parse::<i32>(), id.parse::<i32>()) {
@@ -309,7 +309,10 @@ fn validation_failed() -> ApiError {
     ApiError::Unprocessable("Validation failed".into())
 }
 
-fn parse_thread_issue_query(
+/// Shared query parser for the owner-scoped thread issue collection reads
+/// (`status`, `page_size`, `page_token`). The v2 collection and credit
+/// projection reuse it so validation and cursor semantics stay identical.
+pub(crate) fn parse_thread_issue_query(
     raw: Option<&str>,
 ) -> Result<(Option<String>, i64, Option<String>), ApiError> {
     let mut status: Option<String> = None;
