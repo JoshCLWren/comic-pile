@@ -812,6 +812,13 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/threads",
             get(threads::list_threads).post(thread_lifecycle::create_thread_v2),
         )
+        // #5705: AIP-136 advisory collection custom method. It is registered
+        // separately from `GET /v2/threads` so the list/filter contract stays
+        // untouched, and the Vercel entry has a matching outer route.
+        .route(
+            "/api/v2/threads:checkDuplicates",
+            post(thread_lifecycle::check_potential_duplicates_v2),
+        )
         .route(
             "/api/v2/threads/{thread_id}",
             patch(thread_lifecycle::patch_thread).delete(thread_lifecycle::delete_thread_v2),
@@ -1243,7 +1250,11 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route(
             "/api/v2/threads/{thread_id}/issues",
-            post(issue_mutation::create_issues),
+            post(issue_mutation::create_issues).get(issue_read::list_thread_issues),
+        )
+        .route(
+            "/api/v2/threads/{thread_id}/creatorCredits",
+            get(thread_issues::list_thread_creator_credits),
         )
         .route(
             "/api/v2/threads/{thread_id}/issues/preview",

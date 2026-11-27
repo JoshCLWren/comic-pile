@@ -3406,7 +3406,11 @@ export interface paths {
         patch: operations["patch_thread_documentation"];
         trace?: never;
     };
+<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/connections": {
+=======
+    "/api/v2/threads/{thread_id}/creatorCredits": {
+>>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
         parameters: {
             query?: never;
             header?: never;
@@ -3414,6 +3418,7 @@ export interface paths {
             cookie?: never;
         };
         /**
+<<<<<<< HEAD
          * Documentation-only operation for connected threads.
          * @description List owner-scoped threads connected through reader-authored dependencies, with circularity derived from the effective reading precedence graph.
          */
@@ -3458,6 +3463,13 @@ export interface paths {
          * @description Derive one owner-scoped thread's eligibility from the canonical Reading List evaluator. Converted dependencies and stale is_blocked flags are inert.
          */
         get: operations["thread_ordering_get_thread_eligibility"];
+=======
+         * Documentation-only operation for the canonical v2 thread-scoped credit
+         *     projection (#5706). The v1 bulk creator URL stays on the legacy response;
+         *     this v2 operation adds bounded pagination around the same stored credits.
+         */
+        get: operations["thread_creator_credits"];
+>>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
         put?: never;
         post?: never;
         delete?: never;
@@ -3513,7 +3525,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Documentation-only operation for the canonical v2 thread issue collection
+         *     (#5706). The v2 path is mounted to the same owner-scoped, paginated handler
+         *     as the retained v1 same-path read, so both URLs share one wire contract.
+         */
+        get: operations["list_thread_issues_v2"];
         put?: never;
         /**
          * Documentation-only operation for the mounted issue-create resource.
@@ -3583,7 +3600,11 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+<<<<<<< HEAD
     "/api/v2/threads:explainEligibility": {
+=======
+    "/api/v2/threads:checkDuplicates": {
+>>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
         parameters: {
             query?: never;
             header?: never;
@@ -3592,11 +3613,16 @@ export interface paths {
         };
         get?: never;
         put?: never;
+<<<<<<< HEAD
         /**
          * Documentation-only operation for the bounded batch explanation action.
          * @description Explain eligibility for 1..500 owner-scoped threads in one canonical graph evaluation. Explanations use strict/loose/hold/prerequisite/exclusion logic and isolate cycles.
          */
         post: operations["thread_ordering_explain_eligibility"];
+=======
+        /** @description Advisory AIP-136 collection custom method: report existing volumes that may be the proposed series. Does not create a Thread. Results are owner-scoped, exclude a named thread, and are capped at five matches. */
+        post: operations["check_duplicates"];
+>>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
         delete?: never;
         options?: never;
         head?: never;
@@ -4555,6 +4581,19 @@ export interface components {
              */
             source_path: string;
             source_repository: string;
+        };
+        /** @description Body of `POST /api/v1/threads/check-duplicates`. */
+        CheckDuplicatesRequest: {
+            /** Format: int32 */
+            comicvine_volume_id?: number | null;
+            /** Format: int32 */
+            exclude_thread_id?: number | null;
+            format: string;
+            title: string;
+        };
+        /** @description Response of `POST /api/v1/threads/check-duplicates`. */
+        CheckDuplicatesResponse: {
+            matches: components["schemas"]["NativePotentialDuplicateMatch"][];
         };
         /**
          * CheckPotentialDuplicatesRequest
@@ -6777,6 +6816,23 @@ export interface components {
         /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssuesSimple`. */
         NativeMigrateToIssuesSimpleRequest: {
             issue_number: string;
+        };
+        /** @description One possible existing volume. */
+        NativePotentialDuplicateMatch: {
+            /** Format: int64 */
+            comicvine_volume_id?: number | null;
+            format: string;
+            /** Format: int32 */
+            issues_remaining: number;
+            match_type: string;
+            /** Format: int32 */
+            start_year?: number | null;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
         };
         /** @description Confirmed provider series metadata for one queue row. */
         NativeQueueSeriesMetadata: {
@@ -9414,6 +9470,24 @@ export interface components {
             title: string;
             /** Format: int32 */
             total_issues?: number | null;
+        };
+        /**
+         * @description Bounded, paginated thread-scoped issue-credit projection for #5706.
+         *
+         *     Keeps the frozen per-issue `issue_id`/`creators` wire shape of the legacy
+         *     bulk creator read and adds standard page fields. The `issues` array omits
+         *     unmapped issues and issues without stored credits, exactly like the legacy
+         *     response, while `total_count` counts matching confirmed-mapping issue rows.
+         */
+        ThreadCreatorCreditsResponse: {
+            issues: components["schemas"]["NativeIssueCreatorsEntry"][];
+            next_page_token?: string | null;
+            /** Format: int64 */
+            page_size: number;
+            /** Format: int32 */
+            thread_id: number;
+            /** Format: int64 */
+            total_count: number;
         };
         /**
          * @description Wire parity with Python `ThreadDependenciesResponse`
@@ -19196,9 +19270,20 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
     thread_ordering_thread_connections: {
         parameters: {
             query?: never;
+=======
+    thread_creator_credits: {
+        parameters: {
+            query?: {
+                /** @description 1-100 credited issues (default 100) */
+                page_size?: number;
+                /** @description issue_id continuation cursor */
+                page_token?: string;
+            };
+>>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
             header?: never;
             path: {
                 /** @description Owned Thread identifier */
@@ -19208,15 +19293,32 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+<<<<<<< HEAD
             /** @description Threads connected through reader-authored dependencies */
+=======
+            /** @description Paginated stored creator credits per mapped issue */
+>>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
+<<<<<<< HEAD
                     "application/json": components["schemas"]["ThreadConnectedResponse"];
                 };
             };
+=======
+                    "application/json": components["schemas"]["ThreadCreatorCreditsResponse"];
+                };
+            };
+            /** @description Invalid page token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+>>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
             /** @description Not authenticated */
             401: {
                 headers: {
@@ -19231,6 +19333,7 @@ export interface operations {
                 };
                 content?: never;
             };
+<<<<<<< HEAD
             /** @description Request validation failed */
             422: {
                 headers: {
@@ -19327,6 +19430,9 @@ export interface operations {
                 content?: never;
             };
             /** @description Request validation failed */
+=======
+            /** @description Validation failed */
+>>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19402,27 +19508,60 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
     dependencies_list_thread_issue_dependencies: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description Owned thread identifier */
+=======
+    list_thread_issues_v2: {
+        parameters: {
+            query?: {
+                /** @description Optional read or unread filter */
+                status?: string;
+                /** @description 1-100 issues (default 50) */
+                page_size?: number;
+                /** @description position,id continuation cursor */
+                page_token?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Owned thread ID */
+>>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
+<<<<<<< HEAD
             /** @description Thread issue dependencies */
+=======
+            /** @description Owner-scoped, paginated issues */
+>>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
+<<<<<<< HEAD
                     "application/json": components["schemas"]["ThreadIssueDependenciesResponse"];
                 };
             };
+=======
+                    "application/json": components["schemas"]["ThreadIssueListResponse"];
+                };
+            };
+            /** @description Invalid page token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+>>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
             /** @description Not authenticated */
             401: {
                 headers: {
@@ -19437,6 +19576,16 @@ export interface operations {
                 };
                 content?: never;
             };
+<<<<<<< HEAD
+=======
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+>>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
             /** @description Database temporarily unavailable */
             503: {
                 headers: {
@@ -19676,7 +19825,11 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
     thread_ordering_explain_eligibility: {
+=======
+    check_duplicates: {
+>>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
         parameters: {
             query?: never;
             header?: never;
@@ -19685,17 +19838,29 @@ export interface operations {
         };
         requestBody: {
             content: {
+<<<<<<< HEAD
                 "application/json": components["schemas"]["BatchBlockingExplanationRequest"];
             };
         };
         responses: {
             /** @description Blocking explanations keyed by thread id */
+=======
+                "application/json": components["schemas"]["CheckDuplicatesRequest"];
+            };
+        };
+        responses: {
+            /** @description Possible existing volumes */
+>>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
+<<<<<<< HEAD
                     "application/json": components["schemas"]["BatchBlockingExplanationResponse"];
+=======
+                    "application/json": components["schemas"]["CheckDuplicatesResponse"];
+>>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
                 };
             };
             /** @description Not authenticated */
@@ -19705,6 +19870,7 @@ export interface operations {
                 };
                 content?: never;
             };
+<<<<<<< HEAD
             /** @description One or more threads not found */
             404: {
                 headers: {
@@ -19713,12 +19879,16 @@ export interface operations {
                 content?: never;
             };
             /** @description Request validation failed */
+=======
+            /** @description Validation failed */
+>>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
+<<<<<<< HEAD
             /** @description Database temporarily unavailable */
             503: {
                 headers: {
@@ -19726,6 +19896,8 @@ export interface operations {
                 };
                 content?: never;
             };
+=======
+>>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
         };
     };
     list_undo_snapshots_documentation: {

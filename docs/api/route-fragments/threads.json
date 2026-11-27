@@ -106,6 +106,19 @@
     {
       "bucket": "operations",
       "method": "GET",
+      "path": "/api/v2/threads/{thread_id}/issues",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/threads/[0-9]+/issues$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5706,
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
       "path": "/api/v2/threads/{thread_id}/reading-order-group-memberships",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v2/threads/[^/]+/reading-order-group-memberships$",
@@ -118,6 +131,7 @@
     },
     {
       "bucket": "operations",
+<<<<<<< HEAD
       "method": "GET",
       "path": "/api/v2/threads/{thread_id}/dependencies",
       "dest": "/api/native_roll.rs",
@@ -180,6 +194,18 @@
         "frontend/src/services/api-dependencies.ts"
       ],
       "owning_issue": 5709
+=======
+      "method": "POST",
+      "path": "/api/v2/threads:checkDuplicates",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/threads:checkDuplicates$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5705,
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
+      ]
+>>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
     },
     {
       "bucket": "unversioned_operations",

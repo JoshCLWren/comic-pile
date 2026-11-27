@@ -452,6 +452,33 @@ pub async fn list_thread_issues(
 #[allow(dead_code)]
 pub fn list_thread_issues_documentation() {}
 
+/// Documentation-only operation for the canonical v2 thread issue collection
+/// (#5706). The v2 path is mounted to the same owner-scoped, paginated handler
+/// as the retained v1 same-path read, so both URLs share one wire contract.
+#[utoipa::path(
+    get,
+    path = "/api/v2/threads/{thread_id}/issues",
+    tag = "issues",
+    operation_id = "list_thread_issues_v2",
+    params(
+        ("thread_id" = i32, Path, description = "Owned thread ID"),
+        ("status" = Option<String>, Query, description = "Optional read or unread filter"),
+        ("page_size" = Option<i64>, Query, description = "1-100 issues (default 50)"),
+        ("page_token" = Option<String>, Query, description = "position,id continuation cursor")
+    ),
+    responses(
+        (status = 200, description = "Owner-scoped, paginated issues", body = ThreadIssueListResponse),
+        (status = 400, description = "Invalid page token"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Thread not found"),
+        (status = 422, description = "Validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn list_thread_issues_v2_documentation() {}
+
 /// Documentation-only operation for the mounted single-issue read.
 #[utoipa::path(
     get,
