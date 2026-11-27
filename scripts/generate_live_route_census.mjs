@@ -10,7 +10,9 @@
  *   - the real axum router in `native/roll-service/src/lib.rs` (every live
  *     METHOD/path/handler registration, including v1 and bare /api aliases);
  *   - `vercel.json` for the production ingress destination;
- *   - `docs/api/v2-route-inventory.json` for curated first-party consumers;
+ *   - `docs/api/route-fragments/*.json` for source-owned retirement issues and
+ *     curated first-party consumers (the generated burndown inventory is a
+ *     bot-owned artifact and must not be a PR-editable census input);
  *   - a source scan of first-party browser, CLI and test code for live calls;
  *   - `docs/api/v1-route-dispositions.json` for the curated owner/disposition
  *     matrix (the published ownership decision for each legacy route); and
@@ -41,6 +43,7 @@ export const REPORT_PATH = 'docs/api/LIVE_ROUTE_CENSUS.md';
 export const ROUTER_PATH = 'native/roll-service/src/lib.rs';
 export const DISPOSITIONS_PATH = 'docs/api/v1-route-dispositions.json';
 export const INVENTORY_PATH = 'docs/api/v2-route-inventory.json';
+export const FRAGMENTS_DIR = 'docs/api/route-fragments';
 export const AIP_BASELINE_PATH = 'docs/api/v2-aip-shapes-baseline.json';
 export const VERCEL_PATH = 'vercel.json';
 
@@ -469,6 +472,43 @@ function inventoryOperations(inventory) {
   return result;
 }
 
+/**
+ * Read owner/consumer metadata from contributor-editable route fragments.
+ *
+ * The checked-in burndown inventory is bot-owned and regenerated post-merge,
+ * so an ordinary PR cannot refresh its census ownership by editing the
+ * inventory. Fragments are the editable source the inventory is generated
+ * from; reading them keeps the census deterministic without depending on a
+ * generated artifact.
+ *
+ * @param {string} root Repository root.
+ * @returns {Map<string, {owning_issue: number|null, consumers: string[]}>}
+ *   Metadata keyed by `METHOD path`.
+ */
+export function sourceRouteMetadata(root = DEFAULT_ROOT) {
+  const result = new Map();
+  const dir = path.join(root, FRAGMENTS_DIR);
+  if (!existsSync(dir)) return result;
+  for (const entry of readdirSync(dir).sort()) {
+    if (!entry.endsWith('.json') || entry === 'vercel-rewrites.json') continue;
+    const fragment = readJson(path.join(dir, entry));
+    const defaults = isObject(fragment.defaults) ? fragment.defaults : {};
+    for (const op of Array.isArray(fragment.operations) ? fragment.operations : []) {
+      const method = stringField(op, 'method', null);
+      const opPath = stringField(op, 'path', null);
+      if (method === null || opPath === null) continue;
+      const owner = Number.isInteger(op.owning_issue)
+        ? op.owning_issue
+        : Number.isInteger(defaults.owning_issue) ? defaults.owning_issue : null;
+      const consumers = stringList(op.consumers).length
+        ? stringList(op.consumers)
+        : stringList(defaults.consumers);
+      result.set(`${method} ${opPath}`, {owning_issue: owner, consumers});
+    }
+  }
+  return result;
+}
+
 function dispositionFor(dispositions, route) {
   const overrides = isObject(dispositions.overrides) ? dispositions.overrides : {};
   const direct = overrides[`${route.method} ${route.path}`];
@@ -485,14 +525,15 @@ function dispositionFor(dispositions, route) {
 /**
  * Build the all-version census from primary sources.
  *
- * @param {object} inputs Router text, inventory, dispositions, AIP baseline,
- *   Vercel document and scanned callers.
+ * @param {object} inputs Router text, inventory, source fragment metadata,
+ *   dispositions, AIP baseline, Vercel document and scanned callers.
  * @returns {object} Deterministic census document.
  */
 export function buildCensus(inputs) {
   const routes = parseRouterRoutes(inputs.routerText)
     .filter(route => route.path.startsWith('/api/'));
   const curated = inventoryOperations(inputs.inventory);
+  const sourceMetadata = inputs.sourceMetadata instanceof Map ? inputs.sourceMetadata : new Map();
   const aipEntries = Array.isArray(inputs.aipBaseline?.entries) ? inputs.aipBaseline.entries : [];
   const aipKeys = new Set(aipEntries.map(entry => `${entry.method} ${entry.path}`));
   const knownDebt = new Set(
@@ -512,25 +553,30 @@ export function buildCensus(inputs) {
     const version = routeVersion(route.path);
     const disposition = dispositionFor(inputs.dispositions, route);
     const curatedOp = curated.get(key);
+    const sourceOp = sourceMetadata.get(key) ?? {};
     const aipEntry = aipKeys.has(key) ? aipEntries.find(entry => `${entry.method} ${entry.path}` === key) : null;
     const ownerIssue = Number.isInteger(disposition.owner_issue)
       ? disposition.owner_issue
-      : Number.isInteger(curatedOp?.owning_issue) && version === 'v2'
-        ? curatedOp.owning_issue
-        : Number.isInteger(aipEntry?.owning_issue)
-          ? aipEntry.owning_issue
-          : null;
+      : Number.isInteger(sourceOp.owning_issue)
+        ? sourceOp.owning_issue
+        : Number.isInteger(curatedOp?.owning_issue) && version === 'v2'
+          ? curatedOp.owning_issue
+          : Number.isInteger(aipEntry?.owning_issue)
+            ? aipEntry.owning_issue
+            : null;
     const replacement = stringField(disposition, 'replacement', null)
       ?? (version === 'v2' ? 'canonical-v2' : 'needs-owner-disposition');
     const rolloutStatus = stringField(disposition, 'rollout_status', null)
       ?? (version === 'v2' ? 'live-target' : 'baseline-debt');
+    const sourceConsumers = stringList(sourceOp.consumers);
     const curatedConsumers = stringList(curatedOp?.consumers);
     const matchedCallers = callers.filter(caller => callerMatchesRoute(caller, route));
-    // Precise per-operation source call sites win over the inventory's
-    // family-level consumer lists; curated consumers are the fallback for
-    // routes whose calls are assembled dynamically.
+    // Precise per-operation source call sites win over curated consumer lists;
+    // contributor-editable fragment consumers come before the generated
+    // inventory's family-level fallback for dynamically assembled calls.
     const scannedConsumers = matchedCallers.map(caller => caller.file);
-    const consumers = [...new Set(scannedConsumers.length ? scannedConsumers : curatedConsumers)].sort();
+    const fallbackConsumers = sourceConsumers.length ? sourceConsumers : curatedConsumers;
+    const consumers = [...new Set(scannedConsumers.length ? scannedConsumers : fallbackConsumers)].sort();
     const ingress = resolveIngress(route, vercelRoutes);
     censusRoutes.push({
       method: route.method,
