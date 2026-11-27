@@ -230,6 +230,7 @@ export function useRollRating({
       activeRatingThread,
       rating,
       rateMutation,
+      clearPending,
       setShowSimpleMigration,
       suppressPendingAutoOpenRef,
       setIsRolling,

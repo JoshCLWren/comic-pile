@@ -23,8 +23,7 @@ export function createRollBootstrapApi(client: HttpClient) {
 
   return {
     get: async (userId?: number | string | null): Promise<RollBootstrapResponse> => {
-      const [dieState, eligible, snoozes] = await Promise.all([
-        nativeV2.dieState(),
+      const [eligible, snoozes] = await Promise.all([
         nativeV2.eligibleIssueIds({
           query: readRollSnoozes().length > 0
             ? { snoozed: readRollSnoozes().join(',') }
