@@ -3,6 +3,9 @@
 //!
 //! * `POST /api/v1/threads/` (create)
 //! * `PUT` / `DELETE /api/v1/threads/{thread_id}`
+//! * `PATCH` / `DELETE /api/v2/threads/{thread_id}` (#5703, the canonical AIP
+//!   resource methods; the v1 pair remains mounted until live callers are
+//!   migrated and authenticated production proof exists)
 //! * `POST /api/v1/threads/{thread_id}/exclude`, `/restore`, `/set-pending`
 //! * `POST /api/v1/threads/reactivate`
 //! * `GET /api/v1/threads/stale`
@@ -1312,7 +1315,12 @@ async fn update_once(
     })
 }
 
-/// `PUT /api/v1/threads/{thread_id}`
+/// `PUT /api/v1/threads/{thread_id}` (retained temporarily for live callers).
+///
+/// This is a partial update in practice, but AIP-134 names `PATCH` as the
+/// standard resource method; `patch_thread` is the v2 destination. No full
+/// replacement PUT contract exists, so no v2 PUT is introduced. The v1 route is
+/// removed only after #5703's v2 callers are proven in production.
 pub async fn update_thread(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
