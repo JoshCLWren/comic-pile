@@ -906,6 +906,26 @@ fn entry_year(entry: &serde_json::Map<String, Value>) -> Option<i32> {
         .and_then(|year| i32::try_from(year).ok())
 }
 
+/// Shared read-only prospective-graph calculation.
+///
+/// Both the retained same-path v1 handler and the canonical v2 AIP-136 custom
+/// method (#5714) call this function. It parses the request, takes one
+/// repeatable-read snapshot, reconciles only the selected owner-scoped positions
+/// and evaluates them with the same Option E evaluator and cycle validator.
+/// Nothing is written: repeating a call with the same source fingerprint and
+/// answers returns the same preview without touching lists, history, graph or
+/// exclusions.
+pub async fn preview_reading_graph_for(
+    state: &AppState,
+    user: AuthenticatedUser,
+    list_id: i64,
+    body: &[u8],
+) -> Result<ReadingGraphPreview, PreviewError> {
+    let request = parse_request(body)?;
+    let loaded = load(state, user, list_id, &request.included_positions).await?;
+    build_preview(&loaded, user.id(), list_id, &request)
+}
+
 /// Mounted handler for `POST .../cbl/{list_id}/reading-graph-preview`.
 pub async fn preview_cbl_reading_graph_handler(
     State(state): State<Arc<AppState>>,
@@ -914,9 +934,9 @@ pub async fn preview_cbl_reading_graph_handler(
     body: Bytes,
 ) -> Result<Json<ReadingGraphPreview>, PreviewError> {
     let list_id = parse_path_int(list_id)?;
-    let request = parse_request(&body)?;
-    let loaded = load(&state, user, list_id, &request.included_positions).await?;
-    build_preview(&loaded, user.id(), list_id, &request).map(Json)
+    preview_reading_graph_for(&state, user, list_id, &body)
+        .await
+        .map(Json)
 }
 
 fn build_preview(
