@@ -723,7 +723,11 @@ mod tests {
             "/api/v1/issues/7/comicvine",
             "/api/v2/issues/7/dependencies",
             "/api/v1/threads/7/issue-dependencies",
-            "/api/v1/threads/7/issues",
+            // The retired v1 issue collection no longer has a GET handler
+            // (#5706); the paired v2 collection and credit projection are the
+            // live reads and must require auth through the service router.
+            "/api/v2/threads/7/issues",
+            "/api/v2/threads/7/creatorCredits",
         ] {
             let response = app
                 .clone()
