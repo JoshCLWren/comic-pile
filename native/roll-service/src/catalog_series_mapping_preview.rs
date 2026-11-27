@@ -1,10 +1,14 @@
-//! Same-path Rust cutover of `POST /api/v1/catalog/series-mappings/preview`.
+//! Series-mapping preview, mounted canonically at
+//! `POST /api/v2/seriesMappings:preview` (AIP-136 stateless collection method).
 //!
-//! The preview plan (scope, rows, counts, state digest) is produced by the same
-//! `catalog_commit::build_plan_for_commit` builder the Rust commit endpoint uses
-//! to revalidate a preview. The signed token therefore remains mutually
-//! intelligible with both the existing Rust commit handler and the retired
-//! Python preview/commit contract.
+//! The retained `POST /api/v1/catalog/series-mappings/preview` alias exists only
+//! until production proof retires it; every real caller uses the v2 custom
+//! method. Both URLs share one read-only implementation: the preview plan
+//! (scope, rows, counts, state digest) is produced by the same
+//! `catalog_commit::build_plan_for_commit` builder the durable commit endpoint
+//! uses to revalidate a preview. The signed token therefore remains mutually
+//! intelligible with the retained commit handler and carries the idempotency
+//! evidence without writing any state itself.
 
 use crate::{
     auth::AuthenticatedUser,
@@ -417,6 +421,41 @@ pub async fn preview_series_mapping_handler(
     };
     Ok(Json(response))
 }
+
+// ---------------------------------------------------------------------------
+// POST /api/v2/seriesMappings:preview
+// ---------------------------------------------------------------------------
+
+/// Canonical v2 entry point: an AIP-136 stateless collection custom method.
+///
+/// It shares the read-only implementation with the retained v1 alias, so the
+/// signed preview token, wire response, authorization, validation and state
+/// digest stay identical. Preview never writes mappings, receipts, reading
+/// history or provider cache entries; the durable commit remains
+/// `POST /api/v2/series-mapping-commits`.
+pub async fn preview_series_mappings_v2(
+    state: State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    body: Bytes,
+) -> Result<Json<SeriesMappingPreviewResponse>, PreviewError> {
+    preview_series_mapping_handler(state, user, body).await
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v2/seriesMappings:preview",
+    operation_id = "preview_series_mappings",
+    tag = "catalog",
+    description = "Stateless AIP-136 collection custom method: build a read-only series-mapping preview and a signed idempotency token for the durable commit. No mappings, receipts, history or provider state are written.",
+    request_body = SeriesMappingPreviewRequest,
+    responses(
+        (status = 200, description = "Read-only series mapping preview", body = SeriesMappingPreviewResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 422, description = "Validation failed"),
+    ),
+    security(("HTTPBearer" = []))
+)]
+pub fn preview_series_mappings_v2_documentation() {}
 
 #[cfg(test)]
 mod tests {
