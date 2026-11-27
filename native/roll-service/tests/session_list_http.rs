@@ -80,11 +80,7 @@ async fn register(state: &Arc<AppState>, username: &str) -> (String, String, i32
     (token, csrf, id)
 }
 
-async fn send(
-    state: &Arc<AppState>,
-    auth: (&str, &str),
-    path: &str,
-) -> (StatusCode, Value) {
+async fn send(state: &Arc<AppState>, auth: (&str, &str), path: &str) -> (StatusCode, Value) {
     let (token, csrf) = auth;
     let response = router(state.clone())
         .oneshot(
@@ -152,16 +148,30 @@ async fn canonical_session_list_and_get_are_owner_scoped_and_paginated() {
     drop(conn);
 
     let (status, page_one) = send(&state, owner, "/api/v2/readingSessions?page_size=2").await;
-    assert_eq!(status, StatusCode::OK, "list must be mounted and authenticated");
-    let items = page_one["reading_sessions"].as_array().expect("session array");
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "list must be mounted and authenticated"
+    );
+    let items = page_one["reading_sessions"]
+        .as_array()
+        .expect("session array");
     assert_eq!(items.len(), 2);
-    assert_eq!(items[0]["name"].as_str(), Some(format!("readingSessions/{third}").as_str()));
+    assert_eq!(
+        items[0]["name"].as_str(),
+        Some(format!("readingSessions/{third}").as_str())
+    );
     assert_eq!(items[0]["session_id"].as_i64(), Some(i64::from(third)));
     assert_eq!(items[0]["current_die"].as_i64(), Some(12));
     assert_eq!(items[0]["event_count"].as_i64(), Some(1));
     assert_eq!(items[0]["snapshot_count"].as_i64(), Some(1));
-    assert_eq!(items[1]["name"].as_str(), Some(format!("readingSessions/{second}").as_str()));
-    let token = page_one["next_page_token"].as_str().expect("continuation token");
+    assert_eq!(
+        items[1]["name"].as_str(),
+        Some(format!("readingSessions/{second}").as_str())
+    );
+    let token = page_one["next_page_token"]
+        .as_str()
+        .expect("continuation token");
 
     let (status, page_two) = send(
         &state,
@@ -170,24 +180,34 @@ async fn canonical_session_list_and_get_are_owner_scoped_and_paginated() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    let items = page_two["reading_sessions"].as_array().expect("session array");
+    let items = page_two["reading_sessions"]
+        .as_array()
+        .expect("session array");
     assert_eq!(items.len(), 1);
-    assert_eq!(items[0]["name"].as_str(), Some(format!("readingSessions/{first}").as_str()));
-    assert!(page_two["next_page_token"].is_null(), "last page has no cursor");
+    assert_eq!(
+        items[0]["name"].as_str(),
+        Some(format!("readingSessions/{first}").as_str())
+    );
+    assert!(
+        page_two["next_page_token"].is_null(),
+        "last page has no cursor"
+    );
 
-    let (status, detail) = send(
-        &state,
-        owner,
-        &format!("/api/v2/readingSessions/{third}"),
-    )
-    .await;
+    let (status, detail) = send(&state, owner, &format!("/api/v2/readingSessions/{third}")).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(detail["name"].as_str(), Some(format!("readingSessions/{third}").as_str()));
+    assert_eq!(
+        detail["name"].as_str(),
+        Some(format!("readingSessions/{third}").as_str())
+    );
     assert_eq!(detail["start_die"].as_i64(), Some(10));
     assert_eq!(detail["ladder_path"].as_str(), Some("10 → 12"));
 
     let (status, _) = send(&state, owner, &format!("/api/v2/readingSessions/{foreign}")).await;
-    assert_eq!(status, StatusCode::NOT_FOUND, "foreign session is indistinguishable");
+    assert_eq!(
+        status,
+        StatusCode::NOT_FOUND,
+        "foreign session is indistinguishable"
+    );
     let (status, _) = send(&state, other, &format!("/api/v2/readingSessions/{third}")).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 

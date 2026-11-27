@@ -261,10 +261,7 @@ fn app() -> Router {
         .route("/api/v2/roll/bootstrap", get(native_dispatch))
         .route("/api/v2/readingSessions", get(native_dispatch))
         .route("/api/v2/readingSessions", post(native_dispatch))
-        .route(
-            "/api/v2/readingSessions/{session_id}",
-            get(native_dispatch),
-        )
+        .route("/api/v2/readingSessions/{session_id}", get(native_dispatch))
         .route(
             "/api/v2/readingSessions/{session_id}/snapshots",
             get(native_dispatch),

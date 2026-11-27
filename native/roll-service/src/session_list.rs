@@ -95,7 +95,9 @@ struct PageKey {
 /// Decode an opaque token this endpoint issued. Anything else fails closed
 /// before SQL, so a client cannot inject an arbitrary timestamp or id.
 fn parse_page_token(token: &str) -> Result<PageKey, ApiError> {
-    let bytes = URL_SAFE_NO_PAD.decode(token).map_err(|_| bad_page_token())?;
+    let bytes = URL_SAFE_NO_PAD
+        .decode(token)
+        .map_err(|_| bad_page_token())?;
     let value: Value = serde_json::from_slice(&bytes).map_err(|_| bad_page_token())?;
     let object = value.as_object().ok_or_else(bad_page_token)?;
     if object.len() != 2 {
@@ -173,10 +175,7 @@ async fn load_sessions(
 ) -> Result<Vec<ReadingSessionResource>, ApiError> {
     let connection = db::checkout(state).await?;
     let cursor_time: Option<DateTime<Utc>> = cursor
-        .map(|key| {
-            DateTime::<Utc>::from_timestamp_micros(key.micros)
-                .ok_or_else(bad_page_token)
-        })
+        .map(|key| DateTime::<Utc>::from_timestamp_micros(key.micros).ok_or_else(bad_page_token))
         .transpose()?;
     let cursor_id: Option<i32> = cursor.map(|key| key.id);
 
@@ -252,7 +251,9 @@ pub async fn list_reading_sessions(
         .map(parse_page_token)
         .transpose()?;
     // Fetch one extra row to know whether a continuation is needed.
-    let limit = i64::from(page_size).checked_add(1).ok_or_else(bad_page_size)?;
+    let limit = i64::from(page_size)
+        .checked_add(1)
+        .ok_or_else(bad_page_size)?;
     let mut rows = load_sessions(&state, user.id(), None, cursor, limit).await?;
     let has_more = rows.len() > page_size as usize;
     if has_more {
