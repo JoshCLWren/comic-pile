@@ -80,6 +80,7 @@
     {"method":"PUT","path":"/api/v2/reading-mode","owning_issue":4335,"reason":"non-lowercamelcase-segment,put-mutation"},
     {"method":"POST","path":"/api/v2/reading-mode/suggestion-dismissals","owning_issue":4335,"reason":"non-lowercamelcase-segment"},
     {"method":"POST","path":"/api/v2/reading-mode/suggestions","owning_issue":4335,"reason":"non-lowercamelcase-segment"},
+    {"method":"POST","path":"/api/v2/reading-order-groups:resolveMemberships","owning_issue":4841,"reason":"non-lowercamelcase-segment"},
     {"method":"POST","path":"/api/v2/reading-order-groups/{group_id}/issue-ranges","owning_issue":4841,"reason":"non-lowercamelcase-segment"},
     {"method":"POST","path":"/api/v2/reading-order-groups/{group_id}/members","owning_issue":4841,"reason":"non-lowercamelcase-segment"},
     {"method":"DELETE","path":"/api/v2/reading-order-groups/{group_id}/members/{member_id}","owning_issue":4841,"reason":"non-lowercamelcase-segment"},

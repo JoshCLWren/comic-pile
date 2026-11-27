@@ -16,7 +16,7 @@ issue that owns its removal.
 
 | Reason code | Rule |
 | --- | --- |
-| `non-lowercamelcase-segment` | A collection or resource segment must be lowerCamelCase: `readingLists`, not `reading-lists` or `reading_lists`. Path parameters (`{list_id}`) are exempt. |
+| `non-lowercamelcase-segment` | A collection or resource segment must be lowerCamelCase: `readingLists`, not `reading-lists` or `reading_lists`. This includes the resource half of a custom method (`reading-lists:planAdoption` is still a violation). Path parameters (`{list_id}`) are exempt. |
 | `trailing-slash` | Canonical paths never end in `/`. |
 | `action-shaped-subpath` | A bare verb (`/restore`, `/preview`, `/resolve`) is not a resource method. Use a `:verbNoun` custom method or a real sub-resource. |
 | `custom-method-not-final` / `custom-method-malformed` | A custom method is one final `{resource}:verbNoun` segment. |
@@ -50,8 +50,8 @@ base commit (main `083133bd`):
 
 - 158 distinct live `/api/v2` method/path pairs (137 declared by route
   fragments, 21 historical ingress-only operations).
-- 101 of them do not satisfy the contract yet and are baselined:
-  - 92 contain a hyphenated or otherwise non-lowerCamelCase segment;
+- 102 of them do not satisfy the contract yet and are baselined:
+  - 93 contain a hyphenated or otherwise non-lowerCamelCase segment;
   - 15 use an action-shaped subpath instead of a `:camelCaseVerb` custom method;
   - 6 use a trailing slash;
   - 6 mutate a resource with PUT.
