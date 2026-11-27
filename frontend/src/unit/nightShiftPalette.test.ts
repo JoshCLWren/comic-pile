@@ -226,6 +226,26 @@ describe('Night Shift boot and storage contract (#5980)', () => {
     }
   })
 
+  it('keeps shared shell components on semantic tokens', () => {
+    const sharedSurfaces = [
+      'src/components/Tooltip.tsx',
+      'src/components/LoadingSpinner.tsx',
+      'src/components/Modal.tsx',
+      'src/components/AppErrorBoundary.tsx',
+      'src/components/Navigation.tsx',
+      'src/contexts/ToastProvider.tsx',
+      'src/pages/QueuePage/QueueControls.tsx',
+    ]
+    for (const file of sharedSurfaces) {
+      const source = readFrontendFile(file)
+      for (const legacy of ['#1a1410', '#d4890e', 'amber-', 'stone-', 'white/5', 'white/10']) {
+        expect(source.toLowerCase(), `${file} still uses legacy palette ${legacy}`).not.toContain(
+          legacy.toLowerCase(),
+        )
+      }
+    }
+  })
+
   it('applies Night Shift colors in the inline bootstrap shell', () => {
     const shell = readFrontendFile('index.html')
     for (const color of ['#20242d', '#303644', '#eef1f4', '#b2bdcb', '#9cdbe9', '#4d5767']) {

@@ -70,10 +70,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                  toast.type === "error"
                    ? "border-[var(--theme-danger)] text-[var(--theme-danger)]"
                    : toast.type === "success"
-                     ? "bg-green-900/90 border-green-700 text-green-100"
+                     ? "border-[var(--theme-success)] text-[var(--theme-success)]"
                      : toast.type === "warning"
-                       ? "bg-amber-900/90 border-amber-700 text-amber-100"
-                       : "bg-stone-800/90 border-stone-600 text-stone-100"
+                       ? "border-[var(--theme-warning)] text-[var(--theme-warning)]"
+                       : "border-[var(--theme-border)] text-[var(--theme-text-primary)]"
                }`}
             role="alert"
           >
