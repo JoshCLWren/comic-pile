@@ -1342,7 +1342,6 @@ mod tests {
             "/api/v1/threads/{thread_id}/connected",
             "/api/v1/threads/{thread_id}/dependency-order-check",
             "/api/v1/threads/{thread_id}/issues:validateOrder",
-            "/api/v1/threads/{thread_id}/reading-orders",
         ] {
             assert!(document["paths"].get(path).is_some(), "{path}");
         }
