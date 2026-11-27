@@ -338,6 +338,31 @@ describe('useQueueThreadActions', () => {
     expect(toastSpy).toHaveBeenCalledWith('Deleted "Doomed"', 'success')
   })
 
+  it('shows the server delete detail rather than the transport error message', async () => {
+    const remove = {
+      ...mutationStubs(),
+      mutate: vi.fn().mockRejectedValue({
+        message: 'Request failed with status code 409',
+        response: { status: 409, data: { detail: 'Series is still referenced by a Reading List' } },
+      }),
+    }
+    const { result } = renderHook(
+      () => useQueueThreadActions({}, buildDeps({ deleteHook: () => remove })),
+      { wrapper },
+    )
+
+    act(() => result.current.requestDelete(makeThread({ id: 5, title: 'Referenced' })))
+    await act(() => result.current.confirmDelete())
+
+    expect(remove.mutate).toHaveBeenCalledWith(5)
+    expect(result.current.pendingDeleteThread?.id).toBe(5)
+    expect(result.current.deleteError).toBe('Series is still referenced by a Reading List')
+    expect(toastSpy).toHaveBeenCalledWith(
+      'Failed to delete series: Series is still referenced by a Reading List',
+      'error',
+    )
+  })
+
   it('shows an actionable error toast and keeps the dialog open on delete failure', async () => {
     const remove = {
       mutate: vi.fn().mockRejectedValue(new Error('Cannot delete thread: has dependencies')),
