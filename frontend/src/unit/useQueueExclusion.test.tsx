@@ -73,8 +73,8 @@ beforeEach(() => {
     threads: [makeThread()],
     next_page_token: null,
   })
-  mockRestore.mockResolvedValue(makeThread())
-  mockExclude.mockResolvedValue(makeThread())
+  mockRestore.mockResolvedValue({ restored_thread_ids: [7] })
+  mockExclude.mockResolvedValue({ group: null, excluded_thread_ids: [7] })
   invalidate.mockResolvedValue()
 })
 
