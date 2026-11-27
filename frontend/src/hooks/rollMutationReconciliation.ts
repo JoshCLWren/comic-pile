@@ -33,6 +33,13 @@ export function isAmbiguousNetworkFailure(error: unknown): boolean {
     || candidate.message === 'Network Error'
 }
 
+function isRetryableRollRecoveryFailure(error: unknown): boolean {
+  if (isAuthenticationMutationFailure(error)) return true
+  if (!error || !isNonNullObject(error)) return false
+  const status = (error as { response?: { status?: number } }).response?.status
+  return status === 503
+}
+
 export function isAuthenticationMutationFailure(error: unknown): boolean {
   if (!error || !isNonNullObject(error)) return false
 
@@ -103,7 +110,7 @@ export async function recoverProtectedRollMutation<T>(
     try {
       state = await mutationApi.bootstrap()
     } catch (error: unknown) {
-      if (isAuthenticationMutationFailure(error) && attempt < AUTH_RECOVERY_DELAYS_MS.length) {
+      if (isRetryableRollRecoveryFailure(error) && attempt < AUTH_RECOVERY_DELAYS_MS.length) {
         continue
       }
       throw error
