@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-27T00:55:36+00:00",
+  "generated_at": "2026-11-27T00:57:36.556179+00:00",
   "models": [
     {
       "health": {
@@ -2255,7 +2255,7 @@
             "unknown_failure": 2,
             "work_failure": 6
           },
-          "idle": 10,
+          "idle": 9,
           "kinds": {
             "review": {
               "completed": 0,
@@ -2268,7 +2268,7 @@
               "runs": 1
             }
           },
-          "runs": 19
+          "runs": 18
         }
       }
     },
@@ -2601,8 +2601,8 @@
             "control_plane_failure": 7,
             "work_failure": 6
           },
-          "idle": 6,
-          "runs": 20
+          "idle": 5,
+          "runs": 19
         }
       }
     },
@@ -3039,8 +3039,8 @@
             "unknown_failure": 4,
             "work_failure": 14
           },
-          "idle": 22,
-          "runs": 43
+          "idle": 21,
+          "runs": 42
         }
       }
     },
@@ -3127,9 +3127,9 @@
         "7d": {
           "completed": 6,
           "delivered": 6,
-          "failed": 64,
+          "failed": 63,
           "failures": {
-            "control_plane_failure": 15,
+            "control_plane_failure": 14,
             "provider_throttle": 2,
             "work_failure": 47
           },
@@ -3156,7 +3156,7 @@
               "runs": 1
             }
           },
-          "runs": 89
+          "runs": 88
         }
       }
     },
@@ -3340,8 +3340,8 @@
             "control_plane_failure": 1,
             "work_failure": 14
           },
-          "idle": 10,
-          "runs": 26
+          "idle": 9,
+          "runs": 25
         }
       }
     },
@@ -4232,23 +4232,23 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-26T23:59:13+00:00",
-        "last_outcome": "provider_throttle",
-        "status": "cooling"
+        "cooldown_until": null,
+        "last_outcome": "control_plane_failure",
+        "status": "healthy"
       },
       "model": "beam-free",
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 13,
-          "delivered": 8,
-          "failed": 7,
+          "completed": 10,
+          "delivered": 6,
+          "failed": 6,
           "failures": {
             "control_plane_failure": 2,
             "provider_throttle": 1,
-            "work_failure": 4
+            "work_failure": 3
           },
-          "idle": 6,
+          "idle": 5,
           "kinds": {
             "implement": {
               "completed": 0,
@@ -4261,35 +4261,35 @@
               "runs": 1
             },
             "merge-conflict": {
-              "completed": 4,
-              "delivered": 4,
+              "completed": 3,
+              "delivered": 3,
               "failed": 1,
               "failures": {
                 "provider_throttle": 1
               },
-              "idle": 6,
-              "runs": 11
+              "idle": 5,
+              "runs": 9
             },
             "review": {
-              "completed": 9,
-              "delivered": 4,
-              "failed": 5,
+              "completed": 7,
+              "delivered": 3,
+              "failed": 4,
               "failures": {
                 "control_plane_failure": 2,
-                "work_failure": 3
+                "work_failure": 2
               },
               "idle": 0,
-              "runs": 14
+              "runs": 11
             }
           },
-          "runs": 26
+          "runs": 21
         },
         "7d": {
           "completed": 41,
           "delivered": 27,
-          "failed": 39,
+          "failed": 40,
           "failures": {
-            "control_plane_failure": 5,
+            "control_plane_failure": 6,
             "provider_failure": 1,
             "provider_throttle": 2,
             "work_failure": 31
@@ -4319,13 +4319,13 @@
             "review": {
               "completed": 33,
               "delivered": 19,
-              "failed": 17,
+              "failed": 18,
               "failures": {
-                "control_plane_failure": 4,
+                "control_plane_failure": 5,
                 "work_failure": 13
               },
               "idle": 1,
-              "runs": 51
+              "runs": 52
             },
             "review-findings": {
               "completed": 1,
@@ -4338,7 +4338,7 @@
               "runs": 5
             }
           },
-          "runs": 97
+          "runs": 98
         }
       }
     },
@@ -4362,14 +4362,14 @@
         "7d": {
           "completed": 4,
           "delivered": 3,
-          "failed": 18,
+          "failed": 16,
           "failures": {
             "agent_timeout": 1,
             "control_plane_failure": 7,
-            "work_failure": 10
+            "work_failure": 8
           },
           "idle": 0,
-          "runs": 22
+          "runs": 20
         }
       }
     },
@@ -5246,9 +5246,9 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-27T00:00:00+00:00",
-        "last_outcome": "provider_quota",
-        "status": "cooling"
+        "cooldown_until": null,
+        "last_outcome": "control_plane_failure",
+        "status": "healthy"
       },
       "model": "hungerg-free",
       "source": "opencode-free",
@@ -5256,17 +5256,21 @@
         "24h": {
           "completed": 4,
           "delivered": 3,
-          "failed": 0,
-          "failures": {},
+          "failed": 1,
+          "failures": {
+            "control_plane_failure": 1
+          },
           "idle": 1,
           "kinds": {
             "review": {
               "completed": 2,
               "delivered": 1,
-              "failed": 0,
-              "failures": {},
+              "failed": 1,
+              "failures": {
+                "control_plane_failure": 1
+              },
               "idle": 0,
-              "runs": 2
+              "runs": 3
             },
             "review-findings": {
               "completed": 2,
@@ -5277,14 +5281,14 @@
               "runs": 3
             }
           },
-          "runs": 5
+          "runs": 6
         },
         "7d": {
           "completed": 19,
           "delivered": 18,
-          "failed": 26,
+          "failed": 27,
           "failures": {
-            "control_plane_failure": 1,
+            "control_plane_failure": 2,
             "provider_throttle": 10,
             "work_failure": 15
           },
@@ -5314,12 +5318,13 @@
             "review": {
               "completed": 3,
               "delivered": 2,
-              "failed": 2,
+              "failed": 3,
               "failures": {
+                "control_plane_failure": 1,
                 "provider_throttle": 2
               },
               "idle": 0,
-              "runs": 5
+              "runs": 6
             },
             "review-findings": {
               "completed": 6,
@@ -5330,71 +5335,71 @@
               "runs": 7
             }
           },
-          "runs": 47
+          "runs": 48
         }
       }
     },
     {
       "health": {
         "cooldown_until": null,
-        "last_outcome": "control_plane_failure",
+        "last_outcome": "success",
         "status": "healthy"
       },
       "kept_hot": {
-        "successes": 316,
-        "trials": 425
+        "successes": 317,
+        "trials": 427
       },
       "model": "hy4-flash-free",
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 242,
-          "delivered": 120,
-          "failed": 63,
+          "completed": 236,
+          "delivered": 116,
+          "failed": 68,
           "failures": {
-            "control_plane_failure": 11,
+            "control_plane_failure": 15,
             "model_policy_violation": 2,
             "provider_throttle": 1,
-            "work_failure": 49
+            "work_failure": 50
           },
-          "idle": 28,
+          "idle": 26,
           "kinds": {
             "implement": {
-              "completed": 43,
-              "delivered": 43,
+              "completed": 44,
+              "delivered": 44,
               "failed": 3,
               "failures": {
                 "control_plane_failure": 1,
                 "work_failure": 2
               },
               "idle": 0,
-              "runs": 46
+              "runs": 47
             },
             "merge-conflict": {
-              "completed": 12,
-              "delivered": 12,
+              "completed": 10,
+              "delivered": 10,
               "failed": 5,
               "failures": {
                 "work_failure": 5
               },
-              "idle": 17,
-              "runs": 34
+              "idle": 15,
+              "runs": 30
             },
             "review": {
-              "completed": 136,
-              "delivered": 16,
-              "failed": 49,
+              "completed": 133,
+              "delivered": 15,
+              "failed": 54,
               "failures": {
-                "control_plane_failure": 9,
+                "control_plane_failure": 13,
                 "model_policy_violation": 2,
-                "work_failure": 38
+                "work_failure": 39
               },
               "idle": 1,
-              "runs": 186
+              "runs": 188
             },
             "review-findings": {
-              "completed": 50,
-              "delivered": 49,
+              "completed": 48,
+              "delivered": 47,
               "failed": 5,
               "failures": {
                 "control_plane_failure": 1,
@@ -5402,7 +5407,7 @@
                 "work_failure": 3
               },
               "idle": 10,
-              "runs": 65
+              "runs": 63
             },
             "split": {
               "completed": 1,
@@ -5415,32 +5420,32 @@
               "runs": 2
             }
           },
-          "runs": 333
+          "runs": 330
         },
         "7d": {
-          "completed": 316,
-          "delivered": 154,
-          "failed": 131,
+          "completed": 317,
+          "delivered": 155,
+          "failed": 136,
           "failures": {
-            "control_plane_failure": 22,
+            "control_plane_failure": 26,
             "model_policy_violation": 2,
             "provider_failure": 3,
             "provider_throttle": 1,
             "unknown_failure": 2,
-            "work_failure": 101
+            "work_failure": 102
           },
           "idle": 35,
           "kinds": {
             "implement": {
-              "completed": 44,
-              "delivered": 44,
+              "completed": 45,
+              "delivered": 45,
               "failed": 3,
               "failures": {
                 "control_plane_failure": 1,
                 "work_failure": 2
               },
               "idle": 0,
-              "runs": 47
+              "runs": 48
             },
             "merge-conflict": {
               "completed": 15,
@@ -5455,16 +5460,16 @@
             "review": {
               "completed": 188,
               "delivered": 28,
-              "failed": 71,
+              "failed": 76,
               "failures": {
-                "control_plane_failure": 12,
+                "control_plane_failure": 16,
                 "model_policy_violation": 2,
                 "provider_failure": 2,
                 "unknown_failure": 1,
-                "work_failure": 54
+                "work_failure": 55
               },
               "idle": 1,
-              "runs": 260
+              "runs": 265
             },
             "review-findings": {
               "completed": 65,
@@ -5489,7 +5494,7 @@
               "runs": 2
             }
           },
-          "runs": 482
+          "runs": 488
         }
       }
     },
@@ -6645,15 +6650,15 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-27T00:00:00+00:00",
-        "last_outcome": "provider_quota",
-        "status": "cooling"
+        "cooldown_until": null,
+        "last_outcome": "success",
+        "status": "healthy"
       },
       "model": "recursive/flint-v1.0:free",
       "source": "openrouter-free",
       "windows": {
         "24h": {
-          "completed": 3,
+          "completed": 4,
           "delivered": 2,
           "failed": 0,
           "failures": {},
@@ -6674,12 +6679,20 @@
               "failures": {},
               "idle": 2,
               "runs": 4
+            },
+            "split": {
+              "completed": 1,
+              "delivered": 0,
+              "failed": 0,
+              "failures": {},
+              "idle": 0,
+              "runs": 1
             }
           },
-          "runs": 5
+          "runs": 6
         },
         "7d": {
-          "completed": 6,
+          "completed": 7,
           "delivered": 4,
           "failed": 0,
           "failures": {},
@@ -6716,9 +6729,17 @@
               "failures": {},
               "idle": 3,
               "runs": 6
+            },
+            "split": {
+              "completed": 1,
+              "delivered": 0,
+              "failed": 0,
+              "failures": {},
+              "idle": 0,
+              "runs": 1
             }
           },
-          "runs": 9
+          "runs": 10
         }
       }
     },
@@ -23364,12 +23385,12 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 2,
+          "failed": 1,
           "failures": {
-            "provider_quota": 2
+            "provider_quota": 1
           },
           "idle": 0,
-          "runs": 2
+          "runs": 1
         }
       }
     },
@@ -23603,8 +23624,8 @@
           "completed": 0,
           "delivered": 0,
           "failed": 69,
-          "idle": 10,
-          "runs": 79
+          "idle": 9,
+          "runs": 78
         }
       }
     },
@@ -23640,9 +23661,9 @@
         "7d": {
           "completed": 68,
           "delivered": 67,
-          "failed": 522,
-          "idle": 245,
-          "runs": 835
+          "failed": 521,
+          "idle": 242,
+          "runs": 831
         }
       }
     },
@@ -23669,18 +23690,18 @@
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 285,
-          "delivered": 155,
-          "failed": 87,
-          "idle": 35,
-          "runs": 407
+          "completed": 276,
+          "delivered": 149,
+          "failed": 92,
+          "idle": 32,
+          "runs": 400
         },
         "7d": {
-          "completed": 463,
-          "delivered": 277,
-          "failed": 499,
+          "completed": 464,
+          "delivered": 278,
+          "failed": 504,
           "idle": 134,
-          "runs": 1096
+          "runs": 1102
         }
       }
     },
@@ -23688,18 +23709,18 @@
       "source": "openrouter-free",
       "windows": {
         "24h": {
-          "completed": 4,
+          "completed": 5,
           "delivered": 3,
           "failed": 6,
           "idle": 3,
-          "runs": 13
+          "runs": 14
         },
         "7d": {
-          "completed": 9,
+          "completed": 10,
           "delivered": 7,
           "failed": 49,
           "idle": 6,
-          "runs": 64
+          "runs": 65
         }
       }
     },
@@ -23792,9 +23813,9 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 30,
+          "failed": 29,
           "idle": 33,
-          "runs": 63
+          "runs": 62
         }
       }
     }
@@ -23804,9 +23825,9 @@
     "24h": "24 hours",
     "7d": "7 days"
   },
-  "counts_generated_at": "2026-11-27T00:01:19.790343+00:00",
+  "counts_generated_at": "2026-11-27T00:57:36.556179+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-27T00:55:37Z",
+    "generated_at": "2026-11-27T00:57:37Z",
     "sources": {
       "nvidia": [
         "google/diffusiongemma-26b-a4b-it",
@@ -23825,8 +23846,8 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-27T00:55:37.456257+00:00",
-    "days_elapsed": 26.039,
+    "checked_at": "2026-11-27T00:57:37.337147+00:00",
+    "days_elapsed": 26.04,
     "days_in_month": 30.0,
     "days_left": 3.96,
     "in_use": true,
@@ -23844,31 +23865,31 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 47700163,
-        "organization": 47700163,
+        "database": 48199201,
+        "organization": 48199201,
         "owner_target": 50000000,
-        "projected_database": 54956215,
-        "projected_organization": 54956215,
-        "projected_share": 0.1099,
-        "share_used": 0.0954
+        "projected_database": 55529033,
+        "projected_organization": 55529033,
+        "projected_share": 0.1111,
+        "share_used": 0.0964
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 190462,
-        "organization": 190462,
+        "database": 190474,
+        "organization": 190474,
         "owner_target": 1000000,
-        "projected_database": 219435,
-        "projected_organization": 219435,
+        "projected_database": 219440,
+        "projected_organization": 219440,
         "projected_share": 0.0219,
         "share_used": 0.019
       },
       "storage_bytes": {
         "allowance": 5000000000,
-        "database": 22884352,
-        "organization": 22884352,
+        "database": 22888448,
+        "organization": 22888448,
         "owner_target": 250000000,
-        "projected_database": 22884352,
-        "projected_organization": 22884352,
+        "projected_database": 22888448,
+        "projected_organization": 22888448,
         "projected_share": 0.0046,
         "share_used": 0.0046
       }
@@ -23884,7 +23905,7 @@
     "status": "warn"
   },
   "schema": {
-    "checked_at": "2026-11-27T00:55:40+00:00",
+    "checked_at": "2026-11-27T00:57:39+00:00",
     "code_version": 6,
     "last_upgrade": {
       "at": "2026-11-25T18:11:07+00:00",
@@ -24062,7 +24083,7 @@
     "stored_version": 6
   },
   "crashes": {
-    "generated_at": "2026-11-27T00:55:40Z",
+    "generated_at": "2026-11-27T00:57:40Z",
     "groups": [
       {
         "count": 2,
@@ -24192,48 +24213,9 @@
     ]
   },
   "gh_usage": {
-    "generated_at": "2026-11-27T00:55:42Z",
+    "generated_at": "2026-11-27T00:57:41Z",
     "jobs": {
       "dispatch": [
-        {
-          "at": 1795739976,
-          "buckets": {
-            "reader": 14,
-            "workflow": 5
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 4481,
-            "reset": 1795742045
-          },
-          "cache_hits": 0,
-          "github": 19,
-          "label": "dispatch issue:5701",
-          "paginated": 4,
-          "top": [
-            [
-              "api GET repos/R/issues/N",
-              3
-            ],
-            [
-              "api GET repos/R/pulls/N",
-              3
-            ],
-            [
-              "api GET repos/R/issues",
-              2
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ],
-            [
-              "api GET repos/R/pulls",
-              1
-            ]
-          ],
-          "writes": 0
-        },
         {
           "at": 1795740022,
           "buckets": {
@@ -24651,6 +24633,45 @@
             [
               "api GET repos/R/pulls/N",
               3
+            ],
+            [
+              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
+              2
+            ],
+            [
+              "api GET repos/R/pulls",
+              1
+            ]
+          ],
+          "writes": 0
+        },
+        {
+          "at": 1795740999,
+          "buckets": {
+            "reader": 275,
+            "workflow": 5
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 3952,
+            "reset": 1795742045
+          },
+          "cache_hits": 0,
+          "github": 280,
+          "label": "dispatch issue:5713",
+          "paginated": 3,
+          "top": [
+            [
+              "api GET repos/R/issues",
+              155
+            ],
+            [
+              "api GET repos/R/issues/N",
+              111
+            ],
+            [
+              "api GET repos/R/pulls/N",
+              4
             ],
             [
               "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
