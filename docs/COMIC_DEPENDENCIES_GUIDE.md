@@ -299,7 +299,10 @@ Response (201 Created):
 
 #### List Thread Dependencies
 ```http
-GET /api/v1/threads/{thread_id}/dependencies
+GET /api/v2/threads/{thread_id}/dependencies
+
+> Reader-authored edges only (#5709). Converted/legacy audit rows and inert
+> `cbl-order:` notes are excluded from this collection.
 
 Response:
 {
@@ -328,18 +331,42 @@ Response:
 }
 ```
 
-#### Get Blocking Explanation
+#### Get Eligibility and Explanations
 ```http
-POST /api/v1/threads/{thread_id}:getBlockingInfo
+GET /api/v2/threads/{thread_id}/eligibility
 
 Response:
 {
-  "is_blocked": true,
-  "blocking_reasons": [
-    "Blocked by issue #361 in Uncanny X-Men (thread #5)"
-  ]
+  "thread_id": 5,
+  "eligible": false,
+  "next_issue_id": 361,
+  "state": "blocked",
+  "manual_read_now_allowed": true,
+  "blockers": [{"kind": "prerequisite", "origin": "reader",
+                "waiting_on_issue_ids": [123], "list_id": null}]
 }
 ```
+
+```http
+POST /api/v2/threads:explainEligibility
+Content-Type: application/json
+
+{"thread_ids": [5, 9]}
+
+Response:
+{
+  "threads": {
+    "5": {"is_blocked": true, "blocking_reasons": [
+      "Reader prerequisite: waiting on Uncanny X-Men #361"], "blocking_dependencies": [...]},
+    "9": {"is_blocked": false, "blocking_reasons": [], "blocking_dependencies": []}
+  }
+}
+```
+
+Both resources are derived from the canonical Reading List evaluator. Historical
+converted dependencies and a stale `is_blocked` flag cannot veto an explicit
+Read Now. The batch is bounded to 1..500 ids, checks ownership for the whole
+batch in one query, and isolates persisted cycles to their own threads.
 
 #### Delete Dependency
 ```http
@@ -553,13 +580,16 @@ POST /api/v1/dependencies/
 
 ```http
 # Check if X-Men thread is blocked
-POST /api/v1/threads/12:getBlockingInfo
+GET /api/v2/threads/12/eligibility
 
 Response:
 {
-  "is_blocked": true,
-  "blocking_reasons": [
-    "Blocked by issue #82 in X-Men (thread #12)",
+  "eligible": false,
+  "state": "blocked",
+  "manual_read_now_allowed": true,
+  "blockers": [
+    {"kind": "prerequisite", "origin": "reader",
+     "waiting_on_issue_ids": [790], "list_id": null}
     "Blocked by issue #362 in Uncanny X-Men (thread #5)"
   ]
 }
@@ -1164,12 +1194,15 @@ POST   /api/v1/issues/{issue_id}:markRead              # Mark read
 POST   /api/v1/issues/{issue_id}:markUnread            # Mark unread
 
 # Dependencies
-POST   /api/v1/dependencies/                           # Create dependency
-GET    /api/v1/dependencies/{dependency_id}            # Get dependency
-DELETE /api/v1/dependencies/{dependency_id}            # Delete dependency
-GET    /api/v1/threads/{thread_id}/dependencies        # List thread deps
-POST   /api/v1/threads/{thread_id}:getBlockingInfo     # Get blocking reasons
-GET    /api/v1/dependencies/blocked                    # Get all blocked IDs
+POST   /api/v2/dependencies/                           # Create dependency
+GET    /api/v2/dependencies/{dependency_id}            # Get dependency
+DELETE /api/v2/dependencies/{dependency_id}            # Delete dependency
+GET    /api/v2/threads/{thread_id}/dependencies        # List reader-authored thread deps
+GET    /api/v2/threads/{thread_id}/issueDependencies   # List per-issue deps
+GET    /api/v2/threads/{thread_id}/eligibility         # Derived eligibility singleton
+POST   /api/v2/threads:explainEligibility              # Bounded batch explanations
+GET    /api/v2/threads/{thread_id}/connections         # Connected threads
+GET    /api/v2/dependencies/blocked                    # Get all blocked IDs
 
 # Thread Migration
 POST   /api/v1/threads/{thread_id}:migrateToIssues     # Migrate thread
