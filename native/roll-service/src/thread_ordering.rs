@@ -98,6 +98,45 @@ pub struct BatchBlockingExplanationRequest {
     pub thread_ids: Vec<i32>,
 }
 
+/// v2 derived singleton: canonical eligibility for one thread.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct ThreadEligibilityResponse {
+    pub thread_id: i32,
+    pub eligible: bool,
+    pub is_blocked: bool,
+    pub next_issue_id: Option<i32>,
+    pub blocking_reasons: Vec<String>,
+    pub blocking_dependencies: Vec<BlockingDependency>,
+}
+
+/// Ordered `thread_id -> eligibility` object, preserving request order.
+#[derive(Debug, Clone, utoipa::ToSchema)]
+#[schema(value_type = HashMap<String, ThreadEligibilityResponse>)]
+pub struct OrderedEligibilityExplanations(pub Vec<(i32, ThreadEligibilityResponse)>);
+
+impl Serialize for OrderedEligibilityExplanations {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut map = serializer.serialize_map(Some(self.0.len()))?;
+        for (thread_id, explanation) in &self.0 {
+            map.serialize_entry(&thread_id.to_string(), explanation)?;
+        }
+        map.end()
+    }
+}
+
+/// v2 `POST /api/v2/threads:explainEligibility` response.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct BatchEligibilityResponse {
+    pub threads: OrderedEligibilityExplanations,
+}
+
+/// v2 `POST /api/v2/threads:explainEligibility` request.
+#[derive(Debug, Clone, serde::Deserialize, utoipa::ToSchema)]
+pub struct BatchEligibilityRequest {
+    #[schema(min_items = 1, max_items = 500)]
+    pub thread_ids: Vec<i32>,
+}
+
 /// Python `ConnectedThreadInfo`.
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct ConnectedThreadInfo {
@@ -320,12 +359,58 @@ fn describe_origin(
     format!("{kind} in {list}")
 }
 
-/// Option E authority: live blockers from the evaluated reading graph.
-async fn option_e_explanations(
+fn build_canonical_explanation(
+    thread_state: Option<&crate::reading_constraints::ThreadEligibility>,
+    thread_titles: &HashMap<i32, &str>,
+    issues: &HashMap<i32, (i32, &str)>,
+    list_names: &HashMap<i32, String>,
+) -> Result<(bool, bool, Option<i32>, Vec<String>, Vec<BlockingDependency>), ApiError> {
+    let mut reasons = Vec::new();
+    let mut dependencies = Vec::new();
+    let Some(thread_state) = thread_state else {
+        return Ok((false, false, None, reasons, dependencies));
+    };
+    for gate in reading_blocker_projection::describe_blocker_gates(thread_state.blockers.clone()) {
+        let origin = describe_origin(&gate.blocker, list_names);
+        for issue_id in gate.described_issue_ids {
+            let Some((source_thread_id, number)) = issues.get(&issue_id).copied() else {
+                return Err(ApiError::Internal("Internal Server Error".into()));
+            };
+            let source_title = thread_titles
+                .get(&source_thread_id)
+                .copied()
+                .unwrap_or("Required series");
+            let issue_label = format!("{source_title} #{number}");
+            let label = format!("{origin}: waiting on {issue_label}");
+            reasons.push(label.clone());
+            dependencies.push(BlockingDependency {
+                thread_id: source_thread_id,
+                thread_title: source_title.to_string(),
+                issue_number: number.to_string(),
+                label,
+                issue_id: Some(issue_id),
+            });
+        }
+    }
+    if thread_state.next_issue_id.is_none() {
+        reasons.push("No available unread issue".to_string());
+    }
+    let is_blocked = !thread_state.eligible;
+    Ok((
+        thread_state.eligible,
+        is_blocked,
+        thread_state.next_issue_id,
+        reasons,
+        dependencies,
+    ))
+}
+
+/// Canonical authority: live blockers from the evaluated reading graph.
+async fn canonical_eligibility_explanations(
     state: &AppState,
     user: AuthenticatedUser,
     thread_ids: &[i32],
-) -> Result<Vec<(i32, BlockingExplanation)>, ApiError> {
+) -> Result<Vec<(i32, ThreadEligibilityResponse)>, ApiError> {
     let validated = option_inputs::load_option_inputs_contained(state, user).await?;
     let evaluated = reading_eligibility::evaluate(&validated)?;
     let inputs = validated.inputs();
@@ -349,46 +434,44 @@ async fn option_e_explanations(
 
     let mut result = Vec::with_capacity(thread_ids.len());
     for thread_id in thread_ids {
-        let state = evaluated.get(thread_id);
-        let mut reasons = Vec::new();
-        let mut dependencies = Vec::new();
-        if let Some(state) = state {
-            for gate in reading_blocker_projection::describe_blocker_gates(state.blockers.clone()) {
-                let origin = describe_origin(&gate.blocker, &list_names);
-                for issue_id in gate.described_issue_ids {
-                    let Some((source_thread_id, number)) = issues.get(&issue_id).copied() else {
-                        return Err(ApiError::Internal("Internal Server Error".into()));
-                    };
-                    let source_title = thread_titles
-                        .get(&source_thread_id)
-                        .copied()
-                        .unwrap_or("Required series");
-                    let issue_label = format!("{source_title} #{number}");
-                    let label = format!("{origin}: waiting on {issue_label}");
-                    reasons.push(label.clone());
-                    dependencies.push(BlockingDependency {
-                        thread_id: source_thread_id,
-                        thread_title: source_title.to_string(),
-                        issue_number: number.to_string(),
-                        label,
-                        issue_id: Some(issue_id),
-                    });
-                }
-            }
-            if state.next_issue_id.is_none() {
-                reasons.push("No available unread issue".to_string());
-            }
-        }
+        let thread_state = evaluated.get(thread_id);
+        let (eligible, is_blocked, next_issue_id, blocking_reasons, blocking_dependencies) =
+            build_canonical_explanation(thread_state, &thread_titles, &issues, &list_names)?;
         result.push((
             *thread_id,
-            BlockingExplanation {
-                is_blocked: state.is_some_and(|state| !state.eligible),
-                blocking_reasons: reasons,
-                blocking_dependencies: dependencies,
+            ThreadEligibilityResponse {
+                thread_id: *thread_id,
+                eligible,
+                is_blocked,
+                next_issue_id,
+                blocking_reasons,
+                blocking_dependencies,
             },
         ));
     }
     Ok(result)
+}
+
+/// Option E authority: live blockers from the evaluated reading graph.
+async fn option_e_explanations(
+    state: &AppState,
+    user: AuthenticatedUser,
+    thread_ids: &[i32],
+) -> Result<Vec<(i32, BlockingExplanation)>, ApiError> {
+    let canonical = canonical_eligibility_explanations(state, user, thread_ids).await?;
+    Ok(canonical
+        .into_iter()
+        .map(|(id, e)| {
+            (
+                id,
+                BlockingExplanation {
+                    is_blocked: e.is_blocked,
+                    blocking_reasons: e.blocking_reasons,
+                    blocking_dependencies: e.blocking_dependencies,
+                },
+            )
+        })
+        .collect())
 }
 
 async fn blocking_details(
