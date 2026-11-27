@@ -3385,7 +3385,14 @@ export interface paths {
         /** Documentation-only operation used to emit the generated OpenAPI contract. */
         get: operations["list_threads_documentation"];
         put?: never;
-        post?: never;
+        /**
+         * Documentation-only operation for the AIP-133 standard Create on the v2
+         *     threads collection (#5702). The handler lives in `thread_lifecycle` and
+         *     shares the legacy write path; only the URL and the `Location` response
+         *     header differ.
+         * @description Create a thread at the end of the authenticated reader's queue. The created resource (including its stable `id`) is returned at 201 with a `Location` header naming the v2 collection member. The write preserves owner assignment, the five-second duplicate-merge guard and the Python validation envelope; it creates no Plan, dependency or issue rows.
+         */
+        post: operations["create_thread_v2_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6924,7 +6931,7 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
-        /** @description Python `ThreadResponse`. */
+        /** @description The Python `ThreadResponse` projection every lifecycle writer returns. */
         NativeThreadResponse: {
             blocking_reasons: string[];
             created_at: string;
@@ -6938,7 +6945,7 @@ export interface components {
             last_activity_at?: string | null;
             /** Format: double */
             last_rating?: number | null;
-            manual_creator_credits: Record<string, never>[];
+            manual_creator_credits: unknown;
             /** Format: int32 */
             next_unread_issue_id?: number | null;
             next_unread_issue_number?: string | null;
@@ -9255,6 +9262,18 @@ export interface components {
             /** Title */
             title: string;
             /** Total Issues */
+            total_issues?: number | null;
+        };
+        /** @description Body of `POST /api/v1/threads/`. */
+        ThreadCreateRequest: {
+            format: string;
+            is_test?: boolean;
+            /** Format: int32 */
+            issues_remaining: number;
+            manual_creator_credits?: unknown[];
+            notes?: string | null;
+            title: string;
+            /** Format: int32 */
             total_issues?: number | null;
         };
         /**
@@ -18923,6 +18942,7 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
     list_thread_creator_credits_v2_documentation: {
         parameters: {
             query?: {
@@ -18944,10 +18964,28 @@ export interface operations {
         responses: {
             /** @description Paginated thread creator credits */
             200: {
+=======
+    create_thread_v2_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThreadCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created (or the duplicate created seconds earlier) */
+            201: {
+>>>>>>> origin/main
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
+<<<<<<< HEAD
                     "application/json": components["schemas"]["ThreadCreatorCreditsPage"];
                 };
             };
@@ -18958,6 +18996,11 @@ export interface operations {
                 };
                 content?: never;
             };
+=======
+                    "application/json": components["schemas"]["NativeThreadResponse"];
+                };
+            };
+>>>>>>> origin/main
             /** @description Not authenticated */
             401: {
                 headers: {
@@ -18965,6 +19008,7 @@ export interface operations {
                 };
                 content?: never;
             };
+<<<<<<< HEAD
             /** @description Thread not found */
             404: {
                 headers: {
@@ -18972,6 +19016,8 @@ export interface operations {
                 };
                 content?: never;
             };
+=======
+>>>>>>> origin/main
             /** @description Validation failed */
             422: {
                 headers: {
@@ -18979,6 +19025,7 @@ export interface operations {
                 };
                 content?: never;
             };
+<<<<<<< HEAD
             /** @description Database temporarily unavailable */
             503: {
                 headers: {
@@ -18986,6 +19033,8 @@ export interface operations {
                 };
                 content?: never;
             };
+=======
+>>>>>>> origin/main
         };
     };
     issue_order_documentation: {
