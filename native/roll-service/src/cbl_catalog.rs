@@ -153,7 +153,7 @@ pub struct CBLCatalogBrowseQuery {
 }
 
 #[derive(Debug)]
-enum CatalogError {
+pub(crate) enum CatalogError {
     InvalidFolder(String),
     FolderNotFound(String),
     Validation(String),
@@ -320,7 +320,7 @@ fn public_cbl_repository(repository: &str) -> String {
 /// Validate and normalize a source-relative folder path.
 ///
 /// Mirrors `normalize_cbl_folder_path`.
-fn normalize_folder(raw: Option<&str>) -> Result<String, CatalogError> {
+pub(crate) fn normalize_folder(raw: Option<&str>) -> Result<String, CatalogError> {
     let Some(folder) = raw else {
         return Ok(String::new());
     };
@@ -360,7 +360,7 @@ fn folder_prefix_len(folder: &str) -> i32 {
 }
 
 /// Build root-through-folder breadcrumbs for a normalized folder path.
-fn breadcrumbs(folder: &str) -> Vec<CBLBreadcrumb> {
+pub(crate) fn breadcrumbs(folder: &str) -> Vec<CBLBreadcrumb> {
     let mut out = vec![CBLBreadcrumb {
         name: ROOT_BREADCRUMB_NAME.to_string(),
         path: String::new(),
@@ -383,7 +383,7 @@ fn breadcrumbs(folder: &str) -> Vec<CBLBreadcrumb> {
 }
 
 /// Escape SQL `LIKE` metacharacters in a literal folder or search term.
-fn escape_like(value: &str) -> String {
+pub(crate) fn escape_like(value: &str) -> String {
     value
         .replace('\\', "\\\\")
         .replace('%', "\\%")
@@ -391,13 +391,13 @@ fn escape_like(value: &str) -> String {
 }
 
 #[derive(Debug, Clone)]
-struct FolderSummary {
+pub(crate) struct FolderSummary {
     folders: Vec<CBLSourceFolder>,
     direct_list_count: i32,
     total_list_count: i32,
 }
 
-async fn read_folder(
+pub(crate) async fn read_folder(
     conn: &deadpool_postgres::Object,
     folder: &str,
 ) -> Result<FolderSummary, tokio_postgres::Error> {

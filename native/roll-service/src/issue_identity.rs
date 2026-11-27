@@ -270,7 +270,7 @@ fn is_filesystem_location(value: &str) -> bool {
     value.starts_with('/') || value.starts_with("file:") || value.starts_with("mnt/")
 }
 
-fn public_cbl_repository(repository: &str) -> String {
+pub(crate) fn public_cbl_repository(repository: &str) -> String {
     let normalized = repository.trim().replace('\\', "/");
     if !is_filesystem_location(&normalized) {
         return repository.to_string();
