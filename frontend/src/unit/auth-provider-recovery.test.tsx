@@ -33,15 +33,6 @@ vi.mock('../services/api', () => {
   }
 })
 
-vi.mock('../services/api-preferences', () => ({
-  preferencesApi: {
-    get: (options?: { timeout?: number; skipAuthRedirect?: boolean }) =>
-      mocks.get('/v2/users/me/preferences', options),
-    patch: (data: { theme?: string | null }) => mocks.patch('/v2/users/me/preferences', data),
-  },
-}))
-
-import { PreferencesSync } from '../hooks/usePreferences'
 import { AuthProvider, useAuth } from '../App'
 
 let auth: AuthContextValue | null = null
@@ -49,11 +40,6 @@ let auth: AuthContextValue | null = null
 function Consumer() {
   auth = useAuth()
   return null
-}
-
-function PreferencesSyncConsumer() {
-  const { authState } = useAuth()
-  return <PreferencesSync isAuthenticated={authState.status === 'authenticated'} />
 }
 
 function renderProvider(queryClient = new QueryClient({
@@ -66,7 +52,6 @@ function renderProvider(queryClient = new QueryClient({
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <Consumer />
-        <PreferencesSyncConsumer />
       </AuthProvider>
     </QueryClientProvider>,
   )
@@ -79,10 +64,10 @@ function axiosError(status: number): Error & { isAxiosError: true; response: { s
   })
 }
 
-const PREFERENCES_CONFIG = { timeout: 15000, skipAuthRedirect: true }
-
-async function waitForPreferencesFetch() {
-  await waitFor(() => expect(mocks.get).toHaveBeenCalledWith('/v2/users/me/preferences', PREFERENCES_CONFIG))
+/** Wait until the auth bootstrap has settled after a successful session. */
+async function waitForAuthenticatedSettled() {
+  await waitFor(() => expect(auth?.authState.isLoading).toBe(false))
+  expect(mocks.get.mock.calls.some(([url]) => url === '/v2/users/me/preferences')).toBe(false)
 }
 
 describe('AuthProvider transient recovery', () => {
@@ -265,7 +250,6 @@ describe('AuthProvider transient recovery', () => {
     mocks.get
       .mockRejectedValueOnce(Object.assign(new Error('network timeout'), { isAxiosError: true, code: 'ERR_NETWORK' }))
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
-      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
 
     renderProvider()
 
@@ -290,26 +274,21 @@ describe('AuthProvider transient recovery', () => {
     expect(auth?.authState.status).toBe('authenticated')
     expect(auth?.authState.isLoading).toBe(false)
     expect(mocks.clearAccessToken).not.toHaveBeenCalled()
-    expect(mocks.get).toHaveBeenCalledTimes(3)
+    expect(mocks.get).toHaveBeenCalledTimes(2)
     expect(mocks.get).toHaveBeenNthCalledWith(2, '/v2/auth/me', {
       timeout: 15000,
       skipAuthRedirect: true,
       skipAuthRefresh: true,
     })
-    
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0)
-    })
-    expect(mocks.get).toHaveBeenNthCalledWith(3, '/v2/users/me/preferences', PREFERENCES_CONFIG)
+    expect(mocks.get.mock.calls.some(([url]) => url === '/v2/users/me/preferences')).toBe(false)
   }, 15000)
 
   it('logs out when explicit recovery proves the persistent session is invalid', async () => {
     mocks.get
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
-      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
     renderProvider()
     await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
-    await waitForPreferencesFetch()
+    await waitForAuthenticatedSettled()
 
     mocks.get.mockRejectedValueOnce(axiosError(401))
     mocks.refreshSession.mockRejectedValueOnce(axiosError(401))
@@ -324,10 +303,9 @@ describe('AuthProvider transient recovery', () => {
   it('transitions to degraded state when explicit recovery hits a transient server failure', async () => {
     mocks.get
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
-      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
     renderProvider()
     await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
-    await waitForPreferencesFetch()
+    await waitForAuthenticatedSettled()
 
     // /auth/me fails with 503 -- recovery must not rotate the refresh token
     mocks.get.mockRejectedValueOnce(axiosError(503))
@@ -348,12 +326,11 @@ describe('AuthProvider transient recovery', () => {
     mocks.get
       .mockRejectedValueOnce(axiosError(401))
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
-      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
     mocks.refreshSession.mockResolvedValueOnce('new-token')
 
     renderProvider()
     await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
-    await waitForPreferencesFetch()
+    await waitForAuthenticatedSettled()
 
     expect(auth?.authState.isLoading).toBe(false)
     expect(mocks.clearAccessToken).not.toHaveBeenCalled()
@@ -387,16 +364,14 @@ describe('AuthProvider transient recovery', () => {
   it('revalidates silently before logging the user out on resume', async () => {
     mocks.get
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
-      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
     renderProvider()
     await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
-    await waitForPreferencesFetch()
+    await waitForAuthenticatedSettled()
 
     mocks.get.mockRejectedValueOnce(axiosError(401))
     mocks.refreshSession.mockResolvedValueOnce('new-token')
     mocks.get
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
-      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
 
     await act(async () => {
       await auth!.revalidateSession(15000)
@@ -409,10 +384,9 @@ describe('AuthProvider transient recovery', () => {
   it('transient 503 on /auth/me recovers without a refresh call and keeps the session', async () => {
     mocks.get
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
-      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
     renderProvider()
     await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
-    await waitForPreferencesFetch()
+    await waitForAuthenticatedSettled()
 
     // /auth/me returns 503 -- recovery must retry /auth/me, not rotate the refresh token
     mocks.get.mockRejectedValueOnce(axiosError(503))
@@ -429,16 +403,14 @@ describe('AuthProvider transient recovery', () => {
   it('expired token uses one coalesced refresh then retries /auth/me on success', async () => {
     mocks.get
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
-      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
     renderProvider()
     await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
-    await waitForPreferencesFetch()
+    await waitForAuthenticatedSettled()
 
     // /auth/me returns 401 (expired token), then refresh succeeds, then /auth/me succeeds
     mocks.get
       .mockRejectedValueOnce(axiosError(401))
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
-      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
     mocks.refreshSession.mockResolvedValueOnce('new-token')
 
     await act(async () => {
@@ -455,10 +427,9 @@ describe('AuthProvider transient recovery', () => {
   it('refresh failing with 503 does not clear a valid access token', async () => {
     mocks.get
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
-      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
     renderProvider()
     await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
-    await waitForPreferencesFetch()
+    await waitForAuthenticatedSettled()
 
     // /auth/me returns 401 (expired), refresh fails with 503 (transient)
     mocks.get.mockRejectedValueOnce(axiosError(401))
@@ -476,10 +447,9 @@ describe('AuthProvider transient recovery', () => {
   it('rapid concurrent recoverSession calls share one in-flight /auth/me validation', async () => {
     mocks.get
       .mockResolvedValueOnce({ username: 'reader', email: 'reader@example.com' })
-      .mockResolvedValueOnce({ theme: 'classic', user_id: 1 })
     renderProvider()
     await waitFor(() => expect(auth?.authState.status).toBe('authenticated'))
-    await waitForPreferencesFetch()
+    await waitForAuthenticatedSettled()
 
     // Both /auth/me calls resolve with the same user; the second call should
     // reuse the single in-flight recovery promise, not start a second validation.
@@ -502,7 +472,7 @@ describe('AuthProvider transient recovery', () => {
       await second
     })
 
-    expect(mocks.get).toHaveBeenCalledTimes(3) // 2 bootstrap + 1 recovery /auth/me
+    expect(mocks.get).toHaveBeenCalledTimes(2) // 1 bootstrap + 1 recovery /auth/me
     expect(auth?.authState.status).toBe('authenticated')
   })
 })
