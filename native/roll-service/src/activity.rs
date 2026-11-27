@@ -747,6 +747,160 @@ mod tests {
         assert_eq!(items[0].thread_title.as_deref(), Some("Saga"));
     }
 
+    /// Exercise the real write handlers, not hand-authored event rows. The
+    /// chosen offers can vary, but their causal order and die transitions cannot.
+    #[tokio::test]
+    async fn fresh_roll_direct_rating_and_reset_are_causal_and_owner_scoped() {
+        use crate::{
+            issue_handler::read_rate_issue,
+            issue_service::IssueReadRateRequest,
+            roll_offer::{offer, RollOfferRequest},
+            roll_reset::{reset, ResetDiceRequest},
+        };
+        use axum::extract::Path;
+
+        let (state, _db) = seeded_state(
+            r#"
+            INSERT INTO users (id, username) VALUES (1, 'reader-1'), (2, 'reader-2');
+            INSERT INTO threads
+                (id, user_id, title, format, issues_remaining, status,
+                 queue_position, total_issues, reading_progress)
+            VALUES (10, 1, 'First', 'Comic', 1, 'active', 1, 1, '0%'),
+                   (20, 1, 'Second', 'Comic', 1, 'active', 2, 1, '0%'),
+                   (30, 1, 'Third', 'Comic', 1, 'active', 3, 1, '0%');
+            INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+            VALUES (100, 10, '1', 'unread', now(), 1),
+                   (200, 20, '1', 'unread', now(), 1),
+                   (300, 30, '1', 'unread', now(), 1);
+            UPDATE threads t SET next_unread_issue_id = i.id
+            FROM issues i WHERE i.thread_id = t.id;
+            "#,
+        )
+        .await;
+        let owner = AuthenticatedUser::for_test(1);
+        let Json(first) = offer(
+            State(state.clone()),
+            owner,
+            Json(RollOfferRequest {
+                timezone: None,
+                snoozed_thread_ids: vec![],
+                idempotency_key: "activity-first-offer".into(),
+                expected_pending_thread_id: None,
+            }),
+        )
+        .await
+        .expect("first roll");
+        assert_eq!(first.die_size, 6);
+
+        let Json(second) = offer(
+            State(state.clone()),
+            owner,
+            Json(RollOfferRequest {
+                timezone: None,
+                snoozed_thread_ids: vec![],
+                idempotency_key: "activity-second-offer".into(),
+                expected_pending_thread_id: Some(first.thread_id),
+            }),
+        )
+        .await
+        .expect("reroll");
+        assert_eq!(second.snoozed_thread_id, Some(first.thread_id));
+        assert_ne!(first.thread_id, second.thread_id);
+        assert_eq!(second.die_size, 8);
+
+        let rolled_issue_id = second.issue_id.expect("rolled issue");
+        let direct_issue_id = first.issue_id.expect("snoozed issue");
+        let Json(rolled_rating) = read_rate_issue(
+            State(state.clone()),
+            owner,
+            Path(rolled_issue_id),
+            Json(IssueReadRateRequest {
+                status: Some("read".into()),
+                rating: Some(3.0),
+                issue_number_alias: None,
+                idempotency_key: "activity-roll-rating".into(),
+                source: Some("roll_offer".into()),
+            }),
+        )
+        .await
+        .expect("rate offered comic");
+        assert!(rolled_rating.read_event_created);
+        assert!(rolled_rating.rating_event_created);
+        let rated_die = rolled_rating.die_after.expect("Roll rating changes the die");
+        assert_eq!(rated_die, 10);
+
+        let Json(direct_rating) = read_rate_issue(
+            State(state.clone()),
+            owner,
+            Path(direct_issue_id),
+            Json(IssueReadRateRequest {
+                status: Some("read".into()),
+                rating: Some(4.0),
+                issue_number_alias: None,
+                idempotency_key: "activity-direct-rating".into(),
+                source: Some("direct".into()),
+            }),
+        )
+        .await
+        .expect("direct read of a snoozed comic");
+        assert!(direct_rating.read_event_created);
+        assert!(direct_rating.rating_event_created);
+        assert_eq!(direct_rating.die_after, None);
+
+        let Json(reset_receipt) = reset(
+            State(state.clone()),
+            owner,
+            Json(ResetDiceRequest {
+                idempotency_key: "activity-reset-dice".into(),
+            }),
+        )
+        .await
+        .expect("reset dice");
+        assert_eq!(reset_receipt.die, 6);
+        assert!(!reset_receipt.replayed);
+
+        // The same client key is legal for another reader and must never
+        // leak into the owner's activity stream.
+        let Json(other_reset) = reset(
+            State(state.clone()),
+            AuthenticatedUser::for_test(2),
+            Json(ResetDiceRequest {
+                idempotency_key: "activity-reset-dice".into(),
+            }),
+        )
+        .await
+        .expect("other reader reset");
+        assert!(!other_reset.replayed);
+
+        for limit in [1, 2, 50] {
+            let items = all_pages(&state, 1, limit).await;
+            let types: Vec<&str> = items.iter().map(|item| item.event_type.as_str()).collect();
+            assert_eq!(types, ["roll", "snooze", "roll", "rate", "rate", "reset_dice"]);
+            assert_eq!(items[0].thread_id, Some(first.thread_id));
+            assert_eq!(items[0].die_before, Some(6));
+            assert_eq!(items[1].thread_id, Some(first.thread_id));
+            assert_eq!(items[1].die_before, Some(6));
+            assert_eq!(items[1].die_after, Some(8));
+            assert_eq!(items[2].thread_id, Some(second.thread_id));
+            assert_eq!(items[2].die_before, Some(8));
+            assert_eq!(items[3].issue_id, Some(rolled_issue_id));
+            assert_eq!(items[3].rating, Some(3.0));
+            assert_eq!(items[3].die_before, Some(8));
+            assert_eq!(items[3].die_after, Some(rated_die));
+            assert_eq!(items[4].issue_id, Some(direct_issue_id));
+            assert_eq!(items[4].rating, Some(4.0));
+            assert_eq!(items[4].die_before, None);
+            assert_eq!(items[4].die_after, None);
+            assert_eq!(items[5].die_before, Some(rated_die));
+            assert_eq!(items[5].die_after, Some(6));
+        }
+        let other = all_pages(&state, 2, 1).await;
+        assert_eq!(other.len(), 1);
+        assert_eq!(other[0].event_type, "reset_dice");
+        assert_eq!(other[0].die_after, Some(6));
+        assert!(all_pages(&state, 3, 10).await.is_empty());
+    }
+
     #[tokio::test]
     async fn malformed_page_tokens_return_bad_request() {
         let (state, _db) = seeded_state(PRODUCTION_SEQUENCE).await;
