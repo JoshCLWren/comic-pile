@@ -138,10 +138,10 @@ function responseFor(method: string, path: string, query: CanonicalQuery) {
   }
   if (method !== 'GET') return undefined
   if (path === '/api/v2/continuityPlans/') return []
-  if (/^\/api\/v2\/continuity-plans\/\d+\/reader$/.test(path)) {
+  if (/^\/api\/v2\/continuityPlans\/\d+\/reader$/.test(path)) {
     return planReader(Number(path.split('/')[4]))
   }
-  if (/^\/api\/v1\/continuity-plans\/\d+$/.test(path)) {
+  if (/^\/api\/v2\/continuityPlans\/\d+$/.test(path)) {
     return planDetail(Number(path.split('/')[4]))
   }
   if (path === '/api/v2/identity-inbox') {
