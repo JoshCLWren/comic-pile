@@ -809,7 +809,7 @@ async fn group_response(
 // Handlers: reads.
 // ---------------------------------------------------------------------------
 
-/// `GET /api/v1/reading-order-groups/`
+/// Shared list delegate behind `GET /api/v2/readingOrderGroups` (#5710).
 pub async fn list_groups(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -887,7 +887,7 @@ pub async fn list_groups(
     Ok(Json(responses))
 }
 
-/// `POST /api/v1/reading-order-groups/`
+/// Shared create delegate behind `POST /api/v2/readingOrderGroups` (#5710).
 pub async fn create_group(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -971,7 +971,8 @@ pub async fn list_thread_groups(
     Ok(Json(groups))
 }
 
-/// `GET /api/v1/reading-order-groups/{group_id}`
+/// Basic group read used by mutate responses; the canonical v2 Get folds in
+/// the enriched detail view through `get_group_detail`.
 pub async fn get_group(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
