@@ -424,7 +424,7 @@ export default function RollPage() {
   )
   // Rolled state is derived from the pending roll itself, not tracked
   // separately. Clearing the pending roll (rate/snooze/cancel/reset-dice)
-  // nulls `rolledResult`, so the die and CTA fall back to idle/"Begin".
+  // nulls `rolledResult`, so the die falls back to its idle state.
   const hasRolled = state.rolledResult != null
  
   if (isBootstrapLoading && !bootstrap && !isBootstrapError) {
