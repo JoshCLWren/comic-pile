@@ -5170,6 +5170,66 @@
         ]
       }
     },
+    "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection": {
+      "post": {
+        "tags": [
+          "reading-orders"
+        ],
+        "description": "Stateless AIP-136 custom method: deterministically preview how a continuity plan would project into a reading order. No plan, reading order or item is written; confirmation is a separate durable v2 operation that revalidates the plan.",
+        "operationId": "preview_reading_order_projection",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "description": "Continuity plan id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingOrderProjectPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Deterministic projection preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingOrderProjectPreviewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Plan or reading order not found"
+          },
+          "409": {
+            "description": "Malformed plan"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/creators": {
       "get": {
         "tags": [
@@ -10597,6 +10657,7 @@
       }
     },
     "/api/v2/threads/{thread_id}": {
+<<<<<<< HEAD
       "get": {
         "tags": [
           "threads"
@@ -10639,6 +10700,8 @@
           }
         ]
       },
+=======
+>>>>>>> origin/main
       "delete": {
         "tags": [
           "threads"
@@ -11189,6 +11252,56 @@
         ]
       }
     },
+<<<<<<< HEAD
+=======
+    "/api/v2/threads/{thread_id}/readingOrders": {
+      "get": {
+        "tags": [
+          "reading-orders"
+        ],
+        "description": "List the authenticated reader's reading orders that contain the given thread. A foreign or unknown thread is an empty collection.",
+        "operationId": "list_thread_reading_orders",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owned reading orders containing the thread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadReadingOrdersResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+>>>>>>> origin/main
     "/api/v2/threads:checkDuplicates": {
       "post": {
         "tags": [
@@ -27082,6 +27195,7 @@
           }
         }
       },
+<<<<<<< HEAD
       "ThreadListResult": {
         "oneOf": [
           {
@@ -27093,6 +27207,8 @@
         ],
         "description": "One v2 threads list response. The active/completed/excluded filters keep the\nqueue-list projection; the stale filter keeps the legacy detail-shaped\nprojection. Both are emitted inline (no envelope variant key)."
       },
+=======
+>>>>>>> origin/main
       "ThreadPatchPrecondition": {
         "type": "object",
         "description": "Committed values a stale client read before issuing a Thread patch.",
