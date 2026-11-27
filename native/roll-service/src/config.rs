@@ -45,8 +45,6 @@ pub struct Config {
     /// Refresh-token and refresh-cookie lifetime, matching Python's
     /// REFRESH_TOKEN_EXPIRE_DAYS.
     pub refresh_token_expire_days: i64,
-    /// Effective approved Reading List engine rollout setting, parsed once at startup.
-    pub reading_lists: bool,
 }
 /// Adapt SQLAlchemy/Neon URLs for tokio-postgres. The production DATABASE_URL
 /// can contain libpq/driver options that tokio-postgres does not recognize.

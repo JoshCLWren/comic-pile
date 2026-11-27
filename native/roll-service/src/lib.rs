@@ -47,7 +47,6 @@ pub mod issue_service;
 pub mod legacy_dependencies;
 pub mod metrics;
 pub mod openapi;
-pub mod reading_lists_setting;
 pub mod option_inputs;
 pub mod outbound;
 pub(crate) mod plan_rule_compiler;
@@ -143,8 +142,11 @@ pub struct AppState {
     /// fake that never opens a socket, so no test can reach the network
     /// (#5339). See [`outbound`].
     pub outbound: Arc<dyn outbound::OutboundHttp>,
-    /// Effective Reading List engine setting (see [`reading_lists_setting`]); injectable so
-    /// tests choose it per state instead of mutating process environment.
+    /// The Reading List engine is the sole automatic-eligibility authority.
+    ///
+    /// There is no activation switch: production always evaluates the canonical
+    /// reading-order graph. The field is a test seam so focused tests can still
+    /// isolate the stored-flag path; no deployment input can disable the engine.
     pub reading_lists: bool,
     /// Cache, rolling budget and cooldown for browser-called ComicVine routes.
     pub comicvine_limits: comicvine_limits::ComicVineLimits,
@@ -232,7 +234,7 @@ impl AppState {
             environment: config.environment,
             connection_recovery: true,
             outbound,
-            reading_lists: config.reading_lists,
+            reading_lists: true,
             comicvine_limits: comicvine_limits::ComicVineLimits::default(),
         })
     }

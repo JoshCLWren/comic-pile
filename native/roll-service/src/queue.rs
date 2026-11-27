@@ -1042,14 +1042,14 @@ mod tests {
         stored_blocked: bool,
         issue_id: Option<i32>,
     ) {
-        let connection = db::checkout(db).await.expect("option e seed connection");
+        let connection = db::checkout(db).await.expect("Reading Lists seed connection");
         connection
             .execute(
                 "INSERT INTO users (id, username) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
                 &[&user_id, &format!("queue-reader-{user_id}")],
             )
             .await
-            .expect("seed option e reader");
+            .expect("seed Reading Lists reader");
         connection
             .execute(
                 "INSERT INTO threads (id, user_id, title, format, issues_remaining, status, \
@@ -1064,7 +1064,7 @@ mod tests {
                 ],
             )
             .await
-            .expect("seed option e thread");
+            .expect("seed Reading Lists thread");
         if let Some(issue_id) = issue_id {
             connection
                 .execute(
@@ -1073,14 +1073,14 @@ mod tests {
                     &[&issue_id, &thread_id, &issue_id.to_string()],
                 )
                 .await
-                .expect("seed option e issue");
+                .expect("seed Reading Lists issue");
             connection
                 .execute(
                     "UPDATE threads SET next_unread_issue_id = $1 WHERE id = $2",
                     &[&issue_id, &thread_id],
                 )
                 .await
-                .expect("link option e thread issue");
+                .expect("link Reading Lists thread issue");
         }
         drop(Object::take(connection));
     }
@@ -1693,16 +1693,16 @@ mod tests {
             assert_eq!(
                 get_queue_entry(State(state.clone()), user, Path(thread_id))
                     .await
-                    .expect("option e entry")
+                    .expect("Reading Lists entry")
                     .0
                     .position,
                 expected,
-                "option e GET ordinal for thread {thread_id}"
+                "Reading Lists GET ordinal for thread {thread_id}"
             );
         }
         let before = get_queue_entry(State(state.clone()), user, Path(1))
             .await
-            .expect("option e entry")
+            .expect("Reading Lists entry")
             .0
             .ordering_version;
 
@@ -1715,7 +1715,7 @@ mod tests {
             Json(QueueEntryPatch { position: 1 }),
         )
         .await
-        .expect("option e clamped move")
+        .expect("Reading Lists clamped move")
         .0;
         assert_eq!(clamped.position, 3);
         assert_eq!(clamped.ordering_version, before);
@@ -1734,7 +1734,7 @@ mod tests {
             Json(QueueEntryPatch { position: 1 }),
         )
         .await
-        .expect("option e readable move")
+        .expect("Reading Lists readable move")
         .0;
         assert_eq!(readable.position, 1);
         assert_ne!(readable.ordering_version, before);
@@ -1746,11 +1746,11 @@ mod tests {
             assert_eq!(
                 get_queue_entry(State(state.clone()), user, Path(thread_id))
                     .await
-                    .expect("option e entry after move")
+                    .expect("Reading Lists entry after move")
                     .0
                     .position,
                 expected,
-                "option e GET ordinal after move for thread {thread_id}"
+                "Reading Lists GET ordinal after move for thread {thread_id}"
             );
         }
     }
