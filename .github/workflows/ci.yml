@@ -189,7 +189,13 @@ jobs:
           node-version: '24'
       - name: Reject newly introduced non-AIP v2 URL shapes
         run: node scripts/check_v2_aip_shapes.mjs
+<<<<<<< HEAD
       - run: node --test scripts/generate_route_burndown.test.mjs scripts/generate_openapi_types.test.mjs scripts/generate_vercel_routes.test.mjs scripts/vercel_slim_routes.test.mjs scripts/no_background_metadata_repair.test.mjs scripts/check_v2_aip_shapes.test.mjs
+=======
+      - name: Verify the all-version live route census and retirement allowlist
+        run: node scripts/generate_live_route_census.mjs --check
+      - run: node --test scripts/generate_route_burndown.test.mjs scripts/generate_openapi_types.test.mjs scripts/generate_vercel_routes.test.mjs scripts/vercel_slim_routes.test.mjs scripts/no_background_metadata_repair.test.mjs scripts/check_v2_aip_shapes.test.mjs scripts/generate_live_route_census.test.mjs
+>>>>>>> origin/main
 
   build:
     needs: [factory-scope]
