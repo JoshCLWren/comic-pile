@@ -267,6 +267,47 @@
             "HTTPBearer": []
           }
         ]
+      },
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Documentation-only operation for the AIP-133 standard Create on the v2\nthreads collection (#5702). The handler lives in `thread_lifecycle` and\nshares the legacy write path; only the URL and the `Location` response\nheader differ.",
+        "description": "Create a thread at the end of the authenticated reader's queue. The created resource (including its stable `id`) is returned at 201 with a `Location` header naming the v2 collection member. The write preserves owner assignment, the five-second duplicate-merge guard and the Python validation envelope; it creates no Plan, dependency or issue rows.",
+        "operationId": "create_thread_v2_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThreadCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created (or the duplicate created seconds earlier)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     }
   },
@@ -360,6 +401,7 @@
           }
         }
       },
+<<<<<<< HEAD
       "StaleThreadListResponse": {
         "type": "object",
         "description": "Stale threads page returned by `filter=stale` on the v2 collection.\n\nStale rows are still active queue rows, but the legacy stale read projects\nthe full detail-shaped `ThreadResponse` instead of the queue-list item. The\ndistinction is kept on the wire so callers of the retired v1 stale read can\nmigrate without losing fields; counts stay zero/absent because the stale\nread never published a whole-queue total.",
@@ -395,6 +437,8 @@
           }
         }
       },
+=======
+>>>>>>> origin/main
       "ThreadCreateRequest": {
         "type": "object",
         "description": "Body of `POST /api/v1/threads/`.",
@@ -436,6 +480,7 @@
           }
         }
       },
+<<<<<<< HEAD
       "ThreadDetailResponse": {
         "type": "object",
         "description": "The legacy single-thread response retained for the v1 and bare aliases.",
@@ -537,6 +582,8 @@
           }
         }
       },
+=======
+>>>>>>> origin/main
       "ThreadListItem": {
         "type": "object",
         "description": "One reader threads collection item.",
@@ -693,6 +740,7 @@
           }
         }
       },
+<<<<<<< HEAD
       "ThreadListResult": {
         "oneOf": [
           {
@@ -704,6 +752,8 @@
         ],
         "description": "One v2 threads list response. The active/completed/excluded filters keep the\nqueue-list projection; the stale filter keeps the legacy detail-shaped\nprojection. Both are emitted inline (no envelope variant key)."
       },
+=======
+>>>>>>> origin/main
       "ThreadResponse": {
         "type": "object",
         "description": "The Python `ThreadResponse` projection every lifecycle writer returns.",

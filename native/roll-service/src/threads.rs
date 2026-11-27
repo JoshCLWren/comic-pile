@@ -1741,7 +1741,10 @@ fn cursor_clause(sort: &str, cursor: Option<&QueueCursor>) -> (String, Vec<Param
 #[openapi(
     paths(
         list_threads_documentation,
+<<<<<<< HEAD
         get_thread_v2_documentation,
+=======
+>>>>>>> origin/main
         create_thread_v2_documentation,
         list_completed_threads_documentation
     ),
@@ -1802,6 +1805,7 @@ impl utoipa::Modify for ThreadsSecurityAddon {
 #[allow(dead_code)]
 pub(crate) fn list_threads_documentation() {}
 
+<<<<<<< HEAD
 /// Standard resource Get for one owned Thread.
 #[utoipa::path(
     get,
@@ -1818,6 +1822,8 @@ pub(crate) fn list_threads_documentation() {}
 #[allow(dead_code)]
 pub(crate) fn get_thread_v2_documentation() {}
 
+=======
+>>>>>>> origin/main
 /// Documentation-only operation for the AIP-133 standard Create on the v2
 /// threads collection (#5702). The handler lives in `thread_lifecycle` and
 /// shares the legacy write path; only the URL and the `Location` response
@@ -2184,6 +2190,30 @@ mod tests {
             "#/components/schemas/ThreadDetailResponse"
         );
         assert!(operation["responses"]["404"].is_object());
+    }
+
+    #[test]
+    fn threads_openapi_documents_the_v2_standard_create() {
+        use utoipa::OpenApi;
+        let document = serde_json::to_value(ThreadsApi::openapi()).expect("threads OpenAPI");
+        let operation = &document["paths"]["/api/v2/threads"]["post"];
+        assert_eq!(operation["operationId"], "create_thread_v2_documentation");
+        assert_eq!(
+            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ThreadCreateRequest"
+        );
+        assert_eq!(
+            operation["responses"]["201"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ThreadResponse"
+        );
+        assert!(
+            operation["description"]
+                .as_str()
+                .is_some_and(|description| description.contains("Location")),
+            "the 201 Location/name contract must be documented"
+        );
+        assert!(document["components"]["schemas"]["ThreadCreateRequest"].is_object());
+        assert!(document["components"]["schemas"]["ThreadResponse"].is_object());
     }
 
     #[test]
