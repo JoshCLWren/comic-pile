@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { NavigateFunction } from 'react-router-dom'
 import { queryClient } from '../../query/queryClient'
@@ -94,6 +94,7 @@ export function useRollActions({
     setShuffleError,
     setErrorMessage,
     setIsRolling,
+    isRatingView,
   } = state
   const {
     setDieMutation,
@@ -262,8 +263,18 @@ export function useRollActions({
     }
   }
 
+  // A native button disables after the first click re-renders, but two taps in
+  // the same tick would otherwise start two roll intervals before that render.
+  // The guard covers both the pending-offer shortcut and the timed roll path;
+  // returning from Rate releases it (#5981).
+  const rollGuardRef = useRef(false)
+  useEffect(() => {
+    if (!isRatingView) rollGuardRef.current = false
+  }, [isRatingView])
+
   function handleRoll() {
-    if (isRolling) return
+    if (isRolling || rollGuardRef.current) return
+    rollGuardRef.current = true
     navigator.vibrate?.(15)
     if (bootstrap?.pending_thread_id && !suppressPendingAutoOpenRef.current) {
       const pendingId = Number(bootstrap.pending_thread_id)
