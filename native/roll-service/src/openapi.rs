@@ -36,12 +36,6 @@ use utoipa::OpenApi;
         crate::auth::dto::forgot_password_documentation,
         crate::auth::dto::reset_password_documentation,
         crate::catalog_commit::commit_documentation,
-<<<<<<< ours
-        // #5716: stateless AIP-136 preview, deliberately separate from the
-        // durable commit operation registered above.
-        crate::catalog_series_mapping_preview::preview_series_mappings_v2_documentation,
-||||||| base
-=======
         // #5716: stateless AIP-136 preview, deliberately separate from the
         // durable commit operation registered above.
         crate::catalog_series_mapping_preview::preview_series_mappings_v2_documentation,
@@ -50,7 +44,6 @@ use utoipa::OpenApi;
         // same-path contract only and must not be published here.
         crate::continuity_plans_project_preview::preview_reading_order_projection_v2_documentation,
         crate::thread_ordering::thread_reading_orders_v2_documentation,
->>>>>>> theirs
         crate::issue_identity::cbl_adoption_commit_documentation,
         crate::issue_identity::cbl_targeted_adoption_commit_documentation,
         crate::activity::list_activity_documentation,
@@ -434,7 +427,6 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         // #5711: the six crossover-membership operations are v2-only after the
         // retired `/api/v1` aliases were unmounted. Publish them here so the
         // generated frontend client stays aligned with the live ingress.
-<<<<<<< ours
         .merge_from(crate::dependency_groups::dependency_groups_v2_openapi())
         // #5709: canonical eligibility, batch explanations and reader-authored
         // connections are v2-only; the v1 diagnostics were retired outright.
@@ -442,14 +434,6 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         // #5710: canonical v2 reading-order-group collection CRUD; the retired
         // v1 paths are no longer part of the deployed contract.
         .merge_from(crate::dependency_groups::reading_order_groups_v2_openapi());
-||||||| base
-        .merge_from(crate::dependency_groups::dependency_groups_v2_openapi());
-=======
-        .merge_from(crate::dependency_groups::dependency_groups_v2_openapi())
-        // #5710: canonical v2 reading-order-group collection CRUD; the retired
-        // v1 paths are no longer part of the deployed contract.
-        .merge_from(crate::dependency_groups::reading_order_groups_v2_openapi());
->>>>>>> theirs
     // The aggregate artifact is the deployed v2 runtime contract. The
     // completed-threads v1 operation has its own same-path contract and must
     // not expand the v2 inventory.
@@ -469,7 +453,6 @@ mod tests {
         serde_json::to_value(canonical_openapi()).expect("canonical OpenAPI document")
     }
 
-<<<<<<< ours
     /// The advisory duplicate check is a v2 AIP-136 collection custom method
     /// (#5705). It must be published with its own operation identity and DTOs,
     /// separate from both the `GET /api/v2/threads` list/filter contract
@@ -554,8 +537,6 @@ mod tests {
         );
     }
 
-||||||| base
-=======
     /// The advisory duplicate check is a v2 AIP-136 collection custom method
     /// (#5705). It must be published with its own operation identity and DTOs,
     /// separate from both the `GET /api/v2/threads` list/filter contract
@@ -695,7 +676,6 @@ mod tests {
         );
     }
 
->>>>>>> theirs
     /// The issue read-state and reader-context operations moved from their
     /// `/api/v1/issues/{id}:action` URLs to v2 resources. Every method must stay
     /// in both the domain document and the aggregate runtime contract with its

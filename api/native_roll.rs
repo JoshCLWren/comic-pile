@@ -1639,7 +1639,6 @@ mod tests {
     }
 
     #[tokio::test]
-<<<<<<< ours
     async fn v2_thread_dependency_diagnosis_ingress_reaches_rust_and_v1_is_404() {
         // #5709: the canonical dependency/blocking diagnosis resources moved
         // to v2 URLs. Register them in this Vercel entry table or the fallback
@@ -1748,8 +1747,6 @@ mod tests {
     }
 
     #[tokio::test]
-||||||| base
-=======
     async fn v2_thread_issue_read_ingress_reaches_rust_and_never_hits_json_404() {
         // #5706: both canonical v2 reads must be registered in this Vercel
         // entry table. An unauthenticated request must reach the dispatched
@@ -1785,7 +1782,6 @@ mod tests {
     }
 
     #[tokio::test]
->>>>>>> theirs
     async fn edit_series_preview_ingress_reaches_rust_and_never_hits_json_404() {
         // #5863: Edit Series Add posted to the inner-router-only preview paths,
         // so the Vercel ingress returned its JSON 404 ("Not Found") instead of
@@ -1841,7 +1837,6 @@ mod tests {
     }
 
     #[tokio::test]
-<<<<<<< ours
     async fn check_duplicates_v2_ingress_reaches_rust_and_never_hits_json_404() {
         // #5705: `POST /api/v2/threads:checkDuplicates` is registered in the
         // inner service router, but the Vercel entry owns a separate route
@@ -1927,8 +1922,6 @@ mod tests {
     }
 
     #[tokio::test]
-||||||| base
-=======
     async fn check_duplicates_v2_ingress_reaches_rust_and_never_hits_json_404() {
         // #5705: `POST /api/v2/threads:checkDuplicates` is registered in the
         // inner service router, but the Vercel entry owns a separate route
@@ -2062,7 +2055,6 @@ mod tests {
     }
 
     #[tokio::test]
->>>>>>> theirs
     async fn unknown_api_route_returns_rust_json_404_without_database() {
         let mut router = app();
         let response = router

@@ -17,22 +17,6 @@
     {
       "bucket": "operations",
       "method": "POST",
-<<<<<<< ours
-      "path": "/api/v2/seriesMappings:preview",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/seriesMappings:preview$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 5716,
-      "consumers": [
-        "frontend/src/services/api-series-mapping.ts"
-      ]
-    },
-    {
-      "bucket": "operations",
-      "method": "POST",
-||||||| base
-=======
       "path": "/api/v2/seriesMappings:preview",
       "dest": "/api/native_api.rs",
       "src": "^/api/v2/seriesMappings:preview$",
@@ -46,7 +30,6 @@
     {
       "bucket": "operations",
       "method": "POST",
->>>>>>> theirs
       "path": "/api/v2/series-mapping-commits",
       "dest": "/api/native_api.rs",
       "src": "^/api/v2/series-mapping-commits$",

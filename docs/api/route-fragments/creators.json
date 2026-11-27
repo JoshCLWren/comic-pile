@@ -57,22 +57,6 @@
     {
       "bucket": "operations",
       "method": "GET",
-<<<<<<< ours
-      "path": "/api/v2/threads/{thread_id}/creatorCredits",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/threads/[^/]+/creatorCredits$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 5706,
-      "consumers": [
-        "frontend/src/services/api-issues.ts"
-      ]
-    },
-    {
-      "bucket": "operations",
-      "method": "GET",
-||||||| base
-=======
       "path": "/api/v2/threads/{thread_id}/creatorCredits",
       "dest": "/api/native_api.rs",
       "src": "^/api/v2/threads/[^/]+/creatorCredits$",
@@ -86,7 +70,6 @@
     {
       "bucket": "operations",
       "method": "GET",
->>>>>>> theirs
       "path": "/api/v2/creators",
       "dest": "/api/native_api.rs",
       "src": "^/api/v2/creators$",

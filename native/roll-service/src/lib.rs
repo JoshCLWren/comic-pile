@@ -1637,7 +1637,6 @@ mod tests {
         }
     }
 
-<<<<<<< ours
     #[tokio::test]
     async fn retired_v1_dependency_diagnosis_routes_return_404_in_inner_router() {
         // #5709: dependency/blocking/connection diagnosis is v2-only. The
@@ -1761,8 +1760,6 @@ mod tests {
         }
     }
 
-||||||| base
-=======
     #[tokio::test]
     async fn v2_group_crud_is_mounted_and_retired_v1_crud_returns_404_in_inner_router() {
         let config = Config::from_lookup(|name| match name {
@@ -1820,7 +1817,6 @@ mod tests {
         }
     }
 
->>>>>>> theirs
     #[test]
     fn api_error_variants_carry_typed_status_and_detail() {
         let cases = [

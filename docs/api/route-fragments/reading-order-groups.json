@@ -17,119 +17,44 @@
     {
       "bucket": "operations",
       "method": "GET",
-<<<<<<< ours
-      "path": "/api/v2/readingOrderGroups",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/readingOrderGroups$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 5710
-||||||| base
-      "path": "/api/v1/reading-order-groups/",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/reading\\-order\\-groups/$"
-=======
       "path": "/api/v2/readingOrderGroups",
       "dest": "/api/native_api.rs",
       "src": "^/api/v2/readingOrderGroups$",
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 5710
->>>>>>> theirs
     },
     {
       "bucket": "operations",
       "method": "POST",
-<<<<<<< ours
-      "path": "/api/v2/readingOrderGroups",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/readingOrderGroups$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 5710
-||||||| base
-      "path": "/api/v1/reading-order-groups/",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/reading\\-order\\-groups/$"
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "DELETE",
-      "path": "/api/v1/reading-order-groups/{group_id}",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/reading\\-order\\-groups/[^/]+$"
-=======
       "path": "/api/v2/readingOrderGroups",
       "dest": "/api/native_api.rs",
       "src": "^/api/v2/readingOrderGroups$",
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 5710
->>>>>>> theirs
     },
     {
       "bucket": "operations",
       "method": "GET",
-<<<<<<< ours
-      "path": "/api/v2/readingOrderGroups/{group_id}",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/readingOrderGroups/[^/]+$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 5710
-||||||| base
-      "path": "/api/v1/reading-order-groups/{group_id}",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/reading\\-order\\-groups/[^/]+$"
-=======
       "path": "/api/v2/readingOrderGroups/{group_id}",
       "dest": "/api/native_api.rs",
       "src": "^/api/v2/readingOrderGroups/[^/]+$",
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 5710
->>>>>>> theirs
     },
     {
       "bucket": "operations",
       "method": "PATCH",
-<<<<<<< ours
-      "path": "/api/v2/readingOrderGroups/{group_id}",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/readingOrderGroups/[^/]+$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 5710
-||||||| base
-      "path": "/api/v1/reading-order-groups/{group_id}",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/reading\\-order\\-groups/[^/]+$"
-=======
       "path": "/api/v2/readingOrderGroups/{group_id}",
       "dest": "/api/native_api.rs",
       "src": "^/api/v2/readingOrderGroups/[^/]+$",
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 5710
->>>>>>> theirs
     },
     {
-<<<<<<< ours
-      "bucket": "operations",
-      "method": "DELETE",
-      "path": "/api/v2/readingOrderGroups/{group_id}",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/readingOrderGroups/[^/]+$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 5710
-||||||| base
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/reading-order-groups/{group_id}/detail",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/detail$"
-=======
       "bucket": "operations",
       "method": "DELETE",
       "path": "/api/v2/readingOrderGroups/{group_id}",
@@ -138,7 +63,6 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 5710
->>>>>>> theirs
     },
     {
       "bucket": "v1_operations",
