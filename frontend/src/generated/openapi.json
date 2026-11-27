@@ -23492,6 +23492,164 @@
         ]
       }
     },
+    "/api/v2/cblSources/{source_id}/adoptionPreview": {
+      "get": {
+        "operationId": "get_cbl_adoption_preview_v2",
+        "parameters": [
+          {
+            "description": "CBL source list id",
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CblAdoptionPreviewResponse"
+                }
+              }
+            },
+            "description": "Read-only adoption projection"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "CBL source list not found or not active"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "crate::cbl_sources_v2"
+        ]
+      }
+    },
+    "/api/v2/cblSources/{source_id}:planAdoption": {
+      "post": {
+        "operationId": "plan_cbl_adoption_v2",
+        "parameters": [
+          {
+            "description": "CBL source list id",
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CblAdoptionPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CblAdoptionPreviewResponse"
+                }
+              }
+            },
+            "description": "Stateless adoption calculation"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "CBL source list not found or not active"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "crate::cbl_sources_v2"
+        ]
+      }
+    },
+    "/api/v2/cblSources/{source_id}:previewReadingGraph": {
+      "post": {
+        "operationId": "preview_cbl_reading_graph_v2",
+        "parameters": [
+          {
+            "description": "CBL source list id",
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NativeReadingGraphPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeReadingGraphPreview"
+                }
+              }
+            },
+            "description": "Read-only prospective graph"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "CBL source list or target reading list not found"
+          },
+          "422": {
+            "description": "Validation failed, or unknown/unresolved source position or overlap answer"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "crate::cbl_sources_v2"
+        ]
+      }
+    },
     "/api/v2/comicvine/issues/{issue_id}/identity": {
       "delete": {
         "operationId": "remove_identity_documentation",

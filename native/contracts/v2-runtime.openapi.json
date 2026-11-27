@@ -963,6 +963,164 @@
         }
       }
     },
+    "/api/v2/cblSources/{source_id}/adoptionPreview": {
+      "get": {
+        "tags": [
+          "crate::cbl_sources_v2"
+        ],
+        "operationId": "get_cbl_adoption_preview_v2",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "description": "CBL source list id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read-only adoption projection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CblAdoptionPreviewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "CBL source list not found or not active"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/cblSources/{source_id}:planAdoption": {
+      "post": {
+        "tags": [
+          "crate::cbl_sources_v2"
+        ],
+        "operationId": "plan_cbl_adoption_v2",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "description": "CBL source list id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CblAdoptionPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Stateless adoption calculation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CblAdoptionPreviewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "CBL source list not found or not active"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/cblSources/{source_id}:previewReadingGraph": {
+      "post": {
+        "tags": [
+          "crate::cbl_sources_v2"
+        ],
+        "operationId": "preview_cbl_reading_graph_v2",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "description": "CBL source list id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingGraphPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Read-only prospective graph",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingGraphPreview"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "CBL source list or target reading list not found"
+          },
+          "422": {
+            "description": "Validation failed, or unknown/unresolved source position or overlap answer"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/comicvine/issues/{issue_id}/identity": {
       "get": {
         "tags": [
@@ -9648,6 +9806,300 @@
           }
         }
       },
+      "CblAdoptionEntryResponse": {
+        "type": "object",
+        "required": [
+          "collection_excluded",
+          "collection_exclusion_ids",
+          "cbl_position",
+          "cbl_entry_id",
+          "series_name",
+          "issue_number",
+          "series_group_id",
+          "adoption_class",
+          "adoption_decision",
+          "adopted",
+          "resolution_status",
+          "is_duplicate_identity"
+        ],
+        "properties": {
+          "adopted": {
+            "type": "boolean"
+          },
+          "adoption_class": {
+            "type": "string"
+          },
+          "adoption_decision": {
+            "type": "string"
+          },
+          "canonical_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "cbl_entry_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cbl_position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "collection_excluded": {
+            "type": "boolean"
+          },
+          "collection_exclusion_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "collection_exclusion_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "comicvine_issue_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "comicvine_series_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_duplicate_identity": {
+            "type": "boolean"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "publication_year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "read_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "read_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolution_status": {
+            "type": "string"
+          },
+          "resolved_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "series_external_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "series_group_id": {
+            "type": "string"
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "series_provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "volume_year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "CblAdoptionPlanRequest": {
+        "type": "object",
+        "properties": {
+          "entry_decisions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "series_decisions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CblAdoptionPreviewResponse": {
+        "type": "object",
+        "required": [
+          "source",
+          "total_positions",
+          "entries",
+          "summary"
+        ],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CblAdoptionEntryResponse"
+            }
+          },
+          "source": {
+            "$ref": "#/components/schemas/CblSourceFingerprintResponse"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/CblAdoptionSummaryResponse"
+          },
+          "total_positions": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "CblAdoptionSummaryResponse": {
+        "type": "object",
+        "required": [
+          "reused_existing_count",
+          "missing_would_create_count",
+          "excluded_count",
+          "unresolved_count",
+          "awaiting_opt_in_count",
+          "final_adopted_count",
+          "final_adopted_order",
+          "reused_existing_positions",
+          "missing_would_create_positions",
+          "excluded_positions",
+          "unresolved_positions",
+          "awaiting_opt_in_positions"
+        ],
+        "properties": {
+          "awaiting_opt_in_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "awaiting_opt_in_positions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "excluded_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "excluded_positions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "final_adopted_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "final_adopted_order": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "missing_would_create_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "missing_would_create_positions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "reused_existing_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reused_existing_positions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "unresolved_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "unresolved_positions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        }
+      },
+      "CblSourceFingerprintResponse": {
+        "type": "object",
+        "required": [
+          "source_list_id",
+          "source_repository",
+          "source_path",
+          "content_hash",
+          "revision_sha"
+        ],
+        "properties": {
+          "content_hash": {
+            "type": "string"
+          },
+          "revision_sha": {
+            "type": "string"
+          },
+          "source_list_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_path": {
+            "type": "string"
+          },
+          "source_repository": {
+            "type": "string"
+          }
+        }
+      },
       "CheckDuplicatesRequest": {
         "type": "object",
         "description": "Body of `POST /api/v1/threads/check-duplicates`.",
@@ -17123,6 +17575,85 @@
           }
         }
       },
+      "ReadingGraphBlocker": {
+        "type": "object",
+        "required": [
+          "kind",
+          "waiting_on_issue_ids",
+          "explanation"
+        ],
+        "properties": {
+          "explanation": {
+            "type": "string"
+          },
+          "gate_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "list_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "waiting_on_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      },
+      "ReadingGraphChoiceEffect": {
+        "type": "object",
+        "required": [
+          "choice",
+          "label",
+          "detail",
+          "rollable_issue_ids",
+          "waiting_issue_ids",
+          "series"
+        ],
+        "properties": {
+          "choice": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "rollable_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphSeriesNode"
+            }
+          },
+          "waiting_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      },
       "ReadingGraphCycle": {
         "type": "object",
         "description": "One cycle with its concrete edge path.",
@@ -17136,6 +17667,21 @@
             "items": {
               "$ref": "#/components/schemas/ReadingGraphEdge"
             }
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "ReadingGraphCycleError": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
           },
           "message": {
             "type": "string"
@@ -17212,6 +17758,39 @@
           }
         }
       },
+      "ReadingGraphIssueReference": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "series_name",
+          "issue_number",
+          "blockers"
+        ],
+        "properties": {
+          "blockers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphBlocker"
+            }
+          },
+          "comicvine_volume_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "series_name": {
+            "type": "string"
+          }
+        }
+      },
       "ReadingGraphList": {
         "type": "object",
         "description": "One affected Reading List.",
@@ -17230,6 +17809,154 @@
           },
           "name": {
             "type": "string"
+          }
+        }
+      },
+      "ReadingGraphOverlap": {
+        "type": "object",
+        "required": [
+          "overlap_id",
+          "continuing_series",
+          "waiting_series",
+          "question",
+          "blocked_issue_ids",
+          "choices"
+        ],
+        "properties": {
+          "blocked_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "choices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphChoiceEffect"
+            }
+          },
+          "continuing_series": {
+            "$ref": "#/components/schemas/ReadingGraphSeriesReference"
+          },
+          "overlap_id": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "selected_choice": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "waiting_series": {
+            "$ref": "#/components/schemas/ReadingGraphSeriesReference"
+          }
+        }
+      },
+      "ReadingGraphOverlapChoice": {
+        "type": "object",
+        "required": [
+          "overlap_id",
+          "choice"
+        ],
+        "properties": {
+          "choice": {
+            "type": "string"
+          },
+          "overlap_id": {
+            "type": "string"
+          }
+        }
+      },
+      "ReadingGraphPreview": {
+        "type": "object",
+        "required": [
+          "source_list_id",
+          "content_hash",
+          "revision_sha",
+          "series",
+          "overlaps",
+          "issues",
+          "rollable_issue_ids",
+          "waiting_issue_ids",
+          "cycle_errors"
+        ],
+        "properties": {
+          "content_hash": {
+            "type": "string"
+          },
+          "cycle_errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphCycleError"
+            }
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphIssueReference"
+            }
+          },
+          "overlaps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphOverlap"
+            }
+          },
+          "revision_sha": {
+            "type": "string"
+          },
+          "rollable_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphSeriesNode"
+            }
+          },
+          "source_list_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "waiting_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      },
+      "ReadingGraphPreviewRequest": {
+        "type": "object",
+        "properties": {
+          "included_positions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "overlap_choices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphOverlapChoice"
+            }
+          },
+          "target_list_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
           }
         }
       },
@@ -17401,6 +18128,77 @@
             "type": "integer",
             "description": "Total count of unresolved references.",
             "minimum": 0
+          }
+        }
+      },
+      "ReadingGraphSeriesNode": {
+        "type": "object",
+        "required": [
+          "comicvine_volume_id",
+          "series_name",
+          "state",
+          "unread_count",
+          "rollable_count",
+          "waiting_count",
+          "waits_for_issue_ids"
+        ],
+        "properties": {
+          "comicvine_volume_id": {
+            "type": "string"
+          },
+          "rollable_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "unread_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "waiting_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "waits_for_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "ReadingGraphSeriesReference": {
+        "type": "object",
+        "required": [
+          "comicvine_volume_id",
+          "series_name"
+        ],
+        "properties": {
+          "comicvine_volume_id": {
+            "type": "string"
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
           }
         }
       },

@@ -3723,6 +3723,164 @@
         }
       }
     },
+    "/api/v2/cblSources/{source_id}/adoptionPreview": {
+      "get": {
+        "tags": [
+          "crate::cbl_sources_v2"
+        ],
+        "operationId": "get_cbl_adoption_preview_v2",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "description": "CBL source list id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read-only adoption projection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CblAdoptionPreviewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "CBL source list not found or not active"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/cblSources/{source_id}:planAdoption": {
+      "post": {
+        "tags": [
+          "crate::cbl_sources_v2"
+        ],
+        "operationId": "plan_cbl_adoption_v2",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "description": "CBL source list id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CblAdoptionPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Stateless adoption calculation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CblAdoptionPreviewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "CBL source list not found or not active"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/cblSources/{source_id}:previewReadingGraph": {
+      "post": {
+        "tags": [
+          "crate::cbl_sources_v2"
+        ],
+        "operationId": "preview_cbl_reading_graph_v2",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "description": "CBL source list id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingGraphPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Read-only prospective graph",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingGraphPreview"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "CBL source list or target reading list not found"
+          },
+          "422": {
+            "description": "Validation failed, or unknown/unresolved source position or overlap answer"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/comicvine/issues/{issue_id}/identity": {
       "get": {
         "tags": [
