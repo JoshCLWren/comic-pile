@@ -1415,6 +1415,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(dependency_groups::create_group_v2),
         )
         .route(
+<<<<<<< HEAD
             "/api/v2/readingOrderGroups/{group_id}",
             get(dependency_groups::get_group_v2),
         )
@@ -1425,6 +1426,22 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v2/readingOrderGroups/{group_id}",
             delete(dependency_groups::delete_group_v2),
+=======
+            "/api/v1/reading-order-groups/{group_id}",
+            get(dependency_groups::get_group),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}",
+            patch(dependency_groups::update_group),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}",
+            delete(dependency_groups::delete_group),
+        )
+        .route(
+            "/api/v1/reading-order-groups/{group_id}/detail",
+            get(dependency_groups::get_group_detail),
+>>>>>>> origin/main
         )
         .route(
             "/api/v1/reading-order-groups/{group_id}/order",
