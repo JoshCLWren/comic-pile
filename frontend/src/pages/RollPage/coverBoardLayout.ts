@@ -144,7 +144,7 @@ export function carouselOffset(index: number, active: number, length: number): n
 
 /** CSS transform for one cover in the wraparound gallery. */
 export function carouselTransform(offset: number, coverWidth: number): string {
-  const step = coverWidth * 0.89 + 16
+  const step = Math.round(coverWidth * 0.89 + 16)
   return `translateX(calc(-50% + ${offset * step}px)) scale(${offset === 0 ? 1 : 0.84})`
 }
 
