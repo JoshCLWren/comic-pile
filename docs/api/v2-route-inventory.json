@@ -6,10 +6,10 @@
     "generated_by": "scripts/generate_route_burndown.mjs",
     "issue": 4739,
     "ingress_source": "vercel.json",
-    "total_live_operations": 157,
-    "native_rust": 157,
+    "total_live_operations": 163,
+    "native_rust": 163,
     "python_fastapi": 0,
-    "native_rust_status": 157,
+    "native_rust_status": 163,
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 0
