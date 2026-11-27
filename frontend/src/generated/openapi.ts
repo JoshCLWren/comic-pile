@@ -18909,22 +18909,6 @@ export interface operations {
             };
         };
     };
-<<<<<<< HEAD
-    get_thread_v2_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Owned Thread identifier */
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Owner-scoped thread detail */
-            200: {
-=======
     create_thread_v2_documentation: {
         parameters: {
             query?: never;
@@ -18940,16 +18924,11 @@ export interface operations {
         responses: {
             /** @description Created (or the duplicate created seconds earlier) */
             201: {
->>>>>>> origin/main
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-<<<<<<< HEAD
-                    "application/json": components["schemas"]["ThreadDetailResponse"];
-=======
                     "application/json": components["schemas"]["NativeThreadResponse"];
->>>>>>> origin/main
                 };
             };
             /** @description Not authenticated */
@@ -18959,13 +18938,45 @@ export interface operations {
                 };
                 content?: never;
             };
-<<<<<<< HEAD
-            /** @description Thread not found or not owned by the reader */
-            404: {
-=======
             /** @description Validation failed */
             422: {
->>>>>>> origin/main
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_thread_v2_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped thread detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadDetailResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found or not owned by the reader */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
