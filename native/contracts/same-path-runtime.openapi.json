@@ -1,3 +1,6 @@
+   Compiling comicpile-roll-service v0.1.0 (/home/runner/work/comic-pile/comic-pile/native/roll-service)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.57s
+     Running `target/debug/examples/same_path_openapi`
 {
   "openapi": "3.1.0",
   "info": {
@@ -1449,64 +1452,6 @@
         ]
       }
     },
-    "/api/v1/issue-identity/cbl-sources/compare": {
-      "post": {
-        "tags": [
-          "issue-identity"
-        ],
-        "summary": "Documentation-only operation for CBL source comparison.",
-        "operationId": "compare_cbl_sources_documentation",
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Maximum ranked candidates, 1-100 (default 50)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CblSourceComparisonRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Ranked coverage comparison",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CblSourceComparisonResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request or query failed validation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/v1/issue-identity/cbl-sources/folders": {
       "get": {
         "tags": [
@@ -1801,67 +1746,6 @@
           },
           "422": {
             "description": "Validation failed, or unknown/unresolved source position or overlap answer"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates": {
-      "get": {
-        "tags": [
-          "issue-identity"
-        ],
-        "summary": "Documentation-only operation for reading-list CBL candidates.",
-        "operationId": "find_cbl_candidates_for_reading_list_documentation",
-        "parameters": [
-          {
-            "name": "list_id",
-            "in": "path",
-            "description": "Owned custom CBL list identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Maximum ranked candidates, 1-100 (default 50)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Reading-list gaps and ranked CBL candidates",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CblReadingListCandidatesResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Custom CBL not found"
-          },
-          "422": {
-            "description": "Query failed validation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationErrorResponse"
-                }
-              }
-            }
           }
         },
         "security": [
@@ -4004,6 +3888,64 @@
             "description": "Database temporarily unavailable"
           }
         }
+      }
+    },
+    "/api/v2/cblSources:compare": {
+      "post": {
+        "tags": [
+          "issue-identity"
+        ],
+        "summary": "Documentation-only operation for CBL source comparison (v2, #5713).",
+        "operationId": "compare_cbl_sources_v2_documentation",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum ranked candidates, 1-100 (default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CblSourceComparisonRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Ranked coverage comparison",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CblSourceComparisonResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request or query failed validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/v2/comicvine/issues/{issue_id}/identity": {
@@ -8126,6 +8068,67 @@
           },
           "503": {
             "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/reading-lists/{list_id}/cbl-candidates": {
+      "get": {
+        "tags": [
+          "issue-identity"
+        ],
+        "summary": "Documentation-only operation for reading-list CBL candidates (v2, #5713).",
+        "operationId": "find_cbl_candidates_for_reading_list_v2_documentation",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "description": "Owned custom CBL list identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum ranked candidates, 1-100 (default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reading-list gaps and ranked CBL candidates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CblReadingListCandidatesResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Custom CBL not found"
+          },
+          "422": {
+            "description": "Query failed validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
           }
         },
         "security": [
