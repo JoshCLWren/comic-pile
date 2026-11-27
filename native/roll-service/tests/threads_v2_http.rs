@@ -122,13 +122,7 @@ async fn send(state: &Arc<AppState>, request: Request<Body>) -> (StatusCode, Val
     )
 }
 
-fn authed(
-    method: &str,
-    uri: &str,
-    token: &str,
-    csrf: &str,
-    body: Option<Value>,
-) -> Request<Body> {
+fn authed(method: &str, uri: &str, token: &str, csrf: &str, body: Option<Value>) -> Request<Body> {
     let builder = Request::builder()
         .method(method)
         .uri(uri)
@@ -144,17 +138,8 @@ fn authed(
     }
 }
 
-async fn call(
-    ctx: &Ctx,
-    method: &str,
-    uri: &str,
-    body: Option<Value>,
-) -> (StatusCode, Value) {
-    send(
-        &ctx.state,
-        authed(method, uri, &ctx.token, &ctx.csrf, body),
-    )
-    .await
+async fn call(ctx: &Ctx, method: &str, uri: &str, body: Option<Value>) -> (StatusCode, Value) {
+    send(&ctx.state, authed(method, uri, &ctx.token, &ctx.csrf, body)).await
 }
 
 async fn seed_thread(ctx: &Ctx, user_id: i32, title: &str) -> i32 {
@@ -171,11 +156,7 @@ async fn seed_thread(ctx: &Ctx, user_id: i32, title: &str) -> i32 {
                      '[{\"name\":\"Jane Doe\",\"roles\":[\"Writer\"]}]'::json,
                      false, false, false, NOW())
              RETURNING id",
-            &[
-                &user_id,
-                &title,
-                &i32::try_from(user_id).unwrap_or(1),
-            ],
+            &[&user_id, &title, &i32::try_from(user_id).unwrap_or(1)],
         )
         .await
         .unwrap()

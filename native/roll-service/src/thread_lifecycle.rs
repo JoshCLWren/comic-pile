@@ -1007,9 +1007,7 @@ struct PatchPrecondition {
 /// Parse the AIP-134 field mask. Both the array form and the canonical
 /// comma-separated string form are accepted; empty means "use body presence".
 fn parse_update_mask(check: &mut Check, value: Option<&Value>) -> Option<Vec<String>> {
-    let Some(value) = value else {
-        return None;
-    };
+    let value = value?;
     let names: Vec<String> = match value {
         Value::String(text) => text
             .split(',')
@@ -3269,11 +3267,8 @@ mod tests {
     #[test]
     fn patch_without_mask_preserves_omitted_fields() {
         let mut check = Check::default();
-        let (input, _) = parse_patch(
-            &mut check,
-            Some(json!({"notes": null, "title": "Renamed"})),
-        )
-        .unwrap();
+        let (input, _) =
+            parse_patch(&mut check, Some(json!({"notes": null, "title": "Renamed"}))).unwrap();
         assert!(check.is_clean());
         assert_eq!(input.title.as_deref(), Some("Renamed"));
         assert!(input.notes_present);
@@ -3341,8 +3336,7 @@ mod tests {
             notes: Some("stale notes".to_owned()),
             credits: None,
         };
-        let failure =
-            check_precondition(&owned_thread_for_precondition(), &expected).unwrap_err();
+        let failure = check_precondition(&owned_thread_for_precondition(), &expected).unwrap_err();
         let LifecycleError::Api(error) = failure else {
             panic!("expected an API conflict, not a validation failure");
         };
