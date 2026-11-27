@@ -9,22 +9,9 @@
 //! * `PATCH /api/v2/readingOrderGroups/{group_id}`
 //! * `DELETE /api/v2/readingOrderGroups/{group_id}`
 //!
-//! Membership/range/order reads still retain their v1 paths (#5710 does not
-//! own them and #5711 migrates them separately):
+//! Group order still retains its v1 path; memberships and ranges moved to v2
+//! in #5711:
 //!
-<<<<<<< HEAD
-//! * `GET /api/v1/reading-order-groups/threads/{thread_id}/groups`
-//! * `POST /api/v1/reading-order-groups/{group_id}/issue-ranges`
-//! * `POST /api/v1/reading-order-groups/{group_id}/members`
-//! * `DELETE /api/v1/reading-order-groups/{group_id}/members/{member_id}`
-=======
-//! * `GET /api/v1/reading-order-groups/` (group CRUD stays on v1, #5710)
-//! * `POST /api/v1/reading-order-groups/`
-//! * `GET /api/v1/reading-order-groups/{group_id}`
-//! * `GET /api/v1/reading-order-groups/{group_id}/detail`
-//! * `PATCH /api/v1/reading-order-groups/{group_id}`
-//! * `DELETE /api/v1/reading-order-groups/{group_id}`
->>>>>>> origin/main
 //! * `PUT /api/v1/reading-order-groups/{group_id}/order`
 //!
 //! The six membership operations moved to their v2-only resources in #5711:
@@ -1734,89 +1721,7 @@ pub async fn delete_group_v2(
 #[allow(dead_code)]
 pub fn list_thread_group_memberships_documentation() {}
 
-<<<<<<< HEAD
 /// Documentation-only operation for adding an issue-position range.
-=======
-/// Documentation-only operation for fetching one group.
-#[utoipa::path(
-    get,
-    path = "/api/v1/reading-order-groups/{group_id}",
-    tag = "reading-order-groups",
-    operation_id = "dependency_groups_get",
-    params(("group_id" = i32, Path, description = "Owned group identifier")),
-    responses(
-        (status = 200, description = "Owned group", body = DependencyGroupResponse),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Group not found"),
-        (status = 422, description = "Request validation failed"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn get_group_documentation() {}
-
-/// Documentation-only operation for renaming one group.
-#[utoipa::path(
-    patch,
-    path = "/api/v1/reading-order-groups/{group_id}",
-    tag = "reading-order-groups",
-    operation_id = "dependency_groups_update",
-    params(("group_id" = i32, Path, description = "Owned group identifier")),
-    request_body = DependencyGroupUpdateRequest,
-    responses(
-        (status = 200, description = "Renamed group", body = DependencyGroupResponse),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Group not found"),
-        (status = 409, description = "A group with this name already exists"),
-        (status = 422, description = "Request validation failed"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn update_group_documentation() {}
-
-/// Documentation-only operation for deleting one group.
-#[utoipa::path(
-    delete,
-    path = "/api/v1/reading-order-groups/{group_id}",
-    tag = "reading-order-groups",
-    operation_id = "dependency_groups_delete",
-    params(("group_id" = i32, Path, description = "Owned group identifier")),
-    responses(
-        (status = 204, description = "Group deleted"),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Group not found"),
-        (status = 422, description = "Request validation failed"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn delete_group_documentation() {}
-
-/// Documentation-only operation for fetching enriched group detail.
-#[utoipa::path(
-    get,
-    path = "/api/v1/reading-order-groups/{group_id}/detail",
-    tag = "reading-order-groups",
-    operation_id = "dependency_groups_get_detail",
-    params(("group_id" = i32, Path, description = "Owned group identifier")),
-    responses(
-        (status = 200, description = "Owned group detail", body = DependencyGroupDetailResponse),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Group not found"),
-        (status = 422, description = "Request validation failed"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn get_group_detail_documentation() {}
-
-/// Documentation-only operation for adding an issue-position range (v2).
->>>>>>> origin/main
 #[utoipa::path(
     post,
     path = "/api/v2/reading-order-groups/{group_id}/issue-ranges",

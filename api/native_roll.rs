@@ -771,28 +771,16 @@ fn app() -> Router {
         .route("/api/v2/readingOrderGroups", get(native_dispatch))
         .route("/api/v2/readingOrderGroups", post(native_dispatch))
         .route(
-<<<<<<< HEAD
             "/api/v2/readingOrderGroups/{group_id}",
             get(native_dispatch),
         )
         .route(
             "/api/v2/readingOrderGroups/{group_id}",
-=======
-            "/api/v1/reading-order-groups/{group_id}",
-            get(native_dispatch),
-        )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}",
->>>>>>> origin/main
             patch(native_dispatch),
         )
         .route(
             "/api/v2/readingOrderGroups/{group_id}",
             delete(native_dispatch),
-        )
-        .route(
-            "/api/v1/reading-order-groups/threads/{thread_id}/groups",
-            get(native_dispatch),
         )
         .route(
             "/api/v1/reading-order-groups/{group_id}/order",
