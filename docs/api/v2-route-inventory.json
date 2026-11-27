@@ -6,10 +6,10 @@
     "generated_by": "scripts/generate_route_burndown.mjs",
     "issue": 4739,
     "ingress_source": "vercel.json",
-    "total_live_operations": 157,
-    "native_rust": 157,
+    "total_live_operations": 156,
+    "native_rust": 156,
     "python_fastapi": 0,
-    "native_rust_status": 157,
+    "native_rust_status": 156,
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 0
@@ -1874,19 +1874,6 @@
       ],
       "method": "GET",
       "path": "/api/v2/reading-order-groups/{group_id}/reading-plans",
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
-    },
-    {
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4841,
-      "consumers": [
-        "frontend/src/services/api-dependency-groups.ts"
-      ],
-      "method": "POST",
-      "path": "/api/v2/reading-order-groups:resolveMemberships",
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
       "verified_against": "vercel.json"
