@@ -39,39 +39,28 @@ so the effective pool can only shrink. Collection exclusions use stable
 Issue/Thread identities and normalized volume IDs, including ComicVine numeric and
 `4050-` spellings; titles never infer identity.
 
-## Owner-approved rollout setting
+## Single canonical engine (no activation switch)
 
-Evaluated eligibility is a rollout setting, not a per-request feature flag and not
-an API-version marker. `native/roll-service/src/reading_lists_setting.rs` parses it once
-at startup into `AppState::reading_lists`:
+The Reading List engine is the one automatic-eligibility authority. There is no
+rollout setting, approval variable, feature flag, shadow mode or second evaluator:
+`AppState::reading_lists` is always `true` in production, and no deployment input
+can disable it. The field exists only as a deterministic test seam for isolating
+the stored-flag path in focused negative-control tests.
 
-| Variable | Effect |
-| --- | --- |
-| `READING_LISTS_ENABLED` | Must be truthy (`1`, `true`, `yes`, `on`, `t`, `y`). |
-| `READING_LISTS_APPROVED_PREVIEW` | Must be non-blank; records the owner approval reference. |
+Every eligibility surface consumes the same evaluated reading-order graph:
 
-The approval reference is an audit marker, not independently verified
-authorization. Handlers must not read the environment directly; tests inject the
-resolved value.
+- The Reading List reader endpoint evaluates the canonical graph and reports
+  `execution_mode: "reading_lists"`.
+- Queue, Thread list/detail, ordering, and lifecycle projections group and rank
+  by canonical eligibility, not by stored `threads.is_blocked`.
+- `POST /api/v2/reading-boundaries` resolves the canonical evaluator for every
+  requested Thread.
+- Roll offer and bootstrap load and evaluate the same canonical inputs.
 
-Current behavior is not uniform across every surface:
-
-- The Reading List reader endpoint always evaluates the canonical graph and
-  reports `execution_mode: "reading_lists"`, even when the rollout setting is off.
-- Queue, Thread list/detail, ordering, and lifecycle projections use the setting to
-  choose canonical or legacy stored `threads.is_blocked` authority.
-- `POST /api/v2/reading-boundaries` returns `evaluator: "unavailable"`, no next
-  Issue, and no blockers when the setting is off.
-- Roll offer and bootstrap always load and evaluate canonical inputs, even when
-  the setting is off. The setting changes some active-thread projections but does
-  not restore a stored-flag Roll fallback. This is a recorded runtime discrepancy,
-  not the intended setting-off contract.
-
-Reading List execution is current canonical behavior. The rollout setting controls
-only the per-surface compatibility projections listed above; this document does
-not establish the live deployed value. Changing that value remains an operator
-decision requiring fresh owner-approved read-only acceptance across reader cohorts,
-not merely a deployment.
+The v2 reader projection and UI still carry a per-list `execution_mode`
+discriminator with a `legacy` branch; that residual compatibility path is retired
+by the deletion owners (#3677/#3678) and is not a selectable execution mode of the
+engine. Manual direct Read/Rate never consults eligibility.
 
 ## Prerequisites and exclusions
 

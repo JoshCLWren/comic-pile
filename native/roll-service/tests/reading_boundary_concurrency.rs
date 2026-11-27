@@ -36,17 +36,17 @@ use tower::ServiceExt;
 const PASSWORD: &str = "correct-horse-battery";
 
 fn state(url: &str, reading_lists: bool) -> Arc<AppState> {
-    Arc::new(test_support::test_app_state(
+    let mut state = test_support::test_app_state(
         Config::from_lookup(|key| match key {
             "RUST_ROLL_DATABASE_URL" => Some(url.into()),
             "RUST_ROLL_JWT_SECRET" => Some(test_support::TEST_JWT_SECRET.into()),
             "RUST_ROLL_POOL_SIZE" => Some("4".into()),
-            "READING_LISTS_ENABLED" => reading_lists.then(|| "true".into()),
-            "READING_LISTS_APPROVED_PREVIEW" => Some("injected-by-test".into()),
             _ => None,
         })
         .unwrap(),
-    ))
+    );
+    state.reading_lists = reading_lists;
+    Arc::new(state)
 }
 
 async fn database(reading_lists: bool) -> Option<(Arc<AppState>, tokio::sync::MutexGuard<'static, ()>)> {

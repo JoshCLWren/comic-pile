@@ -40,24 +40,22 @@ async fn setup(prefix: &str) -> Ctx {
     setup_with_reading_lists(prefix, false).await
 }
 
-/// Reading List engine is injected into the test config, never the process environment.
+/// The engine setting is injected on the state; no deployment switch exists.
 /// The blocked-series regression needs the evaluated eligibility projection so
 /// its blocker is a live prerequisite rather than a stored flag.
 async fn setup_with_reading_lists(prefix: &str, reading_lists: bool) -> Ctx {
     let url = comicpile_roll_service::test_support::database_url().await;
-    let state = Arc::new(test_support::test_app_state(
+    let mut state = test_support::test_app_state(
         Config::from_lookup(|key| match key {
             "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-thread-series-cover-secret".into()),
             "RUST_ROLL_POOL_SIZE" => Some("2".into()),
-            "READING_LISTS_ENABLED" if reading_lists => Some("true".into()),
-            "READING_LISTS_APPROVED_PREVIEW" if reading_lists => {
-                Some("factory-thread-series-cover-regression".into())
-            }
             _ => None,
         })
         .unwrap(),
-    ));
+    );
+    state.reading_lists = reading_lists;
+    let state = Arc::new(state);
     let guard = comicpile_roll_service::test_support::reset_for_test(&state).await;
     let username = format!("{prefix}-{}-{}", std::process::id(), unique_suffix());
     let (token, csrf, user_id) = register_user(&state, &username).await;

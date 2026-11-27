@@ -27,8 +27,8 @@
 //! Scope notes:
 //! * `stale` and `set-pending` resolve their candidate pool through the same
 //!   canonical Reading List evaluator as automatic Roll, unconditionally: no
-//!   `READING_LISTS_ENABLED` mode switch, approval gate or stored `is_blocked`
-//!   fallback (issue #5525 A7/A16/A17). The dense Queue ordinal in lifecycle
+//!   activation switch, approval gate or stored `is_blocked` fallback (issue
+//!   #5525 A7/A16/A17). The dense Queue ordinal in lifecycle
 //!   responses keeps the preview's presentation contract for wire parity.
 //! * `test-backdate` is only available when `TEST_ENVIRONMENT` is set, matching
 //!   the Python test helper's guard.
@@ -364,7 +364,7 @@ async fn reading_lists_eligible(
 /// Canonical reading-list inputs for the automatic-Roll authority paths.
 ///
 /// The evaluated graph is the only execution model: the snapshot is resolved
-/// unconditionally, never behind `READING_LISTS_ENABLED` (#5525 A7/A17), so stored
+/// unconditionally, with no activation switch (#5525 A7/A17), so stored
 /// `threads.is_blocked` is never consulted as permission. The loader checks
 /// out its own pooled connection; callers resolve it before opening a write
 /// transaction and never nest two checkouts.

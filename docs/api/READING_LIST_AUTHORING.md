@@ -85,13 +85,12 @@ Dependencies or change global read state.
 `GET /api/v2/reading-lists/{list_id}/reader` always projects availability from the
 canonical Rust evaluator.
 
-The owner-approved rollout setting (`READING_LISTS_ENABLED` truthy plus a non-blank
-`READING_LISTS_APPROVED_PREVIEW`, parsed once into `AppState::reading_lists`) controls several
-Queue/Thread/boundary projections, but current Roll offer/bootstrap behavior is
-not a uniform setting-off fallback. See
-[Reading List runtime](../READING_LIST_RUNTIME.md#owner-approved-rollout-setting)
-for the exact per-surface behavior and recorded discrepancy. Enabling the setting
-is a separate owner-approved operational decision, not an authoring-side flag.
+The Reading List engine is always active: there is no rollout setting, approval
+variable or authoring-side flag. Every Queue/Thread/boundary, Roll offer and
+bootstrap projection consumes the same canonical evaluator. See
+[Reading List runtime](../READING_LIST_RUNTIME.md#single-canonical-engine-no-activation-switch)
+for the per-surface contract. Authoring persists reader intent; it never selects
+or disables an execution mode.
 
 ## Frontend authoring flow
 

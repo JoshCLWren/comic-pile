@@ -154,8 +154,9 @@ SQLAlchemy URL prefixes. Both paths share the bounded pool/timeout settings.
 configuration. The reading-session gap is fixed by `SessionPolicy::default()`.
 The dice ladder is `[2, 4, 6, 8, 10, 12, 20]`, with d6 as the default; native Roll
 rating steps use the 4.0 threshold. See
-`native/roll-service/src/config.rs` and
-`native/roll-service/src/reading_lists_setting.rs` for the exact settings.
+`native/roll-service/src/config.rs` for the exact startup settings. The Reading
+List engine has no activation variable; it is the sole automatic-eligibility
+authority.
 
 ## Regeneration and validation
 

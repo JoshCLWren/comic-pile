@@ -41,7 +41,7 @@ async fn setup_user(
     setup_user_with(prefix, false).await
 }
 
-/// `reading_lists` is injected into the state's config; nothing touches the process env.
+/// `reading_lists` is injected on the state; no deployment switch exists.
 async fn setup_user_with(
     prefix: &str,
     reading_lists: bool,
@@ -53,20 +53,18 @@ async fn setup_user_with(
     tokio::sync::MutexGuard<'static, ()>,
 ) {
     let url = comicpile_roll_service::test_support::database_url().await;
-    let state = Arc::new(
-        AppState::new(
-            Config::from_lookup(|key| match key {
-                "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
-                "RUST_ROLL_JWT_SECRET" => Some("synthetic-roll-routes-secret".into()),
-                "RUST_ROLL_POOL_SIZE" => Some("2".into()),
-                "READING_LISTS_ENABLED" if reading_lists => Some("true".into()),
-                "READING_LISTS_APPROVED_PREVIEW" if reading_lists => Some("injected-by-test".into()),
-                _ => None,
-            })
-            .unwrap(),
-        )
+    let mut state = AppState::new(
+        Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-roll-routes-secret".into()),
+            "RUST_ROLL_POOL_SIZE" => Some("2".into()),
+            _ => None,
+        })
         .unwrap(),
-    );
+    )
+    .unwrap();
+    state.reading_lists = reading_lists;
+    let state = Arc::new(state);
     let guard = comicpile_roll_service::test_support::reset_for_test(&state).await;
     let username = format!("{prefix}-{}-{}", std::process::id(), unique_suffix());
     let (token, csrf, user_id) = register_user(&state, &username).await;

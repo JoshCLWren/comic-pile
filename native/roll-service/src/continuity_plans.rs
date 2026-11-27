@@ -1957,9 +1957,9 @@ pub async fn create_continuity_plan(
     // Compile the plan's strict/checkpoint/convergence intent into rules and
     // canonical edges, and rebuild normalized membership, in this transaction.
     // Python also calls `ensure_new_plan_has_authority` here, but that adapter
-    // is gated on `READING_LISTS_ENABLED` (default false) plus an owner-approved
-    // preview; it is a no-op in the deployed configuration and the native
-    // service deliberately does not expose that experimental switch.
+    // was an experimental preview gate and is a no-op in the deployed
+    // configuration. The native service has no such switch: the canonical
+    // Reading List evaluator is the only execution authority.
     if let Err(error) = compile_plan_rules(
         &tx,
         user.id(),

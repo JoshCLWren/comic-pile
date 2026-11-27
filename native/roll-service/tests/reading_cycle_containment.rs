@@ -31,8 +31,6 @@ fn state(url: &str) -> Arc<AppState> {
             "RUST_ROLL_DATABASE_URL" => Some(url.into()),
             "RUST_ROLL_JWT_SECRET" => Some(test_support::TEST_JWT_SECRET.into()),
             "RUST_ROLL_POOL_SIZE" => Some("4".into()),
-            "READING_LISTS_ENABLED" => Some("true".into()),
-            "READING_LISTS_APPROVED_PREVIEW" => Some("injected-by-test".into()),
             _ => None,
         })
         .unwrap(),
