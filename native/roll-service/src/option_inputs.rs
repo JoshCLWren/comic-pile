@@ -955,6 +955,12 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_ctes_treat_cbl_order_rows_as_inert() {
+        assert!(SNAPSHOT_CTES.contains("d.origin = 'reader'"));
+        assert!(SNAPSHOT_CTES.contains("d.note NOT LIKE 'cbl-order:%'"));
+    }
+
+    #[test]
     fn legacy_dependency_rows_decode_from_the_diagnostics_projection() {
         let rows: Vec<LegacyDependencyRow> = serde_json::from_value(serde_json::json!([
             {

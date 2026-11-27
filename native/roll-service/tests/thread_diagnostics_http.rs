@@ -404,7 +404,7 @@ async fn batch_blocking_info_preserves_request_order_and_validates() {
     assert_eq!(body["threads"][b.to_string()]["is_blocked"], true, "{text}");
     assert_eq!(
         body["threads"][b.to_string()]["blocking_reasons"],
-        json!(["Blocked by Alpha: #1"])
+        json!(["Reader prerequisite: waiting on Alpha #1"])
     );
     assert_eq!(body["threads"][a.to_string()]["is_blocked"], false);
     let first = text.find(&format!("\"{b}\":")).unwrap();
@@ -527,8 +527,9 @@ async fn eligibility_singleton_ignores_converted_edges_and_stale_blocked_flags()
     dependency(&conn, blocker_issue, blocked_issue, None).await;
     // Converted rows are audit data and must never veto an explicit Read Now.
     conn.execute(
-        "INSERT INTO dependencies (created_at, source_issue_id, target_issue_id, origin, classification) \
-         VALUES (NOW(), $1, $2, 'converted', 'C')",
+        "INSERT INTO dependencies \
+           (created_at, source_issue_id, target_issue_id, origin, classification, provenance) \
+         VALUES (NOW(), $1, $2, 'converted', 'C', 'converted from CBL')",
         &[&healthy_issue, &blocked_issue],
     )
     .await
