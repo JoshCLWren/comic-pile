@@ -1470,7 +1470,7 @@ pub async fn list_thread_issues_v2(
             ],
         )
         .await
-        .map_err(db::query_error)?
+        .map_err(|error| ApiError::Internal(format!("SQLDIAG {error}")))?
         .ok_or_else(|| thread_not_found(thread_id))?;
     let payload: String = row.get(1);
     let mut issues: Vec<ThreadIssueV2Item> = serde_json::from_str(&payload)
