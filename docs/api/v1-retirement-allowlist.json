@@ -1,0 +1,2486 @@
+{
+  "schema_version": 1,
+  "generated_by": "scripts/generate_live_route_census.mjs",
+  "issue": 5719,
+  "description": "Baseline v1, bare /api and nonconforming-v2 METHOD/path pairs. New calls or registrations outside this list fail CI. owner_issue is the specific retirement ticket; needs_owner_issue marks visible baseline debt.",
+  "reject_new_v1_calls": true,
+  "reject_new_v1_route_registrations": true,
+  "require_runtime": "native-rust",
+  "known_unowned_baseline": [],
+  "summary": {
+    "total_entries": 175,
+    "with_owner": 175,
+    "baseline_debt": 0,
+    "nonconforming_v2": 98
+  },
+  "entries": [
+    {
+      "method": "GET",
+      "path": "/api/auth/csrf",
+      "version": "unversioned",
+      "owner_issue": 4549,
+      "disposition": "POST|GET /api/v2/auth/*",
+      "rollout_status": "caller-migration-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/forgot-password",
+      "version": "unversioned",
+      "owner_issue": 4549,
+      "disposition": "POST|GET /api/v2/auth/*",
+      "rollout_status": "caller-migration-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "version": "unversioned",
+      "owner_issue": 4549,
+      "disposition": "POST|GET /api/v2/auth/*",
+      "rollout_status": "caller-migration-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "version": "unversioned",
+      "owner_issue": 4549,
+      "disposition": "POST|GET /api/v2/auth/*",
+      "rollout_status": "caller-migration-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me",
+      "version": "unversioned",
+      "owner_issue": 4549,
+      "disposition": "POST|GET /api/v2/auth/*",
+      "rollout_status": "caller-migration-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/refresh",
+      "version": "unversioned",
+      "owner_issue": 4549,
+      "disposition": "POST|GET /api/v2/auth/*",
+      "rollout_status": "caller-migration-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/register",
+      "version": "unversioned",
+      "owner_issue": 4549,
+      "disposition": "POST|GET /api/v2/auth/*",
+      "rollout_status": "caller-migration-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/reset-password",
+      "version": "unversioned",
+      "owner_issue": 4549,
+      "disposition": "POST|GET /api/v2/auth/*",
+      "rollout_status": "caller-migration-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/bug-reports/",
+      "version": "unversioned",
+      "owner_issue": 5718,
+      "disposition": "POST /api/v2/bugReports",
+      "rollout_status": "compatibility-alias-debt",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/metrics",
+      "version": "unversioned",
+      "owner_issue": 4335,
+      "disposition": "retain-infrastructure",
+      "rollout_status": "active-infrastructure",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/roll/events/{event_id}/recommendation-explanation",
+      "version": "unversioned",
+      "owner_issue": 4595,
+      "disposition": "retire-without-replacement",
+      "rollout_status": "legacy-family-debt",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/threads/{thread_id}",
+      "version": "unversioned",
+      "owner_issue": 5701,
+      "disposition": "GET /api/v2/threads/{thread_id}",
+      "rollout_status": "compatibility-alias-debt",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/auth/csrf",
+      "version": "v1",
+      "owner_issue": 4549,
+      "disposition": "POST|GET /api/v2/auth/*",
+      "rollout_status": "caller-migration-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/forgot-password",
+      "version": "v1",
+      "owner_issue": 4549,
+      "disposition": "POST|GET /api/v2/auth/*",
+      "rollout_status": "caller-migration-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "version": "v1",
+      "owner_issue": 4549,
+      "disposition": "POST|GET /api/v2/auth/*",
+      "rollout_status": "caller-migration-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/logout",
+      "version": "v1",
+      "owner_issue": 4549,
+      "disposition": "POST|GET /api/v2/auth/*",
+      "rollout_status": "caller-migration-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/auth/me",
+      "version": "v1",
+      "owner_issue": 4549,
+      "disposition": "POST|GET /api/v2/auth/*",
+      "rollout_status": "caller-migration-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/refresh",
+      "version": "v1",
+      "owner_issue": 4549,
+      "disposition": "POST|GET /api/v2/auth/*",
+      "rollout_status": "caller-migration-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/register",
+      "version": "v1",
+      "owner_issue": 4549,
+      "disposition": "POST|GET /api/v2/auth/*",
+      "rollout_status": "caller-migration-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/reset-password",
+      "version": "v1",
+      "owner_issue": 4549,
+      "disposition": "POST|GET /api/v2/auth/*",
+      "rollout_status": "caller-migration-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/bug-reports/",
+      "version": "v1",
+      "owner_issue": 5718,
+      "disposition": "POST /api/v2/bugReports",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-bug-reports.ts",
+        "frontend/src/unit/api.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/catalog/series-mappings/preview",
+      "version": "v1",
+      "owner_issue": 5716,
+      "disposition": "POST /api/v2/seriesMappings:preview",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-series-mapping.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
+      "version": "v1",
+      "owner_issue": 4835,
+      "disposition": "GET /api/v2/comicvine/series/{comicvine_volume_id}/import-status",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
+      "version": "v1",
+      "owner_issue": 5715,
+      "disposition": "POST /api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-reading-orders.ts",
+        "frontend/src/unit/api-reading-orders.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/continuity-rules/",
+      "version": "v1",
+      "owner_issue": 4335,
+      "disposition": "retire-without-replacement",
+      "rollout_status": "legacy-family-debt",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/continuity-rules/{rule_id}",
+      "version": "v1",
+      "owner_issue": 4335,
+      "disposition": "retire-without-replacement",
+      "rollout_status": "legacy-family-debt",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/creators",
+      "version": "v1",
+      "owner_issue": 4836,
+      "disposition": "GET /api/v2/creators | GET /api/v2/creators/summaries",
+      "rollout_status": "migrated-awaiting-retirement",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/creators/",
+      "version": "v1",
+      "owner_issue": 4836,
+      "disposition": "GET /api/v2/creators | GET /api/v2/creators/summaries",
+      "rollout_status": "migrated-awaiting-retirement",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/creators/summaries",
+      "version": "v1",
+      "owner_issue": 4836,
+      "disposition": "GET /api/v2/creators | GET /api/v2/creators/summaries",
+      "rollout_status": "migrated-awaiting-retirement",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/cron/release-sync",
+      "version": "v1",
+      "owner_issue": 5276,
+      "disposition": "POST /api/v2/reading-plan-sync/runs",
+      "rollout_status": "background-caller-migration",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/issue-identity/cbl-sources",
+      "version": "v1",
+      "owner_issue": 5712,
+      "disposition": "GET /api/v2/cblSources",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/issue-identity/cbl-sources/browse",
+      "version": "v1",
+      "owner_issue": 5712,
+      "disposition": "GET /api/v2/cblSources",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}",
+      "version": "v1",
+      "owner_issue": 5712,
+      "disposition": "GET /api/v2/cblSources",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/issue-identity/cbl-sources/compare",
+      "version": "v1",
+      "owner_issue": 5713,
+      "disposition": "POST /api/v2/cblSources:compare",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/issue-identity/cbl-sources/folders",
+      "version": "v1",
+      "owner_issue": 5712,
+      "disposition": "GET /api/v2/cblSources",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/issue-identity/cbl-sources/{list_id}",
+      "version": "v1",
+      "owner_issue": 5712,
+      "disposition": "GET /api/v2/cblSources",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
+      "version": "v1",
+      "owner_issue": 5714,
+      "disposition": "GET /api/v2/cblSources/{source_id}/adoptionPreview | :planAdoption | :previewReadingGraph",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
+      "version": "v1",
+      "owner_issue": 5714,
+      "disposition": "GET /api/v2/cblSources/{source_id}/adoptionPreview | :planAdoption | :previewReadingGraph",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
+      "version": "v1",
+      "owner_issue": 5714,
+      "disposition": "GET /api/v2/cblSources/{source_id}/adoptionPreview | :planAdoption | :previewReadingGraph",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
+      "version": "v1",
+      "owner_issue": 5713,
+      "disposition": "GET /api/v2/readingLists/{list_id}/cblCandidates",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/issues/{issue_id}/comicvine",
+      "version": "v1",
+      "owner_issue": 4623,
+      "disposition": "GET /api/v2/issues/{issue_id}/comicvine",
+      "rollout_status": "migrated-awaiting-retirement",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/reading-order-groups/{group_id}/order",
+      "version": "v1",
+      "owner_issue": 5711,
+      "disposition": "POST /api/v2/reading-order-groups/{group_id}/members | /issue-ranges",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/releases/",
+      "version": "v1",
+      "owner_issue": 4849,
+      "disposition": "GET /api/v2/releases",
+      "rollout_status": "migrated-awaiting-retirement",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/releases/source",
+      "version": "v1",
+      "owner_issue": 4849,
+      "disposition": "GET /api/v2/releases",
+      "rollout_status": "migrated-awaiting-retirement",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/releases/{release_id}",
+      "version": "v1",
+      "owner_issue": 4849,
+      "disposition": "GET /api/v2/releases",
+      "rollout_status": "migrated-awaiting-retirement",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/releases/{release_id}/retract",
+      "version": "v1",
+      "owner_issue": 4849,
+      "disposition": "GET /api/v2/releases",
+      "rollout_status": "migrated-awaiting-retirement",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/roll/events/{event_id}/recommendation-explanation",
+      "version": "v1",
+      "owner_issue": 4595,
+      "disposition": "retire-without-replacement",
+      "rollout_status": "legacy-family-debt",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/taste/discoveries",
+      "version": "v1",
+      "owner_issue": 5717,
+      "disposition": "GET /api/v2/users/me/tasteDiscoveries | POST /api/v2/users/me/tasteDiscoveries/{id}:dismiss",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/unit/api-taste.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/taste/discoveries/{signal_id}/dismiss",
+      "version": "v1",
+      "owner_issue": 5717,
+      "disposition": "GET /api/v2/users/me/tasteDiscoveries | POST /api/v2/users/me/tasteDiscoveries/{id}:dismiss",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/unit/api-taste.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/threads/",
+      "version": "v1",
+      "owner_issue": 5702,
+      "disposition": "POST /api/v2/threads",
+      "rollout_status": "slice-merged",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/test/core-views-request-budget.spec.ts",
+        "frontend/src/unit/api-auth-recovery.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
+        "frontend/src/unit/httpClient.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/threads/check-duplicates",
+      "version": "v1",
+      "owner_issue": 5705,
+      "disposition": "POST /api/v2/threads:checkDuplicates",
+      "rollout_status": "slice-merged",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/threads/completed/threads",
+      "version": "v1",
+      "owner_issue": 5701,
+      "disposition": "GET /api/v2/threads?filter=status eq 'completed'",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-threads.ts",
+        "frontend/src/test/p0-auth-outage-recovery.spec.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/threads/excluded/threads",
+      "version": "v1",
+      "owner_issue": 5704,
+      "disposition": "GET /api/v2/threads?filter=excluded",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-threads.ts",
+        "frontend/src/test/p0-auth-outage-recovery.spec.ts",
+        "frontend/src/test/p0-snooze-unsnooze.spec.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/threads/groups:batch",
+      "version": "v1",
+      "owner_issue": 5711,
+      "disposition": "retire-without-replacement",
+      "rollout_status": "pinned-404",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/threads/reactivate",
+      "version": "v1",
+      "owner_issue": 5704,
+      "disposition": "POST /api/v2/threads/{thread_id}:reactivate",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/threads/stale",
+      "version": "v1",
+      "owner_issue": 5701,
+      "disposition": "GET /api/v2/threads?filter=stale",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-threads.ts",
+        "frontend/src/test/cbl-replace-review.spec.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/threads/{thread_id}",
+      "version": "v1",
+      "owner_issue": 5701,
+      "disposition": "GET /api/v2/threads/{thread_id}",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/services/api-migration.ts",
+        "frontend/src/services/api-threads.ts",
+        "frontend/src/test/cbl-replace-review.spec.ts",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+        "frontend/src/unit/api-auth-failure-isolation.test.ts",
+        "frontend/src/unit/api-issues-coverage.test.ts",
+        "frontend/src/unit/api-issues.test.ts",
+        "frontend/src/unit/api.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}",
+      "version": "v1",
+      "owner_issue": 4832,
+      "disposition": "GET|POST|PATCH|DELETE /api/v2/threads[/{thread_id}]",
+      "rollout_status": "slices-5701-5707",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/api-migration.ts",
+        "frontend/src/services/api-threads.ts",
+        "frontend/src/test/cbl-replace-review.spec.ts",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+        "frontend/src/unit/api-auth-failure-isolation.test.ts",
+        "frontend/src/unit/api-issues-coverage.test.ts",
+        "frontend/src/unit/api-issues.test.ts",
+        "frontend/src/unit/api.test.ts"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/threads/{thread_id}",
+      "version": "v1",
+      "owner_issue": 5703,
+      "disposition": "PATCH /api/v2/threads/{thread_id}",
+      "rollout_status": "slice-merged",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/services/api-migration.ts",
+        "frontend/src/services/api-threads.ts",
+        "frontend/src/test/cbl-replace-review.spec.ts",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+        "frontend/src/unit/api-auth-failure-isolation.test.ts",
+        "frontend/src/unit/api-issues-coverage.test.ts",
+        "frontend/src/unit/api-issues.test.ts",
+        "frontend/src/unit/api.test.ts"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/threads/{thread_id}",
+      "version": "v1",
+      "owner_issue": 5703,
+      "disposition": "DELETE /api/v2/threads/{thread_id}",
+      "rollout_status": "slice-merged",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/services/api-migration.ts",
+        "frontend/src/services/api-threads.ts",
+        "frontend/src/test/cbl-replace-review.spec.ts",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+        "frontend/src/unit/api-auth-failure-isolation.test.ts",
+        "frontend/src/unit/api-issues-coverage.test.ts",
+        "frontend/src/unit/api-issues.test.ts",
+        "frontend/src/unit/api.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/threads/{thread_id}/connected",
+      "version": "v1",
+      "owner_issue": 5709,
+      "disposition": "GET /api/v2/dependencies/blocked",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/threads/{thread_id}/dependencies",
+      "version": "v1",
+      "owner_issue": 5709,
+      "disposition": "GET /api/v2/dependencies/blocked",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/test/p0-dependencies-reading-order.spec.ts",
+        "frontend/src/unit/api.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/threads/{thread_id}/dependency-order-check",
+      "version": "v1",
+      "owner_issue": 5709,
+      "disposition": "GET /api/v2/dependencies/blocked",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}/exclude",
+      "version": "v1",
+      "owner_issue": 5704,
+      "disposition": "POST /api/v2/queue-exclusions | DELETE /api/v2/queue-exclusions/{exclusion_id}",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-threads.ts",
+        "frontend/src/unit/api.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/threads/{thread_id}/issue-dependencies",
+      "version": "v1",
+      "owner_issue": 5709,
+      "disposition": "GET /api/v2/dependencies/blocked",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/threads/{thread_id}/issues",
+      "version": "v1",
+      "owner_issue": 5706,
+      "disposition": "GET /api/v2/threads/{thread_id}/issues | POST /api/v2/threads/{thread_id}/issues",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/test/cbl-replace-review.spec.ts",
+        "frontend/src/test/continuity-checkpoint-convergence.spec.ts",
+        "frontend/src/test/continuity-parallel-lanes.spec.ts",
+        "frontend/src/test/custom-cbl-create-cycle.spec.ts",
+        "frontend/src/test/helpers.ts",
+        "frontend/src/test/issue-1883-roll-a11y-duplicates.spec.ts",
+        "frontend/src/test/issue-1885-roll-target-sizes.spec.ts",
+        "frontend/src/test/issue-2104-zero-readiness.spec.ts",
+        "frontend/src/test/issue-3626-creator-issue-deep-link.spec.ts",
+        "frontend/src/test/issue-5435-bulk-queue-exclusions.spec.ts",
+        "frontend/src/test/p0-dependencies-reading-order.spec.ts",
+        "frontend/src/test/reading-list-gate-authoring.spec.ts",
+        "frontend/src/test/reading-plan-reader.spec.ts",
+        "frontend/src/unit/api-issues-coverage.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}/issues",
+      "version": "v1",
+      "owner_issue": 5706,
+      "disposition": "GET /api/v2/threads/{thread_id}/issues | POST /api/v2/threads/{thread_id}/issues",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/test/fixtures.ts",
+        "frontend/src/test/helpers.ts",
+        "frontend/src/test/issue-3626-creator-issue-deep-link.spec.ts",
+        "frontend/src/unit/api-issues-coverage.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/threads/{thread_id}/issues/creators",
+      "version": "v1",
+      "owner_issue": 5706,
+      "disposition": "GET /api/v2/threads/{thread_id}/issues | POST /api/v2/threads/{thread_id}/issues",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/unit/api-issues-coverage.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}/issues:reorder",
+      "version": "v1",
+      "owner_issue": 5706,
+      "disposition": "GET /api/v2/threads/{thread_id}/issues | POST /api/v2/threads/{thread_id}/issues",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/threads/{thread_id}/issues:validateOrder",
+      "version": "v1",
+      "owner_issue": 5706,
+      "disposition": "GET /api/v2/threads/{thread_id}/issues | POST /api/v2/threads/{thread_id}/issues",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/threads/{thread_id}/reading-orders",
+      "version": "v1",
+      "owner_issue": 5715,
+      "disposition": "GET /api/v2/threads/{thread_id}/readingOrders",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-reading-orders.ts",
+        "frontend/src/unit/api-reading-orders.test.ts",
+        "frontend/src/unit/api.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}/restore",
+      "version": "v1",
+      "owner_issue": 5704,
+      "disposition": "POST /api/v2/queue-exclusions/restore",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-threads.ts",
+        "frontend/src/unit/api.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}/set-pending",
+      "version": "v1",
+      "owner_issue": 4344,
+      "disposition": "retire-without-replacement",
+      "rollout_status": "owner-issue-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-threads.ts",
+        "frontend/src/test/cbl-replace-review.spec.ts",
+        "frontend/src/test/helpers.ts",
+        "frontend/src/test/issue-1885-roll-target-sizes.spec.ts"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/threads/{thread_id}/test-backdate",
+      "version": "v1",
+      "owner_issue": 4335,
+      "disposition": "retire-without-replacement",
+      "rollout_status": "test-helper-debt",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/services/api-dependency-groups.ts",
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/api-migration.ts",
+        "frontend/src/services/api-reading-orders.ts",
+        "frontend/src/services/api-threads.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/threads:getBlockingInfo",
+      "version": "v1",
+      "owner_issue": 5709,
+      "disposition": "GET /api/v2/dependencies/blocked",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+        "frontend/src/unit/useReadingBoundaries.request-budget.test.tsx"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/users/me/taste-signals",
+      "version": "v1",
+      "owner_issue": 5717,
+      "disposition": "PATCH /api/v2/users/me/tasteSignals/{signal_id}",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict",
+      "version": "v1",
+      "owner_issue": 5717,
+      "disposition": "PATCH /api/v2/users/me/tasteSignals/{signal_id}",
+      "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/auth/forgot-password",
+      "version": "v2",
+      "owner_issue": 4459,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-auth.ts",
+        "frontend/src/services/api.ts",
+        "frontend/src/test/auth-account-switching.spec.ts",
+        "frontend/src/test/network-budget/auth-public.spec.ts",
+        "frontend/src/unit/api-auth-v2.test.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/auth/refresh",
+      "version": "v2",
+      "owner_issue": 4459,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api.ts",
+        "frontend/src/test/auth-account-switching.spec.ts",
+        "frontend/src/test/auth-fixtures.ts",
+        "frontend/src/test/fixtures.ts",
+        "frontend/src/test/issue-4527-roll-snoozes.spec.ts",
+        "frontend/src/test/network-budget/auth-public.spec.ts",
+        "frontend/src/test/p0-auth-outage-recovery.spec.ts",
+        "frontend/src/unit/api-auth-recovery.test.ts",
+        "frontend/src/unit/api-auth-v2.test.ts",
+        "frontend/src/unit/api-creators.test.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/auth/reset-password",
+      "version": "v2",
+      "owner_issue": 4459,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-auth.ts",
+        "frontend/src/services/api.ts",
+        "frontend/src/test/network-budget/auth-public.spec.ts",
+        "frontend/src/unit/api-auth-v2.test.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/comicvine/resolve",
+      "version": "v2",
+      "owner_issue": 4835,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts",
+        "frontend/src/unit/api-comicvine.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/comicvine/search/series",
+      "version": "v2",
+      "owner_issue": 4835,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts",
+        "frontend/src/unit/api-comicvine.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/comicvine/series/{comicvine_volume_id}/import-status",
+      "version": "v2",
+      "owner_issue": 4835,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts",
+        "frontend/src/unit/api-comicvine.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/",
+      "version": "v2",
+      "owner_issue": 4838,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/test/issue-4503-request-budget.spec.ts",
+        "frontend/src/unit/api-continuity-plans.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/continuity-plans/",
+      "version": "v2",
+      "owner_issue": 4838,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/test/continuity-checkpoint-convergence.spec.ts",
+        "frontend/src/test/continuity-parallel-lanes.spec.ts",
+        "frontend/src/test/custom-cbl-create-cycle.spec.ts",
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
+        "frontend/src/test/issue-2104-zero-readiness.spec.ts",
+        "frontend/src/test/issue-4503-request-budget.spec.ts",
+        "frontend/src/test/reading-plan-reader.spec.ts",
+        "frontend/src/unit/api-continuity-plans.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/continuity-plans/from-reading-order",
+      "version": "v2",
+      "owner_issue": 4838,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-orders.ts",
+        "frontend/src/unit/api-reading-orders.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/continuity-plans/release-sources/",
+      "version": "v2",
+      "owner_issue": 4838,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/unit/api-continuity-plans.test.ts"
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v2/continuity-plans/release-sources/{source_id}",
+      "version": "v2",
+      "owner_issue": 4838,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/continuity-plans/release-sources/{source_id}",
+      "version": "v2",
+      "owner_issue": 4838,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}",
+      "version": "v2",
+      "owner_issue": 4838,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/unit/api-continuity-plans.test.ts",
+        "frontend/src/unit/api-reading-orders.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/continuity-plans/{plan_id}",
+      "version": "v2",
+      "owner_issue": 4838,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/unit/api-continuity-plans.test.ts",
+        "frontend/src/unit/api-reading-orders.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/continuity-plans/{plan_id}",
+      "version": "v2",
+      "owner_issue": 4838,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/unit/api-continuity-plans.test.ts",
+        "frontend/src/unit/api-reading-orders.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+      "version": "v2",
+      "owner_issue": 4838,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-orders.ts"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+      "version": "v2",
+      "owner_issue": 4838,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-orders.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/membership",
+      "version": "v2",
+      "owner_issue": 4838,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-orders.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/reader",
+      "version": "v2",
+      "owner_issue": 4684,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/test/issue-4503-request-budget.spec.ts",
+        "frontend/src/test/shared-issue-reader.spec.ts",
+        "frontend/src/unit/api-continuity-plans.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/continuity-plans/{plan_id}/reading-orders/project",
+      "version": "v2",
+      "owner_issue": 4838,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-reading-orders.ts",
+        "frontend/src/unit/api-reading-orders.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/recovery",
+      "version": "v2",
+      "owner_issue": 4684,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-reading-plan-recovery.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/continuity-plans/{plan_id}/recovery",
+      "version": "v2",
+      "owner_issue": 4684,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-reading-plan-recovery.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/release-sources/",
+      "version": "v2",
+      "owner_issue": 4838,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-orders.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/release-sources/reader",
+      "version": "v2",
+      "owner_issue": 4838,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/creators/compare",
+      "version": "v2",
+      "owner_issue": 4836,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-creators.ts",
+        "frontend/src/services/creatorComparisonApi.ts",
+        "frontend/src/test/issue-3091-creator-comparison.spec.ts",
+        "frontend/src/unit/api-creator-comparison.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/creators/team-chemistry",
+      "version": "v2",
+      "owner_issue": 4836,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-creators.ts",
+        "frontend/src/services/creatorTeamChemistryApi.ts",
+        "frontend/src/unit/creatorTeamChemistryApi.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/creators/{creator_key}/metrics/rating-distribution/{rating_value}",
+      "version": "v2",
+      "owner_issue": 4836,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/creatorMetricDrilldownApi.ts",
+        "frontend/src/unit/creatorMetricDrilldownApi.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/creators/{creator_key}/metrics/role-stats/{role}",
+      "version": "v2",
+      "owner_issue": 4836,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/creatorMetricDrilldownApi.ts",
+        "frontend/src/unit/creatorMetricDrilldownApi.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}",
+      "version": "v2",
+      "owner_issue": 4836,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/creatorMetricDrilldownApi.ts",
+        "frontend/src/unit/creatorMetricDrilldownApi.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/demo-roll",
+      "version": "v2",
+      "owner_issue": 4855,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/unit/api-demo.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/dependencies/",
+      "version": "v2",
+      "owner_issue": 4684,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
+        "frontend/src/test/issue-1883-roll-a11y-duplicates.spec.ts",
+        "frontend/src/test/issue-1885-roll-target-sizes.spec.ts",
+        "frontend/src/test/p0-dependencies-reading-order.spec.ts",
+        "frontend/src/test/reading-plan-reader.spec.ts",
+        "frontend/src/unit/api.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/identity-inbox",
+      "version": "v2",
+      "owner_issue": 4335,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-identity.ts",
+        "frontend/src/test/issue-4503-request-budget.spec.ts",
+        "frontend/src/test/p0-auth-outage-recovery.spec.ts",
+        "frontend/src/unit/api-identity.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/identity-inbox/issue-matches",
+      "version": "v2",
+      "owner_issue": 4335,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-identity.ts",
+        "frontend/src/unit/api-identity.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/identity-inbox/{mapping_id}",
+      "version": "v2",
+      "owner_issue": 4335,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-identity.ts",
+        "frontend/src/unit/api-identity.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/identity-inbox/{mapping_id}/confirmations",
+      "version": "v2",
+      "owner_issue": 4335,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-identity.ts",
+        "frontend/src/unit/api-identity.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/identity-inbox/{mapping_id}/deferrals",
+      "version": "v2",
+      "owner_issue": 4335,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-identity.ts",
+        "frontend/src/unit/api-identity.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/identity-inbox/{mapping_id}/rejections",
+      "version": "v2",
+      "owner_issue": 4335,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-identity.ts",
+        "frontend/src/unit/api-identity.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/identity-inbox/{mapping_id}/skips",
+      "version": "v2",
+      "owner_issue": 4335,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-identity.ts",
+        "frontend/src/unit/api-identity.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/issue-duplicate-reconciliation/apply",
+      "version": "v2",
+      "owner_issue": 4653,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-issue-duplicate-reconciliation.ts",
+        "frontend/src/unit/api-issue-duplicate-reconciliation.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/issue-duplicate-reconciliation/detect",
+      "version": "v2",
+      "owner_issue": 4653,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-issue-duplicate-reconciliation.ts",
+        "frontend/src/unit/api-issue-duplicate-reconciliation.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/issue-duplicate-reconciliation/preview",
+      "version": "v2",
+      "owner_issue": 4653,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-issue-duplicate-reconciliation.ts",
+        "frontend/src/unit/api-issue-duplicate-reconciliation.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/issue-duplicate-reconciliation/undo",
+      "version": "v2",
+      "owner_issue": 4653,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-issue-duplicate-reconciliation.ts",
+        "frontend/src/unit/api-issue-duplicate-reconciliation.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/issue-read-marker-removals",
+      "version": "v2",
+      "owner_issue": 4335,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/issue-read-markers",
+      "version": "v2",
+      "owner_issue": 4335,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/issues/{issue_id}/position",
+      "version": "v2",
+      "owner_issue": 4335,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/unit/api-issues-coverage.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/issues/{issue_id}/read-markers",
+      "version": "v2",
+      "owner_issue": 4335,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/test/helpers.ts",
+        "frontend/src/test/reading-plan-reader.spec.ts",
+        "frontend/src/unit/api-issues-coverage.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/issues/{issue_id}/reader-context",
+      "version": "v2",
+      "owner_issue": 4335,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/api-reader-context.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/queue-entries/{thread_id}",
+      "version": "v2",
+      "owner_issue": 4335,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/test/p0-roll-selection.spec.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx",
+        "frontend/src/unit/nativeV2Client.test.ts"
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v2/queue-entries/{thread_id}",
+      "version": "v2",
+      "owner_issue": 4335,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/test/p0-roll-selection.spec.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx",
+        "frontend/src/unit/nativeV2Client.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/queue-exclusion-groups/{group_id}/restore",
+      "version": "v2",
+      "owner_issue": 5435,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/queue-exclusions",
+      "version": "v2",
+      "owner_issue": 5435,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/queue-exclusions/restore",
+      "version": "v2",
+      "owner_issue": 5435,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/queue-exclusions/status:check",
+      "version": "v2",
+      "owner_issue": 5435,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-threads.ts",
+        "frontend/src/unit/api-threads.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/queue-orders",
+      "version": "v2",
+      "owner_issue": 4335,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/test/p0-roll-selection.spec.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/reading-boundaries",
+      "version": "v2",
+      "owner_issue": 4335,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-reading-boundaries.ts",
+        "frontend/src/test/queue-boundary-retry.spec.ts",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+        "frontend/src/unit/nativeV2Client.test.ts",
+        "frontend/src/unit/useReadingBoundaries.request-budget.test.tsx"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/reading-graph",
+      "version": "v2",
+      "owner_issue": 4684,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-reading-graph.ts",
+        "frontend/src/test/p0-auth-outage-recovery.spec.ts",
+        "frontend/src/test/reading-mode-acceptance.spec.ts",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/reading-graph/repairs",
+      "version": "v2",
+      "owner_issue": 4684,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/reading-lists",
+      "version": "v2",
+      "owner_issue": 4684,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts",
+        "frontend/src/test/custom-cbl-create-cycle.spec.ts",
+        "frontend/src/test/custom-cbl-delete-confirm.spec.ts",
+        "frontend/src/unit/api-custom-cbl.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/reading-lists",
+      "version": "v2",
+      "owner_issue": 4684,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts",
+        "frontend/src/test/cbl-replace-review.spec.ts",
+        "frontend/src/test/custom-cbl-delete-confirm.spec.ts",
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
+        "frontend/src/test/issue-5435-bulk-queue-exclusions.spec.ts",
+        "frontend/src/test/reading-plan-reader.spec.ts",
+        "frontend/src/unit/api-custom-cbl.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/reading-lists/issue-candidates",
+      "version": "v2",
+      "owner_issue": 4844,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts",
+        "frontend/src/test/cbl-replace-review.spec.ts",
+        "frontend/src/test/custom-cbl-delete-confirm.spec.ts",
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
+        "frontend/src/test/reading-list-discovery.spec.ts",
+        "frontend/src/unit/api-custom-cbl.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/reading-lists/memberships:check",
+      "version": "v2",
+      "owner_issue": 5435,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts",
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/reading-lists/{list_id}",
+      "version": "v2",
+      "owner_issue": 4684,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts",
+        "frontend/src/test/cbl-replace-review.spec.ts",
+        "frontend/src/test/custom-cbl-delete-confirm.spec.ts",
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
+        "frontend/src/test/reading-list-discovery.spec.ts",
+        "frontend/src/unit/api-custom-cbl.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/reading-lists/{list_id}",
+      "version": "v2",
+      "owner_issue": 4684,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts",
+        "frontend/src/test/cbl-replace-review.spec.ts",
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
+        "frontend/src/unit/api-custom-cbl.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/reading-lists/{list_id}",
+      "version": "v2",
+      "owner_issue": 4684,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts",
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
+        "frontend/src/unit/api-custom-cbl.test.ts",
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/reading-lists/{list_id}/adoption-commits",
+      "version": "v2",
+      "owner_issue": 4844,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/unit/api-cbl-sources.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/reading-lists/{list_id}/export",
+      "version": "v2",
+      "owner_issue": 4844,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts",
+        "frontend/src/unit/api-custom-cbl.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/reading-lists/{list_id}/overlap-decisions",
+      "version": "v2",
+      "owner_issue": 4844,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/reading-lists/{list_id}/overlap-decisions",
+      "version": "v2",
+      "owner_issue": 4844,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/reading-lists/{list_id}/overlap-decisions/{decision_id}",
+      "version": "v2",
+      "owner_issue": 4844,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/reading-lists/{list_id}/reader",
+      "version": "v2",
+      "owner_issue": 4684,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts",
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
+        "frontend/src/test/reading-plan-reader.spec.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/adoption-commits",
+      "version": "v2",
+      "owner_issue": 4844,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/unit/api-cbl-sources.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/applications",
+      "version": "v2",
+      "owner_issue": 4844,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts",
+        "frontend/src/test/cbl-replace-review.spec.ts",
+        "frontend/src/unit/api-custom-cbl.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/reading-mode",
+      "version": "v2",
+      "owner_issue": 4335,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/readingMode.ts",
+        "frontend/src/test/reading-mode-acceptance.spec.ts",
+        "frontend/src/test/reading-mode-quiz.spec.ts",
+        "frontend/src/unit/nativeV2Client.test.ts",
+        "frontend/src/unit/readingMode.service.test.ts"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/reading-mode",
+      "version": "v2",
+      "owner_issue": 4335,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/readingMode.ts",
+        "frontend/src/test/reading-mode-acceptance.spec.ts",
+        "frontend/src/test/reading-mode-quiz.spec.ts",
+        "frontend/src/unit/nativeV2Client.test.ts",
+        "frontend/src/unit/readingMode.service.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/reading-mode/suggestion-dismissals",
+      "version": "v2",
+      "owner_issue": 4335,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/readingMode.ts",
+        "frontend/src/unit/nativeV2Client.test.ts",
+        "frontend/src/unit/readingMode.service.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/reading-mode/suggestions",
+      "version": "v2",
+      "owner_issue": 4335,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/readingMode.ts",
+        "frontend/src/unit/nativeV2Client.test.ts",
+        "frontend/src/unit/readingMode.service.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/reading-order-groups/{group_id}/issue-ranges",
+      "version": "v2",
+      "owner_issue": 4841,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts",
+        "frontend/src/test/issue-1883-roll-a11y-duplicates.spec.ts",
+        "frontend/src/unit/api-dependency-groups.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/reading-order-groups/{group_id}/members",
+      "version": "v2",
+      "owner_issue": 4841,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts",
+        "frontend/src/test/issue-2104-zero-readiness.spec.ts",
+        "frontend/src/test/issue-2298-crossover-reading-order.spec.ts",
+        "frontend/src/test/issue-3268-threads-route-redirect.spec.ts",
+        "frontend/src/unit/api-dependency-groups.test.ts"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/reading-order-groups/{group_id}/members/{member_id}",
+      "version": "v2",
+      "owner_issue": 4841,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts",
+        "frontend/src/unit/api-dependency-groups.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/reading-order-groups/{group_id}/reading-plans",
+      "version": "v2",
+      "owner_issue": 4841,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/reading-order-groups:resolveMemberships",
+      "version": "v2",
+      "owner_issue": 4841,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts",
+        "frontend/src/test/core-views-request-budget.spec.ts",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+        "frontend/src/unit/api-dependency-groups.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/reading-orders/",
+      "version": "v2",
+      "owner_issue": 4851,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-reading-orders.ts",
+        "frontend/src/unit/api-reading-orders.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/reading-orders/{reading_order_id}/items",
+      "version": "v2",
+      "owner_issue": 4851,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-reading-orders.ts",
+        "frontend/src/unit/api-reading-orders.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/reading-plan-sync/runs",
+      "version": "v2",
+      "owner_issue": 4851,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/reading-plan-sync/status",
+      "version": "v2",
+      "owner_issue": 4851,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/roll/dice-command",
+      "version": "v2",
+      "owner_issue": 4335,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-roll.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/roll/die-state",
+      "version": "v2",
+      "owner_issue": 4595,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/test/p0-auth-outage-recovery.spec.ts",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx",
+        "frontend/src/unit/rollResourcesApi.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/roll/dismiss-pending",
+      "version": "v2",
+      "owner_issue": 4850,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-roll.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/roll/eligible-issue-ids",
+      "version": "v2",
+      "owner_issue": 4595,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/test/p0-auth-outage-recovery.spec.ts",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx",
+        "frontend/src/unit/rollResourcesApi.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/roll/reset",
+      "version": "v2",
+      "owner_issue": 4335,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-roll.ts",
+        "frontend/src/unit/RollPage.test.tsx",
+        "frontend/src/unit/nativeV2Client.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/roll/switch-prerequisite",
+      "version": "v2",
+      "owner_issue": 4850,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/rollBootstrapApi.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/series-mapping-commits",
+      "version": "v2",
+      "owner_issue": 4844,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-series-mapping.ts",
+        "frontend/src/unit/api-series-mapping.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/tags/{tag_id}/assignment-batches",
+      "version": "v2",
+      "owner_issue": 4335,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-tags.ts",
+        "frontend/src/unit/api-tags.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/tags/{tag_id}/unassignment-batches",
+      "version": "v2",
+      "owner_issue": 4335,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-tags.ts",
+        "frontend/src/unit/api-tags.test.ts",
+        "frontend/src/unit/nativeV2Client.test.ts"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/threads/{thread_id}/issue-order",
+      "version": "v2",
+      "owner_issue": 4684,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/unit/api-issues-coverage.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/threads/{thread_id}/reading-order-group-memberships",
+      "version": "v2",
+      "owner_issue": 4841,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts",
+        "frontend/src/unit/api-dependency-groups.test.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/undo/{session_id}/snapshots",
+      "version": "v2",
+      "owner_issue": 4839,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-undo.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/retired-session-callers.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore",
+      "version": "v2",
+      "owner_issue": 4839,
+      "disposition": "canonical-v2",
+      "rollout_status": "live-target",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-undo.ts",
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/retired-session-callers.test.ts"
+      ]
+    }
+  ]
+}
