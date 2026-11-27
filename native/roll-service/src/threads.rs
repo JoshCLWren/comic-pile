@@ -19,6 +19,9 @@
 //!   and uses that result for grouping, availability, frontier and blocking
 //!   reasons. It needs the bounded Option E input snapshot in addition to the
 //!   page statement, so the default path is the only one-statement path.
+//!
+//! `POST /api/v2/threads` is the paired AIP-133 standard Create (#5702); its
+//! handler lives in `thread_lifecycle` and shares the legacy write path.
 
 use axum::http::StatusCode;
 
