@@ -12,7 +12,6 @@ import { useBugReportRestore } from '../contexts/useBugReportRestore'
 import { ToastProvider } from '../contexts/ToastProvider'
 import {
   useDismissPending,
-  useOverrideRoll,
   useRoll,
   useSetDie,
 } from '../hooks/useRoll'
@@ -55,7 +54,6 @@ vi.mock('../hooks/useRoll', () => ({
   useSetDie: vi.fn(),
   useResetDice: vi.fn(() => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false })),
   useRoll: vi.fn(),
-  useOverrideRoll: vi.fn(),
   useDismissPending: vi.fn(),
 }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn() }))
@@ -152,8 +150,6 @@ beforeEach(() => {
   vi.mocked(useSetDie).mockReturnValue(cast<ReturnType<typeof useSetDie>>({ mutate: vi.fn(), isPending: false }))
   // SAFETY: Test stub for useRoll; minimal stub preserves the mutation contract used by the component.
   vi.mocked(useRoll).mockReturnValue(cast<ReturnType<typeof useRoll>>({ mutate: vi.fn(), isPending: false }))
-  // SAFETY: Test stub for useOverrideRoll; safe widening for the mocked hook return.
-  vi.mocked(useOverrideRoll).mockReturnValue(cast<ReturnType<typeof useOverrideRoll>>({ mutate: vi.fn(), isPending: false }))
   // SAFETY: Test stub for useDismissPending; only mutate/isPending are observed.
   vi.mocked(useDismissPending).mockReturnValue(cast<ReturnType<typeof useDismissPending>>({ mutate: vi.fn(), isPending: false }))
   // SAFETY: Test stub for useSnooze; stub matches the hook's mutation surface.
