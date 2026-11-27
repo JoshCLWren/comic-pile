@@ -634,7 +634,9 @@ async fn create_v2_returns_201_with_location_and_owner_scoped_thread() {
     assert_eq!(body["notes"], "  keep ");
     let id = body["id"].as_i64().unwrap() as i32;
     assert_eq!(
-        headers.get(header::LOCATION).and_then(|value| value.to_str().ok()),
+        headers
+            .get(header::LOCATION)
+            .and_then(|value| value.to_str().ok()),
         Some(format!("/api/v2/threads/{id}").as_str()),
         "AIP-133 Create must name the created collection member"
     );
@@ -708,7 +710,11 @@ async fn create_v2_keeps_duplicate_merge_and_validation_contract() {
         ),
     )
     .await;
-    assert_eq!(invalid_status, StatusCode::UNPROCESSABLE_ENTITY, "{invalid:?}");
+    assert_eq!(
+        invalid_status,
+        StatusCode::UNPROCESSABLE_ENTITY,
+        "{invalid:?}"
+    );
     assert_eq!(invalid["detail"], "Validation failed");
 
     let count: i64 = ctx
@@ -794,7 +800,11 @@ async fn create_v2_assigns_mapped_and_unmapped_series_to_their_owners() {
         .iter()
         .map(|thread| thread["id"].as_i64().unwrap() as i32)
         .collect();
-    assert_eq!(visible, vec![mapped_id], "the v2 collection must stay owner-scoped");
+    assert_eq!(
+        visible,
+        vec![mapped_id],
+        "the v2 collection must stay owner-scoped"
+    );
 }
 
 // ---------------------------------------------------------------------------
