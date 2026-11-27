@@ -35,26 +35,26 @@ export function createThreadsApi(client: HttpClient) {
       return response
     },
     listCompleted: async (search?: string, sort?: string, pageToken?: string | null, pageSize?: number): Promise<ThreadListResponse> => {
-      const queryParams: Record<string, string | number> = { filter: 'completed' };
-      if (search) queryParams.search = search;
-      if (sort) queryParams.order_by = sort;
-      if (pageSize) queryParams.page_size = pageSize;
-      if (pageToken) queryParams.page_token = pageToken;
-
       const response = await client.get<ThreadListResponse>('/v2/threads', {
-        params: queryParams,
+        params: {
+          filter: 'completed',
+          ...(search ? { search } : {}),
+          ...(sort ? { order_by: sort } : {}),
+          ...(pageSize ? { page_size: pageSize } : {}),
+          ...(pageToken ? { page_token: pageToken } : {}),
+        },
       })
       return response
     },
     listExcluded: async (search?: string, sort?: string, pageToken?: string | null, pageSize?: number): Promise<ThreadListResponse> => {
-      const queryParams: Record<string, string | number> = { filter: 'excluded' };
-      if (search) queryParams.search = search;
-      if (sort) queryParams.order_by = sort;
-      if (pageSize) queryParams.page_size = pageSize;
-      if (pageToken) queryParams.page_token = pageToken;
-
       const response = await client.get<ThreadListResponse>('/v2/threads', {
-        params: queryParams,
+        params: {
+          filter: 'excluded',
+          ...(search ? { search } : {}),
+          ...(sort ? { order_by: sort } : {}),
+          ...(pageSize ? { page_size: pageSize } : {}),
+          ...(pageToken ? { page_token: pageToken } : {}),
+        },
       })
       return response
     },

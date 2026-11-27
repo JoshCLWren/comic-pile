@@ -218,6 +218,7 @@ it('ignores late detail and stale responses after unmount', async () => {
   await act(async () => {
     // SAFETY: the detail resolves after unmount, so the component already holds the id
     resolveDetail({ id: 10 } as Thread)
+    // SAFETY: stale list resolves after unmount with an empty payload
     resolveStale({ threads: [], next_page_token: null, active_count: 0 } as never)
     await Promise.resolve()
   })
