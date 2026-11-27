@@ -1192,7 +1192,7 @@ async fn julix_strict_order_is_shared_by_roll_queue_reader_and_explanations() {
 
     let (status, king_detail) = send(
         &state,
-        get(&format!("/api/v2/threads/{king_thread}"), &token, &csrf),
+        get(&format!("/api/v1/threads/{king_thread}"), &token, &csrf),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{king_detail:?}");
@@ -1391,7 +1391,7 @@ async fn roll_offer_queue_position_matches_queue_and_detail() {
 
     let (detail_status, detail_body) = send(
         &state,
-        get(&format!("/api/v2/threads/{pick}"), &token, &csrf),
+        get(&format!("/api/v1/threads/{pick}"), &token, &csrf),
     )
     .await;
     assert_eq!(detail_status, StatusCode::OK, "{detail_body:?}");
@@ -1479,7 +1479,7 @@ async fn bootstrap_reload_pending_offer_queue_position_matches_queue_and_detail(
 
     let (detail_status, detail_body) = send(
         &state,
-        get(&format!("/api/v2/threads/{pick}"), &token, &csrf),
+        get(&format!("/api/v1/threads/{pick}"), &token, &csrf),
     )
     .await;
     assert_eq!(detail_status, StatusCode::OK, "{detail_body:?}");
