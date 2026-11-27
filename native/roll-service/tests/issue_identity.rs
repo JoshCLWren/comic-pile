@@ -3124,6 +3124,25 @@ async fn v2_cbl_source_previews_are_repeatable_and_write_nothing() {
     // commit path, not these previews, rejects a stale client fingerprint.
     assert_eq!(preview["source"]["content_hash"], "h-ov");
     assert_eq!(preview["source"]["revision_sha"], "rev-40");
+
+    // The durable adoption-commit resource stays the only writer, and it
+    // rejects a preview fingerprint that no longer matches the source.
+    let (status, conflict) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/v2/reading-lists/1/adoption-commits",
+        json!({
+            "entry_decisions": {},
+            "series_decisions": [],
+            "series_overrides": [],
+            "content_hash": "stale-hash",
+            "revision_sha": preview["source"]["revision_sha"],
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{conflict}");
+    assert_eq!(conflict["detail"]["code"], "stale_preview");
     assert_eq!(v2_preview_state_counts(&state).await, before);
 }
 
