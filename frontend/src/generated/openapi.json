@@ -17546,18 +17546,6 @@
         "title": "ThreadCreate",
         "type": "object"
       },
-<<<<<<< HEAD
-      "ThreadCreatorCreditsPage": {
-        "description": "Paginated thread-scoped creator-credit projection.\n\n`issues` contains only rows with stored credits, matching the legacy bulk\nread; callers fall back to the series' manual credits for absent issues.",
-        "properties": {
-          "issues": {
-            "items": {
-              "$ref": "#/components/schemas/NativeIssueCreatorsEntry"
-            },
-            "type": "array"
-          },
-          "next_page_token": {
-=======
       "ThreadCreateRequest": {
         "description": "Body of `POST /api/v1/threads/`.",
         "properties": {
@@ -17576,13 +17564,44 @@
             "type": "array"
           },
           "notes": {
->>>>>>> origin/main
             "type": [
               "string",
               "null"
             ]
           },
-<<<<<<< HEAD
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "title",
+          "format",
+          "issues_remaining"
+        ],
+        "type": "object"
+      },
+      "ThreadCreatorCreditsPage": {
+        "description": "Paginated thread-scoped creator-credit projection.\n\n`issues` contains only rows with stored credits, matching the legacy bulk\nread; callers fall back to the series' manual credits for absent issues.",
+        "properties": {
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeIssueCreatorsEntry"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "page_size": {
             "format": "int64",
             "type": "integer"
@@ -17601,23 +17620,6 @@
           "issues",
           "total_count",
           "page_size"
-=======
-          "title": {
-            "type": "string"
-          },
-          "total_issues": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "title",
-          "format",
-          "issues_remaining"
->>>>>>> origin/main
         ],
         "type": "object"
       },
