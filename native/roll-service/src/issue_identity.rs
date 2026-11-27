@@ -753,13 +753,10 @@ fn normalize_comparison_ids(raw: Vec<String>) -> Result<Vec<String>, Vec<Validat
     Ok(normalized)
 }
 
-/// `POST /api/v1/issue-identity/cbl-sources/compare`
-#[instrument(skip(state, _auth, payload))]
-pub async fn compare_cbl_sources(
-    State(state): State<Arc<AppState>>,
-    _auth: AuthenticatedUser,
-    Query(params): Query<CompareQueryParams>,
-    Json(payload): Json<CblSourceComparisonRequest>,
+async fn compare_cbl_sources_impl(
+    state: &Arc<AppState>,
+    params: CompareQueryParams,
+    payload: CblSourceComparisonRequest,
 ) -> Result<Json<CblSourceComparisonResponse>, IdentityError> {
     let limit = match parse_int("limit", params.limit.as_deref(), 50, 1, 100) {
         Ok(limit) => limit,
@@ -801,7 +798,7 @@ pub async fn compare_cbl_sources(
         }));
     }
 
-    let pool = checkout(&state).await?;
+    let pool = checkout(state).await?;
 
     // Candidate coverage rows: active lists containing at least one exact input identity.
     let coverage_rows = pool
@@ -999,6 +996,17 @@ pub async fn compare_cbl_sources(
         candidates_total,
         candidates: comparisons,
     }))
+}
+
+/// `POST /api/v2/cbl-sources:compare`
+#[instrument(skip(state, _auth, payload))]
+pub async fn compare_cbl_sources_v2(
+    State(state): State<Arc<AppState>>,
+    _auth: AuthenticatedUser,
+    Query(params): Query<CompareQueryParams>,
+    Json(payload): Json<CblSourceComparisonRequest>,
+) -> Result<Json<CblSourceComparisonResponse>, IdentityError> {
+    compare_cbl_sources_impl(&state, params, payload).await
 }
 
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
