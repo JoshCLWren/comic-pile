@@ -1604,14 +1604,10 @@ mod tests {
     }
 
     #[tokio::test]
-<<<<<<< HEAD
     async fn retired_v1_dependency_diagnosis_routes_return_404_in_inner_router() {
         // #5709: dependency/blocking/connection diagnosis is v2-only. The
         // retired aliases must not fall through to a live handler or to the
         // generic `{thread_id}` POST action dispatcher.
-=======
-    async fn v2_group_crud_is_mounted_and_retired_v1_crud_returns_404_in_inner_router() {
->>>>>>> origin/main
         let config = Config::from_lookup(|name| match name {
             "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
@@ -1620,7 +1616,6 @@ mod tests {
         .unwrap();
         let state = Arc::new(AppState::new(config).unwrap());
         for (method, uri) in [
-<<<<<<< HEAD
             ("GET", "/api/v1/threads/42/dependencies"),
             ("GET", "/api/v1/threads/42/issue-dependencies"),
             ("GET", "/api/v1/threads/42/connected"),
@@ -1631,7 +1626,59 @@ mod tests {
             // unauthenticated probe is 401 before dispatch. With a valid
             // credential the action dispatcher returns 404 (covered by the
             // DB-backed HTTP test). It has no live handler either way.
-=======
+            let response = router(Arc::clone(&state))
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{method} {uri}");
+            let bytes = to_bytes(response.into_body(), 1024).await.unwrap();
+            assert_eq!(
+                String::from_utf8_lossy(&bytes),
+                r#"{"detail":"Not Found"}"#,
+                "{method} {uri}"
+            );
+        }
+        for (method, uri) in [
+            ("GET", "/api/v2/threads/42/dependencies"),
+            ("GET", "/api/v2/threads/42/issueDependencies"),
+            ("GET", "/api/v2/threads/42/eligibility"),
+            ("POST", "/api/v2/threads:explainEligibility"),
+            ("GET", "/api/v2/threads/42/connections"),
+        ] {
+            let response = router(Arc::clone(&state))
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_ne!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "{method} {uri} must reach its handler, not the 404 fallback"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn v2_group_crud_is_mounted_and_retired_v1_crud_returns_404_in_inner_router() {
+        let config = Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
+            _ => None,
+        })
+        .unwrap();
+        let state = Arc::new(AppState::new(config).unwrap());
+        for (method, uri) in [
             ("GET", "/api/v2/readingOrderGroups"),
             ("POST", "/api/v2/readingOrderGroups"),
             ("GET", "/api/v2/readingOrderGroups/7"),
@@ -1659,7 +1706,6 @@ mod tests {
             ("GET", "/api/v1/reading-order-groups/7/detail"),
             ("GET", "/api/v2/readingOrderGroups/7/detail"),
         ] {
->>>>>>> origin/main
             let response = router(Arc::clone(&state))
                 .oneshot(
                     Request::builder()
@@ -1678,32 +1724,6 @@ mod tests {
                 "{method} {uri}"
             );
         }
-<<<<<<< HEAD
-        for (method, uri) in [
-            ("GET", "/api/v2/threads/42/dependencies"),
-            ("GET", "/api/v2/threads/42/issueDependencies"),
-            ("GET", "/api/v2/threads/42/eligibility"),
-            ("POST", "/api/v2/threads:explainEligibility"),
-            ("GET", "/api/v2/threads/42/connections"),
-        ] {
-            let response = router(Arc::clone(&state))
-                .oneshot(
-                    Request::builder()
-                        .method(method)
-                        .uri(uri)
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-            assert_ne!(
-                response.status(),
-                StatusCode::NOT_FOUND,
-                "{method} {uri} must reach its handler, not the 404 fallback"
-            );
-        }
-=======
->>>>>>> origin/main
     }
 
     #[test]
