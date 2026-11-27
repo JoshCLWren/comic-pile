@@ -14,11 +14,25 @@ export type ThreadIssueCreatorCredit = ManualCreatorCredit & {
   creator_id?: number | null
 }
 
-/** Response of GET /v1/threads/{threadId}/issues/creators. */
+/** Query parameters for the paginated v2 thread creator-credit projection. */
+export interface IssueCreatorCreditsParams {
+  status?: 'unread' | 'read'
+  page_size?: number
+  page_token?: string
+}
+
+/** Response of GET /v2/threads/{threadId}/creatorCredits. */
 export interface ThreadIssueCreatorsResponse {
   thread_id: number
   issues: { issue_id: number; creators: ThreadIssueCreatorCredit[] }[]
+  /** Pagination fields are emitted by the v2 endpoint; older mocks may omit them. */
+  total_count?: number
+  page_size?: number
+  next_page_token?: string | null
 }
+
+/** Bounded upper limit for the default all-pages creator-credit read. */
+const MAX_CREATOR_CREDIT_PAGES = 100
 
 export interface IssueReadOperationItem {
   issue_id: number
@@ -151,17 +165,44 @@ export function createIssuesApi(client: HttpClient) {
       threadId: number,
       params?: IssueListParams
     ): Promise<IssueListResponse> => {
-      return client.get(`/v1/threads/${threadId}/issues`, { params })
+      return client.get(`/v2/threads/${threadId}/issues`, { params })
     },
 
     /**
-     * List stored ComicVine creator credits for every mapped issue in a thread
-     * in one request (issue #3461).
+     * List stored ComicVine creator credits for a thread's issues as a bounded
+     * thread-scoped projection (issues #3461, #5706). With explicit params a
+     * single page is returned; without params every page is aggregated in at
+     * most `MAX_CREATOR_CREDIT_PAGES` bulk requests (never one request per
+     * issue). Unmapped issues are omitted and callers fall back to the series'
+     * manual credits for those rows.
+     *
      * @param threadId - The thread ID whose issue credits are listed
-     * @returns Per-issue creator credits; unmapped issues are omitted
+     * @param params - Optional status filter and pagination cursor/page size
+     * @returns Per-issue creator credits
      */
-    listCreators: async (threadId: number): Promise<ThreadIssueCreatorsResponse> => {
-      return client.get(`/v1/threads/${threadId}/issues/creators`)
+    listCreators: async (
+      threadId: number,
+      params?: IssueCreatorCreditsParams,
+    ): Promise<ThreadIssueCreatorsResponse> => {
+      const path = `/v2/threads/${threadId}/creatorCredits`
+      if (params) {
+        return client.get(path, { params })
+      }
+      const first = await client.get<ThreadIssueCreatorsResponse>(path, {
+        params: { page_size: 100 },
+      })
+      const issues = [...first.issues]
+      let nextPageToken = first.next_page_token
+      let pages = 1
+      while (nextPageToken && pages < MAX_CREATOR_CREDIT_PAGES) {
+        const page = await client.get<ThreadIssueCreatorsResponse>(path, {
+          params: { page_size: 100, page_token: nextPageToken },
+        })
+        issues.push(...page.issues)
+        nextPageToken = page.next_page_token
+        pages += 1
+      }
+      return { ...first, issues, next_page_token: nextPageToken ?? null }
     },
 
     /**

@@ -21,11 +21,63 @@ describe('issuesApi', () => {
     await issuesApi.create(1, '1-5')
     await issuesApi.create(1, '6-8', { insert_after_issue_id: 4 })
     await issuesApi.create(1, '9', { insert_after_issue_id: null })
-    expect(client.get).toHaveBeenNthCalledWith(1, '/v1/threads/1/issues', { params: undefined })
-    expect(client.get).toHaveBeenNthCalledWith(2, '/v1/threads/1/issues', { params: { status: 'read', page_size: 10, page_token: 'next' } })
+    expect(client.get).toHaveBeenNthCalledWith(1, '/v2/threads/1/issues', { params: undefined })
+    expect(client.get).toHaveBeenNthCalledWith(2, '/v2/threads/1/issues', { params: { status: 'read', page_size: 10, page_token: 'next' } })
     expect(client.post).toHaveBeenNthCalledWith(1, '/v2/threads/1/issues', { issue_range: '1-5' })
     expect(client.post).toHaveBeenNthCalledWith(2, '/v2/threads/1/issues', { issue_range: '6-8', insert_after_issue_id: 4 })
     expect(client.post).toHaveBeenNthCalledWith(3, '/v2/threads/1/issues', { issue_range: '9', append_to_end: true })
+  })
+
+  it('reads creator credits from the thread-scoped v2 projection, paginated or aggregated', async () => {
+    client.get.mockResolvedValueOnce({
+      thread_id: 1,
+      issues: [{ issue_id: 4, creators: [{ name: 'Writer', roles: ['writer'] }] }],
+      total_count: 2,
+      page_size: 1,
+      next_page_token: '1,4',
+    })
+    const page = await issuesApi.listCreators(1, { page_size: 1 })
+    expect(client.get).toHaveBeenNthCalledWith(1, '/v2/threads/1/creatorCredits', {
+      params: { page_size: 1 },
+    })
+    expect(page.next_page_token).toBe('1,4')
+
+    const filtered = await issuesApi.listCreators(2, {
+      status: 'read',
+      page_size: 10,
+      page_token: '3,9',
+    })
+    expect(client.get).toHaveBeenNthCalledWith(2, '/v2/threads/2/creatorCredits', {
+      params: { status: 'read', page_size: 10, page_token: '3,9' },
+    })
+    expect(filtered.issues).toEqual([])
+
+    client.get.mockReset()
+    client.get
+      .mockResolvedValueOnce({
+        thread_id: 3,
+        issues: [],
+        total_count: 2,
+        page_size: 100,
+        next_page_token: '1,4',
+      })
+      .mockResolvedValueOnce({
+        thread_id: 3,
+        issues: [{ issue_id: 5, creators: [] }],
+        total_count: 2,
+        page_size: 100,
+        next_page_token: null,
+      })
+    const all = await issuesApi.listCreators(3)
+    expect(client.get).toHaveBeenNthCalledWith(1, '/v2/threads/3/creatorCredits', {
+      params: { page_size: 100 },
+    })
+    expect(client.get).toHaveBeenNthCalledWith(2, '/v2/threads/3/creatorCredits', {
+      params: { page_size: 100, page_token: '1,4' },
+    })
+    expect(all.issues).toHaveLength(1)
+    expect(all.next_page_token).toBeNull()
+    expect(all.total_count).toBe(2)
   })
 
   it('previews creates with every positioning and strategy option', async () => {

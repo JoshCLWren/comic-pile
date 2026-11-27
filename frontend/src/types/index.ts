@@ -411,6 +411,16 @@ export type Issue = Omit<components['schemas']['IssueResponse'], 'status' | 'pos
   issue_number_alias?: string | null;
   /** Authored number with alias when distinct. */
   display_issue_number?: string;
+  /** Effective per-issue rating returned by the v2 thread collection (#5706). */
+  rating?: number | null;
+  /** Stored mapping state; `unmapped` when no provider identity exists (#5706). */
+  mapping_state?: string;
+  /** Whether a confirmed ComicVine issue identity exists (#5706). */
+  has_confirmed_identity?: boolean;
+  /** Confirmed provider issue identifier; candidates never expose one (#5706). */
+  comicvine_issue_id?: string | null;
+  /** Exact stored provider cover URL; null when missing or unconfirmed (#5706). */
+  cover_image_url?: string | null;
 };
 
 /**
