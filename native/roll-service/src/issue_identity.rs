@@ -2288,6 +2288,23 @@ async fn load_collection_guard_state<E: DbExec>(
                     .extend(vals);
             }
         }
+        // Read-only catalog fallback: preserve canonical issue-level volume
+        // evidence for catalog-only links until the #3221/#3231 census proves
+        // no such reader rows remain. Bounded by all_issue_ids and owner-scoped.
+        let rows = tx.run_query(
+            "SELECT i.id, ei.provider, ei.external_id FROM issues i JOIN threads t ON t.id = i.thread_id JOIN catalog_issues ci ON ci.id = i.catalog_issue_id JOIN catalog_series cs ON cs.id = ci.catalog_series_id JOIN external_identities ei ON ei.id = cs.canonical_external_identity_id WHERE i.id = ANY($1) AND t.user_id=$2",
+            &[&all_issue_ids, &user_id]
+        ).await.map_err(|e| tx_db_error(e, ""))?;
+        for row in rows {
+            let issue_id: i32 = row.get(0);
+            let provider: String = row.get(1);
+            let external_id: String = row.get(2);
+            state
+                .issue_volumes
+                .entry(issue_id)
+                .or_default()
+                .insert(normalize_volume(&provider, &external_id));
+        }
     }
 
     thread_ids.sort_unstable();
@@ -2295,6 +2312,22 @@ async fn load_collection_guard_state<E: DbExec>(
     if !thread_ids.is_empty() {
         let rows = tx.run_query(
             "SELECT tesm.thread_id, ei.provider, ei.external_id FROM thread_external_series_mappings tesm JOIN external_identities ei ON ei.id = tesm.external_identity_id JOIN threads t ON t.id = tesm.thread_id WHERE tesm.thread_id = ANY($1) AND tesm.status='confirmed' AND t.user_id=$2 AND ei.entity_type='series'",
+            &[&thread_ids, &user_id]
+        ).await.map_err(|e| tx_db_error(e, ""))?;
+        for row in rows {
+            let tid: i32 = row.get(0);
+            let p: String = row.get(1);
+            let e: String = row.get(2);
+            state
+                .thread_identities
+                .entry(tid)
+                .or_default()
+                .insert(normalize_volume(&p, &e));
+        }
+        // Read-only catalog fallback for catalog-only thread identities; kept
+        // until the #3221/#3231 census/rehearsal proves no such rows remain.
+        let rows = tx.run_query(
+            "SELECT t.id, ei.provider, ei.external_id FROM threads t JOIN catalog_series cs ON cs.id = t.catalog_series_id JOIN external_identities ei ON ei.id = cs.canonical_external_identity_id WHERE t.id = ANY($1) AND t.user_id=$2",
             &[&thread_ids, &user_id]
         ).await.map_err(|e| tx_db_error(e, ""))?;
         for row in rows {
