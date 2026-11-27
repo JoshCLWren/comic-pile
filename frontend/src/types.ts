@@ -29,9 +29,6 @@ export type ThreadUpdatePayload = components['schemas']['ThreadUpdate']
 /** AIP-134 partial update body for `PATCH /api/v2/threads/{thread_id}`. */
 export type ThreadPatchPayload = import('./types/index').ThreadPatchPayload
 export type ReactivateThreadPayload = components['schemas']['ReactivateRequest']
-export interface OverrideRollPayload {
-  thread_id: number
-}
 export type Dependency = components['schemas']['DependencyResponse']
 export type ThreadDependenciesResponse = components['schemas']['ThreadDependenciesResponse']
 export type IssueDependencyEdge = components['schemas']['IssueDependencyEdge']
