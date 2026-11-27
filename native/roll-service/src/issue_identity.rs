@@ -5106,10 +5106,10 @@ pub fn get_cbl_source_list_documentation() {}
 #[allow(dead_code)]
 pub fn find_cbl_sources_by_comicvine_issue_documentation() {}
 
-/// Documentation-only operation for CBL source comparison.
+/// Documentation-only operation for CBL source comparison (v2, #5713).
 #[utoipa::path(
     post,
-    path = "/api/v1/issue-identity/cbl-sources/compare",
+    path = "/api/v2/cblSources:compare",
     tag = "issue-identity",
     params(("limit" = Option<i32>, Query, description = "Maximum ranked candidates, 1-100 (default 50)")),
     request_body = CblSourceComparisonRequest,
@@ -5120,12 +5120,12 @@ pub fn find_cbl_sources_by_comicvine_issue_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn compare_cbl_sources_documentation() {}
+pub fn compare_cbl_sources_v2_documentation() {}
 
-/// Documentation-only operation for reading-list CBL candidates.
+/// Documentation-only operation for reading-list CBL candidates (v2, #5713).
 #[utoipa::path(
     get,
-    path = "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
+    path = "/api/v2/reading-lists/{list_id}/cbl-candidates",
     tag = "issue-identity",
     params(
         ("list_id" = i32, Path, description = "Owned custom CBL list identifier"),
@@ -5139,7 +5139,7 @@ pub fn compare_cbl_sources_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn find_cbl_candidates_for_reading_list_documentation() {}
+pub fn find_cbl_candidates_for_reading_list_v2_documentation() {}
 
 /// Documentation-only operation for the CBL adoption preview.
 #[utoipa::path(

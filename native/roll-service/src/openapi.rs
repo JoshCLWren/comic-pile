@@ -36,6 +36,8 @@ use utoipa::OpenApi;
         crate::auth::dto::forgot_password_documentation,
         crate::auth::dto::reset_password_documentation,
         crate::catalog_commit::commit_documentation,
+        crate::issue_identity::compare_cbl_sources_v2_documentation,
+        crate::issue_identity::find_cbl_candidates_for_reading_list_v2_documentation,
         crate::issue_identity::cbl_adoption_commit_documentation,
         crate::issue_identity::cbl_targeted_adoption_commit_documentation,
         crate::activity::list_activity_documentation,
