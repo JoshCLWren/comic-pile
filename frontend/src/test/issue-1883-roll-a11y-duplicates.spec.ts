@@ -111,7 +111,7 @@ async function seedInterrelatedThreads(
   expect(issuesA.length).toBeGreaterThanOrEqual(5);
   expect(issuesB.length).toBeGreaterThanOrEqual(3);
 
-  await apiPost(page, user, '/api/v1/reading-order-groups/', { name: 'Cosmic Clash' })
+  await apiPost(page, user, '/api/v2/readingOrderGroups', { name: 'Cosmic Clash' })
     .then(async (group) => {
       // SAFETY: the API returns a created group, so its id is always present
       const groupId = group.id as number;

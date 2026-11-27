@@ -150,7 +150,7 @@ async fn reading_order_group_routes_round_trip_over_http() {
     // Empty list, then create.
     let (status, body) = send(
         &state,
-        authed("GET", "/api/v1/reading-order-groups/", &token, &csrf, None),
+        authed("GET", "/api/v2/readingOrderGroups", &token, &csrf, None),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
@@ -160,7 +160,7 @@ async fn reading_order_group_routes_round_trip_over_http() {
         &state,
         authed(
             "POST",
-            "/api/v1/reading-order-groups/",
+            "/api/v2/readingOrderGroups",
             &token,
             &csrf,
             Some(json!({"name": "Crossover"})),
@@ -171,7 +171,7 @@ async fn reading_order_group_routes_round_trip_over_http() {
     let group_id = body["id"].as_i64().unwrap() as i32;
 
     // Single-group read before any memberships exist.
-    let path = format!("/api/v1/reading-order-groups/{group_id}");
+    let path = format!("/api/v2/readingOrderGroups/{group_id}");
     let (status, body) = send(&state, authed("GET", &path, &token, &csrf, None)).await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(body["name"], json!("Crossover"));
@@ -218,10 +218,19 @@ async fn reading_order_group_routes_round_trip_over_http() {
     assert_eq!(body["added_issue_ids"].as_array().unwrap().len(), 2);
     let issue_id = body["added_issue_ids"][0].as_i64().unwrap();
 
-    // Detail enrichment, authoritative ordering and linked plans.
-    let path = format!("/api/v1/reading-order-groups/{group_id}/detail");
+    // Canonical Get folds the detail view: enriched memberships, authoritative
+    // ordering and linked plans all arrive on the resource read, with no
+    // separate `/detail` action path.
+    let path = format!("/api/v2/readingOrderGroups/{group_id}");
     let (status, body) = send(&state, authed("GET", &path, &token, &csrf, None)).await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["name"], json!("Crossover"));
+    assert!(body["memberships"].is_array(), "{body:?}");
+    assert!(body["linked_plans"].is_array(), "{body:?}");
+    assert_eq!(
+        body["memberships"][0]["membership"]["id"],
+        json!(member_id)
+    );
 
     let path = format!("/api/v1/reading-order-groups/{group_id}/order");
     let (status, body) = send(
@@ -247,7 +256,7 @@ async fn reading_order_group_routes_round_trip_over_http() {
         &state,
         authed(
             "PATCH",
-            &format!("/api/v1/reading-order-groups/{group_id}"),
+            &format!("/api/v2/readingOrderGroups/{group_id}"),
             &token,
             &csrf,
             Some(json!({"name": "Renamed"})),
@@ -274,7 +283,7 @@ async fn reading_order_group_routes_round_trip_over_http() {
         &state,
         authed(
             "DELETE",
-            &format!("/api/v1/reading-order-groups/{group_id}"),
+            &format!("/api/v2/readingOrderGroups/{group_id}"),
             &token,
             &csrf,
             None,
@@ -287,7 +296,7 @@ async fn reading_order_group_routes_round_trip_over_http() {
         &state,
         authed(
             "GET",
-            &format!("/api/v1/reading-order-groups/{group_id}"),
+            &format!("/api/v2/readingOrderGroups/{group_id}"),
             &token,
             &csrf,
             None,
@@ -326,7 +335,7 @@ async fn reading_order_group_validation_uses_python_422_body() {
         &state,
         authed(
             "POST",
-            "/api/v1/reading-order-groups/",
+            "/api/v2/readingOrderGroups",
             &token,
             &csrf,
             Some(json!({"name": "Crossover"})),
@@ -341,7 +350,7 @@ async fn reading_order_group_validation_uses_python_422_body() {
         &state,
         authed(
             "GET",
-            "/api/v1/reading-order-groups/not-an-int",
+            "/api/v2/readingOrderGroups/not-an-int",
             &token,
             &csrf,
             None,
@@ -915,7 +924,7 @@ async fn delete_group_serializes_with_sibling_issue_write() {
         let state = state.clone();
         let token = token.clone();
         let csrf = csrf.clone();
-        let path = format!("/api/v1/reading-order-groups/{group_id}");
+        let path = format!("/api/v2/readingOrderGroups/{group_id}");
         tokio::spawn(
             async move { send(&state, authed("DELETE", &path, &token, &csrf, None)).await },
         )
