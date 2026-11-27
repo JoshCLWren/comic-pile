@@ -101,7 +101,10 @@ export function DirectReadIssuePanel({
   // remain usable when optional metadata/cover lookups fail.
   const canShowEditor = issue?.status !== 'read' || card != null
   const lookup = preferredIssueId == null ? nextUnread : preferredIssue
-  const choices = browse.data?.pages.flatMap((page) => page.issues) ?? []
+  const choices = useMemo(
+    () => browse.data?.pages.flatMap((page) => page.issues) ?? [],
+    [browse.data],
+  )
   // The opt-in picker lists exact owned issues too. One bounded batch serves
   // all visible choices; collapsed rows issue no provider or card request.
   const browseIssueIds = useMemo(() => choices.map((candidate) => candidate.id), [choices])
