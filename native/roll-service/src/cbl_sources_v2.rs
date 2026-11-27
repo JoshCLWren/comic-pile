@@ -806,6 +806,34 @@ mod tests {
     }
 
     #[test]
+    fn source_token_accepts_the_canonical_root_browser_cursor() {
+        // Emitted by encodeSourcePageToken in frontend/src/services/api-cbl-sources.ts
+        // for `browse({ page: 2, pageSize: 25 })` at the root folder. The browser
+        // must spell the empty folder as `folder:` to match Folder("").canonical().
+        let token = "eyJwIjoyLCJmIjoiZm9sZGVyOiIsIm8iOiJuYW1lIiwicyI6MjV9";
+        let filter = parse_source_filter(Some("folder:")).expect("root filter");
+        assert_eq!(filter, SourceFilter::Folder(String::new()));
+        let decoded = source_cursor(Some(token), &filter, "name", 25).expect("valid cursor");
+        assert_eq!(
+            decoded,
+            Some(SourcePageCursor {
+                p: 2,
+                f: "folder:".to_string(),
+                o: "name".to_string(),
+                s: 25,
+            })
+        );
+        // The pre-fix browser token used an empty `f`, which must stay invalid.
+        let legacy = encode_cursor(&SourcePageCursor {
+            p: 2,
+            f: String::new(),
+            o: "name".to_string(),
+            s: 25,
+        });
+        assert!(source_cursor(Some(&legacy), &filter, "name", 25).is_err());
+    }
+
+    #[test]
     fn occurrence_filter_requires_an_exact_issue_id() {
         assert_eq!(
             parse_occurrence_filter(Some("4000-123")).expect("bare id"),

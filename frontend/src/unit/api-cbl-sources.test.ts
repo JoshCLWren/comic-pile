@@ -132,6 +132,17 @@ describe('cblSourcesApi canonical v2 catalog reads (#5712)', () => {
     expect(atob(token)).toBe(JSON.stringify({ p: 3, f: 'folder:DC/Marvel', o: 'name', s: 25 }))
   })
 
+  it('canonicalizes the root folder so page 2 tokens match the server filter', async () => {
+    client.get.mockResolvedValue({ items: [], folders: [], total: 0 })
+
+    await cblSourcesApi.browse({ page: 2, pageSize: 25 })
+    // SAFETY: `browse` makes exactly one GET whose config is a BrowseRequestConfig.
+    const [, config] = client.get.mock.calls[0] as [string, BrowseRequestConfig]
+    expect(config.params.filter).toBe('folder:')
+    const token = String(config.params.page_token)
+    expect(JSON.parse(atob(token))).toEqual({ p: 2, f: 'folder:', o: 'name', s: 25 })
+  })
+
   it('turns a search query into a catalog-wide filter and ignores folder scope', async () => {
     client.get.mockResolvedValue({ items: [], folders: [], total: 0 })
 

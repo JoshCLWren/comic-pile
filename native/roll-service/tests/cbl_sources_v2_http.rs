@@ -187,6 +187,35 @@ async fn list_browses_root_and_continues_with_an_opaque_token() {
 }
 
 #[tokio::test]
+async fn root_browser_emitted_page_token_round_trips_to_page_two() {
+    let (state, token, _guard) = setup().await;
+    // This is the exact opaque token shape encodeSourcePageToken emits for
+    // `browse({ page: 2, pageSize: 1 })` at the root folder. Its `f` must be the
+    // canonical `folder:` or the server rejects it as an invalid page token.
+    const BROWSER_PAGE_TWO: &str = "eyJwIjoyLCJmIjoiZm9sZGVyOiIsIm8iOiJuYW1lIiwicyI6MX0";
+
+    let (status, page) = get(
+        &state,
+        &token,
+        &format!("/api/v2/cblSources?filter=folder:&page_size=1&page_token={BROWSER_PAGE_TWO}"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{page}");
+    assert_eq!(page["scope"], "folder");
+    assert_eq!(page["folder"], "");
+    assert_eq!(page["page"], 2);
+    assert_eq!(page["page_size"], 1);
+    assert_eq!(page["total"], 2, "root browse selects direct children only");
+    assert_eq!(page["items"].as_array().unwrap().len(), 1);
+    assert_eq!(page["has_previous"], true);
+
+    // The pre-fix browser emitted `{...,"f":"",...}`, which must stay invalid.
+    let legacy = "/api/v2/cblSources?filter=folder:&page_size=1&page_token=eyJwIjoyLCJmIjoiIiwibyI6Im5hbWUiLCJzIjoxfQ";
+    let (status, rejected) = get(&state, &token, legacy).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{rejected}");
+}
+
+#[tokio::test]
 async fn all_filter_discovers_sources_across_every_folder() {
     let (state, token, _guard) = setup().await;
     let (status, body) = get(&state, &token, "/api/v2/cblSources?filter=all&page_size=50").await;
