@@ -890,12 +890,8 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(thread_lifecycle::list_excluded_threads),
         )
         .route(
-            "/api/v1/threads/groups:batch",
-            post(thread_lifecycle::list_thread_groups_batch),
-        )
-        .route(
             "/api/v2/threads/{thread_id}/reading-order-group-memberships",
-            get(dependency_groups::list_thread_groups_v2),
+            get(dependency_groups::list_thread_groups),
         )
         .route(
             "/api/v1/threads/reactivate",
@@ -1409,10 +1405,6 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(dependency_groups::create_group),
         )
         .route(
-            "/api/v1/reading-order-groups/threads/{thread_id}/groups",
-            get(dependency_groups::list_thread_groups),
-        )
-        .route(
             "/api/v1/reading-order-groups/{group_id}",
             get(dependency_groups::get_group),
         )
@@ -1429,32 +1421,16 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(dependency_groups::get_group_detail),
         )
         .route(
-            "/api/v1/reading-order-groups/{group_id}/issue-ranges",
-            post(dependency_groups::add_issue_range),
-        )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}/members",
-            post(dependency_groups::add_member),
-        )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
-            delete(dependency_groups::remove_member),
-        )
-        .route(
             "/api/v1/reading-order-groups/{group_id}/order",
             put(dependency_groups::set_group_order),
         )
         .route(
-            "/api/v1/reading-order-groups/{group_id}/plans",
-            get(dependency_groups::list_crossover_plans),
-        )
-        .route(
             "/api/v2/reading-order-groups:resolveMemberships",
-            post(thread_lifecycle::resolve_memberships_v2),
+            post(thread_lifecycle::resolve_memberships),
         )
         .route(
             "/api/v2/reading-order-groups/{group_id}/reading-plans",
-            get(dependency_groups::list_crossover_plans_v2),
+            get(dependency_groups::list_crossover_plans),
         )
         .route(
             "/api/v2/reading-order-groups/{group_id}/members",

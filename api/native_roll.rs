@@ -358,7 +358,6 @@ fn app() -> Router {
         .route("/api/v1/threads/", post(native_dispatch))
         .route("/api/v1/threads/check-duplicates", post(native_dispatch))
         .route("/api/v1/threads/excluded/threads", get(native_dispatch))
-        .route("/api/v1/threads/groups:batch", post(native_dispatch))
         .route("/api/v1/threads/reactivate", post(native_dispatch))
         .route("/api/v1/threads/stale", get(native_dispatch))
         .route("/api/v1/threads/{thread_id}", put(native_dispatch))
@@ -768,10 +767,6 @@ fn app() -> Router {
         .route("/api/v1/reading-order-groups/", get(native_dispatch))
         .route("/api/v1/reading-order-groups/", post(native_dispatch))
         .route(
-            "/api/v1/reading-order-groups/threads/{thread_id}/groups",
-            get(native_dispatch),
-        )
-        .route(
             "/api/v1/reading-order-groups/{group_id}",
             get(native_dispatch),
         )
@@ -788,23 +783,34 @@ fn app() -> Router {
             get(native_dispatch),
         )
         .route(
-            "/api/v1/reading-order-groups/{group_id}/issue-ranges",
-            post(native_dispatch),
-        )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}/members",
-            post(native_dispatch),
-        )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
-            delete(native_dispatch),
-        )
-        .route(
             "/api/v1/reading-order-groups/{group_id}/order",
             put(native_dispatch),
         )
+        // #5711: the v2 crossover-membership surface is the single authority.
+        // The Vercel entry needs its own route registrations; without them the
+        // native_not_found fallback returns a JSON 404 before dispatch.
         .route(
-            "/api/v1/reading-order-groups/{group_id}/plans",
+            "/api/v2/reading-order-groups:resolveMemberships",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/reading-order-groups/{group_id}/reading-plans",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/reading-order-groups/{group_id}/members",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/reading-order-groups/{group_id}/issue-ranges",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/reading-order-groups/{group_id}/members/{member_id}",
+            delete(native_dispatch),
+        )
+        .route(
+            "/api/v2/threads/{thread_id}/reading-order-group-memberships",
             get(native_dispatch),
         )
         .fallback(native_not_found)
