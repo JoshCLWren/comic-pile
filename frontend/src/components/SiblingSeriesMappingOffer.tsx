@@ -10,6 +10,8 @@ import type {
   SeriesMappingPreviewRow,
 } from '../services/api-series-mapping'
 import { getApiErrorDetail, isIndeterminateApiOutcome } from '../utils/apiError'
+import CompactIssueCardTrigger from './CompactIssueCardTrigger'
+import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 
 interface SiblingSeriesMappingOfferProps {
   /** The corrected ComicPile issue whose confirmed volume licenses sibling scope. */
@@ -93,6 +95,12 @@ export default function SiblingSeriesMappingOffer({
     [rows, originIssueId],
   )
   const providerInventoryCount = rows.length - ownedRows.length
+
+  // Owned rows share one bounded owner-scoped batch; provider inventory rows
+  // (no thread id) are deliberately excluded and never get an owned card.
+  const ownedIssueIds = useMemo(() => ownedRows.map((row) => row.issue_id), [ownedRows])
+  const cardsQuery = useIssueCards(ownedIssueIds, { enabled: ownedIssueIds.length > 0 })
+  const cardsByIssue = useMemo(() => indexIssueCards(cardsQuery.data), [cardsQuery.data])
 
   const selectedRowIds = useMemo(
     () =>
