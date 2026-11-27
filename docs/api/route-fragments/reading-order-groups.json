@@ -1,8 +1,8 @@
 {
   "family": "reading-order-groups",
   "owned_path_patterns": [
-    "^/api/v1/reading\\-order\\-groups(?:/.*)?$",
-    "^/api/v2/reading\\-order\\-groups(?:/.*)?$"
+    "^/api/v1/reading\\-order\\-groups(?::.*|/.*)?$",
+    "^/api/v2/reading\\-order\\-groups(?::.*|/.*)?$"
   ],
   "defaults": {
     "runtime": "native-rust",
