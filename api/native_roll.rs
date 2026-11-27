@@ -389,6 +389,15 @@ fn app() -> Router {
                 .delete(native_dispatch),
         )
         .route("/api/v2/threads/{thread_id}/issues", post(native_dispatch))
+        // Canonical v2 issue collection and creator-credit reads (#5706).
+        // The Vercel entry keeps its own route table: without matching
+        // entries here the fallback returns the Rust JSON 404 before the
+        // dispatched handler runs.
+        .route("/api/v2/threads/{thread_id}/issues", get(native_dispatch))
+        .route(
+            "/api/v2/threads/{thread_id}/creatorCredits",
+            get(native_dispatch),
+        )
         // Edit Series previews (#5863). The inner router registers these
         // handlers, but the Vercel entry owns a separate route table: without
         // matching routes here the fallback returns the Rust JSON 404
@@ -1594,6 +1603,41 @@ mod tests {
                 String::from_utf8_lossy(&bytes),
                 r#"{"detail":"Not Found"}"#,
                 "{method} {uri} must hit native_not_found"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn v2_thread_issue_read_ingress_reaches_rust_and_never_hits_json_404() {
+        // #5706: both canonical v2 reads must be registered in this Vercel
+        // entry table. An unauthenticated request must reach the dispatched
+        // handler (401) or a cold-start 503; it must never fall through to
+        // native_not_found with the Rust JSON 404.
+        for (method, uri) in [
+            ("GET", "/api/v2/threads/42/issues"),
+            ("GET", "/api/v2/threads/42/creatorCredits"),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("thread issue read ingress response");
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{method} {uri} runtime header"
+            );
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{method} {uri} must reach Rust dispatch, not the 404 fallback, got {}",
+                response.status()
             );
         }
     }

@@ -14,10 +14,22 @@ export type ThreadIssueCreatorCredit = ManualCreatorCredit & {
   creator_id?: number | null
 }
 
-/** Response of GET /v1/threads/{threadId}/issues/creators. */
+/** Query parameters accepted by the thread creator-credit projection (#5706). */
+export interface ThreadIssueCreditsParams {
+  page_size?: number
+  page_token?: string
+}
+
+/** Response of GET /v2/threads/{threadId}/creatorCredits (#5706). */
 export interface ThreadIssueCreatorsResponse {
   thread_id: number
   issues: { issue_id: number; creators: ThreadIssueCreatorCredit[] }[]
+  /** Total confirmed-mapping issue rows (including rows without stored credits), independent of the page. */
+  total_count?: number
+  /** Size of this page (1-100, default 100). */
+  page_size?: number
+  /** Continuation cursor, or null when the projection is exhausted. */
+  next_page_token?: string | null
 }
 
 export interface IssueReadOperationItem {
@@ -151,17 +163,22 @@ export function createIssuesApi(client: HttpClient) {
       threadId: number,
       params?: IssueListParams
     ): Promise<IssueListResponse> => {
-      return client.get(`/v1/threads/${threadId}/issues`, { params })
+      return client.get(`/v2/threads/${threadId}/issues`, { params })
     },
 
     /**
-     * List stored ComicVine creator credits for every mapped issue in a thread
-     * in one request (issue #3461).
+     * List stored ComicVine creator credits for mapped issues in a thread
+     * (#3461, moved to the canonical v2 projection in #5706). One bounded
+     * request covers a page of issue rows; unmapped issues are omitted.
      * @param threadId - The thread ID whose issue credits are listed
-     * @returns Per-issue creator credits; unmapped issues are omitted
+     * @param params - Optional page size and continuation token
+     * @returns Per-issue creator credits with pagination fields
      */
-    listCreators: async (threadId: number): Promise<ThreadIssueCreatorsResponse> => {
-      return client.get(`/v1/threads/${threadId}/issues/creators`)
+    listCreators: async (
+      threadId: number,
+      params?: ThreadIssueCreditsParams
+    ): Promise<ThreadIssueCreatorsResponse> => {
+      return client.get(`/v2/threads/${threadId}/creatorCredits`, { params })
     },
 
     /**

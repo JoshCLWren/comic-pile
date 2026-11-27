@@ -766,6 +766,19 @@ export interface ListThreadIssuesRequest {
 
 export type ListThreadIssuesResponse = components['schemas']['ThreadIssueListResponse']
 
+export interface ListThreadIssuesV2Request {
+  path: {
+    thread_id: number
+  }
+  query?: {
+    status?: string
+    page_size?: number
+    page_token?: string
+  }
+}
+
+export type ListThreadIssuesV2Response = components['schemas']['ThreadIssueListResponse']
+
 export interface ListThreadsRequest {
   query?: {
     search?: string
@@ -1265,6 +1278,18 @@ export type SwitchPrerequisiteResponse = components['schemas']['RollPrerequisite
 
 export type TeamChemistryResponse = components['schemas']['CreatorTeamChemistryResponse']
 
+export interface ThreadCreatorCreditsRequest {
+  path: {
+    thread_id: number
+  }
+  query?: {
+    page_size?: number
+    page_token?: string
+  }
+}
+
+export type ThreadCreatorCreditsResponse = components['schemas']['ThreadCreatorCreditsResponse']
+
 export interface UnassignTagRequest {
   path: {
     tag_id: number
@@ -1436,6 +1461,7 @@ export interface NativeV2Client {
   listSessionSnapshots(args: ListSessionSnapshotsRequest): Promise<ListSessionSnapshotsResponse>
   listTags(): Promise<ListTagsResponse>
   listThreadIssues(args: ListThreadIssuesRequest): Promise<ListThreadIssuesResponse>
+  listThreadIssuesV2(args: ListThreadIssuesV2Request): Promise<ListThreadIssuesV2Response>
   listThreads(args?: ListThreadsRequest): Promise<ListThreadsResponse>
   listUndoSnapshots(args: ListUndoSnapshotsRequest): Promise<ListUndoSnapshotsResponse>
   login(args: LoginRequest): Promise<LoginResponse>
@@ -1502,6 +1528,7 @@ export interface NativeV2Client {
   summaries(args?: SummariesRequest): Promise<SummariesResponse>
   switchPrerequisite(args: SwitchPrerequisiteRequest): Promise<SwitchPrerequisiteResponse>
   teamChemistry(): Promise<TeamChemistryResponse>
+  threadCreatorCredits(args: ThreadCreatorCreditsRequest): Promise<ThreadCreatorCreditsResponse>
   unassignTag(args: UnassignTagRequest): Promise<UnassignTagResponse>
   undoToSnapshot(args: UndoToSnapshotRequest): Promise<UndoToSnapshotResponse>
   unsnooze(args: UnsnoozeRequest): Promise<UnsnoozeResponse>
@@ -2034,6 +2061,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         { params: compactQuery(args.query) },
       )
     },
+    listThreadIssuesV2(args: ListThreadIssuesV2Request) {
+      return client.get<ListThreadIssuesV2Response>(
+        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/issues`,
+        { params: compactQuery(args.query) },
+      )
+    },
     listThreads(args: ListThreadsRequest = {}) {
       return client.get<ListThreadsResponse>(
         "/v2/threads",
@@ -2385,6 +2418,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     teamChemistry() {
       return client.get<TeamChemistryResponse>("/v2/creators/team-chemistry")
+    },
+    threadCreatorCredits(args: ThreadCreatorCreditsRequest) {
+      return client.get<ThreadCreatorCreditsResponse>(
+        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/creatorCredits`,
+        { params: compactQuery(args.query) },
+      )
     },
     unassignTag(args: UnassignTagRequest) {
       return client.delete<UnassignTagResponse>(

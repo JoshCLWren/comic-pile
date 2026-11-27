@@ -234,7 +234,7 @@ describe('Thread detail request budget', () => {
     const handler = makeHandler('available')
     const { calls, client } = createRequestRecorder((call) => {
       if (call.url === '/v1/threads/42') return { ...THREADS[42], total_issues: 2 }
-      if (call.url === '/v1/threads/42/issues') {
+      if (call.url === '/v2/threads/42/issues') {
         const secondPage = call.params?.page_token === 'next'
         return {
           issues: [{
@@ -250,7 +250,7 @@ describe('Thread detail request budget', () => {
           next_page_token: secondPage ? null : 'next',
         }
       }
-      if (call.url === '/v1/threads/42/issues/creators') return { thread_id: 42, issues: [] }
+      if (call.url === '/v2/threads/42/creatorCredits') return { thread_id: 42, issues: [] }
       if (call.url === '/v2/tags/effective/threads/42/issues') {
         return { thread_id: 42, issues: [] }
       }
@@ -262,18 +262,18 @@ describe('Thread detail request budget', () => {
     render(renderThread())
 
     const expand = await screen.findByRole('button', { name: 'Expand' })
-    expect(calls.some((call) => call.url === '/v1/threads/42/issues')).toBe(false)
+    expect(calls.some((call) => call.url === '/v2/threads/42/issues')).toBe(false)
     fireEvent.click(expand)
     await screen.findByRole('group', { name: 'Issue #1 in Saga' })
     fireEvent.click(await screen.findByRole('button', { name: 'Load more' }))
     await screen.findByRole('group', { name: 'Issue #2 in Saga' })
 
     const expectedIssueReads = {
-      'GET /v1/threads/42/issues?page_size=100': 1,
-      'GET /v1/threads/42/issues?page_size=100&page_token=next': 1,
+      'GET /v2/threads/42/issues?page_size=100': 1,
+      'GET /v2/threads/42/issues?page_size=100&page_token=next': 1,
     }
     const issueReads = () => Object.fromEntries(
-      Object.entries(requestCounts(calls)).filter(([key]) => key.includes('/v1/threads/42/issues?')),
+      Object.entries(requestCounts(calls)).filter(([key]) => key.includes('/v2/threads/42/issues?')),
     )
     expect(issueReads()).toEqual(expectedIssueReads)
 

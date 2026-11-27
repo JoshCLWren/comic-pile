@@ -15,11 +15,12 @@ interface ThreadIssueCreatorsState {
 /**
  * Bulk read of stored ComicVine creator credits for a thread's issues (#3461).
  *
- * One request covers every issue row, so expanding a full issue page never
- * fans out into one provider-intelligence request per row. The read is pure
- * stored data: it does not trigger per-issue metadata refreshes. Callers use
- * the map as the preferred per-issue credits and fall back to the series'
- * manual creator credits for absent issues.
+ * The canonical v2 projection is paginated (#5706). This hook drains its
+ * bounded pages into one map, so expanding a full issue page never fans out
+ * into one provider-intelligence request per row. The read is pure stored
+ * data: it does not trigger per-issue metadata refreshes. Callers use the map
+ * as the preferred per-issue credits and fall back to the series' manual
+ * creator credits for absent issues.
  *
  * @param threadId - Thread whose issue credits are read, or null when disabled
  * @param enabled - Gates the query (used by collapsed issue sections)
@@ -31,7 +32,23 @@ export function useThreadIssueCreators(
 ): ThreadIssueCreatorsState {
   const query = useQuery({
     queryKey: threadId ? queryKeys.thread.issueCreators(threadId) : [],
-    queryFn: () => issuesApi.listCreators(threadId!),
+    queryFn: async () => {
+      const pageSize = 100
+      const first = await issuesApi.listCreators(threadId!, { page_size: pageSize })
+      const issues = [...first.issues]
+      const seenTokens = new Set<string>()
+      let token = first.next_page_token ?? null
+      while (token && !seenTokens.has(token)) {
+        seenTokens.add(token)
+        const page = await issuesApi.listCreators(threadId!, {
+          page_size: pageSize,
+          page_token: token,
+        })
+        issues.push(...page.issues)
+        token = page.next_page_token ?? null
+      }
+      return { ...first, issues }
+    },
     enabled: !!threadId && enabled,
   })
 
