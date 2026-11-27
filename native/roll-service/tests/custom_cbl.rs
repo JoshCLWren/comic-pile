@@ -503,19 +503,21 @@ async fn apply_rebuilds_membership_without_compiling_edges() {
         "membership overlay must mirror merged plan nodes"
     );
 
-    let rule = conn
+    let compiled_rules: i64 = conn
         .query_one(
-            "SELECT source_id, target_id, checkpoint_issue_id FROM continuity_rules
-             WHERE user_id=$1 AND note='continuity-plan:920001' AND satisfaction_type='checkpoint'",
+            "SELECT count(*) FROM continuity_rules
+             WHERE user_id=$1 AND note='continuity-plan:920001'",
             &[&fixture.user_id],
         )
         .await
-        .expect("compiled checkpoint rule");
-    assert_eq!(rule.get::<_, i32>(0), 910201);
-    assert_eq!(rule.get::<_, i32>(1), 910203);
-    assert_eq!(rule.get::<_, Option<i32>>(2), Some(910201));
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        compiled_rules, 0,
+        "a list/CBL edit must not compile continuity rules"
+    );
 
-    let dependencies: i64 = conn
+    let compiled_edges: i64 = conn
         .query_one(
             "SELECT count(*) FROM dependencies
              WHERE source_issue_id=910201 AND target_issue_id=910203
@@ -526,8 +528,8 @@ async fn apply_rebuilds_membership_without_compiling_edges() {
         .unwrap()
         .get(0);
     assert_eq!(
-        dependencies, 1,
-        "compiled rule must create a canonical edge"
+        compiled_edges, 0,
+        "a list/CBL edit must not compile dependency edges"
     );
     drop(conn);
 }
@@ -845,15 +847,19 @@ async fn apply_reuse_clears_stale_checkpoint_target_ref_id() {
         stale_edges, 0,
         "stale singular checkpoint target must not compile into an edge"
     );
-    let rule = conn
+    let compiled_rules: i64 = conn
         .query_one(
-            "SELECT target_id FROM continuity_rules
-             WHERE user_id=$1 AND note='continuity-plan:920004' AND satisfaction_type='checkpoint'",
+            "SELECT count(*) FROM continuity_rules
+             WHERE user_id=$1 AND note='continuity-plan:920004'",
             &[&fixture.user_id],
         )
         .await
-        .expect("compiled checkpoint rule");
-    assert_eq!(rule.get::<_, i32>(0), 910203);
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        compiled_rules, 0,
+        "reusing a checkpoint node must not compile a continuity rule"
+    );
     drop(conn);
 }
 
