@@ -2410,6 +2410,65 @@
         ]
       }
     },
+    "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection": {
+      "post": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_preview_reading_order_projection",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "description": "Continuity plan id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingOrderProjectPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Deterministic projection preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingOrderProjectPreviewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Plan or reading order not found"
+          },
+          "409": {
+            "description": "Malformed plan"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/creators": {
       "get": {
         "tags": [
@@ -7188,6 +7247,53 @@
           },
           "404": {
             "description": "Thread or issue not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/threads/{thread_id}/readingOrders": {
+      "get": {
+        "tags": [
+          "reading-orders"
+        ],
+        "summary": "Documentation-only operation for reading orders containing a thread.",
+        "operationId": "thread_ordering_reading_orders",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owned reading orders containing the thread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadReadingOrdersResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Request validation failed"
           },
           "503": {
             "description": "Database temporarily unavailable"
@@ -16489,6 +16595,38 @@
         },
         "additionalProperties": false
       },
+      "ReadingOrderItemResponse": {
+        "type": "object",
+        "description": "Python `ReadingOrderItemResponse`.",
+        "required": [
+          "thread_id",
+          "thread_title",
+          "position",
+          "is_read"
+        ],
+        "properties": {
+          "is_read": {
+            "type": "boolean"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        }
+      },
       "ReadingOrderListResponse": {
         "type": "object",
         "description": "Python `ReadingOrderListResponse`.",
@@ -16501,6 +16639,144 @@
             "items": {
               "$ref": "#/components/schemas/ReadingOrderSummary"
             }
+          }
+        }
+      },
+      "ReadingOrderProjectPreviewConflict": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "node_id",
+          "existing_positions"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "existing_positions": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "message": {
+            "type": "string"
+          },
+          "node_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "ReadingOrderProjectPreviewEntry": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "position",
+          "source"
+        ],
+        "properties": {
+          "position": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "source": {
+            "type": "string"
+          },
+          "source_node_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ReadingOrderProjectPreviewRequest": {
+        "type": "object",
+        "required": [
+          "reading_order_id"
+        ],
+        "properties": {
+          "reading_order_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ReadingOrderProjectPreviewResponse": {
+        "type": "object",
+        "required": [
+          "plan_id",
+          "plan_name",
+          "plan_ordering_mode",
+          "plan_updated_at",
+          "reading_order_id",
+          "reading_order_name",
+          "entries",
+          "conflicts",
+          "total_positions",
+          "dropped_node_ids"
+        ],
+        "properties": {
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderProjectPreviewConflict"
+            }
+          },
+          "dropped_node_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderProjectPreviewEntry"
+            }
+          },
+          "plan_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "plan_name": {
+            "type": "string"
+          },
+          "plan_ordering_mode": {
+            "type": "string"
+          },
+          "plan_updated_at": {
+            "type": "string"
+          },
+          "reading_order_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "reading_order_name": {
+            "type": "string"
+          },
+          "total_positions": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -16577,6 +16853,7 @@
           "plan_id",
           "plan_name",
           "plan_ordering_mode",
+          "plan_updated_at",
           "reading_order_id",
           "reading_order_name",
           "entries",
@@ -16613,6 +16890,9 @@
           "plan_ordering_mode": {
             "type": "string"
           },
+          "plan_updated_at": {
+            "type": "string"
+          },
           "reading_order_id": {
             "type": "integer",
             "format": "int32"
@@ -16632,6 +16912,12 @@
           "reading_order_id"
         ],
         "properties": {
+          "plan_updated_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "reading_order_id": {
             "type": "integer",
             "format": "int32"
@@ -16673,6 +16959,46 @@
           "updated_count": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "ReadingOrderResponse": {
+        "type": "object",
+        "description": "Python `ReadingOrderResponse`.",
+        "required": [
+          "id",
+          "name",
+          "total_items",
+          "completed_items",
+          "items"
+        ],
+        "properties": {
+          "completed_items": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderItemResponse"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "total_items": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -19093,6 +19419,21 @@
           "thread_id": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "ThreadReadingOrdersResponse": {
+        "type": "object",
+        "description": "Python `ThreadReadingOrdersResponse`.",
+        "required": [
+          "reading_orders"
+        ],
+        "properties": {
+          "reading_orders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingOrderResponse"
+            }
           }
         }
       },

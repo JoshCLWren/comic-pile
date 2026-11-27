@@ -3452,53 +3452,6 @@
         ]
       }
     },
-    "/api/v1/threads/{thread_id}/reading-orders": {
-      "get": {
-        "tags": [
-          "reading-orders"
-        ],
-        "summary": "Documentation-only operation for reading orders containing a thread.",
-        "operationId": "thread_ordering_reading_orders",
-        "parameters": [
-          {
-            "name": "thread_id",
-            "in": "path",
-            "description": "Thread identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Owned reading orders containing the thread",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ThreadReadingOrdersResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/v1/threads/{thread_id}:getBlockingInfo": {
       "post": {
         "tags": [
@@ -5667,6 +5620,65 @@
                 }
               }
             }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection": {
+      "post": {
+        "tags": [
+          "continuity-plans"
+        ],
+        "operationId": "continuity_plans_preview_reading_order_projection",
+        "parameters": [
+          {
+            "name": "plan_id",
+            "in": "path",
+            "description": "Continuity plan id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingOrderProjectPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Deterministic projection preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingOrderProjectPreviewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Plan or reading order not found"
+          },
+          "409": {
+            "description": "Malformed plan"
+          },
+          "422": {
+            "description": "Validation failed"
           }
         },
         "security": [
@@ -10606,6 +10618,53 @@
           },
           "404": {
             "description": "Thread or issue not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/threads/{thread_id}/readingOrders": {
+      "get": {
+        "tags": [
+          "reading-orders"
+        ],
+        "summary": "Documentation-only operation for reading orders containing a thread.",
+        "operationId": "thread_ordering_reading_orders",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owned reading orders containing the thread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadReadingOrdersResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Request validation failed"
           },
           "503": {
             "description": "Database temporarily unavailable"
@@ -22539,6 +22598,7 @@
           "plan_id",
           "plan_name",
           "plan_ordering_mode",
+          "plan_updated_at",
           "reading_order_id",
           "reading_order_name",
           "entries",
@@ -22573,6 +22633,9 @@
             "type": "string"
           },
           "plan_ordering_mode": {
+            "type": "string"
+          },
+          "plan_updated_at": {
             "type": "string"
           },
           "reading_order_id": {
@@ -22661,6 +22724,7 @@
           "plan_id",
           "plan_name",
           "plan_ordering_mode",
+          "plan_updated_at",
           "reading_order_id",
           "reading_order_name",
           "entries",
@@ -22697,6 +22761,9 @@
           "plan_ordering_mode": {
             "type": "string"
           },
+          "plan_updated_at": {
+            "type": "string"
+          },
           "reading_order_id": {
             "type": "integer",
             "format": "int32"
@@ -22716,6 +22783,12 @@
           "reading_order_id"
         ],
         "properties": {
+          "plan_updated_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "reading_order_id": {
             "type": "integer",
             "format": "int32"
