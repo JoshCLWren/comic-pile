@@ -441,6 +441,17 @@ fn decode_reference(raw: &str) -> String {
         "gt" => ">".to_string(),
         "quot" => "\"".to_string(),
         "apos" => "'".to_string(),
+        numeric if numeric.starts_with("#x") || numeric.starts_with("#X") => {
+            u32::from_str_radix(&numeric[2..], 16)
+                .ok()
+                .and_then(char::from_u32)
+                .map_or_else(|| format!("&{entity};"), |value| value.to_string())
+        }
+        numeric if numeric.starts_with('#') => numeric[1..]
+            .parse::<u32>()
+            .ok()
+            .and_then(char::from_u32)
+            .map_or_else(|| format!("&{entity};"), |value| value.to_string()),
         other => format!("&{other};"),
     }
 }
@@ -1246,6 +1257,14 @@ mod tests {
         assert_eq!(list.books[1].volume_year, None);
         assert_eq!(list.books[1].comicvine_issue_id.as_deref(), Some("2002"));
         assert_eq!(list.content_hash.len(), 64);
+    }
+
+    #[test]
+    fn decodes_numeric_and_named_entities_in_list_names() {
+        let xml =
+            b"<ReadingList><Name>Batman &#39; Robin &amp; Friends</Name><Books /></ReadingList>";
+        let list = parse_cbl_bytes(xml, "DC/Batman.cbl").expect("parse");
+        assert_eq!(list.name, "Batman ' Robin & Friends");
     }
 
     #[test]
