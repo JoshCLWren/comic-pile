@@ -613,6 +613,72 @@ pub async fn get_threads_blocking_info(
 }
 
 // ---------------------------------------------------------------------------
+// v2 canonical eligibility / connections (#5709)
+// ---------------------------------------------------------------------------
+
+/// `GET /api/v2/threads/{thread_id}/eligibility`
+pub async fn get_thread_eligibility(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    thread_id: Result<Path<String>, PathRejection>,
+) -> Result<Json<ThreadEligibilityResponse>, ApiError> {
+    let thread_id = parse_thread_id(thread_id)?;
+    {
+        let connection = db::checkout(&state).await?;
+        require_owned_thread(&**connection, user, thread_id).await?;
+    }
+    let mut details = canonical_eligibility_explanations(&state, user, &[thread_id]).await?;
+    let (_, explanation) = details
+        .pop()
+        .ok_or_else(|| ApiError::Internal("Internal Server Error".into()))?;
+    Ok(Json(explanation))
+}
+
+/// `POST /api/v2/threads:explainEligibility`
+pub async fn explain_threads_eligibility(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    body: axum::body::Bytes,
+) -> Result<Json<BatchEligibilityResponse>, ApiError> {
+    let requested = parse_batch_thread_ids(&body)?;
+    let thread_ids: Vec<i32> = requested
+        .iter()
+        .filter_map(|id| i32::try_from(*id).ok())
+        .collect();
+    let not_found = || ApiError::NotFound("One or more threads not found".to_string());
+    if thread_ids.len() != requested.len() {
+        return Err(not_found());
+    }
+    {
+        let connection = db::checkout(&state).await?;
+        let owned: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM threads WHERE id = ANY($1) AND user_id = $2",
+                &[&thread_ids, &user.id()],
+            )
+            .await
+            .map_err(db::query_error)?
+            .get(0);
+        if owned != thread_ids.len() as i64 {
+            return Err(not_found());
+        }
+    }
+    let details = canonical_eligibility_explanations(&state, user, &thread_ids).await?;
+    Ok(Json(BatchEligibilityResponse {
+        threads: OrderedEligibilityExplanations(details),
+    }))
+}
+
+/// `GET /api/v2/threads/{thread_id}/connections`
+pub async fn get_thread_connections(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    thread_id: Result<Path<String>, PathRejection>,
+) -> Result<Json<ThreadConnectedResponse>, ApiError> {
+    get_thread_connected_threads(State(state), user, thread_id).await
+}
+
+// ---------------------------------------------------------------------------
 // Dependency order check / validate order
 // ---------------------------------------------------------------------------
 

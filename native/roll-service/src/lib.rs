@@ -845,12 +845,16 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(reader_context::get_issue_reader_context),
         )
         .route(
-            "/api/v1/threads:getBlockingInfo",
-            post(thread_ordering::get_threads_blocking_info),
+            "/api/v2/threads:explainEligibility",
+            post(thread_ordering::explain_threads_eligibility),
         )
         .route(
-            "/api/v1/threads/{thread_id}/connected",
-            get(thread_ordering::get_thread_connected_threads),
+            "/api/v2/threads/{thread_id}/eligibility",
+            get(thread_ordering::get_thread_eligibility),
+        )
+        .route(
+            "/api/v2/threads/{thread_id}/connections",
+            get(thread_ordering::get_thread_connections),
         )
         .route(
             "/api/v1/threads/{thread_id}/dependency-order-check",
