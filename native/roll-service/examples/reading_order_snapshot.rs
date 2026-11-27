@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Local parity runner. Never mounted on the service's public router.
-use comicpile_roll_service::{auth, config::Config, option_inputs, AppState};
+use comicpile_roll_service::{auth, config::Config, reading_order_inputs, AppState};
 #[tokio::main]
 async fn main() {
     let state = AppState::new(Config::from_env().expect("local configuration required")).unwrap();
@@ -8,7 +8,7 @@ async fn main() {
     let user = auth::authenticate(&state, &token)
         .await
         .expect("fixture authentication");
-    match option_inputs::load_option_diagnostics(&state, user).await {
+    match reading_order_inputs::load_reading_order_diagnostics(&state, user).await {
         Ok(inputs) => {
             println!("{}", serde_json::to_string(&inputs).unwrap());
             if inputs.require_resolved().is_err() {

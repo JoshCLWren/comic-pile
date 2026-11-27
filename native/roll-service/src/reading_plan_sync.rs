@@ -1005,7 +1005,7 @@ async fn extend_adopted_issues_to_following_plans(
 
                 // Validate the complete projected graph once. Any cycle or invalid
                 // reference rolls back the caller's whole source transaction.
-                let inputs = crate::option_inputs::load_inputs_in_transaction(
+                let inputs = crate::reading_order_inputs::load_inputs_in_transaction(
                     tx,
                     AuthenticatedUser::from_id(user_id),
                 )

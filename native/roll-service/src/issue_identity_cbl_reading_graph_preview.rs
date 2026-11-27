@@ -17,7 +17,7 @@ use crate::{
     issue_identity::{
         load_active_cbl_list_meta, reconcile_entries_for_adoption_positions, sha256_hex,
     },
-    option_inputs::{self, normalize_volume, OptionInputs, ReadingEntry},
+    reading_order_inputs::{self, normalize_volume, ReadingOrderInputs, ReadingEntry},
     preview_validation::{parse_body_object, parse_path_int, validation_failed},
     reading_blocker_projection::{describe_blocker_gates, DescribedBlockerGate},
     reading_constraints::{self, Blocker, ThreadEligibility, ValidationError},
@@ -836,7 +836,7 @@ struct Loaded {
     revision_sha: String,
     list_name: String,
     entries: Vec<serde_json::Map<String, Value>>,
-    inputs: OptionInputs,
+    inputs: ReadingOrderInputs,
     volume_years: HashMap<String, i32>,
 }
 
@@ -874,7 +874,7 @@ async fn load(
     // short preview selection into a full-list fan-out (#5342 review).
     let entries =
         reconcile_entries_for_adoption_positions(&tx, user.id(), &meta, included_positions).await?;
-    let inputs = option_inputs::load_inputs_in_transaction(&tx, user).await?;
+    let inputs = reading_order_inputs::load_inputs_in_transaction(&tx, user).await?;
     let keys: BTreeSet<String> = inputs.thread_volumes.values().cloned().collect();
     let volume_years = load_volume_years(&tx, &keys).await?;
     tx.rollback().await.map_err(db::query_error)?;
@@ -1011,7 +1011,7 @@ fn build_preview(
         }
     }
 
-    let mut owned_lists: Vec<&option_inputs::ReadingList> = inputs.lists.iter().collect();
+    let mut owned_lists: Vec<&reading_order_inputs::ReadingList> = inputs.lists.iter().collect();
     owned_lists.sort_by_key(|list| list.list_id);
     let target = match request.target_list_id {
         None => None,

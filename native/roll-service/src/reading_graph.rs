@@ -12,7 +12,7 @@
 //! Issue, read state, rating, history event, or another reader's row.
 
 use crate::{
-    auth::AuthenticatedUser, db, option_inputs, option_inputs::OptionInputs,
+    auth::AuthenticatedUser, db, reading_order_inputs, reading_order_inputs::ReadingOrderInputs,
     reading_constraints::ValidationError, ApiError, AppState,
 };
 use axum::{extract::State, http::StatusCode, Json};
@@ -165,7 +165,7 @@ pub struct ReadingGraphRepairResponse {
 
 pub(crate) fn cycle_conflict(
     error: ValidationError,
-    inputs: &option_inputs::OptionInputs,
+    inputs: &reading_order_inputs::ReadingOrderInputs,
 ) -> ApiError {
     match error {
         ValidationError::Cycle { edges, .. } => {
@@ -220,7 +220,7 @@ pub(crate) fn cycle_conflict(
 /// (`detail.code` / `detail.path`) rather than the graph diagnostic 409.
 pub(crate) fn custom_cbl_cycle_conflict(
     error: ValidationError,
-    inputs: &option_inputs::OptionInputs,
+    inputs: &reading_order_inputs::ReadingOrderInputs,
 ) -> ApiError {
     match error {
         ValidationError::Cycle { message, edges } => {
@@ -311,7 +311,7 @@ pub(crate) fn custom_cbl_cycle_conflict(
 }
 
 fn issue_lookup(
-    inputs: &OptionInputs,
+    inputs: &ReadingOrderInputs,
 ) -> (BTreeMap<i32, ReadingGraphIssue>, BTreeMap<i32, String>) {
     let titles: BTreeMap<i32, String> = inputs
         .core
@@ -338,7 +338,7 @@ fn issue_lookup(
     (issues, titles)
 }
 
-fn list_lookup(inputs: &OptionInputs) -> BTreeMap<i32, ReadingGraphList> {
+fn list_lookup(inputs: &ReadingOrderInputs) -> BTreeMap<i32, ReadingGraphList> {
     inputs
         .lists
         .iter()
@@ -446,9 +446,9 @@ fn push_repairs(
 }
 
 pub(crate) fn project(
-    inputs: &OptionInputs,
+    inputs: &ReadingOrderInputs,
     validated: &crate::reading_constraints::ValidatedReadingInputs,
-    legacy: Option<&[option_inputs::LegacyDependencyRow]>,
+    legacy: Option<&[reading_order_inputs::LegacyDependencyRow]>,
 ) -> ReadingGraphResponse {
     let (issues, titles) = issue_lookup(inputs);
     let lists = list_lookup(inputs);
@@ -586,7 +586,7 @@ async fn record_repair_receipt(
     Ok(())
 }
 
-fn repair_target_exists(inputs: &OptionInputs, action: &ReadingGraphRepairAction) -> bool {
+fn repair_target_exists(inputs: &ReadingOrderInputs, action: &ReadingGraphRepairAction) -> bool {
     match action {
         ReadingGraphRepairAction::DeleteList { list_id } => {
             inputs.lists.iter().any(|list| list.list_id == *list_id)
@@ -623,7 +623,7 @@ fn repair_is_offered(
     })
 }
 
-fn invalid_response(inputs: &OptionInputs) -> ReadingGraphResponse {
+fn invalid_response(inputs: &ReadingOrderInputs) -> ReadingGraphResponse {
     ReadingGraphResponse {
         status: "invalid".to_string(),
         cycles: vec![],
@@ -641,11 +641,11 @@ pub async fn reading_graph(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
 ) -> Result<Json<ReadingGraphResponse>, crate::ApiError> {
-    let diagnostics = option_inputs::load_frontier_diagnostics(&state, user).await?;
+    let diagnostics = reading_order_inputs::load_frontier_diagnostics(&state, user).await?;
     if !diagnostics.inputs.unresolved.is_empty() {
         return Ok(Json(invalid_response(&diagnostics.inputs)));
     }
-    let validated = option_inputs::validated_contained(diagnostics.inputs)?;
+    let validated = reading_order_inputs::validated_contained(diagnostics.inputs)?;
     let response = project(
         validated.inputs(),
         &validated,
@@ -666,7 +666,7 @@ pub async fn reading_graph(
 }
 
 fn remove_from_inputs(
-    inputs: &mut OptionInputs,
+    inputs: &mut ReadingOrderInputs,
     action: &ReadingGraphRepairAction,
 ) -> Result<String, &'static str> {
     match action {
@@ -785,9 +785,9 @@ pub async fn repair(
         None
     };
     let inputs = if let Some(transaction) = transaction.as_ref() {
-        option_inputs::load_inputs_in_transaction(transaction, user).await?
+        reading_order_inputs::load_inputs_in_transaction(transaction, user).await?
     } else {
-        option_inputs::load_option_diagnostics(&state, user).await?
+        reading_order_inputs::load_reading_order_diagnostics(&state, user).await?
     };
     if !inputs.unresolved.is_empty() {
         if request.confirm {
@@ -803,7 +803,7 @@ pub async fn repair(
             graph: invalid_response(&inputs),
         }));
     }
-    let validated = option_inputs::validated_contained(inputs.clone())?;
+    let validated = reading_order_inputs::validated_contained(inputs.clone())?;
     let allowed = project(&inputs, &validated, None).repairs;
     let status_before = if validated.graph_problem().is_some() {
         "cycle"
@@ -873,8 +873,8 @@ pub async fn repair(
     if request.confirm {
         // Re-read after commit so the response is the persisted graph, not the
         // pre-transaction snapshot with an in-memory deletion applied.
-        let fresh = option_inputs::load_option_diagnostics(&state, user).await?;
-        let after = option_inputs::validated_contained(fresh)?;
+        let fresh = reading_order_inputs::load_reading_order_diagnostics(&state, user).await?;
+        let after = reading_order_inputs::validated_contained(fresh)?;
         let status_after = if after.graph_problem().is_some() {
             "cycle"
         } else {
@@ -895,7 +895,7 @@ pub async fn repair(
             graph: project(after.inputs(), &after, None),
         }));
     }
-    let after = option_inputs::validated_contained(projected)?;
+    let after = reading_order_inputs::validated_contained(projected)?;
     Ok(Json(ReadingGraphRepairResponse {
         applied: false,
         status_before: status_before.to_string(),
@@ -950,13 +950,13 @@ pub fn repair_documentation() {}
 mod tests {
     use super::*;
     use crate::{
-        option_inputs::{OverlapDecision, Prerequisite, ReadingEntry, ReadingList},
+        reading_order_inputs::{OverlapDecision, Prerequisite, ReadingEntry, ReadingList},
         reading_inputs::{CoreReadingInputs, ReadingIssue, ReadingThread, StoredThreadEligibility},
         test_support,
     };
 
-    fn inputs() -> OptionInputs {
-        OptionInputs {
+    fn inputs() -> ReadingOrderInputs {
+        ReadingOrderInputs {
             core: CoreReadingInputs {
                 threads: vec![ReadingThread {
                     id: 8,
@@ -1049,7 +1049,7 @@ mod tests {
 
     #[test]
     fn reading_graph_response_carries_the_frontier_audit() {
-        use crate::option_inputs::LegacyDependencyRow;
+        use crate::reading_order_inputs::LegacyDependencyRow;
         // Acyclic fixture: the strict list holds only the frontier, so Reading List engine
         // offers issue 11 today while the inert legacy edge from unread issue
         // 14 still records possible reader intent.
@@ -1279,7 +1279,7 @@ mod tests {
         // The exact Reading List engine authority blocks #361 and leaves X-Men #80
         // eligible.
         let validated =
-            option_inputs::load_option_inputs_contained(&state, AuthenticatedUser::for_test(9101))
+            reading_order_inputs::load_reading_order_inputs_contained(&state, AuthenticatedUser::for_test(9101))
                 .await
                 .expect("validated Reading List engine inputs");
         let eligible: Vec<i32> = validated

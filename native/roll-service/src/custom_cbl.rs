@@ -7,7 +7,7 @@
 use crate::{
     auth::AuthenticatedUser,
     cbl_catalog::{ValidationErrorItem, ValidationErrorResponse},
-    db, option_inputs,
+    db, reading_order_inputs,
     reading_constraints::ValidatedReadingInputs,
     reading_graph::custom_cbl_cycle_conflict,
     ApiError, AppState,
@@ -330,8 +330,8 @@ fn response_from_row(
 async fn graph_preflight(
     tx: &Transaction<'_>,
     user: &AuthenticatedUser,
-) -> Result<option_inputs::OptionInputs, ApiError> {
-    let inputs = option_inputs::load_inputs_in_transaction(tx, *user).await?;
+) -> Result<reading_order_inputs::ReadingOrderInputs, ApiError> {
+    let inputs = reading_order_inputs::load_inputs_in_transaction(tx, *user).await?;
     let names = inputs
         .lists
         .iter()
@@ -350,7 +350,7 @@ async fn graph_preflight(
 /// extra round trip is needed here.
 #[allow(dead_code)]
 fn strict_coverage_warnings(
-    inputs: &option_inputs::OptionInputs,
+    inputs: &reading_order_inputs::ReadingOrderInputs,
     entries: &[CustomCBLEntryResponse],
     mode: &str,
 ) -> Vec<String> {
@@ -959,7 +959,7 @@ async fn validate_projection(
     user: &AuthenticatedUser,
     projected: &std::collections::HashMap<i32, Vec<(String, String)>>,
 ) -> Result<(), ApiError> {
-    let mut inputs = option_inputs::load_inputs_in_transaction(tx, *user).await?;
+    let mut inputs = reading_order_inputs::load_inputs_in_transaction(tx, *user).await?;
     let names = inputs
         .lists
         .iter()
@@ -971,7 +971,7 @@ async fn validate_projection(
         if let Some(decisions) = projected.get(&list.list_id) {
             list.overlap_decisions = decisions
                 .iter()
-                .map(|(c, w)| option_inputs::OverlapDecision {
+                .map(|(c, w)| reading_order_inputs::OverlapDecision {
                     continuing_volume_id: c.clone(),
                     waiting_volume_id: w.clone(),
                 })
@@ -1903,7 +1903,7 @@ pub async fn apply_custom_cbl(
     validate_merged_node_ownership(&tx, &user, &owned_issues, &new_nodes).await?;
 
     // Graph preflight with new nodes
-    let mut inputs = option_inputs::load_inputs_in_transaction(&tx, user).await?;
+    let mut inputs = reading_order_inputs::load_inputs_in_transaction(&tx, user).await?;
     let list_names: BTreeMap<i32, String> = inputs
         .lists
         .iter()
@@ -1942,7 +1942,7 @@ pub async fn apply_custom_cbl(
         if let Some(decisions) = overlap_decisions.get(&list.list_id) {
             list.overlap_decisions = decisions
                 .iter()
-                .map(|(c, w)| option_inputs::OverlapDecision {
+                .map(|(c, w)| reading_order_inputs::OverlapDecision {
                     continuing_volume_id: c.clone(),
                     waiting_volume_id: w.clone(),
                 })

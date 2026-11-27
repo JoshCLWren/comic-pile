@@ -6,7 +6,7 @@
 //! only) that may even contain a cycle, so it cannot use the stored-state
 //! `ValidatedReadingInputs` pipeline. Everything here is pure: no I/O.
 
-use crate::option_inputs::{OptionInputs, Prerequisite, ReadingEntry, ReadingList};
+use crate::reading_order_inputs::{ReadingOrderInputs, Prerequisite, ReadingEntry, ReadingList};
 use crate::reading_constraints::{Blocker, ThreadEligibility};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -26,7 +26,7 @@ pub(crate) struct ProposedList {
 /// decisions in the preview (Python builds them without any); only the proposed
 /// list takes the reader's answers.
 pub(crate) struct EvalInput<'a> {
-    pub inputs: &'a OptionInputs,
+    pub inputs: &'a ReadingOrderInputs,
     pub prerequisites: Vec<&'a Prerequisite>,
     /// Owned lists other than the proposed one, ascending by id.
     pub owned_lists: Vec<&'a ReadingList>,

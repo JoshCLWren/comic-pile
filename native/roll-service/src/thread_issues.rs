@@ -36,7 +36,7 @@
 
 use crate::{
     auth::AuthenticatedUser,
-    db, option_inputs, queue, reading_eligibility,
+    db, reading_order_inputs, queue, reading_eligibility,
     reading_session::{self, SessionPolicy},
     roll_exclusions, thread_ordering, ApiError, AppState,
 };
@@ -703,7 +703,7 @@ async fn display_position(
         .await
         .map_err(db::query_error)?;
     let candidates: Option<HashSet<i32>> = if reading_lists {
-        let validated = option_inputs::load_validated_contained_in_transaction(tx, user).await?;
+        let validated = reading_order_inputs::load_validated_contained_in_transaction(tx, user).await?;
         let frontiers = validated
             .eligible_frontiers()
             .map_err(|_| ApiError::Internal("Invalid reading constraints".to_string()))?;
@@ -1764,7 +1764,7 @@ async fn select_manual_pick(
     session_id: i32,
     die: i32,
 ) -> Result<(), ApiError> {
-    let validated = option_inputs::load_validated_contained_in_transaction(tx, user).await?;
+    let validated = reading_order_inputs::load_validated_contained_in_transaction(tx, user).await?;
     let derived = reading_eligibility::evaluate(&validated)?;
     let next_issue_id = derived
         .get(&thread_id)

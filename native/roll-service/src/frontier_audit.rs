@@ -22,7 +22,7 @@
 #![forbid(unsafe_code)]
 
 use crate::{
-    option_inputs::{LegacyDependencyRow, OptionInputs},
+    reading_order_inputs::{LegacyDependencyRow, ReadingOrderInputs},
     reading_constraints::ValidatedReadingInputs,
 };
 use serde::Serialize;
@@ -152,7 +152,7 @@ pub fn evidence_class(row: &LegacyDependencyRow) -> &'static str {
 /// never feeds eligibility. A frontier protected by any actionable Reading List engine
 /// constraint (reader prerequisite or list order) is never reported.
 pub fn audit_frontiers(
-    inputs: &OptionInputs,
+    inputs: &ReadingOrderInputs,
     validated: &ValidatedReadingInputs,
     legacy: &[LegacyDependencyRow],
 ) -> FrontierAuditReport {
@@ -283,7 +283,7 @@ fn count_classes(legacy: &[LegacyDependencyRow]) -> BTreeMap<String, usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::option_inputs::{OverlapDecision, Prerequisite, ReadingEntry, ReadingList};
+    use crate::reading_order_inputs::{OverlapDecision, Prerequisite, ReadingEntry, ReadingList};
     use crate::reading_constraints::ValidatedReadingInputs;
     use crate::reading_inputs::{
         CoreReadingInputs, ReadingIssue, ReadingThread, StoredThreadEligibility,
@@ -293,8 +293,8 @@ mod tests {
     /// The issue #4198 fixture chain:
     /// `UXM #360 (read) -> X-Men #80 (unread) -> X-Men #1/2 (unread) -> UXM #361 (unread)`.
     /// UXM #361 is the Uncanny X-Men frontier; X-Men #80 is the X-Men frontier.
-    fn fixture_inputs() -> OptionInputs {
-        OptionInputs {
+    fn fixture_inputs() -> ReadingOrderInputs {
+        ReadingOrderInputs {
             core: CoreReadingInputs {
                 threads: vec![
                     ReadingThread {
@@ -386,7 +386,7 @@ mod tests {
         }
     }
 
-    fn validated(inputs: OptionInputs) -> ValidatedReadingInputs {
+    fn validated(inputs: ReadingOrderInputs) -> ValidatedReadingInputs {
         ValidatedReadingInputs::contained(
             inputs,
             &BTreeMap::from([(7, "90s crossovers".to_string())]),

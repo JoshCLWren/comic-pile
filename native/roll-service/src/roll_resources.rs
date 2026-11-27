@@ -30,7 +30,7 @@ use crate::{
     auth::{validate_folded_auth, FoldedAuthRow, VerifiedAccessClaims, FOLDED_AUTH_CTES},
     db,
     dice_state::{self, DiceAction, LATEST_DIE_CTE},
-    option_inputs,
+    reading_order_inputs,
     reading_session::SessionPolicy,
     roll_pool::{offer_frontiers, MAX_TEMPORARY_SNOOZES},
     ApiError, AppState,
@@ -151,7 +151,7 @@ struct DiePayload {
 #[derive(Debug, Deserialize)]
 struct EligiblePayload {
     auth: Option<FoldedAuthRow>,
-    snapshot: option_inputs::SnapshotRows,
+    snapshot: reading_order_inputs::SnapshotRows,
     die_after: Option<i32>,
     pending_thread_id: Option<i32>,
 }
@@ -244,8 +244,8 @@ fn eligible_statement() -> &'static str {
         format!(
             "WITH {FOLDED_AUTH_CTES},\n{SNAPSHOT_CTES},\n{SNAPSHOT_PROJECTION},\n{LATEST_DIE_CTE},\n{pending}\n{ELIGIBLE_SELECT}",
             pending = pending_offer_cte(),
-            SNAPSHOT_CTES = option_inputs::SNAPSHOT_CTES,
-            SNAPSHOT_PROJECTION = option_inputs::SNAPSHOT_PROJECTION,
+            SNAPSHOT_CTES = reading_order_inputs::SNAPSHOT_CTES,
+            SNAPSHOT_PROJECTION = reading_order_inputs::SNAPSHOT_PROJECTION,
         )
     })
 }
@@ -355,12 +355,12 @@ fn parse_snoozed(raw: Option<&str>) -> Result<HashSet<i32>, ApiError> {
 /// offer snoozes it first: that steps the die up and excludes the pending
 /// thread, so the read projects the same outcome without persisting an event.
 fn select_eligible(
-    inputs: option_inputs::OptionInputs,
+    inputs: reading_order_inputs::ReadingOrderInputs,
     die_after: Option<i32>,
     pending_thread_id: Option<i32>,
     snoozed: &HashSet<i32>,
 ) -> Result<RollEligibleIssueIdsResponse, ApiError> {
-    let validated = option_inputs::validated_contained(inputs)?;
+    let validated = reading_order_inputs::validated_contained(inputs)?;
     let candidates = validated.eligible_frontiers().map_err(|e| {
         tracing::debug!(
             error_kind = crate::error_kind(&e),
@@ -421,7 +421,7 @@ pub async fn eligible_issue_ids(
 ) -> Result<Json<RollEligibleIssueIdsResponse>, ApiError> {
     let snoozed = parse_snoozed(query.snoozed.as_deref())?;
     let payload = load_eligible_payload(&state, &claims).await?;
-    let inputs = option_inputs::assemble_snapshot(payload.snapshot)?;
+    let inputs = reading_order_inputs::assemble_snapshot(payload.snapshot)?;
     Ok(Json(select_eligible(
         inputs,
         payload.die_after,
@@ -749,7 +749,7 @@ mod tests {
         // The offer's own pool for the same reader, die and browser snoozes.
         let user = crate::auth::AuthenticatedUser::for_test(1);
         let snoozed = HashSet::from([20, 30]);
-        let validated = option_inputs::load_option_inputs(&fixture.state, user)
+        let validated = reading_order_inputs::load_reading_order_inputs(&fixture.state, user)
             .await
             .unwrap();
         let offer = offer_frontiers(

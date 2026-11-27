@@ -8,12 +8,12 @@
 //! explanation read later projects.
 //!
 //! Selection eligibility is the same Reading List engine authority the native Roll offer
-//! uses (`crate::option_inputs` + `crate::reading_constraints`), so a manual
+//! uses (`crate::reading_order_inputs` + `crate::reading_constraints`), so a manual
 //! pick can never select a series the dice would refuse.
 #![forbid(unsafe_code)]
 use crate::{
     auth::AuthenticatedUser,
-    db, option_inputs,
+    db, reading_order_inputs,
     reading_constraints::EligibleFrontier,
     reading_session::{self, SessionPolicy},
     roll_exclusions, ApiError, AppState,
@@ -78,7 +78,7 @@ fn normalize_format_value(value: &str) -> String {
 }
 
 /// Count the unread issues the eligibility snapshot reports for one thread.
-fn unread_count(inputs: &option_inputs::OptionInputs, thread_id: i32) -> i32 {
+fn unread_count(inputs: &reading_order_inputs::ReadingOrderInputs, thread_id: i32) -> i32 {
     inputs
         .core
         .issues
@@ -429,7 +429,7 @@ pub async fn override_roll(
     let active = reading_session::bootstrap(&state, user, None, SessionPolicy::default()).await?;
     // Read-only Reading List engine snapshot before the write connection so this request
     // never nests two pool checkouts.
-    let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
+    let validated = reading_order_inputs::load_reading_order_inputs_contained(&state, user).await?;
     let candidates = validated.eligible_frontiers().map_err(|e| {
         tracing::debug!(
             error_kind = crate::error_kind(&e),

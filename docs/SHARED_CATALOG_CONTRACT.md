@@ -46,7 +46,7 @@ verified.
 The current native service consumes catalog links when loading canonical volume
 evidence and issue identity:
 
-- `native/roll-service/src/option_inputs.rs` joins `catalog_series` and
+- `native/roll-service/src/reading_order_inputs.rs` joins `catalog_series` and
   `catalog_issues` into the owner-scoped eligibility snapshot.
 - `native/roll-service/src/issue_identity.rs` reads catalog links for issue-card
   identity projection.

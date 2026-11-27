@@ -9,7 +9,7 @@ use crate::{
     auth::AuthenticatedUser,
     db,
     dice_mutation::{self, DiceCommand},
-    dice_state, option_inputs,
+    dice_state, reading_order_inputs,
     reading_session::{self, SessionPolicy},
     roll_pool::{offer_frontiers, MAX_TEMPORARY_SNOOZES},
     ApiError, AppState,
@@ -330,7 +330,7 @@ pub async fn offer(
     .await?;
     // Compute the read-only Reading List engine snapshot before taking the write
     // connection so this request never nests two pool checkouts.
-    let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
+    let validated = reading_order_inputs::load_reading_order_inputs_contained(&state, user).await?;
     // The canonical position shown for a pending Roll comes from the same
     // Reading List engine ordering the Queue list and Thread Detail use.
     let reading_lists = state.reading_lists;
@@ -565,7 +565,7 @@ pub async fn unsnooze(
 
     // Compute the read-only Reading List engine snapshot before taking the write
     // connection so this request never nests two pool checkouts.
-    let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
+    let validated = reading_order_inputs::load_reading_order_inputs_contained(&state, user).await?;
     let reading_lists = state.reading_lists;
     let eligible_ids = if reading_lists {
         crate::threads::eligible_candidate_ids(&validated)?

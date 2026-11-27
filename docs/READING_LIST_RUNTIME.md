@@ -14,7 +14,7 @@ is no Python Reading List or custom-CBL runtime.
 - `native/roll-service/src/reading_constraints.rs` validates the complete graph.
 - `native/roll-service/src/reading_eligibility.rs` derives availability from that
   validated snapshot.
-- `native/roll-service/src/option_inputs.rs` loads the owner-scoped inputs the
+- `native/roll-service/src/reading_order_inputs.rs` loads the owner-scoped inputs the
   evaluator consumes.
 
 Authoring runs the shared graph validator inside the write transaction before

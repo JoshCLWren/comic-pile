@@ -1,5 +1,5 @@
 //! Pure global stored-constraint validation, including read and excluded issues.
-use crate::option_inputs::OptionInputs;
+use crate::reading_order_inputs::ReadingOrderInputs;
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::Reverse,
@@ -159,7 +159,7 @@ impl Snapshot {
     /// Preserve every authoritative owner-scoped constraint. Names default to stable
     /// numeric labels. Converted and legacy-generated prerequisites are audit data and
     /// are excluded here so they cannot reach evaluation or cycle validation.
-    pub fn from_inputs(inputs: &OptionInputs, names: &BTreeMap<i32, String>) -> Self {
+    pub fn from_inputs(inputs: &ReadingOrderInputs, names: &BTreeMap<i32, String>) -> Self {
         Self {
             threads: inputs
                 .core
@@ -612,7 +612,7 @@ pub enum PoolReason {
 }
 
 /// Classify an empty Roll pool without materializing any diagnostic rows.
-pub fn pool_reason(inputs: &OptionInputs, candidates: &[EligibleFrontier]) -> PoolReason {
+pub fn pool_reason(inputs: &ReadingOrderInputs, candidates: &[EligibleFrontier]) -> PoolReason {
     if !candidates.is_empty() {
         return PoolReason::Ready;
     }
@@ -938,7 +938,7 @@ fn topological_order(
 /// Only this type may be consumed by future native eligible-candidate projection.
 /// Private fields prevent raw/incomplete loader data from masquerading as validated.
 pub struct ValidatedReadingInputs {
-    inputs: OptionInputs,
+    inputs: ReadingOrderInputs,
     topological_order: Vec<i32>,
     edges: BTreeSet<ConstraintEdge>,
     graph_problem: Option<GraphProblem>,
@@ -947,7 +947,7 @@ pub struct ValidatedReadingInputs {
 impl ValidatedReadingInputs {
     /// Strict authoring validation: any cycle rejects the complete write.
     pub fn new(
-        inputs: OptionInputs,
+        inputs: ReadingOrderInputs,
         names: &BTreeMap<i32, String>,
     ) -> Result<Self, ValidationError> {
         inputs.require_resolved().map_err(|e| {
@@ -974,7 +974,7 @@ impl ValidatedReadingInputs {
     /// The returned structure reports the exact cycle and excludes only the
     /// cyclic Issues from eligibility. Writes must still use [`Self::new`].
     pub fn contained(
-        inputs: OptionInputs,
+        inputs: ReadingOrderInputs,
         names: &BTreeMap<i32, String>,
     ) -> Result<Self, ValidationError> {
         inputs.require_resolved().map_err(|e| {
@@ -1012,7 +1012,7 @@ impl ValidatedReadingInputs {
             Err(other) => Err(other),
         }
     }
-    pub fn inputs(&self) -> &OptionInputs {
+    pub fn inputs(&self) -> &ReadingOrderInputs {
         &self.inputs
     }
     pub fn topological_order(&self) -> &[i32] {
@@ -1240,13 +1240,13 @@ impl ValidatedReadingInputs {
 mod tests {
     use super::*;
     use crate::{
-        option_inputs::{
+        reading_order_inputs::{
             Prerequisite as OptionPrerequisite, ReadingEntry, ReadingList, UnresolvedReference,
         },
         reading_inputs::{CoreReadingInputs, ReadingIssue, ReadingThread, StoredThreadEligibility},
     };
-    fn inputs() -> OptionInputs {
-        OptionInputs {
+    fn inputs() -> ReadingOrderInputs {
+        ReadingOrderInputs {
             core: CoreReadingInputs {
                 threads: vec![ReadingThread {
                     id: 8,
@@ -1281,7 +1281,7 @@ mod tests {
     #[test]
     fn reading_lists_frontier_uses_live_graph_and_next_unread_not_stale_stored_flags() {
         use crate::reading_inputs::StoredThreadEligibility;
-        fn fixture(strict: bool, skipped: bool, exclude_other: bool) -> OptionInputs {
+        fn fixture(strict: bool, skipped: bool, exclude_other: bool) -> ReadingOrderInputs {
             let mut source = inputs();
             source.core.threads[0].status = "active".into();
             source.core.threads.push(ReadingThread {
@@ -1335,7 +1335,7 @@ mod tests {
             }
             source
         }
-        let frontiers = |source: OptionInputs| {
+        let frontiers = |source: ReadingOrderInputs| {
             ValidatedReadingInputs::new(source, &BTreeMap::new())
                 .unwrap()
                 .eligible_frontiers()
@@ -1463,8 +1463,8 @@ mod tests {
         queue_position: i32,
         issue_status: &str,
         excluded: bool,
-    ) -> OptionInputs {
-        let mut source = OptionInputs {
+    ) -> ReadingOrderInputs {
+        let mut source = ReadingOrderInputs {
             core: CoreReadingInputs {
                 threads: vec![ReadingThread {
                     id: 8,
@@ -1497,7 +1497,7 @@ mod tests {
         source
     }
 
-    fn reason(source: OptionInputs) -> PoolReason {
+    fn reason(source: ReadingOrderInputs) -> PoolReason {
         let validated = ValidatedReadingInputs::new(source, &BTreeMap::new()).unwrap();
         let candidates = validated.eligible_frontiers().unwrap();
         pool_reason(validated.inputs(), &candidates)
@@ -1566,8 +1566,8 @@ mod tests {
         assert_eq!(reason(blocked), PoolReason::AllBlocked);
     }
 
-    fn graph_inputs() -> OptionInputs {
-        OptionInputs {
+    fn graph_inputs() -> ReadingOrderInputs {
+        ReadingOrderInputs {
             core: CoreReadingInputs {
                 threads: vec![
                     ReadingThread {
@@ -1658,8 +1658,8 @@ mod tests {
         }
     }
 
-    fn muse_inputs() -> OptionInputs {
-        OptionInputs {
+    fn muse_inputs() -> ReadingOrderInputs {
+        ReadingOrderInputs {
             core: CoreReadingInputs {
                 threads: vec![
                     ReadingThread {
@@ -1827,7 +1827,7 @@ mod tests {
         // Roll/Queue/History alive; this pins the failure mode the fixtures
         // reproduce without mocking the validator.
         for fixture in [graph_inputs(), muse_inputs()] {
-            let error = crate::option_inputs::validated(fixture)
+            let error = crate::reading_order_inputs::validated(fixture)
                 .err()
                 .expect("the incident fixture must be cyclic");
             assert_eq!(
@@ -1837,8 +1837,8 @@ mod tests {
         }
     }
 
-    fn skip_inputs(read: &[i32], list_entries: &[i32]) -> OptionInputs {
-        OptionInputs {
+    fn skip_inputs(read: &[i32], list_entries: &[i32]) -> ReadingOrderInputs {
+        ReadingOrderInputs {
             core: CoreReadingInputs {
                 threads: vec![ReadingThread {
                     id: 1,
@@ -2039,7 +2039,7 @@ mod tests {
         // USM:  #19 read (sm19), #20 unread (sm20, after_previous behind bp19)
         // UBP:  #11 unread (bp11), #19 unread (bp19)
         // UXM:  #5  unread (xm5) - independent, gate none
-        let source = OptionInputs {
+        let source = ReadingOrderInputs {
             core: CoreReadingInputs {
                 threads: vec![
                     ReadingThread {

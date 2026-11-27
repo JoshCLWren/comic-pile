@@ -25,7 +25,7 @@
 use axum::http::StatusCode;
 
 use crate::{
-    auth::VerifiedAccessClaims, db, option_inputs, reading_eligibility, ApiError, AppState,
+    auth::VerifiedAccessClaims, db, reading_order_inputs, reading_eligibility, ApiError, AppState,
 };
 use axum::{
     extract::{Query, State},
@@ -367,7 +367,7 @@ pub async fn list_threads(
     let mut preauthenticated = None;
     if reading_lists {
         let user = crate::auth::authenticate_claims(&state, &claims).await?;
-        let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
+        let validated = reading_order_inputs::load_reading_order_inputs_contained(&state, user).await?;
         reading_lists_state = Some(ReadingOrderProjection::build(&validated)?);
         preauthenticated = Some(user.id());
     }
@@ -459,7 +459,7 @@ pub async fn get_thread_detail(
     let mut candidates: Vec<i32> = Vec::new();
     if reading_lists {
         let user = crate::auth::authenticate_claims(&state, &claims).await?;
-        let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
+        let validated = reading_order_inputs::load_reading_order_inputs_contained(&state, user).await?;
         candidates = eligible_candidate_ids(&validated)?;
     }
     let position = display_position_expr("(SELECT user_id FROM auth)", "$4", "$5", "$6");

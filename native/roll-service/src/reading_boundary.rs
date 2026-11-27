@@ -2,7 +2,7 @@
 //! Implements the same contract as Python's POST /api/v2/reading-boundaries.
 
 use crate::{
-    auth::AuthenticatedUser, db, option_inputs, reading_constraints::ValidatedReadingInputs,
+    auth::AuthenticatedUser, db, reading_order_inputs, reading_constraints::ValidatedReadingInputs,
     ApiError, AppState,
 };
 use axum::{
@@ -784,7 +784,7 @@ async fn get_reading_boundary_explanations(
             return Err(ApiError::NotFound(format!("Thread {thread_id} not found")));
         }
         let validated = if state.reading_lists {
-            Some(option_inputs::load_validated_contained_in_transaction(&tx, user).await?)
+            Some(reading_order_inputs::load_validated_contained_in_transaction(&tx, user).await?)
         } else {
             None
         };

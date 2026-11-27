@@ -16,7 +16,7 @@
 use crate::{
     auth::AuthenticatedUser,
     bootstrap::{pending_roll_recovery, BootstrapRollRecovery},
-    db, option_inputs,
+    db, reading_order_inputs,
     reading_session::{self, SessionPolicy},
     ApiError, AppState,
 };
@@ -203,7 +203,7 @@ async fn switch(
     let active = reading_session::bootstrap(&state, user, None, SessionPolicy::default()).await?;
     // Read-only Reading List engine snapshot before the write connection so this request
     // never nests two pool checkouts.
-    let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
+    let validated = reading_order_inputs::load_reading_order_inputs_contained(&state, user).await?;
     let candidates = validated.eligible_frontiers().map_err(|e| {
         tracing::debug!(
             error_kind = crate::error_kind(&e),

@@ -53,7 +53,7 @@ pub struct UnresolvedReference {
     pub object_id: i32,
 }
 #[derive(Debug, Clone, Serialize)]
-pub struct OptionInputs {
+pub struct ReadingOrderInputs {
     pub core: CoreReadingInputs,
     pub thread_volumes: BTreeMap<i32, String>,
     pub lists: Vec<ReadingList>,
@@ -61,7 +61,7 @@ pub struct OptionInputs {
     pub excluded_issue_ids: BTreeSet<i32>,
     pub unresolved: Vec<UnresolvedReference>,
 }
-impl OptionInputs {
+impl ReadingOrderInputs {
     /// Refuse incomplete constraints before an evaluator can use this snapshot.
     pub fn require_resolved(&self) -> Result<(), ApiError> {
         let invalid_lists = self.lists.iter().any(|list| {
@@ -359,14 +359,14 @@ pub struct LegacyDependencyRow {
 /// Reading List engine snapshot deliberately ignores.
 #[derive(Debug)]
 pub struct OptionDiagnostics {
-    pub inputs: OptionInputs,
+    pub inputs: ReadingOrderInputs,
     pub legacy_dependencies: Vec<LegacyDependencyRow>,
 }
 
 async fn load_transaction(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,
-) -> Result<OptionInputs, ApiError> {
+) -> Result<ReadingOrderInputs, ApiError> {
     let row = tx
         .query_one(preauthenticated_statement(), &[&user.id()])
         .await
@@ -413,7 +413,7 @@ async fn load_frontier_diagnostics_transaction(
 /// The caller owns the statement that produced the snapshot; this only turns
 /// the owner-scoped rows into the evaluator's inputs and fails closed on a
 /// row that references data the reader does not own.
-pub(crate) fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, ApiError> {
+pub(crate) fn assemble_snapshot(snapshot: SnapshotRows) -> Result<ReadingOrderInputs, ApiError> {
     let core = CoreReadingInputs {
         threads: snapshot
             .threads
@@ -567,7 +567,7 @@ pub(crate) fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, 
         .map(|i| i.id)
         .collect();
     unresolved.sort();
-    Ok(OptionInputs {
+    Ok(ReadingOrderInputs {
         core,
         thread_volumes,
         lists: lists.into_values().collect(),
@@ -587,10 +587,10 @@ impl Drop for Pending {
 /// Read all Reading List engine constraints in one SQL statement inside a bounded, repeatable-read, read-only transaction.
 /// Diagnostics contain owned entry/dependency IDs only, never foreign titles or metadata.
 /// Diagnostic-only: preserves unresolved IDs for comparison, never for execution.
-pub async fn load_option_diagnostics(
+pub async fn load_reading_order_diagnostics(
     state: &AppState,
     user: AuthenticatedUser,
-) -> Result<OptionInputs, ApiError> {
+) -> Result<ReadingOrderInputs, ApiError> {
     let started = Instant::now();
     let mut pending = Pending(Some(db::checkout(state).await?));
     let result = tokio::time::timeout(state.request_timeout, async {
@@ -633,7 +633,7 @@ pub async fn load_option_diagnostics(
 }
 /// Validate loaded inputs, failing closed on missing or foreign constraint endpoints.
 pub(crate) fn validated(
-    inputs: OptionInputs,
+    inputs: ReadingOrderInputs,
 ) -> Result<crate::reading_constraints::ValidatedReadingInputs, ApiError> {
     let names = list_names(&inputs);
     crate::reading_constraints::ValidatedReadingInputs::new(inputs, &names).map_err(|error| {
@@ -648,7 +648,7 @@ pub(crate) fn validated(
     })
 }
 
-fn list_names(inputs: &OptionInputs) -> BTreeMap<i32, String> {
+fn list_names(inputs: &ReadingOrderInputs) -> BTreeMap<i32, String> {
     inputs
         .lists
         .iter()
@@ -658,7 +658,7 @@ fn list_names(inputs: &OptionInputs) -> BTreeMap<i32, String> {
 
 /// Validate for a read path: isolate cyclic components instead of failing the request.
 pub(crate) fn validated_contained(
-    inputs: OptionInputs,
+    inputs: ReadingOrderInputs,
 ) -> Result<crate::reading_constraints::ValidatedReadingInputs, ApiError> {
     let names = list_names(&inputs);
     crate::reading_constraints::ValidatedReadingInputs::contained(inputs, &names).map_err(|error| {
@@ -724,19 +724,19 @@ pub async fn load_frontier_diagnostics(
 }
 
 /// Load execution inputs, failing closed on missing or foreign constraint endpoints.
-pub async fn load_option_inputs(
+pub async fn load_reading_order_inputs(
     state: &AppState,
     user: AuthenticatedUser,
 ) -> Result<crate::reading_constraints::ValidatedReadingInputs, ApiError> {
-    validated(load_option_diagnostics(state, user).await?)
+    validated(load_reading_order_diagnostics(state, user).await?)
 }
 
 /// Load read-path inputs, containing an existing cycle to its own subgraph.
-pub async fn load_option_inputs_contained(
+pub async fn load_reading_order_inputs_contained(
     state: &AppState,
     user: AuthenticatedUser,
 ) -> Result<crate::reading_constraints::ValidatedReadingInputs, ApiError> {
-    validated_contained(load_option_diagnostics(state, user).await?)
+    validated_contained(load_reading_order_diagnostics(state, user).await?)
 }
 
 /// Load read-path inputs inside an existing transaction, containing any cycle.
@@ -751,7 +751,7 @@ pub(crate) async fn load_validated_contained_in_transaction(
 pub(crate) async fn load_inputs_in_transaction(
     transaction: &Transaction<'_>,
     user: AuthenticatedUser,
-) -> Result<OptionInputs, ApiError> {
+) -> Result<ReadingOrderInputs, ApiError> {
     load_transaction(transaction, user).await
 }
 
@@ -767,7 +767,7 @@ mod tests {
 
     #[test]
     fn overlap_validation_rejects_self_and_duplicate_pairs_per_list() {
-        let mut inputs = OptionInputs {
+        let mut inputs = ReadingOrderInputs {
             core: CoreReadingInputs {
                 threads: vec![],
                 issues: vec![],

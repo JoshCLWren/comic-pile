@@ -18,7 +18,7 @@
 //! owner-scoped and never touch issues, read state, ratings or history.
 
 use crate::{
-    auth::AuthenticatedUser, db, issue_service, option_inputs,
+    auth::AuthenticatedUser, db, issue_service, reading_order_inputs,
     reading_constraints::ValidatedReadingInputs, ApiError, AppState,
 };
 use axum::{
@@ -211,7 +211,7 @@ async fn lock_reader(tx: &Transaction<'_>, user_id: i32) -> Result<(), ApiError>
 /// Combined-graph preflight: the projected graph after this write must be
 /// acyclic, or the transaction rolls back and nothing is changed.
 async fn graph_preflight(tx: &Transaction<'_>, user: AuthenticatedUser) -> Result<(), ApiError> {
-    let inputs = option_inputs::load_inputs_in_transaction(tx, user).await?;
+    let inputs = reading_order_inputs::load_inputs_in_transaction(tx, user).await?;
     let names: BTreeMap<i32, String> = inputs
         .lists
         .iter()

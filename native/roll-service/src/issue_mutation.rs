@@ -7,7 +7,7 @@
 //! prerequisite or plan dangling is refused with the owning names.
 
 use crate::{
-    auth::AuthenticatedUser, db, option_inputs, reading_constraints::ValidatedReadingInputs,
+    auth::AuthenticatedUser, db, reading_order_inputs, reading_constraints::ValidatedReadingInputs,
     thread_issues::natural_issue_order, ApiError, AppState,
 };
 use axum::{
@@ -187,7 +187,7 @@ pub fn preview_issue_create_documentation() {}
 #[allow(dead_code)]
 pub fn preview_issue_structure_documentation() {}
 
-fn names(inputs: &option_inputs::OptionInputs) -> BTreeMap<i32, String> {
+fn names(inputs: &reading_order_inputs::ReadingOrderInputs) -> BTreeMap<i32, String> {
     inputs
         .lists
         .iter()
@@ -196,7 +196,7 @@ fn names(inputs: &option_inputs::OptionInputs) -> BTreeMap<i32, String> {
 }
 
 async fn graph_preflight(tx: &Transaction<'_>, user: AuthenticatedUser) -> Result<(), ApiError> {
-    let inputs = option_inputs::load_inputs_in_transaction(tx, user).await?;
+    let inputs = reading_order_inputs::load_inputs_in_transaction(tx, user).await?;
     let names = names(&inputs);
     ValidatedReadingInputs::new(inputs.clone(), &names)
         .map_err(|error| crate::reading_graph::cycle_conflict(error, &inputs))?;
@@ -1385,8 +1385,8 @@ async fn preview_projection(
     }
     recreate_tracking_state(tx, thread_id, user.id()).await?;
 
-    let inputs = option_inputs::load_inputs_in_transaction(tx, user).await?;
-    let validated = option_inputs::validated_contained(inputs.clone())?;
+    let inputs = reading_order_inputs::load_inputs_in_transaction(tx, user).await?;
+    let validated = reading_order_inputs::validated_contained(inputs.clone())?;
     let graph = crate::reading_graph::project(&inputs, &validated, None);
     let can_commit = graph.status == "ok";
     let conflict_message = if can_commit {

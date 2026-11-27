@@ -7,7 +7,7 @@
 //! Queue use, so a persisted cycle cannot make this page fail globally.
 
 use crate::{
-    auth::AuthenticatedUser, db, option_inputs, reading_blocker_projection,
+    auth::AuthenticatedUser, db, reading_order_inputs, reading_blocker_projection,
     reading_constraints::ValidatedReadingInputs, reading_eligibility, ApiError, AppState,
 };
 use axum::{
@@ -519,8 +519,8 @@ pub async fn create_reading_list(
 async fn graph_preflight(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,
-) -> Result<option_inputs::OptionInputs, ApiError> {
-    let inputs = option_inputs::load_inputs_in_transaction(tx, user).await?;
+) -> Result<reading_order_inputs::ReadingOrderInputs, ApiError> {
+    let inputs = reading_order_inputs::load_inputs_in_transaction(tx, user).await?;
     let names = inputs
         .lists
         .iter()
@@ -532,7 +532,7 @@ async fn graph_preflight(
 }
 
 fn strict_coverage_warnings(
-    inputs: &option_inputs::OptionInputs,
+    inputs: &reading_order_inputs::ReadingOrderInputs,
     entries: &[ReadingListEntry],
     mode: &str,
 ) -> Vec<String> {
@@ -1050,7 +1050,7 @@ pub async fn read_reading_list(
     let entries = load_entries_conn(&conn, list_id).await?;
     drop(conn);
 
-    let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
+    let validated = reading_order_inputs::load_reading_order_inputs_contained(&state, user).await?;
     let evaluated = reading_eligibility::evaluate(&validated)?;
     let inputs = validated.inputs();
     let titles: BTreeMap<i32, String> = inputs

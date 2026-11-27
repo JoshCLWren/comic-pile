@@ -40,7 +40,7 @@ use crate::{
     continuity_plans::ContinuityPlanNode,
     db,
     dice_api::Pending,
-    option_inputs, queue,
+    reading_order_inputs, queue,
     reading_constraints::ValidatedReadingInputs,
     reading_session::{self, SessionPolicy},
     roll_exclusions,
@@ -372,7 +372,7 @@ async fn canonical_eligibility_inputs(
     state: &AppState,
     user: AuthenticatedUser,
 ) -> Result<ValidatedReadingInputs, ApiError> {
-    option_inputs::load_option_inputs_contained(state, user).await
+    reading_order_inputs::load_reading_order_inputs_contained(state, user).await
 }
 
 /// Reader-facing reason for a thread the canonical evaluator rejects.

@@ -283,13 +283,13 @@ pub fn evaluate(
 mod tests {
     use super::*;
     use crate::{
-        option_inputs::OptionInputs,
+        reading_order_inputs::ReadingOrderInputs,
         reading_inputs::{CoreReadingInputs, ReadingIssue, ReadingThread, StoredThreadEligibility},
     };
     use std::collections::{BTreeMap, BTreeSet};
 
-    fn test_inputs() -> OptionInputs {
-        OptionInputs {
+    fn test_inputs() -> ReadingOrderInputs {
+        ReadingOrderInputs {
             core: CoreReadingInputs {
                 threads: vec![
                     ReadingThread {
@@ -369,7 +369,7 @@ mod tests {
         let mut inputs = test_inputs();
         inputs
             .prerequisites
-            .push(crate::option_inputs::Prerequisite {
+            .push(crate::reading_order_inputs::Prerequisite {
                 prerequisite_id: 1,
                 source_issue_id: 11,
                 target_issue_id: 20,
@@ -438,13 +438,13 @@ mod tests {
             is_blocked: false,
             queue_position: 4,
         });
-        inputs.lists.push(crate::option_inputs::ReadingList {
+        inputs.lists.push(crate::reading_order_inputs::ReadingList {
             list_id: 2,
             mode: "strict".into(),
             name: "Mignolaverse - Julix".into(),
             entries: [10, 11, 21, 20, 40, 30]
                 .into_iter()
-                .map(|issue_id| crate::option_inputs::ReadingEntry {
+                .map(|issue_id| crate::reading_order_inputs::ReadingEntry {
                     issue_id,
                     gate: "none".into(),
                     skipped: false,
@@ -577,14 +577,14 @@ mod tests {
                 queue_position: 0,
             },
         ]);
-        inputs.lists.push(crate::option_inputs::ReadingList {
+        inputs.lists.push(crate::reading_order_inputs::ReadingList {
             list_id: 2,
             mode: "strict".into(),
             name: "Mignolaverse — Julix Comics (Unread)".into(),
             // Positions 22, 23, 24, 25, 45, 53, 54 in the production list.
             entries: [10, 11, 12, 30, 40, 50, 20]
                 .into_iter()
-                .map(|issue_id| crate::option_inputs::ReadingEntry {
+                .map(|issue_id| crate::reading_order_inputs::ReadingEntry {
                     issue_id,
                     gate: "none".into(),
                     skipped: false,
@@ -594,7 +594,7 @@ mod tests {
         });
         inputs
             .prerequisites
-            .push(crate::option_inputs::Prerequisite {
+            .push(crate::reading_order_inputs::Prerequisite {
                 prerequisite_id: 1_724_900,
                 source_issue_id: 50,
                 target_issue_id: 20,
@@ -648,19 +648,19 @@ mod tests {
         let mut inputs = test_inputs();
         inputs.thread_volumes.insert(1, "comicvine:11".into());
         inputs.thread_volumes.insert(2, "comicvine:20".into());
-        inputs.lists.push(crate::option_inputs::ReadingList {
+        inputs.lists.push(crate::reading_order_inputs::ReadingList {
             list_id: 2,
             mode: "strict".into(),
             name: "Overlapping volumes".into(),
             entries: [11, 20]
                 .into_iter()
-                .map(|issue_id| crate::option_inputs::ReadingEntry {
+                .map(|issue_id| crate::reading_order_inputs::ReadingEntry {
                     issue_id,
                     gate: "none".into(),
                     skipped: false,
                 })
                 .collect(),
-            overlap_decisions: vec![crate::option_inputs::OverlapDecision {
+            overlap_decisions: vec![crate::reading_order_inputs::OverlapDecision {
                 continuing_volume_id: "comicvine:20".into(),
                 waiting_volume_id: "comicvine:11".into(),
             }],
@@ -695,22 +695,22 @@ mod tests {
             is_blocked: false,
             queue_position: 3,
         });
-        inputs.lists.push(crate::option_inputs::ReadingList {
+        inputs.lists.push(crate::reading_order_inputs::ReadingList {
             list_id: 2,
             mode: "loose".into(),
             name: "Milestone".into(),
             entries: vec![
-                crate::option_inputs::ReadingEntry {
+                crate::reading_order_inputs::ReadingEntry {
                     issue_id: 11,
                     gate: "none".into(),
                     skipped: false,
                 },
-                crate::option_inputs::ReadingEntry {
+                crate::reading_order_inputs::ReadingEntry {
                     issue_id: 30,
                     gate: "hold".into(),
                     skipped: false,
                 },
-                crate::option_inputs::ReadingEntry {
+                crate::reading_order_inputs::ReadingEntry {
                     issue_id: 20,
                     gate: "none".into(),
                     skipped: false,
@@ -749,17 +749,17 @@ mod tests {
             queue_position: 3,
         });
         // Series order 10 -> 11 conflicts with a strict list that puts 11 first.
-        inputs.lists.push(crate::option_inputs::ReadingList {
+        inputs.lists.push(crate::reading_order_inputs::ReadingList {
             list_id: 1,
             mode: "strict".to_string(),
             name: "Curated".to_string(),
             entries: vec![
-                crate::option_inputs::ReadingEntry {
+                crate::reading_order_inputs::ReadingEntry {
                     issue_id: 11,
                     gate: "none".to_string(),
                     skipped: false,
                 },
-                crate::option_inputs::ReadingEntry {
+                crate::reading_order_inputs::ReadingEntry {
                     issue_id: 10,
                     gate: "none".to_string(),
                     skipped: false,

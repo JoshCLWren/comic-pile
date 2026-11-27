@@ -2,7 +2,7 @@
 //! No Python hop and no synthetic "success" values for missing database rows.
 use crate::{
     auth::AuthenticatedUser,
-    db, option_inputs,
+    db, reading_order_inputs,
     reading_session::{self, SessionPolicy},
     ApiError, AppState,
 };
@@ -770,7 +770,7 @@ async fn canonical_series_stats(
     Ok(stats)
 }
 
-fn recovery_label(inputs: &option_inputs::OptionInputs, issue_id: i32) -> String {
+fn recovery_label(inputs: &reading_order_inputs::ReadingOrderInputs, issue_id: i32) -> String {
     let Some(issue) = inputs.core.issues.iter().find(|issue| issue.id == issue_id) else {
         return "Required issue".into();
     };
@@ -806,7 +806,7 @@ fn recovery_diagnostic(
 fn recovery_chains(
     issue_id: i32,
     edges: &[crate::reading_constraints::ConstraintEdge],
-    inputs: &option_inputs::OptionInputs,
+    inputs: &reading_order_inputs::ReadingOrderInputs,
     readable: &HashSet<i32>,
     ancestors: &HashSet<i32>,
     depth: usize,
@@ -1061,7 +1061,7 @@ pub async fn bootstrap_v2(
         SessionPolicy::default(),
     )
     .await?;
-    let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
+    let validated = reading_order_inputs::load_reading_order_inputs_contained(&state, user).await?;
     let session = &active.session;
     let candidates = validated.eligible_frontiers().map_err(|e| {
         tracing::debug!(
@@ -1304,14 +1304,14 @@ pub fn initialize_session_documentation() {}
 mod recovery_diagnostic_tests {
     use super::recovery_chains;
     use crate::{
-        option_inputs::OptionInputs,
+        reading_order_inputs::ReadingOrderInputs,
         reading_constraints::ConstraintEdge,
         reading_inputs::{CoreReadingInputs, ReadingIssue, ReadingThread},
     };
     use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-    fn inputs() -> OptionInputs {
-        OptionInputs {
+    fn inputs() -> ReadingOrderInputs {
+        ReadingOrderInputs {
             core: CoreReadingInputs {
                 threads: vec![ReadingThread {
                     id: 7,
