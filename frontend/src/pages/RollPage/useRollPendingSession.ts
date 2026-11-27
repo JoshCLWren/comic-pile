@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import type { RollBootstrapResponse, RollBootstrapThread } from '../../types/rollBootstrap'
+import type { RollPendingSelection } from '../../services/rollPendingSelection'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 import type { ThreadMetadata } from './types'
 
@@ -7,6 +8,8 @@ interface UseRollPendingSessionParams {
   state: RollPageState & RollPageStateSetters
   bootstrap?: RollBootstrapResponse | null
   rollPool: RollBootstrapThread[]
+  /** Exact browser-owned selection restored from storage, never server state. */
+  pending?: RollPendingSelection | null
 }
 
 /**
@@ -15,7 +18,7 @@ interface UseRollPendingSessionParams {
  * it restores the full rating context without issuing any additional request,
  * so a reload or navigation never loses an in-flight read.
  */
-export function useRollPendingSession({ state, bootstrap, rollPool }: UseRollPendingSessionParams): void {
+export function useRollPendingSession({ state, bootstrap, rollPool, pending }: UseRollPendingSessionParams): void {
   const {
     suppressPendingAutoOpenRef,
     selectedThreadId,
@@ -34,7 +37,7 @@ export function useRollPendingSession({ state, bootstrap, rollPool }: UseRollPen
 
   useEffect(() => {
     if (suppressPendingAutoOpenRef.current) return
-    const pendingThreadId = bootstrap?.pending_thread_id
+    const pendingThreadId = pending?.thread_id
     if (!pendingThreadId) return
 
     const pendingId = Number(pendingThreadId)
@@ -69,7 +72,7 @@ export function useRollPendingSession({ state, bootstrap, rollPool }: UseRollPen
         : null
 
     const pendingResult =
-      pendingFromSession?.last_rolled_result ?? bootstrap?.last_rolled_result ?? null
+      pendingFromSession?.last_rolled_result ?? pending?.result ?? bootstrap?.last_rolled_result ?? null
     // SAFETY: both pendingFromSession and pendingFromPool carry ThreadMetadata when present; the union falls back to null.
     const pendingMetadata = (pendingFromSession ?? pendingFromPool) as ThreadMetadata | null
     const shouldInitializeRatingView = !isRatingView || !isCurrentPendingSelection

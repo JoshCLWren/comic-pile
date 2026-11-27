@@ -43,7 +43,7 @@ import { LastReadStrip } from './components/LastReadStrip'
 import { useRollLastRead } from '../../hooks/useRollLastRead'
 import { useSnapshots, useUndo } from '../../hooks/useUndo'
 import { useToast } from '../../contexts/useToast'
-import { invalidateAfterUndo, invalidateDirectReadIssueSelection, invalidateRollBootstrapOnNavigation } from '../../query/cacheEffects'
+import { invalidateAfterUndo, invalidateDirectReadIssueSelection } from '../../query/cacheEffects'
 import { resolveRollSelectedDie } from './selectedDie'
 import { ThreadPool } from './components/ThreadPool'
 import { resolveSnoozedSeriesCovers } from './resolveSnoozedSeriesCovers'
@@ -258,6 +258,8 @@ export default function RollPage() {
     refetchBootstrap,
     enterRatingView: rating.enterRatingView,
     onSnoozeRefreshFailed: reportSnoozeRefreshFailed,
+    pendingThreadId: pendingSelection.pending?.thread_id ?? null,
+    seedPending: pendingSelection.seedFromOffer,
   })
 
   const modals = useRollModals({
@@ -658,7 +660,7 @@ export default function RollPage() {
             state.setShowMigrationDialog(true)
           }}
           selectedThread={state.selectedThread}
-          pendingThreadId={bootstrap.pending_thread_id}
+          pendingThreadId={pendingSelection.pending?.thread_id ?? null}
           onCloseActionSheet={() => state.setIsActionSheetOpen(false)}
           onAction={actions.handleAction}
           isSetCurrentIssueOpen={state.isSetCurrentIssueOpen}
