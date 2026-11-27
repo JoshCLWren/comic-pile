@@ -1362,6 +1362,7 @@ WITH owned AS (
               AND e.context->>'undone_by_snapshot_id' IS NULL
             ORDER BY e.timestamp DESC, e.id DESC LIMIT 1) AS rating,
            COALESCE(id_map.status, 'unmapped') AS mapping_state,
+           (id_map.status = 'confirmed') AS has_confirmed_identity,
            CASE WHEN id_map.status = 'confirmed' THEN id_map.external_id END AS comicvine_issue_id,
            id_map.cover_url AS cover_image_url
     FROM paged p
@@ -1550,6 +1551,11 @@ pub async fn list_thread_creator_credits_v2(
     } else {
         None
     };
+    // The page query fetches one extra row to detect continuation. The extra
+    // row may also carry credits, so the public projection is cut back to the
+    // requested size before it is returned.
+    let mut issues = issues;
+    issues.truncate(page_size as usize);
     Ok(Json(ThreadCreatorCreditsPage {
         thread_id,
         issues,
