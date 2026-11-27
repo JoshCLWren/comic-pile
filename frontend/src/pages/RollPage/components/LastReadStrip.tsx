@@ -139,6 +139,7 @@ export function LastReadStrip({
             status="read"
             rating={view.rating ?? null}
             hideTitle
+            showCover={false}
             actionLabel="Read or rate this issue"
           />
         </div>
