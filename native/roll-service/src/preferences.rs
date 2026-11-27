@@ -732,6 +732,73 @@ mod tests {
     }
 
     #[test]
+    fn stable_signal_name_round_trips_colon_shaped_external_keys() {
+        let name = taste_signal_name("creator", "creator:writer:dk");
+        assert_eq!(name, "creator:creator:writer:dk");
+        assert_eq!(
+            parse_taste_signal_name(&name).expect("canonical name"),
+            ("creator".to_string(), "creator:writer:dk".to_string())
+        );
+        assert_eq!(
+            parse_taste_signal_name("era:1990s").expect("simple key"),
+            ("era".to_string(), "1990s".to_string())
+        );
+        for invalid in ["no-separator", "color:red", "creator:", ":missing-type"] {
+            assert_eq!(
+                parse_taste_signal_name(invalid)
+                    .expect_err("malformed composite name")
+                    .status(),
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "name={invalid}"
+            );
+        }
+        let oversized = format!("creator:{}", "x".repeat(256));
+        assert_eq!(
+            parse_taste_signal_name(&oversized)
+                .expect_err("oversized key")
+                .status(),
+            StatusCode::UNPROCESSABLE_ENTITY
+        );
+    }
+
+    #[test]
+    fn patch_body_supports_masks_and_preserves_aip134_semantics() {
+        let set = parse_taste_signal_patch(br#"{"user_verdict":"sometimes","update_mask":["user_verdict"]}"#)
+            .expect("masked set");
+        assert_eq!(set, VerdictPatch::Set("sometimes".to_string()));
+        assert_eq!(
+            parse_taste_signal_patch(br#"{"user_verdict":"rejected"}"#).expect("presence set"),
+            VerdictPatch::Set("rejected".to_string())
+        );
+        assert_eq!(
+            parse_taste_signal_patch(br#"{"update_mask":"user_verdict"}"#).expect("string mask clears"),
+            VerdictPatch::Clear
+        );
+        assert_eq!(
+            parse_taste_signal_patch(br#"{"update_mask":["user_verdict"],"user_verdict":null}"#)
+                .expect("explicit null clears"),
+            VerdictPatch::Clear
+        );
+        assert_eq!(
+            parse_taste_signal_patch(b"{}").expect("empty patch"),
+            VerdictPatch::Unchanged
+        );
+        for invalid in [
+            br#"{"user_verdict":"love-it"}"#.as_slice(),
+            br#"{"update_mask":["theme"]}"#,
+            br#"{"update_mask":42}"#,
+            b"[]",
+        ] {
+            assert_eq!(
+                parse_taste_signal_patch(invalid)
+                    .expect_err("invalid patch")
+                    .status(),
+                StatusCode::UNPROCESSABLE_ENTITY
+            );
+        }
+    }
+
+    #[test]
     fn display_name_derivation_matches_the_python_handler() {
         assert_eq!(display_name_for("creator:writer:dk"), "dk");
         assert_eq!(display_name_for("plain-key"), "plain-key");
@@ -875,5 +942,112 @@ mod tests {
             row.get::<_, Option<String>>(0).as_deref(),
             Some("confirmed")
         );
+    }
+
+    #[tokio::test]
+    async fn v2_patch_is_owner_scoped_idempotent_and_verdict_only() {
+        use axum::body::Bytes;
+        let (state, client, _db) = db_fixture().await;
+        client
+            .batch_execute(
+                "INSERT INTO users (id, username) VALUES (2, 'reader-2');
+                 INSERT INTO taste_signals \
+                   (user_id, signal_type, external_key, display_name, affinity_estimate, \
+                    confidence, evidence_count, distinct_thread_count, created_at, updated_at) \
+                 VALUES \
+                   (1, 'creator', 'creator:writer:dk', 'dk', 0.8, 0.9, 4, 2, NOW(), NOW()), \
+                   (2, 'creator', 'creator:writer:dk', 'dk', 0.5, 0.7, 9, 6, NOW(), NOW());",
+            )
+            .await
+            .expect("seed owner and foreign taste signals");
+
+        let name = taste_signal_name("creator", "creator:writer:dk");
+        let body = Bytes::from(
+            serde_json::json!({"user_verdict": "confirmed", "update_mask": ["user_verdict"]})
+                .to_string(),
+        );
+        let Json(first) = patch_taste_signal_v2(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Path(name.clone()),
+            body.clone(),
+        )
+        .await
+        .expect("v2 verdict patch");
+        assert_eq!(first.user_verdict.as_deref(), Some("confirmed"));
+        assert_eq!(first.evidence_count, 4, "inferred evidence must survive");
+
+        let Json(second) = patch_taste_signal_v2(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Path(name.clone()),
+            body,
+        )
+        .await
+        .expect("duplicate v2 verdict patch");
+        assert_eq!(
+            serde_json::to_value(&first).expect("first wire body"),
+            serde_json::to_value(&second).expect("second wire body"),
+            "identical verdicts must be byte-idempotent"
+        );
+
+        let owner = client
+            .query_one(
+                "SELECT user_verdict, verdict_at, evidence_count, distinct_thread_count \
+                 FROM taste_signals WHERE user_id=1 AND signal_type='creator' \
+                 AND external_key='creator:writer:dk'",
+                &[],
+            )
+            .await
+            .expect("owner row");
+        assert_eq!(
+            owner.get::<_, Option<String>>(0).as_deref(),
+            Some("confirmed")
+        );
+        assert!(owner.get::<_, Option<chrono::DateTime<chrono::Utc>>>(1).is_some());
+        assert_eq!(owner.get::<_, i32>(2), 4);
+        assert_eq!(owner.get::<_, i32>(3), 2);
+
+        let foreign = client
+            .query_one(
+                "SELECT user_verdict, evidence_count FROM taste_signals \
+                 WHERE user_id=2 AND signal_type='creator' AND external_key='creator:writer:dk'",
+                &[],
+            )
+            .await
+            .expect("foreign row");
+        assert_eq!(foreign.get::<_, Option<String>>(0), None);
+        assert_eq!(foreign.get::<_, i32>(1), 9, "foreign evidence untouched");
+
+        let Json(cleared) = patch_taste_signal_v2(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Path(name.clone()),
+            Bytes::from(br#"{"update_mask":["user_verdict"]}"#.to_vec()),
+        )
+        .await
+        .expect("masked verdict clear");
+        assert_eq!(cleared.user_verdict, None);
+
+        let missing = patch_taste_signal_v2(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Path(taste_signal_name("era", "1990s")),
+            Bytes::from(br#"{"user_verdict":"confirmed"}"#.to_vec()),
+        )
+        .await
+        .expect("direct verdict creates the owned signal");
+        assert_eq!(missing.user_verdict.as_deref(), Some("confirmed"));
+        assert_eq!(missing.evidence_count, 0);
+
+        let no_fields = patch_taste_signal_v2(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Path(taste_signal_name("era", "1980s")),
+            Bytes::from(b"{}".to_vec()),
+        )
+        .await
+        .expect_err("a no-op patch cannot invent a signal");
+        assert_eq!(no_fields.status(), StatusCode::NOT_FOUND);
     }
 }

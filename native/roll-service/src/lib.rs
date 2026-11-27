@@ -1203,6 +1203,18 @@ pub fn router(state: Arc<AppState>) -> Router {
             patch(preferences::patch_user_preferences),
         )
         .route(
+            "/api/v2/users/me/tasteDiscoveries",
+            get(taste_discoveries::list_taste_discoveries_v2),
+        )
+        .route(
+            "/api/v2/users/me/tasteDiscoveries/{signal_id}:dismiss",
+            post(taste_discoveries::dismiss_taste_discovery_v2),
+        )
+        .route(
+            "/api/v2/users/me/tasteSignals/{signal_name}",
+            patch(preferences::patch_taste_signal_v2),
+        )
+        .route(
             "/api/v1/users/me/taste-signals",
             get(preferences::list_taste_signals),
         )
