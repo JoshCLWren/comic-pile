@@ -1,12 +1,11 @@
-//! Same-path native CRUD for the browser's generalized continuity rules.
+//! Same-path native CRUD for generalized continuity rules.
 //!
-//! The Python implementation remains in place until production execution is
-//! proven. This module deliberately mirrors its owner checks, graph lock,
-//! cycle validation, canonical dependency compilation, and response shape.
+//! A continuity rule is inert bookkeeping: the Reading List engine is the sole
+//! eligibility evaluator, so rule writes never compile canonical dependency
+//! edges or refresh a legacy blocked projection. Owner checks, graph lock,
+//! cycle validation and the response shape are retained.
 
-use crate::{
-    auth::AuthenticatedUser, db, issue_service::refresh_blocked_threads, ApiError, AppState,
-};
+use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -20,7 +19,6 @@ use tokio_postgres::{Row, Transaction};
 use utoipa::ToSchema;
 
 const CONTINUITY_LOCK_NAMESPACE: i32 = 1_129_274_964;
-const RULE_NOTE_PREFIX: &str = "canonical:rule:";
 
 #[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 #[serde(deny_unknown_fields)]
@@ -407,48 +405,6 @@ async fn load_rule(
     Ok(Some(response_from_row(&row, members)))
 }
 
-pub(crate) async fn compile_edges(
-    tx: &Transaction<'_>,
-    pairs: &[(i32, i32)],
-    rule_id: i32,
-) -> Result<(), ApiError> {
-    if pairs.is_empty() {
-        return Ok(());
-    }
-    let sources: Vec<i32> = pairs.iter().map(|pair| pair.0).collect();
-    let targets: Vec<i32> = pairs.iter().map(|pair| pair.1).collect();
-    tx.execute(
-        "INSERT INTO dependencies (source_issue_id,target_issue_id,note,created_at)
-         SELECT * FROM unnest($1::int[],$2::int[],$3::text[],ARRAY(SELECT now() FROM generate_series(1,cardinality($1))))
-         ON CONFLICT (source_issue_id,target_issue_id) DO UPDATE SET note=EXCLUDED.note
-         WHERE dependencies.note LIKE 'canonical:rule:%' OR dependencies.note LIKE 'canonical:rule-backfill:%'",
-        &[&sources, &targets, &vec![format!("{RULE_NOTE_PREFIX}{rule_id}"); pairs.len()]],
-    ).await.map_err(db::query_error)?;
-    Ok(())
-}
-
-pub(crate) async fn retire_edges(
-    tx: &Transaction<'_>,
-    user_id: i32,
-    pairs: &[(i32, i32)],
-    exclude_rule_id: i32,
-) -> Result<(), ApiError> {
-    for (source, target) in pairs {
-        let still_used = tx.query_opt(
-            "SELECT 1 FROM continuity_rules r
-             WHERE r.user_id=$1 AND r.id<>$2 AND (
-               (r.satisfaction_type IN ('item_read','checkpoint') AND r.source_type='issue' AND r.target_type='issue' AND COALESCE(r.checkpoint_issue_id,r.source_id)=$3 AND r.target_id=$4)
-               OR (r.satisfaction_type='converged' AND r.target_type='issue' AND EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(r.convergence_targets::jsonb,'[]'::jsonb)) t WHERE t->>'type'='issue' AND (t->>'id')::int=$3) AND r.target_id=$4)
-             ) LIMIT 1",
-            &[&user_id, &exclude_rule_id, &source, &target],
-        ).await.map_err(db::query_error)?.is_some();
-        if !still_used {
-            tx.execute("DELETE FROM dependencies WHERE source_issue_id=$1 AND target_issue_id=$2 AND (note LIKE 'canonical:rule:%' OR note LIKE 'canonical:rule-backfill:%')", &[&source, &target]).await.map_err(db::query_error)?;
-        }
-    }
-    Ok(())
-}
-
 async fn insert_members(
     tx: &Transaction<'_>,
     rule_id: i32,
@@ -566,8 +522,6 @@ pub async fn create(
     let row = tx.query_one("INSERT INTO continuity_rules (user_id,source_type,source_id,target_type,target_id,satisfaction_type,checkpoint_issue_id,convergence_targets,note,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::text::json,$9,NOW(),NOW()) RETURNING id", &[&user.id(),&request.source_type,&request.source_id,&request.target_type,&request.target_id,&request.satisfaction_type,&request.checkpoint_issue_id,&targets,&request.note]).await.map_err(|error| if error.as_db_error().is_some_and(|e| e.code().code()=="23505") { conflict("continuity_rule_exists") } else { db::query_error(error) })?;
     let rule_id: i32 = row.get(0);
     insert_members(&tx, rule_id, &request.selected_member_issue_ids).await?;
-    compile_edges(&tx, &edge_pairs(&request), rule_id).await?;
-    refresh_blocked_threads(&tx, user.id()).await?;
     let response = load_rule(&tx, user.id(), rule_id)
         .await?
         .ok_or_else(|| internal_error("Failed to load inserted continuity rule"))?;
@@ -591,7 +545,7 @@ pub async fn update(
         .await
         .map_err(db::query_error)?;
     lock_graph(&tx, user.id()).await?;
-    let old = load_rule(&tx, user.id(), rule_id)
+    load_rule(&tx, user.id(), rule_id)
         .await?
         .ok_or_else(|| not_found(format!("Continuity rule {rule_id} not found")))?;
     owned_references(&tx, user.id(), &request).await?;
@@ -623,18 +577,6 @@ pub async fn update(
             return Err(conflict("continuity_cycle"));
         }
     }
-    let old_request = ContinuityRuleRequest {
-        source_type: old.source_type,
-        source_id: old.source_id,
-        target_type: old.target_type,
-        target_id: old.target_id,
-        satisfaction_type: old.satisfaction_type,
-        checkpoint_issue_id: old.checkpoint_issue_id,
-        convergence_targets: old.convergence_targets,
-        selected_member_issue_ids: old.selected_member_issue_ids,
-        note: old.note,
-    };
-    let old_pairs = edge_pairs(&old_request);
     let targets = if request.convergence_targets.is_empty() {
         None
     } else {
@@ -655,9 +597,6 @@ pub async fn update(
     .await
     .map_err(db::query_error)?;
     insert_members(&tx, rule_id, &request.selected_member_issue_ids).await?;
-    retire_edges(&tx, user.id(), &old_pairs, rule_id).await?;
-    compile_edges(&tx, &edge_pairs(&request), rule_id).await?;
-    refresh_blocked_threads(&tx, user.id()).await?;
     let response = load_rule(&tx, user.id(), rule_id)
         .await?
         .ok_or_else(|| internal_error("Failed to load updated continuity rule"))?;
@@ -677,28 +616,15 @@ pub async fn delete(
         .await
         .map_err(db::query_error)?;
     lock_graph(&tx, user.id()).await?;
-    let old = load_rule(&tx, user.id(), rule_id)
+    load_rule(&tx, user.id(), rule_id)
         .await?
         .ok_or_else(|| not_found(format!("Continuity rule {rule_id} not found")))?;
-    let old_request = ContinuityRuleRequest {
-        source_type: old.source_type,
-        source_id: old.source_id,
-        target_type: old.target_type,
-        target_id: old.target_id,
-        satisfaction_type: old.satisfaction_type,
-        checkpoint_issue_id: old.checkpoint_issue_id,
-        convergence_targets: old.convergence_targets,
-        selected_member_issue_ids: old.selected_member_issue_ids,
-        note: old.note,
-    };
     tx.execute(
         "DELETE FROM continuity_rules WHERE id=$1 AND user_id=$2",
         &[&rule_id, &user.id()],
     )
     .await
     .map_err(db::query_error)?;
-    retire_edges(&tx, user.id(), &edge_pairs(&old_request), rule_id).await?;
-    refresh_blocked_threads(&tx, user.id()).await?;
     tx.commit().await.map_err(db::query_error)?;
     Ok(StatusCode::NO_CONTENT.into_response())
 }
