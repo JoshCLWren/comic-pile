@@ -137,11 +137,7 @@ fn authed(method: &str, path: &str, token: &str, csrf: &str, body: Option<Value>
 /// Seed the owned/foreign session drill-down rows used by the #5885 HTTP
 /// regressions. High, fixed IDs avoid the sequence values allocated by the
 /// register calls in `setup_user` / `register_extra_user`.
-async fn seed_session_drilldown_fixture(
-    state: &Arc<AppState>,
-    owner_id: i32,
-    foreign_id: i32,
-) {
+async fn seed_session_drilldown_fixture(state: &Arc<AppState>, owner_id: i32, foreign_id: i32) {
     let connection = state.pool.get().await.unwrap();
     connection
         .batch_execute(&format!(
