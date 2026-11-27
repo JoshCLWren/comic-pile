@@ -43,8 +43,10 @@ function runCli(args) {
     });
     return {status: 0, stdout, stderr: ''};
   } catch (error) {
+    // execFileSync exposes status/stdout/stderr on its error; decode the process
+    // result at this I/O boundary instead of narrowing an unparsed value.
     return {
-      status: typeof error.status === 'number' ? error.status : 1,
+      status: error.status ?? 1,
       stdout: String(error.stdout ?? ''),
       stderr: String(error.stderr ?? ''),
     };
