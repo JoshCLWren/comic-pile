@@ -3986,6 +3986,8 @@ export interface components {
             thread_title?: string | null;
             timestamp: string;
             type: string;
+        } & {
+            [key: string]: unknown;
         };
         ActivityResponse: {
             activities: components["schemas"]["ActivityItem"][];
@@ -3993,11 +3995,15 @@ export interface components {
             items: components["schemas"]["ActivityItem"][];
             next_cursor?: string | null;
             next_page_token?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         AssignTagRequest: {
             /** Format: int32 */
             target_id: number;
             target_type: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * @description One inert legacy/converted dependency row into the frontier.
@@ -4022,6 +4028,8 @@ export interface components {
             source_status?: string | null;
             /** Format: int32 */
             target_issue_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description One owned Reading List placement of the frontier issue, with its gate. */
         AuditListMembership: {
@@ -4031,14 +4039,20 @@ export interface components {
             list_name: string;
             mode: string;
             skipped: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `BatchBlockingExplanationRequest` (documentation schema). */
         BatchBlockingExplanationRequest: {
             thread_ids: number[];
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `BatchBlockingExplanationResponse`. */
         BatchBlockingExplanationResponse: {
             threads: components["schemas"]["OrderedExplanations"];
+        } & {
+            [key: string]: unknown;
         };
         /** @enum {string} */
         BlockerKind: "strict_order" | "hold" | "after_previous" | "prerequisite" | "reading_cycle";
@@ -4053,17 +4067,23 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
             thread_title: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Blocked status plus reader-language reasons (Python `BlockingExplanation`). */
         BlockingExplanation: {
             blocking_dependencies: components["schemas"]["BlockingDependency"][];
             blocking_reasons: string[];
             is_blocked: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /** Body_set_pending_thread_api_v1_threads__thread_id__set_pending_post */
         Body_set_pending_thread_api_v1_threads__thread_id__set_pending_post: {
             /** Expected Issue Id */
             expected_issue_id?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Currently pending thread shown by the Roll surface. */
         BootstrapActiveThread: {
@@ -4096,6 +4116,8 @@ export interface components {
             title: string;
             /** Format: int32 */
             total_issues?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Compact bandwidth block retained for existing Roll consumers. */
         BootstrapBandwidth: {
@@ -4105,6 +4127,8 @@ export interface components {
             mode_version?: string | null;
             predicted_bandwidth?: string | null;
             source?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Mapping state for a rollable candidate. */
         BootstrapIdentitySummary: {
@@ -4112,6 +4136,8 @@ export interface components {
             series_mapping_state: string;
             source: string;
             state: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Candidate issue identity displayed on a Roll face. */
         BootstrapIssueSummary: {
@@ -4120,6 +4146,8 @@ export interface components {
             /** Format: int32 */
             id: number;
             number: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Most recent rated issue for the active session. */
         BootstrapLastRead: {
@@ -4131,6 +4159,8 @@ export interface components {
             /** Format: int32 */
             thread_id?: number | null;
             thread_title?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Reader statistics for one rollable face or canonical series run. */
         BootstrapReaderStats: {
@@ -4145,6 +4175,8 @@ export interface components {
             rating_count: number;
             /** Format: int64 */
             read_count: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * @description Full live `GET /api/v2/roll/bootstrap` payload.
@@ -4184,6 +4216,8 @@ export interface components {
             timezone?: string | null;
             /** Format: int32 */
             user_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * @description Bounded recovery diagnostic shown when the pending issue is blocked.
@@ -4200,6 +4234,8 @@ export interface components {
             original_thread_id: number;
             original_thread_title: string;
             readable_prerequisites: unknown[];
+        } & {
+            [key: string]: unknown;
         };
         /** @description One eligible Roll face. */
         BootstrapRollableItem: {
@@ -4210,11 +4246,15 @@ export interface components {
             reader: components["schemas"]["BootstrapReaderStats"];
             routes: components["schemas"]["BootstrapRoute"][];
             thread: components["schemas"]["BootstrapThreadSummary"];
+        } & {
+            [key: string]: unknown;
         };
         /** @description One Roll route label attached to a rollable face. */
         BootstrapRoute: {
             kind: string;
             name: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Legacy session-mode bridge retained on the live bootstrap contract. */
         BootstrapSessionMode: {
@@ -4232,6 +4272,8 @@ export interface components {
             predicted_intent?: string | null;
             /** @description Extension boundary: stored guidance JSON is passed through verbatim. */
             session_mode_correction_guidance?: unknown;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * @description One tag visible to the reader on a Roll thread row.
@@ -4261,6 +4303,8 @@ export interface components {
             last_activity_at?: string | null;
             tags: components["schemas"]["BootstrapTag"][];
             title: string;
+        } & {
+            [key: string]: unknown;
         };
         BoundaryEditorTarget: {
             /** Format: int32 */
@@ -4273,6 +4317,8 @@ export interface components {
             prerequisite_id?: number | null;
             /** Format: int32 */
             thread_id?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * @description Deployment-level capability for the canonical evaluator behind this batch.
@@ -4294,6 +4340,8 @@ export interface components {
             thread_id: number;
             thread_title: string;
             volume_label?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @enum {string} */
         BoundaryListMode: "strict" | "loose";
@@ -4302,6 +4350,8 @@ export interface components {
             list_id: number;
             mode: components["schemas"]["BoundaryListMode"];
             name: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @enum {string} */
         BoundaryState: "blocked" | "available" | "complete" | "unavailable";
@@ -4311,6 +4361,8 @@ export interface components {
             diagnostics?: components["schemas"]["BugReportDiagnostics"] | null;
             report_type?: components["schemas"]["ReportType"];
             title: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Structured browser diagnostics (`userAgent` alias on the wire). */
         BugReportDiagnostics: {
@@ -4322,14 +4374,20 @@ export interface components {
             url: string;
             userAgent: string;
             viewport: components["schemas"]["DiagnosticViewport"];
+        } & {
+            [key: string]: unknown;
         };
         /** @description Response after successfully creating a GitHub issue. */
         BugReportResponse: {
             issue_url: string;
+        } & {
+            [key: string]: unknown;
         };
         BulkAssignRequest: {
             target_ids: number[];
             target_type: string;
+        } & {
+            [key: string]: unknown;
         };
         BulkAssignResponse: {
             affected_ids: number[];
@@ -4339,10 +4397,14 @@ export interface components {
             /** Format: int32 */
             tag_id: number;
             target_type: string;
+        } & {
+            [key: string]: unknown;
         };
         CBLBreadcrumb: {
             name: string;
             path: string;
+        } & {
+            [key: string]: unknown;
         };
         CBLCatalogBrowseResponse: {
             breadcrumbs: components["schemas"]["CBLBreadcrumb"][];
@@ -4372,6 +4434,8 @@ export interface components {
             total: number;
             /** Format: int64 */
             total_pages: number;
+        } & {
+            [key: string]: unknown;
         };
         CBLCatalogListItem: {
             content_hash: string;
@@ -4383,23 +4447,33 @@ export interface components {
             revision_sha: string;
             source_path: string;
             source_repository: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Global dependency-acquisition outage shape. */
         CBLDatabaseUnavailableDetail: {
             code: string;
             message: string;
             status: string;
+        } & {
+            [key: string]: unknown;
         };
         CBLDatabaseUnavailableResponse: {
             error: components["schemas"]["CBLDatabaseUnavailableDetail"];
+        } & {
+            [key: string]: unknown;
         };
         /** @description Error detail for catalog-originated failures (400/404/503). */
         CBLErrorDetail: {
             code: string;
             message: string;
+        } & {
+            [key: string]: unknown;
         };
         CBLErrorResponse: {
             detail: components["schemas"]["CBLErrorDetail"];
+        } & {
+            [key: string]: unknown;
         };
         CBLFolderListingResponse: {
             breadcrumbs: components["schemas"]["CBLBreadcrumb"][];
@@ -4409,6 +4483,8 @@ export interface components {
             folders: components["schemas"]["CBLSourceFolder"][];
             /** Format: int32 */
             total_list_count: number;
+        } & {
+            [key: string]: unknown;
         };
         CBLSourceFolder: {
             /** Format: int32 */
@@ -4417,6 +4493,8 @@ export interface components {
             path: string;
             /** Format: int32 */
             total_list_count: number;
+        } & {
+            [key: string]: unknown;
         };
         CanonicalCorrection: {
             canonical_value: string;
@@ -4428,6 +4506,8 @@ export interface components {
             id: number;
             provenance: string;
             provider_value?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         CblAdoptionCommitRequest: {
             content_hash: string;
@@ -4438,6 +4518,8 @@ export interface components {
             revision_sha: string;
             series_decisions?: components["schemas"]["CommitSeriesDecision"][];
             series_overrides?: components["schemas"]["CommitEntryOverride"][];
+        } & {
+            [key: string]: unknown;
         };
         CblAdoptionCommitResponseWire: {
             created_at: string;
@@ -4454,6 +4536,8 @@ export interface components {
             updated_at: string;
             /** Format: int32 */
             user_id: number;
+        } & {
+            [key: string]: unknown;
         };
         CblAdoptionEntryResponse: {
             adopted: boolean;
@@ -4485,6 +4569,8 @@ export interface components {
             series_provider?: string | null;
             /** Format: int32 */
             volume_year?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         CblAdoptionPlanRequest: {
             entry_decisions?: {
@@ -4493,6 +4579,8 @@ export interface components {
             series_decisions?: {
                 [key: string]: boolean;
             };
+        } & {
+            [key: string]: unknown;
         };
         CblAdoptionPreviewResponse: {
             entries: components["schemas"]["CblAdoptionEntryResponse"][];
@@ -4500,6 +4588,8 @@ export interface components {
             summary: components["schemas"]["CblAdoptionSummaryResponse"];
             /** Format: int32 */
             total_positions: number;
+        } & {
+            [key: string]: unknown;
         };
         CblAdoptionSummaryResponse: {
             /** Format: int32 */
@@ -4520,6 +4610,8 @@ export interface components {
             /** Format: int32 */
             unresolved_count: number;
             unresolved_positions: number[];
+        } & {
+            [key: string]: unknown;
         };
         /** @description One Comic Vine occurrence in the shared CBL catalog. */
         CblComicvineOccurrence: {
@@ -4540,6 +4632,8 @@ export interface components {
             source_repository: string;
             /** Format: int32 */
             volume_year?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description A page of Comic Vine occurrences with shared-catalog totals. */
         CblComicvineOccurrencePage: {
@@ -4553,6 +4647,8 @@ export interface components {
             occurrences_offset: number;
             /** Format: int32 */
             occurrences_total: number;
+        } & {
+            [key: string]: unknown;
         };
         CblReadingListCandidatesResponse: {
             candidates: components["schemas"]["CblSourceComparisonMatch"][];
@@ -4571,6 +4667,8 @@ export interface components {
             /** Format: int32 */
             list_id: number;
             list_name: string;
+        } & {
+            [key: string]: unknown;
         };
         CblReadingListInputEntry: {
             comicvine_issue_id?: string | null;
@@ -4582,6 +4680,8 @@ export interface components {
             /** Format: int32 */
             position: number;
             series_name: string;
+        } & {
+            [key: string]: unknown;
         };
         CblSourceComparisonMatch: {
             /** Format: int32 */
@@ -4620,9 +4720,13 @@ export interface components {
             source_path: string;
             source_ref: string;
             source_repository: string;
+        } & {
+            [key: string]: unknown;
         };
         CblSourceComparisonRequest: {
             comicvine_issue_ids: string[];
+        } & {
+            [key: string]: unknown;
         };
         CblSourceComparisonResponse: {
             candidates: components["schemas"]["CblSourceComparisonMatch"][];
@@ -4631,6 +4735,8 @@ export interface components {
             comicvine_issue_ids: string[];
             /** Format: int32 */
             input_total: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description One ordered source occurrence inside a CBL list. */
         CblSourceEntryDetail: {
@@ -4644,6 +4750,8 @@ export interface components {
             series_name: string;
             /** Format: int32 */
             volume_year?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         CblSourceFingerprintResponse: {
             content_hash: string;
@@ -4652,6 +4760,8 @@ export interface components {
             source_list_id: number;
             source_path: string;
             source_repository: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description One active CBL source list with one bounded page of ordered occurrences. */
         CblSourceListDetail: {
@@ -4672,6 +4782,8 @@ export interface components {
             source_path: string;
             source_ref: string;
             source_repository: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Reader-safe summary of one active persisted CBL source list. */
         CblSourceListDiscoveryItem: {
@@ -4688,6 +4800,8 @@ export interface components {
              */
             source_path: string;
             source_repository: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Body of `POST /api/v1/threads/check-duplicates`. */
         CheckDuplicatesRequest: {
@@ -4697,10 +4811,14 @@ export interface components {
             exclude_thread_id?: number | null;
             format: string;
             title: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Response of `POST /api/v1/threads/check-duplicates`. */
         CheckDuplicatesResponse: {
             matches: components["schemas"]["NativePotentialDuplicateMatch"][];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CheckPotentialDuplicatesRequest
@@ -4727,6 +4845,8 @@ export interface components {
              * @description Proposed series title
              */
             title: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CheckPotentialDuplicatesResponse
@@ -4735,6 +4855,8 @@ export interface components {
         CheckPotentialDuplicatesResponse: {
             /** Matches */
             matches?: components["schemas"]["PotentialDuplicateMatch"][];
+        } & {
+            [key: string]: unknown;
         };
         /** @description Owner-scoped local representations of a related ComicVine issue. */
         ComicPileMatch: {
@@ -4745,6 +4867,8 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
             thread_title: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ComicVineCreator
@@ -4762,6 +4886,8 @@ export interface components {
             name: string;
             /** Roles */
             roles?: string[];
+        } & {
+            [key: string]: unknown;
         };
         ComicVineIssueCandidate: {
             /** Format: int32 */
@@ -4772,6 +4898,8 @@ export interface components {
             name?: string | null;
             site_detail_url?: string | null;
             store_date?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ComicVineMappingHealth
@@ -4808,6 +4936,8 @@ export interface components {
              * @description Total issues in this thread's scope
              */
             tracked_issue_count: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ComicVineMappingStatus
@@ -4829,6 +4959,8 @@ export interface components {
             kind: string;
             validation_error?: string | null;
             volume?: components["schemas"]["ComicVineSeriesResult"] | null;
+        } & {
+            [key: string]: unknown;
         };
         ComicVineResolvedIssue: {
             /** Format: int32 */
@@ -4842,12 +4974,16 @@ export interface components {
             store_date?: string | null;
             /** Format: int32 */
             volume_id?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         ComicVineSeriesIssuesResponse: {
             /** Format: int32 */
             comicvine_volume_id: number;
             issues: components["schemas"]["ComicVineIssueCandidate"][];
             series_name: string;
+        } & {
+            [key: string]: unknown;
         };
         ComicVineSeriesResult: {
             /** Format: int32 */
@@ -4860,6 +4996,8 @@ export interface components {
             site_detail_url?: string | null;
             /** Format: int32 */
             start_year?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         ComicVineSeriesSearchResponse: {
             has_more: boolean;
@@ -4877,16 +5015,22 @@ export interface components {
             results: components["schemas"]["ComicVineSeriesResult"][];
             /** Format: int64 */
             total_available?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         CommitEntryOverride: {
             /** Format: int32 */
             cbl_position: number;
             decision: string;
+        } & {
+            [key: string]: unknown;
         };
         CommitRequest: {
             approved_row_ids?: string[];
             idempotency_key: string;
             preview_token: string;
+        } & {
+            [key: string]: unknown;
         };
         CommitResponse: {
             already_confirmed_issue_ids: number[];
@@ -4895,21 +5039,29 @@ export interface components {
             idempotency_key: string;
             needs_review_issue_ids: number[];
             series_mapping: components["schemas"]["CommitSeriesMapping"];
+        } & {
+            [key: string]: unknown;
         };
         CommitSeriesDecision: {
             decision: string;
             series_name: string;
+        } & {
+            [key: string]: unknown;
         };
         CommitSeriesMapping: {
             evidence_source: string;
             external_id: string;
             provider: string;
             status: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `ConfirmIdentityRequest` (lax `int`). */
         ConfirmIdentityRequest: {
             /** Format: int32 */
             comicvine_issue_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `ConnectedThreadInfo`. */
         ConnectedThreadInfo: {
@@ -4921,6 +5073,8 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
             title: string;
+        } & {
+            [key: string]: unknown;
         };
         ContinuityPlanLane: {
             id: string;
@@ -4929,6 +5083,8 @@ export interface components {
             name: string;
             /** Format: int32 */
             order: number;
+        } & {
+            [key: string]: unknown;
         };
         ContinuityPlanListItem: {
             /** Format: int32 */
@@ -4942,6 +5098,8 @@ export interface components {
             /** Format: int32 */
             step_count: number;
             updated_at: string;
+        } & {
+            [key: string]: unknown;
         };
         ContinuityPlanNode: {
             /** Format: int32 */
@@ -4966,6 +5124,8 @@ export interface components {
             source_role: string | null;
             source_story_arc_ids: string[] | null;
             source_target_story_arc_id: string | null;
+        } & {
+            [key: string]: unknown;
         };
         ContinuityPlanResponse: {
             created_at: string;
@@ -4978,6 +5138,8 @@ export interface components {
             updated_at: string;
             /** Format: int32 */
             user_id: number;
+        } & {
+            [key: string]: unknown;
         };
         ContinuityPlanResponseWire: {
             created_at: string;
@@ -4990,6 +5152,8 @@ export interface components {
             updated_at: string;
             /** Format: int32 */
             user_id: number;
+        } & {
+            [key: string]: unknown;
         };
         ContinuityPlanWrite: {
             expected_updated_at?: string | null;
@@ -4997,6 +5161,8 @@ export interface components {
             name: string;
             nodes?: components["schemas"]["ContinuityPlanNode"][];
             ordering_mode?: string;
+        } & {
+            [key: string]: unknown;
         };
         ContinuityReleaseSourceResponse: {
             created_at: string;
@@ -5016,6 +5182,8 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
             updated_at: string;
+        } & {
+            [key: string]: unknown;
         };
         ContinuityRuleRequest: {
             /** Format: int32 */
@@ -5030,6 +5198,8 @@ export interface components {
             /** Format: int32 */
             target_id: number;
             target_type: string;
+        } & {
+            [key: string]: unknown;
         };
         ContinuityRuleResponse: {
             /** Format: int32 */
@@ -5050,11 +5220,15 @@ export interface components {
             updated_at: string;
             /** Format: int32 */
             user_id: number;
+        } & {
+            [key: string]: unknown;
         };
         ConvergenceTarget: {
             /** Format: int32 */
             id: number;
             type: string;
+        } & {
+            [key: string]: unknown;
         };
         CreateIssuesRequest: {
             /**
@@ -5078,17 +5252,23 @@ export interface components {
             issue_range: string;
             /** @description Placement strategy. Defaults to safe_default. */
             strategy?: components["schemas"]["IssuePlacementStrategy"];
+        } & {
+            [key: string]: unknown;
         };
         CreateTagRequest: {
             color?: string;
             include_near_matches?: boolean;
             name: string;
             scope?: string;
+        } & {
+            [key: string]: unknown;
         };
         CreateTagResponse: {
             near_matches: components["schemas"]["NearMatch"][];
             redirected_to_global: boolean;
             tag: components["schemas"]["Tag"];
+        } & {
+            [key: string]: unknown;
         };
         /** @description An issue's credited creator with stable provider identity and merged roles. */
         Creator: {
@@ -5096,6 +5276,8 @@ export interface components {
             creator_id?: number | null;
             name: string;
             roles: string[];
+        } & {
+            [key: string]: unknown;
         };
         CreatorComparisonCoverage: {
             /** Format: int64 */
@@ -5113,6 +5295,8 @@ export interface components {
             /** Format: int64 */
             unread_issues_with_creator_metadata: number;
             upcoming_complete: boolean;
+        } & {
+            [key: string]: unknown;
         };
         CreatorComparisonIssueRef: {
             /** Format: int64 */
@@ -5122,6 +5306,8 @@ export interface components {
             /** Format: int64 */
             thread_id: number;
             thread_title: string;
+        } & {
+            [key: string]: unknown;
         };
         CreatorComparisonItem: {
             /** Format: double */
@@ -5151,6 +5337,8 @@ export interface components {
             unread_issue_refs: components["schemas"]["CreatorComparisonIssueRef"][];
             /** Format: int64 */
             unread_upcoming_count: number;
+        } & {
+            [key: string]: unknown;
         };
         CreatorComparisonResponse: {
             comparisons: {
@@ -5158,6 +5346,8 @@ export interface components {
             };
             coverage: components["schemas"]["CreatorComparisonCoverage"];
             insufficient_data_keys: string[];
+        } & {
+            [key: string]: unknown;
         };
         CreatorComparisonRoleStat: {
             /** Format: double */
@@ -5167,6 +5357,8 @@ export interface components {
             /** Format: int64 */
             rated_issue_count: number;
             role: string;
+        } & {
+            [key: string]: unknown;
         };
         CreatorComparisonSeriesAggregate: {
             /** Format: double */
@@ -5178,6 +5370,8 @@ export interface components {
             /** Format: int64 */
             thread_id: number;
             thread_title: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description One credited creator (Python `ComicVineCreator`). */
         CreatorCredit: {
@@ -5185,6 +5379,8 @@ export interface components {
             creator_id?: number | null;
             name: string;
             roles: string[];
+        } & {
+            [key: string]: unknown;
         };
         CreatorDetailResponse: {
             coverage: components["schemas"]["CreatorSummaryCoverage"];
@@ -5202,6 +5398,8 @@ export interface components {
             series_groups_total: number;
             summary: components["schemas"]["CreatorSummaryItem"];
             upcoming_issues: components["schemas"]["CreatorIssueRow"][];
+        } & {
+            [key: string]: unknown;
         };
         CreatorDiscoveryCoverage: {
             /** Format: int64 */
@@ -5209,6 +5407,8 @@ export interface components {
             /** Format: int64 */
             rated_issues_with_creator_metadata: number;
             ratings_complete: boolean;
+        } & {
+            [key: string]: unknown;
         };
         CreatorDiscoveryEntry: {
             /** Format: double */
@@ -5246,6 +5446,8 @@ export interface components {
             trend_sample_count: number;
             /** Format: int64 */
             unread_issue_count: number;
+        } & {
+            [key: string]: unknown;
         };
         CreatorDiscoveryReason: {
             comparison: string;
@@ -5255,6 +5457,8 @@ export interface components {
             threshold: number;
             /** Format: double */
             value: number;
+        } & {
+            [key: string]: unknown;
         };
         CreatorDiscoveryResponse: {
             coverage: components["schemas"]["CreatorDiscoveryCoverage"];
@@ -5263,6 +5467,8 @@ export interface components {
             /** Format: int64 */
             minimum_reliable_sample: number;
             views: components["schemas"]["CreatorDiscoveryView"][];
+        } & {
+            [key: string]: unknown;
         };
         CreatorDiscoveryView: {
             description: string;
@@ -5276,6 +5482,8 @@ export interface components {
             /** Format: int64 */
             total: number;
             truncated: boolean;
+        } & {
+            [key: string]: unknown;
         };
         CreatorInsights: {
             /** Format: int64 */
@@ -5292,6 +5500,8 @@ export interface components {
             series_sample_met: boolean;
             strongest_series?: components["schemas"]["CreatorSeriesInsight"] | null;
             weakest_series?: components["schemas"]["CreatorSeriesInsight"] | null;
+        } & {
+            [key: string]: unknown;
         };
         CreatorIssueInsight: {
             /** Format: double */
@@ -5304,6 +5514,8 @@ export interface components {
             /** Format: int64 */
             thread_id: number;
             thread_title: string;
+        } & {
+            [key: string]: unknown;
         };
         CreatorIssueRow: {
             /** Format: double */
@@ -5318,6 +5530,8 @@ export interface components {
             /** Format: int64 */
             thread_id: number;
             thread_title: string;
+        } & {
+            [key: string]: unknown;
         };
         CreatorListItem: {
             /** Format: double */
@@ -5327,6 +5541,8 @@ export interface components {
             normalized_roles: string[];
             /** Format: int64 */
             ratings_count: number;
+        } & {
+            [key: string]: unknown;
         };
         CreatorListResponse: {
             coverage: components["schemas"]["CreatorSummaryCoverage"];
@@ -5337,12 +5553,16 @@ export interface components {
             offset: number;
             /** Format: int64 */
             total: number;
+        } & {
+            [key: string]: unknown;
         };
         CreatorMetricCalculation: {
             denominator?: string | null;
             formula: string;
             numerator: string;
             percentage?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         CreatorMetricDrilldown: {
             /** Format: int64 */
@@ -5374,6 +5594,8 @@ export interface components {
             series_title?: string | null;
             /** Format: int64 */
             total_count: number;
+        } & {
+            [key: string]: unknown;
         };
         CreatorMetricIssue: {
             creator_roles: string[];
@@ -5390,6 +5612,8 @@ export interface components {
             /** Format: int64 */
             thread_id: number;
             thread_title: string;
+        } & {
+            [key: string]: unknown;
         };
         CreatorMetricPagination: {
             /** Format: int64 */
@@ -5400,12 +5624,16 @@ export interface components {
             page_size: number;
             /** Format: int64 */
             total_pages: number;
+        } & {
+            [key: string]: unknown;
         };
         CreatorRatingBucket: {
             /** Format: int64 */
             count: number;
             /** Format: double */
             rating: number;
+        } & {
+            [key: string]: unknown;
         };
         CreatorRatingDistribution: {
             buckets: components["schemas"]["CreatorRatingBucket"][];
@@ -5419,6 +5647,8 @@ export interface components {
             min_rating: number;
             /** Format: int64 */
             sample_count: number;
+        } & {
+            [key: string]: unknown;
         };
         CreatorRoleStat: {
             /** Format: double */
@@ -5428,6 +5658,8 @@ export interface components {
             /** Format: int64 */
             rated_issue_count: number;
             role: string;
+        } & {
+            [key: string]: unknown;
         };
         CreatorSeriesGroup: {
             /** Format: double */
@@ -5450,6 +5682,8 @@ export interface components {
             thread_title: string;
             /** Format: int64 */
             unread_issue_count: number;
+        } & {
+            [key: string]: unknown;
         };
         CreatorSeriesInsight: {
             /** Format: double */
@@ -5467,6 +5701,8 @@ export interface components {
             /** Format: int64 */
             thread_id: number;
             thread_title: string;
+        } & {
+            [key: string]: unknown;
         };
         CreatorSeriesIssueListResponse: {
             /** Format: double */
@@ -5492,12 +5728,16 @@ export interface components {
             thread_title: string;
             /** Format: int64 */
             total: number;
+        } & {
+            [key: string]: unknown;
         };
         CreatorSummariesResponse: {
             coverage: components["schemas"]["CreatorSummaryCoverage"];
             summaries: {
                 [key: string]: components["schemas"]["CreatorSummaryItem"];
             };
+        } & {
+            [key: string]: unknown;
         };
         CreatorSummaryCoverage: {
             /** Format: int64 */
@@ -5515,6 +5755,8 @@ export interface components {
             /** Format: int64 */
             unread_issues_with_creator_metadata: number;
             upcoming_complete: boolean;
+        } & {
+            [key: string]: unknown;
         };
         CreatorSummaryItem: {
             /** Format: double */
@@ -5528,6 +5770,8 @@ export interface components {
             read_unrated_count: number;
             /** Format: int64 */
             upcoming_count: number;
+        } & {
+            [key: string]: unknown;
         };
         CreatorTeamChemistryResponse: {
             coverage: components["schemas"]["CreatorTeamCoverage"];
@@ -5538,6 +5782,8 @@ export interface components {
             pairs: components["schemas"]["CreatorTeamPair"][];
             /** Format: int64 */
             pairs_total: number;
+        } & {
+            [key: string]: unknown;
         };
         CreatorTeamCoverage: {
             /** Format: int64 */
@@ -5545,6 +5791,8 @@ export interface components {
             /** Format: int64 */
             rated_issues_with_creator_metadata: number;
             ratings_complete: boolean;
+        } & {
+            [key: string]: unknown;
         };
         CreatorTeamIssueRef: {
             /** Format: double */
@@ -5556,6 +5804,8 @@ export interface components {
             /** Format: int64 */
             thread_id: number;
             thread_title: string;
+        } & {
+            [key: string]: unknown;
         };
         CreatorTeamMember: {
             /** Format: double */
@@ -5567,6 +5817,8 @@ export interface components {
             difference_from_baseline?: number | null;
             display_name: string;
             roles: string[];
+        } & {
+            [key: string]: unknown;
         };
         CreatorTeamPair: {
             creators: components["schemas"]["CreatorTeamMember"][];
@@ -5584,6 +5836,8 @@ export interface components {
                 [key: string]: number;
             };
             shared_series: components["schemas"]["CreatorTeamSeriesRef"][];
+        } & {
+            [key: string]: unknown;
         };
         CreatorTeamSeriesRef: {
             /** Format: int64 */
@@ -5591,14 +5845,20 @@ export interface components {
             /** Format: int64 */
             thread_id: number;
             thread_title: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Response body carrying a double-submit CSRF token. */
         CsrfResponse: {
             csrf_token: string;
+        } & {
+            [key: string]: unknown;
         };
         CustomCBLApplyRequest: {
             expected_updated_at?: string | null;
             lane_id?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         CustomCBLApplyResponse: {
             added_issue_ids: number[];
@@ -5613,10 +5873,14 @@ export interface components {
             updated_at: string;
             /** Format: int32 */
             user_id: number;
+        } & {
+            [key: string]: unknown;
         };
         CustomCBLEntryIntent: {
             gate: string;
             skipped?: boolean;
+        } & {
+            [key: string]: unknown;
         };
         CustomCBLEntryResponse: {
             checkpoint_target_issue_ids: number[];
@@ -5634,6 +5898,8 @@ export interface components {
             status: string;
             /** Format: int32 */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         CustomCBLIssueSearchResult: {
             /** @description Exact provider-supplied CDN URL. Null when unmapped; never image bytes. */
@@ -5645,6 +5911,8 @@ export interface components {
             status: string;
             /** Format: int32 */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         CustomCBLListItem: {
             description?: string | null;
@@ -5655,6 +5923,8 @@ export interface components {
             mode: string;
             name: string;
             updated_at: string;
+        } & {
+            [key: string]: unknown;
         };
         CustomCBLPredecessorChange: {
             after_issue_ids: number[];
@@ -5664,6 +5934,8 @@ export interface components {
             /** Format: int32 */
             issue_id: number;
             issue_name: string;
+        } & {
+            [key: string]: unknown;
         };
         CustomCBLResponse: {
             created_at: string;
@@ -5680,6 +5952,8 @@ export interface components {
             /** Format: int32 */
             user_id: number;
             warnings?: string[];
+        } & {
+            [key: string]: unknown;
         };
         CustomCBLWrite: {
             checkpoint_issue_ids?: number[] | null;
@@ -5694,6 +5968,8 @@ export interface components {
             issue_ids?: number[];
             mode?: string | null;
             name: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description The product-owned deterministic guest Roll fixture. */
         DemoRoll: {
@@ -5723,6 +5999,8 @@ export interface components {
             title: string;
             /** Format: int32 */
             total_issues?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * @description Flat wire request mirroring the Python `DependencyCreate` payload so the
@@ -5735,6 +6013,8 @@ export interface components {
             /** Format: int32 */
             target_id: number;
             target_type: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DependencyGroupCreate
@@ -5743,10 +6023,14 @@ export interface components {
         DependencyGroupCreate: {
             /** Name */
             name: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Wire request mirroring the Python `DependencyGroupCreate` payload. */
         DependencyGroupCreateRequest: {
             name: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DependencyGroupDetailMemberResponse
@@ -5761,6 +6045,8 @@ export interface components {
              */
             other_crossovers: string[];
             thread?: components["schemas"]["ThreadResponse"] | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DependencyGroupDetailResponse
@@ -5783,6 +6069,8 @@ export interface components {
             memberships: components["schemas"]["DependencyGroupDetailMemberResponse"][];
             /** Name */
             name: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DependencyGroupIssueRangeCreate
@@ -5795,6 +6083,8 @@ export interface components {
             start_position: number;
             /** Thread Id */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Wire request mirroring the Python `DependencyGroupIssueRangeCreate` payload. */
         DependencyGroupIssueRangeCreateRequest: {
@@ -5804,6 +6094,8 @@ export interface components {
             start_position: number;
             /** Format: int32 */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DependencyGroupIssueRangeResponse
@@ -5820,6 +6112,8 @@ export interface components {
             start_position: number;
             /** Thread Id */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DependencyGroupMemberCreate
@@ -5835,6 +6129,8 @@ export interface components {
             sequence_order?: number | null;
             /** Thread Id */
             thread_id?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Wire request mirroring the Python `DependencyGroupMemberCreate` payload. */
         DependencyGroupMemberCreateRequest: {
@@ -5844,6 +6140,8 @@ export interface components {
             sequence_order?: number | null;
             /** Format: int32 */
             thread_id?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DependencyGroupMemberResponse
@@ -5867,6 +6165,8 @@ export interface components {
             series_title?: string | null;
             /** Thread Id */
             thread_id: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DependencyGroupOrderItem
@@ -5877,6 +6177,8 @@ export interface components {
             issue_id: number;
             /** Sequence Order */
             sequence_order: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DependencyGroupOrderUpdate
@@ -5885,10 +6187,14 @@ export interface components {
         DependencyGroupOrderUpdate: {
             /** Items */
             items: components["schemas"]["DependencyGroupOrderItem"][];
+        } & {
+            [key: string]: unknown;
         };
         /** @description Wire request mirroring the Python `DependencyGroupOrderUpdate` payload. */
         DependencyGroupOrderUpdateRequest: {
             items: components["schemas"]["NativeDependencyGroupOrderItem"][];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DependencyGroupResponse
@@ -5921,6 +6227,8 @@ export interface components {
              * @default 0
              */
             total_issues: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DependencyGroupSummary
@@ -5931,6 +6239,8 @@ export interface components {
             id: number;
             /** Name */
             name: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * DependencyGroupUpdate
@@ -5939,13 +6249,19 @@ export interface components {
         DependencyGroupUpdate: {
             /** Name */
             name: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Wire request mirroring the Python `DependencyGroupUpdate` payload. */
         DependencyGroupUpdateRequest: {
             name: string;
+        } & {
+            [key: string]: unknown;
         };
         DependencyNoteUpdate: {
             note?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `DependencyOrderConflict`. */
         DependencyOrderConflict: {
@@ -5956,6 +6272,8 @@ export interface components {
             issue_number: string;
             /** Format: int32 */
             position: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `DependencyOrderRequirement`. */
         DependencyOrderRequirement: {
@@ -5964,6 +6282,8 @@ export interface components {
             issue_number: string;
             /** Format: int32 */
             position: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * @description Issue-level dependency response mirroring the Python `DependencyResponse`
@@ -5992,11 +6312,15 @@ export interface components {
             /** Format: int32 */
             target_thread_id?: number | null;
             warning?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description A captured console error entry. */
         DiagnosticError: {
             message: string;
             timestamp: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Performance timing diagnostic information (both fields optional). */
         DiagnosticPerformance: {
@@ -6004,6 +6328,8 @@ export interface components {
             domContentLoaded?: number | null;
             /** Format: double */
             loadComplete?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Screen diagnostic information (`pixelRatio` alias on the wire). */
         DiagnosticScreen: {
@@ -6011,16 +6337,22 @@ export interface components {
             /** Format: double */
             pixelRatio: number;
             width: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Scroll position diagnostic information. */
         DiagnosticScroll: {
             x: number;
             y: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Viewport diagnostic information. */
         DiagnosticViewport: {
             height: number;
             width: number;
+        } & {
+            [key: string]: unknown;
         };
         DiceCommandReceipt: {
             /** Format: int32 */
@@ -6030,6 +6362,8 @@ export interface components {
             /** Format: int32 */
             event_id: number;
             replayed: boolean;
+        } & {
+            [key: string]: unknown;
         };
         DuplicateCandidateGroup: {
             confidence: string;
@@ -6039,9 +6373,13 @@ export interface components {
             /** Format: int32 */
             suggested_canonical_issue_id?: number | null;
             suggested_duplicate_issue_ids: number[];
+        } & {
+            [key: string]: unknown;
         };
         DuplicateDetectionResponse: {
             groups: components["schemas"]["DuplicateCandidateGroup"][];
+        } & {
+            [key: string]: unknown;
         };
         DuplicateIssueEvidence: {
             comicvine_issue_id?: string | null;
@@ -6064,6 +6402,8 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
             thread_title: string;
+        } & {
+            [key: string]: unknown;
         };
         DuplicateListMembership: {
             /** Format: int32 */
@@ -6073,6 +6413,8 @@ export interface components {
             list_name: string;
             /** Format: int32 */
             position: number;
+        } & {
+            [key: string]: unknown;
         };
         DuplicateRatingEvent: {
             /** Format: int32 */
@@ -6080,6 +6422,8 @@ export interface components {
             /** Format: double */
             rating: number;
             timestamp: string;
+        } & {
+            [key: string]: unknown;
         };
         DuplicateReadEvent: {
             /** Format: int32 */
@@ -6088,6 +6432,8 @@ export interface components {
             is_synthetic: boolean;
             issue_number?: string | null;
             timestamp: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @enum {string} */
         EditorKind: "reading_list" | "prerequisite" | "issue";
@@ -6095,6 +6441,8 @@ export interface components {
             direct: boolean;
             sources: components["schemas"]["InheritanceSource"][];
             tag: components["schemas"]["Tag"];
+        } & {
+            [key: string]: unknown;
         };
         EffectiveTagsResponse: {
             direct_tags: components["schemas"]["Tag"][];
@@ -6102,10 +6450,14 @@ export interface components {
             /** Format: int32 */
             target_id: number;
             target_type: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Request body for an enumeration-safe password-recovery email. */
         ForgotPasswordRequest: {
             email: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description One unprotected current unread frontier with its inert evidence. */
         FrontierAuditFinding: {
@@ -6121,6 +6473,8 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
             thread_title: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description The complete read-only audit response for one owner. */
         FrontierAuditReport: {
@@ -6150,20 +6504,28 @@ export interface components {
              *     legacy evidence records possible reader intent: the reported gaps.
              */
             unprotected_frontiers: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Body of `POST /api/v2/reading-order-groups:resolveMemberships`. */
         GroupsBatchRequest: {
             thread_ids: number[];
+        } & {
+            [key: string]: unknown;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        } & {
+            [key: string]: unknown;
         };
         IdentityInboxActionResponse: {
             message: string;
             success: boolean;
             updated_item?: components["schemas"]["IdentityInboxItem"] | null;
+        } & {
+            [key: string]: unknown;
         };
         IdentityInboxCandidate: {
             comicvine_id?: string | null;
@@ -6178,11 +6540,15 @@ export interface components {
             provider: string;
             rejection_reason?: string | null;
             status: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Body for confirming an identity inbox candidate. */
         IdentityInboxConfirmRequest: {
             /** Format: int32 */
             external_identity_id: number;
+        } & {
+            [key: string]: unknown;
         };
         IdentityInboxItem: {
             candidates: components["schemas"]["IdentityInboxCandidate"][];
@@ -6207,6 +6573,8 @@ export interface components {
             /** Format: double */
             updated_at?: number | null;
             why_stopped: string;
+        } & {
+            [key: string]: unknown;
         };
         IdentityInboxPartialMatch: {
             actionable_reason: string;
@@ -6215,6 +6583,8 @@ export interface components {
             matched: components["schemas"]["IdentityInboxPartialMatchIssue"][];
             unmatched: components["schemas"]["IdentityInboxPartialMatchIssue"][];
             volume_name: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * @description One issue in an explainable partial series match. When a stored candidate
@@ -6232,12 +6602,16 @@ export interface components {
             /** Format: int32 */
             mapping_id?: number | null;
             reason: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Body for rejecting an identity inbox candidate. */
         IdentityInboxRejectRequest: {
             /** Format: int32 */
             external_identity_id: number;
             rejection_reason: string;
+        } & {
+            [key: string]: unknown;
         };
         IdentityInboxResponse: {
             items: components["schemas"]["IdentityInboxItem"][];
@@ -6247,6 +6621,8 @@ export interface components {
             offset: number;
             /** Format: int64 */
             total: number;
+        } & {
+            [key: string]: unknown;
         };
         IdentityInboxSearchResponse: {
             /** Format: int32 */
@@ -6265,6 +6641,8 @@ export interface components {
             results: components["schemas"]["IdentityInboxSearchResult"][];
             /** Format: int64 */
             total_available?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         IdentityInboxSearchResult: {
             /** Format: int32 */
@@ -6282,6 +6660,8 @@ export interface components {
             /** Format: int32 */
             start_year?: number | null;
             volume_name?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * @description Python `ImportIssueRequest`: `title` 1-200 characters (stored stripped),
@@ -6299,6 +6679,8 @@ export interface components {
             /** Format: int32 */
             reading_order_id?: number | null;
             title: string;
+        } & {
+            [key: string]: unknown;
         };
         ImportIssueResponse: {
             /** Format: int32 */
@@ -6313,6 +6695,8 @@ export interface components {
             thread_id: number;
             /** Format: int32 */
             total_items?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         ImportSeriesIssueResult: {
             /** Format: int32 */
@@ -6323,6 +6707,8 @@ export interface components {
             issue_id?: number | null;
             issue_number?: string | null;
             outcome: string;
+        } & {
+            [key: string]: unknown;
         };
         ImportSeriesRequest: {
             /** Format: int32 */
@@ -6335,6 +6721,8 @@ export interface components {
             comicvine_volume_id: number;
             /** Format: int32 */
             reading_order_id?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         ImportSeriesResponse: {
             /** Format: int32 */
@@ -6358,12 +6746,16 @@ export interface components {
             total_issues_in_series: number;
             /** Format: int32 */
             total_items?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         InheritanceSource: {
             display_name: string;
             /** Format: int32 */
             target_id: number;
             target_type: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * @description Temporary explicit write boundary for legacy reading-session consumers.
@@ -6371,6 +6763,8 @@ export interface components {
          */
         InitializeSessionRequest: {
             timezone?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `InsertReadingOrderItemRequest`. */
         InsertReadingOrderItemRequest: {
@@ -6378,6 +6772,8 @@ export interface components {
             position: number;
             /** Format: int32 */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `InsertReadingOrderItemResponse`. */
         InsertReadingOrderItemResponse: {
@@ -6389,10 +6785,14 @@ export interface components {
             thread_id: number;
             /** Format: int64 */
             total_items: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Request body for the bulk read-state operations. */
         IssueBulkRequest: {
             issue_ids: number[];
+        } & {
+            [key: string]: unknown;
         };
         IssueCard: {
             /** @description Confirmed provider issue identifier, never a provisional candidate. */
@@ -6432,14 +6832,20 @@ export interface components {
             thread_id: number;
             /** @description Display series/run title. */
             thread_title: string;
+        } & {
+            [key: string]: unknown;
         };
         IssueCardsRequest: {
             /** @description Visible issue identifiers requested for one bounded batch. */
             issue_ids: number[];
+        } & {
+            [key: string]: unknown;
         };
         IssueCardsResponse: {
             /** @description Owned cards in first-request order; foreign or missing IDs are omitted. */
             items: components["schemas"]["IssueCard"][];
+        } & {
+            [key: string]: unknown;
         };
         /** @description Request body of `POST /api/v1/threads/{thread_id}/issues`. */
         IssueCreateRange: {
@@ -6450,6 +6856,8 @@ export interface components {
             insert_after_issue_id?: number | null;
             /** @description Range such as `1-25` or `1, 3, 5-7`. */
             issue_range: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * IssueCreatorsEntry
@@ -6460,6 +6868,8 @@ export interface components {
             creators?: components["schemas"]["ComicVineCreator"][];
             /** Issue Id */
             issue_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Wire parity with Python `IssueDependenciesResponse`. */
         IssueDependenciesResponse: {
@@ -6467,6 +6877,8 @@ export interface components {
             /** Format: int32 */
             issue_id: number;
             outgoing: components["schemas"]["IssueDependencyEdge"][];
+        } & {
+            [key: string]: unknown;
         };
         /** @description Wire parity with Python `IssueDependencyEdge` (`app/schemas/dependency.py`). */
         IssueDependencyEdge: {
@@ -6478,6 +6890,8 @@ export interface components {
             /** Format: int32 */
             source_thread_id: number;
             source_thread_title: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Wire parity with Python `IssueResponse` (`app/schemas/issue.py`). */
         IssueDetailResponse: {
@@ -6492,6 +6906,8 @@ export interface components {
             status: string;
             /** Format: int32 */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description A source-preserving alternative to creating a new physical issue (#4654). */
         IssueEditAliasOffer: {
@@ -6507,6 +6923,8 @@ export interface components {
             requested_issue_number: string;
             /** @description Human-readable series the existing issue belongs to. */
             series_title: string;
+        } & {
+            [key: string]: unknown;
         };
         IssueEditPreviewOutcome: {
             added_issue_numbers: string[];
@@ -6517,6 +6935,8 @@ export interface components {
             graph: components["schemas"]["ReadingGraphResponse"];
             preserves_existing_relative_order: boolean;
             strategy: components["schemas"]["IssuePlacementStrategy"];
+        } & {
+            [key: string]: unknown;
         };
         IssueEditPreviewResponse: {
             /**
@@ -6532,6 +6952,8 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
             thread_title: string;
+        } & {
+            [key: string]: unknown;
         };
         IssueIdentityMapping: {
             comicvine_id: string;
@@ -6543,6 +6965,8 @@ export interface components {
             external_identity_id: number;
             provider: string;
             status: string;
+        } & {
+            [key: string]: unknown;
         };
         IssueIdentityResponse: {
             candidate_mappings: components["schemas"]["IssueIdentityMapping"][];
@@ -6555,6 +6979,8 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
             thread_title: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Wire parity with Python's ComicVineIssueIntelligence. */
         IssueIntelligence: {
@@ -6574,6 +7000,8 @@ export interface components {
             series_name?: string | null;
             store_date?: string | null;
             story_arcs: components["schemas"]["StoryArc"][];
+        } & {
+            [key: string]: unknown;
         };
         IssueListResponse: {
             issues: components["schemas"]["IssueMutationItem"][];
@@ -6592,6 +7020,8 @@ export interface components {
              * @description Snapshot a reader can restore to reverse this committed edit (#4654).
              */
             undo_snapshot_id?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Request body for `PUT /api/v2/issues/{issue_id}/position`. */
         IssueMoveRequest: {
@@ -6600,6 +7030,8 @@ export interface components {
              * @description Move after this issue. `null` moves the issue to position 1.
              */
             after_issue_id: number | null;
+        } & {
+            [key: string]: unknown;
         };
         IssueMutationItem: {
             /** Format: int32 */
@@ -6608,13 +7040,19 @@ export interface components {
             status: string;
             /** Format: int32 */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         IssueOrderRequest: {
             issue_ids: number[];
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `IssueOrderValidationResponse`. */
         IssueOrderValidationResponse: {
             warnings: string[];
+        } & {
+            [key: string]: unknown;
         };
         /** @enum {string} */
         IssuePlacementStrategy: "safe_default" | "numeric_resort";
@@ -6626,6 +7064,8 @@ export interface components {
             previous_status: string;
             /** Format: int32 */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Reviewable, reversible record of a bulk read/unread operation (#4655). */
         IssueReadOperationResponse: {
@@ -6635,12 +7075,16 @@ export interface components {
             items: components["schemas"]["IssueReadOperationItem"][];
             operation_type: string;
             undone_at?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Result of undoing a bulk read/unread operation (#4655). */
         IssueReadOperationUndoResponse: {
             operation: components["schemas"]["IssueReadOperationResponse"];
             skipped_issue_ids: number[];
             undone_issue_ids: number[];
+        } & {
+            [key: string]: unknown;
         };
         IssueReadRateRequest: {
             /** @description Client-generated retry key. Same key/payload replays the same receipt. */
@@ -6665,6 +7109,8 @@ export interface components {
             source?: string | null;
             /** @description Explicit new status. Omit to leave read state unchanged. */
             status?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         IssueReadRateResponse: {
             /**
@@ -6679,10 +7125,14 @@ export interface components {
             read_event_created: boolean;
             replayed: boolean;
             thread: components["schemas"]["ThreadProgress"];
+        } & {
+            [key: string]: unknown;
         };
         /** @description Request body of `POST /api/v1/threads/{thread_id}/issues:reorder`. */
         IssueReorderRequest: {
             issue_ids: number[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * IssueResponse
@@ -6706,11 +7156,15 @@ export interface components {
             status: string;
             /** Thread Id */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description One bounded page of the canonical reading-session collection. */
         ListReadingSessionsResponse: {
             next_page_token?: string | null;
             reading_sessions: components["schemas"]["ReadingSessionResource"][];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * @description Request body for username/password login.
@@ -6723,6 +7177,8 @@ export interface components {
         LoginRequest: {
             password: string;
             username: string;
+        } & {
+            [key: string]: unknown;
         };
         ManualDieRequest: {
             /** Format: int32 */
@@ -6730,6 +7186,8 @@ export interface components {
             idempotency_key: string;
             /** @enum {string} */
             kind: "manual_select";
+        } & {
+            [key: string]: unknown;
         };
         /**
          * @description Python `MetadataCorrectionRequest`: unconstrained `str` fields (empty is
@@ -6739,22 +7197,30 @@ export interface components {
             canonical_value: string;
             field_name: string;
             reason?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `MetadataCorrectionRevertRequest` (lax `int`). */
         MetadataCorrectionRevertRequest: {
             /** Format: int32 */
             correction_id: number;
+        } & {
+            [key: string]: unknown;
         };
         MetadataCorrectionsResponse: {
             corrections: components["schemas"]["CanonicalCorrection"][];
             /** Format: int32 */
             issue_id: number;
+        } & {
+            [key: string]: unknown;
         };
         MetadataRefreshResponse: {
             comicvine_issue_id?: string | null;
             /** Format: int32 */
             issue_id: number;
             refreshed: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * MigrateToIssuesRequest
@@ -6771,6 +7237,8 @@ export interface components {
              * @description Total number of issues in the series (e.g., 25)
              */
             total_issues: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * MigrateToIssuesSimpleRequest
@@ -6782,6 +7250,8 @@ export interface components {
              * @description The issue number user just read (e.g., '5', 'Annual 1')
              */
             issue_number: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Minimal release data for reconciliation endpoints (no body). */
         MinimalReleaseResponse: {
@@ -6807,6 +7277,8 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
             visibility: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Compact confirmed ComicVine mapping health for one queue row. */
         NativeComicVineMappingHealth: {
@@ -6821,6 +7293,8 @@ export interface components {
             status: string;
             /** Format: int32 */
             tracked_issue_count: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Wire response member mirroring the Python `DependencyGroupDetailMemberResponse`. */
         NativeDependencyGroupDetailMemberResponse: {
@@ -6828,6 +7302,8 @@ export interface components {
             membership: components["schemas"]["NativeDependencyGroupMemberResponse"];
             other_crossovers: string[];
             thread?: components["schemas"]["ThreadDetailResponse"] | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Wire response mirroring the Python `DependencyGroupDetailResponse`. */
         NativeDependencyGroupDetailResponse: {
@@ -6837,6 +7313,8 @@ export interface components {
             linked_plans: components["schemas"]["NativeDependencyGroupSummary"][];
             memberships: components["schemas"]["NativeDependencyGroupDetailMemberResponse"][];
             name: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Wire response mirroring the Python `DependencyGroupIssueRangeResponse`. */
         NativeDependencyGroupIssueRangeResponse: {
@@ -6848,6 +7326,8 @@ export interface components {
             start_position: number;
             /** Format: int32 */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Wire response mirroring the Python `DependencyGroupMemberResponse`. */
         NativeDependencyGroupMemberResponse: {
@@ -6861,6 +7341,8 @@ export interface components {
             series_title?: string | null;
             /** Format: int32 */
             thread_id?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Wire request item mirroring the Python `DependencyGroupOrderItem` payload. */
         NativeDependencyGroupOrderItem: {
@@ -6868,6 +7350,8 @@ export interface components {
             issue_id: number;
             /** Format: int32 */
             sequence_order: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Wire response mirroring the Python `DependencyGroupResponse`. */
         NativeDependencyGroupResponse: {
@@ -6881,18 +7365,24 @@ export interface components {
             reading_progress: string;
             /** Format: int64 */
             total_issues: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Wire response mirroring the Python `DependencyGroupSummary`. */
         NativeDependencyGroupSummary: {
             /** Format: int32 */
             id: number;
             name: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Stored creator credits for one issue (Python `IssueCreatorsEntry`). */
         NativeIssueCreatorsEntry: {
             creators: components["schemas"]["CreatorCredit"][];
             /** Format: int32 */
             issue_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description One issue row (Python `IssueResponse`). */
         NativeIssueResponse: {
@@ -6906,6 +7396,8 @@ export interface components {
             status: string;
             /** Format: int32 */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssues`. */
         NativeMigrateToIssuesRequest: {
@@ -6913,10 +7405,14 @@ export interface components {
             last_issue_read: number;
             /** Format: int32 */
             total_issues: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssuesSimple`. */
         NativeMigrateToIssuesSimpleRequest: {
             issue_number: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description One possible existing volume. */
         NativePotentialDuplicateMatch: {
@@ -6934,6 +7430,8 @@ export interface components {
             title: string;
             /** Format: int32 */
             total_issues?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Confirmed provider series metadata for one queue row. */
         NativeQueueSeriesMetadata: {
@@ -6941,6 +7439,8 @@ export interface components {
             volume?: string | null;
             /** Format: int32 */
             year?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         NativeReadingGraphBlocker: {
             explanation: string;
@@ -6950,6 +7450,8 @@ export interface components {
             /** Format: int64 */
             list_id?: number | null;
             waiting_on_issue_ids: number[];
+        } & {
+            [key: string]: unknown;
         };
         NativeReadingGraphChoiceEffect: {
             choice: string;
@@ -6958,10 +7460,14 @@ export interface components {
             rollable_issue_ids: number[];
             series: components["schemas"]["NativeReadingGraphSeriesNode"][];
             waiting_issue_ids: number[];
+        } & {
+            [key: string]: unknown;
         };
         NativeReadingGraphCycleError: {
             code: string;
             message: string;
+        } & {
+            [key: string]: unknown;
         };
         NativeReadingGraphIssueReference: {
             blockers: components["schemas"]["NativeReadingGraphBlocker"][];
@@ -6970,6 +7476,8 @@ export interface components {
             issue_id: number;
             issue_number: string;
             series_name: string;
+        } & {
+            [key: string]: unknown;
         };
         NativeReadingGraphOverlap: {
             blocked_issue_ids: number[];
@@ -6979,10 +7487,14 @@ export interface components {
             question: string;
             selected_choice?: string | null;
             waiting_series: components["schemas"]["NativeReadingGraphSeriesReference"];
+        } & {
+            [key: string]: unknown;
         };
         NativeReadingGraphOverlapChoice: {
             choice: string;
             overlap_id: string;
+        } & {
+            [key: string]: unknown;
         };
         NativeReadingGraphPreview: {
             content_hash: string;
@@ -6995,12 +7507,16 @@ export interface components {
             /** Format: int64 */
             source_list_id: number;
             waiting_issue_ids: number[];
+        } & {
+            [key: string]: unknown;
         };
         NativeReadingGraphPreviewRequest: {
             included_positions?: number[];
             overlap_choices?: components["schemas"]["NativeReadingGraphOverlapChoice"][];
             /** Format: int64 */
             target_list_id?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         NativeReadingGraphSeriesNode: {
             comicvine_volume_id: string;
@@ -7015,12 +7531,16 @@ export interface components {
             waits_for_issue_ids: number[];
             /** Format: int64 */
             year?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         NativeReadingGraphSeriesReference: {
             comicvine_volume_id: string;
             series_name: string;
             /** Format: int64 */
             year?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         NativeReadingOrderProjectionConflict: {
             code: string;
@@ -7029,6 +7549,8 @@ export interface components {
             node_id: string;
             /** Format: int32 */
             thread_id?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         NativeReadingOrderProjectionEntry: {
             /** Format: int32 */
@@ -7038,6 +7560,8 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
             thread_title?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         NativeReadingOrderProjectionPreview: {
             conflicts: components["schemas"]["NativeReadingOrderProjectionConflict"][];
@@ -7052,10 +7576,14 @@ export interface components {
             reading_order_name: string;
             /** Format: int32 */
             total_positions: number;
+        } & {
+            [key: string]: unknown;
         };
         NativeReadingOrderProjectionRequest: {
             /** Format: int32 */
             reading_order_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Response body: the Python `RollResponse` projection for a manual pick. */
         NativeRollResponse: {
@@ -7085,6 +7613,8 @@ export interface components {
             title: string;
             /** Format: int32 */
             total_issues?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         NativeSeriesMappingPreviewCounts: {
             /** Format: int64 */
@@ -7099,6 +7629,8 @@ export interface components {
             safe_exact_match: number;
             /** Format: int64 */
             unresolved: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * @description Wire-exact mirror of
@@ -7118,6 +7650,8 @@ export interface components {
             site_detail_url?: string | null;
             /** Format: int32 */
             start_year?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Request contract for `app/schemas/catalog.py::SeriesMappingPreviewRequest`. */
         NativeSeriesMappingPreviewRequest: {
@@ -7126,6 +7660,8 @@ export interface components {
             provider: string;
             provider_series_external_id: string;
             scope_mode?: string;
+        } & {
+            [key: string]: unknown;
         };
         NativeSeriesMappingPreviewResponse: {
             counts: components["schemas"]["NativeSeriesMappingPreviewCounts"];
@@ -7137,6 +7673,8 @@ export interface components {
             provider_series?: components["schemas"]["NativeSeriesMappingPreviewProviderSeries"] | null;
             rows: components["schemas"]["NativeSeriesMappingPreviewRow"][];
             scope: components["schemas"]["NativeSeriesMappingPreviewScope"];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * @description Wire-exact mirror of `app/schemas/catalog.py::SeriesMappingPreviewRow`.
@@ -7165,6 +7703,8 @@ export interface components {
             thread_id?: number | null;
             thread_title?: string | null;
             title?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         NativeSeriesMappingPreviewScope: {
             basis?: string | null;
@@ -7173,10 +7713,14 @@ export interface components {
             scope_key?: string | null;
             series_label?: string | null;
             status: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Request body of `POST /api/v1/threads/{thread_id}:setCurrentIssue`. */
         NativeSetCurrentIssueRequest: {
             issue_number: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `SetCurrentIssueResponse`. */
         NativeSetCurrentIssueResponse: {
@@ -7197,12 +7741,16 @@ export interface components {
             title: string;
             /** Format: int32 */
             total_issues?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Bulk creator credits for one thread (Python `ThreadIssueCreatorsResponse`). */
         NativeThreadIssueCreatorsResponse: {
             issues: components["schemas"]["NativeIssueCreatorsEntry"][];
             /** Format: int32 */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description The Python `ThreadResponse` projection every lifecycle writer returns. */
         NativeThreadResponse: {
@@ -7230,6 +7778,8 @@ export interface components {
             title: string;
             /** Format: int32 */
             total_issues?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         NearMatch: {
             color: string;
@@ -7238,6 +7788,8 @@ export interface components {
             name: string;
             normalized_name: string;
             scope: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Ordered `thread_id -> explanation` object (Python `dict[int, ...]`). */
         OrderedExplanations: {
@@ -7252,6 +7804,8 @@ export interface components {
             list_id: number;
             updated_at: string;
             waiting_volume_id: string;
+        } & {
+            [key: string]: unknown;
         };
         OverlapDecisionSetResponse: {
             candidate_volumes?: components["schemas"]["OverlapVolumeCandidate"][];
@@ -7259,21 +7813,29 @@ export interface components {
             /** Format: int32 */
             list_id: number;
             updated_at: string;
+        } & {
+            [key: string]: unknown;
         };
         OverlapDecisionWrite: {
             continuing_volume_id: string;
             expected_updated_at?: string | null;
             waiting_volume_id: string;
+        } & {
+            [key: string]: unknown;
         };
         OverlapVolumeCandidate: {
             /** Format: int32 */
             thread_id: number;
             thread_title: string;
             volume_id: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Safe acknowledgement returned whether or not an account exists. */
         PasswordResetResponse: {
             message: string;
+        } & {
+            [key: string]: unknown;
         };
         PlanReaderBlocker: {
             explanation: string;
@@ -7283,6 +7845,8 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
             thread_title: string;
+        } & {
+            [key: string]: unknown;
         };
         PlanReaderIssue: {
             availability: string;
@@ -7300,6 +7864,8 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
             thread_title: string;
+        } & {
+            [key: string]: unknown;
         };
         PlanReaderLane: {
             id: string;
@@ -7307,10 +7873,14 @@ export interface components {
             name: string;
             /** Format: int32 */
             order: number;
+        } & {
+            [key: string]: unknown;
         };
         PlanReaderProgress: {
             read_issues: number;
             total_issues: number;
+        } & {
+            [key: string]: unknown;
         };
         PlanReaderResponse: {
             available_now: components["schemas"]["PlanReaderIssue"][];
@@ -7325,6 +7895,8 @@ export interface components {
             release_candidates: components["schemas"]["PlanReleaseCandidate"][];
             release_sources: components["schemas"]["PlanReleaseSourceStatus"][];
             sources: components["schemas"]["PlanReaderSource"][];
+        } & {
+            [key: string]: unknown;
         };
         PlanReaderSource: {
             adopted_at?: string | null;
@@ -7337,6 +7909,8 @@ export interface components {
             repository?: string | null;
             revision_sha?: string | null;
             source_path?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         PlanRecoveryPreview: {
             candidates: components["schemas"]["RecoveryCandidate"][];
@@ -7349,6 +7923,8 @@ export interface components {
             retained_steps: components["schemas"]["RecoveryStep"][];
             /** @description A linked plan is not eligible for destructive association changes. */
             status: string;
+        } & {
+            [key: string]: unknown;
         };
         PlanReleaseCandidate: {
             enableable: boolean;
@@ -7367,6 +7943,8 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
             thread_title: string;
+        } & {
+            [key: string]: unknown;
         };
         PlanReleaseSourceStatus: {
             enabled: boolean;
@@ -7384,6 +7962,8 @@ export interface components {
             source_id: number;
             /** Format: int32 */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         PlanRelinkRequest: {
             /** @description Explicit confirmation of the candidate's membership and order differences. */
@@ -7392,6 +7972,8 @@ export interface components {
             expected_plan_updated_at: string;
             /** Format: int32 */
             list_id: number;
+        } & {
+            [key: string]: unknown;
         };
         PlanRelinkResult: {
             /** Format: int32 */
@@ -7399,6 +7981,8 @@ export interface components {
             /** Format: int32 */
             plan_id: number;
             status: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * @description Why the Roll pool has no in-play faces.
@@ -7461,6 +8045,8 @@ export interface components {
              * @description Tracked issue total, or None for counter-based series
              */
             total_issues?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * PotentialDuplicateMatchType
@@ -7496,6 +8082,8 @@ export interface components {
             series_title: string;
             /** @description Names of every custom reading list the issue is a member of. */
             source_lists: string[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * @description Body of `POST /api/v2/threads/{thread_id}/issues/structure-preview`.
@@ -7516,6 +8104,8 @@ export interface components {
             issue_ids?: number[] | null;
             /** @description `delete` removes one issue; `reorder` applies a complete new order. */
             operation: string;
+        } & {
+            [key: string]: unknown;
         };
         PreviewIssuesRequest: {
             /** @description Numbers the reader explicitly chose to alias instead of duplicating. */
@@ -7536,6 +8126,8 @@ export interface components {
             issue_range: string;
             /** @description Requested placement strategy. Defaults to safe_default. */
             strategy?: components["schemas"]["IssuePlacementStrategy"];
+        } & {
+            [key: string]: unknown;
         };
         /** @description One release ledger record returned by public-facing endpoints. */
         PublicReleaseResponse: {
@@ -7553,6 +8145,8 @@ export interface components {
             title: string;
             /** Format: date-time */
             updated_at: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Resource patch for one queue entry. */
         QueueEntryPatch: {
@@ -7561,6 +8155,8 @@ export interface components {
              * @description Target reader-visible ordinal. Ranks beyond the end place the entry last.
              */
             position: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Queue entry resource returned by GET and PATCH. */
         QueueEntryResponse: {
@@ -7584,6 +8180,8 @@ export interface components {
              * @description Canonical queue-entry identity: the owned Thread id.
              */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Bulk exclusion provenance attached to an excluded queue thread (#5435). */
         QueueExclusionGroupRef: {
@@ -7593,11 +8191,15 @@ export interface components {
             source_id: number;
             source_kind: string;
             source_name: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Queue-order (shuffle) creation request. */
         QueueOrderRequest: {
             /** @description Client retry key. Replaying a committed key returns the same revision. */
             idempotency_key?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Durable queue-order revision. */
         QueueOrderResponse: {
@@ -7613,6 +8215,8 @@ export interface components {
              * @description Number of entries whose position this revision wrote.
              */
             shuffled: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * QueueSeriesMetadata
@@ -7638,6 +8242,8 @@ export interface components {
              * @description Confirmed publication/start year.
              */
             year?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * QueueThreadListItem
@@ -7675,10 +8281,12 @@ export interface components {
             /** Last Activity At */
             last_activity_at: string | null;
             /** Manual Creator Credits */
-            manual_creator_credits?: {
+            manual_creator_credits?: ({
                 name: string;
                 roles: string[];
-            }[];
+            } & {
+                [key: string]: unknown;
+            })[];
             /** Next Unread Issue Number */
             next_unread_issue_number?: string | null;
             /** Notes */
@@ -7695,6 +8303,8 @@ export interface components {
             title: string;
             /** Total Issues */
             total_issues?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * QueueThreadListResponse
@@ -7714,6 +8324,8 @@ export interface components {
             next_page_token?: string | null;
             /** Threads */
             threads: components["schemas"]["QueueThreadListItem"][];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ReactivateRequest
@@ -7724,6 +8336,8 @@ export interface components {
             issues_to_add: number;
             /** Thread Id */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `ReaderContextCrossover`. */
         ReaderContextCrossover: {
@@ -7740,18 +8354,24 @@ export interface components {
             ratings_count: number;
             /** Format: int64 */
             read_count: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `ReaderContextCrossoverMembership`. */
         ReaderContextCrossoverMembership: {
             /** Format: int32 */
             id: number;
             name: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `ReaderContextCrossoverNextMember`. */
         ReaderContextCrossoverNextMember: {
             /** Format: int32 */
             issue_id: number;
             issue_number: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `ReaderContextEdge`. */
         ReaderContextEdge: {
@@ -7777,11 +8397,15 @@ export interface components {
             /** Format: int32 */
             target_thread_id?: number | null;
             target_thread_title?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `ReaderContextLocalChain`. */
         ReaderContextLocalChain: {
             edges: components["schemas"]["ReaderContextEdge"][];
             issues: components["schemas"]["ReaderContextLocalIssue"][];
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `ReaderContextLocalIssue`. */
         ReaderContextLocalIssue: {
@@ -7796,6 +8420,8 @@ export interface components {
             /** @description `previous`, `current`, `next` or `future`. */
             relation: string;
             status: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `ReaderContextPreviousIssue`. */
         ReaderContextPreviousIssue: {
@@ -7804,6 +8430,8 @@ export interface components {
             issue_number: string;
             /** Format: double */
             rating?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `ReaderContextRecentRating`. */
         ReaderContextRecentRating: {
@@ -7812,6 +8440,8 @@ export interface components {
             issue_number: string;
             /** Format: double */
             rating: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `ReaderContextResponse`. */
         ReaderContextResponse: {
@@ -7820,6 +8450,8 @@ export interface components {
             issue_id: number;
             local_chain: components["schemas"]["ReaderContextLocalChain"];
             series: components["schemas"]["ReaderContextSeries"];
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `ReaderContextSeries`. */
         ReaderContextSeries: {
@@ -7837,15 +8469,21 @@ export interface components {
             ratings_count: number;
             recent_ratings: components["schemas"]["ReaderContextRecentRating"][];
             series_name?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         ReadingBoundaryBatchRequest: {
             thread_ids: number[];
+        } & {
+            [key: string]: unknown;
         };
         ReadingBoundaryBatchResponseV2: {
             evaluator: components["schemas"]["BoundaryEvaluator"];
             threads: {
                 [key: string]: components["schemas"]["ReadingBoundaryExplanationV2"];
             };
+        } & {
+            [key: string]: unknown;
         };
         ReadingBoundaryBlocker: {
             editor?: components["schemas"]["BoundaryEditorTarget"] | null;
@@ -7853,6 +8491,8 @@ export interface components {
             origin: components["schemas"]["BlockerOrigin"];
             reason: string;
             waiting_on: components["schemas"]["BoundaryIssue"][];
+        } & {
+            [key: string]: unknown;
         };
         ReadingBoundaryExplanationV2: {
             blockers: components["schemas"]["ReadingBoundaryBlocker"][];
@@ -7861,10 +8501,14 @@ export interface components {
             summary: string;
             /** Format: int32 */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         ReadingBoundaryNext: {
             editor?: components["schemas"]["BoundaryEditorTarget"] | null;
             issue: components["schemas"]["BoundaryIssue"];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ReadingGraphBlocker
@@ -7884,6 +8528,8 @@ export interface components {
             list_id?: number | null;
             /** Waiting On Issue Ids */
             waiting_on_issue_ids?: number[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ReadingGraphChoiceEffect
@@ -7905,11 +8551,15 @@ export interface components {
             series?: components["schemas"]["ReadingGraphSeriesNode"][];
             /** Waiting Issue Ids */
             waiting_issue_ids?: number[];
+        } & {
+            [key: string]: unknown;
         };
         /** @description One cycle with its concrete edge path. */
         ReadingGraphCycle: {
             edges: components["schemas"]["ReadingGraphEdge"][];
             message: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ReadingGraphCycleError
@@ -7920,6 +8570,8 @@ export interface components {
             code: string;
             /** Message */
             message: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description One stored requirement that participates in a cycle. */
         ReadingGraphEdge: {
@@ -7932,6 +8584,8 @@ export interface components {
             prerequisite_id?: number | null;
             source: components["schemas"]["ReadingGraphIssue"];
             target: components["schemas"]["ReadingGraphIssue"];
+        } & {
+            [key: string]: unknown;
         };
         /** @description One issue endpoint as a reader sees it, never a bare database identifier. */
         ReadingGraphIssue: {
@@ -7941,6 +8595,8 @@ export interface components {
             series_title: string;
             /** Format: int32 */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ReadingGraphIssueReference
@@ -7957,6 +8613,8 @@ export interface components {
             issue_number: string;
             /** Series Name */
             series_name: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description One affected Reading List. */
         ReadingGraphList: {
@@ -7964,6 +8622,8 @@ export interface components {
             list_id: number;
             mode: string;
             name: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ReadingGraphOverlap
@@ -7982,6 +8642,8 @@ export interface components {
             /** Selected Choice */
             selected_choice?: ("protect_order" | "continue_series") | null;
             waiting_series: components["schemas"]["ReadingGraphSeriesReference"];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ReadingGraphOverlapChoice
@@ -7995,6 +8657,8 @@ export interface components {
             choice: "protect_order" | "continue_series";
             /** Overlap Id */
             overlap_id: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ReadingGraphPreview
@@ -8019,6 +8683,8 @@ export interface components {
             source_list_id: number;
             /** Waiting Issue Ids */
             waiting_issue_ids?: number[];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ReadingGraphPreviewRequest
@@ -8031,6 +8697,8 @@ export interface components {
             overlap_choices?: components["schemas"]["ReadingGraphOverlapChoice"][];
             /** Target List Id */
             target_list_id?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description One owner-scoped repair the reader can preview and apply. */
         ReadingGraphRepairOption: {
@@ -8043,6 +8711,8 @@ export interface components {
             list_id?: number | null;
             /** Format: int32 */
             prerequisite_id?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Flat wire request so a preview never depends on tagged-enum deserialization. */
         ReadingGraphRepairRequest: {
@@ -8055,6 +8725,8 @@ export interface components {
             list_id?: number | null;
             /** Format: int32 */
             prerequisite_id?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         ReadingGraphRepairResponse: {
             applied: boolean;
@@ -8062,6 +8734,8 @@ export interface components {
             removed: string;
             status_after: string;
             status_before: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Complete graph state. `status` is `ok`, `cycle`, or `invalid`. */
         ReadingGraphResponse: {
@@ -8074,6 +8748,8 @@ export interface components {
             status: string;
             /** @description Total count of unresolved references. */
             unresolved_reference_count: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ReadingGraphSeriesNode
@@ -8099,6 +8775,8 @@ export interface components {
             waits_for_issue_ids?: number[];
             /** Year */
             year?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ReadingGraphSeriesReference
@@ -8111,12 +8789,16 @@ export interface components {
             series_name: string;
             /** Year */
             year?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description One affected Thread. */
         ReadingGraphThread: {
             /** Format: int32 */
             thread_id: number;
             title: string;
+        } & {
+            [key: string]: unknown;
         };
         ReadingList: {
             created_at: string;
@@ -8132,11 +8814,15 @@ export interface components {
             /** Format: int32 */
             user_id: number;
             warnings?: string[];
+        } & {
+            [key: string]: unknown;
         };
         ReadingListBlockerExplanation: {
             blocking_dependencies: components["schemas"]["ReadingListDependency"][];
             blocking_reasons: string[];
             is_blocked: boolean;
+        } & {
+            [key: string]: unknown;
         };
         ReadingListDependency: {
             /** Format: int32 */
@@ -8146,6 +8832,8 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
             thread_title: string;
+        } & {
+            [key: string]: unknown;
         };
         ReadingListEntry: {
             checkpoint_target_issue_ids: number[];
@@ -8163,10 +8851,14 @@ export interface components {
             status: string;
             /** Format: int32 */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         ReadingListEntryIntent: {
             gate: string;
             skipped?: boolean;
+        } & {
+            [key: string]: unknown;
         };
         ReadingListPredecessorChange: {
             after_issue_ids: number[];
@@ -8176,6 +8868,8 @@ export interface components {
             /** Format: int32 */
             issue_id: number;
             issue_name: string;
+        } & {
+            [key: string]: unknown;
         };
         ReadingListReader: {
             entries: components["schemas"]["ReadingListReaderEntry"][];
@@ -8184,6 +8878,8 @@ export interface components {
             list_id: number;
             mode: string;
             name: string;
+        } & {
+            [key: string]: unknown;
         };
         ReadingListReaderEntry: {
             availability: string;
@@ -8203,6 +8899,8 @@ export interface components {
             status: string;
             /** Format: int32 */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         ReadingListSummary: {
             description?: string | null;
@@ -8213,6 +8911,8 @@ export interface components {
             mode: string;
             name: string;
             updated_at: string;
+        } & {
+            [key: string]: unknown;
         };
         ReadingListWrite: {
             checkpoint_issue_ids?: number[] | null;
@@ -8236,6 +8936,8 @@ export interface components {
             issue_ids: number[];
             mode?: string | null;
             name: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Current reading-mode state for the active session (wire response). */
         ReadingModeResponse: {
@@ -8243,6 +8945,8 @@ export interface components {
             intent?: string | null;
             source?: string | null;
             suggested: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * @description Set request: `source` is required; `answers` (quiz) or resolved
@@ -8255,6 +8959,8 @@ export interface components {
             bandwidth?: string | null;
             intent?: string | null;
             source: string;
+        } & {
+            [key: string]: unknown;
         };
         ReadingOrderAdoptRequest: {
             lane_id?: string | null;
@@ -8262,6 +8968,8 @@ export interface components {
             plan_name?: string | null;
             /** Format: int32 */
             reading_order_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `ReadingOrderItemResponse`. */
         ReadingOrderItemResponse: {
@@ -8272,10 +8980,14 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
             thread_title: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `ReadingOrderListResponse`. */
         ReadingOrderListResponse: {
             reading_orders: components["schemas"]["ReadingOrderSummary"][];
+        } & {
+            [key: string]: unknown;
         };
         ReadingOrderProjectPreviewConflict: {
             code: string;
@@ -8284,6 +8996,8 @@ export interface components {
             node_id: string;
             /** Format: int64 */
             thread_id?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         ReadingOrderProjectPreviewEntry: {
             /** Format: int64 */
@@ -8293,10 +9007,14 @@ export interface components {
             /** Format: int64 */
             thread_id: number;
             thread_title?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         ReadingOrderProjectPreviewRequest: {
             /** Format: int64 */
             reading_order_id: number;
+        } & {
+            [key: string]: unknown;
         };
         ReadingOrderProjectPreviewResponse: {
             conflicts: components["schemas"]["ReadingOrderProjectPreviewConflict"][];
@@ -8311,6 +9029,8 @@ export interface components {
             reading_order_name: string;
             /** Format: int64 */
             total_positions: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ReadingOrderProjectionConflict
@@ -8330,6 +9050,8 @@ export interface components {
             node_id: string;
             /** Thread Id */
             thread_id?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ReadingOrderProjectionEntry
@@ -8346,6 +9068,8 @@ export interface components {
             thread_id: number;
             /** Thread Title */
             thread_title: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ReadingOrderProjectionPreview
@@ -8373,6 +9097,8 @@ export interface components {
             reading_order_name: string;
             /** Total Positions */
             total_positions: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ReadingOrderProjectionRequest
@@ -8381,6 +9107,8 @@ export interface components {
         ReadingOrderProjectionRequest: {
             /** Reading Order Id */
             reading_order_id: number;
+        } & {
+            [key: string]: unknown;
         };
         ReadingOrderProjectionResult: {
             /** Format: int32 */
@@ -8395,6 +9123,8 @@ export interface components {
             total_positions: number;
             /** Format: int32 */
             updated_count: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `ReadingOrderResponse`. */
         ReadingOrderResponse: {
@@ -8407,6 +9137,8 @@ export interface components {
             name: string;
             /** Format: int64 */
             total_items: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description One row of the reading-orders list (Python `ReadingOrderSummary`). */
         ReadingOrderSummary: {
@@ -8416,6 +9148,8 @@ export interface components {
             name: string;
             /** Format: int64 */
             total_items: number;
+        } & {
+            [key: string]: unknown;
         };
         ReadingPlanDependencyLink: {
             /** Format: int32 */
@@ -8425,9 +9159,13 @@ export interface components {
             source_issue_id: number;
             /** Format: int32 */
             target_issue_id: number;
+        } & {
+            [key: string]: unknown;
         };
         ReadingPlanDependencyLinkRequest: {
             explanation?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         ReadingPlanMemberIssue: {
             /** Format: int32 */
@@ -8441,6 +9179,8 @@ export interface components {
             reader_optional?: boolean | null;
             reader_role?: string | null;
             source_metadata?: unknown;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Mirrors Python `app/schemas/reading_plan_membership.py::ReadingPlanMembershipResponse`. */
         ReadingPlanMembershipResponse: {
@@ -8451,12 +9191,16 @@ export interface components {
             plan_id: number;
             progress: components["schemas"]["ReadingPlanProgress"];
             sources: components["schemas"]["ReadingPlanSourceSnapshot"][];
+        } & {
+            [key: string]: unknown;
         };
         ReadingPlanProgress: {
             /** Format: int32 */
             read_issues: number;
             /** Format: int32 */
             total_issues: number;
+        } & {
+            [key: string]: unknown;
         };
         ReadingPlanReleaseSourceStatus: {
             enabled: boolean;
@@ -8474,6 +9218,8 @@ export interface components {
             source_id: number;
             /** Format: int32 */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         ReadingPlanSourcePlacementView: {
             /** Format: int32 */
@@ -8483,6 +9229,8 @@ export interface components {
             plan_source_id: number;
             /** Format: int32 */
             source_position?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         ReadingPlanSourceSnapshot: {
             adopted_at?: string | null;
@@ -8495,12 +9243,16 @@ export interface components {
             repository?: string | null;
             revision_sha?: string | null;
             source_path?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Result of the explicit v2 reading-session initialization write. */
         ReadingSessionCreatedResponse: {
             created: boolean;
             /** Format: int32 */
             session_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description One durable, event-derived reading session in the canonical collection. */
         ReadingSessionResource: {
@@ -8524,6 +9276,8 @@ export interface components {
             start_die: number;
             started_at: string;
             timezone?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         ReconcileApplyRequest: {
             /** Format: int32 */
@@ -8533,6 +9287,8 @@ export interface components {
             };
             duplicate_issue_ids: number[];
             preview_token: string;
+        } & {
+            [key: string]: unknown;
         };
         ReconcileApplyResponse: {
             /** Format: int32 */
@@ -8545,6 +9301,8 @@ export interface components {
             /** Format: int32 */
             undo_snapshot_id?: number | null;
             warnings: string[];
+        } & {
+            [key: string]: unknown;
         };
         ReconcilePreviewAction: {
             decision_key?: string | null;
@@ -8552,6 +9310,8 @@ export interface components {
             kind: string;
             requires_decision: boolean;
             safe: boolean;
+        } & {
+            [key: string]: unknown;
         };
         ReconcilePreviewRequest: {
             /** Format: int32 */
@@ -8561,6 +9321,8 @@ export interface components {
                 [key: string]: string;
             };
             duplicate_issue_ids: number[];
+        } & {
+            [key: string]: unknown;
         };
         ReconcilePreviewResponse: {
             actions: components["schemas"]["ReconcilePreviewAction"][];
@@ -8572,16 +9334,22 @@ export interface components {
             duplicates: components["schemas"]["DuplicateIssueEvidence"][];
             preview_token: string;
             warnings: string[];
+        } & {
+            [key: string]: unknown;
         };
         ReconcileUndoRequest: {
             /** Format: int32 */
             reconciliation_id: number;
+        } & {
+            [key: string]: unknown;
         };
         ReconcileUndoResponse: {
             /** Format: int32 */
             reconciliation_id: number;
             undone: boolean;
             warnings: string[];
+        } & {
+            [key: string]: unknown;
         };
         RecoveryCandidate: {
             added_steps: components["schemas"]["RecoveryStep"][];
@@ -8593,21 +9361,29 @@ export interface components {
             order_changed: boolean;
             removed_steps: components["schemas"]["RecoveryStep"][];
             steps: components["schemas"]["RecoveryStep"][];
+        } & {
+            [key: string]: unknown;
         };
         RecoveryStep: {
             /** Format: int32 */
             issue_id: number;
             label: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Optional request body for token refresh; the refresh cookie is also accepted. */
         RefreshTokenRequest: {
             refresh_token: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Request body for account registration. */
         RegisterRequest: {
             email: string;
             password: string;
             username: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Related issue derived from a confirmed explicit story-arc relationship. */
         RelatedIssue: {
@@ -8618,6 +9394,8 @@ export interface components {
             issue_number?: string | null;
             name?: string | null;
             series_name?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Paginated published releases for What's New. */
         ReleaseListResponse: {
@@ -8628,6 +9406,8 @@ export interface components {
             releases: components["schemas"]["PublicReleaseResponse"][];
             /** Format: int64 */
             total: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description One complete release ledger record returned to trusted automation. */
         ReleaseResponse: {
@@ -8654,6 +9434,8 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
             visibility: string;
+        } & {
+            [key: string]: unknown;
         };
         ReleaseSourceCreate: {
             /** Format: int32 */
@@ -8664,14 +9446,20 @@ export interface components {
             plan_id: number;
             /** Format: int32 */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Result of reconciling a GitHub source identity with the ledger. */
         ReleaseSourceResponse: {
             exists: boolean;
             release?: components["schemas"]["MinimalReleaseResponse"] | null;
+        } & {
+            [key: string]: unknown;
         };
         ReleaseSourceUpdate: {
             enabled: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Idempotent release publication payload from trusted automation. */
         ReleaseUpsertRequest: {
@@ -8692,12 +9480,16 @@ export interface components {
             summary: string;
             title: string;
             visibility?: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `ReplaceIdentityRequest` (`reason` `max_length=500`). */
         ReplaceIdentityRequest: {
             /** Format: int32 */
             comicvine_issue_id: number;
             reason?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * @description Report kind, mirroring Python `ReportType = Literal["bug", "feature"]`.
@@ -8706,16 +9498,22 @@ export interface components {
         ReportType: "bug" | "feature";
         ResetDiceRequest: {
             idempotency_key: string;
+        } & {
+            [key: string]: unknown;
         };
         ResetDiceResponse: {
             /** Format: int32 */
             die: number;
             replayed: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Request body for completing a password reset with a single-use token. */
         ResetPasswordRequest: {
             new_password: string;
             token: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description The reader's current logical die and the approved ladder. */
         RollDieStateResponse: {
@@ -8732,6 +9530,8 @@ export interface components {
             /** @description The approved dice ladder, smallest to largest. */
             ladder: number[];
             last_roll?: components["schemas"]["RollLastRoll"] | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description The ordered eligible issue identifiers for the current die. */
         RollEligibleIssueIdsResponse: {
@@ -8754,6 +9554,8 @@ export interface components {
             pool_reason: components["schemas"]["PoolReason"];
             /** @description The owning thread identifiers, parallel to `issue_ids`. */
             thread_ids: number[];
+        } & {
+            [key: string]: unknown;
         };
         /** @description The most recent Roll recorded for this reader. */
         RollLastRoll: {
@@ -8781,6 +9583,8 @@ export interface components {
              * @description The rolled thread.
              */
             thread_id?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         RollOfferRequest: {
             /**
@@ -8794,6 +9598,8 @@ export interface components {
             snoozed_thread_ids?: number[];
             /** @description Browser timezone used only by the retained session bridge. */
             timezone?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         RollOfferResponse: {
             /** Format: int32 */
@@ -8829,6 +9635,8 @@ export interface components {
             title: string;
             /** Format: int32 */
             total_issues?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Request body for the manual override. */
         RollOverrideRequest: {
@@ -8837,6 +9645,8 @@ export interface components {
              * @description Reader-selected thread identifier.
              */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Request body for accepting one current recovery recommendation. */
         RollPrerequisiteSwitchRequest: {
@@ -8847,6 +9657,8 @@ export interface components {
             node_id: number;
             /** @description Recommended continuity-node type. Only concrete issues are accepted. */
             node_type: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Durable active-target state after accepting a recovery recommendation. */
         RollPrerequisiteSwitchResponse: {
@@ -8859,6 +9671,8 @@ export interface components {
             /** Format: int32 */
             target_thread_id: number;
             target_thread_title: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * RollResponse
@@ -8897,6 +9711,8 @@ export interface components {
             title: string;
             /** Total Issues */
             total_issues?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Wire parity with Python `SeriesImportStatusResponse`. */
         SeriesImportStatusResponse: {
@@ -8908,6 +9724,8 @@ export interface components {
             series_name?: string | null;
             /** Format: int32 */
             thread_id?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SeriesMappingPreviewCounts
@@ -8944,6 +9762,8 @@ export interface components {
              * @description Number of unresolved issues
              */
             unresolved: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SeriesMappingPreviewProviderSeries
@@ -8987,6 +9807,8 @@ export interface components {
              * @description Start year
              */
             start_year?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SeriesMappingPreviewRequest
@@ -9014,6 +9836,8 @@ export interface components {
              * @default confirmed_origin
              */
             scope_mode: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SeriesMappingPreviewResponse
@@ -9046,6 +9870,8 @@ export interface components {
             rows?: components["schemas"]["SeriesMappingPreviewRow"][];
             /** @description Scope information */
             scope: components["schemas"]["SeriesMappingPreviewScope"];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SeriesMappingPreviewRow
@@ -9123,6 +9949,8 @@ export interface components {
              * @description Issue title
              */
             title?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SeriesMappingPreviewScope
@@ -9154,6 +9982,8 @@ export interface components {
              * @description Scope status: 'available' or 'unavailable'
              */
             status: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Active thread projection. */
         SessionActiveThread: {
@@ -9181,6 +10011,8 @@ export interface components {
             title: string;
             /** Format: int32 */
             total_issues?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Canonical bandwidth state. */
         SessionBandwidthState: {
@@ -9190,6 +10022,8 @@ export interface components {
             mode_version?: string | null;
             predicted_bandwidth?: string | null;
             source?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Full session details response with events and narrative summary. */
         SessionDetailsResponse: {
@@ -9207,6 +10041,8 @@ export interface components {
             start_die: number;
             started_at: string;
             timezone?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Event detail for session details response. */
         SessionEventDetail: {
@@ -9230,6 +10066,8 @@ export interface components {
             thread_title?: string | null;
             timestamp: string;
             type: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Canonical intent state. */
         SessionIntentState: {
@@ -9239,6 +10077,8 @@ export interface components {
             mode_version?: string | null;
             predicted_intent?: string | null;
             source?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         SessionSnapshotItem: {
             created_at: string;
@@ -9249,11 +10089,15 @@ export interface components {
             id: number;
             /** Format: int32 */
             session_id: number;
+        } & {
+            [key: string]: unknown;
         };
         SessionSnapshotsResponse: {
             /** Format: int32 */
             session_id: number;
             snapshots: components["schemas"]["SessionSnapshotItem"][];
+        } & {
+            [key: string]: unknown;
         };
         /** @description Direct visible tag. */
         SessionTag: {
@@ -9267,12 +10111,16 @@ export interface components {
             owner_user_id?: number | null;
             scope: string;
             updated_at: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Compact thread summary. */
         SessionThreadSummary: {
             /** Format: int32 */
             id: number;
             title: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SetCurrentIssueRequest
@@ -9284,6 +10132,8 @@ export interface components {
              * @description Target issue number to set as current
              */
             issue_number: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * SetCurrentIssueResponse
@@ -9312,6 +10162,8 @@ export interface components {
             title: string;
             /** Total Issues */
             total_issues?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         SourceSyncFailure: {
             error: string;
@@ -9323,12 +10175,16 @@ export interface components {
             thread_id: number;
             /** Format: int32 */
             volume_id: number;
+        } & {
+            [key: string]: unknown;
         };
         StartupMetricsResponse: {
             /** Format: double */
             startup_duration?: number | null;
             /** Format: double */
             startup_time?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description A provider story arc with bounded related issues and a correct total. */
         StoryArc: {
@@ -9339,6 +10195,8 @@ export interface components {
             related_issues: components["schemas"]["RelatedIssue"][];
             /** Format: int32 */
             total_related_count?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         SyncReport: {
             /** Format: int64 */
@@ -9372,16 +10230,22 @@ export interface components {
             total_sources: number;
             /** Format: int64 */
             unknown_date_skips: number;
+        } & {
+            [key: string]: unknown;
         };
         SyncRequest: {
             /** Format: date-time */
             as_of: string;
             refresh?: boolean;
+        } & {
+            [key: string]: unknown;
         };
         SyncResponse: {
             message: string;
             result: components["schemas"]["SyncReport"];
             success: boolean;
+        } & {
+            [key: string]: unknown;
         };
         SyncStatusResponse: {
             /** Format: int64 */
@@ -9389,6 +10253,8 @@ export interface components {
             sources: components["schemas"]["SyncStatusSource"][];
             /** Format: int64 */
             total_sources: number;
+        } & {
+            [key: string]: unknown;
         };
         SyncStatusSource: {
             enabled: boolean;
@@ -9402,6 +10268,8 @@ export interface components {
             reading_plan_id: number;
             /** Format: int32 */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         Tag: {
             color: string;
@@ -9414,6 +10282,8 @@ export interface components {
             owner_user_id?: number | null;
             scope: string;
             updated_at: string;
+        } & {
+            [key: string]: unknown;
         };
         TagAssignmentResponse: {
             created_at: string;
@@ -9424,6 +10294,8 @@ export interface components {
             /** Format: int32 */
             target_id: number;
             target_type: string;
+        } & {
+            [key: string]: unknown;
         };
         TagDeleteResponse: {
             /** Format: int64 */
@@ -9433,9 +10305,13 @@ export interface components {
             };
             /** Format: int32 */
             tag_id: number;
+        } & {
+            [key: string]: unknown;
         };
         TagListResponse: {
             tags: components["schemas"]["Tag"][];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * TagResponse
@@ -9464,6 +10340,8 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        } & {
+            [key: string]: unknown;
         };
         TagUsageResponse: {
             assignments_by_target_type: {
@@ -9476,6 +10354,8 @@ export interface components {
             tag_id: number;
             /** Format: int64 */
             total_assignments: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description One prompt-eligible inferred taste pattern shown on Roll. */
         TasteDiscovery: {
@@ -9489,19 +10369,27 @@ export interface components {
             id: number;
             prompt: string;
             signal_type: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Ranked prompt-eligible discoveries for the authenticated reader. */
         TasteDiscoveryListResponse: {
             discoveries: components["schemas"]["TasteDiscovery"][];
             generated_at: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Wire parity with Python `{"dismissed": True}`. */
         TasteDismissResponse: {
             dismissed: boolean;
+        } & {
+            [key: string]: unknown;
         };
         /** @description All Taste Bank signals owned by the authenticated user. */
         TasteSignalListResponse: {
             signals: components["schemas"]["TasteSignalResponse"][];
+        } & {
+            [key: string]: unknown;
         };
         /** @description Canonical representation of one persisted Taste Bank signal. */
         TasteSignalResponse: {
@@ -9523,16 +10411,22 @@ export interface components {
             user_id: number;
             user_verdict?: string | null;
             verdict_at?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Explicit user verdict on one Taste Bank signal. */
         TasteVerdictRequest: {
             verdict: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `ThreadConnectedResponse`. */
         ThreadConnectedResponse: {
             connected_threads: components["schemas"]["ConnectedThreadInfo"][];
             /** Format: int32 */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ThreadCreate
@@ -9549,16 +10443,20 @@ export interface components {
             /** Issues Remaining */
             issues_remaining: number;
             /** Manual Creator Credits */
-            manual_creator_credits?: {
+            manual_creator_credits?: ({
                 name: string;
                 roles: string[];
-            }[];
+            } & {
+                [key: string]: unknown;
+            })[];
             /** Notes */
             notes?: string | null;
             /** Title */
             title: string;
             /** Total Issues */
             total_issues?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Body of `POST /api/v1/threads/`. */
         ThreadCreateRequest: {
@@ -9571,6 +10469,8 @@ export interface components {
             title: string;
             /** Format: int32 */
             total_issues?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * @description Bounded, paginated thread-scoped issue-credit projection for #5706.
@@ -9589,6 +10489,8 @@ export interface components {
             thread_id: number;
             /** Format: int64 */
             total_count: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * @description Wire parity with Python `ThreadDependenciesResponse`
@@ -9599,12 +10501,16 @@ export interface components {
         ThreadDependenciesResponse: {
             blocked_by: components["schemas"]["DependencyResponse"][];
             blocking: components["schemas"]["DependencyResponse"][];
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `ThreadDependencyOrderCheckResponse`. */
         ThreadDependencyOrderCheckResponse: {
             conflicts: components["schemas"]["DependencyOrderConflict"][];
             /** Format: int32 */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description The legacy single-thread response retained for the v1 and bare aliases. */
         ThreadDetailResponse: {
@@ -9632,6 +10538,8 @@ export interface components {
             title: string;
             /** Format: int32 */
             total_issues?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Newly created issues (Python `IssueListResponse`). Named distinctly from the v2 `IssueListResponse` so merged contracts never collide. */
         ThreadIssueCreateListResponse: {
@@ -9641,6 +10549,8 @@ export interface components {
             page_size: number;
             /** Format: int32 */
             total_count: number;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ThreadIssueCreatorsResponse
@@ -9655,12 +10565,16 @@ export interface components {
             issues?: components["schemas"]["IssueCreatorsEntry"][];
             /** Thread Id */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Wire parity with Python `ThreadIssueDependenciesResponse`. */
         ThreadIssueDependenciesResponse: {
             issues: components["schemas"]["IssueDependenciesResponse"][];
             /** Format: int32 */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         ThreadIssueListResponse: {
             issues: components["schemas"]["IssueDetailResponse"][];
@@ -9669,11 +10583,15 @@ export interface components {
             page_size: number;
             /** Format: int64 */
             total_count: number;
+        } & {
+            [key: string]: unknown;
         };
         ThreadIssuesEffectiveTagsResponse: {
             issues: components["schemas"]["EffectiveTagsResponse"][];
             /** Format: int32 */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description One reader threads collection item. */
         ThreadListItem: {
@@ -9705,6 +10623,8 @@ export interface components {
             title: string;
             /** Format: int32 */
             total_issues?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Paginated reader threads collection. */
         ThreadListResponse: {
@@ -9717,6 +10637,8 @@ export interface components {
             filtered_count?: number | null;
             next_page_token?: string | null;
             threads: components["schemas"]["ThreadListItem"][];
+        } & {
+            [key: string]: unknown;
         };
         /** @description Committed values a stale client read before issuing a Thread patch. */
         ThreadPatchPrecondition: {
@@ -9728,6 +10650,8 @@ export interface components {
             notes?: string | null;
             /** @description Title observed by the client. */
             title?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * @description Body of `PATCH /api/v2/threads/{thread_id}`.
@@ -9759,6 +10683,8 @@ export interface components {
              *     comma-separated string. Omit for presence-based partial update.
              */
             update_mask?: string[] | null;
+        } & {
+            [key: string]: unknown;
         };
         ThreadProgress: {
             /** Format: int32 */
@@ -9771,10 +10697,14 @@ export interface components {
             status: string;
             /** Format: int32 */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Python `ThreadReadingOrdersResponse`. */
         ThreadReadingOrdersResponse: {
             reading_orders: components["schemas"]["ReadingOrderResponse"][];
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ThreadResponse
@@ -9809,10 +10739,12 @@ export interface components {
             /** Last Rating */
             last_rating: number | null;
             /** Manual Creator Credits */
-            manual_creator_credits?: {
+            manual_creator_credits?: ({
                 name: string;
                 roles: string[];
-            }[];
+            } & {
+                [key: string]: unknown;
+            })[];
             /** Next Unread Issue Id */
             next_unread_issue_id?: number | null;
             /** Next Unread Issue Number */
@@ -9829,6 +10761,8 @@ export interface components {
             title: string;
             /** Total Issues */
             total_issues?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description One tag visible to the reader. */
         ThreadTag: {
@@ -9842,6 +10776,8 @@ export interface components {
             owner_user_id?: number | null;
             scope: string;
             updated_at: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * ThreadUpdate
@@ -9855,20 +10791,26 @@ export interface components {
             /** Issues Remaining */
             issues_remaining?: number | null;
             /** Manual Creator Credits */
-            manual_creator_credits?: {
+            manual_creator_credits?: ({
                 name: string;
                 roles: string[];
-            }[] | null;
+            } & {
+                [key: string]: unknown;
+            })[] | null;
             /** Notes */
             notes?: string | null;
             /** Title */
             title?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Response body for token endpoints, matching the Python wire contract. */
         TokenResponse: {
             access_token: string;
             refresh_token: string;
             token_type: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Full session response matching Python SessionResponse. */
         UndoApplyResponse: {
@@ -9904,6 +10846,8 @@ export interface components {
             timezone?: string | null;
             /** Format: int32 */
             user_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Snapshot item in the list response. */
         UndoSnapshotItem: {
@@ -9915,12 +10859,16 @@ export interface components {
             id: number;
             /** Format: int32 */
             session_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Undo snapshots list response. */
         UndoSnapshotsResponse: {
             /** Format: int32 */
             session_id: number;
             snapshots: components["schemas"]["UndoSnapshotItem"][];
+        } & {
+            [key: string]: unknown;
         };
         /** @description Request body for unsnoozing a thread. */
         UnsnoozeRequest: {
@@ -9929,6 +10877,8 @@ export interface components {
              * @description The thread ID to unsnooze. Idempotent: an already-removed snooze succeeds.
              */
             thread_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Response for unsnooze, mirroring the roll offer shape so the UI can rehydrate. */
         UnsnoozeResponse: {
@@ -9968,10 +10918,14 @@ export interface components {
             total_issues?: number | null;
             /** Format: int32 */
             unsnoozed_thread_id?: number | null;
+        } & {
+            [key: string]: unknown;
         };
         UpdateTagRequest: {
             color?: string | null;
             name?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * @description Partial update of the authenticated user's preferences.
@@ -9982,12 +10936,16 @@ export interface components {
          */
         UserPreferencesPatchRequest: {
             theme?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Current preference values for the authenticated user. */
         UserPreferencesResponse: {
             theme: string;
             /** Format: int32 */
             user_id: number;
+        } & {
+            [key: string]: unknown;
         };
         /** @description Response body for the current-user endpoint. */
         UserResponse: {
@@ -9996,6 +10954,8 @@ export interface components {
             id: number;
             is_admin: boolean;
             username: string;
+        } & {
+            [key: string]: unknown;
         };
         /** ValidationError */
         ValidationError: {
@@ -10009,6 +10969,8 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        } & {
+            [key: string]: unknown;
         };
         /** @description FastAPI/Pydantic validation error item shape (422). */
         ValidationErrorItem: {
@@ -10017,9 +10979,13 @@ export interface components {
             loc: string[];
             msg: string;
             type: string;
+        } & {
+            [key: string]: unknown;
         };
         ValidationErrorResponse: {
             detail: components["schemas"]["ValidationErrorItem"][];
+        } & {
+            [key: string]: unknown;
         };
     };
     responses: never;
