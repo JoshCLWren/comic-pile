@@ -2459,3 +2459,49 @@ async fn v2_eligibility_uses_canonical_logic_and_batch_authorization() {
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(body["thread_id"], b);
 }
+
+#[tokio::test]
+async fn retired_v1_thread_dependency_reads_are_not_routed() {
+    let (state, token, csrf, user_id, _guard) = setup_user("tord-retired").await;
+    let conn = state.pool.get().await.unwrap();
+    let t = thread(&conn, user_id, "Retired").await;
+    for (method, path, request) in [
+        (
+            "GET",
+            format!("/api/v1/threads/{t}/issue-dependencies"),
+            get(
+                &format!("/api/v1/threads/{t}/issue-dependencies"),
+                &token,
+                &csrf,
+            ),
+        ),
+        (
+            "GET",
+            format!("/api/v1/threads/{t}/dependencies"),
+            get(&format!("/api/v1/threads/{t}/dependencies"), &token, &csrf),
+        ),
+        (
+            "POST",
+            format!("/api/v1/threads/{t}:getBlockingInfo"),
+            post(
+                &format!("/api/v1/threads/{t}:getBlockingInfo"),
+                &token,
+                &csrf,
+                None,
+            ),
+        ),
+        (
+            "POST",
+            "/api/v1/threads:getBlockingInfo".to_string(),
+            post("/api/v1/threads:getBlockingInfo", &token, &csrf, None),
+        ),
+        (
+            "GET",
+            format!("/api/v1/threads/{t}/connected"),
+            get(&format!("/api/v1/threads/{t}/connected"), &token, &csrf),
+        ),
+    ] {
+        let (status, body) = send(&state, request).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{method} {path}: {body:?}");
+    }
+}
