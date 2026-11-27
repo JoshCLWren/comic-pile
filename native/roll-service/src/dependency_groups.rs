@@ -940,7 +940,7 @@ async fn create_group_tx(
     })
 }
 
-/// `GET /api/v1/reading-order-groups/threads/{thread_id}/groups`
+/// `GET /api/v2/threads/{thread_id}/reading-order-group-memberships`
 pub async fn list_thread_groups(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1186,7 +1186,7 @@ async fn delete_group_tx(
     Ok(())
 }
 
-/// `POST /api/v1/reading-order-groups/{group_id}/issue-ranges`
+/// `POST /api/v2/reading-order-groups/{group_id}/issue-ranges`
 pub async fn add_issue_range(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1307,7 +1307,7 @@ async fn add_issue_range_tx(
     })
 }
 
-/// `POST /api/v1/reading-order-groups/{group_id}/members`
+/// `POST /api/v2/reading-order-groups/{group_id}/members`
 pub async fn add_member(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
