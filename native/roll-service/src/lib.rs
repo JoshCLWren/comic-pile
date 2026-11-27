@@ -676,10 +676,6 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(catalog_series_mapping_preview::preview_series_mapping_handler),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
-            post(continuity_plans_project_preview::preview_plan_projection_handler),
-        )
-        .route(
             "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
             get(issue_identity_adoption_preview::api_cbl_adoption_preview_handler),
         )
@@ -1304,6 +1300,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
             delete(continuity_plans::unlink_plan_dependency_edge),
+        )
+        .route(
+            "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection",
+            post(continuity_plans_project_preview::preview_plan_projection_handler),
         )
         .route(
             "/api/v2/continuity-plans/{plan_id}/reading-orders/project",

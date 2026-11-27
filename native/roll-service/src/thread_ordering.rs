@@ -1181,7 +1181,7 @@ pub fn validate_order_documentation() {}
 /// Documentation-only operation for reading orders containing a thread.
 #[utoipa::path(
     get,
-    path = "/api/v1/threads/{thread_id}/reading-orders",
+    path = "/api/v2/threads/{thread_id}/readingOrders",
     tag = "reading-orders",
     operation_id = "thread_ordering_reading_orders",
     params(("thread_id" = i32, Path, description = "Thread identifier")),
@@ -1193,7 +1193,6 @@ pub fn validate_order_documentation() {}
     ),
     security(("HTTPBearer" = []))
 )]
-#[allow(dead_code)]
 pub fn thread_reading_orders_documentation() {}
 
 /// OpenAPI document for the native same-path thread ordering surface.
