@@ -257,13 +257,22 @@ async fn patch_stale_expected_precondition_returns_409_and_writes_nothing() {
 async fn patch_and_delete_reject_cross_account_writes_with_404() {
     let ctx = setup("v2owner").await;
     let thread = seed_thread(&ctx, ctx.user_id, "Owned").await;
-    let (other_token, other_csrf, _other_user) =
-        register_user(&ctx.state, &format!("v2other-{}-{}", std::process::id(), unique_suffix())).await;
+    let (other_token, other_csrf, _other_user) = register_user(
+        &ctx.state,
+        &format!("v2other-{}-{}", std::process::id(), unique_suffix()),
+    )
+    .await;
     let uri = format!("/api/v2/threads/{thread}");
 
     let (status, body) = send(
         &ctx.state,
-        authed("PATCH", &uri, &other_token, &other_csrf, Some(json!({"title": "Nope"}))),
+        authed(
+            "PATCH",
+            &uri,
+            &other_token,
+            &other_csrf,
+            Some(json!({"title": "Nope"})),
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
