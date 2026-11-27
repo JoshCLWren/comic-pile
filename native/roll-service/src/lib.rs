@@ -691,7 +691,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         // preview alias stays mounted only until production proof retires it;
         // no new caller may use it.
         .route(
-            "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection",
+            "/api/v2/continuityPlans/{plan_id}/:previewReadingOrderProjection",
             post(continuity_plans_project_preview::preview_reading_order_projection_v2),
         )
         .route(
