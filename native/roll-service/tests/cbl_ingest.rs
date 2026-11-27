@@ -107,11 +107,11 @@ async fn apply(
     revision: &str,
     alias: Option<&str>,
 ) -> comicpile_roll_service::cbl_ingest::SyncSummary {
-    let conn = state.pool.get().await.unwrap();
+    let mut conn = state.pool.get().await.unwrap();
     let transaction = conn.transaction().await.unwrap();
     let aliases = alias.map(|value| vec![value.to_string()]).unwrap_or_default();
     let summary = sync_cbl_lists(
-        &transaction,
+        &*transaction,
         "JoshCLWren/CBL-ReadingLists",
         revision,
         parsed,
@@ -186,7 +186,7 @@ async fn dry_run_reports_counts_without_writing_any_rows() {
 
     let conn = state.pool.get().await.unwrap();
     let summary = sync_cbl_lists(
-        &conn,
+        &**conn,
         "JoshCLWren/CBL-ReadingLists",
         "abc1234",
         &parsed,
