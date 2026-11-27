@@ -4,6 +4,7 @@
  * a single semantic token set, exact approved colors, legacy aliases that
  * point at that set, and WCAG AA contrast for text and status roles.
  */
+import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -203,6 +204,28 @@ describe('Night Shift single-palette contract (#5980)', () => {
 
 describe('Night Shift boot and storage contract (#5980)', () => {
   const sourceRoot = resolve(process.cwd(), 'src')
+
+  it('includes the exact owner-approved prototype artifact', () => {
+    let directory = process.cwd()
+    let prototypePath = ''
+    for (let depth = 0; depth < 4; depth += 1) {
+      const candidate = resolve(directory, 'docs', 'design', 'comicpile-night-shift.html')
+      if (existsSync(candidate)) {
+        prototypePath = candidate
+        break
+      }
+      directory = resolve(directory, '..')
+    }
+    expect(prototypePath, 'approved Night Shift prototype must be in docs/design').not.toBe('')
+    const content = readFileSync(prototypePath)
+    const blobHash = createHash('sha1')
+      .update(`blob ${content.length}\0`)
+      .update(content)
+      .digest('hex')
+    expect(blobHash, 'prototype must match the owner-verified Git blob').toBe(
+      '4e45352848f3eb53ebfe0e1eee5339868aaafe70',
+    )
+  })
 
   it('never restores or writes an appearance preference', () => {
     const visit = (directory: string): string[] => {
