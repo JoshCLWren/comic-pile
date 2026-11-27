@@ -36,8 +36,9 @@ use crate::{
     db, ApiError, AppState,
 };
 use axum::{
-    extract::{Path, RawQuery, State},
+    extract::{Path, PathRejection, RawQuery, State},
     http::StatusCode,
+    response::{IntoResponse, Response},
     Json,
 };
 use chrono::{DateTime, Duration, Utc};
@@ -563,6 +564,35 @@ pub async fn dismiss_taste_discovery_v2(
     Path(signal_id): Path<i32>,
 ) -> Result<Json<TasteDismissResponse>, ApiError> {
     Ok(Json(dismiss_discovery_for(&state, &user, signal_id).await?))
+}
+
+/// Dispatch v2 `POST /api/v2/users/me/tasteDiscoveries/{segment}`.
+///
+/// axum/matchit cannot mount a parameter followed by literal text, so the
+/// `{signal_id}:dismiss` custom method is captured as one segment and split on
+/// its first colon, exactly like the existing thread action family. Unknown
+/// actions and malformed identifiers return a JSON 404/422 and never reach the
+/// dismissal write.
+pub async fn post_taste_discovery_action(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    segment: Result<Path<String>, PathRejection>,
+) -> Result<Response, ApiError> {
+    let Path(segment) = segment.map_err(|_| ApiError::NotFound("Not Found".to_string()))?;
+    let signal_id = parse_dismiss_action(&segment)?;
+    dismiss_discovery_for(&state, &user, signal_id)
+        .await
+        .map(IntoResponse::into_response)
+}
+
+/// Resolve the `:dismiss` custom-method suffix captured in one route segment.
+fn parse_dismiss_action(segment: &str) -> Result<i32, ApiError> {
+    match segment.split_once(':') {
+        Some((raw_id, "dismiss")) => raw_id
+            .parse::<i32>()
+            .map_err(|_| ApiError::Unprocessable("Validation failed".to_string())),
+        _ => Err(ApiError::NotFound("Not Found".to_string())),
+    }
 }
 
 /// Documentation-only operation for the mounted discovery listing.
@@ -1116,6 +1146,34 @@ mod tests {
             .expect_err("foreign signal must 404");
         assert_eq!(foreign.status(), StatusCode::NOT_FOUND);
         assert_eq!(foreign.detail(), "Taste discovery 8002 not found");
+    }
+
+    #[test]
+    fn v2_dismiss_action_segment_parses_only_the_canonical_suffix() {
+        assert_eq!(parse_dismiss_action("7:dismiss").expect("custom method"), 7);
+        assert_eq!(
+            parse_dismiss_action("0:dismiss").expect("zero id"),
+            0,
+            "zero is a syntactically valid id; ownership decides existence"
+        );
+        assert_eq!(
+            parse_dismiss_action("7:other")
+                .expect_err("unknown custom method")
+                .status(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            parse_dismiss_action("7")
+                .expect_err("bare resource has no custom method")
+                .status(),
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            parse_dismiss_action("abc:dismiss")
+                .expect_err("non-numeric id")
+                .status(),
+            StatusCode::UNPROCESSABLE_ENTITY
+        );
     }
 
     #[test]
