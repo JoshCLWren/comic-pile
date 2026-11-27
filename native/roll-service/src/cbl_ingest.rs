@@ -334,11 +334,19 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
             }
             Event::Empty(ref element) => {
                 root_seen = true;
-                if element.name().as_ref() == "Book" {
-                    let mut book = parse_book(element)?;
-                    book.position = i32::try_from(books.len() + 1)
-                        .map_err(|_| IngestError::new("too many ordered book entries"))?;
-                    books.push(book);
+                match element.name().as_ref() {
+                    "Book" => {
+                        let mut book = parse_book(element)?;
+                        book.position = i32::try_from(books.len() + 1)
+                            .map_err(|_| IngestError::new("too many ordered book entries"))?;
+                        books.push(book);
+                    }
+                    "Database" => {
+                        if let Some(book) = current_book.as_mut() {
+                            apply_database(book, element)?;
+                        }
+                    }
+                    _ => {}
                 }
             }
             Event::Text(ref text) => {
