@@ -500,6 +500,7 @@ mod tests {
         );
     }
 
+<<<<<<< HEAD
     /// #5714: the CBL preview surface is one read-only singleton resource and
     /// two stateless AIP-136 custom methods, not three more v1 aliases.
     #[test]
@@ -516,16 +517,7 @@ mod tests {
             "CblAdoptionPreviewResponse",
             "ReadingGraphPreviewRequest",
             "ReadingGraphPreview",
-        ] {
-            assert!(
-                doc["components"]["schemas"][schema].is_object(),
-                "missing {schema} in v2 contract"
-            );
-        }
-        // A read-only singleton stays a GET; only the calculations are POSTs.
-        assert!(doc["paths"]["/api/v2/cblSources/{source_id}/adoptionPreview"]["post"].is_null());
-    }
-
+=======
     /// #5716: the canonical preview is an AIP-136 stateless collection custom
     /// method on the lowerCamelCase `seriesMappings` collection. It must not be
     /// published as a v1 same-path operation in the v2 contract, and it must
@@ -551,12 +543,17 @@ mod tests {
             "SeriesMappingPreviewScope",
             "SeriesMappingPreviewCounts",
             "SeriesMappingPreviewProviderSeries",
+>>>>>>> origin/main
         ] {
             assert!(
                 doc["components"]["schemas"][schema].is_object(),
                 "missing {schema} in v2 contract"
             );
         }
+<<<<<<< HEAD
+        // A read-only singleton stays a GET; only the calculations are POSTs.
+        assert!(doc["paths"]["/api/v2/cblSources/{source_id}/adoptionPreview"]["post"].is_null());
+=======
         assert!(
             doc["paths"]["/api/v1/catalog/series-mappings/preview"].is_null(),
             "v1 preview must not be published in the canonical v2 contract"
@@ -565,6 +562,7 @@ mod tests {
             doc["paths"]["/api/v2/series-mapping-commits"]["post"].is_object(),
             "durable v2 commit must stay registered"
         );
+>>>>>>> origin/main
     }
 
     /// The issue read-state and reader-context operations moved from their
