@@ -1386,10 +1386,7 @@ FROM owned CROSS JOIN totals
 "#;
 
 fn thread_issues_v2_page_sql() -> String {
-    THREAD_ISSUES_V2_PAGE_SQL_TEMPLATE.replace(
-        "{cover}",
-        &COVER_URL_SQL.replace("{x}", "x"),
-    )
+    THREAD_ISSUES_V2_PAGE_SQL_TEMPLATE.replace("{cover}", &COVER_URL_SQL.replace("{x}", "x"))
 }
 
 /// One set-based statement for the credit page: issues are paged by stable
@@ -1431,7 +1428,16 @@ FROM owned CROSS JOIN totals
 
 fn parse_v2_page_query(
     raw: Option<&str>,
-) -> Result<(Option<String>, i64, Option<String>, Option<i32>, Option<i32>), ApiError> {
+) -> Result<
+    (
+        Option<String>,
+        i64,
+        Option<String>,
+        Option<i32>,
+        Option<i32>,
+    ),
+    ApiError,
+> {
     let (status, page_size, page_token) = crate::issue_read::parse_thread_issue_query(raw)?;
     let cursor = page_token
         .as_deref()
@@ -1453,7 +1459,8 @@ pub async fn list_thread_issues_v2(
 ) -> Result<Json<ThreadIssuesV2Page>, ApiError> {
     let Path(raw) = thread_id.map_err(|_| validation_failed())?;
     let thread_id: i32 = raw.parse().map_err(|_| validation_failed())?;
-    let (status, page_size, _token, position, issue_id) = parse_v2_page_query(raw_query.0.as_deref())?;
+    let (status, page_size, _token, position, issue_id) =
+        parse_v2_page_query(raw_query.0.as_deref())?;
     let limit = page_size + 1;
 
     let connection = db::checkout(&state).await?;
@@ -1477,7 +1484,9 @@ pub async fn list_thread_issues_v2(
         .map_err(|_| ApiError::Internal("Internal Server Error".into()))?;
     let next_page_token = if issues.len() as i64 > page_size {
         issues.truncate(page_size as usize);
-        issues.last().map(|issue| format!("{},{}", issue.position, issue.id))
+        issues
+            .last()
+            .map(|issue| format!("{},{}", issue.position, issue.id))
     } else {
         None
     };
@@ -1498,7 +1507,8 @@ pub async fn list_thread_creator_credits_v2(
 ) -> Result<Json<ThreadCreatorCreditsPage>, ApiError> {
     let Path(raw) = thread_id.map_err(|_| validation_failed())?;
     let thread_id: i32 = raw.parse().map_err(|_| validation_failed())?;
-    let (status, page_size, _token, position, issue_id) = parse_v2_page_query(raw_query.0.as_deref())?;
+    let (status, page_size, _token, position, issue_id) =
+        parse_v2_page_query(raw_query.0.as_deref())?;
     let limit = page_size + 1;
 
     let connection = db::checkout(&state).await?;
@@ -2250,7 +2260,9 @@ mod tests {
         let sql = thread_issues_v2_page_sql();
         assert!(sql.contains("threads WHERE id = $1 AND user_id = $2"));
         assert!(sql.contains("LIMIT $6"));
-        assert!(sql.contains("COALESCE(id_map.status = 'confirmed', false) AS has_confirmed_identity"));
+        assert!(
+            sql.contains("COALESCE(id_map.status = 'confirmed', false) AS has_confirmed_identity")
+        );
         assert!(sql.contains("x.metadata_json->>'image_url'"));
         assert!(!sql.contains("{cover}") && !sql.contains("{x}"));
         assert!(!sql.contains("reading_eligibility"));
@@ -2260,10 +2272,8 @@ mod tests {
 
     #[test]
     fn v2_page_query_parses_filter_and_cursor() {
-        let (status, size, token, position, id) = parse_v2_page_query(Some(
-            "status=%72ead&page_size=2%35&page_token=3%2C17",
-        ))
-        .unwrap();
+        let (status, size, token, position, id) =
+            parse_v2_page_query(Some("status=%72ead&page_size=2%35&page_token=3%2C17")).unwrap();
         assert_eq!(status.as_deref(), Some("read"));
         assert_eq!(size, 25);
         assert_eq!(token.as_deref(), Some("3,17"));

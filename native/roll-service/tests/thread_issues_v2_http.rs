@@ -179,7 +179,11 @@ async fn plain_thread(conn: &Conn, user_id: i32, title: &str) -> i32 {
     .get(0)
 }
 
-async fn seed_issues(conn: &Conn, thread_id: i32, entries: &[(&str, &str, Option<&str>)]) -> Vec<i32> {
+async fn seed_issues(
+    conn: &Conn,
+    thread_id: i32,
+    entries: &[(&str, &str, Option<&str>)],
+) -> Vec<i32> {
     let numbers: Vec<&str> = entries.iter().map(|entry| entry.0).collect();
     let statuses: Vec<&str> = entries.iter().map(|entry| entry.1).collect();
     let aliases: Vec<Option<&str>> = entries.iter().map(|entry| entry.2).collect();
@@ -296,13 +300,7 @@ async fn v2_issues_are_ordered_enriched_filtered_and_paginated() {
     assert_eq!(body["issues"][0]["id"], ids[2]);
     assert!(body["next_page_token"].is_null());
 
-    let (status, body) = send(
-        &state,
-        &format!("{path}?status=read"),
-        &token,
-        &csrf,
-    )
-    .await;
+    let (status, body) = send(&state, &format!("{path}?status=read"), &token, &csrf).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["total_count"], 1);
     assert_eq!(body["issues"][0]["id"], ids[2]);
@@ -335,7 +333,11 @@ async fn v2_creator_credits_are_bulk_paginated_and_owner_scoped() {
     let ids = seed_issues(
         &conn,
         thread,
-        &[("1", "unread", None), ("2", "read", None), ("3", "unread", None)],
+        &[
+            ("1", "unread", None),
+            ("2", "read", None),
+            ("3", "unread", None),
+        ],
     )
     .await;
     confirmed_issue_identity(
@@ -397,13 +399,7 @@ async fn v2_creator_credits_are_bulk_paginated_and_owner_scoped() {
     assert_eq!(body["issues"][0]["issue_id"], ids[2]);
     assert!(body["next_page_token"].is_null());
 
-    let (status, body) = send(
-        &state,
-        &format!("{path}?status=read"),
-        &token,
-        &csrf,
-    )
-    .await;
+    let (status, body) = send(&state, &format!("{path}?status=read"), &token, &csrf).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["total_count"], 1);
     assert!(body["issues"].as_array().unwrap().is_empty());
