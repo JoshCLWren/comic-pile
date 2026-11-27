@@ -20177,64 +20177,6 @@
         ]
       }
     },
-    "/api/v1/issue-identity/cbl-sources/compare": {
-      "post": {
-        "operationId": "compare_cbl_sources_documentation",
-        "parameters": [
-          {
-            "description": "Maximum ranked candidates, 1-100 (default 50)",
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CblSourceComparisonRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CblSourceComparisonResponse"
-                }
-              }
-            },
-            "description": "Ranked coverage comparison"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationErrorResponse"
-                }
-              }
-            },
-            "description": "Request or query failed validation"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for CBL source comparison.",
-        "tags": [
-          "issue-identity"
-        ]
-      }
-    },
     "/api/v1/issue-identity/cbl-sources/folders": {
       "get": {
         "operationId": "list_cbl_source_folders",
@@ -20535,67 +20477,6 @@
         ],
         "tags": [
           "crate::issue_identity_cbl_reading_graph_preview"
-        ]
-      }
-    },
-    "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates": {
-      "get": {
-        "operationId": "find_cbl_candidates_for_reading_list_documentation",
-        "parameters": [
-          {
-            "description": "Owned custom CBL list identifier",
-            "in": "path",
-            "name": "list_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Maximum ranked candidates, 1-100 (default 50)",
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CblReadingListCandidatesResponse"
-                }
-              }
-            },
-            "description": "Reading-list gaps and ranked CBL candidates"
-          },
-          "404": {
-            "description": "Custom CBL not found"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationErrorResponse"
-                }
-              }
-            },
-            "description": "Query failed validation"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for reading-list CBL candidates.",
-        "tags": [
-          "issue-identity"
         ]
       }
     },
@@ -23357,6 +23238,64 @@
         "summary": "Documentation-only operation for the mounted v2 reset-password handler.",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v2/cblSources:compare": {
+      "post": {
+        "operationId": "compare_cbl_sources_v2_documentation",
+        "parameters": [
+          {
+            "description": "Maximum ranked candidates, 1-100 (default 50)",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CblSourceComparisonRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CblSourceComparisonResponse"
+                }
+              }
+            },
+            "description": "Ranked coverage comparison"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            },
+            "description": "Request or query failed validation"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for CBL source comparison (v2, #5713).",
+        "tags": [
+          "issue-identity"
         ]
       }
     },
@@ -27484,6 +27423,67 @@
           }
         ],
         "summary": "Documentation-only operation for committing an adoption plan.",
+        "tags": [
+          "issue-identity"
+        ]
+      }
+    },
+    "/api/v2/reading-lists/{list_id}/cbl-candidates": {
+      "get": {
+        "operationId": "find_cbl_candidates_for_reading_list_v2_documentation",
+        "parameters": [
+          {
+            "description": "Owned custom CBL list identifier",
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Maximum ranked candidates, 1-100 (default 50)",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CblReadingListCandidatesResponse"
+                }
+              }
+            },
+            "description": "Reading-list gaps and ranked CBL candidates"
+          },
+          "404": {
+            "description": "Custom CBL not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            },
+            "description": "Query failed validation"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for reading-list CBL candidates (v2, #5713).",
         "tags": [
           "issue-identity"
         ]

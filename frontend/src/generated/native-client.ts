@@ -121,6 +121,15 @@ export interface CompareRequest {
 
 export type CompareResponse = components['schemas']['CreatorComparisonResponse']
 
+export interface CompareCblSourcesV2Request {
+  query?: {
+    limit?: number
+  }
+  body: components['schemas']['CblSourceComparisonRequest']
+}
+
+export type CompareCblSourcesV2Response = components['schemas']['CblSourceComparisonResponse']
+
 export interface ConfirmRequest {
   path: {
     mapping_id: number
@@ -476,6 +485,17 @@ export interface ExportCustomCblRequest {
 }
 
 export type ExportCustomCblResponse = string
+
+export interface FindCblCandidatesForReadingListV2Request {
+  path: {
+    list_id: number
+  }
+  query?: {
+    limit?: number
+  }
+}
+
+export type FindCblCandidatesForReadingListV2Response = components['schemas']['CblReadingListCandidatesResponse']
 
 export interface ForgotPasswordRequest {
   body: components['schemas']['ForgotPasswordRequest']
@@ -1313,6 +1333,7 @@ export interface NativeV2Client {
   comicvineSeriesIssues(args: ComicvineSeriesIssuesRequest): Promise<ComicvineSeriesIssuesResponse>
   commit(args: CommitRequest): Promise<CommitResponse>
   compare(args?: CompareRequest): Promise<CompareResponse>
+  compareCblSourcesV2(args: CompareCblSourcesV2Request): Promise<CompareCblSourcesV2Response>
   confirm(args: ConfirmRequest): Promise<ConfirmResponse>
   confirmIdentity(args: ConfirmIdentityRequest): Promise<ConfirmIdentityResponse>
   continuityPlansAdoptReadingOrder(args: ContinuityPlansAdoptReadingOrderRequest): Promise<ContinuityPlansAdoptReadingOrderResponse>
@@ -1362,6 +1383,7 @@ export interface NativeV2Client {
   effectiveThreadIssues(args: EffectiveThreadIssuesRequest): Promise<EffectiveThreadIssuesResponse>
   eligibleIssueIds(args?: EligibleIssueIdsRequest): Promise<EligibleIssueIdsResponse>
   exportCustomCbl(args: ExportCustomCblRequest): Promise<ExportCustomCblResponse>
+  findCblCandidatesForReadingListV2(args: FindCblCandidatesForReadingListV2Request): Promise<FindCblCandidatesForReadingListV2Response>
   forgotPassword(args: ForgotPasswordRequest): Promise<ForgotPasswordResponse>
   get(args: GetRequest): Promise<GetResponse>
   getIssue(args: GetIssueRequest): Promise<GetIssueResponse>
@@ -1540,6 +1562,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.get<CompareResponse>(
         "/v2/creators/compare",
         { params: compactQuery(args.query) },
+      )
+    },
+    compareCblSourcesV2(args: CompareCblSourcesV2Request) {
+      return client.post<CompareCblSourcesV2Response, CompareCblSourcesV2Request['body']>(
+        "/v2/cblSources:compare",
+        args.body,
       )
     },
     confirm(args: ConfirmRequest) {
@@ -1791,6 +1819,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     exportCustomCbl(args: ExportCustomCblRequest) {
       return client.get<ExportCustomCblResponse>(
         `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/export`,
+      )
+    },
+    findCblCandidatesForReadingListV2(args: FindCblCandidatesForReadingListV2Request) {
+      return client.get<FindCblCandidatesForReadingListV2Response>(
+        `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/cbl-candidates`,
+        { params: compactQuery(args.query) },
       )
     },
     forgotPassword(args: ForgotPasswordRequest) {

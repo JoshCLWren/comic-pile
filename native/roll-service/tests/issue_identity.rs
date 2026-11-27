@@ -468,7 +468,7 @@ async fn compare_cbl_sources_ranks_and_validates() {
         &state,
         &token,
         &csrf,
-        "/api/v1/issue-identity/cbl-sources/compare",
+        "/api/v2/cblSources:compare",
         json!({"comicvine_issue_ids": [ISSUE_ID, "4000-999"]}),
     )
     .await;
@@ -485,7 +485,7 @@ async fn compare_cbl_sources_ranks_and_validates() {
         &state,
         &token,
         &csrf,
-        "/api/v1/issue-identity/cbl-sources/compare?limit=0",
+        "/api/v2/cblSources:compare?limit=0",
         json!({"comicvine_issue_ids": [ISSUE_ID]}),
     )
     .await;
@@ -530,7 +530,7 @@ async fn reading_list_candidates_reports_gaps_and_ranks() {
     let (status, body) = get(
         &state,
         &token,
-        "/api/v1/issue-identity/reading-lists/910/cbl-candidates",
+        "/api/v2/reading-lists/910/cbl-candidates",
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -1683,7 +1683,7 @@ async fn reading_list_candidates_other_user_returns_404() {
     let (status, body) = get(
         &state,
         &token2,
-        "/api/v1/issue-identity/reading-lists/920/cbl-candidates",
+        "/api/v2/reading-lists/920/cbl-candidates",
     )
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
