@@ -1206,9 +1206,11 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/users/me/tasteDiscoveries",
             get(taste_discoveries::list_taste_discoveries_v2),
         )
+        // matchit cannot mount `{signal_id}:dismiss` directly; the single
+        // segment is captured and dispatched on the `:dismiss` suffix below.
         .route(
-            "/api/v2/users/me/tasteDiscoveries/{signal_id}:dismiss",
-            post(taste_discoveries::dismiss_taste_discovery_v2),
+            "/api/v2/users/me/tasteDiscoveries/{segment}",
+            post(taste_discoveries::post_taste_discovery_action),
         )
         .route(
             "/api/v2/users/me/tasteSignals/{signal_name}",
