@@ -5,13 +5,9 @@ import type { ReportType } from './BugReportModal'
 import { useAuth } from '../App'
 import { useNavCollapse } from '../contexts/NavCollapseContext'
 import api from '../services/api'
-import { useToast } from '../contexts/useToast'
 import { useIdentityInboxStatus } from '../hooks/useIdentityInbox'
-import { DEFAULT_THEME, getAppliedTheme, isSupportedTheme, readStoredThemePreference, selectTheme } from '../services/theme'
-import type { ThemeId } from '../services/theme'
 import type { DiagnosticData } from '../hooks/useDiagnostics'
 import { useResponsive } from '../utils/responsive'
-import { useUpdatePreferences } from '../hooks/usePreferences'
 import OverlayPortal from './OverlayPortal'
 
 type BugReportSubmit = (
@@ -60,12 +56,6 @@ const SECONDARY_NAV_ITEMS: NavItem[] = [
   { path: '/whats-new', label: "What's new", icon: 'new', ariaLabel: "What's new page" },
   { path: '/glossary', label: 'Glossary', icon: 'glossary', ariaLabel: 'Glossary page' },
   { path: '/identity-inbox', label: 'Identity Inbox', icon: 'identity-inbox', ariaLabel: 'Identity Inbox page' },
-]
-
-const APPEARANCE_OPTIONS: Array<{ id: ThemeId; label: string; ariaLabel: string; mobileClassName: string }> = [
-  { id: 'classic', label: 'Classic theme', ariaLabel: 'Classic theme', mobileClassName: 'classic:text-stone-100 ink-gold:text-stone-900 command-center:text-stone-100' },
-  { id: 'ink-gold', label: 'Ink Gold theme', ariaLabel: 'Ink-gold theme', mobileClassName: 'classic:text-stone-400 ink-gold:text-stone-100 command-center:text-stone-400' },
-  { id: 'command-center', label: 'Command Center theme', ariaLabel: 'Command center theme', mobileClassName: 'classic:text-stone-400 ink-gold:text-stone-400 command-center:text-stone-100' },
 ]
 
 function NavIcon({ name }: { name: NavIconName }) {
@@ -173,14 +163,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
   const { collapsed, toggleCollapsed } = useNavCollapse()
   const navigate = useNavigate()
   const { isMobile } = useResponsive()
-  const { showToast } = useToast()
-  const updatePreferences = useUpdatePreferences(() => {
-    showToast('Theme applied for this session, but saving your preference failed.', 'error')
-  })
   const [isMoreOpen, setIsMoreOpen] = useState(false)
-  const [activeTheme, setActiveTheme] = useState<ThemeId>(
-    () => getAppliedTheme() ?? readStoredThemePreference() ?? DEFAULT_THEME,
-  )
   const { data: inboxTotal, isError: inboxStatusError } = useIdentityInboxStatus(authState.status === 'authenticated')
   const showIdentityInbox = inboxTotal !== undefined && !inboxStatusError && inboxTotal > 0
   const visibleSecondaryNavItems = showIdentityInbox
@@ -188,16 +171,6 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
     : SECONDARY_NAV_ITEMS.filter((item) => item.path !== '/identity-inbox')
   const moreButtonRef = useRef<HTMLButtonElement>(null)
   const moreMenuRef = useRef<HTMLElement>(null)
-
-  useEffect(() => {
-    const root = document.documentElement
-    const observer = new MutationObserver(() => {
-      const applied = getAppliedTheme()
-      if (applied) setActiveTheme(applied)
-    })
-    observer.observe(root, { attributes: true, attributeFilter: ['data-theme'] })
-    return () => observer.disconnect()
-  }, [])
 
   useEffect(() => {
     setIsMoreOpen(false)
@@ -231,20 +204,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
     (path === '/continuity-plans' && (location.pathname === '/reading-lists' || location.pathname.startsWith('/reading-lists/')))
   const isMoreRoute = visibleSecondaryNavItems.some((item) => isActive(item.path))
 
-  const toggleMoreMenu = () => {
-    if (!isMoreOpen) {
-      const themeAttr = document.documentElement.getAttribute('data-theme')
-      setActiveTheme(isSupportedTheme(themeAttr) ? themeAttr : DEFAULT_THEME)
-    }
-    setIsMoreOpen(value => !value)
-  }
-
-  const setTheme = (themeId: string) => {
-    const applied = selectTheme(themeId)
-    if (applied === null) return
-    setActiveTheme(applied)
-    updatePreferences.mutate({ theme: applied })
-  }
+  const toggleMoreMenu = () => setIsMoreOpen(value => !value)
 
   const handleLogout = useCallback(async () => {
     try {
@@ -356,30 +316,6 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
                   {authState.user?.username.charAt(0)}
                 </span>
               ) : null}
-              <div
-                className="flex flex-col items-center gap-1"
-                role="group"
-                aria-label="Appearance"
-              >
-                {APPEARANCE_OPTIONS.map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    data-theme={option.id}
-                    onClick={() => setTheme(option.id)}
-                    aria-pressed={activeTheme === option.id}
-                    aria-label={option.ariaLabel}
-                    title={option.label}
-                    className={`h-7 w-7 rounded-md text-[10px] font-bold transition-colors ${
-                      activeTheme === option.id
-                        ? 'bg-white/10 text-[var(--theme-text-primary)] ring-1 ring-[var(--theme-focus-ring)]'
-                        : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
-                    }`}
-                  >
-                    {option.id === 'classic' ? 'C' : option.id === 'ink-gold' ? 'IG' : 'CC'}
-                  </button>
-                ))}
-              </div>
               {authState.status === 'authenticated' && (
                 <div className="flex w-8">
                   <BugReportButton onSubmit={onBugReportSubmit} variant="sidebar" collapsed />
@@ -405,31 +341,6 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
               ) : authState.user?.username ? (
                 <span className="block truncate text-xs font-medium text-[var(--theme-text-muted)]">{authState.user?.username}</span>
               ) : null}
-              <div
-                className="mt-2 flex items-center justify-center gap-1 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] px-2 py-1"
-                role="group"
-                aria-label="Appearance"
-              >
-                <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--theme-text-muted)' }}>Theme</span>
-                {APPEARANCE_OPTIONS.map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    data-theme={option.id}
-                    onClick={() => setTheme(option.id)}
-                    aria-pressed={activeTheme === option.id}
-                    aria-label={option.label}
-                    title={option.label}
-                    className={`h-7 w-7 rounded-md text-[10px] font-bold transition-colors ${
-                      activeTheme === option.id
-                        ? 'bg-white/10 text-[var(--theme-text-primary)]'
-                        : 'text-[var(--theme-text-muted)] hover:bg-white/5 hover:text-[var(--theme-text-primary)]'
-                    }`}
-                  >
-                    {option.id === 'classic' ? 'C' : option.id === 'ink-gold' ? 'IG' : 'CC'}
-                  </button>
-                ))}
-              </div>
               {authState.status === 'authenticated' && (
                 <div className="mt-2 w-full">
                   <BugReportButton onSubmit={onBugReportSubmit} variant="sidebar" />
