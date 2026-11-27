@@ -74,6 +74,7 @@ export interface CustomCBLIssueSearchResult {
   series_name: string
   issue_number: string
   status: string
+  cover_image_url?: string | null
 }
 
 export interface CustomCBLWrite {

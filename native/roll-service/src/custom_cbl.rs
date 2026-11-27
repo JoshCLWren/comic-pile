@@ -93,6 +93,9 @@ pub struct CustomCBLIssueSearchResult {
     pub series_name: String,
     pub issue_number: String,
     pub status: String,
+    /// Exact provider-supplied CDN URL. Null when unmapped; never image bytes.
+    #[serde(default)]
+    pub cover_image_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -1035,9 +1038,48 @@ pub async fn search_custom_cbl_issues(
         let conn = db::checkout(&state).await?;
         let normalized = raw_q.trim();
         let mut query = String::from(
-            "SELECT i.id, i.thread_id, t.title, i.issue_number, i.status
+            "SELECT i.id, i.thread_id, t.title, i.issue_number, i.status,
+                mapping.cover_url
              FROM issues i
              JOIN threads t ON t.id=i.thread_id
+             LEFT JOIN LATERAL (
+                 SELECT
+                     CASE WHEN m.status='confirmed' THEN
+                         COALESCE(
+                             NULLIF(BTRIM(x.metadata_json->>'image_url'), ''),
+                             NULLIF(BTRIM(x.metadata_json->>'primary_image'), ''),
+                             NULLIF(BTRIM(x.metadata_json#>>'{image,original_url}'), ''),
+                             NULLIF(BTRIM(x.metadata_json#>>'{image,super_url}'), ''),
+                             NULLIF(BTRIM(x.metadata_json#>>'{image,screen_large_url}'), ''),
+                             NULLIF(BTRIM(x.metadata_json#>>'{image,medium_url}'), ''),
+                             NULLIF(BTRIM(x.metadata_json#>>'{image,screen_url}'), ''),
+                             NULLIF(BTRIM(x.metadata_json#>>'{image,small_url}'), ''),
+                             NULLIF(BTRIM(x.metadata_json#>>'{image,thumb_url}'), ''),
+                             NULLIF(BTRIM(x.metadata_json#>>'{image,tiny_url}'), ''),
+                             NULLIF(BTRIM(x.metadata_json#>>'{image,icon_url}'), ''),
+                             NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,original_url}'), ''),
+                             NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,super_url}'), ''),
+                             NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,screen_large_url}'), ''),
+                             NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,medium_url}'), ''),
+                             NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,screen_url}'), ''),
+                             NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,small_url}'), ''),
+                             NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,thumb_url}'), ''),
+                             NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,tiny_url}'), ''),
+                             NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image,icon_url}'), ''),
+                             NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,image_url}'), ''),
+                             NULLIF(BTRIM(x.metadata_json#>>'{raw_provider_payload,primary_image}'), ''),
+                             NULLIF(BTRIM(x.metadata_json->>'cover_image_url'), '')
+                         )
+                     ELSE NULL END AS cover_url
+                 FROM issue_external_identity_mappings m
+                 JOIN external_identities x ON x.id=m.external_identity_id
+                 WHERE m.issue_id=i.id AND x.entity_type='issue'
+                   AND m.status<>'rejected'
+                   AND lower(x.provider) IN ('comicvine', 'comic_vine')
+                 ORDER BY (m.status='confirmed') DESC, m.confidence DESC NULLS LAST,
+                          m.updated_at DESC, m.id DESC
+                 LIMIT 1
+             ) mapping ON true
              WHERE t.user_id=$1",
         );
         let pattern;
@@ -1064,6 +1106,7 @@ pub async fn search_custom_cbl_issues(
                     series_name: row.get(2),
                     issue_number: row.get(3),
                     status: row.get(4),
+                    cover_image_url: row.get(5),
                 })
                 .collect(),
         ))

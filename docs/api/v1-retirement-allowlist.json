@@ -258,8 +258,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-series-mapping.ts",
-        "frontend/src/unit/api-proxy.test.ts"
+        "frontend/src/services/api-series-mapping.ts"
       ]
     },
     {
@@ -2391,7 +2390,8 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-series-mapping.ts"
+        "frontend/src/services/api-series-mapping.ts",
+        "frontend/src/unit/api-series-mapping.test.ts"
       ]
     },
     {

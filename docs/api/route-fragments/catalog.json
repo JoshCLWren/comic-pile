@@ -2,7 +2,8 @@
   "family": "catalog",
   "owned_path_patterns": [
     "^/api/v1/catalog/series-mappings/preview$",
-    "^/api/v2/series-mapping-commits$"
+    "^/api/v2/series-mapping-commits$",
+    "^/api/v2/seriesMappings(?::.*|/.*)?$"
   ],
   "defaults": {
     "runtime": "python-fastapi",
@@ -13,6 +14,19 @@
     ]
   },
   "operations": [
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/seriesMappings:preview",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/seriesMappings:preview$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5716,
+      "consumers": [
+        "frontend/src/services/api-series-mapping.ts"
+      ]
+    },
     {
       "bucket": "operations",
       "method": "POST",
