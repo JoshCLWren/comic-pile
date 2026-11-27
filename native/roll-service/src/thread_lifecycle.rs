@@ -2166,6 +2166,13 @@ pub(crate) async fn list_stale_page(
             .map(|row| row.get(0))
             .collect();
         Ok(load_views(&*tx, user_id, &ids, Some(&available_ids)).await?)
+    })
+    .await
+    .map_err(|error| match error {
+        LifecycleError::Api(api) => api,
+        LifecycleError::Validation { .. } => {
+            ApiError::Internal("Internal Server Error".to_string())
+        }
     })?;
     let mut views = views;
     let next_page_token = if views.len() > page_size as usize {

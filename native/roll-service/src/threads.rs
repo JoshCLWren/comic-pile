@@ -920,7 +920,7 @@ async fn excluded_page(
         resolved.page_token.as_deref(),
     )
     .await?
-    .into_inner())
+    .0)
 }
 
 /// Attach bulk exclusion provenance to excluded thread list items in one query.
