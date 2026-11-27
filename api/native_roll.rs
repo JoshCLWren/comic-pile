@@ -284,10 +284,6 @@ fn app() -> Router {
             post(native_dispatch),
         )
         .route(
-            "/api/v2/continuityPlans/{plan_id_and_action}",
-            post(native_dispatch),
-        )
-        .route(
             "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
             get(native_dispatch),
         )
@@ -610,11 +606,15 @@ fn app() -> Router {
             "/api/v2/continuityPlans/release-sources/{source_id}",
             patch(native_dispatch).delete(native_dispatch),
         )
+        // The AIP-136 `:previewReadingOrderProjection` custom method shares
+        // this segment: axum/matchit cannot register a literal suffix after a
+        // path parameter, so the service handler validates the suffix.
         .route(
             "/api/v2/continuityPlans/{plan_id}",
             get(native_dispatch)
                 .put(native_dispatch)
-                .delete(native_dispatch),
+                .delete(native_dispatch)
+                .post(native_dispatch),
         )
         .route(
             "/api/v2/continuityPlans/{plan_id}/membership",

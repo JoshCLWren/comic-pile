@@ -1311,8 +1311,13 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/continuityPlans/{plan_id}/dependencies/{dependency_id}",
             delete(continuity_plans::unlink_plan_dependency_edge),
         )
+        // axum/matchit cannot register a `{param}` with a literal suffix in the
+        // same segment, so the AIP-136 `:previewReadingOrderProjection` method
+        // is dispatched from the same `{plan_id}` segment used by the standard
+        // methods. The handler validates the suffix; the public wire path and
+        // OpenAPI document keep the canonical spelling.
         .route(
-            "/api/v2/continuityPlans/{plan_id_and_action}",
+            "/api/v2/continuityPlans/{plan_id}",
             post(continuity_plans_project_preview::preview_plan_projection_handler),
         )
         .route(
