@@ -889,19 +889,12 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/threads/{thread_id}/reading-orders",
             get(thread_ordering::get_thread_reading_orders),
         )
-        .route(
-            "/api/v1/threads/completed/threads",
-            get(threads::list_completed_threads),
-        )
         .route("/api/v1/threads/", post(thread_lifecycle::create_thread))
         .route(
             "/api/v1/threads/check-duplicates",
             post(thread_lifecycle::check_potential_duplicates),
         )
-        .route(
-            "/api/v1/threads/excluded/threads",
-            get(thread_lifecycle::list_excluded_threads),
-        )
+
         // The retired batch URL would otherwise be captured as a
         // `/api/v1/threads/{thread_id}` action. Pin it to an explicit 404 so
         // v2 is the only membership batch authority (#5711).
@@ -916,10 +909,6 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/threads/reactivate",
             post(thread_lifecycle::reactivate_thread),
-        )
-        .route(
-            "/api/v1/threads/stale",
-            get(thread_lifecycle::list_stale_threads),
         )
         .route(
             "/api/v1/threads/{thread_id}",
