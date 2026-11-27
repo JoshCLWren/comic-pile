@@ -359,21 +359,22 @@ fn describe_origin(
     format!("{kind} in {list}")
 }
 
+/// Destructured output of the canonical explanation builder: eligibility,
+/// blocked flag, next issue, reader-facing reasons and blocking dependencies.
+type CanonicalExplanation = (
+    bool,
+    bool,
+    Option<i32>,
+    Vec<String>,
+    Vec<BlockingDependency>,
+);
+
 fn build_canonical_explanation(
     thread_state: Option<&crate::reading_constraints::ThreadEligibility>,
     thread_titles: &HashMap<i32, &str>,
     issues: &HashMap<i32, (i32, &str)>,
     list_names: &HashMap<i32, String>,
-) -> Result<
-    (
-        bool,
-        bool,
-        Option<i32>,
-        Vec<String>,
-        Vec<BlockingDependency>,
-    ),
-    ApiError,
-> {
+) -> Result<CanonicalExplanation, ApiError> {
     let mut reasons = Vec::new();
     let mut dependencies = Vec::new();
     let Some(thread_state) = thread_state else {
