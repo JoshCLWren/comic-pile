@@ -129,6 +129,34 @@ pub struct ThreadListResponse {
     pub filtered_count: Option<i32>,
 }
 
+/// Stale threads page returned by `filter=stale` on the v2 collection.
+///
+/// Stale rows are still active queue rows, but the legacy stale read projects
+/// the full detail-shaped `ThreadResponse` instead of the queue-list item. The
+/// distinction is kept on the wire so callers of the retired v1 stale read can
+/// migrate without losing fields; counts stay zero/absent because the stale
+/// read never published a whole-queue total.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct StaleThreadListResponse {
+    pub threads: Vec<crate::thread_lifecycle::ThreadResponse>,
+    pub next_page_token: Option<String>,
+    /// Always zero: a stale page is not a whole-active-queue read.
+    pub active_count: i32,
+    /// Always absent: the stale read never measured a filtered whole-queue total.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filtered_count: Option<i32>,
+}
+
+/// One v2 threads list response. The active/completed/excluded filters keep the
+/// queue-list projection; the stale filter keeps the legacy detail-shaped
+/// projection. Both are emitted inline (no envelope variant key).
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[serde(untagged)]
+pub enum ThreadListResult {
+    Page(ThreadListResponse),
+    Stale(StaleThreadListResponse),
+}
+
 /// The legacy single-thread response retained for the v1 and bare aliases.
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct ThreadDetailResponse {
@@ -156,11 +184,152 @@ pub struct ThreadDetailResponse {
 #[derive(Debug, Default, Deserialize)]
 pub struct ThreadListQuery {
     pub search: Option<String>,
+    /// Canonical AIP-132 ordering parameter.
+    pub order_by: Option<String>,
+    /// Legacy spelling of `order_by`, accepted while browser callers migrate.
     pub sort: Option<String>,
     pub page_size: Option<i64>,
     pub page_token: Option<String>,
+    /// AIP-132 resource filter: `active` (default), `completed`, `stale` or `excluded`.
+    pub filter: Option<String>,
+    /// Age threshold in days; only meaningful with `filter=stale`.
+    pub days: Option<i64>,
     /// Retired v1 filter: reject it instead of silently changing its meaning.
     pub collection_id: Option<String>,
+}
+
+/// Canonical collection filter for the v2 threads List method.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ThreadFilter {
+    Active,
+    Completed,
+    Stale,
+    Excluded,
+}
+
+impl ThreadFilter {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Active => "active",
+            Self::Completed => "completed",
+            Self::Stale => "stale",
+            Self::Excluded => "excluded",
+        }
+    }
+}
+
+/// Fully validated and normalized parameters for one v2 threads List request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ResolvedListQuery {
+    filter: ThreadFilter,
+    order_by: String,
+    search: String,
+    days: i64,
+    page_size: i64,
+    page_token: Option<String>,
+}
+
+/// Bound the stale-age threshold without changing the legacy default (#5420).
+const MAX_STALE_DAYS: i64 = 3650;
+
+/// Resolve and validate the documented v2 List parameters.
+///
+/// `order_by` is canonical and `sort` remains an accepted legacy alias, but a
+/// request that supplies both with different values is rejected rather than
+/// silently choosing one. `days` only applies to the stale filter so an old
+/// caller cannot change an active/completed page by carrying the parameter.
+fn resolve_list_query(query: &ThreadListQuery) -> Result<ResolvedListQuery, ApiError> {
+    if query.collection_id.is_some() {
+        return Err(unprocessable("collection_id is retired"));
+    }
+    let filter = match query
+        .filter
+        .as_deref()
+        .map(str::trim)
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+        .unwrap_or("active")
+    {
+        "active" => ThreadFilter::Active,
+        "completed" => ThreadFilter::Completed,
+        "stale" => ThreadFilter::Stale,
+        "excluded" => ThreadFilter::Excluded,
+        _ => return Err(bad_request("filter must be active, completed, stale or excluded")),
+    };
+    if let (Some(order_by), Some(sort)) = (query.order_by.as_deref(), query.sort.as_deref()) {
+        if order_by != sort {
+            return Err(bad_request("order_by and sort disagree"));
+        }
+    }
+    let requested_order = query
+        .order_by
+        .as_deref()
+        .or(query.sort.as_deref())
+        .unwrap_or(match filter {
+            ThreadFilter::Active => "position",
+            ThreadFilter::Completed | ThreadFilter::Excluded => "created",
+            ThreadFilter::Stale => "last_activity",
+        });
+    let order_by = match (filter, requested_order) {
+        (ThreadFilter::Active, "position" | "title" | "created") => requested_order.to_string(),
+        (ThreadFilter::Completed | ThreadFilter::Excluded, "position") => {
+            // Off the active queue `position` has no meaning; the legacy reads
+            // have always fallen back to creation order.
+            "created".to_string()
+        }
+        (ThreadFilter::Completed | ThreadFilter::Excluded, "title" | "created") => {
+            requested_order.to_string()
+        }
+        (ThreadFilter::Stale, "position") => {
+            // Preserve the legacy stale read's oldest-activity-first ordering
+            // when an old client carries the Queue's default sort.
+            "last_activity".to_string()
+        }
+        (ThreadFilter::Stale, "last_activity" | "title" | "created") => {
+            requested_order.to_string()
+        }
+        _ => {
+            return Err(bad_request(
+                "order_by must be one of: position, title, created, last_activity",
+            ))
+        }
+    };
+    let raw_search = query.search.as_deref();
+    if raw_search.is_some_and(str::is_empty) {
+        return Err(unprocessable("search must be at least 1 character"));
+    }
+    if filter == ThreadFilter::Stale && raw_search.is_some() {
+        return Err(unprocessable("search is not supported for filter=stale"));
+    }
+    let search = normalize_search(raw_search);
+    let days = match query.days {
+        Some(days) => {
+            if filter != ThreadFilter::Stale {
+                return Err(unprocessable("days is only valid for filter=stale"));
+            }
+            if !(0..=MAX_STALE_DAYS).contains(&days) {
+                return Err(unprocessable("days must be between 0 and 3650"));
+            }
+            days
+        }
+        None => 30,
+    };
+    let page_size = query.page_size.unwrap_or(if filter == ThreadFilter::Stale {
+        200
+    } else {
+        DEFAULT_PAGE_SIZE
+    });
+    if !(1..=MAX_PAGE_SIZE).contains(&page_size) {
+        return Err(unprocessable("page_size must be between 1 and 200"));
+    }
+    Ok(ResolvedListQuery {
+        filter,
+        order_by,
+        search,
+        days,
+        page_size,
+        page_token: query.page_token.clone(),
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
