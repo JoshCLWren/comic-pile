@@ -127,7 +127,7 @@ function QueueControlsInner({
           <button
             type="button"
             onClick={onCreateThread}
-            className="hidden md:flex h-12 px-5 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 whitespace-nowrap hover:bg-[var(--theme-primary-action-hover)] items-center"
+            className="hidden md:flex h-12 px-5 rounded-xl bg-[var(--theme-primary-action)] font-black text-[var(--theme-primary-action-text)] whitespace-nowrap hover:bg-[var(--theme-primary-action-hover)] items-center"
             data-testid="queue-add-thread-desktop"
           >
             Add Series
@@ -143,8 +143,8 @@ function QueueControlsInner({
               onClick={() => onSortChange(sort)}
               className={`px-2.5 md:px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors ${
                 sortBy === sort
-                  ? 'bg-amber-600/20 text-amber-400 border border-amber-500/30'
-                  : 'bg-white/5 text-stone-400 border border-white/10 hover:bg-white/10'
+                  ? 'bg-[var(--theme-bg-hover)] text-[var(--theme-comic-accent)] border border-[var(--theme-comic-accent)]/40'
+                  : 'bg-[var(--theme-bg-panel)] text-[var(--theme-text-muted)] border border-[var(--theme-border)] hover:bg-[var(--theme-bg-hover)]'
               }`}
             >
               {sort === 'position' ? 'Position' : sort === 'alphabetical' ? 'Title' : 'Recently added'}
