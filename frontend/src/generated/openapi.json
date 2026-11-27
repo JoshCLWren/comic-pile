@@ -17798,8 +17798,6 @@
         ],
         "type": "object"
       },
-<<<<<<< HEAD
-=======
       "ThreadCreatorCreditsResponse": {
         "description": "Bounded, paginated thread-scoped issue-credit projection for #5706.\n\nKeeps the frozen per-issue `issue_id`/`creators` wire shape of the legacy\nbulk creator read and adds standard page fields. The `issues` array omits\nunmapped issues and issues without stored credits, exactly like the legacy\nresponse, while `total_count` counts matching confirmed-mapping issue rows.",
         "properties": {
@@ -17836,7 +17834,6 @@
         ],
         "type": "object"
       },
->>>>>>> origin/main
       "ThreadDependenciesResponse": {
         "description": "Wire parity with Python `ThreadDependenciesResponse`\n(`app/schemas/dependency.py`): the `blocking` list holds edges where this\nthread's issues block others, `blocked_by` holds edges where this thread's\nissues are blocked. Each entry is the enriched `DependencyResponse`.",
         "properties": {
@@ -30364,8 +30361,6 @@
         "tags": [
           "threads"
         ]
-<<<<<<< HEAD
-=======
       }
     },
     "/api/v2/threads/{thread_id}/creatorCredits": {
@@ -30438,7 +30433,6 @@
         "tags": [
           "issues"
         ]
->>>>>>> origin/main
       }
     },
     "/api/v2/threads/{thread_id}/issue-order": {
@@ -30819,7 +30813,6 @@
         ]
       }
     },
-<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/readingOrders": {
       "get": {
         "operationId": "thread_ordering_reading_orders",
@@ -30835,7 +30828,38 @@
             }
           }
         ],
-=======
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadReadingOrdersResponse"
+                }
+              }
+            },
+            "description": "Owned reading orders containing the thread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for reading orders containing a thread.",
+        "tags": [
+          "reading-orders"
+        ]
+      }
+    },
     "/api/v2/threads:checkDuplicates": {
       "post": {
         "description": "Advisory AIP-136 collection custom method: report existing volumes that may be the proposed series. Does not create a Thread. Results are owner-scoped, exclude a named thread, and are capped at five matches.",
@@ -30850,38 +30874,22 @@
           },
           "required": true
         },
->>>>>>> origin/main
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-<<<<<<< HEAD
-                  "$ref": "#/components/schemas/ThreadReadingOrdersResponse"
-                }
-              }
-            },
-            "description": "Owned reading orders containing the thread"
-=======
                   "$ref": "#/components/schemas/CheckDuplicatesResponse"
                 }
               }
             },
             "description": "Possible existing volumes"
->>>>>>> origin/main
           },
           "401": {
             "description": "Not authenticated"
           },
           "422": {
-<<<<<<< HEAD
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-=======
             "description": "Validation failed"
->>>>>>> origin/main
           }
         },
         "security": [
@@ -30889,14 +30897,8 @@
             "HTTPBearer": []
           }
         ],
-<<<<<<< HEAD
-        "summary": "Documentation-only operation for reading orders containing a thread.",
-        "tags": [
-          "reading-orders"
-=======
         "tags": [
           "threads"
->>>>>>> origin/main
         ]
       }
     },

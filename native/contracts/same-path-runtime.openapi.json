@@ -10578,8 +10578,6 @@
             "HTTPBearer": []
           }
         ]
-<<<<<<< HEAD
-=======
       }
     },
     "/api/v2/threads/{thread_id}/creatorCredits": {
@@ -10652,7 +10650,6 @@
             "HTTPBearer": []
           }
         ]
->>>>>>> origin/main
       }
     },
     "/api/v2/threads/{thread_id}/issue-order": {
@@ -11033,7 +11030,6 @@
         ]
       }
     },
-<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/readingOrders": {
       "get": {
         "tags": [
@@ -11060,7 +11056,27 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ThreadReadingOrdersResponse"
-=======
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/threads:checkDuplicates": {
       "post": {
         "tags": [
@@ -11085,7 +11101,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CheckDuplicatesResponse"
->>>>>>> origin/main
                 }
               }
             }
@@ -11094,14 +11109,7 @@
             "description": "Not authenticated"
           },
           "422": {
-<<<<<<< HEAD
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-=======
             "description": "Validation failed"
->>>>>>> origin/main
           }
         },
         "security": [
@@ -26479,8 +26487,6 @@
           }
         }
       },
-<<<<<<< HEAD
-=======
       "ThreadCreatorCreditsResponse": {
         "type": "object",
         "description": "Bounded, paginated thread-scoped issue-credit projection for #5706.\n\nKeeps the frozen per-issue `issue_id`/`creators` wire shape of the legacy\nbulk creator read and adds standard page fields. The `issues` array omits\nunmapped issues and issues without stored credits, exactly like the legacy\nresponse, while `total_count` counts matching confirmed-mapping issue rows.",
@@ -26517,7 +26523,6 @@
           }
         }
       },
->>>>>>> origin/main
       "ThreadDependenciesResponse": {
         "type": "object",
         "description": "Wire parity with Python `ThreadDependenciesResponse`\n(`app/schemas/dependency.py`): the `blocking` list holds edges where this\nthread's issues block others, `blocked_by` holds edges where this thread's\nissues are blocked. Each entry is the enriched `DependencyResponse`.",
