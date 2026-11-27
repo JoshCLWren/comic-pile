@@ -489,6 +489,95 @@ async fn concurrent_reactivate_v2_requests_add_issues_once() {
     assert_eq!(issue_rows(&ctx, done).await.len(), 4);
 }
 
+/// A direct "Remove from Queue" has no container provenance: it excludes the
+/// owned thread durably without inventing a group, keeps its issue rows and
+/// blocking state, and is reversible through the same v2 resource.
+#[tokio::test]
+async fn v2_direct_exclusion_needs_no_source_group_and_preserves_issue_rows() {
+    let ctx = setup("v2directexcl").await;
+    let thread = seed_thread(&ctx, ctx.user_id, "Direct", "active", 1, 2).await;
+    let first = seed_issue(&ctx, thread, "1", 1, "unread").await;
+    seed_issue(&ctx, thread, "2", 2, "unread").await;
+    ctx.state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .execute(
+            "UPDATE threads SET total_issues = 2, issues_remaining = 2,
+                    next_unread_issue_id = $2, reading_progress = 'not_started',
+                    is_blocked = true WHERE id = $1",
+            &[&thread, &first],
+        )
+        .await
+        .unwrap();
+
+    let (status, body) = call(
+        &ctx,
+        "POST",
+        "/api/v2/queue-exclusions",
+        Some(json!({"thread_ids": [thread]})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["excluded_thread_ids"], json!([thread]));
+    assert!(
+        body["group"].is_null(),
+        "no source means no provenance group"
+    );
+
+    let row: (String, i32) = ctx
+        .state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one(
+            "SELECT status, queue_position FROM threads WHERE id = $1",
+            &[&thread],
+        )
+        .await
+        .unwrap();
+    assert_eq!(row, ("excluded".to_string(), 0));
+    assert!(is_blocked(&ctx, thread).await);
+    assert_eq!(
+        issue_rows(&ctx, thread).await,
+        vec![
+            ("1".into(), 1, "unread".into()),
+            ("2".into(), 2, "unread".into()),
+        ]
+    );
+
+    let (status, body) = call(
+        &ctx,
+        "POST",
+        "/api/v2/queue-exclusions/restore",
+        Some(json!({"thread_ids": [thread]})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["restored_thread_ids"], json!([thread]));
+    let status: String = ctx
+        .state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one("SELECT status FROM threads WHERE id = $1", &[&thread])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(status, "active");
+    assert!(is_blocked(&ctx, thread).await);
+    assert_eq!(
+        issue_rows(&ctx, thread).await,
+        vec![
+            ("1".into(), 1, "unread".into()),
+            ("2".into(), 2, "unread".into()),
+        ]
+    );
+}
+
 /// Intentional exclusion is a durable queue state, not prerequisite blocking.
 /// A blocked thread stays blocked when it is excluded and restored, and a
 /// foreign thread id is never touched by the reader's exclusion request.
