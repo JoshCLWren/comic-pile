@@ -945,6 +945,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn v2_signal_route_mounts_encoded_composite_name() {
+        use crate::{config::Config, router, AppState};
+        use axum::{
+            body::Body,
+            http::{Request, StatusCode},
+        };
+        use tower::ServiceExt;
+
+        let config = Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
+            _ => None,
+        })
+        .expect("test config");
+        let app = router(Arc::new(AppState::new(config).expect("test state")));
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri("/api/v2/users/me/tasteSignals/creator%3Acreator%3Awriter%3Adk")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"user_verdict":"confirmed"}"#))
+                    .expect("request"),
+            )
+            .await
+            .expect("router response");
+        assert_eq!(
+            response.status(),
+            StatusCode::UNAUTHORIZED,
+            "the encoded composite-name route must be mounted and authenticated"
+        );
+    }
+
+    #[tokio::test]
     async fn v2_patch_is_owner_scoped_idempotent_and_verdict_only() {
         use axum::body::Bytes;
         let (state, client, _db) = db_fixture().await;

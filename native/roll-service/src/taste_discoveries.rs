@@ -1363,6 +1363,8 @@ mod tests {
         for (method, uri) in [
             ("GET", "/api/v1/taste/discoveries"),
             ("POST", "/api/v1/taste/discoveries/7/dismiss"),
+            ("GET", "/api/v2/users/me/tasteDiscoveries"),
+            ("POST", "/api/v2/users/me/tasteDiscoveries/7:dismiss"),
         ] {
             let response = app
                 .clone()
