@@ -366,22 +366,6 @@ export interface DeleteThreadV2Request {
 
 export type DeleteThreadV2Response = void
 
-export interface DependenciesListThreadDependenciesRequest {
-  path: {
-    thread_id: number
-  }
-}
-
-export type DependenciesListThreadDependenciesResponse = components['schemas']['ThreadDependenciesResponse']
-
-export interface DependenciesListThreadIssueDependenciesRequest {
-  path: {
-    thread_id: number
-  }
-}
-
-export type DependenciesListThreadIssueDependenciesResponse = components['schemas']['ThreadIssueDependenciesResponse']
-
 export interface DependencyGroupsV2AddIssueRangeRequest {
   path: {
     group_id: number
@@ -596,6 +580,22 @@ export interface GetTagRequest {
 }
 
 export type GetTagResponse = components['schemas']['Tag']
+
+export interface GetThreadDependenciesRequest {
+  path: {
+    thread_id: number
+  }
+}
+
+export type GetThreadDependenciesResponse = components['schemas']['ThreadDependenciesResponse']
+
+export interface GetThreadIssueDependenciesRequest {
+  path: {
+    thread_id: number
+  }
+}
+
+export type GetThreadIssueDependenciesResponse = components['schemas']['ThreadIssueDependenciesResponse']
 
 export type GetUserPreferencesResponse = components['schemas']['UserPreferencesResponse']
 
@@ -1302,31 +1302,6 @@ export interface ThreadCreatorCreditsRequest {
 
 export type ThreadCreatorCreditsResponse = components['schemas']['ThreadCreatorCreditsResponse']
 
-<<<<<<< HEAD
-export interface ThreadOrderingExplainEligibilityRequest {
-  body: components['schemas']['BatchBlockingExplanationRequest']
-}
-
-export type ThreadOrderingExplainEligibilityResponse = components['schemas']['BatchBlockingExplanationResponse']
-
-export interface ThreadOrderingGetThreadEligibilityRequest {
-  path: {
-    thread_id: number
-  }
-}
-
-export type ThreadOrderingGetThreadEligibilityResponse = components['schemas']['ThreadEligibilityResponse']
-
-export interface ThreadOrderingThreadConnectionsRequest {
-  path: {
-    thread_id: number
-  }
-}
-
-export type ThreadOrderingThreadConnectionsResponse = components['schemas']['ThreadConnectedResponse']
-
-=======
->>>>>>> origin/main
 export interface UnassignTagRequest {
   path: {
     tag_id: number
@@ -1441,8 +1416,6 @@ export interface NativeV2Client {
   deleteReadingList(args: DeleteReadingListRequest): Promise<DeleteReadingListResponse>
   deleteTag(args: DeleteTagRequest): Promise<DeleteTagResponse>
   deleteThreadV2(args: DeleteThreadV2Request): Promise<DeleteThreadV2Response>
-  dependenciesListThreadDependencies(args: DependenciesListThreadDependenciesRequest): Promise<DependenciesListThreadDependenciesResponse>
-  dependenciesListThreadIssueDependencies(args: DependenciesListThreadIssueDependenciesRequest): Promise<DependenciesListThreadIssueDependenciesResponse>
   dependencyGroupsV2AddIssueRange(args: DependencyGroupsV2AddIssueRangeRequest): Promise<DependencyGroupsV2AddIssueRangeResponse>
   dependencyGroupsV2AddMember(args: DependencyGroupsV2AddMemberRequest): Promise<DependencyGroupsV2AddMemberResponse>
   dependencyGroupsV2ListReadingPlans(args: DependencyGroupsV2ListReadingPlansRequest): Promise<DependencyGroupsV2ListReadingPlansResponse>
@@ -1474,6 +1447,8 @@ export interface NativeV2Client {
   getReadingSession(args: GetReadingSessionRequest): Promise<GetReadingSessionResponse>
   getSessionDetails(args: GetSessionDetailsRequest): Promise<GetSessionDetailsResponse>
   getTag(args: GetTagRequest): Promise<GetTagResponse>
+  getThreadDependencies(args: GetThreadDependenciesRequest): Promise<GetThreadDependenciesResponse>
+  getThreadIssueDependencies(args: GetThreadIssueDependenciesRequest): Promise<GetThreadIssueDependenciesResponse>
   getUserPreferences(): Promise<GetUserPreferencesResponse>
   importIssue(args: ImportIssueRequest): Promise<ImportIssueResponse>
   importSeries(args: ImportSeriesRequest): Promise<ImportSeriesResponse>
@@ -1568,12 +1543,6 @@ export interface NativeV2Client {
   switchPrerequisite(args: SwitchPrerequisiteRequest): Promise<SwitchPrerequisiteResponse>
   teamChemistry(): Promise<TeamChemistryResponse>
   threadCreatorCredits(args: ThreadCreatorCreditsRequest): Promise<ThreadCreatorCreditsResponse>
-<<<<<<< HEAD
-  threadOrderingExplainEligibility(args: ThreadOrderingExplainEligibilityRequest): Promise<ThreadOrderingExplainEligibilityResponse>
-  threadOrderingGetThreadEligibility(args: ThreadOrderingGetThreadEligibilityRequest): Promise<ThreadOrderingGetThreadEligibilityResponse>
-  threadOrderingThreadConnections(args: ThreadOrderingThreadConnectionsRequest): Promise<ThreadOrderingThreadConnectionsResponse>
-=======
->>>>>>> origin/main
   unassignTag(args: UnassignTagRequest): Promise<UnassignTagResponse>
   undoToSnapshot(args: UndoToSnapshotRequest): Promise<UndoToSnapshotResponse>
   unsnooze(args: UnsnoozeRequest): Promise<UnsnoozeResponse>
@@ -1827,16 +1796,6 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}`,
       )
     },
-    dependenciesListThreadDependencies(args: DependenciesListThreadDependenciesRequest) {
-      return client.get<DependenciesListThreadDependenciesResponse>(
-        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/dependencies`,
-      )
-    },
-    dependenciesListThreadIssueDependencies(args: DependenciesListThreadIssueDependenciesRequest) {
-      return client.get<DependenciesListThreadIssueDependenciesResponse>(
-        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/issueDependencies`,
-      )
-    },
     dependencyGroupsV2AddIssueRange(args: DependencyGroupsV2AddIssueRangeRequest) {
       return client.post<DependencyGroupsV2AddIssueRangeResponse, DependencyGroupsV2AddIssueRangeRequest['body']>(
         `/v2/reading-order-groups/${encodeURIComponent(String(args.path.group_id))}/issue-ranges`,
@@ -1984,6 +1943,16 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     getTag(args: GetTagRequest) {
       return client.get<GetTagResponse>(
         `/v2/tags/${encodeURIComponent(String(args.path.tag_id))}`,
+      )
+    },
+    getThreadDependencies(args: GetThreadDependenciesRequest) {
+      return client.get<GetThreadDependenciesResponse>(
+        `/v1/threads/${encodeURIComponent(String(args.path.thread_id))}/dependencies`,
+      )
+    },
+    getThreadIssueDependencies(args: GetThreadIssueDependenciesRequest) {
+      return client.get<GetThreadIssueDependenciesResponse>(
+        `/v1/threads/${encodeURIComponent(String(args.path.thread_id))}/issue-dependencies`,
       )
     },
     getUserPreferences() {
@@ -2482,25 +2451,6 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         { params: compactQuery(args.query) },
       )
     },
-<<<<<<< HEAD
-    threadOrderingExplainEligibility(args: ThreadOrderingExplainEligibilityRequest) {
-      return client.post<ThreadOrderingExplainEligibilityResponse, ThreadOrderingExplainEligibilityRequest['body']>(
-        "/v2/threads:explainEligibility",
-        args.body,
-      )
-    },
-    threadOrderingGetThreadEligibility(args: ThreadOrderingGetThreadEligibilityRequest) {
-      return client.get<ThreadOrderingGetThreadEligibilityResponse>(
-        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/eligibility`,
-      )
-    },
-    threadOrderingThreadConnections(args: ThreadOrderingThreadConnectionsRequest) {
-      return client.get<ThreadOrderingThreadConnectionsResponse>(
-        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/connections`,
-      )
-    },
-=======
->>>>>>> origin/main
     unassignTag(args: UnassignTagRequest) {
       return client.delete<UnassignTagResponse>(
         `/v2/tags/${encodeURIComponent(String(args.path.tag_id))}/assignments/${encodeURIComponent(String(args.path.target_type))}/${encodeURIComponent(String(args.path.target_id))}`,
