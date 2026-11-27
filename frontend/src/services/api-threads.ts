@@ -71,10 +71,12 @@ export function createThreadsApi(client: HttpClient) {
         Object.entries(fields)
           .filter(([, value]) => value !== undefined)
           .map(([key]) => key)
-      const body: ThreadPatchPayload = {
-        ...fields,
-        ...(mask.length ? { update_mask: mask } : {}),
-        ...(expected ? { expected } : {}),
+      const body: ThreadPatchPayload = { ...fields }
+      if (mask.length) {
+        body.update_mask = mask
+      }
+      if (expected) {
+        body.expected = expected
       }
       return client.patch<Thread, ThreadPatchPayload>(`/v2/threads/${id}`, body)
     },
