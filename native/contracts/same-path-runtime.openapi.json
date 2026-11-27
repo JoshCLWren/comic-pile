@@ -8851,7 +8851,6 @@
         ]
       }
     },
-<<<<<<< HEAD
     "/api/v2/readingSessions": {
       "get": {
         "tags": [
@@ -8887,7 +8886,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ListReadingSessionsResponse"
-=======
     "/api/v2/readingOrderGroups": {
       "get": {
         "tags": [
@@ -8905,17 +8903,13 @@
                   "items": {
                     "$ref": "#/components/schemas/DependencyGroupResponse"
                   }
->>>>>>> origin/main
                 }
               }
             }
           },
-<<<<<<< HEAD
           "400": {
             "description": "Invalid page size or token"
           },
-=======
->>>>>>> origin/main
           "401": {
             "description": "Not authenticated"
           },
@@ -8931,8 +8925,6 @@
       },
       "post": {
         "tags": [
-<<<<<<< HEAD
-=======
           "reading-order-groups"
         ],
         "summary": "Documentation-only operation for creating a v2 reading-order group.",
@@ -9188,7 +9180,6 @@
       },
       "post": {
         "tags": [
->>>>>>> origin/main
           "readingSessions"
         ],
         "summary": "Documentation-only operation for the mounted v2 reading-session initializer.",
@@ -10602,7 +10593,6 @@
       }
     },
     "/api/v2/threads/{thread_id}": {
-<<<<<<< HEAD
       "get": {
         "tags": [
           "threads"
@@ -10645,8 +10635,6 @@
           }
         ]
       },
-=======
->>>>>>> origin/main
       "delete": {
         "tags": [
           "threads"
@@ -26754,7 +26742,6 @@
           }
         }
       },
-<<<<<<< HEAD
       "ThreadListResult": {
         "oneOf": [
           {
@@ -26766,8 +26753,6 @@
         ],
         "description": "One v2 threads list response. The active/completed/excluded filters keep the\nqueue-list projection; the stale filter keeps the legacy detail-shaped\nprojection. Both are emitted inline (no envelope variant key)."
       },
-=======
->>>>>>> origin/main
       "ThreadPatchPrecondition": {
         "type": "object",
         "description": "Committed values a stale client read before issuing a Thread patch.",

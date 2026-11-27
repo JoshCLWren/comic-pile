@@ -2954,19 +2954,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-<<<<<<< HEAD
     "/api/v2/readingSessions": {
-=======
     "/api/v2/readingOrderGroups": {
->>>>>>> origin/main
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-<<<<<<< HEAD
-=======
         /** Documentation-only operation for listing v2 reading-order groups. */
         get: operations["reading_order_groups_list"];
         put?: never;
@@ -3008,7 +3003,6 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
->>>>>>> origin/main
         /** Documentation-only List operation for the canonical collection. */
         get: operations["list_reading_sessions_documentation"];
         put?: never;
@@ -3493,12 +3487,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-<<<<<<< HEAD
         /** Standard resource Get for one owned Thread. */
         get: operations["get_thread_v2_documentation"];
-=======
         get?: never;
->>>>>>> origin/main
         put?: never;
         post?: never;
         /** @description Delete an owned Thread (AIP-135). A second delete, or a delete of a foreign or already deleted Thread, returns 404. Never 403. */
@@ -9561,15 +9552,12 @@ export interface components {
             next_page_token?: string | null;
             threads: components["schemas"]["ThreadListItem"][];
         };
-<<<<<<< HEAD
         /**
          * @description One v2 threads list response. The active/completed/excluded filters keep the
          *     queue-list projection; the stale filter keeps the legacy detail-shaped
          *     projection. Both are emitted inline (no envelope variant key).
          */
         ThreadListResult: components["schemas"]["ThreadListResponse"] | components["schemas"]["StaleThreadListResponse"];
-=======
->>>>>>> origin/main
         /** @description Committed values a stale client read before issuing a Thread patch. */
         ThreadPatchPrecondition: {
             /** @description Format observed by the client. */
@@ -17901,8 +17889,6 @@ export interface operations {
             };
         };
     };
-<<<<<<< HEAD
-=======
     reading_order_groups_list: {
         parameters: {
             query?: never;
@@ -18151,7 +18137,6 @@ export interface operations {
             };
         };
     };
->>>>>>> origin/main
     list_reading_sessions_documentation: {
         parameters: {
             query?: {
@@ -19351,7 +19336,6 @@ export interface operations {
             };
         };
     };
-<<<<<<< HEAD
     get_thread_v2_documentation: {
         parameters: {
             query?: never;
@@ -19389,8 +19373,6 @@ export interface operations {
             };
         };
     };
-=======
->>>>>>> origin/main
     delete_thread_v2_documentation: {
         parameters: {
             query?: never;
