@@ -216,8 +216,9 @@ it('ignores late detail and stale responses after unmount', async () => {
   detail.unmount()
   stale.unmount()
   await act(async () => {
-    // SAFETY: the detail resolves after unmount, so the component already holds the id
+    // SAFETY: test stubs only the fields this late-resolution assertion observes.
     resolveDetail({ id: 10 } as Thread)
+    // SAFETY: test stubs the stale response shape consumed by the unmounted hook.
     resolveStale({ threads: [], next_page_token: null, active_count: 0 } as never)
     await Promise.resolve()
   })
