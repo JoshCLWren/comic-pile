@@ -1135,29 +1135,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/threads/{thread_id}/set-pending": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Set Pending Thread
-         * @description Set a thread as pending for rating (manual selection).
-         *
-         *     Raises:
-         *         HTTPException: 404 when not found; 400 when inactive, blocked, or out of issues.
-         */
-        post: operations["set_pending_thread_api_v1_threads__thread_id__set_pending_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/threads/{thread_id}/test-backdate": {
         parameters: {
             query?: never;
@@ -4011,11 +3988,6 @@ export interface components {
             blocking_dependencies: components["schemas"]["BlockingDependency"][];
             blocking_reasons: string[];
             is_blocked: boolean;
-        };
-        /** Body_set_pending_thread_api_v1_threads__thread_id__set_pending_post */
-        Body_set_pending_thread_api_v1_threads__thread_id__set_pending_post: {
-            /** Expected Issue Id */
-            expected_issue_id?: number | null;
         };
         /** @description Currently pending thread shown by the Roll surface. */
         BootstrapActiveThread: {
@@ -12708,41 +12680,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ThreadResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    set_pending_thread_api_v1_threads__thread_id__set_pending_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["Body_set_pending_thread_api_v1_threads__thread_id__set_pending_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RollResponse"];
                 };
             };
             /** @description Validation Error */

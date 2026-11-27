@@ -284,31 +284,6 @@ export async function invalidateAfterResumeRecovery(client: QueryClient): Promis
   ])
 }
 
-/**
- * Drop the cached roll bootstrap after a manual thread selection
- * (`POST /threads/{id}/set-pending`) so the next Roll mount fetches the new
- * pending thread instead of replaying a still-fresh snapshot with no pending
- * selection (#2153). `resetQueries` (not `invalidateQueries`) is deliberate:
- * an invalidated-but-cached bootstrap would still be handed to Roll on mount
- * and briefly render the empty dice view before the refetch settles.
- */
-export async function resetRollBootstrapAfterManualSelection(
-  client: QueryClient,
-): Promise<void> {
-  await Promise.all([
-    client.resetQueries({
-      queryKey: queryKeys.roll.bootstrap(),
-      exact: true,
-    }),
-    client.resetQueries({
-      queryKey: queryKeys.roll.eligibleIssueIdsAll(),
-    }),
-    client.resetQueries({
-      queryKey: queryKeys.roll.issueCardsAll(),
-    }),
-  ])
-}
-
 export async function invalidateAfterQueueMovement(client: QueryClient): Promise<void> {
   // The queue list reset, active-count, bootstrap, and excluded-view refreshes
   // are issued together so callers can await one settled pass.

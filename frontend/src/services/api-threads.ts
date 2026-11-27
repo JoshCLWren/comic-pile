@@ -6,7 +6,6 @@ import type {
   CheckPotentialDuplicatesRequest,
   CheckPotentialDuplicatesResponse,
   ReactivateThreadPayload,
-  RollResponse,
   SetCurrentIssueResponse,
   Thread,
   ThreadCreatePayload,
@@ -117,11 +116,6 @@ export function createThreadsApi(client: HttpClient) {
     reactivate: (data: ReactivateThreadPayload) =>
       client.post<Thread, ReactivateThreadPayload>('/v1/threads/reactivate', data),
     listStale: (days = 30) => client.get<Thread[]>('/v1/threads/stale', { params: { days } }),
-    setPending: (id: number, expectedIssueId?: number) =>
-      client.post<RollResponse, { expected_issue_id: number }>(
-        `/v1/threads/${id}/set-pending`,
-        expectedIssueId === undefined ? undefined : { expected_issue_id: expectedIssueId },
-      ),
     setCurrentIssue: (id: number, issueNumber: string) =>
       client.post<SetCurrentIssueResponse, { issue_number: string }>(`/v1/threads/${id}:setCurrentIssue`, { issue_number: issueNumber }),
     /**
