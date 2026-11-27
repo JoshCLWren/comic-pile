@@ -1789,6 +1789,30 @@ mod tests {
     }
 
     #[test]
+    fn threads_openapi_documents_the_v2_standard_create() {
+        use utoipa::OpenApi;
+        let document = serde_json::to_value(ThreadsApi::openapi()).expect("threads OpenAPI");
+        let operation = &document["paths"]["/api/v2/threads"]["post"];
+        assert_eq!(operation["operationId"], "create_thread_v2_documentation");
+        assert_eq!(
+            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ThreadCreateRequest"
+        );
+        assert_eq!(
+            operation["responses"]["201"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ThreadResponse"
+        );
+        assert!(
+            operation["description"]
+                .as_str()
+                .is_some_and(|description| description.contains("Location")),
+            "the 201 Location/name contract must be documented"
+        );
+        assert!(document["components"]["schemas"]["ThreadCreateRequest"].is_object());
+        assert!(document["components"]["schemas"]["ThreadResponse"].is_object());
+    }
+
+    #[test]
     fn threads_openapi_documents_the_completed_collection_read() {
         use utoipa::OpenApi;
         let document = serde_json::to_value(ThreadsApi::openapi()).expect("threads OpenAPI");
