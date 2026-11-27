@@ -156,7 +156,7 @@ async fn seed_thread(ctx: &Ctx, user_id: i32, title: &str) -> i32 {
                      '[{\"name\":\"Jane Doe\",\"roles\":[\"Writer\"]}]'::json,
                      false, false, false, NOW())
              RETURNING id",
-            &[&user_id, &title, &i32::try_from(user_id).unwrap_or(1)],
+            &[&user_id, &title, &user_id],
         )
         .await
         .unwrap()
