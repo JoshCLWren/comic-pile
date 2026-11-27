@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-27T17:57:53+00:00",
+  "generated_at": "2026-11-27T17:59:12+00:00",
   "models": [
     {
       "health": {
@@ -23743,7 +23743,7 @@
   },
   "counts_generated_at": "2026-11-27T17:42:49.617021+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-27T17:57:54Z",
+    "generated_at": "2026-11-27T17:59:12Z",
     "sources": {
       "nvidia": [
         "google/diffusiongemma-26b-a4b-it",
@@ -23765,7 +23765,7 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-27T17:57:54.127256+00:00",
+    "checked_at": "2026-11-27T17:59:12.766965+00:00",
     "days_elapsed": 26.749,
     "days_in_month": 30.0,
     "days_left": 3.25,
@@ -23784,31 +23784,31 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 63207441,
-        "organization": 63207441,
+        "database": 63257112,
+        "organization": 63257112,
         "owner_target": 50000000,
-        "projected_database": 70889500,
-        "projected_organization": 70889500,
-        "projected_share": 0.1418,
-        "share_used": 0.1264
+        "projected_database": 70945208,
+        "projected_organization": 70945208,
+        "projected_share": 0.1419,
+        "share_used": 0.1265
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 225595,
-        "organization": 225595,
+        "database": 225637,
+        "organization": 225637,
         "owner_target": 1000000,
-        "projected_database": 253013,
-        "projected_organization": 253013,
+        "projected_database": 253060,
+        "projected_organization": 253060,
         "projected_share": 0.0253,
         "share_used": 0.0226
       },
       "storage_bytes": {
         "allowance": 5000000000,
-        "database": 25182208,
-        "organization": 25182208,
+        "database": 25190400,
+        "organization": 25190400,
         "owner_target": 250000000,
-        "projected_database": 25182208,
-        "projected_organization": 25182208,
+        "projected_database": 25190400,
+        "projected_organization": 25190400,
         "projected_share": 0.005,
         "share_used": 0.005
       }
@@ -23826,7 +23826,7 @@
     "top_queries_error": "Turso database stats answered HTTP 404 (check FACTORY_TURSO_ORG / FACTORY_TURSO_DATABASE)"
   },
   "schema": {
-    "checked_at": "2026-11-27T17:57:56+00:00",
+    "checked_at": "2026-11-27T17:59:14+00:00",
     "code_version": 6,
     "last_upgrade": {
       "at": "2026-11-25T18:11:07+00:00",
@@ -24004,7 +24004,7 @@
     "stored_version": 6
   },
   "crashes": {
-    "generated_at": "2026-11-27T17:57:56Z",
+    "generated_at": "2026-11-27T17:59:14Z",
     "groups": [
       {
         "count": 8,
@@ -24143,48 +24143,9 @@
     ]
   },
   "gh_usage": {
-    "generated_at": "2026-11-27T17:57:57Z",
+    "generated_at": "2026-11-27T17:59:15Z",
     "jobs": {
       "dispatch": [
-        {
-          "at": 1795801551,
-          "buckets": {
-            "reader": 19,
-            "workflow": 5
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 4077,
-            "reset": 1795803595
-          },
-          "cache_hits": 0,
-          "github": 24,
-          "label": "dispatch issue:5907",
-          "paginated": 4,
-          "top": [
-            [
-              "api GET repos/R/pulls/N",
-              8
-            ],
-            [
-              "api GET repos/R/issues/N",
-              3
-            ],
-            [
-              "api GET repos/R/issues",
-              2
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ],
-            [
-              "api GET repos/R/pulls",
-              1
-            ]
-          ],
-          "writes": 0
-        },
         {
           "at": 1795801625,
           "buckets": {
@@ -24589,6 +24550,45 @@
           "cache_hits": 0,
           "github": 25,
           "label": "dispatch issue:5707",
+          "paginated": 4,
+          "top": [
+            [
+              "api GET repos/R/pulls/N",
+              9
+            ],
+            [
+              "api GET repos/R/issues/N",
+              3
+            ],
+            [
+              "api GET repos/R/issues",
+              2
+            ],
+            [
+              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
+              2
+            ],
+            [
+              "api GET repos/R/pulls",
+              1
+            ]
+          ],
+          "writes": 0
+        },
+        {
+          "at": 1795802300,
+          "buckets": {
+            "reader": 23,
+            "workflow": 5
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 3654,
+            "reset": 1795803595
+          },
+          "cache_hits": 0,
+          "github": 28,
+          "label": "dispatch issue:4442",
           "paginated": 4,
           "top": [
             [
