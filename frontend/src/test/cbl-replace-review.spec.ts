@@ -251,17 +251,21 @@ test.describe('CBL replacement review', () => {
     ]
     await page.route('**/api/v2/cblSources*', (route) =>
       route.fulfill({
-        json: [
-          {
-            id: 9001,
-            name: 'Replace Review Source',
-            source_path: `review-${suffix}.cbl`,
-            source_repository: 'shared/cbls',
-            declared_issue_count: 2,
-            content_hash: 'review-hash',
-            revision_sha: 'review-revision',
-          },
-        ],
+        json: {
+          items: [
+            {
+              id: 9001,
+              name: 'Replace Review Source',
+              source_path: `review-${suffix}.cbl`,
+              source_repository: 'shared/cbls',
+              declared_issue_count: 2,
+              content_hash: 'review-hash',
+              revision_sha: 'review-revision',
+            },
+          ],
+          total: 1,
+          catalog_total: 1,
+        },
       }),
     )
     await page.route('**/api/v1/issue-identity/cbl/9001/adoption-preview', (route) =>
