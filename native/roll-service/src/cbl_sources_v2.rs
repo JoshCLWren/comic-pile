@@ -33,13 +33,13 @@ const MAX_FILTER_LENGTH: usize = 1000;
 const MAX_SEARCH_LENGTH: usize = 200;
 const MAX_COMICVINE_ID_LENGTH: usize = 100;
 
+/// One root-through-folder breadcrumb.
+pub use cbl_catalog::CBLBreadcrumb;
 /// One item in a shared catalog page. Field-for-field identical to the
 /// discovery item the browser already renders.
 pub use cbl_catalog::CBLCatalogListItem;
 /// One immediate child folder of a shared catalog folder.
 pub use cbl_catalog::CBLSourceFolder;
-/// One root-through-folder breadcrumb.
-pub use cbl_catalog::CBLBreadcrumb;
 
 /// One bounded page of the shared source collection.
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -248,7 +248,10 @@ fn source_cursor(
         return Ok(None);
     };
     let cursor: SourcePageCursor = decode_cursor(token)?;
-    if cursor.f != filter.canonical() || cursor.o != order_by || cursor.s != page_size || cursor.p < 1
+    if cursor.f != filter.canonical()
+        || cursor.o != order_by
+        || cursor.s != page_size
+        || cursor.p < 1
     {
         return Err(bad_page_token());
     }
@@ -279,7 +282,10 @@ fn page_offset(page: i64, page_size: i64) -> Result<i64, ApiError> {
 /// Parse one exact Comic Vine issue id out of the occurrence filter.
 fn parse_occurrence_filter(raw: Option<&str>) -> Result<String, ApiError> {
     let value = raw.unwrap_or("").trim();
-    let issue_id = value.strip_prefix("comicvine_issue_id:").unwrap_or(value).trim();
+    let issue_id = value
+        .strip_prefix("comicvine_issue_id:")
+        .unwrap_or(value)
+        .trim();
     if issue_id.is_empty() {
         return Err(ApiError::Unprocessable(
             "cblOccurrences filter requires a Comic Vine issue id".to_string(),
@@ -336,7 +342,11 @@ async fn query_source_page(
                 .query(&sql, &[&pattern, &page_size, &offset])
                 .await
                 .map_err(db::query_error)?;
-            Ok((rows.iter().map(cbl_catalog::map_item).collect(), total, catalog_total))
+            Ok((
+                rows.iter().map(cbl_catalog::map_item).collect(),
+                total,
+                catalog_total,
+            ))
         }
         SourceFilter::Folder(folder) => {
             let (folder_like, prefix_len): (Option<String>, i32) = if folder.is_empty() {
@@ -378,7 +388,11 @@ async fn query_source_page(
                 .query(&sql, &[&folder_like, &prefix_len, &page_size, &offset])
                 .await
                 .map_err(db::query_error)?;
-            Ok((rows.iter().map(cbl_catalog::map_item).collect(), total, catalog_total))
+            Ok((
+                rows.iter().map(cbl_catalog::map_item).collect(),
+                total,
+                catalog_total,
+            ))
         }
     }
 }
@@ -391,13 +405,13 @@ pub async fn list_cbl_sources(
 ) -> Result<Json<ListCblSourcesResponse>, ApiError> {
     let filter = parse_source_filter(query.filter.as_deref())?;
     let order_by = parse_order_by(query.order_by.as_deref())?;
-    let page_size = parse_bounded_int("page_size", query.page_size.as_deref(), DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE)?;
-    let cursor = source_cursor(
-        query.page_token.as_deref(),
-        &filter,
-        &order_by,
-        page_size,
+    let page_size = parse_bounded_int(
+        "page_size",
+        query.page_size.as_deref(),
+        DEFAULT_PAGE_SIZE,
+        MAX_PAGE_SIZE,
     )?;
+    let cursor = source_cursor(query.page_token.as_deref(), &filter, &order_by, page_size)?;
     let requested_page = cursor.as_ref().map_or(1, |value| value.p);
 
     let conn = db::checkout(&state).await?;
@@ -411,9 +425,13 @@ pub async fn list_cbl_sources(
             cbl_catalog::breadcrumbs(""),
         ),
         SourceFilter::Folder(folder) => {
-            let summary = cbl_catalog::read_folder(&conn, folder).await.map_err(db::query_error)?;
+            let summary = cbl_catalog::read_folder(&conn, folder)
+                .await
+                .map_err(db::query_error)?;
             if !folder.is_empty() && summary.folders.is_empty() && summary.direct_list_count == 0 {
-                return Err(ApiError::NotFound(format!("CBL folder not found: {folder}")));
+                return Err(ApiError::NotFound(format!(
+                    "CBL folder not found: {folder}"
+                )));
             }
             (
                 summary.folders,
@@ -425,8 +443,14 @@ pub async fn list_cbl_sources(
         }
     };
 
-    let (items, total, catalog_total) =
-        query_source_page(&conn, &filter, &order_by, page_size, page_offset(requested_page, page_size)?).await?;
+    let (items, total, catalog_total) = query_source_page(
+        &conn,
+        &filter,
+        &order_by,
+        page_size,
+        page_offset(requested_page, page_size)?,
+    )
+    .await?;
 
     let total_pages = if total == 0 {
         0
@@ -441,9 +465,15 @@ pub async fn list_cbl_sources(
     // Re-read the clamped page: an out-of-range token must return the last real
     // page, never an empty slice with a contradictory page indicator.
     let items = if effective_page != requested_page {
-        query_source_page(&conn, &filter, &order_by, page_size, page_offset(effective_page, page_size)?)
-            .await?
-            .0
+        query_source_page(
+            &conn,
+            &filter,
+            &order_by,
+            page_size,
+            page_offset(effective_page, page_size)?,
+        )
+        .await?
+        .0
     } else {
         items
     };
@@ -530,14 +560,16 @@ pub async fn list_cbl_occurrences(
     )?;
 
     let conn = db::checkout(&state).await?;
-    let page = issue_identity::load_cbl_comicvine_occurrences(&conn, &issue_id, offset, limit).await?;
-    let next_page_token = (page.occurrences_total as i64 > offset.saturating_add(limit)).then(|| {
-        encode_cursor(&OccurrencePageCursor {
-            o: offset.saturating_add(limit),
-            s: page_size,
-            f: issue_id.clone(),
-        })
-    });
+    let page =
+        issue_identity::load_cbl_comicvine_occurrences(&conn, &issue_id, offset, limit).await?;
+    let next_page_token =
+        (page.occurrences_total as i64 > offset.saturating_add(limit)).then(|| {
+            encode_cursor(&OccurrencePageCursor {
+                o: offset.saturating_add(limit),
+                s: page_size,
+                f: issue_id.clone(),
+            })
+        });
 
     Ok(Json(ListCblOccurrencesResponse {
         comicvine_issue_id: page.comicvine_issue_id,
@@ -645,7 +677,13 @@ mod tests {
 
     #[test]
     fn filter_rejects_traversal_and_control_characters() {
-        for raw in ["folder:..", "folder:a/../b", "folder:a\\b", "folder:a\u{0001}b", "q:"] {
+        for raw in [
+            "folder:..",
+            "folder:a/../b",
+            "folder:a\\b",
+            "folder:a\u{0001}b",
+            "q:",
+        ] {
             assert!(parse_source_filter(Some(raw)).is_err(), "accepted {raw:?}");
         }
         let too_long = format!("q:{}", "x".repeat(MAX_SEARCH_LENGTH + 1));
@@ -663,7 +701,8 @@ mod tests {
     #[test]
     fn page_size_is_bounded_before_any_allocation() {
         assert_eq!(
-            parse_bounded_int("page_size", None, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE).expect("default"),
+            parse_bounded_int("page_size", None, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE)
+                .expect("default"),
             DEFAULT_PAGE_SIZE
         );
         assert!(parse_bounded_int("page_size", Some("0"), 50, 100).is_err());

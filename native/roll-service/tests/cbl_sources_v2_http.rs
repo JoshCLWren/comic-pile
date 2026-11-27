@@ -53,7 +53,10 @@ async fn setup() -> (Arc<AppState>, String, tokio::sync::MutexGuard<'static, ()>
             .uri("/api/v1/auth/register")
             .header(
                 "x-forwarded-for",
-                format!("2001:db8::{:x}", NEXT_CLIENT.fetch_add(1, Ordering::Relaxed)),
+                format!(
+                    "2001:db8::{:x}",
+                    NEXT_CLIENT.fetch_add(1, Ordering::Relaxed)
+                ),
             )
             .header(header::CONTENT_TYPE, "application/json")
             .body(Body::from(
@@ -166,8 +169,7 @@ async fn list_browses_root_and_continues_with_an_opaque_token() {
     assert_eq!(second["page"], 2);
     assert_eq!(second["has_previous"], true);
     assert_ne!(
-        first["items"][0]["id"],
-        second["items"][0]["id"],
+        first["items"][0]["id"], second["items"][0]["id"],
         "continuation must advance the page"
     );
 }
@@ -201,9 +203,15 @@ async fn detail_is_read_only_and_projects_catalog_provenance() {
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["name"], "Mister Miracle 1989");
     assert_eq!(body["source_path"], PUBLIC_SOURCE_PATH);
-    assert!(!body["source_path"].as_str().unwrap().contains("CBL-ReadingLists/DC"));
+    assert!(!body["source_path"]
+        .as_str()
+        .unwrap()
+        .contains("CBL-ReadingLists/DC"));
     assert_eq!(body["source_repository"], PUBLIC_REPOSITORY);
-    assert_eq!(body["source_ref"], "JoshCLWren/CBL-ReadingLists:DC/Mister Miracle (1989)/Mister Miracle.cbl");
+    assert_eq!(
+        body["source_ref"],
+        "JoshCLWren/CBL-ReadingLists:DC/Mister Miracle (1989)/Mister Miracle.cbl"
+    );
     assert_eq!(body["entries_total"], 2);
     assert_eq!(body["entries"].as_array().unwrap().len(), 2);
 
@@ -214,15 +222,22 @@ async fn detail_is_read_only_and_projects_catalog_provenance() {
 #[tokio::test]
 async fn occurrences_match_only_the_exact_comicvine_issue_identity() {
     let (state, token, _guard) = setup().await;
-    let (status, body) =
-        get(&state, &token, &format!("/api/v2/cblOccurrences?filter={ISSUE_ID}")).await;
+    let (status, body) = get(
+        &state,
+        &token,
+        &format!("/api/v2/cblOccurrences?filter={ISSUE_ID}"),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["comicvine_issue_id"], ISSUE_ID);
     assert_eq!(body["occurrences_total"], 2);
     assert_eq!(body["lists_total"], 1);
     assert_eq!(body["occurrences"].as_array().unwrap().len(), 2);
     assert_eq!(body["occurrences"][0]["comicvine_issue_id"], ISSUE_ID);
-    assert_eq!(body["occurrences"][0]["source_repository"], PUBLIC_REPOSITORY);
+    assert_eq!(
+        body["occurrences"][0]["source_repository"],
+        PUBLIC_REPOSITORY
+    );
     // The same external id from another provider must not be counted.
     assert_eq!(body["occurrences_total"], 2);
 
@@ -256,5 +271,9 @@ async fn query_validation_rejects_bad_filter_order_and_replayed_token() {
         &format!("/api/v2/cblSources?page_size=1&filter=q:JLI&page_token={cursor}"),
     )
     .await;
-    assert_eq!(status, StatusCode::BAD_REQUEST, "a token is bound to its filter");
+    assert_eq!(
+        status,
+        StatusCode::BAD_REQUEST,
+        "a token is bound to its filter"
+    );
 }
