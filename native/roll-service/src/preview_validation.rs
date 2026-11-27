@@ -96,7 +96,7 @@ mod tests {
         );
         for bad in [
             "12".to_string(),
-            format!("12:otherMethod"),
+            "12:otherMethod".to_string(),
             format!("abc:{method}"),
             format!("{method}:12"),
         ] {
