@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-27T17:59:12+00:00",
+  "generated_at": "2026-11-27T18:14:24+00:00",
   "models": [
     {
       "health": {
@@ -23743,7 +23743,7 @@
   },
   "counts_generated_at": "2026-11-27T17:42:49.617021+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-27T17:59:12Z",
+    "generated_at": "2026-11-27T18:14:24Z",
     "sources": {
       "nvidia": [
         "google/diffusiongemma-26b-a4b-it",
@@ -23765,10 +23765,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-27T17:59:12.766965+00:00",
-    "days_elapsed": 26.749,
+    "checked_at": "2026-11-27T18:14:24.631082+00:00",
+    "days_elapsed": 26.76,
     "days_in_month": 30.0,
-    "days_left": 3.25,
+    "days_left": 3.24,
     "in_use": true,
     "label": "",
     "metrics": {
@@ -23784,31 +23784,31 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 63257112,
-        "organization": 63257112,
+        "database": 63429976,
+        "organization": 63429976,
         "owner_target": 50000000,
-        "projected_database": 70945208,
-        "projected_organization": 70945208,
-        "projected_share": 0.1419,
-        "share_used": 0.1265
+        "projected_database": 71109839,
+        "projected_organization": 71109839,
+        "projected_share": 0.1422,
+        "share_used": 0.1269
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 225637,
-        "organization": 225637,
+        "database": 225685,
+        "organization": 225685,
         "owner_target": 1000000,
-        "projected_database": 253060,
-        "projected_organization": 253060,
+        "projected_database": 253010,
+        "projected_organization": 253010,
         "projected_share": 0.0253,
         "share_used": 0.0226
       },
       "storage_bytes": {
         "allowance": 5000000000,
-        "database": 25190400,
-        "organization": 25190400,
+        "database": 25198592,
+        "organization": 25198592,
         "owner_target": 250000000,
-        "projected_database": 25190400,
-        "projected_organization": 25190400,
+        "projected_database": 25198592,
+        "projected_organization": 25198592,
         "projected_share": 0.005,
         "share_used": 0.005
       }
@@ -23826,7 +23826,7 @@
     "top_queries_error": "Turso database stats answered HTTP 404 (check FACTORY_TURSO_ORG / FACTORY_TURSO_DATABASE)"
   },
   "schema": {
-    "checked_at": "2026-11-27T17:59:14+00:00",
+    "checked_at": "2026-11-27T18:14:27+00:00",
     "code_version": 6,
     "last_upgrade": {
       "at": "2026-11-25T18:11:07+00:00",
@@ -24004,7 +24004,7 @@
     "stored_version": 6
   },
   "crashes": {
-    "generated_at": "2026-11-27T17:59:14Z",
+    "generated_at": "2026-11-27T18:14:27Z",
     "groups": [
       {
         "count": 8,
@@ -24143,413 +24143,23 @@
     ]
   },
   "gh_usage": {
-    "generated_at": "2026-11-27T17:59:15Z",
+    "generated_at": "2026-11-27T18:14:28Z",
     "jobs": {
       "dispatch": [
         {
-          "at": 1795801625,
-          "buckets": {
-            "reader": 19,
-            "workflow": 5
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 4058,
-            "reset": 1795803595
-          },
-          "cache_hits": 0,
-          "github": 24,
-          "label": "dispatch issue:4405",
-          "paginated": 4,
-          "top": [
-            [
-              "api GET repos/R/pulls/N",
-              8
-            ],
-            [
-              "api GET repos/R/issues/N",
-              3
-            ],
-            [
-              "api GET repos/R/issues",
-              2
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ],
-            [
-              "api GET repos/R/pulls",
-              1
-            ]
-          ],
-          "writes": 0
-        },
-        {
-          "at": 1795801690,
-          "buckets": {
-            "reader": 19,
-            "workflow": 5
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 4047,
-            "reset": 1795803595
-          },
-          "cache_hits": 0,
-          "github": 24,
-          "label": "dispatch issue:3637",
-          "paginated": 4,
-          "top": [
-            [
-              "api GET repos/R/pulls/N",
-              8
-            ],
-            [
-              "api GET repos/R/issues/N",
-              3
-            ],
-            [
-              "api GET repos/R/issues",
-              2
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ],
-            [
-              "api GET repos/R/pulls",
-              1
-            ]
-          ],
-          "writes": 0
-        },
-        {
-          "at": 1795801753,
-          "buckets": {
-            "reader": 19,
-            "workflow": 5
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 3971,
-            "reset": 1795803595
-          },
-          "cache_hits": 0,
-          "github": 24,
-          "label": "dispatch issue:2397",
-          "paginated": 4,
-          "top": [
-            [
-              "api GET repos/R/pulls/N",
-              8
-            ],
-            [
-              "api GET repos/R/issues/N",
-              3
-            ],
-            [
-              "api GET repos/R/issues",
-              2
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ],
-            [
-              "api GET repos/R/pulls",
-              1
-            ]
-          ],
-          "writes": 0
-        },
-        {
-          "at": 1795801809,
-          "buckets": {
-            "reader": 19,
-            "workflow": 5
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 3935,
-            "reset": 1795803595
-          },
-          "cache_hits": 0,
-          "github": 24,
-          "label": "dispatch issue:2389",
-          "paginated": 4,
-          "top": [
-            [
-              "api GET repos/R/pulls/N",
-              8
-            ],
-            [
-              "api GET repos/R/issues/N",
-              3
-            ],
-            [
-              "api GET repos/R/issues",
-              2
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ],
-            [
-              "api GET repos/R/pulls",
-              1
-            ]
-          ],
-          "writes": 0
-        },
-        {
-          "at": 1795801875,
-          "buckets": {
-            "reader": 19,
-            "workflow": 5
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 3907,
-            "reset": 1795803595
-          },
-          "cache_hits": 0,
-          "github": 24,
-          "label": "dispatch issue:5485",
-          "paginated": 4,
-          "top": [
-            [
-              "api GET repos/R/pulls/N",
-              8
-            ],
-            [
-              "api GET repos/R/issues/N",
-              3
-            ],
-            [
-              "api GET repos/R/issues",
-              2
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ],
-            [
-              "api GET repos/R/pulls",
-              1
-            ]
-          ],
-          "writes": 0
-        },
-        {
-          "at": 1795801933,
-          "buckets": {
-            "reader": 19,
-            "workflow": 5
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 3874,
-            "reset": 1795803595
-          },
-          "cache_hits": 0,
-          "github": 24,
-          "label": "dispatch issue:4105",
-          "paginated": 4,
-          "top": [
-            [
-              "api GET repos/R/pulls/N",
-              8
-            ],
-            [
-              "api GET repos/R/issues/N",
-              3
-            ],
-            [
-              "api GET repos/R/issues",
-              2
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ],
-            [
-              "api GET repos/R/pulls",
-              1
-            ]
-          ],
-          "writes": 0
-        },
-        {
-          "at": 1795801989,
-          "buckets": {
-            "reader": 19,
-            "workflow": 5
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 3825,
-            "reset": 1795803595
-          },
-          "cache_hits": 0,
-          "github": 24,
-          "label": "dispatch issue:4099",
-          "paginated": 4,
-          "top": [
-            [
-              "api GET repos/R/pulls/N",
-              8
-            ],
-            [
-              "api GET repos/R/issues/N",
-              3
-            ],
-            [
-              "api GET repos/R/issues",
-              2
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ],
-            [
-              "api GET repos/R/pulls",
-              1
-            ]
-          ],
-          "writes": 0
-        },
-        {
-          "at": 1795802044,
-          "buckets": {
-            "reader": 19,
-            "workflow": 5
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 3819,
-            "reset": 1795803595
-          },
-          "cache_hits": 0,
-          "github": 24,
-          "label": "dispatch issue:4114",
-          "paginated": 4,
-          "top": [
-            [
-              "api GET repos/R/pulls/N",
-              8
-            ],
-            [
-              "api GET repos/R/issues/N",
-              3
-            ],
-            [
-              "api GET repos/R/issues",
-              2
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ],
-            [
-              "api GET repos/R/pulls",
-              1
-            ]
-          ],
-          "writes": 0
-        },
-        {
-          "at": 1795802095,
-          "buckets": {
-            "reader": 19,
-            "workflow": 5
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 3806,
-            "reset": 1795803595
-          },
-          "cache_hits": 0,
-          "github": 24,
-          "label": "dispatch issue:4128",
-          "paginated": 4,
-          "top": [
-            [
-              "api GET repos/R/pulls/N",
-              8
-            ],
-            [
-              "api GET repos/R/issues/N",
-              3
-            ],
-            [
-              "api GET repos/R/issues",
-              2
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ],
-            [
-              "api GET repos/R/pulls",
-              1
-            ]
-          ],
-          "writes": 0
-        },
-        {
-          "at": 1795802150,
-          "buckets": {
-            "reader": 19,
-            "workflow": 5
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 3770,
-            "reset": 1795803595
-          },
-          "cache_hits": 0,
-          "github": 24,
-          "label": "dispatch issue:5704",
-          "paginated": 4,
-          "top": [
-            [
-              "api GET repos/R/pulls/N",
-              8
-            ],
-            [
-              "api GET repos/R/issues/N",
-              3
-            ],
-            [
-              "api GET repos/R/issues",
-              2
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ],
-            [
-              "api GET repos/R/pulls",
-              1
-            ]
-          ],
-          "writes": 0
-        },
-        {
-          "at": 1795802222,
+          "at": 1795802539,
           "buckets": {
             "reader": 20,
             "workflow": 5
           },
           "budget": {
             "limit": 5000,
-            "remaining": 3721,
+            "remaining": 3587,
             "reset": 1795803595
           },
           "cache_hits": 0,
           "github": 25,
-          "label": "dispatch issue:5707",
+          "label": "dispatch issue:5743",
           "paginated": 4,
           "top": [
             [
@@ -24576,19 +24186,409 @@
           "writes": 0
         },
         {
-          "at": 1795802300,
+          "at": 1795802590,
+          "buckets": {
+            "reader": 20,
+            "workflow": 5
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 3587,
+            "reset": 1795803595
+          },
+          "cache_hits": 0,
+          "github": 25,
+          "label": "dispatch issue:4335",
+          "paginated": 4,
+          "top": [
+            [
+              "api GET repos/R/pulls/N",
+              9
+            ],
+            [
+              "api GET repos/R/issues/N",
+              3
+            ],
+            [
+              "api GET repos/R/issues",
+              2
+            ],
+            [
+              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
+              2
+            ],
+            [
+              "api GET repos/R/pulls",
+              1
+            ]
+          ],
+          "writes": 0
+        },
+        {
+          "at": 1795802646,
+          "buckets": {
+            "reader": 20,
+            "workflow": 5
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 3567,
+            "reset": 1795803595
+          },
+          "cache_hits": 0,
+          "github": 25,
+          "label": "dispatch issue:5877",
+          "paginated": 4,
+          "top": [
+            [
+              "api GET repos/R/pulls/N",
+              9
+            ],
+            [
+              "api GET repos/R/issues/N",
+              3
+            ],
+            [
+              "api GET repos/R/issues",
+              2
+            ],
+            [
+              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
+              2
+            ],
+            [
+              "api GET repos/R/pulls",
+              1
+            ]
+          ],
+          "writes": 0
+        },
+        {
+          "at": 1795802701,
+          "buckets": {
+            "reader": 20,
+            "workflow": 5
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 3560,
+            "reset": 1795803595
+          },
+          "cache_hits": 0,
+          "github": 25,
+          "label": "dispatch issue:5886",
+          "paginated": 4,
+          "top": [
+            [
+              "api GET repos/R/pulls/N",
+              9
+            ],
+            [
+              "api GET repos/R/issues/N",
+              3
+            ],
+            [
+              "api GET repos/R/issues",
+              2
+            ],
+            [
+              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
+              2
+            ],
+            [
+              "api GET repos/R/pulls",
+              1
+            ]
+          ],
+          "writes": 0
+        },
+        {
+          "at": 1795802764,
+          "buckets": {
+            "reader": 20,
+            "workflow": 5
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 3498,
+            "reset": 1795803595
+          },
+          "cache_hits": 0,
+          "github": 25,
+          "label": "dispatch issue:5899",
+          "paginated": 4,
+          "top": [
+            [
+              "api GET repos/R/pulls/N",
+              9
+            ],
+            [
+              "api GET repos/R/issues/N",
+              3
+            ],
+            [
+              "api GET repos/R/issues",
+              2
+            ],
+            [
+              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
+              2
+            ],
+            [
+              "api GET repos/R/pulls",
+              1
+            ]
+          ],
+          "writes": 0
+        },
+        {
+          "at": 1795802832,
+          "buckets": {
+            "reader": 20,
+            "workflow": 5
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 3464,
+            "reset": 1795803595
+          },
+          "cache_hits": 0,
+          "github": 25,
+          "label": "dispatch issue:4204",
+          "paginated": 4,
+          "top": [
+            [
+              "api GET repos/R/pulls/N",
+              9
+            ],
+            [
+              "api GET repos/R/issues/N",
+              3
+            ],
+            [
+              "api GET repos/R/issues",
+              2
+            ],
+            [
+              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
+              2
+            ],
+            [
+              "api GET repos/R/pulls",
+              1
+            ]
+          ],
+          "writes": 0
+        },
+        {
+          "at": 1795802900,
+          "buckets": {
+            "reader": 20,
+            "workflow": 5
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 3462,
+            "reset": 1795803595
+          },
+          "cache_hits": 0,
+          "github": 25,
+          "label": "dispatch issue:5431",
+          "paginated": 4,
+          "top": [
+            [
+              "api GET repos/R/pulls/N",
+              9
+            ],
+            [
+              "api GET repos/R/issues/N",
+              3
+            ],
+            [
+              "api GET repos/R/issues",
+              2
+            ],
+            [
+              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
+              2
+            ],
+            [
+              "api GET repos/R/pulls",
+              1
+            ]
+          ],
+          "writes": 0
+        },
+        {
+          "at": 1795802957,
+          "buckets": {
+            "reader": 20,
+            "workflow": 5
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 3461,
+            "reset": 1795803595
+          },
+          "cache_hits": 0,
+          "github": 25,
+          "label": "dispatch issue:3580",
+          "paginated": 4,
+          "top": [
+            [
+              "api GET repos/R/pulls/N",
+              9
+            ],
+            [
+              "api GET repos/R/issues/N",
+              3
+            ],
+            [
+              "api GET repos/R/issues",
+              2
+            ],
+            [
+              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
+              2
+            ],
+            [
+              "api GET repos/R/pulls",
+              1
+            ]
+          ],
+          "writes": 0
+        },
+        {
+          "at": 1795803012,
+          "buckets": {
+            "reader": 20,
+            "workflow": 5
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 3461,
+            "reset": 1795803595
+          },
+          "cache_hits": 0,
+          "github": 25,
+          "label": "dispatch issue:3604",
+          "paginated": 4,
+          "top": [
+            [
+              "api GET repos/R/pulls/N",
+              9
+            ],
+            [
+              "api GET repos/R/issues/N",
+              3
+            ],
+            [
+              "api GET repos/R/issues",
+              2
+            ],
+            [
+              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
+              2
+            ],
+            [
+              "api GET repos/R/pulls",
+              1
+            ]
+          ],
+          "writes": 0
+        },
+        {
+          "at": 1795803076,
+          "buckets": {
+            "reader": 20,
+            "workflow": 5
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 3460,
+            "reset": 1795803595
+          },
+          "cache_hits": 0,
+          "github": 25,
+          "label": "dispatch issue:3709",
+          "paginated": 4,
+          "top": [
+            [
+              "api GET repos/R/pulls/N",
+              9
+            ],
+            [
+              "api GET repos/R/issues/N",
+              3
+            ],
+            [
+              "api GET repos/R/issues",
+              2
+            ],
+            [
+              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
+              2
+            ],
+            [
+              "api GET repos/R/pulls",
+              1
+            ]
+          ],
+          "writes": 0
+        },
+        {
+          "at": 1795803133,
+          "buckets": {
+            "reader": 20,
+            "workflow": 5
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 3460,
+            "reset": 1795803595
+          },
+          "cache_hits": 0,
+          "github": 25,
+          "label": "dispatch issue:4171",
+          "paginated": 4,
+          "top": [
+            [
+              "api GET repos/R/pulls/N",
+              9
+            ],
+            [
+              "api GET repos/R/issues/N",
+              3
+            ],
+            [
+              "api GET repos/R/issues",
+              2
+            ],
+            [
+              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
+              2
+            ],
+            [
+              "api GET repos/R/pulls",
+              1
+            ]
+          ],
+          "writes": 0
+        },
+        {
+          "at": 1795803207,
           "buckets": {
             "reader": 23,
             "workflow": 5
           },
           "budget": {
             "limit": 5000,
-            "remaining": 3654,
+            "remaining": 3460,
             "reset": 1795803595
           },
           "cache_hits": 0,
           "github": 28,
-          "label": "dispatch issue:4442",
+          "label": "dispatch issue:3717",
           "paginated": 4,
           "top": [
             [
