@@ -1425,7 +1425,7 @@ async fn add_member_tx(
     ))
 }
 
-/// `DELETE /api/v1/reading-order-groups/{group_id}/members/{member_id}`
+/// `DELETE /api/v2/reading-order-groups/{group_id}/members/{member_id}`
 pub async fn remove_member(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1622,7 +1622,7 @@ async fn set_group_order_tx(
     })
 }
 
-/// `GET /api/v1/reading-order-groups/{group_id}/plans`
+/// `GET /api/v2/reading-order-groups/{group_id}/reading-plans`
 pub async fn list_crossover_plans(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
