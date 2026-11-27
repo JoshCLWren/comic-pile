@@ -286,6 +286,22 @@ Non-browser / helper / infrastructure surface included in the census:
 - #5707: `POST /api/v1/threads/{thread_id}:setCurrentIssue` — not-live; POST /api/v2/threads/{thread_id}/issues | PATCH /api/v2/issues/{issue_id}.
 - #5708: `GET /api/v1/sessions/{session_id}` — not-live; GET /api/v2/readingSessions | GET /api/v2/readingSessions/{session_id}.
 - #5710: `GET /api/v1/reading-order-groups/` — not-live; GET|POST|PATCH|DELETE /api/v2/readingOrderGroups[/{group_id}].
+- #4549: `GET /api/v1/auth/csrf` — not-live; GET /api/v2/auth/csrf.
+- #4549: `GET /api/v1/auth/me` — not-live; GET /api/v2/auth/me.
+- #4549: `POST /api/v1/auth/register` — not-live; POST /api/v2/auth/register.
+- #4549: `POST /api/v1/auth/login` — not-live; POST /api/v2/auth/login.
+- #4549: `POST /api/v1/auth/refresh` — not-live; POST /api/v2/auth/refresh.
+- #4549: `POST /api/v1/auth/logout` — not-live; POST /api/v2/auth/logout.
+- #4549: `POST /api/v1/auth/forgot-password` — not-live; POST /api/v2/auth/forgot-password.
+- #4549: `POST /api/v1/auth/reset-password` — not-live; POST /api/v2/auth/reset-password.
+- #4549: `GET /api/auth/csrf` — not-live; GET /api/v2/auth/csrf.
+- #4549: `GET /api/auth/me` — not-live; GET /api/v2/auth/me.
+- #4549: `POST /api/auth/register` — not-live; POST /api/v2/auth/register.
+- #4549: `POST /api/auth/login` — not-live; POST /api/v2/auth/login.
+- #4549: `POST /api/auth/refresh` — not-live; POST /api/v2/auth/refresh.
+- #4549: `POST /api/auth/logout` — not-live; POST /api/v2/auth/logout.
+- #4549: `POST /api/auth/forgot-password` — not-live; POST /api/v2/auth/forgot-password.
+- #4549: `POST /api/auth/reset-password` — not-live; POST /api/v2/auth/reset-password.
 
 ## Baseline debt requiring an owner issue
 
