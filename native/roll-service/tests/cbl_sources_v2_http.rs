@@ -299,6 +299,52 @@ async fn occurrences_match_only_the_exact_comicvine_issue_identity() {
 }
 
 #[tokio::test]
+async fn occurrence_token_binds_the_effective_limit_on_replay() {
+    let (state, token, _guard) = setup().await;
+    let (status, first) = get(
+        &state,
+        &token,
+        &format!("/api/v2/cblOccurrences?filter={ISSUE_ID}&page_size=1&limit=1"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{first}");
+    assert_eq!(first["occurrences_limit"], 1);
+    assert_eq!(first["occurrences"].as_array().unwrap().len(), 1);
+    let cursor = first["next_page_token"]
+        .as_str()
+        .expect("two occurrences must issue a continuation token")
+        .to_owned();
+
+    // Same filter/page size/limit: the continuation advances to page two.
+    let (status, second) = get(
+        &state,
+        &token,
+        &format!(
+            "/api/v2/cblOccurrences?filter={ISSUE_ID}&page_size=1&limit=1&page_token={cursor}"
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{second}");
+    assert_eq!(second["occurrences_offset"], 1);
+    assert_eq!(second["occurrences"].as_array().unwrap().len(), 1);
+    assert_ne!(
+        first["occurrences"][0]["position"], second["occurrences"][0]["position"],
+        "continuation must advance the page"
+    );
+
+    // A replay that changes the effective limit must not silently change stride.
+    let (status, rejected) = get(
+        &state,
+        &token,
+        &format!(
+            "/api/v2/cblOccurrences?filter={ISSUE_ID}&page_size=1&limit=2&page_token={cursor}"
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{rejected}");
+}
+
+#[tokio::test]
 async fn query_validation_rejects_bad_filter_order_and_replayed_token() {
     let (state, token, _guard) = setup().await;
 

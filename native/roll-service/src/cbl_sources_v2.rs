@@ -14,7 +14,7 @@
 //!
 //! Pagination is AIP-132 shaped: `page_token` is an opaque, self-describing
 //! continuation cursor that is replay-checked against the current filter,
-//! ordering and page size before it can affect SQL or an offset.
+//! ordering, page size and effective limit before it can affect SQL or an offset.
 
 use crate::{auth::AuthenticatedUser, cbl_catalog, db, issue_identity, ApiError, AppState};
 use axum::{
