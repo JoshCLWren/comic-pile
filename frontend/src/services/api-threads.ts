@@ -11,8 +11,8 @@ import type {
   Thread,
   ThreadCreatePayload,
   ThreadListResponse,
+  ThreadPatchPayload,
   ThreadQueryParams,
-  ThreadUpdatePayload,
 } from '../types'
 
 /**
@@ -59,9 +59,26 @@ export function createThreadsApi(client: HttpClient) {
     },
     get: (id: number) => client.get<Thread>(`/v1/threads/${id}`),
     create: (data: ThreadCreatePayload) => client.post<Thread, ThreadCreatePayload>('/v1/threads/', data),
-    update: (id: number, data: ThreadUpdatePayload) =>
-      client.put<Thread, ThreadUpdatePayload>(`/v1/threads/${id}`, data),
-    delete: (id: number) => client.delete<void>(`/v1/threads/${id}`),
+    /**
+     * AIP-134 partial update on the canonical v2 Thread resource. The field mask
+     * is derived from the keys the caller actually supplied, so an omitted field
+     * can never be cleared by a stale client snapshot (issue #5703).
+     */
+    update: async (id: number, data: ThreadPatchPayload): Promise<Thread> => {
+      const { expected, update_mask: suppliedMask, ...fields } = data
+      const mask =
+        suppliedMask ??
+        Object.entries(fields)
+          .filter(([, value]) => value !== undefined)
+          .map(([key]) => key)
+      const body: ThreadPatchPayload = {
+        ...fields,
+        ...(mask.length ? { update_mask: mask } : {}),
+        ...(expected ? { expected } : {}),
+      }
+      return client.patch<Thread, ThreadPatchPayload>(`/v2/threads/${id}`, body)
+    },
+    delete: (id: number) => client.delete<void>(`/v2/threads/${id}`),
     exclude: (id: number) => client.post<Thread>(`/v1/threads/${id}/exclude`),
     restore: (id: number) => client.post<Thread>(`/v1/threads/${id}/restore`),
     bulkExclude: (data: BulkQueueExclusionRequest) =>
