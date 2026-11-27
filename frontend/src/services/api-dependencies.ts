@@ -5,7 +5,7 @@ import type {
   ThreadDependenciesResponse,
   IssueDependenciesResponse,
   ConnectedDependenciesResponse,
-  BlockingInfoResponse,
+  ThreadEligibilityResponse,
   BatchBlockingInfoResponse,
 } from '../types'
 
@@ -23,7 +23,7 @@ export interface ThreadIssueDependenciesResponse {
 export function createIssueDependenciesApi(client: HttpClient) {
   return {
     listForThread: (threadId: number): Promise<ThreadIssueDependenciesResponse> =>
-      client.get<ThreadIssueDependenciesResponse>(`/v1/threads/${threadId}/issue-dependencies`),
+      client.get<ThreadIssueDependenciesResponse>(`/v2/threads/${threadId}/issueDependencies`),
   }
 }
 
@@ -37,15 +37,17 @@ export function createDependenciesApi(client: HttpClient) {
   return {
     listBlockedThreadIds: () => client.get<number[]>('/v2/dependencies/blocked'),
     listThreadDependencies: (threadId: number) =>
-      client.get<ThreadDependenciesResponse>(`/v1/threads/${threadId}/dependencies`),
+      client.get<ThreadDependenciesResponse>(`/v2/threads/${threadId}/dependencies`),
     getIssueDependencies: (issueId: number) =>
       client.get<IssueDependenciesResponse>(`/v2/issues/${issueId}/dependencies`),
-    getBlockingInfo: (threadId: number) =>
-      client.post<BlockingInfoResponse>(`/v1/threads/${threadId}:getBlockingInfo`),
+    getThreadEligibility: (threadId: number) =>
+      client.get<ThreadEligibilityResponse>(`/v2/threads/${threadId}/eligibility`),
     getBatchBlockingInfo: (threadIds: number[]) =>
-      client.post<BatchBlockingInfoResponse>('/v1/threads:getBlockingInfo', { thread_ids: threadIds }),
+      client.post<BatchBlockingInfoResponse>('/v2/threads:explainEligibility', {
+        thread_ids: threadIds,
+      }),
     getConnectedThreads: (threadId: number) =>
-      client.get<ConnectedDependenciesResponse>(`/v1/threads/${threadId}/connected`),
+      client.get<ConnectedDependenciesResponse>(`/v2/threads/${threadId}/connections`),
     createDependency: ({ sourceType = 'thread', sourceId, targetType = 'thread', targetId }: DependencyCreatePayload) =>
       client.post<Dependency, { source_type: 'thread' | 'issue'; source_id: number; target_type: 'thread' | 'issue'; target_id: number }>('/v2/dependencies/', {
         source_type: sourceType,
