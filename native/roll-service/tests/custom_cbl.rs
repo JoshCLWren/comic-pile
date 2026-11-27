@@ -460,6 +460,15 @@ async fn apply_rebuilds_membership_without_compiling_edges() {
     )
     .await
     .expect("seed owned continuity plan");
+    // An explicitly authored prerequisite is the sole eligibility authority;
+    // an unrelated list edit must not rewrite or duplicate it.
+    conn.execute(
+        "INSERT INTO dependencies (source_issue_id, target_issue_id, note, created_at)
+         VALUES (910201, 910203, 'authored:prerequisite', NOW())",
+        &[],
+    )
+    .await
+    .expect("seed authored prerequisite");
     drop(conn);
 
     let (status, list) = post(
@@ -530,6 +539,21 @@ async fn apply_rebuilds_membership_without_compiling_edges() {
     assert_eq!(
         compiled_edges, 0,
         "a list/CBL edit must not compile dependency edges"
+    );
+
+    let authored: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM dependencies
+             WHERE source_issue_id=910201 AND target_issue_id=910203
+               AND note='authored:prerequisite'",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        authored, 1,
+        "the canonical authored prerequisite must survive a list edit"
     );
     drop(conn);
 }
