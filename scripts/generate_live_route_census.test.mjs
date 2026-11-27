@@ -150,6 +150,17 @@ test('CBL comparison and candidate discovery stay pinned to #5713', () => {
   assert.notEqual(candidates.owner_issue, 4844, 'the #4844 adoption family must not own candidate discovery');
 });
 
+test('published report cross-references every mandated owner issue', () => {
+  const report = readFileSync(path.join(repoRoot, 'docs/api/LIVE_ROUTE_CENSUS.md'), 'utf8');
+  const mandated = [
+    ...Array.from({length: 18}, (_, index) => 5701 + index),
+    4344, 4341, 4343, 4549, 4299, 5525,
+  ];
+  for (const issue of mandated) {
+    assert.match(report, new RegExp(`#${issue}\\b`), `report must cross-reference #${issue}`);
+  }
+});
+
 test('every current live v1 method has an owner and a disposition', () => {
   const census = JSON.parse(readFileSync(path.join(repoRoot, 'docs/api/live-route-census.json'), 'utf8'));
   const allowlist = JSON.parse(

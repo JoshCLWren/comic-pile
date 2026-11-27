@@ -5787,6 +5787,30 @@
       "status": "live-p0-evidence",
       "disposition": "retire-without-replacement",
       "notes": "P0 production 503 evidence for the still-live v1 set-pending method owned by #4344."
+    },
+    {
+      "issue": 5707,
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}:setCurrentIssue",
+      "status": "not-live",
+      "disposition": "POST /api/v2/threads/{thread_id}/issues | PATCH /api/v2/issues/{issue_id}",
+      "notes": "Both :setCurrentIssue and :migrateToIssues are absent from the live Rust router; no v1 registration remains. Existing v2 issue creation/patch is the destination."
+    },
+    {
+      "issue": 5708,
+      "method": "GET",
+      "path": "/api/v1/sessions/{session_id}",
+      "status": "not-live",
+      "disposition": "GET /api/v2/readingSessions | GET /api/v2/readingSessions/{session_id}",
+      "notes": "Legacy sessions list/detail are absent from the live Rust router; #4343 separately owns the retired sessions/current/ route."
+    },
+    {
+      "issue": 5710,
+      "method": "GET",
+      "path": "/api/v1/reading-order-groups/",
+      "status": "not-live",
+      "disposition": "GET|POST|PATCH|DELETE /api/v2/readingOrderGroups[/{group_id}]",
+      "notes": "Collection CRUD and /detail are absent from the live Rust router; memberships, ranges and /order remain with #5711."
     }
   ]
 }
