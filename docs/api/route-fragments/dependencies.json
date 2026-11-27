@@ -118,6 +118,7 @@
         "frontend/src/services/api-reader-context.ts"
       ],
       "exclude_from_inventory": true
+
     }
   ]
 }

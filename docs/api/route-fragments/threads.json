@@ -197,6 +197,120 @@
     {
       "bucket": "operations",
       "method": "GET",
+      "path": "/api/v2/threads/{thread_id}/readingOrders",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/threads/[^/]+/readingOrders$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5715,
+      "consumers": [
+        "frontend/src/services/api-reading-orders.ts",
+        "frontend/src/hooks/useReaderContext.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/threads:checkDuplicates",
+      "dest": "/api/native_api.rs",
+      "src": "^/api/v2/threads:checkDuplicates$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5705,
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
+      ]
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "GET",
+      "path": "/api/threads/{thread_id}",
+      "dest": "/api/native_api.rs",
+      "src": "^/api/threads/[0-9]+$",
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/",
+      "dest": "/api/native_api.rs",
+      "src": "^/api/v1/threads/$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4832
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/check-duplicates",
+      "dest": "/api/native_api.rs",
+      "src": "^/api/v1/threads/check\\-duplicates$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4832
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/threads/excluded/threads",
+      "dest": "/api/native_api.rs",
+      "src": "^/api/v1/threads/excluded/threads$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4832
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/reactivate",
+      "dest": "/api/native_api.rs",
+      "src": "^/api/v1/threads/reactivate$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4832
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/threads/stale",
+      "dest": "/api/native_api.rs",
+      "src": "^/api/v1/threads/stale$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4832
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "DELETE",
+      "path": "/api/v1/threads/{thread_id}",
+      "dest": "/api/native_api.rs",
+      "src": "^/api/v1/threads/[^/]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4832
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/threads/{thread_id}",
+      "dest": "/api/native_api.rs",
+      "src": "^/api/v1/threads/[0-9]+$",
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "PUT",
+      "path": "/api/v1/threads/{thread_id}",
+      "dest": "/api/native_api.rs",
+      "src": "^/api/v1/threads/[^/]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4832
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+
       "path": "/api/v1/threads/{thread_id}/dependency-order-check",
       "dest": "/api/native_api.rs",
       "src": "^/api/v1/threads/[^/]+/dependency\\-order\\-check$",
