@@ -172,13 +172,10 @@ use utoipa::OpenApi;
         crate::creators_v2::rating_distribution_documentation,
         crate::creators_v2::role_documentation,
         crate::creators_v2::series_documentation,
-<<<<<<< HEAD
         // #5712: canonical AIP-122 collection reads for the shared CBL catalog.
         crate::cbl_sources_v2::list_cbl_sources_documentation,
         crate::cbl_sources_v2::get_cbl_source_documentation,
         crate::cbl_sources_v2::list_cbl_occurrences_documentation,
-=======
->>>>>>> origin/main
         // AIP-136 collection custom method for the advisory duplicate lookup (#5705).
         crate::thread_lifecycle::check_potential_duplicates_v2_documentation,
     ),
