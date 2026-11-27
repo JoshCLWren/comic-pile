@@ -2558,6 +2558,78 @@
     {
       "runtime": "native-rust",
       "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
+      ],
+      "method": "PUT",
+      "path": "/api/v2/threads/{thread_id}/issue-order",
+      "sql_budget": {
+        "application_statements": 8,
+        "transaction_control_statements": 2,
+        "total_statements": 10,
+        "grows_with_data": false,
+        "basis": "auth 1 + reader lock 1 + thread lock 1 + issues load 1 + constraints defer 1 + reseat positions 1 + recreate tracking 1 + graph_preflight 1 (+2 tx control); set-based",
+        "max_statements": 10,
+        "proof_reference": "native/roll-service/src/issue_mutation.rs",
+        "measurement_status": "pending-fixture"
+      },
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
+      ],
+      "method": "POST",
+      "path": "/api/v2/threads/{thread_id}/issues",
+      "sql_budget": {
+        "application_statements": 11,
+        "transaction_control_statements": 2,
+        "total_statements": 13,
+        "grows_with_data": true,
+        "basis": "auth 1 + reader lock 1 + thread lock 1 + existing issues load 1 + constraints defer 1 + (optional position reseat 1) + one issue insert 1 + recreate tracking 1 + graph_preflight 1 + audit event 1 + total count 1 (+2 tx control); grows with issue count",
+        "max_statements": 13,
+        "proof_reference": "native/roll-service/src/issue_mutation.rs",
+        "measurement_status": "pending-fixture"
+      },
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4841,
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/threads/{thread_id}/reading-order-group-memberships",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5715,
+      "consumers": [
+        "frontend/src/services/api-reading-orders.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/threads/{thread_id}/readingOrders",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
       "owning_issue": 4839,
       "consumers": [
         "frontend/src/services/api-undo.ts"
