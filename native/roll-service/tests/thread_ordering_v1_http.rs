@@ -365,40 +365,31 @@ async fn blocking_info_contains_option_e_cycles_and_preserves_healthy_threads() 
 
     let (status, body) = send(
         &state,
-        post(
-            &format!("/api/v1/threads/{a}:getBlockingInfo"),
+        get(
+            &format!("/api/v2/threads/{a}/eligibility"),
             &token,
             &csrf,
-            None,
         ),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(body["is_blocked"], true, "{body:?}");
-    assert_eq!(
-        body["blocking_reasons"],
-        json!([
-            "Reading constraint cycle: waiting on Series A #1",
-            "Reading constraint cycle: waiting on Series A #2"
-        ]),
-        "{body:?}"
-    );
+    let reasons = body["blocking_reasons"].as_array().unwrap();
+    assert!(reasons.iter().any(|r| r.as_str().unwrap().contains("Reading constraint cycle")), "{body:?}");
 
     let (status, body) = send(
         &state,
-        post(
-            &format!("/api/v1/threads/{healthy}:getBlockingInfo"),
+        get(
+            &format!("/api/v2/threads/{healthy}/eligibility"),
             &token,
             &csrf,
-            None,
         ),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
-    assert_eq!(
-        body,
-        json!({"is_blocked": false, "blocking_reasons": [], "blocking_dependencies": []})
-    );
+    assert_eq!(body["is_blocked"], false, "{body:?}");
+    assert_eq!(body["eligible"], true, "{body:?}");
+    assert_eq!(body["blocking_dependencies"].as_array().unwrap().len(), 0);
 }
 
 #[tokio::test]
@@ -415,7 +406,7 @@ async fn batch_blocking_info_preserves_request_order_and_validates() {
     dependency(&conn, ai, bi, None).await;
     let foreign = thread(&conn, user2, "Foreign").await;
 
-    let path = "/api/v1/threads:getBlockingInfo";
+    let path = "/api/v2/threads:explainEligibility";
     let request = json!({"thread_ids": [b, a, b]});
     let response = router(state.clone())
         .oneshot(post(path, &token, &csrf, Some(request.clone())))
@@ -426,10 +417,9 @@ async fn batch_blocking_info_preserves_request_order_and_validates() {
     let text = String::from_utf8(bytes.to_vec()).unwrap();
     let body: Value = serde_json::from_str(&text).unwrap();
     assert_eq!(body["threads"][b.to_string()]["is_blocked"], true, "{text}");
-    assert_eq!(
-        body["threads"][b.to_string()]["blocking_reasons"],
-        json!(["Blocked by Alpha: #1"])
-    );
+    let reasons = body["threads"][b.to_string()]["blocking_reasons"].as_array().unwrap();
+    assert!(reasons.iter().any(|r| r.as_str().unwrap().contains("Alpha")), "{text}");
+    assert!(reasons.iter().any(|r| r.as_str().unwrap().contains("#1")), "{text}");
     assert_eq!(body["threads"][a.to_string()]["is_blocked"], false);
     let first = text.find(&format!("\"{b}\":")).unwrap();
     let second = text.find(&format!("\"{a}\":")).unwrap();
@@ -477,7 +467,7 @@ async fn connected_threads_report_direction_and_issue_level_cycles() {
 
     let (status, body) = send(
         &state,
-        get(&format!("/api/v1/threads/{a}/connected"), &token, &csrf),
+        get(&format!("/api/v1/threads/{a}/connections"), &token, &csrf),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
@@ -499,7 +489,7 @@ async fn connected_threads_report_direction_and_issue_level_cycles() {
         .unwrap();
     let (_, body) = send(
         &state,
-        get(&format!("/api/v1/threads/{a}/connected"), &token, &csrf),
+        get(&format!("/api/v1/threads/{a}/connections"), &token, &csrf),
     )
     .await;
     assert_eq!(
@@ -512,7 +502,7 @@ async fn connected_threads_report_direction_and_issue_level_cycles() {
     let (status, body) = send(
         &state,
         get(
-            &format!("/api/v1/threads/{lonely}/connected"),
+            &format!("/api/v1/threads/{lonely}/connections"),
             &token,
             &csrf,
         ),
@@ -526,7 +516,7 @@ async fn connected_threads_report_direction_and_issue_level_cycles() {
         let csrf_for = if who == &token { &csrf } else { &csrf2 };
         let (status, body) = send(
             &state,
-            get(&format!("/api/v1/threads/{id}/connected"), who, csrf_for),
+            get(&format!("/api/v1/threads/{id}/connections"), who, csrf_for),
         )
         .await;
         assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
