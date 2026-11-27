@@ -5939,6 +5939,7 @@
         ]
       }
     },
+<<<<<<< /tmp/ours_v2-runtime.openapi.json
     "/api/v2/readingSessions": {
       "get": {
         "tags": [
@@ -5974,6 +5975,14 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ListReadingSessionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid page size or token"
+          },
+=======
     "/api/v2/readingOrderGroups": {
       "get": {
         "tags": [
@@ -5995,9 +6004,7 @@
               }
             }
           },
-          "400": {
-            "description": "Invalid page size or token"
-          },
+>>>>>>> /tmp/theirs_v2-runtime.openapi.json
           "401": {
             "description": "Not authenticated"
           },
@@ -6013,6 +6020,8 @@
       },
       "post": {
         "tags": [
+<<<<<<< /tmp/ours_v2-runtime.openapi.json
+=======
           "reading-order-groups"
         ],
         "summary": "Documentation-only operation for creating a v2 reading-order group.",
@@ -6268,6 +6277,7 @@
       },
       "post": {
         "tags": [
+>>>>>>> /tmp/theirs_v2-runtime.openapi.json
           "readingSessions"
         ],
         "summary": "Documentation-only operation for the mounted v2 reading-session initializer.",
@@ -7681,6 +7691,7 @@
       }
     },
     "/api/v2/threads/{thread_id}": {
+<<<<<<< /tmp/ours_v2-runtime.openapi.json
       "get": {
         "tags": [
           "threads"
@@ -7723,6 +7734,8 @@
           }
         ]
       },
+=======
+>>>>>>> /tmp/theirs_v2-runtime.openapi.json
       "delete": {
         "tags": [
           "threads"
@@ -15168,6 +15181,30 @@
         }
       },
       "ListReadingSessionsResponse": {
+<<<<<<< /tmp/ours_v2-runtime.openapi.json
+=======
+        "type": "object",
+        "description": "One bounded page of the canonical reading-session collection.",
+        "required": [
+          "reading_sessions"
+        ],
+        "properties": {
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading_sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingSessionResource"
+            }
+          }
+        }
+      },
+      "LoginRequest": {
+>>>>>>> /tmp/theirs_v2-runtime.openapi.json
         "type": "object",
         "description": "One bounded page of the canonical reading-session collection.",
         "required": [
@@ -20543,6 +20580,7 @@
           }
         }
       },
+<<<<<<< /tmp/ours_v2-runtime.openapi.json
       "ThreadListResult": {
         "oneOf": [
           {
@@ -20554,6 +20592,8 @@
         ],
         "description": "One v2 threads list response. The active/completed/excluded filters keep the\nqueue-list projection; the stale filter keeps the legacy detail-shaped\nprojection. Both are emitted inline (no envelope variant key)."
       },
+=======
+>>>>>>> /tmp/theirs_v2-runtime.openapi.json
       "ThreadPatchPrecondition": {
         "type": "object",
         "description": "Committed values a stale client read before issuing a Thread patch.",

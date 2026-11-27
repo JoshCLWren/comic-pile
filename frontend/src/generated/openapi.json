@@ -18139,6 +18139,7 @@
         ],
         "type": "object"
       },
+<<<<<<< /tmp/ours_openapi.json
       "ThreadListResult": {
         "description": "One v2 threads list response. The active/completed/excluded filters keep the\nqueue-list projection; the stale filter keeps the legacy detail-shaped\nprojection. Both are emitted inline (no envelope variant key).",
         "oneOf": [
@@ -18150,6 +18151,8 @@
           }
         ]
       },
+=======
+>>>>>>> /tmp/theirs_openapi.json
       "ThreadPatchPrecondition": {
         "description": "Committed values a stale client read before issuing a Thread patch.",
         "properties": {
@@ -28530,6 +28533,8 @@
         ]
       }
     },
+<<<<<<< /tmp/ours_openapi.json
+=======
     "/api/v2/readingOrderGroups": {
       "get": {
         "operationId": "reading_order_groups_list",
@@ -28764,6 +28769,7 @@
         ]
       }
     },
+>>>>>>> /tmp/theirs_openapi.json
     "/api/v2/readingSessions": {
       "get": {
         "operationId": "list_reading_sessions_documentation",
@@ -28857,6 +28863,7 @@
         "summary": "Documentation-only operation for the mounted v2 reading-session initializer.",
         "tags": [
           "readingSessions"
+<<<<<<< /tmp/ours_openapi.json
         ]
       }
     },
@@ -28907,6 +28914,58 @@
         ]
       }
     },
+=======
+        ]
+      }
+    },
+    "/api/v2/readingSessions/{session_id}": {
+      "get": {
+        "operationId": "get_reading_session_documentation",
+        "parameters": [
+          {
+            "description": "Owned reading session",
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingSessionResource"
+                }
+              }
+            },
+            "description": "Event-derived reading session"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only Get operation for the canonical collection.",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
+>>>>>>> /tmp/theirs_openapi.json
     "/api/v2/readingSessions/{session_id}/details": {
       "get": {
         "operationId": "get_session_details_documentation",
@@ -30275,6 +30334,7 @@
           "threads"
         ]
       },
+<<<<<<< /tmp/ours_openapi.json
       "get": {
         "operationId": "get_thread_v2_documentation",
         "parameters": [
@@ -30317,6 +30377,8 @@
           "threads"
         ]
       },
+=======
+>>>>>>> /tmp/theirs_openapi.json
       "patch": {
         "description": "Partially update an owned Thread (AIP-134). Omitted fields are preserved. When `update_mask` is supplied only its fields are applied; a masked field missing from the body is cleared. An `expected` precondition that no longer matches the committed row returns 409 with `detail.code = thread_edit_conflict` and the current values. Foreign or deleted Threads return 404, never 403.",
         "operationId": "patch_thread_documentation",

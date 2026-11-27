@@ -8851,41 +8851,6 @@
         ]
       }
     },
-    "/api/v2/readingSessions": {
-      "get": {
-        "tags": [
-          "sessions"
-        ],
-        "summary": "Documentation-only List operation for the canonical collection.",
-        "operationId": "list_reading_sessions_documentation",
-        "parameters": [
-          {
-            "name": "page_size",
-            "in": "query",
-            "description": "Bounded page size (1-100, default 50)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "page_token",
-            "in": "query",
-            "description": "Opaque continuation token",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "One page of event-derived reading sessions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ListReadingSessionsResponse"
     "/api/v2/readingOrderGroups": {
       "get": {
         "tags": [
@@ -8906,9 +8871,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Invalid page size or token"
           },
           "401": {
             "description": "Not authenticated"
@@ -9228,6 +9190,129 @@
         "operationId": "get_reading_session_documentation",
         "parameters": [
           {
+<<<<<<< /tmp/ours_same-path-runtime.openapi.json
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/readingSessions": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Documentation-only List operation for the canonical collection.",
+        "operationId": "list_reading_sessions_documentation",
+        "parameters": [
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "Bounded page size (1-100, default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "page_token",
+            "in": "query",
+            "description": "Opaque continuation token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of event-derived reading sessions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListReadingSessionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid page size or token"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "readingSessions"
+        ],
+        "summary": "Documentation-only operation for the mounted v2 reading-session initializer.",
+        "operationId": "initialize_session_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InitializeSessionRequest"
+              }
+=======
+            "name": "session_id",
+            "in": "path",
+            "description": "Owned reading session",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+>>>>>>> /tmp/theirs_same-path-runtime.openapi.json
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Event-derived reading session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingSessionResource"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Session not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+<<<<<<< /tmp/ours_same-path-runtime.openapi.json
+    "/api/v2/readingSessions/{session_id}": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Documentation-only Get operation for the canonical collection.",
+        "operationId": "get_reading_session_documentation",
+        "parameters": [
+          {
             "name": "session_id",
             "in": "path",
             "description": "Owned reading session",
@@ -9266,6 +9351,8 @@
         ]
       }
     },
+=======
+>>>>>>> /tmp/theirs_same-path-runtime.openapi.json
     "/api/v2/readingSessions/{session_id}/details": {
       "get": {
         "tags": [
@@ -10593,6 +10680,7 @@
       }
     },
     "/api/v2/threads/{thread_id}": {
+<<<<<<< /tmp/ours_same-path-runtime.openapi.json
       "get": {
         "tags": [
           "threads"
@@ -10635,6 +10723,8 @@
           }
         ]
       },
+=======
+>>>>>>> /tmp/theirs_same-path-runtime.openapi.json
       "delete": {
         "tags": [
           "threads"
@@ -26742,6 +26832,7 @@
           }
         }
       },
+<<<<<<< /tmp/ours_same-path-runtime.openapi.json
       "ThreadListResult": {
         "oneOf": [
           {
@@ -26753,6 +26844,8 @@
         ],
         "description": "One v2 threads list response. The active/completed/excluded filters keep the\nqueue-list projection; the stale filter keeps the legacy detail-shaped\nprojection. Both are emitted inline (no envelope variant key)."
       },
+=======
+>>>>>>> /tmp/theirs_same-path-runtime.openapi.json
       "ThreadPatchPrecondition": {
         "type": "object",
         "description": "Committed values a stale client read before issuing a Thread patch.",
