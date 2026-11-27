@@ -64,7 +64,7 @@ async fn protected_native_mutations_require_a_matching_double_submit_pair() {
         "/api/v2/queue-orders",
         "/api/v2/roll/offer",
         "/api/v2/roll/unsnooze",
-        "/api/v1/auth/logout",
+        "/api/v2/auth/logout",
     ] {
         for (cookie, header_value) in [
             (None, None),
@@ -104,11 +104,11 @@ async fn bootstrap_and_recovery_endpoints_stay_csrf_exempt() {
         "/api/v2/auth/refresh",
         "/api/v2/auth/forgot-password",
         "/api/v2/auth/reset-password",
-        "/api/v1/auth/login",
-        "/api/v1/auth/forgot-password",
-        "/api/v1/auth/reset-password",
-        "/api/auth/forgot-password",
-        "/api/auth/reset-password",
+        "/api/v2/auth/login",
+        "/api/v2/auth/forgot-password",
+        "/api/v2/auth/reset-password",
+        "/api/v2/auth/forgot-password",
+        "/api/v2/auth/reset-password",
     ] {
         let (status, _) = status_and_body(None, None, path).await;
         assert_ne!(
@@ -121,7 +121,7 @@ async fn bootstrap_and_recovery_endpoints_stay_csrf_exempt() {
 
 #[tokio::test]
 async fn logout_requires_a_csrf_pair_on_the_live_alias() {
-    let (status, _) = status_and_body(None, None, "/api/v1/auth/logout").await;
+    let (status, _) = status_and_body(None, None, "/api/v2/auth/logout").await;
     assert_eq!(
         status,
         StatusCode::FORBIDDEN,

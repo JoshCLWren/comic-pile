@@ -49,7 +49,7 @@ async fn setup() -> Fixture {
     let username = format!("issue-search-{suffix}");
     let register_request = Request::builder()
         .method("POST")
-        .uri("/api/v1/auth/register")
+        .uri("/api/v2/auth/register")
         .header(
             "x-forwarded-for",
             format!(

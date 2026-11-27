@@ -54,7 +54,7 @@ async fn register_user(state: &Arc<AppState>, username: &str) -> (String, String
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/api/v1/auth/register")
+                .uri("/api/v2/auth/register")
                 .header("x-forwarded-for", format!("2001:db8::{:x}", NEXT_TEST_CLIENT.fetch_add(1, Ordering::Relaxed)))
                 .header(header::CONTENT_TYPE, "application/json")
                 .body(Body::from(json!({"username": username, "email": format!("{username}@example.com"), "password": "correct-horse-battery"}).to_string()))

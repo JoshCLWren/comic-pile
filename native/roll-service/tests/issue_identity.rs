@@ -497,8 +497,8 @@ async fn compare_cbl_sources_ranks_and_validates() {
 async fn reading_list_candidates_reports_gaps_and_ranks() {
     let (state, token, _csrf, _guard) = setup().await;
 
-    // Resolve the authenticated user's id from /api/v1/auth/me.
-    let (status, me) = get(&state, &token, "/api/v1/auth/me").await;
+    // Resolve the authenticated user's id from /api/v2/auth/me.
+    let (status, me) = get(&state, &token, "/api/v2/auth/me").await;
     assert_eq!(status, StatusCode::OK, "{me}");
     let user_id = me["id"].as_i64().unwrap() as i32;
 
@@ -777,7 +777,7 @@ async fn adoption_commit_persists_canonical_reading_list_and_plan_projection_iss
 #[tokio::test]
 async fn targeted_adoption_commit_uses_plan_lane_and_reconciles_exclusions_issue_5523() {
     let (state, token, csrf, _guard) = setup().await;
-    let (status, me) = get(&state, &token, "/api/v1/auth/me").await;
+    let (status, me) = get(&state, &token, "/api/v2/auth/me").await;
     assert_eq!(status, StatusCode::OK, "{me}");
     let user_id = me["id"].as_i64().unwrap() as i32;
     let conn = state.pool.get().await.unwrap();
@@ -1024,7 +1024,7 @@ fn assert_one_selected_adoption(body: &Value, plan_id: i64) {
 #[tokio::test]
 async fn adoption_commit_does_not_create_crossover_event_label_issue_3517() {
     let (state, token, csrf, _guard) = setup().await;
-    let (status, me) = get(&state, &token, "/api/v1/auth/me").await;
+    let (status, me) = get(&state, &token, "/api/v2/auth/me").await;
     assert_eq!(status, StatusCode::OK, "{me}");
     let user_id = me["id"].as_i64().unwrap() as i32;
     seed_crossover_sentinel(&state, user_id).await;
@@ -1057,7 +1057,7 @@ async fn adoption_commit_does_not_create_crossover_event_label_issue_3517() {
 #[tokio::test]
 async fn targeted_adoption_commit_does_not_create_crossover_event_label_issue_3517() {
     let (state, token, csrf, _guard) = setup().await;
-    let (status, me) = get(&state, &token, "/api/v1/auth/me").await;
+    let (status, me) = get(&state, &token, "/api/v2/auth/me").await;
     assert_eq!(status, StatusCode::OK, "{me}");
     let user_id = me["id"].as_i64().unwrap() as i32;
     seed_crossover_sentinel(&state, user_id).await;
@@ -1103,7 +1103,7 @@ async fn targeted_adoption_commit_does_not_create_crossover_event_label_issue_35
 async fn adoption_plan_reports_title_number_ambiguity_statuses() {
     let (state, token, csrf, _guard) = setup().await;
 
-    let (status, me) = get(&state, &token, "/api/v1/auth/me").await;
+    let (status, me) = get(&state, &token, "/api/v2/auth/me").await;
     assert_eq!(status, StatusCode::OK, "{me}");
     let user_id = me["id"].as_i64().unwrap() as i32;
 
@@ -1655,7 +1655,7 @@ async fn register_user(
 #[tokio::test]
 async fn reading_list_candidates_other_user_returns_404() {
     let (state, token, _csrf, _guard) = setup().await;
-    let (status, me) = get(&state, &token, "/api/v1/auth/me").await;
+    let (status, me) = get(&state, &token, "/api/v2/auth/me").await;
     assert_eq!(status, StatusCode::OK, "{me}");
     let user_id = me["id"].as_i64().unwrap() as i32;
     let conn = state.pool.get().await.unwrap();
@@ -1703,7 +1703,7 @@ async fn adoption_commit_other_users_thread_not_reused() {
         NEXT_CLIENT.fetch_add(1, Ordering::Relaxed),
     )
     .await;
-    let (status, me2) = get(&state, &token2, "/api/v1/auth/me").await;
+    let (status, me2) = get(&state, &token2, "/api/v2/auth/me").await;
     assert_eq!(status, StatusCode::OK, "{me2}");
     let user2 = me2["id"].as_i64().unwrap() as i32;
 
@@ -1972,7 +1972,7 @@ async fn adoption_commit_large_228_entry_commit_and_receipt_replay_is_atomic() {
 #[tokio::test]
 async fn adoption_commit_dedupes_existing_plan_name_instead_of_replacing_it() {
     let (state, token, csrf, _guard) = setup().await;
-    let (status, me) = get(&state, &token, "/api/v1/auth/me").await;
+    let (status, me) = get(&state, &token, "/api/v2/auth/me").await;
     assert_eq!(status, StatusCode::OK, "{me}");
     let user_id = me["id"].as_i64().unwrap() as i32;
 
@@ -2037,7 +2037,7 @@ async fn adoption_commit_dedupes_existing_plan_name_instead_of_replacing_it() {
 #[tokio::test]
 async fn adoption_commit_uses_next_suffix_when_dedupe_variants_exist() {
     let (state, token, csrf, _guard) = setup().await;
-    let (status, me) = get(&state, &token, "/api/v1/auth/me").await;
+    let (status, me) = get(&state, &token, "/api/v2/auth/me").await;
     assert_eq!(status, StatusCode::OK, "{me}");
     let user_id = me["id"].as_i64().unwrap() as i32;
 
@@ -2133,7 +2133,7 @@ async fn assert_plan_nodes(state: &Arc<AppState>, plan_id: i32) -> Value {
 #[tokio::test]
 async fn adoption_commit_creates_fresh_plan_instead_of_reusing_orphan() {
     let (state, token, csrf, _guard) = setup().await;
-    let (status, me) = get(&state, &token, "/api/v1/auth/me").await;
+    let (status, me) = get(&state, &token, "/api/v2/auth/me").await;
     assert_eq!(status, StatusCode::OK, "{me}");
     let user_id = me["id"].as_i64().unwrap() as i32;
     let original_nodes = seed_orphaned_adopted_plan(&state, user_id, 960).await;
@@ -2169,7 +2169,7 @@ async fn adoption_commit_creates_fresh_plan_instead_of_reusing_orphan() {
 #[tokio::test]
 async fn targeted_adoption_commit_creates_fresh_plan_instead_of_updating_orphan() {
     let (state, token, csrf, _guard) = setup().await;
-    let (status, me) = get(&state, &token, "/api/v1/auth/me").await;
+    let (status, me) = get(&state, &token, "/api/v2/auth/me").await;
     assert_eq!(status, StatusCode::OK, "{me}");
     let user_id = me["id"].as_i64().unwrap() as i32;
     let original_nodes = seed_orphaned_adopted_plan(&state, user_id, 961).await;
@@ -2410,7 +2410,7 @@ async fn adoption_commit_rechecks_exclusions_added_after_preview() {
 // ---------------------------------------------------------------------------
 
 async fn me_id(state: &Arc<AppState>, token: &str) -> i32 {
-    let (status, me) = get(state, token, "/api/v1/auth/me").await;
+    let (status, me) = get(state, token, "/api/v2/auth/me").await;
     assert_eq!(status, StatusCode::OK, "{me}");
     me["id"].as_i64().unwrap() as i32
 }
@@ -3321,7 +3321,7 @@ async fn v2_reading_order_projection_preview_is_read_only_and_commit_is_idempote
 
 async fn second_reader(state: &Arc<AppState>, label: &str) -> (String, String, i32) {
     let (token, csrf) = create_test_user(state, label).await;
-    let (status, me) = get(state, &token, "/api/v1/auth/me").await;
+    let (status, me) = get(state, &token, "/api/v2/auth/me").await;
     assert_eq!(status, StatusCode::OK, "{me}");
     (token, csrf, me["id"].as_i64().unwrap() as i32)
 }
@@ -3675,7 +3675,7 @@ async fn adoption_commit_revised_selection_keeps_manual_history_issue_4022() {
     .await;
     assert_eq!(status, StatusCode::CREATED, "{first}");
     let list_id = first["custom_cbl_list_id"].as_i64().unwrap() as i32;
-    let (_, me) = get(&state, &token, "/api/v1/auth/me").await;
+    let (_, me) = get(&state, &token, "/api/v2/auth/me").await;
     let real_user = me["id"].as_i64().unwrap() as i32;
     let conn = state.pool.get().await.unwrap();
 
@@ -3779,7 +3779,7 @@ async fn adoption_commit_revised_selection_keeps_manual_history_issue_4022() {
 #[tokio::test]
 async fn adoption_commit_does_not_truncate_large_source_issue_4022() {
     let (state, token, csrf, _guard) = setup().await;
-    let (_, me) = get(&state, &token, "/api/v1/auth/me").await;
+    let (_, me) = get(&state, &token, "/api/v2/auth/me").await;
     let real_user = me["id"].as_i64().unwrap() as i32;
     let conn = state.pool.get().await.unwrap();
     conn.batch_execute(&format!(

@@ -56,7 +56,7 @@ async fn register_user(state: &Arc<AppState>, username: &str) -> (String, String
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/api/v1/auth/register")
+                .uri("/api/v2/auth/register")
                 .header(
                     "x-forwarded-for",
                     format!(
