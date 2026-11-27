@@ -3661,3 +3661,180 @@ async fn adoption_commit_restores_committed_choices_on_reopen_issue_4022() {
         "{reopened}"
     );
 }
+
+#[tokio::test]
+async fn adoption_commit_revised_selection_keeps_manual_history_issue_4022() {
+    let (state, token, csrf, _guard) = setup().await;
+    let (status, first) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/adoption-commits",
+        adoption_body(&[0], &[1], "rev-1", "h-mm"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{first}");
+    let list_id = first["custom_cbl_list_id"].as_i64().unwrap() as i32;
+    let (_, me) = get(&state, &token, "/api/v1/auth/me").await;
+    let real_user = me["id"].as_i64().unwrap() as i32;
+    let conn = state.pool.get().await.unwrap();
+
+    // A manually added issue and the adopted issue's read history must survive
+    // a revised source selection on the same source-linked list.
+    conn.execute(
+        "INSERT INTO threads
+           (id, title, format, issues_remaining, queue_position, status, created_at, user_id)
+         VALUES (40221, 'Manual extra', 'issues', 1, 0, 'active', NOW(), $1)",
+        &[&real_user],
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        "INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+         VALUES (40221, 40221, '99', 'unread', NOW(), 0)",
+        &[],
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        "INSERT INTO custom_cbl_entries
+           (list_id, issue_id, position, created_at, is_checkpoint,
+            checkpoint_target_issue_ids, gate, skipped)
+         VALUES ($1, 40221, 99, NOW(), false, '[]'::json, 'none', false)",
+        &[&list_id],
+    )
+    .await
+    .unwrap();
+    conn.execute(
+        "UPDATE issues SET status = 'read', read_at = NOW()
+         WHERE id IN (
+           SELECT issue_id FROM custom_cbl_entries WHERE list_id = $1 AND issue_id <> 40221
+         )",
+        &[&list_id],
+    )
+    .await
+    .unwrap();
+
+    // Both source positions resolve to one physical issue: the revised commit
+    // must update the same list in place and not duplicate it.
+    let mut revised = adoption_body(&[0, 1], &[], "rev-1", "h-mm");
+    revised["list_version"] = json!(1);
+    let (status2, second) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/1/adoption-commits",
+        revised,
+    )
+    .await;
+    assert_eq!(status2, StatusCode::OK, "{second}");
+    assert_eq!(second["custom_cbl_list_id"], list_id, "{second}");
+    assert_eq!(second["list_version"], 2, "{second}");
+
+    let entries: Vec<(i32, i32)> = conn
+        .query(
+            "SELECT issue_id, position FROM custom_cbl_entries WHERE list_id = $1 ORDER BY position",
+            &[&list_id],
+        )
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| (row.get(0), row.get(1)))
+        .collect();
+    assert_eq!(
+        entries.len(),
+        2,
+        "one adopted issue plus the manual extra: {entries:?}"
+    );
+    assert!(
+        entries.iter().any(|(issue_id, _)| *issue_id == 40221),
+        "{entries:?}"
+    );
+    let manual_status: String = conn
+        .query_one("SELECT status FROM issues WHERE id = 40221", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        manual_status, "unread",
+        "manual issue must not be marked read"
+    );
+    let adopted_read: i64 = conn
+        .query_one(
+            "SELECT COUNT(*)::bigint FROM issues
+             WHERE id IN (
+               SELECT issue_id FROM custom_cbl_entries WHERE list_id = $1 AND issue_id <> 40221
+             ) AND status = 'read'",
+            &[&list_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(adopted_read, 1, "adopted issue read history must survive");
+}
+
+#[tokio::test]
+async fn adoption_commit_does_not_truncate_large_source_issue_4022() {
+    let (state, token, csrf, _guard) = setup().await;
+    let (_, me) = get(&state, &token, "/api/v1/auth/me").await;
+    let real_user = me["id"].as_i64().unwrap() as i32;
+    let conn = state.pool.get().await.unwrap();
+    conn.batch_execute(&format!(
+        r#"
+        INSERT INTO cbl_source_lists
+          (id, source_id, source_path, name, declared_issue_count, content_hash,
+           revision_sha, active, created_at, updated_at)
+        VALUES (5, 1, 'DC/Big/Big.cbl', 'Big Source', 1001, 'h-big', 'rev-1', TRUE, NOW(), NOW());
+        INSERT INTO external_identities
+          (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+        SELECT 500000 + g, 'comicvine', 'issue', 'CV-BIG-' || g, '{{}}'::json, NOW(), NOW()
+        FROM generate_series(0, 1000) g;
+        INSERT INTO threads
+          (id, title, format, issues_remaining, queue_position, status, created_at, user_id)
+        SELECT 500000 + g, 'Big ' || g, 'issues', 1, g::int, 'active', NOW(), {real_user}
+        FROM generate_series(0, 1000) g;
+        INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+        SELECT 500000 + g, 500000 + g, (g + 1)::text, 'unread', NOW(), 0
+        FROM generate_series(0, 1000) g;
+        INSERT INTO issue_external_identity_mappings
+          (issue_id, external_identity_id, status, evidence_source, evidence_json, created_at, updated_at)
+        SELECT 500000 + g, 500000 + g, 'confirmed', 'cbl_adoption_commit', '{{}}'::json, NOW(), NOW()
+        FROM generate_series(0, 1000) g;
+        INSERT INTO cbl_source_entries
+          (id, list_id, "position", series_name, issue_number, volume_year,
+           publication_year, external_issue_identity_id, external_series_identity_id, created_at)
+        SELECT 600000 + g, 5, g::int, 'Big Series', (g + 1)::text, 2000, 2000,
+               500000 + g, NULL, NOW()
+        FROM generate_series(0, 1000) g;
+        "#
+    ))
+    .await
+    .unwrap();
+    drop(conn);
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/reading-lists/5/adoption-commits",
+        adoption_body(&[], &[], "rev-1", "h-big"),
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::CREATED,
+        "{}",
+        String::from_utf8_lossy(&serde_json::to_vec(&body).unwrap_or_default())
+    );
+    let list_id = body["custom_cbl_list_id"].as_i64().unwrap() as i32;
+    let conn = state.pool.get().await.unwrap();
+    let count: i64 = conn
+        .query_one(
+            "SELECT COUNT(*)::bigint FROM custom_cbl_entries WHERE list_id = $1",
+            &[&list_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(count, 1001, "all 1001 adopted issues must be persisted");
+}
