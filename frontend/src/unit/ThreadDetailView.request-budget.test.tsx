@@ -102,7 +102,7 @@ function makeHandler(state: BoundaryState): Responder {
     }
     if (call.url === '/v1/threads/42') return THREADS[42]
     if (call.url === '/v1/threads/43') return THREADS[43]
-    if (call.url === '/v1/threads/42/connected' || call.url === '/v1/threads/43/connected') {
+    if (call.url === '/v2/threads/42/connections' || call.url === '/v2/threads/43/connections') {
       const id = call.url.includes('/43/') ? 43 : 42
       return { thread_id: id, connected_threads: [] }
     }
@@ -194,7 +194,7 @@ describe('Thread detail request budget', () => {
     expect(requestCounts(calls)).toEqual({
       'POST /v2/reading-boundaries': 1,
       'GET /v1/threads/42': 1,
-      'GET /v1/threads/42/connected': 1,
+      'GET /v2/threads/42/connections': 1,
       'GET /v2/reading-graph': 1,
       'GET /v2/tags/effective/threads/42': 1,
       'POST /v1/threads/groups:batch': 1,
@@ -222,7 +222,7 @@ describe('Thread detail request budget', () => {
     expect(requestCounts(calls)).toEqual({
       'POST /v2/reading-boundaries': 1,
       'GET /v1/threads/42': 1,
-      'GET /v1/threads/42/connected': 1,
+      'GET /v2/threads/42/connections': 1,
       'GET /v2/reading-graph': 1,
       'GET /v2/tags/effective/threads/42': 1,
       'POST /v1/threads/groups:batch': 1,
@@ -301,7 +301,7 @@ describe('Thread detail request budget', () => {
 
     threadResponse.resolve(THREADS[42])
     await waitFor(() =>
-      expect(calls.some((call) => call.url === '/v1/threads/42/connected')).toBe(true),
+      expect(calls.some((call) => call.url === '/v2/threads/42/connections')).toBe(true),
     )
     expect(groupsCalls(calls)).toHaveLength(1)
   })
