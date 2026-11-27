@@ -687,7 +687,7 @@ describe('RollPage parent handlers', () => {
     expect(screen.getByRole('button', { name: 'Roll the dice' })).toBeInTheDocument()
   })
 
-  it('manual Read Now never calls legacy setPending or enters automatic rating mode', async () => {
+  it('manual Read Now never enters automatic rating mode', async () => {
     render(<RollPage />)
     fireEvent.click(screen.getByRole('button', { name: 'thread' }))
     fireEvent.click(screen.getByRole('button', { name: /Read Now/ }))
@@ -771,8 +771,8 @@ describe('RollPage parent handlers', () => {
 
   it('completes simple migration of a pool thread without a page-level refetch', async () => {
     const user = userEvent.setup()
-    // The real pending Roll response, not the retired setPending endpoint,
-    // marks a series without a known total and triggers simple migration.
+    // The real pending Roll response marks a series without a known total
+    // and triggers simple migration.
     bootstrapData.active_thread = {
       id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2,
       queue_position: 1, total_issues: null, issue_id: 11,
@@ -946,7 +946,7 @@ describe('RollPage parent handlers', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
   })
 
-  it('uses the active pending Roll metadata without calling legacy setPending', async () => {
+  it('uses the active pending Roll metadata', async () => {
     bootstrapData.active_thread = { id: 1, title: 'Session fallback', format: 'Graphic Novel', issues_remaining: 2, queue_position: 1, total_issues: 5, issue_id: 11, issue_number: '2' }
     bootstrapData.roll_pool = [{ id: 1, title: 'Session fallback', format: 'Graphic Novel' }]
     render(<RollPage />)
@@ -1095,10 +1095,6 @@ describe('RollPage parent handlers', () => {
   it('handles sparse roll metadata and pending-thread fallback selection', async () => {
     sessionData.current_die = 0
     sessionData.last_rolled_result = null
-    spies.setPending.mockResolvedValueOnce({
-      thread_id: 1, title: 'Sparse', format: 'Comic', issues_remaining: 1,
-      queue_position: 1, total_issues: 2, result: undefined, last_rolled_result: 4,
-    })
     render(<RollPage />)
     expect(screen.getAllByRole('button', { name: 'd6' })[0]).toBeInTheDocument()
     enterPendingRollRating()

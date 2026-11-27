@@ -210,19 +210,6 @@ beforeEach(() => {
   relatedApi.blockingInfo.mockResolvedValue({ blocking_reasons: [] })
   relatedApi.batchBlockingInfo.mockResolvedValue({ threads: {} })
   spies.refetch.mockResolvedValue({})
-  spies.setPending.mockResolvedValue({
-    thread_id: 1,
-    title: 'Saga',
-    format: 'Comic',
-    issues_remaining: 2,
-    queue_position: 1,
-    total_issues: 10,
-    issue_id: 10,
-    issue_number: '4',
-    next_issue_id: 11,
-    next_issue_number: '5',
-    result: 4,
-  })
   spies.rate.mockImplementation(async () => {
     // Mirrors the real useRate reconciliation: after a successful rate the
     // pending roll is consumed, so the bootstrap no longer auto-opens a rating.

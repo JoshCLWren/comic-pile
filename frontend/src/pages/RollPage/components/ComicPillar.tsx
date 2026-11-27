@@ -69,9 +69,9 @@ export function ComicPillar({
   // roll that selected this thread, and queue position is 1-based, with 0 meaning
   // the payload carried no position rather than "first".
   //
-  // Manual picks write a tombstone roll with result 0 (see
-  // `set_pending_thread`), so reporting "Rolled 0 of d6" invented a die result
-  // that never happened (#3450). Result 0 is reserved for "picked manually".
+  // Manual picks write a tombstone roll with result 0, so reporting
+  // "Rolled 0 of d6" invented a die result that never happened (#3450).
+  // Result 0 is reserved for "picked manually".
   const rolledFace = activeRatingThread?.last_rolled_result ?? null
   const queuePosition = activeRatingThread?.queue_position ?? 0
   const rollResultLine =

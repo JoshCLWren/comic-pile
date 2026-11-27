@@ -198,24 +198,6 @@ beforeEach(() => {
     clearRestoreAction: vi.fn(),
     restoreLastView: vi.fn(),
   })
-  // SAFETY: full response shape satisfies RollResponse; never cast bypasses strict mock typing
-  mockedThreadsApi.setPending.mockResolvedValue({
-    thread_id: 1,
-    title: 'Saga',
-    format: 'Comic',
-    issues_remaining: 5,
-    queue_position: 1,
-    die_size: 6,
-    result: 1,
-    offset: 0,
-    snoozed_count: 0,
-    issue_id: null,
-    issue_number: null,
-    next_issue_id: null,
-    next_issue_number: null,
-    total_issues: null,
-    reading_progress: null,
-  } as never)
 })
 
   it('renders queue items and opens create modal', async () => {

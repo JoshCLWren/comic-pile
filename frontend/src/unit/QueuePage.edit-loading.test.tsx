@@ -239,7 +239,6 @@ beforeEach(() => {
     refetch: vi.fn(),
   })
   mockedListForThread.mockResolvedValue({ issues: [] })
-  // SAFETY: full response shape satisfies RollResponse; cast bypasses strict mock typing
 })
 
 describe('Edit Series loading gate (#3443)', () => {
