@@ -241,23 +241,6 @@ describe('compact shared issue entry across dense lists', () => {
   })
 
   it('opens roll-parity details only after the exact row editor is used (#5751)', async () => {
-    const getIntelligence = vi.spyOn(comicVineApi, 'getIssueIntelligence')
-    const effectiveTags = vi.spyOn(tagsApi, 'effectiveForIssue')
-    const metadata: ComicVineIssueIntelligence = {
-      comicvine_issue_id: '4000-9', comicvine_url: null, series_name: 'Hellboy', series_id: 12,
-      issue_number: '9', name: 'The Corpse', description: null, image_url: null,
-      cover_date: null, store_date: null,
-      creators: [{ creator_id: null, name: 'Mike Mignola', roles: ['writer'] }],
-      story_arcs: [], metadata_status: 'deep_fetched',
-    }
-    const tags: EffectiveTagsResponse = {
-      target_type: 'Issue', target_id: 37, direct_tags: [], effective_tags: [],
-    }
-    getIntelligence.mockReset()
-    effectiveTags.mockReset()
-    getIntelligence.mockResolvedValue(metadata)
-    effectiveTags.mockResolvedValue(tags)
-
     setup(<CompactIssueCardTrigger issueId={37} card={card} threadTitle="Hellboy" issueNumber="9" />)
     expect(getIntelligence).not.toHaveBeenCalled()
     expect(effectiveTags).not.toHaveBeenCalled()

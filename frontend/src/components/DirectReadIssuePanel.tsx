@@ -89,10 +89,13 @@ export function DirectReadIssuePanel({
   const cards = useIssueCards(issue ? [issue.id] : [], { enabled: issue != null })
   const card = cards.data?.find((item) => item.issue_id === issue?.id) ?? null
   // ComicIdentity owns the provider-art request. Share its query here only to
-  // decide whether the action card must retain a local/No Cover placeholder
-  // when provider details are absent or fail; React Query deduplicates the read.
+  // decide whether the action card must retain a local cover. Metadata without
+  // an image renders only a provider placeholder, not art for this issue, so
+  // the owned cover stays visible. React Query deduplicates the read.
   const intelligence = useComicVineIssueIntelligence(issue?.id)
-  const showLocalCover = intelligence.isError || (!intelligence.isLoading && intelligence.metadata == null)
+  const showLocalCover = issue == null
+    || intelligence.isError
+    || (!intelligence.isLoading && !intelligence.metadata?.image_url)
   const wrongThread = issue != null && issue.thread_id !== threadId
   // A previously read issue's rating is only available in the authoritative
   // card projection. Opening Edit rating before that fetch resolves would

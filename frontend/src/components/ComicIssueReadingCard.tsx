@@ -31,10 +31,14 @@ export function ComicIssueReadingCard({
   const [requestedIssueId, setRequestedIssueId] = useState<number | null>(null)
   const detailsOpen = isOwned && (showReadingDetails || requestedIssueId === issueId)
   const intelligence = useComicVineIssueIntelligence(detailsOpen ? issueId : null)
-  // Match DirectReadIssuePanel: keep the local cover only when provider art is
-  // absent or failed. React Query deduplicates this read with ComicIdentity.
-  const providerCoverVisible =
-    detailsOpen && !intelligence.isError && (intelligence.isLoading || intelligence.metadata != null)
+  // Match DirectReadIssuePanel: keep the local cover unless the provider pillar
+  // is actually showing art for this issue. Metadata without an image only
+  // renders a provider placeholder, so the owned cover must stay. React Query
+  // deduplicates this read with ComicIdentity.
+  const providerCoverVisible = detailsOpen
+    && !!issueId
+    && !intelligence.isError
+    && (intelligence.isLoading || !!intelligence.metadata?.image_url)
   const resolvedTitle = card?.thread_title || threadTitle
   const resolvedNumber = card?.issue_number || issueNumber
 

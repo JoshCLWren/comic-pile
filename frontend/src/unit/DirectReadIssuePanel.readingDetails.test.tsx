@@ -128,8 +128,23 @@ describe('manual read surface roll parity', () => {
 
     const actionCard = screen.getByTestId('direct-read-action-card')
     expect(actionCard).toHaveAttribute('data-issue-id', '91')
-    // The provider cover is already rendered above, so the card drops its own.
-    expect(actionCard).toHaveAttribute('data-show-cover', 'false')
+    // Provider metadata has no image here, so the card keeps its own cover
+    // rather than leaving two No Cover placeholders in the reading surface.
+    expect(actionCard).toHaveAttribute('data-show-cover', 'true')
+  })
+
+  it('drops the action-card cover only when the provider pillar actually has art', async () => {
+    intelligence.mockResolvedValue({
+      ...metadata,
+      image_url: 'https://comicvine.gamespot.com/saga-3.jpg',
+    })
+    setup()
+
+    expect(await screen.findByText('Fiona Staples')).toBeVisible()
+    expect(await screen.findByTestId('direct-read-action-card')).toHaveAttribute(
+      'data-show-cover',
+      'false',
+    )
   })
 
   it('shows a retryable provider error without hiding the issue tags', async () => {
