@@ -70,12 +70,13 @@ const SESSION_SQL: &str = "SELECT id, to_char(started_at AT TIME ZONE 'UTC', 'YY
 /// Events that belong to a session. Dice commands (snooze via reroll, rate via
 /// roll rating) are persisted by `dice_mutation` with `user_id` but no
 /// `session_id`, so the session timeline also claims that reader's session-less
-/// `rate`/`snooze`/`unsnooze` events that fall inside the session's own window.
-/// An unended session is bounded by the next session for the same reader so a
-/// later session's session-less actions are not absorbed by an abandoned row.
+/// `rate`/`snooze`/`unsnooze`/`manual_die`/`reset_dice` events that fall inside
+/// the session's own window. An unended session is bounded by the next session
+/// for the same reader so a later session's session-less actions are not
+/// absorbed by an abandoned row.
 macro_rules! session_events_filter {
     () => {
-        "(session_id = $1 OR (session_id IS NULL AND user_id = $2 AND type IN ('rate','snooze','unsnooze') AND EXISTS (SELECT 1 FROM sessions s WHERE s.id = $1 AND events.timestamp >= s.started_at AND ((s.ended_at IS NOT NULL AND events.timestamp <= s.ended_at) OR (s.ended_at IS NULL AND events.timestamp < COALESCE((SELECT MIN(s2.started_at) FROM sessions s2 WHERE s2.user_id = s.user_id AND s2.id <> s.id AND s2.started_at > s.started_at), 'infinity'::timestamptz))))))"
+        "(session_id = $1 OR (session_id IS NULL AND user_id = $2 AND type IN ('rate','snooze','unsnooze','manual_die','reset_dice') AND EXISTS (SELECT 1 FROM sessions s WHERE s.id = $1 AND events.timestamp >= s.started_at AND ((s.ended_at IS NOT NULL AND events.timestamp <= s.ended_at) OR (s.ended_at IS NULL AND events.timestamp < COALESCE((SELECT MIN(s2.started_at) FROM sessions s2 WHERE s2.user_id = s.user_id AND s2.id <> s.id AND s2.started_at > s.started_at), 'infinity'::timestamptz))))))"
     };
 }
 const EVENTS_SQL: &str = concat!("SELECT id, type, to_char(timestamp AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), thread_id, selected_thread_id, issue_number, context::text, die, result, selection_method, rating, issues_read, queue_move, die_after, (session_id IS NULL) FROM events WHERE ", session_events_filter!(), " ORDER BY timestamp DESC, id DESC");
@@ -299,7 +300,10 @@ pub async fn get_session_details(
         .filter_map(|row| {
             let type_: String = row.try_get(1).ok()?;
             let die_after: Option<i32> = row.try_get(13).ok().flatten();
-            if matches!(type_.as_str(), "rate" | "snooze" | "undo") {
+            if matches!(
+                type_.as_str(),
+                "rate" | "snooze" | "undo" | "manual_die" | "reset_dice"
+            ) {
                 die_after
             } else {
                 None

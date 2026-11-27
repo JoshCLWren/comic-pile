@@ -325,3 +325,119 @@ async fn canonical_session_resources_ignore_roll_rating_companion_events() {
     assert_eq!(resource["ladder_path"].as_str(), Some("6 → 8"));
     assert_eq!(resource["current_die"].as_i64(), Some(8));
 }
+
+#[tokio::test]
+async fn canonical_session_resources_include_sessionless_manual_die_selection() {
+    let (state, _guard) = database().await;
+    let (owner_token, owner_csrf, owner_id) = register(&state, "sessions_list_manual_owner").await;
+    let (_other_token, _other_csrf, other_id) = register(&state, "sessions_list_manual_other").await;
+    let owner = (owner_token.as_str(), owner_csrf.as_str());
+    let session = insert_session(&state, owner_id, "2026-11-26T01:00:00Z", 6).await;
+
+    let conn = state.pool.get().await.unwrap();
+    let manual_at: DateTime<Utc> = "2026-11-26T01:05:00Z".parse().unwrap();
+    conn.execute(
+        "INSERT INTO events (user_id, session_id, type, timestamp, die, die_after, context)
+         VALUES ($1, NULL, 'manual_die', $2, 10, 12,
+                 '{\"dice_command\":{\"kind\":\"manual_select\",\"die\":12}}'::json)",
+        &[&owner_id, &manual_at],
+    )
+    .await
+    .unwrap();
+    // A foreign reader's manual selection in the same window must not leak in.
+    let foreign_at: DateTime<Utc> = "2026-11-26T01:06:00Z".parse().unwrap();
+    conn.execute(
+        "INSERT INTO events (user_id, session_id, type, timestamp, die, die_after)
+         VALUES ($1, NULL, 'manual_die', $2, 10, 20)",
+        &[&other_id, &foreign_at],
+    )
+    .await
+    .unwrap();
+    drop(conn);
+
+    let (status, get) = send(&state, owner, &format!("/api/v2/readingSessions/{session}")).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(get["event_count"].as_i64(), Some(1));
+    assert_eq!(get["current_die"].as_i64(), Some(12));
+    assert_eq!(get["ladder_path"].as_str(), Some("6 → 12"));
+
+    let (status, list) = send(&state, owner, "/api/v2/readingSessions?page_size=10").await;
+    assert_eq!(status, StatusCode::OK);
+    let items = list["reading_sessions"].as_array().unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["event_count"].as_i64(), Some(1));
+    assert_eq!(items[0]["current_die"].as_i64(), Some(12));
+    assert_eq!(items[0]["ladder_path"].as_str(), Some("6 → 12"));
+
+    let (status, details) = send(
+        &state,
+        owner,
+        &format!("/api/v2/readingSessions/{session}/details"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(details["current_die"].as_i64(), Some(12));
+    assert_eq!(details["ladder_path"].as_str(), Some("6 → 12"));
+    let events = details["events"].as_array().unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["type"].as_str(), Some("manual_die"));
+}
+
+#[tokio::test]
+async fn canonical_session_resources_record_sessionless_reset_after_rate() {
+    let (state, _guard) = database().await;
+    let (owner_token, owner_csrf, owner_id) = register(&state, "sessions_list_reset_owner").await;
+    let owner = (owner_token.as_str(), owner_csrf.as_str());
+    let session = insert_session(&state, owner_id, "2026-11-26T01:00:00Z", 6).await;
+
+    let conn = state.pool.get().await.unwrap();
+    let rate_at: DateTime<Utc> = "2026-11-26T01:05:00Z".parse().unwrap();
+    conn.execute(
+        "INSERT INTO events (user_id, session_id, type, timestamp, die, die_after, context)
+         VALUES ($1, NULL, 'rate', $2, 20, 20, '{}'::json)",
+        &[&owner_id, &rate_at],
+    )
+    .await
+    .unwrap();
+    let reset_at: DateTime<Utc> = "2026-11-26T01:10:00Z".parse().unwrap();
+    conn.execute(
+        "INSERT INTO events (user_id, session_id, type, timestamp, die, die_after, context)
+         VALUES ($1, NULL, 'reset_dice', $2, 20, 6,
+                 '{\"dice_command\":{\"kind\":\"reset\"}}'::json)",
+        &[&owner_id, &reset_at],
+    )
+    .await
+    .unwrap();
+    drop(conn);
+
+    let (status, get) = send(&state, owner, &format!("/api/v2/readingSessions/{session}")).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(get["event_count"].as_i64(), Some(2));
+    assert_eq!(get["current_die"].as_i64(), Some(6));
+    assert_eq!(get["ladder_path"].as_str(), Some("6 → 20 → 6"));
+
+    let (status, list) = send(&state, owner, "/api/v2/readingSessions?page_size=10").await;
+    assert_eq!(status, StatusCode::OK);
+    let items = list["reading_sessions"].as_array().unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["event_count"].as_i64(), Some(2));
+    assert_eq!(items[0]["current_die"].as_i64(), Some(6));
+    assert_eq!(items[0]["ladder_path"].as_str(), Some("6 → 20 → 6"));
+
+    let (status, details) = send(
+        &state,
+        owner,
+        &format!("/api/v2/readingSessions/{session}/details"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(details["current_die"].as_i64(), Some(6));
+    assert_eq!(details["ladder_path"].as_str(), Some("6 → 20 → 6"));
+    let types: Vec<&str> = details["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|event| event["type"].as_str().unwrap())
+        .collect();
+    assert_eq!(types, ["reset_dice", "rate"]);
+}
