@@ -113,7 +113,11 @@ async fn seed_catalog(state: &Arc<AppState>) {
           (1, 1, '{MIRROR_SOURCE_PATH}', 'Mister Miracle 1989', 5, 'h-mm', 'rev-1', TRUE, NOW(), NOW()),
           (2, 1, 'DC/JLI/JLI.cbl', 'JLI', 10, 'h-jli', 'rev-1', TRUE, NOW(), NOW()),
           (3, 1, 'Special/Percent%List.cbl', 'Percent%List', 1, 'h-pct', 'rev-1', TRUE, NOW(), NOW()),
-          (4, 1, 'DC/Archived/Dead.cbl', 'Archived', 1, 'h-dead', 'rev-1', FALSE, NOW(), NOW());
+          (4, 1, 'DC/Archived/Dead.cbl', 'Archived', 1, 'h-dead', 'rev-1', FALSE, NOW(), NOW()),
+          -- Root-level lists are the direct children the folder browse page
+          -- selects; two of them make the one-item page continue to page two.
+          (5, 1, 'Root One.cbl', 'Root One', 1, 'h-root-1', 'rev-1', TRUE, NOW(), NOW()),
+          (6, 1, 'Root Two.cbl', 'Root Two', 1, 'h-root-2', 'rev-1', TRUE, NOW(), NOW());
 
         INSERT INTO external_identities
           (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
@@ -149,12 +153,16 @@ async fn list_browses_root_and_continues_with_an_opaque_token() {
     assert_eq!(first["folder"], "");
     assert_eq!(first["page"], 1);
     assert_eq!(first["page_size"], 1);
-    assert_eq!(first["catalog_total"], 3, "inactive list must be excluded");
+    assert_eq!(first["catalog_total"], 5, "inactive list must be excluded");
+    assert_eq!(first["total"], 2, "root browse selects direct children only");
     assert_eq!(first["items"].as_array().unwrap().len(), 1);
     assert!(!first["folders"].as_array().unwrap().is_empty());
     assert_eq!(first["breadcrumbs"][0]["name"], "All CBLs");
     assert_eq!(first["has_next"], true);
-    let cursor = first["next_page_token"].as_str().unwrap().to_owned();
+    let cursor = first["next_page_token"]
+        .as_str()
+        .expect("a two-item root page must issue a continuation token")
+        .to_owned();
     // Tokens are opaque, not a readable page number or SQL fragment.
     assert!(cursor.len() > 4);
     assert_ne!(cursor, "2");
