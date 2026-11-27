@@ -62,8 +62,15 @@ export function createThreadsApi(client: HttpClient) {
     update: (id: number, data: ThreadUpdatePayload) =>
       client.put<Thread, ThreadUpdatePayload>(`/v1/threads/${id}`, data),
     delete: (id: number) => client.delete<void>(`/v1/threads/${id}`),
-    exclude: (id: number) => client.post<Thread>(`/v1/threads/${id}/exclude`),
-    restore: (id: number) => client.post<Thread>(`/v1/threads/${id}/restore`),
+    // Direct row-level exclusion/restoration use the same durable, reader-owned
+    // v2 queue-exclusion resource as container bulk actions, without a source
+    // group (#5704).
+    exclude: (id: number) =>
+      client.post<BulkQueueExclusionResponse>('/v2/queue-exclusions', { thread_ids: [id] }),
+    restore: (id: number) =>
+      client.post<BulkQueueRestoreResponse>('/v2/queue-exclusions/restore', {
+        thread_ids: [id],
+      }),
     bulkExclude: (data: BulkQueueExclusionRequest) =>
       client.post<BulkQueueExclusionResponse>('/v2/queue-exclusions', data),
     bulkRestore: (threadIds: number[]) =>
