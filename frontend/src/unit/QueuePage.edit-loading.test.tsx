@@ -73,7 +73,6 @@ vi.mock('../hooks/useReadingBoundaries', () => ({
 
 vi.mock('../services/api-threads', () => ({
   threadsApi: {
-    setPending: vi.fn(),
   },
 }))
 
@@ -241,7 +240,6 @@ beforeEach(() => {
   })
   mockedListForThread.mockResolvedValue({ issues: [] })
   // SAFETY: full response shape satisfies RollResponse; cast bypasses strict mock typing
-  mockedThreadsApi.setPending.mockResolvedValue({} as never)
 })
 
 describe('Edit Series loading gate (#3443)', () => {

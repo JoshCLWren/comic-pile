@@ -26,7 +26,7 @@ vi.mock('../services/api-continuity-plans', async () => {
 
 vi.mock('../services/api-threads', async () => {
   const actual = await vi.importActual<typeof import('../services/api-threads')>('../services/api-threads')
-  return { ...actual, threadsApi: { ...actual.threadsApi, setPending: vi.fn() } }
+  return { ...actual, threadsApi: { ...actual.threadsApi } }
 })
 
 vi.mock('../services/api-queue', async () => {
@@ -52,7 +52,6 @@ vi.mock('../components/Tags/TagSection', () => ({
 
 const mockGetReader = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.getReader)
 const mockPlanTags = vi.mocked(tagsApi.effectiveForPlan)
-const mockSetPending = vi.mocked(threadsApi.setPending)
 const mockMoveToFront = vi.mocked(queueApi.moveToFront)
 
 function createWrapper() {
@@ -219,7 +218,6 @@ beforeEach(() => {
   vi.clearAllMocks()
   fetchCards.mockImplementation(async (ids) => ids.map(cardFor))
   mockGetReader.mockResolvedValue(readerView)
-  mockSetPending.mockResolvedValue(cast<Awaited<ReturnType<typeof threadsApi.setPending>>>({ thread_id: 4, issue_id: 95 }))
   mockMoveToFront.mockResolvedValue(cast<Awaited<ReturnType<typeof queueApi.moveToFront>>>(undefined))
   mockPlanTags.mockResolvedValue({
     target_type: 'ContinuityPlan',

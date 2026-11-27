@@ -79,7 +79,6 @@ vi.mock('../hooks/useReadingBoundaries', () => ({
 
 vi.mock('../services/api-threads', () => ({
   threadsApi: {
-    setPending: vi.fn(),
   },
 }))
 
@@ -582,7 +581,6 @@ describe('Keyboard Accessibility', () => {
   const user = userEvent.setup()
   const create = vi.fn().mockResolvedValue({ id: 44 })
   mockedUseCreateThread.mockReturnValue({ mutate: create, isPending: false })
-  mockedThreadsApi.setPending.mockResolvedValue({})
   mockedUseQueueThreads.mockReturnValue({ data: [], isLoading: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
@@ -804,7 +802,6 @@ it('shows one shared boundary failure notice and retries the batch', async () =>
   const readButton = screen.getByLabelText('Read & Rate')
   expect(readButton).toBeEnabled()
   expect(readButton).toHaveAttribute('aria-label', 'Read & Rate')
-  expect(mockedThreadsApi.setPending).not.toHaveBeenCalled()
   expect(showToast).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'), 'error')
   await user.click(screen.getByRole('button', { name: /series actions/i }))
   await user.click(screen.getByRole('menuitem', { name: /delete/i }))

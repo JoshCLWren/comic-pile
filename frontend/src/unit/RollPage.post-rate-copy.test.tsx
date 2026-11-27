@@ -45,7 +45,6 @@ const spies = vi.hoisted(() => ({
   moveBack: vi.fn().mockResolvedValue({}),
   shuffle: vi.fn().mockResolvedValue({}),
   rate: vi.fn(),
-  setPending: vi.fn(),
 }))
 
 interface HoistedHookValue {
@@ -175,7 +174,7 @@ vi.mock('../hooks/useReaderContext', async (importOriginal) => {
 })
 vi.mock('../services/api', () => ({
   default: {},
-  threadsApi: { setPending: spies.setPending, list: vi.fn().mockResolvedValue({ threads: [], next_page_token: null }) },
+  threadsApi: { list: vi.fn().mockResolvedValue({ threads: [], next_page_token: null }) },
   dependenciesApi: {
     getConnectedThreads: relatedApi.connectedThreads,
     getBlockingInfo: relatedApi.blockingInfo,
