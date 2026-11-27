@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "issue": 5719,
+  "description": "Fixture dispositions.",
+  "known_unowned_baseline": [],
+  "families": [
+    {
+      "prefix": "/api/v1/threads",
+      "owner_issue": 4832,
+      "replacement": "GET|POST|PATCH|DELETE /api/v2/threads[/{thread_id}]",
+      "rollout_status": "slice-open"
+    },
+    {
+      "prefix": "/api/threads",
+      "owner_issue": 5701,
+      "replacement": "GET /api/v2/threads/{thread_id}",
+      "rollout_status": "compatibility-alias-debt"
+    }
+  ],
+  "overrides": {
+    "POST /api/v1/threads/{thread_id}/set-pending": {
+      "owner_issue": 4344,
+      "replacement": "retire-without-replacement",
+      "rollout_status": "owner-issue-open",
+      "notes": "Fixture regression: Rust implementation does not retire v1."
+    }
+  }
+}

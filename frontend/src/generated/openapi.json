@@ -5786,6 +5786,13 @@
       },
       "CustomCBLIssueSearchResult": {
         "properties": {
+          "cover_image_url": {
+            "description": "Exact provider-supplied CDN URL. Null when unmapped; never image bytes.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "issue_id": {
             "format": "int32",
             "type": "integer"
@@ -29983,6 +29990,48 @@
           }
         ],
         "summary": "OpenAPI path documentation for the series-mapping commit endpoint.",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/api/v2/seriesMappings:preview": {
+      "post": {
+        "description": "Stateless AIP-136 collection custom method: build a read-only series-mapping preview and a signed idempotency token for the durable commit. No mappings, receipts, history or provider state are written.",
+        "operationId": "preview_series_mappings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NativeSeriesMappingPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeSeriesMappingPreviewResponse"
+                }
+              }
+            },
+            "description": "Read-only series mapping preview"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "tags": [
           "catalog"
         ]
