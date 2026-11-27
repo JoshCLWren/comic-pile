@@ -1487,6 +1487,43 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn migrated_v2_taste_ingress_never_hits_json_404() {
+        // #5717: the v2 taste collection, the `:dismiss` custom method and the
+        // single-segment signal name must be registered in the Vercel ingress
+        // table, not only in the library router. Otherwise the catch-all
+        // fallback returns the Rust JSON 404 before dispatch; no authenticated
+        // production path would exist for the new API.
+        for (method, uri) in [
+            ("GET", "/api/v2/users/me/tasteDiscoveries"),
+            ("POST", "/api/v2/users/me/tasteDiscoveries/7:dismiss"),
+            ("PATCH", "/api/v2/users/me/tasteSignals/creator:writer:dk"),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .header("content-type", "application/json")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{method} {uri} runtime header"
+            );
+            assert_ne!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "{method} {uri} must reach Rust dispatch, not native_not_found"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn reading_order_groups_v2_ingress_reaches_rust_and_v1_crud_is_gone() {
         // #5710: the v2 collection is mounted in the Vercel ingress table as
         // well as the library router; the retired v1 CRUD/detail paths and a
