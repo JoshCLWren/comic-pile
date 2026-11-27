@@ -1452,28 +1452,55 @@ async fn submit_with_issuer(
     Ok(SubmitOutcome::Created(issue_url))
 }
 
+/// The issuer resolves through the app's outbound seam (#5339): production
+/// uses the real HTTPS GitHub client, test-configured apps hold a recording
+/// fake. The `GithubIssuer` closure shape is unchanged so focused tests can
+/// still inject their own issuer through the `*_with_issuer` helpers.
+fn production_issuer(
+    state: &Arc<AppState>,
+) -> impl Fn(GithubSettings, String, String, Vec<String>) -> GithubFuture + Send + Sync + '_ {
+    let outbound = state.outbound.clone();
+    move |settings, title, body, labels| {
+        Box::pin(create_github_issue(
+            outbound.clone(),
+            settings,
+            title,
+            body,
+            labels,
+        ))
+    }
+}
+
 /// Same create flow as the axum handler with an explicitly injected issuer.
 ///
 /// Production [`create`] always passes the real HTTPS GitHub issuer. Tests
 /// pass an in-process fake so no network request is ever made while still
 /// exercising parsing, validation, rate limiting and transaction semantics.
 async fn create_with_issuer(
-    state: Arc<AppState>,
+    state: &Arc<AppState>,
     user_id: i32,
     body: Bytes,
     issuer: &GithubIssuer<'_>,
 ) -> Result<Response, BugReportError> {
     let environment = state.environment;
     let request = parse_request(&body).map_err(|e| e.sanitized_for(environment))?;
-    let (username, is_admin) = load_user(&state, user_id)
+    let (username, is_admin) = load_user(state, user_id)
         .await
         .map_err(|e| BugReportError::from(e).sanitized_for(environment))?;
     let settings = github_settings();
-    submit_with_issuer(
-        &state, user_id, username, is_admin, request, settings, issuer,
+    let outcome = submit_with_issuer(
+        state, user_id, username, is_admin, request, settings, issuer,
     )
     .await
-    .map_err(|e| e.sanitized_for(environment))
+    .map_err(|e| e.sanitized_for(environment))?;
+    match outcome {
+        SubmitOutcome::RateLimited(response) => Ok(response),
+        SubmitOutcome::Created(issue_url) => Ok((
+            StatusCode::CREATED,
+            Json(BugReportResponse { issue_url }),
+        )
+            .into_response()),
+    }
 }
 
 /// `POST /api/bug-reports/` and `POST /api/v1/bug-reports/`.
@@ -1487,25 +1514,50 @@ pub async fn create(
     user: AuthenticatedUser,
     body: Bytes,
 ) -> Result<Response, BugReportError> {
-    // The issuer resolves through the app's outbound seam (#5339): production
-    // uses the real HTTPS GitHub client, test-configured apps hold a recording
-    // fake. The `GithubIssuer` closure shape is unchanged so focused tests can
-    // still inject their own issuer through `create_with_issuer`.
-    let outbound = state.outbound.clone();
-    let issuer = move |settings: GithubSettings,
-                       title: String,
-                       body: String,
-                       labels: Vec<String>|
-          -> GithubFuture {
-        Box::pin(create_github_issue(
-            outbound.clone(),
-            settings,
-            title,
-            body,
-            labels,
-        ))
-    };
-    create_with_issuer(state, user.id(), body, &issuer).await
+    let issuer = production_issuer(&state);
+    create_with_issuer(&state, user.id(), body, &issuer).await
+}
+
+/// `POST /api/v2/bugReports` — AIP-133 standard Create for the bug-report
+/// collection (#5718).
+///
+/// The write path is shared with the retained same-path handlers so
+/// validation, diagnostic sanitization, rate limiting, authenticated ownership,
+/// the GitHub issue body and downstream behavior stay identical. The only
+/// difference is the v2 wire resource: a `201` carrying the AIP-122 `name`,
+/// stable `id` and `issue_url`, plus a `Location` header. There is no trailing
+/// slash and no `:submit` custom-method alias.
+async fn create_v2_with_issuer(
+    state: &Arc<AppState>,
+    user_id: i32,
+    body: Bytes,
+    issuer: &GithubIssuer<'_>,
+) -> Result<Response, BugReportError> {
+    let environment = state.environment;
+    let request = parse_request(&body).map_err(|e| e.sanitized_for(environment))?;
+    let (username, is_admin) = load_user(state, user_id)
+        .await
+        .map_err(|e| BugReportError::from(e).sanitized_for(environment))?;
+    let settings = github_settings();
+    let outcome = submit_with_issuer(
+        state, user_id, username, is_admin, request, settings, issuer,
+    )
+    .await
+    .map_err(|e| e.sanitized_for(environment))?;
+    match outcome {
+        SubmitOutcome::RateLimited(response) => Ok(response),
+        SubmitOutcome::Created(issue_url) => created_v2_response(&issue_url),
+    }
+}
+
+/// Mounted handler for `POST /api/v2/bugReports`.
+pub async fn create_v2(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    body: Bytes,
+) -> Result<Response, BugReportError> {
+    let issuer = production_issuer(&state);
+    create_v2_with_issuer(&state, user.id(), body, &issuer).await
 }
 
 /// Documentation-only operation for the mounted unversioned create.
@@ -1546,6 +1598,26 @@ pub fn create_documentation() {}
 #[allow(dead_code)]
 pub fn create_v1_documentation() {}
 
+/// Documentation-only operation for the canonical AIP-133 Create (#5718).
+#[utoipa::path(
+    post,
+    path = "/api/v2/bugReports",
+    tag = "bug-reports",
+    operation_id = "create_bug_report",
+    request_body = BugReportCreate,
+    responses(
+        (status = 201, description = "Bug report created", body = BugReportV2Response),
+        (status = 401, description = "Not authenticated"),
+        (status = 422, description = "Invalid or blank title/description, or invalid diagnostics"),
+        (status = 429, description = "Non-admin bug report rate limit reached"),
+        (status = 502, description = "GitHub issue creation failed"),
+        (status = 503, description = "GitHub integration not configured")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn create_v2_documentation() {}
+
 /// OpenAPI document for the bug-report same-path surface.
 #[derive(utoipa::OpenApi)]
 #[openapi(
@@ -1564,6 +1636,32 @@ pub fn create_v1_documentation() {}
     modifiers(&BugReportsSecurityAddon)
 )]
 pub struct BugReportsApi;
+
+/// OpenAPI document for the canonical v2 bug-report collection. Kept separate
+/// from [`BugReportsApi`] so the same-path v1/unversioned aliases never leak
+/// into the deployed `/api/v2` contract.
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    paths(create_v2_documentation),
+    components(schemas(
+        ReportType,
+        DiagnosticScreen,
+        DiagnosticViewport,
+        DiagnosticScroll,
+        DiagnosticPerformance,
+        DiagnosticError,
+        BugReportDiagnostics,
+        BugReportCreate,
+        BugReportV2Response
+    )),
+    modifiers(&BugReportsSecurityAddon)
+)]
+pub struct BugReportsV2Api;
+
+/// Mergeable v2 contract consumed by the canonical native OpenAPI aggregate.
+pub fn bug_reports_v2_openapi() -> utoipa::openapi::OpenApi {
+    BugReportsV2Api::openapi()
+}
 
 struct BugReportsSecurityAddon;
 
@@ -2439,7 +2537,7 @@ mod tests {
 
         for (name, body) in cases {
             let error = create_with_issuer(
-                state.clone(),
+                &state,
                 1,
                 Bytes::from(body),
                 &|_: GithubSettings, _: String, _: String, _: Vec<String>| -> GithubFuture {
@@ -2643,7 +2741,7 @@ mod tests {
         let _env = TempGitHubEnv::install();
         let probe = IssuerProbe::new();
         let error = create_with_issuer(
-            state.clone(),
+            &state,
             1102,
             Bytes::from(
                 br#"{"title":"Bug","description":"Details","diagnostics":{"timestamp":"t","url":"u","userAgent":"a","screen":{"width":"5","height":true,"pixelRatio":"2.5"},"viewport":{"width":3.0,"height":"4"},"scroll":{"x":"0","y":5.0},"performance":{"domContentLoaded":"2","loadComplete":true},"errors":[]}}"#
