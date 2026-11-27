@@ -343,7 +343,7 @@ describe('QueuePage callback coverage', () => {
 
   it('loads mixed blocking reasons and leaves a blank reactivation selection untouched', async () => {
     vi.mocked(dependenciesApi.listBlockedThreadIds).mockResolvedValue([1, 3])
-    vi.mocked(dependenciesApi.getThreadEligibility).mockResolvedValueOnce({ blocking_reasons: ['Finish Saga'], is_blocked: true, blocking_dependencies: [] }).mockRejectedValueOnce(new Error('reason failed'))
+    vi.mocked(dependenciesApi.getThreadEligibility).mockResolvedValueOnce({ thread_id: 1, eligible: false, next_issue_id: null, blocking_reasons: ['Finish Saga'], is_blocked: true, blocking_dependencies: [] }).mockRejectedValueOnce(new Error('reason failed'))
     const user = userEvent.setup()
     renderPage()
     await user.click(screen.getAllByRole('button', { name: /^add back to queue$/i })[0]!)
@@ -505,7 +505,7 @@ describe('QueuePage callback coverage', () => {
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
     vi.mocked(useQueueThreads).mockReturnValue({ data: [{ ...thread, is_blocked: true }] as never, isPending: false, refetch: mocks.refetch } as never)
     vi.mocked(dependenciesApi.listBlockedThreadIds).mockResolvedValue([1])
-    vi.mocked(dependenciesApi.getThreadEligibility).mockResolvedValue({ blocking_reasons: [], is_blocked: false, blocking_dependencies: [] })
+    vi.mocked(dependenciesApi.getThreadEligibility).mockResolvedValue({ thread_id: 1, eligible: true, next_issue_id: null, blocking_reasons: [], is_blocked: false, blocking_dependencies: [] })
     // SAFETY: only `restored` is read from the response; a partial stub suffices
     const unsnoozeSpy = vi.spyOn(rollApi, 'unsnooze').mockResolvedValue({ restored: true } as never)
     renderPage()
@@ -528,7 +528,7 @@ describe('QueuePage callback coverage', () => {
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
     vi.mocked(useQueueThreads).mockReturnValue({ data: [{ ...thread, is_blocked: true }] as never, isPending: false, refetch: mocks.refetch } as never)
     vi.mocked(dependenciesApi.listBlockedThreadIds).mockResolvedValue([1])
-    vi.mocked(dependenciesApi.getThreadEligibility).mockResolvedValue({ blocking_reasons: [], is_blocked: false, blocking_dependencies: [] })
+    vi.mocked(dependenciesApi.getThreadEligibility).mockResolvedValue({ thread_id: 1, eligible: true, next_issue_id: null, blocking_reasons: [], is_blocked: false, blocking_dependencies: [] })
     // SAFETY: only `restored` is read from the response; a partial stub suffices
     const unsnoozeSpy = vi.spyOn(rollApi, 'unsnooze').mockResolvedValue({ restored: false } as never)
     renderPage()

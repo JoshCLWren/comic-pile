@@ -97,7 +97,7 @@ beforeEach(() => {
   mockedIssuesApiList.mockResolvedValue({ issues: [], next_page_token: null, total_count: 0, page_size: 100 })
   mockedIssuesApiListCreators.mockResolvedValue({ thread_id: 1, issues: [] })
   vi.mocked(dependenciesApi.explainEligibility).mockResolvedValue({
-    threads: { 1: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] } },
+    threads: { 1: { thread_id: 1, eligible: true, next_issue_id: null, is_blocked: false, blocking_reasons: [], blocking_dependencies: [] } },
   })
   vi.mocked(dependenciesApi.getConnectedThreads).mockResolvedValue({ thread_id: 1, connected_threads: [] })
   vi.mocked(tagsApi.threadIssuesEffective).mockResolvedValue({ thread_id: 1, issues: [] })
