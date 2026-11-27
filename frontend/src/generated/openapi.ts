@@ -1443,6 +1443,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/cblOccurrences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only occurrence List operation. */
+        get: operations["list_cbl_occurrences_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/cblSources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only List operation for the canonical source collection. */
+        get: operations["list_cbl_sources_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/cblSources/{source_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only standard Get operation. */
+        get: operations["get_cbl_source_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/comicvine/issues/{issue_id}/identity": {
         parameters: {
             query?: never;
@@ -6490,6 +6541,52 @@ export interface components {
             status: string;
             /** Thread Id */
             thread_id: number;
+        };
+        /** @description One bounded page of exact Comic Vine occurrences in the shared catalog. */
+        ListCblOccurrencesResponse: {
+            comicvine_issue_id: string;
+            /** Format: int64 */
+            lists_total: number;
+            next_page_token?: string | null;
+            occurrences: components["schemas"]["CblComicvineOccurrence"][];
+            /** Format: int64 */
+            occurrences_limit: number;
+            /** Format: int64 */
+            occurrences_offset: number;
+            /** Format: int64 */
+            occurrences_total: number;
+        };
+        /** @description One bounded page of the shared source collection. */
+        ListCblSourcesResponse: {
+            breadcrumbs: components["schemas"]["CBLBreadcrumb"][];
+            /**
+             * Format: int64
+             * @description Whole active shared-catalog total, independent of folder or search.
+             */
+            catalog_total: number;
+            folder: string;
+            folders: components["schemas"]["CBLSourceFolder"][];
+            has_next: boolean;
+            has_previous: boolean;
+            items: components["schemas"]["CBLCatalogListItem"][];
+            next_page_token?: string | null;
+            /**
+             * Format: int64
+             * @description Echoed effective page, kept for the browser's deep-linkable position.
+             */
+            page: number;
+            /** Format: int64 */
+            page_size: number;
+            previous_page_token?: string | null;
+            query?: string | null;
+            scope: string;
+            /**
+             * Format: int64
+             * @description Full match total for the applied folder/search scope, not this page.
+             */
+            total: number;
+            /** Format: int64 */
+            total_pages: number;
         };
         /** @description One bounded page of the canonical reading-session collection. */
         ListReadingSessionsResponse: {
@@ -13402,6 +13499,178 @@ export interface operations {
             };
             /** @description Password-recovery rate limit exceeded */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_cbl_occurrences_documentation: {
+        parameters: {
+            query?: {
+                /** @description comicvine_issue_id=<id> or a bare Comic Vine issue id */
+                filter?: string;
+                /** @description Bounded page size (1-200, default 50) */
+                page_size?: string;
+                /** @description Opaque continuation cursor */
+                page_token?: string;
+                /** @description Retained bounded occurrence offset */
+                offset?: string;
+                /** @description Bounded occurrence limit */
+                limit?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Exact Comic Vine issue occurrences */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListCblOccurrencesResponse"];
+                };
+            };
+            /** @description Invalid filter or token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing Comic Vine issue id */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_cbl_sources_documentation: {
+        parameters: {
+            query?: {
+                /** @description folder=<path> browse or q=<term>/bare term search */
+                filter?: string;
+                /** @description Stable ordering: name (default) or path */
+                order_by?: string;
+                /** @description Bounded page size (1-100, default 50) */
+                page_size?: string;
+                /** @description Opaque continuation cursor */
+                page_token?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One bounded page of shared CBL sources */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListCblSourcesResponse"];
+                };
+            };
+            /** @description Invalid filter, ordering or token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Folder not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_cbl_source_documentation: {
+        parameters: {
+            query?: {
+                /** @description Ordered entry offset */
+                offset?: string;
+                /** @description Bounded entry limit (1-2000, default 1000) */
+                limit?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Shared catalog source list id */
+                source_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One read-only shared source list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CblSourceListDetail"];
+                };
+            };
+            /** @description Invalid paging parameter */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Source not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

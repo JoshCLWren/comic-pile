@@ -491,6 +491,18 @@ export interface GetRequest {
 
 export type GetResponse = components['schemas']['IdentityInboxResponse']
 
+export interface GetCblSourceRequest {
+  path: {
+    source_id: number
+  }
+  query?: {
+    offset?: string
+    limit?: string
+  }
+}
+
+export type GetCblSourceResponse = components['schemas']['CblSourceListDetail']
+
 export interface GetIssueRequest {
   path: {
     issue_id: number
@@ -723,6 +735,29 @@ export interface ListActivityRequest {
 export type ListActivityResponse = components['schemas']['ActivityResponse']
 
 export type ListBlockedLegacyDependenciesResponse = Array<number>
+
+export interface ListCblOccurrencesRequest {
+  query?: {
+    filter?: string
+    page_size?: string
+    page_token?: string
+    offset?: string
+    limit?: string
+  }
+}
+
+export type ListCblOccurrencesResponse = components['schemas']['ListCblOccurrencesResponse']
+
+export interface ListCblSourcesRequest {
+  query?: {
+    filter?: string
+    order_by?: string
+    page_size?: string
+    page_token?: string
+  }
+}
+
+export type ListCblSourcesResponse = components['schemas']['ListCblSourcesResponse']
 
 export interface ListCorrectionsRequest {
   path: {
@@ -1364,6 +1399,7 @@ export interface NativeV2Client {
   exportCustomCbl(args: ExportCustomCblRequest): Promise<ExportCustomCblResponse>
   forgotPassword(args: ForgotPasswordRequest): Promise<ForgotPasswordResponse>
   get(args: GetRequest): Promise<GetResponse>
+  getCblSource(args: GetCblSourceRequest): Promise<GetCblSourceResponse>
   getIssue(args: GetIssueRequest): Promise<GetIssueResponse>
   getIssueDependencies(args: GetIssueDependenciesRequest): Promise<GetIssueDependenciesResponse>
   getIssueIdentity(args: GetIssueIdentityRequest): Promise<GetIssueIdentityResponse>
@@ -1397,6 +1433,8 @@ export interface NativeV2Client {
   list(args?: ListRequest): Promise<ListResponse>
   listActivity(args?: ListActivityRequest): Promise<ListActivityResponse>
   listBlockedLegacyDependencies(): Promise<ListBlockedLegacyDependenciesResponse>
+  listCblOccurrences(args?: ListCblOccurrencesRequest): Promise<ListCblOccurrencesResponse>
+  listCblSources(args?: ListCblSourcesRequest): Promise<ListCblSourcesResponse>
   listCorrections(args: ListCorrectionsRequest): Promise<ListCorrectionsResponse>
   listReadingLists(): Promise<ListReadingListsResponse>
   listReadingSessions(args?: ListReadingSessionsRequest): Promise<ListReadingSessionsResponse>
@@ -1804,6 +1842,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v2/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}`,
       )
     },
+    getCblSource(args: GetCblSourceRequest) {
+      return client.get<GetCblSourceResponse>(
+        `/v2/cblSources/${encodeURIComponent(String(args.path.source_id))}`,
+        { params: compactQuery(args.query) },
+      )
+    },
     getIssue(args: GetIssueRequest) {
       return client.get<GetIssueResponse>(
         `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}`,
@@ -1967,6 +2011,18 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     listBlockedLegacyDependencies() {
       return client.get<ListBlockedLegacyDependenciesResponse>("/v2/dependencies/blocked")
+    },
+    listCblOccurrences(args: ListCblOccurrencesRequest = {}) {
+      return client.get<ListCblOccurrencesResponse>(
+        "/v2/cblOccurrences",
+        { params: compactQuery(args.query) },
+      )
+    },
+    listCblSources(args: ListCblSourcesRequest = {}) {
+      return client.get<ListCblSourcesResponse>(
+        "/v2/cblSources",
+        { params: compactQuery(args.query) },
+      )
     },
     listCorrections(args: ListCorrectionsRequest) {
       return client.get<ListCorrectionsResponse>(

@@ -4006,6 +4006,235 @@
         }
       }
     },
+    "/api/v2/cblOccurrences": {
+      "get": {
+        "tags": [
+          "cbl-sources"
+        ],
+        "summary": "Documentation-only occurrence List operation.",
+        "operationId": "list_cbl_occurrences_documentation",
+        "parameters": [
+          {
+            "name": "filter",
+            "in": "query",
+            "description": "comicvine_issue_id=<id> or a bare Comic Vine issue id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "Bounded page size (1-200, default 50)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page_token",
+            "in": "query",
+            "description": "Opaque continuation cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Retained bounded occurrence offset",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Bounded occurrence limit",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exact Comic Vine issue occurrences",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListCblOccurrencesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid filter or token"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Missing Comic Vine issue id"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/cblSources": {
+      "get": {
+        "tags": [
+          "cbl-sources"
+        ],
+        "summary": "Documentation-only List operation for the canonical source collection.",
+        "operationId": "list_cbl_sources_documentation",
+        "parameters": [
+          {
+            "name": "filter",
+            "in": "query",
+            "description": "folder=<path> browse or q=<term>/bare term search",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "order_by",
+            "in": "query",
+            "description": "Stable ordering: name (default) or path",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "Bounded page size (1-100, default 50)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page_token",
+            "in": "query",
+            "description": "Opaque continuation cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One bounded page of shared CBL sources",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListCblSourcesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid filter, ordering or token"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Folder not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/cblSources/{source_id}": {
+      "get": {
+        "tags": [
+          "cbl-sources"
+        ],
+        "summary": "Documentation-only standard Get operation.",
+        "operationId": "get_cbl_source_documentation",
+        "parameters": [
+          {
+            "name": "source_id",
+            "in": "path",
+            "description": "Shared catalog source list id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Ordered entry offset",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Bounded entry limit (1-2000, default 1000)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One read-only shared source list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CblSourceListDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid paging parameter"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Source not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/comicvine/issues/{issue_id}/identity": {
       "get": {
         "tags": [
@@ -19839,6 +20068,142 @@
           "thread_id": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "ListCblOccurrencesResponse": {
+        "type": "object",
+        "description": "One bounded page of exact Comic Vine occurrences in the shared catalog.",
+        "required": [
+          "comicvine_issue_id",
+          "occurrences_total",
+          "lists_total",
+          "occurrences_offset",
+          "occurrences_limit",
+          "occurrences"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": "string"
+          },
+          "lists_total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "occurrences": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CblComicvineOccurrence"
+            }
+          },
+          "occurrences_limit": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "occurrences_offset": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "occurrences_total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ListCblSourcesResponse": {
+        "type": "object",
+        "description": "One bounded page of the shared source collection.",
+        "required": [
+          "scope",
+          "folder",
+          "breadcrumbs",
+          "folders",
+          "items",
+          "page",
+          "page_size",
+          "total",
+          "catalog_total",
+          "total_pages",
+          "has_next",
+          "has_previous"
+        ],
+        "properties": {
+          "breadcrumbs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CBLBreadcrumb"
+            }
+          },
+          "catalog_total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Whole active shared-catalog total, independent of folder or search."
+          },
+          "folder": {
+            "type": "string"
+          },
+          "folders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CBLSourceFolder"
+            }
+          },
+          "has_next": {
+            "type": "boolean"
+          },
+          "has_previous": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CBLCatalogListItem"
+            }
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "page": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Echoed effective page, kept for the browser's deep-linkable position."
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "previous_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "query": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scope": {
+            "type": "string"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Full match total for the applied folder/search scope, not this page."
+          },
+          "total_pages": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
