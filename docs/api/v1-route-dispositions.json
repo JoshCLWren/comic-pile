@@ -252,19 +252,6 @@
       "notes": "Webhook/background task caller, not a browser caller."
     },
     {
-      "prefix": "/api/v1/auth",
-      "owner_issue": 4549,
-      "replacement": "POST|GET /api/v2/auth/*",
-      "rollout_status": "caller-migration-open",
-      "notes": "Rust-served legacy aliases; remove with the same-path handlers after v2 production proof (#4459/#4549)."
-    },
-    {
-      "prefix": "/api/auth",
-      "owner_issue": 4549,
-      "replacement": "POST|GET /api/v2/auth/*",
-      "rollout_status": "caller-migration-open"
-    },
-    {
       "prefix": "/api/threads",
       "owner_issue": 5701,
       "replacement": "GET /api/v2/threads/{thread_id}",
