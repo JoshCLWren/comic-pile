@@ -1086,7 +1086,7 @@ mod tests {
     fn volume_map(
         snapshot: &SnapshotRows,
     ) -> BTreeMap<i32, BTreeSet<(String, String)>> {
-        let mut map = BTreeMap::new();
+        let mut map: BTreeMap<i32, BTreeSet<(String, String)>> = BTreeMap::new();
         for row in &snapshot.issue_volumes {
             map.entry(row.issue_id)
                 .or_default()
