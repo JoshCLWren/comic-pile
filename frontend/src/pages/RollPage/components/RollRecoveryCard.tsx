@@ -188,8 +188,11 @@ export function RollRecoveryCard({
             const rowClass =
               'flex w-full flex-col gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left sm:flex-row sm:items-center sm:justify-between sm:gap-3'
 
-            const isIssue = prerequisite.node_type === 'issue'
-            const splitLabel = isIssue ? splitPrerequisiteLabel(prerequisite.label) : null
+            const canonicalIssueId = canonicalPrerequisiteIssueId(
+              prerequisite.node_type,
+              prerequisite.node_id,
+            )
+            const splitLabel = canonicalIssueId != null ? splitPrerequisiteLabel(prerequisite.label) : null
             return (
               <div key={`${prerequisite.node_type}-${prerequisite.node_id}`} className="space-y-1">
                 {isClickable ? (
@@ -208,13 +211,13 @@ export function RollRecoveryCard({
                     {content}
                   </div>
                 )}
-                {isIssue && (
-                  <div className="pl-4">
+                {canonicalIssueId != null && (
+                  <div className="pl-4" data-testid="roll-recovery-issue-actions">
                     <CompactIssueCardTrigger
-                      issueId={prerequisite.node_id}
+                      issueId={canonicalIssueId}
                       threadTitle={splitLabel?.title ?? prerequisite.label}
                       issueNumber={splitLabel?.number ?? '?'}
-                      card={cardsByIssue.get(prerequisite.node_id) ?? null}
+                      card={cardsByIssue.get(canonicalIssueId) ?? null}
                       hideTitle
                       actionLabel="Read directly"
                     />
