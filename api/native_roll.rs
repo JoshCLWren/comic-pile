@@ -293,6 +293,13 @@ fn app() -> Router {
             "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
             post(native_dispatch),
         )
+        // #5715: the Vercel entry has its own route table. Without a matching
+        // catch-all the canonical custom method falls through to
+        // native_not_found; axum requires a capture to own its whole segment.
+        .route(
+            "/api/v2/continuityPlans/{*custom_method}",
+            post(native_dispatch),
+        )
         .route(
             "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
             get(native_dispatch),
@@ -364,6 +371,11 @@ fn app() -> Router {
         )
         .route(
             "/api/v1/threads/{thread_id}/reading-orders",
+            get(native_dispatch),
+        )
+        // #5715: canonical v2 spelling of the same owner-scoped read.
+        .route(
+            "/api/v2/threads/{thread_id}/readingOrders",
             get(native_dispatch),
         )
         .route("/api/v1/threads/{thread_id}/issues", get(native_dispatch))
@@ -1844,6 +1856,54 @@ mod tests {
             text, r#"{"detail":"Not Found"}"#,
             "v2 preview must not hit native_not_found: {text}"
         );
+    }
+
+    #[tokio::test]
+    async fn reading_order_v2_routes_reach_rust_and_never_hit_json_404() {
+        // #5715: both canonical routes are registered in the inner service,
+        // but this Vercel entry keeps its own route table. An unauthenticated
+        // request must reach native_dispatch (401 with state, 503 on cold
+        // start), never the Rust JSON 404 fallback.
+        for (method, uri, body) in [
+            (
+                "POST",
+                "/api/v2/continuityPlans/7:previewReadingOrderProjection",
+                r#"{"reading_order_id":3}"#,
+            ),
+            ("GET", "/api/v2/threads/9/readingOrders", ""),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .header("content-type", "application/json")
+                        .body(Body::from(body))
+                        .unwrap(),
+                )
+                .await
+                .unwrap_or_else(|_| panic!("{method} {uri} ingress response"));
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{method} {uri} must reach Rust dispatch, not the 404 fallback, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{method} {uri} must be served by the native ingress"
+            );
+            let bytes = to_bytes(response.into_body(), 8192)
+                .await
+                .expect("body bytes");
+            let text = String::from_utf8_lossy(&bytes);
+            assert_ne!(
+                text, r#"{"detail":"Not Found"}"#,
+                "{method} {uri} must not hit native_not_found: {text}"
+            );
+        }
     }
 
     #[tokio::test]

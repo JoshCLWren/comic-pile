@@ -282,8 +282,10 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-reading-orders.ts",
-        "frontend/src/unit/api-reading-orders.test.ts"
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-graph.ts",
+        "frontend/src/services/api-reading-orders.ts"
       ]
     },
     {
@@ -930,11 +932,7 @@
       "rollout_status": "slice-open",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": [
-        "frontend/src/services/api-reading-orders.ts",
-        "frontend/src/unit/api-reading-orders.test.ts",
-        "frontend/src/unit/api.test.ts"
-      ]
+      "consumers": []
     },
     {
       "method": "POST",
