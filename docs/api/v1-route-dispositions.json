@@ -51,6 +51,46 @@
       "status": "not-live",
       "disposition": "GET|POST|PATCH|DELETE /api/v2/readingOrderGroups[/{group_id}]",
       "notes": "Collection CRUD and /detail are absent from the live Rust router; memberships, ranges and /order remain with #5711."
+    },
+    {
+      "issue": 5709,
+      "method": "GET",
+      "path": "/api/v1/threads/{thread_id}/issue-dependencies",
+      "status": "not-live",
+      "disposition": "GET /api/v2/threads/{thread_id}/issueDependencies",
+      "notes": "Retired by #5709; the canonical v2 collection is the only authority."
+    },
+    {
+      "issue": 5709,
+      "method": "GET",
+      "path": "/api/v1/threads/{thread_id}/dependencies",
+      "status": "not-live",
+      "disposition": "GET /api/v2/threads/{thread_id}/dependencies",
+      "notes": "Retired by #5709; the canonical v2 reader-authored dependency collection is the only authority."
+    },
+    {
+      "issue": 5709,
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}:getBlockingInfo",
+      "status": "not-live",
+      "disposition": "GET /api/v2/threads/{thread_id}/eligibility",
+      "notes": "Retired by #5709; the derived singleton eligibility resource replaces singleton blocking diagnosis."
+    },
+    {
+      "issue": 5709,
+      "method": "POST",
+      "path": "/api/v1/threads:getBlockingInfo",
+      "status": "not-live",
+      "disposition": "POST /api/v2/threads:explainEligibility",
+      "notes": "Retired by #5709; the bounded v2 explanatory calculation replaces batch blocking diagnosis."
+    },
+    {
+      "issue": 5709,
+      "method": "GET",
+      "path": "/api/v1/threads/{thread_id}/connected",
+      "status": "not-live",
+      "disposition": "GET /api/v2/threads/{thread_id}/connections",
+      "notes": "Retired by #5709; the canonical v2 related-Thread collection is the only authority."
     }
   ],
   "families": [
