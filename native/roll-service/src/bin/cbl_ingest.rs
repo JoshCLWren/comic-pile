@@ -15,13 +15,24 @@ use comicpile_roll_service::cbl_ingest::{
 use std::process::ExitCode;
 
 fn database_url() -> Option<String> {
-    ["CBL_INGEST_DATABASE_URL", "RUST_ROLL_DATABASE_URL", "DATABASE_URL"]
-        .iter()
-        .find_map(|name| std::env::var(name).ok().filter(|value| !value.trim().is_empty()))
+    [
+        "CBL_INGEST_DATABASE_URL",
+        "RUST_ROLL_DATABASE_URL",
+        "DATABASE_URL",
+    ]
+    .iter()
+    .find_map(|name| {
+        std::env::var(name)
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+    })
 }
 
 fn print_payload(payload: &serde_json::Value) {
-    println!("{}", serde_json::to_string(payload).unwrap_or_else(|_| "{}".to_string()));
+    println!(
+        "{}",
+        serde_json::to_string(payload).unwrap_or_else(|_| "{}".to_string())
+    );
 }
 
 async fn run() -> Result<(bool, serde_json::Value), String> {
@@ -77,7 +88,7 @@ async fn run() -> Result<(bool, serde_json::Value), String> {
     let url = database_url().ok_or_else(|| {
         "set CBL_INGEST_DATABASE_URL (or RUST_ROLL_DATABASE_URL / DATABASE_URL)".to_string()
     })?;
-    let client = connect(&url).await.map_err(|error| error.to_string())?;
+    let mut client = connect(&url).await.map_err(|error| error.to_string())?;
     let synced_at = Utc::now();
     let protected: std::collections::BTreeSet<String> = failures
         .iter()
@@ -97,7 +108,7 @@ async fn run() -> Result<(bool, serde_json::Value), String> {
         .await
         .map_err(|error| error.to_string())?
     } else {
-        let mut transaction = client
+        let transaction = client
             .transaction()
             .await
             .map_err(|error| format!("transaction start failed: {error}"))?;
@@ -130,7 +141,8 @@ async fn run() -> Result<(bool, serde_json::Value), String> {
         "parsed_lists": parsed_lists.len(),
         "parse_failures": parse_failures,
     });
-    if let (Some(object), Some(summary_object)) = (payload.as_object_mut(), summary_value.as_object())
+    if let (Some(object), Some(summary_object)) =
+        (payload.as_object_mut(), summary_value.as_object())
     {
         for (key, value) in summary_object {
             object.insert(key.clone(), value.clone());

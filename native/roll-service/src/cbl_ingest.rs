@@ -19,8 +19,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
-    fmt,
-    fs,
+    fmt, fs,
     path::{Path, PathBuf},
 };
 use tokio_postgres::{Client, Config as PostgresConfig, GenericClient};
@@ -185,7 +184,8 @@ pub fn parse_options(arguments: &[String]) -> Result<IngestOptions, IngestError>
         index += 1;
     }
     let mirror_path = mirror_path.ok_or_else(|| IngestError::new("mirror_path is required"))?;
-    let revision_sha = revision_sha.ok_or_else(|| IngestError::new("--revision-sha is required"))?;
+    let revision_sha =
+        revision_sha.ok_or_else(|| IngestError::new("--revision-sha is required"))?;
     validate_repository(&repository)?;
     validate_revision(&revision_sha)?;
     for alias in &repository_aliases {
@@ -232,7 +232,9 @@ fn validate_revision(value: &str) -> Result<(), IngestError> {
 /// Return every `.cbl` file beneath a mirror in deterministic relative-path order.
 pub fn discover_cbl_files(mirror_path: &Path) -> Result<Vec<PathBuf>, IngestError> {
     if !mirror_path.is_dir() {
-        return Err(IngestError::new("mirror_path must be an existing directory"));
+        return Err(IngestError::new(
+            "mirror_path must be an existing directory",
+        ));
     }
     let mut pending = vec![mirror_path.to_path_buf()];
     let mut discovered = Vec::new();
@@ -278,7 +280,8 @@ fn relative_source_path(path: &Path, mirror_path: &Path) -> String {
 
 /// Parse one file from disk, isolating read and XML failures for the inventory.
 pub fn parse_cbl_file(path: &Path, mirror_path: &Path) -> Result<CBLList, IngestError> {
-    let raw = fs::read(path).map_err(|error| IngestError::new(format!("cannot read CBL: {error}")))?;
+    let raw =
+        fs::read(path).map_err(|error| IngestError::new(format!("cannot read CBL: {error}")))?;
     parse_cbl_bytes(&raw, &relative_source_path(path, mirror_path))
 }
 
@@ -341,8 +344,9 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
             }
             Event::Text(ref text) => {
                 if capture.is_some() {
-                    let value = unescape(text.as_ref())
-                        .map_err(|error| IngestError::new(format!("invalid XML entity: {error}")))?;
+                    let value = unescape(text.as_ref()).map_err(|error| {
+                        IngestError::new(format!("invalid XML entity: {error}"))
+                    })?;
                     captured_text.push_str(value.trim());
                 }
             }
@@ -386,14 +390,16 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
         return Err(IngestError::new("CBL document has no root element"));
     }
     if books.len() > MAX_BOOKS_PER_LIST {
-        return Err(IngestError::new("CBL list exceeds the supported entry limit"));
+        return Err(IngestError::new(
+            "CBL list exceeds the supported entry limit",
+        ));
     }
-    let name = name
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| Path::new(source_path).file_stem().map_or_else(
+    let name = name.filter(|value| !value.is_empty()).unwrap_or_else(|| {
+        Path::new(source_path).file_stem().map_or_else(
             || source_path.to_string(),
             |stem| stem.to_string_lossy().into_owned(),
-        ));
+        )
+    });
     if name.chars().count() > MAX_LIST_NAME_LENGTH {
         return Err(IngestError::new("CBL name exceeds 500 characters"));
     }
@@ -432,10 +438,13 @@ fn decode_reference(raw: &str) -> String {
     }
 }
 
-fn attribute(element: &quick_xml::events::BytesStart<'_>, key: &[u8]) -> Result<Option<String>, IngestError> {
+fn attribute(
+    element: &quick_xml::events::BytesStart<'_>,
+    key: &[u8],
+) -> Result<Option<String>, IngestError> {
     for candidate in element.attributes() {
-        let attribute =
-            candidate.map_err(|error| IngestError::new(format!("invalid CBL attribute: {error}")))?;
+        let attribute = candidate
+            .map_err(|error| IngestError::new(format!("invalid CBL attribute: {error}")))?;
         if attribute.key.as_ref().as_bytes() != key {
             continue;
         }
@@ -470,9 +479,9 @@ fn parse_optional_int(raw: &str) -> Result<i32, IngestError> {
     if trimmed.is_empty() {
         return Err(IngestError::new("expected an integer value"));
     }
-    trimmed.parse::<i32>().map_err(|_| {
-        IngestError::new(format!("expected an integer value, got {trimmed:?}"))
-    })
+    trimmed
+        .parse::<i32>()
+        .map_err(|_| IngestError::new(format!("expected an integer value, got {trimmed:?}")))
 }
 
 fn parse_optional_year(raw: Option<String>) -> Result<Option<i32>, IngestError> {
@@ -523,10 +532,9 @@ fn apply_database(
     element: &quick_xml::events::BytesStart<'_>,
 ) -> Result<(), IngestError> {
     let database_name = attribute(element, b"Name")?;
-    if !database_name
-        .as_deref()
-        .is_some_and(|value| value.eq_ignore_ascii_case("comicvine") || value.eq_ignore_ascii_case("cv"))
-    {
+    if !database_name.as_deref().is_some_and(|value| {
+        value.eq_ignore_ascii_case("comicvine") || value.eq_ignore_ascii_case("cv")
+    }) {
         return Ok(());
     }
     if book.comicvine_series_id.is_none() {
@@ -626,10 +634,7 @@ pub fn build_inventory(
         }),
         distinct_comicvine_series_ids: series_ids.len(),
         distinct_comicvine_issue_ids: issue_ids.len(),
-        duplicate_content_hash_groups: hash_paths
-            .values()
-            .filter(|paths| paths.len() > 1)
-            .count(),
+        duplicate_content_hash_groups: hash_paths.values().filter(|paths| paths.len() > 1).count(),
         duplicate_source_paths: all_paths.len() - distinct_paths,
         declared_count_mismatches: parsed_lists
             .iter()
@@ -670,9 +675,10 @@ fn inventory_file(item: &CBLList) -> CBLInventoryFile {
 }
 
 fn publisher_for_path(source_path: &str) -> String {
-    source_path
-        .split_once('/')
-        .map_or_else(|| "(root)".to_string(), |(publisher, _)| publisher.to_string())
+    source_path.split_once('/').map_or_else(
+        || "(root)".to_string(),
+        |(publisher, _)| publisher.to_string(),
+    )
 }
 
 /// Connect with the same credential source as the trusted migration runner.
@@ -737,7 +743,9 @@ pub async fn sync_cbl_lists<C: GenericClient>(
         .iter()
         .any(|item| item.content_hash.is_empty() || item.content_hash.len() != 64)
     {
-        return Err(IngestError::new("CBL content hashes must be 64 hex characters"));
+        return Err(IngestError::new(
+            "CBL content hashes must be 64 hex characters",
+        ));
     }
     if protected_paths.iter().any(|path| path.trim().is_empty()) {
         return Err(IngestError::new(
@@ -784,8 +792,7 @@ pub async fn sync_cbl_lists<C: GenericClient>(
                 dry_run,
             )
             .await?;
-            rows
-                .into_iter()
+            rows.into_iter()
                 .map(|row| {
                     (
                         row.get::<_, String>(1),
@@ -823,10 +830,7 @@ pub async fn sync_cbl_lists<C: GenericClient>(
     keep_paths.extend(protected_paths.iter().map(String::as_str));
     let deactivated = existing_lists
         .iter()
-        .filter(|(path, existing)| {
-            existing.active
-                && !keep_paths.contains(path.as_str())
-        })
+        .filter(|(path, existing)| existing.active && !keep_paths.contains(path.as_str()))
         .count();
     let source_changed = source_created
         || existing_revision.as_deref() != Some(revision_sha.as_str())
@@ -852,14 +856,7 @@ pub async fn sync_cbl_lists<C: GenericClient>(
         });
     }
 
-    let source_id = upsert_source(
-        client,
-        source_id,
-        &repository,
-        &revision_sha,
-        synced_at,
-    )
-    .await?;
+    let source_id = upsert_source(client, source_id, &repository, &revision_sha, synced_at).await?;
     let list_ids = upsert_lists(client, source_id, &pending, &revision_sha, synced_at).await?;
     let changed_ids: Vec<i32> = list_ids.values().copied().collect();
     delete_entries(client, &changed_ids).await?;
@@ -922,13 +919,12 @@ async fn lookup_source<C: GenericClient>(
     )
     .await?;
     if rows.len() > 1 {
-        return Err(IngestError::new("multiple CBL sources share one repository"));
+        return Err(IngestError::new(
+            "multiple CBL sources share one repository",
+        ));
     }
     Ok(rows.first().map_or((None, None), |row| {
-        (
-            Some(row.get::<_, i32>(0)),
-            Some(row.get::<_, String>(1)),
-        )
+        (Some(row.get::<_, i32>(0)), Some(row.get::<_, String>(1)))
     }))
 }
 
@@ -983,8 +979,12 @@ async fn upsert_lists<C: GenericClient>(
     for chunk in pending.chunks(BATCH_SIZE) {
         let paths: Vec<&str> = chunk.iter().map(|item| item.source_path.as_str()).collect();
         let names: Vec<&str> = chunk.iter().map(|item| item.name.as_str()).collect();
-        let declared: Vec<Option<i32>> = chunk.iter().map(|item| item.declared_issue_count).collect();
-        let hashes: Vec<&str> = chunk.iter().map(|item| item.content_hash.as_str()).collect();
+        let declared: Vec<Option<i32>> =
+            chunk.iter().map(|item| item.declared_issue_count).collect();
+        let hashes: Vec<&str> = chunk
+            .iter()
+            .map(|item| item.content_hash.as_str())
+            .collect();
         let rows = client
             .query(
                 "INSERT INTO cbl_source_lists
@@ -1003,13 +1003,7 @@ async fn upsert_lists<C: GenericClient>(
                         updated_at = EXCLUDED.updated_at
                  RETURNING id, source_path",
                 &[
-                    &source_id,
-                    &revision,
-                    &synced_at,
-                    &paths,
-                    &names,
-                    &declared,
-                    &hashes,
+                    &source_id, &revision, &synced_at, &paths, &names, &declared, &hashes,
                 ],
             )
             .await
@@ -1254,8 +1248,11 @@ mod tests {
 
     #[test]
     fn inventory_counts_publishers_duplicates_and_failures() {
-        let good = parse_cbl_bytes(&minimal_cbl("<Book Series=\"X\" Number=\"1\" />"), "DC/One.cbl")
-            .expect("parse");
+        let good = parse_cbl_bytes(
+            &minimal_cbl("<Book Series=\"X\" Number=\"1\" />"),
+            "DC/One.cbl",
+        )
+        .expect("parse");
         let duplicate = CBLList {
             source_path: "DC/Two.cbl".to_string(),
             ..good.clone()
