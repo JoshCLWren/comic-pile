@@ -209,13 +209,13 @@ test('real creator source retains all eleven native v2 browser routes', () => {
 
 test('real custom CBL source retains native reading-list route ownership', () => {
   const fragment = liveFragment('custom-cbl');
-  assert.equal(fragment.operations.length, 15);
+  assert.equal(fragment.operations.length, 16);
   assert.deepEqual(new Set(fragment.operations.map(op => op.bucket)), new Set(['operations']));
   assert.ok(!fragment.operations.some(op => op.method === 'OPTIONS'));
   for (const op of fragment.operations) {
     assert.equal(op.dest, '/api/native_roll.rs', op.path);
     assert.equal(op.runtime, 'native-rust', op.path);
-    assert.ok([4684, 4844, 5435].includes(op.owning_issue), op.path + ' owning_issue=' + op.owning_issue);
+    assert.ok([4684, 4844, 5435, 5713].includes(op.owning_issue), op.path + ' owning_issue=' + op.owning_issue);
   }
   for (const [method, route, owningIssue] of [
     ['GET', '/api/v2/reading-lists', 4684],
@@ -231,6 +231,7 @@ test('real custom CBL source retains native reading-list route ownership', () =>
     ['GET', '/api/v2/reading-lists/{list_id}/overlap-decisions', 4844],
     ['PUT', '/api/v2/reading-lists/{list_id}/overlap-decisions', 4844],
     ['DELETE', '/api/v2/reading-lists/{list_id}/overlap-decisions/{decision_id}', 4844],
+    ['GET', '/api/v2/reading-lists/{list_id}/cbl-candidates', 5713],
   ]) {
     const op = liveOperation(fragment, method, route);
     assert.equal(op.owning_issue, owningIssue, route);
