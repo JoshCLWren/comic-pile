@@ -1918,6 +1918,125 @@ mod tests {
     }
 
     #[test]
+    fn v2_list_query_defaults_to_owner_active_queue() {
+        let resolved = resolve_list_query(&ThreadListQuery::default()).expect("default query");
+        assert_eq!(resolved.filter, ThreadFilter::Active);
+        assert_eq!(resolved.order_by, "position");
+        assert_eq!(resolved.page_size, DEFAULT_PAGE_SIZE);
+        assert_eq!(resolved.days, 30);
+        assert_eq!(resolved.search, "");
+    }
+
+    #[test]
+    fn v2_list_query_accepts_document_filters_and_canonical_ordering() {
+        let completed = resolve_list_query(&ThreadListQuery {
+            filter: Some("completed".to_string()),
+            order_by: Some("created".to_string()),
+            ..ThreadListQuery::default()
+        })
+        .expect("completed query");
+        assert_eq!(completed.filter, ThreadFilter::Completed);
+        assert_eq!(completed.order_by, "created");
+
+        // `position` has no meaning off the active queue; the legacy reads used
+        // creation order. Preserve that mapping instead of changing the cursor.
+        let excluded = resolve_list_query(&ThreadListQuery {
+            filter: Some("excluded".to_string()),
+            sort: Some("position".to_string()),
+            ..ThreadListQuery::default()
+        })
+        .expect("excluded query");
+        assert_eq!(excluded.order_by, "created");
+
+        let stale = resolve_list_query(&ThreadListQuery {
+            filter: Some("stale".to_string()),
+            days: Some(60),
+            ..ThreadListQuery::default()
+        })
+        .expect("stale query");
+        assert_eq!(stale.filter, ThreadFilter::Stale);
+        assert_eq!(stale.order_by, "last_activity");
+        assert_eq!(stale.page_size, 200);
+        assert_eq!(stale.days, 60);
+    }
+
+    #[test]
+    fn v2_list_query_rejects_ambiguous_or_unsupported_parameters() {
+        let disagree = resolve_list_query(&ThreadListQuery {
+            order_by: Some("title".to_string()),
+            sort: Some("created".to_string()),
+            ..ThreadListQuery::default()
+        })
+        .unwrap_err();
+        assert_eq!(disagree.detail(), "order_by and sort disagree");
+
+        let unknown_filter = resolve_list_query(&ThreadListQuery {
+            filter: Some("archived".to_string()),
+            ..ThreadListQuery::default()
+        })
+        .unwrap_err();
+        assert_eq!(
+            unknown_filter.detail(),
+            "filter must be active, completed, stale or excluded"
+        );
+
+        let stale_search = resolve_list_query(&ThreadListQuery {
+            filter: Some("stale".to_string()),
+            search: Some("Batman".to_string()),
+            ..ThreadListQuery::default()
+        })
+        .unwrap_err();
+        assert_eq!(
+            stale_search.detail(),
+            "search is not supported for filter=stale"
+        );
+
+        let active_days = resolve_list_query(&ThreadListQuery {
+            days: Some(7),
+            ..ThreadListQuery::default()
+        })
+        .unwrap_err();
+        assert_eq!(active_days.detail(), "days is only valid for filter=stale");
+
+        let too_old = resolve_list_query(&ThreadListQuery {
+            filter: Some("stale".to_string()),
+            days: Some(MAX_STALE_DAYS + 1),
+            ..ThreadListQuery::default()
+        })
+        .unwrap_err();
+        assert_eq!(too_old.detail(), "days must be between 0 and 3650");
+
+        let too_large = resolve_list_query(&ThreadListQuery {
+            page_size: Some(MAX_PAGE_SIZE + 1),
+            ..ThreadListQuery::default()
+        })
+        .unwrap_err();
+        assert_eq!(too_large.detail(), "page_size must be between 1 and 200");
+
+        let retired = resolve_list_query(&ThreadListQuery {
+            collection_id: Some("1".to_string()),
+            ..ThreadListQuery::default()
+        })
+        .unwrap_err();
+        assert_eq!(retired.detail(), "collection_id is retired");
+    }
+
+    #[test]
+    fn v2_list_result_emits_stale_rows_inline() {
+        let stale = ThreadListResult::Stale(StaleThreadListResponse {
+            threads: Vec::new(),
+            next_page_token: None,
+            active_count: 0,
+            filtered_count: None,
+        });
+        let value = serde_json::to_value(stale).expect("serializable stale page");
+        assert_eq!(value["threads"], serde_json::json!([]));
+        assert_eq!(value["active_count"], 0);
+        assert!(value.get("next_page_token").is_some());
+        assert!(value.get("variant").is_none());
+    }
+
+    #[test]
     fn cursor_round_trip_binds_search_sort_and_execution() {
         let cursor = QueueCursor {
             sort: "position".to_string(),
@@ -1994,7 +2113,35 @@ mod tests {
         let operation = &document["paths"]["/api/v2/threads"]["get"];
         assert_eq!(operation["operationId"], "list_threads_documentation");
         let response = &operation["responses"]["200"]["content"]["application/json"]["schema"];
-        assert_eq!(response["$ref"], "#/components/schemas/ThreadListResponse");
+        let variants = response["anyOf"].as_array().expect("filter-specific response");
+        assert!(variants.iter().any(|variant| {
+            variant["$ref"] == "#/components/schemas/ThreadListResponse"
+        }));
+        assert!(variants.iter().any(|variant| {
+            variant["$ref"] == "#/components/schemas/StaleThreadListResponse"
+        }));
+        let names: Vec<&str> = operation["parameters"]
+            .as_array()
+            .expect("parameters")
+            .iter()
+            .map(|parameter| parameter["name"].as_str().expect("name"))
+            .collect();
+        for expected in ["filter", "order_by", "page_size", "page_token"] {
+            assert!(names.contains(&expected), "missing {expected} parameter");
+        }
+    }
+
+    #[test]
+    fn threads_openapi_documents_the_v2_detail_read() {
+        use utoipa::OpenApi;
+        let document = serde_json::to_value(ThreadsApi::openapi()).expect("threads OpenAPI");
+        let operation = &document["paths"]["/api/v2/threads/{thread_id}"]["get"];
+        assert_eq!(operation["operationId"], "get_thread_v2_documentation");
+        assert_eq!(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ThreadDetailResponse"
+        );
+        assert!(operation["responses"]["404"].is_object());
     }
 
     #[test]

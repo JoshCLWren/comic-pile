@@ -2859,3 +2859,197 @@ async fn test_backdate_and_exclude_do_not_deadlock() {
     );
     assert_eq!(e_status, StatusCode::OK, "exclude: {e_status} {e_body:?}");
 }
+
+// ---------------------------------------------------------------------------
+// canonical v2 Thread Get + filtered List (#5701)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn v2_thread_detail_is_owner_scoped_and_keeps_the_legacy_projection() {
+    let ctx = setup("lcv2detail").await;
+    let (other_token, other_csrf, other_id) = second_user(&ctx).await;
+    let id = seed_thread(&ctx, ctx.user_id, "Saga", "active", 1, 3).await;
+    seed_thread(&ctx, other_id, "Private", "active", 1, 1).await;
+
+    let (status, body) = call(&ctx, "GET", &format!("/api/v2/threads/{id}"), None).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["id"], id);
+    assert_eq!(body["title"], "Saga");
+    for field in [
+        "format",
+        "issues_remaining",
+        "queue_position",
+        "status",
+        "last_rating",
+        "last_activity_at",
+        "notes",
+        "is_test",
+        "is_blocked",
+        "blocking_reasons",
+        "created_at",
+        "total_issues",
+        "reading_progress",
+        "next_unread_issue_id",
+        "next_unread_issue_number",
+        "manual_creator_credits",
+    ] {
+        assert!(body.get(field).is_some(), "detail omitted {field}: {body:?}");
+    }
+
+    let (status, body) = send(
+        &ctx.state,
+        authed(
+            "GET",
+            &format!("/api/v2/threads/{id}"),
+            &other_token,
+            &other_csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
+
+    let (status, body) = call(&ctx, "GET", "/api/v2/threads/999999", None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
+
+    let (status, _) = send(
+        &ctx.state,
+        Request::builder()
+            .method("GET")
+            .uri(format!("/api/v2/threads/{id}"))
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn v2_thread_list_filters_completed_and_excluded_without_cross_owner_rows() {
+    let ctx = setup("lcv2filters").await;
+    let (_, _, other_id) = second_user(&ctx).await;
+    let active = seed_thread(&ctx, ctx.user_id, "Active Saga", "active", 1, 2).await;
+    let completed = seed_thread(&ctx, ctx.user_id, "Completed Saga", "completed", 0, 0).await;
+    let excluded = seed_thread(&ctx, ctx.user_id, "Excluded Saga", "excluded", 0, 0).await;
+    seed_thread(&ctx, other_id, "Foreign Saga", "completed", 0, 0).await;
+
+    let (status, body) = call(
+        &ctx,
+        "GET",
+        "/api/v2/threads?filter=completed&search=saga&page_size=1",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let ids: Vec<i32> = body["threads"]
+        .as_array()
+        .expect("threads")
+        .iter()
+        .map(|thread| thread["id"].as_i64().unwrap() as i32)
+        .collect();
+    assert_eq!(ids, vec![completed]);
+    assert_eq!(body["active_count"], 0);
+    assert_eq!(body["filtered_count"], Value::Null);
+
+    let (status, body) = call(
+        &ctx,
+        "GET",
+        "/api/v2/threads?filter=excluded&search=saga&page_size=1",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["threads"][0]["id"], excluded);
+    assert_eq!(body["threads"][0]["queue_position"], 0);
+    assert!(body["threads"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|thread| thread["id"] != active));
+
+    let (status, body) = call(&ctx, "GET", "/api/v2/threads?filter=archived", None).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
+    for query in ["days=7", "search=", "order_by=title&sort=created", "page_size=201"] {
+        let (status, _) = call(&ctx, "GET", &format!("/api/v2/threads?{query}"), None).await;
+        assert!(
+            status == StatusCode::BAD_REQUEST || status == StatusCode::UNPROCESSABLE_ENTITY,
+            "unexpected status {status} for {query}"
+        );
+    }
+    let (status, _) = call(
+        &ctx,
+        "GET",
+        "/api/v2/threads?filter=stale&search=saga",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn v2_thread_list_stale_filter_is_canonical_and_cursor_paginated() {
+    let ctx = setup("lcv2stale").await;
+    let (_, _, other_id) = second_user(&ctx).await;
+    let never = seed_thread(&ctx, ctx.user_id, "Never Read", "active", 1, 2).await;
+    let old = seed_thread(&ctx, ctx.user_id, "Old", "active", 2, 2).await;
+    let fresh = seed_thread(&ctx, ctx.user_id, "Fresh", "active", 3, 2).await;
+    let foreign = seed_thread(&ctx, other_id, "Foreign", "active", 1, 2).await;
+    let pool = ctx.state.pool.get().await.unwrap();
+    for (id, days) in [(old, 90), (foreign, 90)] {
+        pool.execute(
+            "UPDATE threads SET last_activity_at = NOW() - make_interval(days => $2::int) WHERE id = $1",
+            &[&id, &days],
+        )
+        .await
+        .unwrap();
+    }
+    pool.execute(
+        "UPDATE threads SET last_activity_at = NOW() - interval '1 day' WHERE id = $1",
+        &[&fresh],
+    )
+    .await
+    .unwrap();
+    drop(pool);
+
+    let (status, first) = call(
+        &ctx,
+        "GET",
+        "/api/v2/threads?filter=stale&days=60&page_size=1",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{first:?}");
+    assert_eq!(first["threads"][0]["id"], never);
+    assert_eq!(first["active_count"], 0);
+    let token = first["next_page_token"]
+        .as_str()
+        .expect("stale continuation token");
+
+    let (status, second) = call(
+        &ctx,
+        "GET",
+        &format!(
+            "/api/v2/threads?filter=stale&days=60&page_size=1&page_token={token}"
+        ),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{second:?}");
+    assert_eq!(second["threads"][0]["id"], old);
+    assert!(
+        second["threads"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|thread| thread["id"] != fresh && thread["id"] != foreign)
+    );
+
+    let (status, bad) = call(
+        &ctx,
+        "GET",
+        "/api/v2/threads?filter=stale&page_token=not-a-cursor",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{bad:?}");
+}
