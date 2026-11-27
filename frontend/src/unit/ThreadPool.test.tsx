@@ -67,7 +67,9 @@ describe('ThreadPool Component', () => {
       const label = element.getAttribute('aria-label') || ''
       expect(label).toMatch(/connected to/i)
       expect(label).not.toMatch(/\broutes\b/i)
-      expect(element.textContent).toMatch(/The Amazing Spider-Man|Batman/)
+      // Cover-first presentation keeps the title in the accessible name
+      // instead of repeating it as row text under the artwork (#5981).
+      expect(label).toMatch(/The Amazing Spider-Man|Batman/)
       expect(element).not.toHaveTextContent(/Issue \d+/i)
     })
   })
