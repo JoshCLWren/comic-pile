@@ -819,11 +819,6 @@ pub fn router(state: Arc<AppState>) -> Router {
                 .delete(thread_lifecycle::delete_thread_v2),
         )
         .route(
-            "/api/v1/threads/{thread_id}",
-            get(threads::get_thread_detail),
-        )
-        .route("/api/threads/{thread_id}", get(threads::get_thread_detail))
-        .route(
             "/api/v1/threads/{thread_id}/issues",
             get(issue_read::list_thread_issues),
         )
