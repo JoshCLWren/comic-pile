@@ -41,6 +41,7 @@ unicode-casefold = "0.2"
 utoipa = "6"
 html-escape = "0.3"
 miniz_oxide = "0.9"
+quick-xml = "0.42"
 url = "2"
 
 [dev-dependencies]
