@@ -2484,17 +2484,19 @@ mod tests {
     #[test]
     fn contract_documents_every_operation_and_stays_current() {
         let document = serde_json::to_value(dependency_groups_openapi()).unwrap();
+        // Only the retained same-path order operation stays on v1; CRUD moved
+        // to the canonical v2 collection in #5710.
+        assert!(
+            document["paths"]
+                .get("/api/v1/reading-order-groups/{group_id}/order")
+                .is_some()
+        );
+        // The membership and CRUD operations are v2-only: their retired v1
+        // URLs must not remain documented as live operations.
         for path in [
             "/api/v1/reading-order-groups/",
             "/api/v1/reading-order-groups/{group_id}",
             "/api/v1/reading-order-groups/{group_id}/detail",
-            "/api/v1/reading-order-groups/{group_id}/order",
-        ] {
-            assert!(document["paths"].get(path).is_some(), "{path}");
-        }
-        // The membership operations are v2-only: their retired v1 URLs must not
-        // remain documented as live operations.
-        for path in [
             "/api/v1/reading-order-groups/threads/{thread_id}/groups",
             "/api/v1/reading-order-groups/{group_id}/issue-ranges",
             "/api/v1/reading-order-groups/{group_id}/members",
@@ -2506,6 +2508,29 @@ mod tests {
         let expected = include_str!("../../contracts/reading-order-groups-v1.openapi.json");
         let generated = dependency_groups_openapi().to_pretty_json().unwrap();
         assert_eq!(expected.trim_end(), generated.trim_end());
+    }
+
+    #[test]
+    fn v2_contract_documents_collection_crud_without_detail_action() {
+        let document = serde_json::to_value(reading_order_groups_v2_openapi()).unwrap();
+        for (path, method) in [
+            ("/api/v2/readingOrderGroups", "get"),
+            ("/api/v2/readingOrderGroups", "post"),
+            ("/api/v2/readingOrderGroups/{group_id}", "get"),
+            ("/api/v2/readingOrderGroups/{group_id}", "patch"),
+            ("/api/v2/readingOrderGroups/{group_id}", "delete"),
+        ] {
+            assert!(
+                document["paths"][path][method].is_object(),
+                "missing {method} {path} in v2 collection contract"
+            );
+        }
+        assert!(
+            document["paths"]
+                .get("/api/v2/readingOrderGroups/{group_id}/detail")
+                .is_none(),
+            "v2 must not publish a /detail action path"
+        );
     }
 
     #[test]
