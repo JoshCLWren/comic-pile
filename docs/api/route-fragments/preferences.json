@@ -2,7 +2,8 @@
   "family": "preferences",
   "owned_path_patterns": [
     "^/api/v1/users/me/taste\\-signals(?:/.*)?$",
-    "^/api/v2/users/me/preferences$"
+    "^/api/v2/users/me/preferences$",
+    "^/api/v2/users/me/tasteSignals(?:/.*)?$"
   ],
   "defaults": {
     "runtime": "python-fastapi",
@@ -56,6 +57,19 @@
       "owning_issue": 4335,
       "consumers": [
         "frontend/src/services/api-preferences.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "PATCH",
+      "path": "/api/v2/users/me/tasteSignals/{signal_name}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/users/me/tasteSignals/[^/]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5717,
+      "consumers": [
+        "frontend/src/services/api-taste.ts"
       ]
     }
   ]

@@ -1,7 +1,8 @@
 {
   "family": "taste-discoveries",
   "owned_path_patterns": [
-    "^/api/v1/taste/discoveries(?:/.*)?$"
+    "^/api/v1/taste/discoveries(?:/.*)?$",
+    "^/api/v2/users/me/tasteDiscoveries(?:/.*)?$"
   ],
   "defaults": {
     "runtime": "native-rust",
@@ -27,6 +28,32 @@
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/taste/discoveries/[0-9]+/dismiss$",
       "exclude_from_inventory": true
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/users/me/tasteDiscoveries",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/users/me/tasteDiscoveries$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5717,
+      "consumers": [
+        "frontend/src/services/api-taste.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/users/me/tasteDiscoveries/{signal_id}:dismiss",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/users/me/tasteDiscoveries/[^/]+:dismiss$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5717,
+      "consumers": [
+        "frontend/src/services/api-taste.ts"
+      ]
     }
   ]
 }
