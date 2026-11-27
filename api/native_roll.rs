@@ -1542,6 +1542,76 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn v2_thread_dependency_diagnosis_ingress_reaches_rust_and_v1_is_404() {
+        // #5709: the canonical dependency/blocking diagnosis resources moved
+        // to v2 URLs. Register them in this Vercel entry table or the fallback
+        // returns the Rust JSON 404 before dispatch. The retired v1 aliases
+        // must terminate at that fallback instead of remaining a second
+        // authority (and the batch alias must not be swallowed by `{thread_id}`).
+        for (method, uri) in [
+            ("GET", "/api/v2/threads/42/dependencies"),
+            ("GET", "/api/v2/threads/42/issueDependencies"),
+            ("GET", "/api/v2/threads/42/eligibility"),
+            ("POST", "/api/v2/threads:explainEligibility"),
+            ("GET", "/api/v2/threads/42/connections"),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{method} {uri} runtime header"
+            );
+            assert_ne!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "{method} {uri} must reach Rust dispatch, not the 404 fallback"
+            );
+        }
+        for (method, uri) in [
+            ("GET", "/api/v1/threads/42/dependencies"),
+            ("GET", "/api/v1/threads/42/issue-dependencies"),
+            ("GET", "/api/v1/threads/42/connected"),
+            ("POST", "/api/v1/threads:getBlockingInfo"),
+            ("POST", "/api/v1/threads/42:getBlockingInfo"),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{method} {uri}");
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust"
+            );
+            let bytes = to_bytes(response.into_body(), 1024)
+                .await
+                .expect("body bytes");
+            assert_eq!(
+                String::from_utf8_lossy(&bytes),
+                r#"{"detail":"Not Found"}"#,
+                "{method} {uri} must hit native_not_found"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn edit_series_preview_ingress_reaches_rust_and_never_hits_json_404() {
         // #5863: Edit Series Add posted to the inner-router-only preview paths,
         // so the Vercel ingress returned its JSON 404 ("Not Found") instead of

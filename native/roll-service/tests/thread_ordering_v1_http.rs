@@ -216,13 +216,30 @@ fn post(path: &str, token: &str, csrf: &str, body: Option<Value>) -> Request<Bod
     authed("POST", path, token, csrf, body)
 }
 
+/// The canonical v2 diagnosis surface exposes explanations as a bounded
+/// batch action and individual state as a derived singleton.
+fn explain_one(thread_id: i32, token: &str, csrf: &str) -> Request<Body> {
+    post(
+        "/api/v2/threads:explainEligibility",
+        token,
+        csrf,
+        Some(json!({"thread_ids": [thread_id]})),
+    )
+}
+
+fn explanation(body: &Value, thread_id: i32) -> Value {
+    body["threads"][thread_id.to_string()].clone()
+}
+
 #[tokio::test]
 async fn every_operation_requires_authentication() {
     let (state, _token, _csrf, _user_id, _guard) = setup_user("tord-auth").await;
     for (method, path) in [
-        ("POST", "/api/v1/threads/1:getBlockingInfo"),
-        ("POST", "/api/v1/threads:getBlockingInfo"),
-        ("GET", "/api/v1/threads/1/connected"),
+        ("GET", "/api/v2/threads/1/eligibility"),
+        ("POST", "/api/v2/threads:explainEligibility"),
+        ("GET", "/api/v2/threads/1/connections"),
+        ("GET", "/api/v2/threads/1/dependencies"),
+        ("GET", "/api/v2/threads/1/issueDependencies"),
         ("GET", "/api/v1/threads/1/dependency-order-check"),
         ("GET", "/api/v1/threads/1/issues:validateOrder"),
         ("GET", "/api/v1/threads/1/reading-orders"),
