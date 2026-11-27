@@ -51,7 +51,6 @@
       "status": "not-live",
       "disposition": "GET|POST|PATCH|DELETE /api/v2/readingOrderGroups[/{group_id}]",
       "notes": "Collection CRUD and /detail are absent from the live Rust router; memberships, ranges and /order remain with #5711."
-<<<<<<< HEAD
     },
     {
       "issue": 5709,
@@ -92,8 +91,6 @@
       "status": "not-live",
       "disposition": "GET /api/v2/threads/{thread_id}/connections",
       "notes": "Retired by #5709; the canonical v2 related-Thread collection is the only authority."
-=======
->>>>>>> origin/main
     }
   ],
   "families": [
