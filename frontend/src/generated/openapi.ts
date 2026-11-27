@@ -3393,7 +3393,6 @@ export interface paths {
          * @description Create a thread at the end of the authenticated reader's queue. The created resource (including its stable `id`) is returned at 201 with a `Location` header naming the v2 collection member. The write preserves owner assignment, the five-second duplicate-merge guard and the Python validation envelope; it creates no Plan, dependency or issue rows.
          */
         post: operations["create_thread_v2_documentation"];
-<<<<<<< HEAD
         delete?: never;
         options?: never;
         head?: never;
@@ -3411,8 +3410,6 @@ export interface paths {
         get: operations["get_thread_v2_documentation"];
         put?: never;
         post?: never;
-=======
->>>>>>> origin/main
         delete?: never;
         options?: never;
         head?: never;
@@ -18950,7 +18947,6 @@ export interface operations {
             };
         };
     };
-<<<<<<< HEAD
     get_thread_v2_documentation: {
         parameters: {
             query?: never;
@@ -18988,8 +18984,6 @@ export interface operations {
             };
         };
     };
-=======
->>>>>>> origin/main
     issue_order_documentation: {
         parameters: {
             query?: never;
