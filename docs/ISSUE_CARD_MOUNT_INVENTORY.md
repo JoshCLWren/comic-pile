@@ -45,7 +45,7 @@ Live render-path audit for [#4445](https://github.com/JoshCLWren/comic-pile/issu
 | Reading plan recovery / graph problems | `components/ReadingPlanRecovery.tsx`, `components/ReadingGraphProblemCard.tsx` | Exact owned issues | `CompactIssueCardTrigger` | Batched by visible IDs. |
 | Exclusions / eligibility / boundaries | `components/ExclusionExplanation.tsx`, `components/EligibilityExplanation.tsx`, `components/ReadingBoundaryExplanation.tsx` | Exact owned issues when ID present | `CompactIssueCardTrigger` | Fallback named link when no owner card exists. |
 | ComicVine search/confirm dialog | `components/ComicVineSearchDialog.tsx` | Provider search results/candidates | `ImageWithLoading` | Provider images are not owned confirmed identities; shared image component prevents bespoke img. |
-| Direct read issue picker | `components/DirectReadIssuePanel.tsx` | Exact owned issues | `ComicIssueReadingCard` / `ComicIssueCover` via shared card | Bounded paginated browse; no per-row provider call. |
+| Direct read issue picker | `components/DirectReadIssuePanel.tsx` | Exact owned issues | `ComicIdentity` provider cover / `ComicIssueCard` via shared card | Bounded paginated browse; provider and tag details load only for the selected issue (#5751). |
 
 ## Non-cover / exception surfaces
 

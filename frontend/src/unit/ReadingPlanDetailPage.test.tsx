@@ -9,6 +9,7 @@ import { tagsApi } from '../services/api-tags'
 import { threadsApi } from '../services/api-threads'
 import { queueApi } from '../services/api-queue'
 import { issueCardsApi, type IssueCard } from '../services/issueCardsApi'
+import { comicVineApi, type ComicVineIssueIntelligence } from '../services/api-comicvine'
 import { cast } from '../utils/cast'
 
 vi.mock('../services/api-continuity-plans', async () => {
@@ -54,6 +55,15 @@ const mockGetReader = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.getReade
 const mockPlanTags = vi.mocked(tagsApi.effectiveForPlan)
 const mockSetPending = vi.mocked(threadsApi.setPending)
 const mockMoveToFront = vi.mocked(queueApi.moveToFront)
+const getIntelligence = vi.spyOn(comicVineApi, 'getIssueIntelligence')
+
+const creativeCredits: ComicVineIssueIntelligence = {
+  comicvine_issue_id: '95', comicvine_url: null, series_name: 'X-Men', series_id: 12,
+  issue_number: '95', name: 'Chapter Ninety-Five', description: null, image_url: null,
+  cover_date: null, store_date: null,
+  creators: [{ creator_id: null, name: 'Jack Kirby', roles: ['writer'] }],
+  story_arcs: [], metadata_status: 'deep_fetched',
+}
 
 function createWrapper() {
   const client = new QueryClient({
@@ -227,6 +237,8 @@ beforeEach(() => {
     direct_tags: [],
     effective_tags: [],
   })
+  getIntelligence.mockReset()
+  getIntelligence.mockResolvedValue(creativeCredits)
 })
 
 describe('ReadingPlanDetailPage', () => {
@@ -244,6 +256,18 @@ describe('ReadingPlanDetailPage', () => {
     expect(mockSetPending).not.toHaveBeenCalled()
     expect(mockMoveToFront).not.toHaveBeenCalled()
     expect(screen.getByRole('heading', { name: 'Age of Apocalypse' })).toBeInTheDocument()
+  })
+
+  it('opens the rolled-comic credits only for the plan row whose editor is used', async () => {
+    renderPage()
+    await screen.findByRole('heading', { name: 'Age of Apocalypse' })
+    expect(getIntelligence).not.toHaveBeenCalled()
+
+    const available = screen.getByTestId('available-now')
+    fireEvent.click(within(available).getByRole('button', { name: 'Read now' }))
+
+    expect(await screen.findByText('Jack Kirby')).toBeVisible()
+    expect(getIntelligence).toHaveBeenCalledExactlyOnceWith(95)
   })
 
   it('moves an eligible series to the front without starting a pending roll', async () => {
