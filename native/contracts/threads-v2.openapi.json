@@ -303,7 +303,12 @@
               "null"
             ]
           },
-          "manual_creator_credits": {},
+          "manual_creator_credits": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
           "next_unread_issue_number": {
             "type": [
               "string",
