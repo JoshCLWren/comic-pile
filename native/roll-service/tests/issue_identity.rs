@@ -3183,6 +3183,26 @@ async fn v2_reading_order_projection_preview_is_read_only_and_commit_is_idempote
     )
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/continuityPlans/abc:previewReadingOrderProjection",
+        json!({"reading_order_id": 810}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body, validation_failed());
+    // A different custom-method suffix is never silently treated as a preview.
+    let (status, _) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/continuityPlans/710:someOtherMethod",
+        json!({"reading_order_id": 810}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
 
     let (status, body) = post_json(
         &state,
