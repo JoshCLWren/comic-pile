@@ -946,7 +946,10 @@ async fn delete_group_serializes_with_sibling_issue_write() {
 async fn reading_order_groups_v2_crud_validates_and_retires_v1_collection() {
     let (state, token, csrf, _user_id, _guard) = setup_user("rog-v2-crud").await;
 
-    for blank in ["", "   \t"] {
+    for (blank, detail) in [
+        ("", "Validation failed"),
+        ("   \t", "Group name must not be blank"),
+    ] {
         let (status, body) = send(
             &state,
             authed(
@@ -959,7 +962,7 @@ async fn reading_order_groups_v2_crud_validates_and_retires_v1_collection() {
         )
         .await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body:?}");
-        assert_eq!(body, json!({"detail": "Validation failed"}));
+        assert_eq!(body, json!({"detail": detail}));
     }
 
     let (status, body) = send(
