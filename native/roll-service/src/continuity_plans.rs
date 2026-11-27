@@ -3024,7 +3024,7 @@ pub async fn confirm_plan_projection(
     // and lanes so flattening matches the canonical Python projection.
     let plan_row = tx
         .query_opt(
-            "SELECT id, ordering_mode, lanes_json, nodes_json
+            "SELECT id, ordering_mode, lanes_json, nodes_json, updated_at
              FROM continuity_plans WHERE id = $1 AND user_id = $2",
             &[&plan_id, &user.id()],
         )
@@ -3034,6 +3034,18 @@ pub async fn confirm_plan_projection(
     let ordering_mode: String = plan_row.get(1);
     let lanes_json: serde_json::Value = plan_row.get(2);
     let nodes_json: serde_json::Value = plan_row.get(3);
+    let current_updated_at: chrono::DateTime<chrono::Utc> = plan_row.get(4);
+    let current_updated_at_iso = iso_utc(current_updated_at);
+    if let Some(ref expected) = payload.plan_updated_at {
+        let matches = parse_aware_utc(expected).is_some_and(|value| value == current_updated_at);
+        if !matches {
+            tx.rollback().await.map_err(db::query_error)?;
+            return Err(domain_conflict(serde_json::json!({
+                "code": "plan_version_conflict",
+                "expected_updated_at": current_updated_at_iso,
+            })));
+        }
+    }
 
     // Load the owned reading order.
     tx.query_opt(

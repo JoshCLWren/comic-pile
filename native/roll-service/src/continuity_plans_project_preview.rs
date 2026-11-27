@@ -18,6 +18,7 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
+use chrono::{DateTime, SecondsFormat, Utc};
 use serde_json::Value;
 use std::{collections::HashMap, sync::Arc};
 use utoipa::ToSchema;
@@ -76,6 +77,7 @@ pub struct ReadingOrderProjectPreviewResponse {
     pub plan_id: i64,
     pub plan_name: String,
     pub plan_ordering_mode: String,
+    pub plan_updated_at: String,
     pub reading_order_id: i64,
     pub reading_order_name: String,
     pub entries: Vec<ReadingOrderProjectPreviewEntry>,
@@ -284,7 +286,7 @@ pub async fn preview_plan_projection_handler(
 
     let plan_row = connection
         .query_opt(
-            "SELECT name, ordering_mode, nodes_json, lanes_json FROM continuity_plans \
+            "SELECT name, ordering_mode, nodes_json, lanes_json, updated_at FROM continuity_plans \
              WHERE id = $1 AND user_id = $2",
             &[&plan_key, &user.id()],
         )
@@ -295,6 +297,8 @@ pub async fn preview_plan_projection_handler(
     let ordering_mode: String = plan_row.get(1);
     let nodes_json: Value = plan_row.get(2);
     let lanes_json: Value = plan_row.get(3);
+    let plan_updated_at: DateTime<Utc> = plan_row.get(4);
+    let plan_updated_at = plan_updated_at.to_rfc3339_opts(SecondsFormat::AutoSi, true);
 
     let order_row = connection
         .query_opt(
