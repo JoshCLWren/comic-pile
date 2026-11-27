@@ -134,10 +134,7 @@ pub fn reactivate_thread_documentation() {}
         description = "Generated contract for AIP-136 custom methods on v2 Thread resources."
     ),
     paths(reactivate_thread_documentation),
-    components(schemas(
-        ReactivateThreadRequest,
-        thread_lifecycle::ThreadResponse,
-    )),
+    components(schemas(ReactivateThreadRequest)),
     modifiers(&ThreadsV2SecurityAddon)
 )]
 pub struct ThreadsV2Api;
