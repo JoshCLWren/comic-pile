@@ -18,9 +18,6 @@ import { createRollApi } from './api-roll'
 export function createProtectedRollMutationApi(client: HttpClient) {
   const rollOffers = createRollApi(client)
   const { rate } = createNativeRollMutationApi(client)
-  // Recovery reads only scoped resources; no aggregate/session endpoint is
-  // touched even when the ordinary auth redirect is suppressed.
-  const scopedView = createRollBootstrapApi(client)
   return {
     rate,
     snooze: async (): Promise<SnoozeSessionResponse> => {
@@ -35,7 +32,13 @@ export function createProtectedRollMutationApi(client: HttpClient) {
         correction: null,
       }
     },
-    bootstrap: async (): Promise<RollBootstrapResponse> => scopedView.get(),
+    /**
+     * Recovery reads only scoped resources; no aggregate/session endpoint is
+     * touched even when the ordinary auth redirect is suppressed. The view is
+     * built lazily so transports can be injected in focused tests.
+     */
+    bootstrap: async (): Promise<RollBootstrapResponse> =>
+      createRollBootstrapApi(client).get(),
   }
 }
 
