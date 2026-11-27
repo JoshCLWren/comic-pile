@@ -58,11 +58,7 @@
       "bucket": "operations",
       "method": "GET",
       "path": "/api/v2/threads/{thread_id}/creatorCredits",
-<<<<<<< HEAD
-      "dest": "/api/native_roll.rs",
-=======
       "dest": "/api/native_api.rs",
->>>>>>> origin/main
       "src": "^/api/v2/threads/[^/]+/creatorCredits$",
       "runtime": "native-rust",
       "status": "target",

@@ -18,11 +18,7 @@
       "bucket": "operations",
       "method": "POST",
       "path": "/api/v2/seriesMappings:preview",
-<<<<<<< HEAD
-      "dest": "/api/native_roll.rs",
-=======
       "dest": "/api/native_api.rs",
->>>>>>> origin/main
       "src": "^/api/v2/seriesMappings:preview$",
       "runtime": "native-rust",
       "status": "target",

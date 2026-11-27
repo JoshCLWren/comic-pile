@@ -42,7 +42,7 @@
       "bucket": "operations",
       "method": "GET",
       "path": "/api/v2/threads/{thread_id}",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "src": "^/api/v2/threads/[0-9]+$",
       "runtime": "native-rust",
       "status": "target",
@@ -68,11 +68,7 @@
       "bucket": "operations",
       "method": "PATCH",
       "path": "/api/v2/threads/{thread_id}",
-<<<<<<< HEAD
-      "dest": "/api/native_roll.rs",
-=======
       "dest": "/api/native_api.rs",
->>>>>>> origin/main
       "src": "^/api/v2/threads/[0-9]+$",
       "runtime": "native-rust",
       "status": "target",
@@ -85,11 +81,7 @@
       "bucket": "operations",
       "method": "DELETE",
       "path": "/api/v2/threads/{thread_id}",
-<<<<<<< HEAD
-      "dest": "/api/native_roll.rs",
-=======
       "dest": "/api/native_api.rs",
->>>>>>> origin/main
       "src": "^/api/v2/threads/[0-9]+$",
       "runtime": "native-rust",
       "status": "target",
@@ -128,11 +120,7 @@
       "bucket": "operations",
       "method": "GET",
       "path": "/api/v2/threads/{thread_id}/issues",
-<<<<<<< HEAD
-      "dest": "/api/native_roll.rs",
-=======
       "dest": "/api/native_api.rs",
->>>>>>> origin/main
       "src": "^/api/v2/threads/[0-9]+/issues$",
       "runtime": "native-rust",
       "status": "target",
@@ -156,11 +144,6 @@
     },
     {
       "bucket": "operations",
-<<<<<<< HEAD
-      "method": "POST",
-      "path": "/api/v2/threads:checkDuplicates",
-      "dest": "/api/native_roll.rs",
-=======
       "method": "GET",
       "path": "/api/v2/threads/{thread_id}/readingOrders",
       "dest": "/api/native_roll.rs",
@@ -178,7 +161,7 @@
       "method": "POST",
       "path": "/api/v2/threads:checkDuplicates",
       "dest": "/api/native_api.rs",
->>>>>>> origin/main
+
       "src": "^/api/v2/threads:checkDuplicates$",
       "runtime": "native-rust",
       "status": "target",

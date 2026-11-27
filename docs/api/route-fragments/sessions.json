@@ -17,11 +17,7 @@
       "bucket": "operations",
       "method": "GET",
       "path": "/api/v2/readingSessions",
-<<<<<<< HEAD
-      "dest": "/api/native_roll.rs",
-=======
       "dest": "/api/native_api.rs",
->>>>>>> origin/main
       "src": "^/api/v2/readingSessions$",
       "consumers": [
         "frontend/src/services/api-sessions.ts"
@@ -31,11 +27,7 @@
       "bucket": "operations",
       "method": "POST",
       "path": "/api/v2/readingSessions",
-<<<<<<< HEAD
-      "dest": "/api/native_roll.rs",
-=======
       "dest": "/api/native_api.rs",
->>>>>>> origin/main
       "src": "^/api/v2/readingSessions$",
       "consumers": [
         "frontend/src/services/rollBootstrapApi.ts"
@@ -45,11 +37,7 @@
       "bucket": "operations",
       "method": "GET",
       "path": "/api/v2/readingSessions/{session_id}",
-<<<<<<< HEAD
-      "dest": "/api/native_roll.rs",
-=======
       "dest": "/api/native_api.rs",
->>>>>>> origin/main
       "src": "^/api/v2/readingSessions/[^/]+$",
       "consumers": [
         "frontend/src/services/api-sessions.ts"
@@ -59,11 +47,7 @@
       "bucket": "operations",
       "method": "GET",
       "path": "/api/v2/readingSessions/{session_id}/details",
-<<<<<<< HEAD
-      "dest": "/api/native_roll.rs",
-=======
       "dest": "/api/native_api.rs",
->>>>>>> origin/main
       "src": "^/api/v2/readingSessions/[^/]+/details$",
       "consumers": [
         "frontend/src/services/api-sessions.ts"
@@ -73,11 +57,7 @@
       "bucket": "operations",
       "method": "GET",
       "path": "/api/v2/readingSessions/{session_id}/snapshots",
-<<<<<<< HEAD
-      "dest": "/api/native_roll.rs",
-=======
       "dest": "/api/native_api.rs",
->>>>>>> origin/main
       "src": "^/api/v2/readingSessions/[^/]+/snapshots$",
       "consumers": [
         "frontend/src/services/api-sessions.ts"

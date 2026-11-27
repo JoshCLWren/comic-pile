@@ -18,11 +18,7 @@
       "bucket": "operations",
       "method": "GET",
       "path": "/api/v2/readingOrderGroups",
-<<<<<<< HEAD
-      "dest": "/api/native_roll.rs",
-=======
       "dest": "/api/native_api.rs",
->>>>>>> origin/main
       "src": "^/api/v2/readingOrderGroups$",
       "runtime": "native-rust",
       "status": "target",
@@ -32,11 +28,7 @@
       "bucket": "operations",
       "method": "POST",
       "path": "/api/v2/readingOrderGroups",
-<<<<<<< HEAD
-      "dest": "/api/native_roll.rs",
-=======
       "dest": "/api/native_api.rs",
->>>>>>> origin/main
       "src": "^/api/v2/readingOrderGroups$",
       "runtime": "native-rust",
       "status": "target",
@@ -46,11 +38,7 @@
       "bucket": "operations",
       "method": "GET",
       "path": "/api/v2/readingOrderGroups/{group_id}",
-<<<<<<< HEAD
-      "dest": "/api/native_roll.rs",
-=======
       "dest": "/api/native_api.rs",
->>>>>>> origin/main
       "src": "^/api/v2/readingOrderGroups/[^/]+$",
       "runtime": "native-rust",
       "status": "target",
@@ -60,11 +48,7 @@
       "bucket": "operations",
       "method": "PATCH",
       "path": "/api/v2/readingOrderGroups/{group_id}",
-<<<<<<< HEAD
-      "dest": "/api/native_roll.rs",
-=======
       "dest": "/api/native_api.rs",
->>>>>>> origin/main
       "src": "^/api/v2/readingOrderGroups/[^/]+$",
       "runtime": "native-rust",
       "status": "target",
@@ -74,11 +58,7 @@
       "bucket": "operations",
       "method": "DELETE",
       "path": "/api/v2/readingOrderGroups/{group_id}",
-<<<<<<< HEAD
-      "dest": "/api/native_roll.rs",
-=======
       "dest": "/api/native_api.rs",
->>>>>>> origin/main
       "src": "^/api/v2/readingOrderGroups/[^/]+$",
       "runtime": "native-rust",
       "status": "target",
