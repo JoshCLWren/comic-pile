@@ -130,7 +130,7 @@ async fn seed_catalog(state: &Arc<AppState>) {
         -- A reader-owned list must never appear in the shared catalog.
         INSERT INTO custom_cbl_lists (id, user_id, name, mode, created_at, updated_at)
         VALUES (101, (SELECT id FROM users ORDER BY id DESC LIMIT 1),
-                'PRIVATE READER LIST SHOULD NOT LEAK', 'custom', NOW(), NOW());
+                'PRIVATE READER LIST SHOULD NOT LEAK', 'loose', NOW(), NOW());
         "#
     ))
     .await
