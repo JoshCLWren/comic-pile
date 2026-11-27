@@ -68,6 +68,7 @@ const FAILED: PresentationDetails = {
 
 const OUTCOME_DETAILS: Record<ComicVineHydrationOutcome, PresentationDetails> = {
   complete: FAILED,
+  persist_failed: FAILED,
   no_credits: NO_CREDITS,
   not_confirmed: {
     presentation: 'not_confirmed',

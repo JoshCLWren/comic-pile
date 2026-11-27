@@ -13,6 +13,7 @@ use crate::{
 use axum::http::StatusCode;
 use bytes::Bytes;
 use http_body_util::BodyExt;
+use serde::Serialize;
 use serde_json::{json, Map, Value};
 use std::{sync::Arc, time::Duration};
 
@@ -32,6 +33,74 @@ pub(crate) enum ProviderFailure {
     Unavailable,
     Timeout,
     InvalidPayload,
+}
+
+/// Terminal, user-visible result of one synchronous ComicVine metadata
+/// hydration attempt (#5840). The vocabulary is the one the frontend Retry
+/// flow already renders; `persist_failed` is the only addition and falls
+/// through to its generic failure copy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum MetadataHydrationOutcome {
+    /// Credits and deep metadata are stored (freshly fetched, or the stored
+    /// same-identity metadata was already complete and was reused).
+    Complete,
+    /// The provider answered and legitimately lists no creator credits.
+    NoCredits,
+    /// The issue has no confirmed ComicVine identity, or it changed while the
+    /// provider call was in flight, so nothing was written.
+    NotConfirmed,
+    /// No usable provider credential is configured.
+    ProviderNotConfigured,
+    /// Transport failure, non-success envelope, or a non-throttle HTTP error.
+    ProviderUnavailable,
+    /// Provider throttle; see `retry_after_seconds`.
+    RateLimited,
+    /// The request-relative budget or the provider timeout was exhausted.
+    Timeout,
+    /// The provider answered with a payload that failed identity or shape
+    /// validation. Nothing is stored.
+    InvalidResponse,
+    /// The provider answered but the metadata could not be written.
+    PersistFailed,
+}
+
+/// Outcome plus the provider-requested delay before another explicit Retry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+pub struct MetadataHydration {
+    pub outcome: MetadataHydrationOutcome,
+    pub retry_after_seconds: Option<u32>,
+}
+
+impl MetadataHydration {
+    pub(crate) const fn of(outcome: MetadataHydrationOutcome) -> Self {
+        Self {
+            outcome,
+            retry_after_seconds: None,
+        }
+    }
+
+    /// Whether a fresh, truthful metadata state is now stored for the issue.
+    pub const fn is_terminal_success(&self) -> bool {
+        matches!(
+            self.outcome,
+            MetadataHydrationOutcome::Complete | MetadataHydrationOutcome::NoCredits
+        )
+    }
+}
+
+impl From<&ProviderFailure> for MetadataHydration {
+    fn from(failure: &ProviderFailure) -> Self {
+        match failure {
+            ProviderFailure::RateLimited(seconds) => Self {
+                outcome: MetadataHydrationOutcome::RateLimited,
+                retry_after_seconds: Some(*seconds),
+            },
+            ProviderFailure::Unavailable => Self::of(MetadataHydrationOutcome::ProviderUnavailable),
+            ProviderFailure::Timeout => Self::of(MetadataHydrationOutcome::Timeout),
+            ProviderFailure::InvalidPayload => Self::of(MetadataHydrationOutcome::InvalidResponse),
+        }
+    }
 }
 
 fn issue_id(external_id: &str) -> Option<u32> {
@@ -748,32 +817,46 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
     budget: Duration,
     api_key: &str,
     force: bool,
-) {
-    if budget.is_zero() || api_key.is_empty() {
-        return;
+) -> MetadataHydration {
+    use MetadataHydrationOutcome as Outcome;
+    if api_key.trim().is_empty() {
+        return MetadataHydration::of(Outcome::ProviderNotConfigured);
+    }
+    if budget.is_zero() {
+        return MetadataHydration::of(Outcome::Timeout);
     }
     let run = async {
         let conn = match db::checkout(state).await {
             Ok(c) => c,
-            Err(_) => return,
+            Err(_) => return MetadataHydration::of(Outcome::PersistFailed),
         };
         let Some((identity_id, external_id, cached)) =
             confirmed_identity_for_issue(&conn, user_id, issue_id).await
         else {
-            return;
+            return MetadataHydration::of(Outcome::NotConfirmed);
         };
         // A confirm/remap can reuse already-complete same-identity metadata;
         // an explicit Retry (`force`) always performs a fresh bounded attempt.
         if !force {
             if let Some(metadata) = &cached {
                 if !needs_provider_fetch(metadata, chrono::Utc::now()) {
-                    return;
+                    let has_credits = metadata["creator_credits"]
+                        .as_array()
+                        .is_some_and(|credits| !credits.is_empty());
+                    return MetadataHydration::of(if has_credits {
+                        Outcome::Complete
+                    } else {
+                        Outcome::NoCredits
+                    });
                 }
             }
         }
         let Some(comicvine_id) = issue_id_from_external(&external_id) else {
-            return;
+            return MetadataHydration::of(Outcome::InvalidResponse);
         };
+        // The provider call holds no pooled connection: it must not starve a
+        // small pool nor sit inside a lock while the network is slow.
+        drop(conn);
         let provider_data = match provider_issue(&state.outbound, comicvine_id, api_key).await {
             Ok(value) => value,
             Err(error) => {
@@ -784,7 +867,7 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
                     ),
                     _ => tracing::info!(?error, "inline identity hydration provider call failed"),
                 }
-                return;
+                return MetadataHydration::from(&error);
             }
         };
         let (mut patch, has, url, updated) = match normalized_metadata(&provider_data, comicvine_id)
@@ -793,39 +876,66 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
             Err(error) => {
                 tracing::info!(
                     ?error,
-                    "inline identity hydration normalization failed; refresh row kept"
+                    "inline identity hydration normalization failed; stored metadata kept"
                 );
-                return;
+                return MetadataHydration::from(&error);
             }
         };
         // A sparser fresh roster must never erase cached creator credits.
         if !has {
             preserve_cached_credits(&mut patch, cached.as_ref());
         }
+        let no_credits = !patch["creator_credits"]
+            .as_array()
+            .is_some_and(|credits| !credits.is_empty());
         let Ok(json_patch) = serde_json::to_string(&patch) else {
-            return;
+            return MetadataHydration::of(Outcome::PersistFailed);
         };
-        if let Err(err) = conn
+        let conn = match db::checkout(state).await {
+            Ok(c) => c,
+            Err(_) => return MetadataHydration::of(Outcome::PersistFailed),
+        };
+        // Recheck the mapping at persist time: if the issue was remapped while
+        // the provider call was in flight, the late result for the old identity
+        // is not recorded for this issue (late A cannot overwrite B).
+        match conn
             .execute(
-                "UPDATE external_identities
-                 SET metadata_json = (COALESCE(metadata_json::jsonb, '{}'::jsonb)
+                "UPDATE external_identities e
+                 SET metadata_json = (COALESCE(e.metadata_json::jsonb, '{}'::jsonb)
                                       || ($2::text)::jsonb)::json,
-                     external_url = COALESCE($3, external_url),
-                     provider_updated_at = COALESCE(($4::text)::timestamptz, provider_updated_at),
+                     external_url = COALESCE($3, e.external_url),
+                     provider_updated_at = COALESCE(($4::text)::timestamptz, e.provider_updated_at),
                      updated_at = now()
-                 WHERE id = $1 AND provider = 'comicvine' AND entity_type = 'issue'",
-                &[&identity_id, &json_patch, &url, &updated],
+                 WHERE e.id = $1 AND e.provider = 'comicvine' AND e.entity_type = 'issue'
+                   AND EXISTS (
+                       SELECT 1 FROM issue_external_identity_mappings m
+                       WHERE m.issue_id = $5 AND m.external_identity_id = e.id
+                         AND m.status = 'confirmed')",
+                &[&identity_id, &json_patch, &url, &updated, &issue_id],
             )
             .await
         {
-            tracing::warn!(
-                error_kind = crate::error_kind(&err),
-                "inline identity hydration metadata write failed"
-            );
+            Ok(0) => MetadataHydration::of(Outcome::NotConfirmed),
+            Ok(_) => MetadataHydration::of(if no_credits {
+                Outcome::NoCredits
+            } else {
+                Outcome::Complete
+            }),
+            Err(err) => {
+                tracing::warn!(
+                    error_kind = crate::error_kind(&err),
+                    "inline identity hydration metadata write failed"
+                );
+                MetadataHydration::of(Outcome::PersistFailed)
+            }
         }
     };
-    if tokio::time::timeout(budget, run).await.is_err() {
-        tracing::info!("inline identity creator-credit hydration budget exhausted");
+    match tokio::time::timeout(budget, run).await {
+        Ok(result) => result,
+        Err(_) => {
+            tracing::info!("inline identity creator-credit hydration budget exhausted");
+            MetadataHydration::of(Outcome::Timeout)
+        }
     }
 }
 
@@ -1122,8 +1232,19 @@ mod tests {
         let identity_id = seed_confirmed_identity(&state, "4000-29319", &json!({})).await;
         push_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
 
-        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", true)
-            .await;
+        let result = hydrate_confirmed_identity_inline(
+            &state,
+            1,
+            1,
+            Duration::from_secs(5),
+            "TESTKEY123",
+            true,
+        )
+        .await;
+        assert_eq!(
+            result,
+            MetadataHydration::of(MetadataHydrationOutcome::Complete)
+        );
 
         let connection = db::checkout(&state).await.expect("assert connection");
         let metadata: Value = serde_json::from_str(
@@ -1155,8 +1276,19 @@ mod tests {
         let identity_id = seed_confirmed_identity(&state, "4000-29319", &json!({})).await;
         // No canned provider response: the recording fake fails closed.
 
-        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", true)
-            .await;
+        let result = hydrate_confirmed_identity_inline(
+            &state,
+            1,
+            1,
+            Duration::from_secs(5),
+            "TESTKEY123",
+            true,
+        )
+        .await;
+        assert_eq!(
+            result,
+            MetadataHydration::of(MetadataHydrationOutcome::ProviderUnavailable)
+        );
 
         let connection = db::checkout(&state).await.expect("assert connection");
         let mapping_status: String = connection
@@ -1204,8 +1336,20 @@ mod tests {
             Bytes::from(body),
         );
 
-        hydrate_confirmed_identity_inline(&state, 1, 1, Duration::from_secs(5), "TESTKEY123", true)
-            .await;
+        let result = hydrate_confirmed_identity_inline(
+            &state,
+            1,
+            1,
+            Duration::from_secs(5),
+            "TESTKEY123",
+            true,
+        )
+        .await;
+        assert_eq!(
+            result,
+            MetadataHydration::of(MetadataHydrationOutcome::NoCredits),
+            "legitimate empty credits are distinct from a provider failure"
+        );
 
         let connection = db::checkout(&state).await.expect("assert connection");
         let metadata: Value = serde_json::from_str(
@@ -1222,6 +1366,288 @@ mod tests {
         assert_eq!(metadata["creator_credits"], json!([]));
         assert!(metadata["raw_provider_payload"].is_object());
         drop(Object::take(connection));
+    }
+
+    async fn read_metadata(state: &AppState, identity_id: i32) -> Value {
+        let connection = db::checkout(state).await.expect("metadata connection");
+        let text: String = connection
+            .query_one(
+                "SELECT metadata_json::text FROM external_identities WHERE id = $1",
+                &[&identity_id],
+            )
+            .await
+            .expect("read metadata")
+            .get(0);
+        serde_json::from_str(&text).expect("metadata JSON")
+    }
+
+    async fn confirmed_count(state: &AppState) -> i64 {
+        let connection = db::checkout(state).await.expect("count connection");
+        connection
+            .query_one(
+                "SELECT count(*) FROM issue_external_identity_mappings \
+                 WHERE issue_id = 1 AND status = 'confirmed'",
+                &[],
+            )
+            .await
+            .expect("count confirmed")
+            .get(0)
+    }
+
+    /// #5840: every failure class returns its own bounded, truthful outcome,
+    /// keeps the confirmed mapping, and never writes or erases stored metadata.
+    #[tokio::test]
+    async fn inline_hydration_failure_classes_are_distinct_and_preserve_state() {
+        let stored = json!({"creator_credits": [{"id": 9, "name": "Kept", "role": "writer"}]});
+        let budget = Duration::from_secs(5);
+        let cases: Vec<(&str, MetadataHydration)> = vec![
+            (
+                "throttle",
+                MetadataHydration {
+                    outcome: MetadataHydrationOutcome::RateLimited,
+                    retry_after_seconds: Some(120),
+                },
+            ),
+            (
+                "forbidden",
+                MetadataHydration::of(MetadataHydrationOutcome::ProviderUnavailable),
+            ),
+            (
+                "transport",
+                MetadataHydration::of(MetadataHydrationOutcome::ProviderUnavailable),
+            ),
+            (
+                "bad_envelope",
+                MetadataHydration::of(MetadataHydrationOutcome::ProviderUnavailable),
+            ),
+            (
+                "wrong_identity",
+                MetadataHydration::of(MetadataHydrationOutcome::InvalidResponse),
+            ),
+            (
+                "missing_results",
+                MetadataHydration::of(MetadataHydrationOutcome::InvalidResponse),
+            ),
+        ];
+        for (case, expected) in cases {
+            let Some(state) = crate::test_support::test_state(2).await else {
+                return;
+            };
+            let _guard = crate::test_support::reset_for_test(&state).await;
+            let identity_id = seed_confirmed_identity(&state, "4000-29319", &stored).await;
+            let fake = state.recording_fake().expect("recording provider");
+            match case {
+                "throttle" => {
+                    let mut headers = HeaderMap::new();
+                    headers.insert("retry-after", "120".parse().unwrap());
+                    fake.push_ok(StatusCode::TOO_MANY_REQUESTS, headers, Bytes::new());
+                }
+                "forbidden" => fake.push_ok(StatusCode::FORBIDDEN, HeaderMap::new(), Bytes::new()),
+                "transport" => fake.push_error(crate::outbound::OutboundError::Connect(
+                    "refused".to_owned(),
+                )),
+                "bad_envelope" => fake.push_ok(
+                    StatusCode::OK,
+                    HeaderMap::new(),
+                    Bytes::from(json!({"status_code": 100, "error": "Invalid API Key"}).to_string()),
+                ),
+                "wrong_identity" => fake.push_ok(
+                    StatusCode::OK,
+                    HeaderMap::new(),
+                    Bytes::from(
+                        json!({"status_code": 1, "results": deep_provider_result(777, "2026-11-01 17:33:53")})
+                            .to_string(),
+                    ),
+                ),
+                _ => fake.push_ok(
+                    StatusCode::OK,
+                    HeaderMap::new(),
+                    Bytes::from(json!({"status_code": 1}).to_string()),
+                ),
+            }
+            let result =
+                hydrate_confirmed_identity_inline(&state, 1, 1, budget, "TESTKEY123", true).await;
+            assert_eq!(result, expected, "{case}");
+            assert!(!result.is_terminal_success(), "{case}");
+            assert_eq!(confirmed_count(&state).await, 1, "{case}: mapping kept");
+            assert_eq!(
+                read_metadata(&state, identity_id).await,
+                stored,
+                "{case}: valid stored metadata is never overwritten by a failure"
+            );
+        }
+    }
+
+    /// #5840: a missing credential, an exhausted request budget and an issue
+    /// without a confirmed identity make no provider call and say so truthfully.
+    #[tokio::test]
+    async fn inline_hydration_unattempted_cases_make_no_provider_call() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_confirmed_identity(&state, "4000-29319", &json!({})).await;
+        let budget = Duration::from_secs(5);
+        assert_eq!(
+            hydrate_confirmed_identity_inline(&state, 1, 1, budget, "  \n", true).await,
+            MetadataHydration::of(MetadataHydrationOutcome::ProviderNotConfigured)
+        );
+        assert_eq!(
+            hydrate_confirmed_identity_inline(&state, 1, 1, Duration::ZERO, "TESTKEY123", true)
+                .await,
+            MetadataHydration::of(MetadataHydrationOutcome::Timeout)
+        );
+        // Another user's issue is not this user's confirmed identity.
+        assert_eq!(
+            hydrate_confirmed_identity_inline(&state, 2, 1, budget, "TESTKEY123", true).await,
+            MetadataHydration::of(MetadataHydrationOutcome::NotConfirmed)
+        );
+        assert!(state
+            .recording_fake()
+            .expect("recording provider")
+            .calls()
+            .is_empty());
+        assert_eq!(read_metadata(&state, identity_id).await, json!({}));
+    }
+
+    /// #5840: an explicit Retry after a failed attempt performs a fresh bounded
+    /// attempt and stores the credits; a later non-forced call reuses them.
+    #[tokio::test]
+    async fn inline_hydration_retry_succeeds_after_failure_and_is_then_reused() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_confirmed_identity(&state, "4000-29319", &json!({})).await;
+        let budget = Duration::from_secs(5);
+        let fake = state.recording_fake().expect("recording provider");
+        fake.push_ok(StatusCode::FORBIDDEN, HeaderMap::new(), Bytes::new());
+        let failed =
+            hydrate_confirmed_identity_inline(&state, 1, 1, budget, "TESTKEY123", true).await;
+        assert_eq!(
+            failed.outcome,
+            MetadataHydrationOutcome::ProviderUnavailable
+        );
+
+        push_deep_provider_result(&state, 29319, "2026-11-01 17:33:53");
+        let retried =
+            hydrate_confirmed_identity_inline(&state, 1, 1, budget, "TESTKEY123", true).await;
+        assert_eq!(
+            retried,
+            MetadataHydration::of(MetadataHydrationOutcome::Complete)
+        );
+        assert_eq!(
+            read_metadata(&state, identity_id).await["creator_credits"][0]["name"],
+            "Writer"
+        );
+
+        let reused =
+            hydrate_confirmed_identity_inline(&state, 1, 1, budget, "TESTKEY123", false).await;
+        assert_eq!(
+            reused,
+            MetadataHydration::of(MetadataHydrationOutcome::Complete)
+        );
+        assert_eq!(
+            state
+                .recording_fake()
+                .expect("recording provider")
+                .calls()
+                .len(),
+            2,
+            "complete same-identity metadata is reused without a third provider call"
+        );
+    }
+
+    /// Remaps the issue from identity A to identity B while A's provider call is
+    /// in flight, then answers with A's deep metadata.
+    struct RemapWhileInFlight {
+        pool: deadpool_postgres::Pool,
+        body: Bytes,
+    }
+
+    impl OutboundHttp for RemapWhileInFlight {
+        fn send(&self, _host: &str, _request: OutboundRequest) -> OutboundFuture {
+            let pool = self.pool.clone();
+            let body = self.body.clone();
+            Box::pin(async move {
+                let connection = pool.get().await.expect("remap connection");
+                connection
+                    .batch_execute(
+                        "UPDATE issue_external_identity_mappings \
+                           SET status = 'rejected' WHERE issue_id = 1; \
+                         INSERT INTO external_identities \
+                           (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
+                         VALUES ('comicvine', 'issue', '4000-555', '{\"marker\": \"B\"}'::json, now(), now()); \
+                         INSERT INTO issue_external_identity_mappings \
+                           (issue_id, external_identity_id, status, evidence_source, confidence, \
+                            evidence_json, created_at, updated_at) \
+                         SELECT 1, id, 'confirmed', 'user_confirmed', 1.0, '{}'::json, now(), now() \
+                         FROM external_identities WHERE external_id = '4000-555';",
+                    )
+                    .await
+                    .expect("remap A to B");
+                Ok(OutboundResponse {
+                    status: StatusCode::OK,
+                    headers: HeaderMap::new(),
+                    body: Body::from(body),
+                })
+            })
+        }
+
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+    }
+
+    /// #5840 concurrent A->B: a late provider answer for A must not be recorded
+    /// once the issue is confirmed to B, and B's metadata is untouched.
+    #[tokio::test]
+    async fn inline_hydration_late_result_for_old_identity_is_not_recorded() {
+        let Some(mut state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_a = seed_confirmed_identity(&state, "4000-29319", &json!({})).await;
+        let body = json!({
+            "status_code": 1,
+            "results": deep_provider_result(29319, "2026-11-01 17:33:53"),
+        })
+        .to_string();
+        let pool = state.pool.clone();
+        Arc::get_mut(&mut state)
+            .expect("unique test state")
+            .outbound = Arc::new(RemapWhileInFlight {
+            pool,
+            body: Bytes::from(body),
+        });
+
+        let result = hydrate_confirmed_identity_inline(
+            &state,
+            1,
+            1,
+            Duration::from_secs(5),
+            "TESTKEY123",
+            true,
+        )
+        .await;
+        assert_eq!(
+            result,
+            MetadataHydration::of(MetadataHydrationOutcome::NotConfirmed)
+        );
+        assert_eq!(read_metadata(&state, identity_a).await, json!({}));
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let b_metadata: String = connection
+            .query_one(
+                "SELECT metadata_json::text FROM external_identities WHERE external_id = '4000-555'",
+                &[],
+            )
+            .await
+            .expect("identity B")
+            .get(0);
+        assert_eq!(
+            serde_json::from_str::<Value>(&b_metadata).expect("B JSON"),
+            json!({"marker": "B"})
+        );
     }
 
     #[tokio::test]

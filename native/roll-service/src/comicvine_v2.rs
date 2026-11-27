@@ -23,7 +23,10 @@
 use crate::{
     auth::AuthenticatedUser,
     catalog_commit::inline_hydration_budget,
-    comicvine_provider::{hydrate_confirmed_identity_inline, ProviderFailure},
+    comicvine_provider::{
+        hydrate_confirmed_identity_inline, MetadataHydration, MetadataHydrationOutcome,
+        ProviderFailure,
+    },
     comicvine_resolution::SeriesImportStatusResponse,
     db,
     thread_issues::natural_issue_order,
@@ -186,6 +189,12 @@ pub struct IssueIdentityResponse {
     pub confirmed_mappings: Vec<IssueIdentityMapping>,
     pub candidate_mappings: Vec<IssueIdentityMapping>,
     pub has_unresolved: bool,
+    /// Truthful result of the synchronous metadata hydration that `identity:confirm`
+    /// and `identity:replace` attempt after the mapping commits (#5840). Always
+    /// omitted on reads and on operations that never hydrate, so the frozen
+    /// read wire contract is unchanged.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata_hydration: Option<MetadataHydration>,
 }
 
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
@@ -208,8 +217,13 @@ pub struct MetadataCorrectionsResponse {
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct MetadataRefreshResponse {
     pub issue_id: i32,
+    /// `true` only when this attempt stored a truthful metadata state
+    /// (`outcome` is `complete` or `no_credits`).
     pub refreshed: bool,
     pub comicvine_issue_id: Option<String>,
+    pub outcome: MetadataHydrationOutcome,
+    /// Provider-requested delay before another explicit Retry, when throttled.
+    pub retry_after_seconds: Option<u32>,
 }
 
 /// Python `ConfirmIdentityRequest` (lax `int`).
@@ -264,6 +278,11 @@ pub struct ImportIssueResponse {
     pub reading_order_id: Option<i32>,
     pub position: Option<i32>,
     pub total_items: Option<i32>,
+    /// Truthful result of the synchronous metadata hydration attempted for the
+    /// exact imported issue after it commits (#5840). Omitted when no attempt was
+    /// made, which keeps the response contract unchanged for callers without it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata_hydration: Option<MetadataHydration>,
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -987,6 +1006,7 @@ async fn identity_state(
         confirmed_mappings: confirmed,
         candidate_mappings: candidates,
         has_unresolved,
+        metadata_hydration: None,
     })
 }
 
@@ -1317,12 +1337,14 @@ pub async fn confirm_identity(
     crate::queue::lock_queue(&tx, user.id()).await?;
     lock_owned_issue(&tx, user.id(), issue_id).await?;
     link_confirmed(&tx, issue_id, request.comicvine_issue_id).await?;
-    let response = identity_state(&tx, user.id(), issue_id).await?;
+    let mut response = identity_state(&tx, user.id(), issue_id).await?;
     tx.commit().await.map_err(db::query_error)?;
     // Release the pooled connection before inline hydration checks one out;
     // on a small pool the handler holding it would starve the hydrator.
     drop(connection);
-    hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started, false).await;
+    response.metadata_hydration = Some(
+        hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started, false).await,
+    );
     Ok(Json(response))
 }
 
@@ -1335,9 +1357,9 @@ async fn hydrate_confirmed_identity_if_configured(
     issue_id: i32,
     started: Instant,
     force: bool,
-) {
+) -> MetadataHydration {
     let Some(api_key) = crate::comicvine_provider::provider_api_key() else {
-        return;
+        return MetadataHydration::of(MetadataHydrationOutcome::ProviderNotConfigured);
     };
     hydrate_confirmed_identity_inline(
         state,
@@ -1347,7 +1369,7 @@ async fn hydrate_confirmed_identity_if_configured(
         &api_key,
         force,
     )
-    .await;
+    .await
 }
 
 /// `POST /api/v2/comicvine/issues/{issue_id}/identity:replace` (Python
@@ -1385,10 +1407,12 @@ pub async fn replace_identity(
     .await
     .map_err(db::query_error)?;
     link_confirmed(&tx, issue_id, request.comicvine_issue_id).await?;
-    let response = identity_state(&tx, user.id(), issue_id).await?;
+    let mut response = identity_state(&tx, user.id(), issue_id).await?;
     tx.commit().await.map_err(db::query_error)?;
     drop(connection);
-    hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started, false).await;
+    response.metadata_hydration = Some(
+        hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started, false).await,
+    );
     Ok(Json(response))
 }
 
@@ -1550,17 +1574,20 @@ pub async fn refresh_metadata(
         .map_err(db::query_error)?;
     tx.commit().await.map_err(db::query_error)?;
     let comicvine_issue_id: Option<String> = identity_row.map(|row| row.get(0));
-    let refreshed = comicvine_issue_id.is_some();
     // Release the pooled connection before hydration checks one out; on a
     // small pool holding it here would starve the awaited provider request.
     drop(connection);
-    if comicvine_issue_id.is_some() {
-        hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started, true).await;
-    }
+    let hydration = if comicvine_issue_id.is_some() {
+        hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started, true).await
+    } else {
+        MetadataHydration::of(MetadataHydrationOutcome::NotConfirmed)
+    };
     Ok(Json(MetadataRefreshResponse {
         issue_id,
-        refreshed,
+        refreshed: hydration.is_terminal_success(),
         comicvine_issue_id,
+        outcome: hydration.outcome,
+        retry_after_seconds: hydration.retry_after_seconds,
     }))
 }
 
@@ -1677,6 +1704,7 @@ pub async fn import_issue(
     user: AuthenticatedUser,
     request: Result<Json<ImportIssueRequest>, JsonRejection>,
 ) -> Result<(StatusCode, Json<ImportIssueResponse>), ApiError> {
+    let started = Instant::now();
     let Json(request) = request.map_err(|_| validation_failed())?;
     // Python `title: Field(min_length=1, max_length=200)` bounds the raw
     // string; the service then stores `title.strip()` (possibly empty).
@@ -1786,7 +1814,7 @@ pub async fn import_issue(
         .await
         .map_err(db::query_error)?;
     let issue_id: i32 = issue_row.get(0);
-    // Python `confirm_comicvine_identity` (no post-commit hydration on import).
+    // Hydration for the exact imported issue runs after the commit below.
     let external_identity_id =
         link_with_source(&tx, issue_id, request.comicvine_issue_id, "user_confirmed").await?;
     let mut response = ImportIssueResponse {
@@ -1796,6 +1824,7 @@ pub async fn import_issue(
         reading_order_id: None,
         position: None,
         total_items: None,
+        metadata_hydration: None,
     };
     if let Some(order_id) = request.reading_order_id {
         let items = tx
@@ -1822,6 +1851,15 @@ pub async fn import_issue(
         response.total_items = Some(items.len() as i32 + 1);
     }
     tx.commit().await.map_err(db::query_error)?;
+    // One bounded, awaited provider fetch for this exact issue only. It runs
+    // after the commit, outside any transaction or lock, and a failure never
+    // undoes the import. (Series import deliberately does not fan out.)
+    drop(connection);
+    let hydration =
+        hydrate_confirmed_identity_if_configured(&state, user.id(), issue_id, started, false).await;
+    // No credential means no attempt was made: keep the original wire shape.
+    response.metadata_hydration =
+        (hydration.outcome != MetadataHydrationOutcome::ProviderNotConfigured).then_some(hydration);
     Ok((StatusCode::CREATED, Json(response)))
 }
 
