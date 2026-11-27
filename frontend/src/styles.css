@@ -20,125 +20,53 @@ body {
   overscroll-behavior: contain;
 }
 
+/* Night Shift is the single application-wide visual identity (#5980). These
+   semantic roles are the only palette source; there is no selectable theme,
+   no `data-theme` switch, and no stored appearance preference to restore.
+   The legacy aliases below point at the same roles for older surfaces. */
 :root {
-  --bg-glow: #2a2018;
-  --bg-main: #1a1410;
-  --bg-darker: #110e0a;
-  --bg-highlight: #2a2018;
-  --accent-primary: #d4890e;
-  --accent-red: #c0392b;
-  --accent-amber: var(--accent-primary);
-  --glass-bg: rgba(255, 255, 255, 0.04);
-  --glass-border: rgba(255, 255, 255, 0.08);
+  color-scheme: dark;
+
+  --theme-bg-page: #20242d;
+  --theme-bg-panel: #303644;
+  --theme-bg-hover: #3b4352;
+  --theme-border: #4d5767;
+  --theme-text-primary: #eef1f4;
+  --theme-text-muted: #b2bdcb;
+  --theme-text-dim: #a0acbc;
+  --theme-text: var(--theme-text-primary);
+  --theme-comic-accent: #9cdbe9;
+  --theme-continuity-accent: #c1a7f5;
+  --theme-personal-accent: #e6b9d8;
+  --theme-primary-action: #9cdbe9;
+  --theme-primary-action-hover: #c2e9f1;
+  --theme-primary-action-text: #111111;
+  --theme-danger: #f08a8a;
+  --theme-danger-hover: #f7a3a3;
+  --theme-focus-ring: #9cdbe9;
+  --theme-warning: #f2d08a;
+  --theme-success: #8fe0b8;
+  --theme-error: #f4a6a6;
+
+  /* Dice faces keep the approved Night Shift highlight and shadow pair. */
+  --die-light: #c2e9f1;
+  --die-dark: #658e97;
+
+  --bg-glow: var(--theme-bg-panel);
+  --bg-main: var(--theme-bg-page);
+  --bg-darker: var(--theme-bg-panel);
+  --bg-highlight: var(--theme-bg-hover);
+  --accent-primary: var(--theme-comic-accent);
+  --accent-red: var(--theme-danger);
+  --accent-amber: var(--theme-warning);
+  --glass-bg: var(--theme-bg-panel);
+  --glass-border: var(--theme-border);
   --glass-blur: blur(12px);
-  --text-primary: #e8d5b0;
-  --text-muted: #a0937e;
-  --text-dim: #6b5f50;
+  --text-primary: var(--theme-text-primary);
+  --text-muted: var(--theme-text-muted);
+  --text-dim: var(--theme-text-dim);
   --mobile-nav-height: 3.5rem;
   --desktop-nav-height: 5rem;
-}
-
-/* Semantic theme tokens applied via data-theme on <html>.
-   Each theme also re-points the legacy palette aliases at its semantic
-   tokens so every surface consuming the older variables reskins with the
-   active theme instead of staying frozen in classic colors. */
-[data-theme="classic"] {
-  --theme-bg-page: #1a1410;
-  --theme-bg-panel: rgba(255, 255, 255, 0.04);
-  --theme-bg-hover: rgba(255, 255, 255, 0.12);
-  --theme-border: rgba(255, 255, 255, 0.08);
-  --theme-text-primary: #e8d5b0;
-  --theme-text-muted: #a0937e;
-  --theme-text-dim: #6b5f50;
-  --theme-text: var(--theme-text-primary);
-  --theme-comic-accent: #d4890e;
-  --theme-continuity-accent: #06b6d4;
-  --theme-personal-accent: #a855f7;
-  --theme-primary-action: #d4890e;
-  --theme-primary-action-hover: #f0b429;
-  --theme-primary-action-text: var(--theme-bg-page);
-  --theme-danger: #c0392b;
-  --theme-danger-hover: #e74c3c;
-  --theme-focus-ring: #d4890e;
-  --theme-warning: #fbbf24;
-  --theme-success: #34d399;
-  --theme-error: #ef4444;
-  --bg-glow: #2a2018;
-  --bg-main: var(--theme-bg-page);
-  --bg-darker: #110e0a;
-  --text-primary: var(--theme-text-primary);
-  --text-muted: var(--theme-text-muted);
-  --text-dim: var(--theme-text-dim);
-  --accent-primary: var(--theme-comic-accent);
-  --accent-red: var(--theme-danger);
-  --glass-bg: var(--theme-bg-panel);
-  --glass-border: var(--theme-border);
-}
-
-[data-theme="ink-gold"] {
-  --theme-bg-page: #191005;
-  --theme-bg-panel: #271b0c;
-  --theme-bg-hover: #3b2a13;
-  --theme-border: #3d2c16;
-  --theme-text-primary: #f3dfae;
-  --theme-text-muted: #c8a96f;
-  --theme-text-dim: #8f7243;
-  --theme-text: var(--theme-text-primary);
-  --theme-comic-accent: #e0a419;
-  --theme-continuity-accent: #2f9e8f;
-  --theme-personal-accent: #e0636a;
-  --theme-primary-action: #e0a419;
-  --theme-primary-action-hover: #f0bd3f;
-  --theme-primary-action-text: var(--theme-bg-page);
-  --theme-danger: #c6473f;
-  --theme-danger-hover: #de5b52;
-  --theme-focus-ring: #e0a419;
-  --theme-warning: #f0bd3f;
-  --theme-success: #4ade80;
-  --theme-error: #c6473f;
-  --bg-glow: #3a2610;
-  --bg-main: var(--theme-bg-page);
-  --bg-darker: #0e0a04;
-  --text-primary: var(--theme-text-primary);
-  --text-muted: var(--theme-text-muted);
-  --text-dim: var(--theme-text-dim);
-  --accent-primary: var(--theme-comic-accent);
-  --accent-red: var(--theme-danger);
-  --glass-bg: var(--theme-bg-panel);
-  --glass-border: var(--theme-border);
-}
-
-[data-theme="command-center"] {
-  --theme-bg-page: #0b0c1e;
-  --theme-bg-panel: rgba(0, 0, 0, 0.6);
-  --theme-bg-hover: rgba(255, 255, 255, 0.1);
-  --theme-border: rgba(255, 255, 255, 0.1);
-  --theme-text-primary: #e0f7fa;
-  --theme-text-muted: #a0d8f2;
-  --theme-text-dim: #6b9dbd;
-  --theme-text: var(--theme-text-primary);
-  --theme-comic-accent: #ffd166;
-  --theme-continuity-accent: #00d4ff;
-  --theme-personal-accent: #ff6b7a;
-  --theme-primary-action: #ffd166;
-  --theme-primary-action-hover: #ff9e25;
-  --theme-primary-action-text: var(--theme-bg-page);
-  --theme-danger: #ff4757;
-  --theme-danger-hover: #ff5c6c;
-  --theme-focus-ring: #00d4ff;
-  --theme-warning: #ffd166;
-  --theme-success: #39ff88;
-  --theme-error: #ff4757;
-  --bg-glow: #131640;
-  --bg-main: var(--theme-bg-page);
-  --bg-darker: #05060f;
-  --text-primary: var(--theme-text-primary);
-  --text-muted: var(--theme-text-muted);
-  --text-dim: var(--theme-text-dim);
-  --accent-primary: var(--theme-comic-accent);
-  --accent-red: var(--theme-danger);
-  --glass-bg: var(--theme-bg-panel);
-  --glass-border: var(--theme-border);
 }
 
 /* Keep mobile form controls inside their containers and at the iOS no-zoom font threshold. */
@@ -167,13 +95,8 @@ body {
 }
 
 body {
-  background: radial-gradient(
-    circle at top left,
-    var(--bg-glow) 0%,
-    var(--bg-main) 40%,
-    var(--bg-darker) 100%
-  );
-  color: var(--text-primary);
+  background: var(--theme-bg-page);
+  color: var(--theme-text-primary);
   font-family: 'Outfit', sans-serif;
 }
 
@@ -182,17 +105,17 @@ body {
 }
 
 .scrollbar-thin::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.03);
+  background: color-mix(in srgb, var(--theme-border) 30%, transparent);
   border-radius: 3px;
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--theme-border);
   border-radius: 3px;
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--theme-text-dim);
 }
 
 .threejs-dice-container {
@@ -434,7 +357,7 @@ body {
 .dice-state-idle:hover {
   opacity: 1;
   filter: brightness(1);
-  box-shadow: 0 0 36px rgba(212, 137, 14, 0.3);
+  box-shadow: 0 0 36px color-mix(in srgb, var(--theme-comic-accent) 30%, transparent);
   border-color: var(--accent-primary);
 }
 
@@ -447,7 +370,7 @@ body {
 .dice-state-reroll {
   opacity: 1;
   animation: bounce-in 0.5s ease;
-  box-shadow: 0 0 45px rgba(212, 137, 14, 0.3);
+  box-shadow: 0 0 45px color-mix(in srgb, var(--theme-comic-accent) 30%, transparent);
 }
 
 .dice-state-rate-flow {
@@ -461,7 +384,7 @@ body {
 }
 
 .text-glow {
-  text-shadow: 0 0 20px rgba(212, 137, 14, 0.3);
+  text-shadow: 0 0 20px color-mix(in srgb, var(--theme-comic-accent) 30%, transparent);
 }
 
 @keyframes slide-in {
