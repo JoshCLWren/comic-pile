@@ -250,6 +250,8 @@ pub struct ReadingPlanReleaseSourceStatus {
 pub struct ReadingOrderProjectionRequest {
     #[serde(rename = "reading_order_id")]
     pub reading_order_id: i32,
+    #[serde(rename = "plan_updated_at", default)]
+    pub plan_updated_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
