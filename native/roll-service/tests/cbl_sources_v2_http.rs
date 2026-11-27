@@ -188,8 +188,8 @@ async fn all_filter_discovers_sources_across_every_folder() {
     let (state, token, _guard) = setup().await;
     let (status, body) = get(&state, &token, "/api/v2/cblSources?filter=all&page_size=50").await;
     assert_eq!(status, StatusCode::OK, "{body}");
-    assert_eq!(body["total"], 3);
-    assert_eq!(body["items"].as_array().unwrap().len(), 3);
+    assert_eq!(body["total"], 5);
+    assert_eq!(body["items"].as_array().unwrap().len(), 5);
     // The discovery picker is catalog-wide, not limited to root-level lists.
     assert!(body["items"].to_string().contains("JLI"));
 }
@@ -284,8 +284,10 @@ async fn query_validation_rejects_bad_filter_order_and_replayed_token() {
 
     let (status, first) = get(&state, &token, "/api/v2/cblSources?page_size=1").await;
     assert_eq!(status, StatusCode::OK, "{first}");
-    let cursor = first["next_page_token"].as_str().unwrap();
-    let (status, _) = get(
+    let cursor = first["next_page_token"]
+        .as_str()
+        .expect("the two-item root page must issue a continuation token");
+    let (status, replay) = get(
         &state,
         &token,
         &format!("/api/v2/cblSources?page_size=1&filter=q:JLI&page_token={cursor}"),
@@ -294,6 +296,6 @@ async fn query_validation_rejects_bad_filter_order_and_replayed_token() {
     assert_eq!(
         status,
         StatusCode::BAD_REQUEST,
-        "a token is bound to its filter"
+        "a token is bound to its filter: {replay}"
     );
 }

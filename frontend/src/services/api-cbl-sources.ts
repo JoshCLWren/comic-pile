@@ -272,7 +272,20 @@ function encodeSourcePageToken(
   pageSize: number,
 ): string {
   const payload = JSON.stringify({ p: page, f: filter, o: orderBy, s: pageSize })
-  return btoa(payload).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  // `btoa` consumes Latin-1 bytes while the Rust cursor is UTF-8 JSON. Encode
+  // the payload to UTF-8 first so non-ASCII filters survive the round trip.
+  const bytes = new TextEncoder().encode(payload)
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+/** Named query contract for the canonical catalog List request. */
+interface SourceBrowseParams {
+  filter: string
+  order_by: string
+  page_size: number
+  page_token?: string
 }
 
 /** Fold the browser's folder/search position into one canonical `filter`. */
@@ -343,7 +356,9 @@ export function createCblSourcesApi(client: HttpClient) {
           page_size: limit,
         },
       })
-      return page.items as CBLSourceListDiscoveryItem[]
+      // `CBLCatalogListItem` is a structural alias of the discovery item, so
+      // the API's `items` array already has this type without an assertion.
+      return page.items
     },
     /**
      * Read one page of the shared CBL catalog.
@@ -358,7 +373,7 @@ export function createCblSourcesApi(client: HttpClient) {
       const page = options.page ?? 1
       const pageSize = options.pageSize ?? 50
       const filter = sourceFilter(options)
-      const params: Record<string, string | number> = {
+      const params: SourceBrowseParams = {
         filter,
         order_by: 'name',
         page_size: pageSize,
