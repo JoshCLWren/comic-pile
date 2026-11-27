@@ -569,8 +569,7 @@ async fn compare_cbl_sources_returns_no_matches_for_unknown_ids() {
 #[tokio::test]
 async fn compare_cbl_sources_handles_large_input_set() {
     let (state, token, csrf, _guard) = setup().await;
-    let mut ids: Vec<String> = (1..=999).map(|i| format!("4000-{i}")).collect();
-    ids.push(ISSUE_ID.to_string());
+    let ids: Vec<String> = (1..=1000).map(|i| format!("4000-{i}")).collect();
     let (status, body) = post_json(
         &state,
         &token,
