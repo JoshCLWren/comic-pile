@@ -29695,7 +29695,6 @@
         "tags": [
           "threads"
         ]
-<<<<<<< HEAD
       }
     },
     "/api/v2/threads/{thread_id}": {
@@ -29740,8 +29739,6 @@
         "tags": [
           "threads"
         ]
-=======
->>>>>>> origin/main
       }
     },
     "/api/v2/threads/{thread_id}/issue-order": {
