@@ -13,7 +13,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 
 ## Coverage summary
 
-- Live API routes: 251 (v1 65, v2 174, unversioned 12).
+- Live API routes: 252 (v1 65, v2 175, unversioned 12).
 - v1 routes with a named retirement owner: 65.
 - v1 routes needing an owner issue: 0 (visible baseline debt, not a pass).
 - Routes with unresolved production ingress: 0.
@@ -249,6 +249,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | POST | `/api/v2/roll/switch-prerequisite` | `roll_switch_prerequisite::switch_prerequisite` | v2 | frontend/src/services/rollBootstrapApi.ts | /api/native_roll.rs | #4850 | canonical-v2 | live-target |
 | POST | `/api/v2/roll/unsnooze` | `roll_offer::unsnooze` | v2 | frontend/src/services/api-roll.ts, frontend/src/unit/rollApi.queueSnooze.test.ts | /api/native_roll.rs | #4850 | canonical-v2 | live-target |
 | POST | `/api/v2/series-mapping-commits` | `catalog_commit::commit_series_mapping_handler` | v2 | frontend/src/services/api-series-mapping.ts | /api/native_roll.rs | #4844 | canonical-v2 | live-target |
+| POST | `/api/v2/seriesMappings:preview` | `catalog_series_mapping_preview::preview_series_mappings_v2` | v2 | none | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | GET | `/api/v2/tags` | `tags::list_tags` | v2 | frontend/src/services/api-tags.ts, frontend/src/test/core-views-request-budget.spec.ts, frontend/src/unit/TagEditor.request-scope.test.tsx, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-tags.test.ts, frontend/src/unit/continuityIdentityRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
 | POST | `/api/v2/tags` | `tags::create_tag` | v2 | frontend/src/services/api-tags.ts, frontend/src/test/core-views-request-budget.spec.ts, frontend/src/unit/TagEditor.request-scope.test.tsx, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-tags.test.ts, frontend/src/unit/continuityIdentityRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
 | GET | `/api/v2/tags/effective/issues/{issue_id}` | `tags::effective_for_issue` | v2 | frontend/src/services/api-tags.ts, frontend/src/unit/api-tags.test.ts, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
