@@ -2077,6 +2077,11 @@ fn decode_stale_cursor(token: &str) -> Result<StaleCursor, ApiError> {
         .and_then(Value::as_str)
         .ok_or_else(invalid)?
         .to_string();
+    // The cursor binds this value as a timestamptz. Validate it here so a
+    // forged token cannot turn a client error into a PostgreSQL cast failure.
+    if !activity.is_empty() && chrono::DateTime::parse_from_rfc3339(&activity).is_err() {
+        return Err(invalid());
+    }
     let id = object
         .get("id")
         .and_then(Value::as_i64)
@@ -2978,6 +2983,12 @@ mod tests {
             URL_SAFE_NO_PAD.encode(br#"{"sort":"position","search":"","values":["0","1","2"]}"#);
         assert_eq!(
             decode_stale_cursor(&queue_cursor).unwrap_err().detail(),
+            "Invalid stale page token"
+        );
+        let forged =
+            URL_SAFE_NO_PAD.encode(br#"{"kind":"stale","activity":"not-a-timestamp","id":3}"#);
+        assert_eq!(
+            decode_stale_cursor(&forged).unwrap_err().detail(),
             "Invalid stale page token"
         );
     }
