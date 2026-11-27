@@ -453,10 +453,21 @@ pub async fn preview_plan_projection_handler(
 pub async fn preview_reading_order_projection_v2(
     state: State<Arc<AppState>>,
     user: AuthenticatedUser,
-    plan_id: Result<Path<String>, PathRejection>,
+    custom_method: Result<Path<String>, PathRejection>,
     body: Bytes,
 ) -> Result<Json<ReadingOrderProjectPreviewResponse>, PreviewError> {
-    preview_plan_projection_handler(state, user, plan_id, body).await
+    // matchit requires a capture to own its whole segment, so the mounted
+    // route captures `710:previewReadingOrderProjection` and only the exact
+    // documented custom-method suffix is accepted here. A different suffix is
+    // an owner-scoped 404, never a silent fallthrough to the preview.
+    let Path(segment) =
+        custom_method.map_err(|_| PreviewError::Api(validation_failed()))?;
+    let Some(plan_id) = segment.strip_suffix(":previewReadingOrderProjection") else {
+        return Err(not_found(format!(
+            "Unknown continuity plan custom method {segment:?}"
+        )));
+    };
+    preview_plan_projection_handler(state, user, Ok(Path(plan_id.to_string())), body).await
 }
 
 #[utoipa::path(
