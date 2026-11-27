@@ -29907,7 +29907,6 @@
         ]
       }
     },
-<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/readingOrders": {
       "get": {
         "operationId": "thread_ordering_reading_orders",
@@ -29955,8 +29954,6 @@
         ]
       }
     },
-=======
->>>>>>> origin/main
     "/api/v2/undo/{session_id}/snapshots": {
       "get": {
         "operationId": "list_undo_snapshots_documentation",
