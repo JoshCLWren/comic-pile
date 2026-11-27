@@ -3474,7 +3474,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn create_compiles_checkpoint_rule_and_delete_retires_edge() {
+    async fn create_saves_membership_without_compiling_rules_or_edges() {
         let (state, user, _guard) = plan_db_fixture().await;
         let mut second = node("n2", "issue", 483802, "l1", 1);
         second.is_checkpoint = true;
@@ -3499,7 +3499,7 @@ mod tests {
             .await
             .expect("rule count")
             .get(0);
-        assert_eq!(rule_count, 1);
+        assert_eq!(rule_count, 0, "plan save must not compile continuity rules");
         let membership: i64 = conn
             .query_one(
                 "SELECT count(*) FROM reading_plan_issues WHERE plan_id = $1",
@@ -3519,7 +3519,7 @@ mod tests {
             .await
             .expect("compiled edge")
             .map(|row| row.get(0));
-        assert!(edge.is_some(), "checkpoint must compile a canonical edge");
+        assert!(edge.is_none(), "plan save must not compile a canonical edge");
         drop(conn);
 
         let status =
@@ -3539,7 +3539,7 @@ mod tests {
             .await
             .expect("edge after delete")
             .map(|row| row.get(0));
-        assert!(edge_after.is_none(), "deleting a plan must retire its edge");
+        assert!(edge_after.is_none(), "no compiled rule-derived edge may exist");
         let rule_after: i64 = conn
             .query_one(
                 "SELECT count(*) FROM continuity_rules WHERE note = $1",
@@ -3552,7 +3552,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn create_with_convergence_cycle_returns_structured_409_and_rolls_back() {
+    async fn convergence_gates_do_not_compile_legacy_edges_on_save() {
         let (state, user, _guard) = plan_db_fixture().await;
         let mut first = node("n1", "issue", 483801, "l1", 0);
         first.convergence_gate = vec![serde_json::json!({"node_type": "issue", "node_id": "n2"})];
@@ -3560,25 +3560,35 @@ mod tests {
         second.convergence_gate = vec![serde_json::json!({"node_type": "issue", "node_id": "n1"})];
         let write = payload("informational", vec![lane("l1", 0)], vec![first, second]);
 
-        let error = create_continuity_plan(State(state.clone()), user, Json(write))
-            .await
-            .expect_err("a convergence cycle must be rejected");
-        assert_eq!(error.status(), StatusCode::CONFLICT);
-        assert_eq!(
-            error.structured_detail().expect("structured detail")["code"],
-            "plan_convergence_cycle"
-        );
+        // Cycle eligibility belongs to the canonical Reading List evaluator,
+        // not to a plan-save compiler. The document is saved without compiling
+        // any rule-derived dependency edge.
+        let (status, Json(created)) =
+            create_continuity_plan(State(state.clone()), user, Json(write))
+                .await
+                .expect("create plan");
+        assert_eq!(status, StatusCode::CREATED);
 
         let conn = db::checkout(&state).await.expect("verify connection");
-        let plans: i64 = conn
+        let edges: i64 = conn
             .query_one(
-                "SELECT count(*) FROM continuity_plans WHERE user_id = $1",
-                &[&user.id()],
+                "SELECT count(*) FROM dependencies WHERE note LIKE 'canonical:rule:%'",
+                &[],
             )
             .await
-            .expect("plan count")
+            .expect("compiled edge count")
             .get(0);
-        assert_eq!(plans, 0, "a failed write must leave no plan behind");
+        assert_eq!(edges, 0, "plan save must not compile rule-derived edges");
+        let rules: i64 = conn
+            .query_one(
+                "SELECT count(*) FROM continuity_rules WHERE note = $1",
+                &[&format!("continuity-plan:{}", created.id)],
+            )
+            .await
+            .expect("rule count")
+            .get(0);
+        assert_eq!(rules, 0, "plan save must not compile continuity rules");
+        drop(conn);
     }
 
     #[tokio::test]
