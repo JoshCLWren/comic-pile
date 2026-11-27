@@ -14,6 +14,8 @@ import {
 } from '../services/api-cbl-sources'
 import { applyCblAdoptionChoices } from '../utils/cblAdoptionPlan'
 import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle } from '../utils/cblSourceDisplay'
+import CompactIssueCardTrigger from './CompactIssueCardTrigger'
+import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 
 interface ReadingPlanAddMaterialProps {
   planId: number
@@ -136,6 +138,18 @@ export default function ReadingPlanAddMaterial({
     },
     [previewQuery.data, seriesDecisions, entryDecisions, hasChoices],
   )
+  // One bounded owner-scoped batch for the exact owned issues visible in the
+  // preview. Provider-only/missing entries carry no canonical id and must not
+  // borrow another comic's card or cover.
+  const previewIssueIds = useMemo(
+    () => (preview?.entries ?? [])
+      .map((entry) => entry.canonical_issue_id)
+      .filter((id): id is number => id != null),
+    [preview],
+  )
+  const cardsQuery = useIssueCards(previewIssueIds, { enabled: open && preview != null })
+  const cardsByIssue = useMemo(() => indexIssueCards(cardsQuery.data), [cardsQuery.data])
+
   const result: CBLAdoptionCommitResult | undefined = commitMutation.data
   const isSearching = sourcesQuery.isFetching
   const isPreviewing = previewQuery.isFetching
@@ -402,6 +416,18 @@ export default function ReadingPlanAddMaterial({
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-bold text-[var(--theme-text-primary)]">{entry.series_name} #{entry.issue_number}</span>
                       <span className={`block text-xs ${statusClass(entry)}`}>{statusLabel(entry)}</span>
+                      {entry.canonical_issue_id != null && (
+                        <span className="mt-1 block">
+                          <CompactIssueCardTrigger
+                            issueId={entry.canonical_issue_id}
+                            threadTitle={entry.series_name}
+                            issueNumber={entry.issue_number}
+                            status={entry.read_status === 'read' ? 'read' : 'unread'}
+                            card={cardsByIssue.get(entry.canonical_issue_id) ?? null}
+                            hideTitle
+                          />
+                        </span>
+                      )}
                     </span>
                     {entry.adoption_class !== 'ambiguous_unresolved' && (
                       <label className="flex shrink-0 items-center gap-2 text-xs font-bold text-[var(--theme-text-primary)]">

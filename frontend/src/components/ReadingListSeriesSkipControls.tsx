@@ -32,6 +32,11 @@ interface SeriesSkipGroup {
  * CBL naming convention uses, so the visible label and the checkbox name always
  * identify one volume instead of two identical controls.
  *
+ * A group is a thread-level control over many owned issues, not one canonical
+ * issue. It deliberately never mounts a covered issue card: a representative
+ * issue number or a series title would fabricate an owned identity for a
+ * whole-volume choice (issue #5904).
+ *
  * @param entries - Every entry currently in the draft.
  * @returns One group per series in first-appearance order.
  */
@@ -90,6 +95,7 @@ export default function ReadingListSeriesSkipControls({
     <section
       className="space-y-2 rounded-xl border border-[var(--theme-border)] p-3"
       aria-labelledby={headingId}
+      data-testid="series-skip-controls"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h4
@@ -107,6 +113,8 @@ export default function ReadingListSeriesSkipControls({
           <li
             key={group.threadId}
             className="flex items-center justify-between gap-2 rounded-lg border border-[var(--theme-border)] p-2"
+            data-testid="series-skip-group"
+            data-thread-id={group.threadId}
           >
             <div className="flex min-w-0 items-center gap-2">
               <TriStateCheckbox
