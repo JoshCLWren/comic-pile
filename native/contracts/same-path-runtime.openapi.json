@@ -859,65 +859,6 @@
         ]
       }
     },
-    "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview": {
-      "post": {
-        "tags": [
-          "crate::continuity_plans_project_preview"
-        ],
-        "operationId": "preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post",
-        "parameters": [
-          {
-            "name": "plan_id",
-            "in": "path",
-            "description": "Continuity plan id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReadingOrderProjectPreviewRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Deterministic projection preview",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadingOrderProjectPreviewResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Plan or reading order not found"
-          },
-          "409": {
-            "description": "Malformed plan"
-          },
-          "422": {
-            "description": "Validation failed"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/v1/continuity-rules/": {
       "get": {
         "tags": [

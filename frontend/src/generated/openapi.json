@@ -19348,7 +19348,7 @@
         ]
       }
     },
-    "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview": {
+    "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection": {
       "post": {
         "operationId": "preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post",
         "parameters": [
@@ -22457,7 +22457,7 @@
         ]
       }
     },
-    "/api/v1/threads/{thread_id}/reading-orders": {
+    "/api/v2/threads/{thread_id}/readingOrders": {
       "get": {
         "operationId": "thread_ordering_reading_orders",
         "parameters": [

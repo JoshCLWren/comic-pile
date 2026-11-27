@@ -249,7 +249,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview": {
+    "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection": {
         parameters: {
             query?: never;
             header?: never;
@@ -1162,7 +1162,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/threads/{thread_id}/reading-orders": {
+    "/api/v2/threads/{thread_id}/readingOrders": {
         parameters: {
             query?: never;
             header?: never;
