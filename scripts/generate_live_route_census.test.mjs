@@ -43,7 +43,7 @@ function run(root, ...args) {
 test('router parser records live registrations and ignores test-module strings', () => {
   const source = readFileSync(path.join(inputsRoot, 'native/roll-service/src/lib.rs'), 'utf8');
   const routes = parseRouterRoutes(source);
-  assert.equal(routes.length, 5);
+  assert.equal(routes.length, 6);
   const setPending = routes.find(route => route.path.endsWith('/set-pending'));
   assert.deepEqual(
     {method: setPending.method, handler: setPending.handler, line: setPending.line},
@@ -149,14 +149,18 @@ test('CI gate rejects an unowned v1 route registration', t => {
   assert.ok(failures.some(failure => failure.includes('/api/v1/unowned/new')), JSON.stringify(failures));
 });
 
-test('CI gate rejects unresolved ingress and stale allowlist debt', t => {
+test('CI gate rejects unresolved ingress and stale baseline debt', t => {
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'live-census-ingress-'));
   t.after(() => rmSync(tmp, {recursive: true, force: true}));
   stage(tmp);
   writeFileSync(path.join(tmp, 'vercel.json'), '{"routes":[]}\n');
+  const dispositionsPath = path.join(tmp, 'docs/api/v1-route-dispositions.json');
+  const dispositions = JSON.parse(readFileSync(dispositionsPath, 'utf8'));
+  dispositions.known_unowned_baseline = ['GET /api/v1/retired'];
+  writeFileSync(dispositionsPath, `${JSON.stringify(dispositions, null, 2)}\n`);
   const failures = generate(tmp).failures;
   assert.ok(failures.some(failure => failure.includes('no production ingress')), JSON.stringify(failures));
-  assert.ok(failures.some(failure => failure.includes('missing from the retirement allowlist')));
+  assert.ok(failures.some(failure => failure.includes('known baseline debt')), JSON.stringify(failures));
 });
 
 test('fixture artifacts are complete and checked-in outputs are current', () => {
