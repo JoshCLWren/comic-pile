@@ -1426,18 +1426,16 @@ SELECT totals.total_count,
 FROM owned CROSS JOIN totals
 "#;
 
-fn parse_v2_page_query(
-    raw: Option<&str>,
-) -> Result<
-    (
-        Option<String>,
-        i64,
-        Option<String>,
-        Option<i32>,
-        Option<i32>,
-    ),
-    ApiError,
-> {
+/// `(status, page_size, page_token, cursor_position, cursor_issue_id)`
+type V2PageQuery = (
+    Option<String>,
+    i64,
+    Option<String>,
+    Option<i32>,
+    Option<i32>,
+);
+
+fn parse_v2_page_query(raw: Option<&str>) -> Result<V2PageQuery, ApiError> {
     let (status, page_size, page_token) = crate::issue_read::parse_thread_issue_query(raw)?;
     let cursor = page_token
         .as_deref()
