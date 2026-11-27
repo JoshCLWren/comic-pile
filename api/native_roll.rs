@@ -337,15 +337,12 @@ fn app() -> Router {
             post(native_dispatch),
         )
         .route("/api/v2/threads", get(native_dispatch))
-<<<<<<< HEAD
         .route(
             "/api/v2/threads/{thread_id}",
             get(native_dispatch)
                 .patch(native_dispatch)
                 .delete(native_dispatch),
         )
-=======
->>>>>>> origin/main
         // #5705: the advisory duplicate check is an AIP-136 collection custom
         // method. The inner service registers it too, but this Vercel entry owns
         // a separate route table: without a matching route here a deployed
