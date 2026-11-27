@@ -1660,7 +1660,6 @@ mod tests {
         }
     }
 
-
     #[tokio::test]
     async fn retired_v1_dependency_diagnosis_routes_return_404_in_inner_router() {
         // #5709: dependency/blocking/connection diagnosis is v2-only. The
