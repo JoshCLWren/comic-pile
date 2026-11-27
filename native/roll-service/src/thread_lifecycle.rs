@@ -3302,4 +3302,104 @@ mod tests {
         assert_eq!(pruned[1]["position"], 0);
         assert!(prune_plan_nodes(&nodes, 99, &HashSet::new()).is_none());
     }
+
+    #[test]
+    fn patch_mask_restricts_writes_and_clears_a_masked_absent_field() {
+        let mut check = Check::default();
+        let body = json!({
+            "title": "A newer title",
+            "format": "Comic",
+            "update_mask": ["notes"]
+        });
+        let (input, expected) = parse_patch(&mut check, Some(body)).unwrap();
+        assert!(check.is_clean());
+        assert!(expected.is_none());
+        assert_eq!(input.title, None);
+        assert_eq!(input.format, None);
+        assert!(input.notes_present);
+        assert_eq!(input.notes, None);
+
+        let mut check = Check::default();
+        let (input, _) = parse_patch(
+            &mut check,
+            Some(json!({"title": "kept", "update_mask": ["is_test"]})),
+        )
+        .unwrap();
+        assert!(check.is_clean());
+        assert_eq!(input.is_test, Some(false));
+    }
+
+    #[test]
+    fn patch_without_mask_preserves_omitted_fields() {
+        let mut check = Check::default();
+        let (input, _) =
+            parse_patch(&mut check, Some(json!({"notes": null, "title": "Renamed"}))).unwrap();
+        assert!(check.is_clean());
+        assert_eq!(input.title.as_deref(), Some("Renamed"));
+        assert!(input.notes_present);
+        assert_eq!(input.notes, None);
+        assert_eq!(input.format, None);
+        assert_eq!(input.credits, None);
+    }
+
+    #[test]
+    fn patch_mask_rejects_unknown_fields() {
+        let mut check = Check::default();
+        assert!(parse_patch(
+            &mut check,
+            Some(json!({"title": "x", "update_mask": ["status"]})),
+        )
+        .is_ok());
+        assert!(!check.is_clean());
+        assert!(check_errors(&check)
+            .iter()
+            .any(|error| error["field"] == "body.update_mask"));
+    }
+
+    fn owned_thread_for_precondition() -> OwnedThread {
+        OwnedThread {
+            id: 7,
+            title: "Committed title".to_owned(),
+            format: "Comic".to_owned(),
+            issues_remaining: 3,
+            total_issues: None,
+            reading_progress: None,
+            status: "active".to_owned(),
+            queue_position: 1,
+            notes: Some("committed notes".to_owned()),
+            manual_creator_credits: json!([{"name": "Jane Doe", "roles": ["Writer"]}]),
+        }
+    }
+
+    #[test]
+    fn patch_precondition_accepts_the_committed_snapshot() {
+        let expected = PatchPrecondition {
+            title: Some("Committed title".to_owned()),
+            format: Some("comics".to_owned()),
+            notes_present: true,
+            notes: Some("committed notes".to_owned()),
+            credits: Some(vec![json!({"name": "  Jane   Doe ", "roles": ["Writer"]})]),
+        };
+        check_precondition(&owned_thread_for_precondition(), &expected).unwrap();
+    }
+
+    #[test]
+    fn patch_precondition_returns_409_with_current_values_when_stale() {
+        let expected = PatchPrecondition {
+            title: Some("Stale title".to_owned()),
+            format: Some("Comic".to_owned()),
+            notes_present: true,
+            notes: Some("stale notes".to_owned()),
+            credits: None,
+        };
+        let failure = check_precondition(&owned_thread_for_precondition(), &expected).unwrap_err();
+        let LifecycleError::Api(error) = failure else {
+            panic!("expected an API conflict, not a validation failure");
+        };
+        assert_eq!(error.status(), StatusCode::CONFLICT);
+        let detail = error.structured_detail().expect("structured conflict");
+        assert_eq!(detail["code"], "thread_edit_conflict");
+        assert_eq!(detail["current"]["title"], "Committed title");
+        assert_eq!(detail["current"]["notes"], "committed notes");
+    }
 }
