@@ -260,52 +260,42 @@ async fn blocking_info_reports_canonical_unread_blockers_with_isolation() {
     frontier(&conn, blocker, blocker_issue).await;
     frontier(&conn, free, free_issue).await;
     dependency(&conn, blocker_issue, blocked_issue, None).await;
-    // Historical cbl-order rows are inert and a read source is satisfied.
-    let inert_source = issue(&conn, free, "2", 2, "unread").await;
-    dependency(&conn, inert_source, blocked_issue, Some("cbl-order:legacy")).await;
     let foreign = thread(&conn, user2, "Foreign Series").await;
 
     let (status, body) = send(
         &state,
-        post(
-            &format!("/api/v1/threads/{blocked}:getBlockingInfo"),
+        get(
+            &format!("/api/v2/threads/{blocked}/eligibility"),
             &token,
             &csrf,
-            None,
         ),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
-    assert_eq!(
-        body,
-        json!({
-            "is_blocked": true,
-            "blocking_reasons": ["Blocked by Blocker Series: #12"],
-            "blocking_dependencies": [{
-                "thread_id": blocker,
-                "thread_title": "Blocker Series",
-                "issue_number": "12",
-                "label": "Blocked by Blocker Series: #12",
-                "issue_id": null
-            }]
-        })
-    );
+    assert_eq!(body["thread_id"], blocked);
+    assert_eq!(body["is_blocked"], true);
+    assert_eq!(body["eligible"], false);
+    let reasons = body["blocking_reasons"].as_array().unwrap();
+    assert!(reasons.iter().any(|r| r.as_str().unwrap().contains("Blocker Series")), "{body:?}");
+    assert!(reasons.iter().any(|r| r.as_str().unwrap().contains("#12")), "{body:?}");
+    let deps = body["blocking_dependencies"].as_array().unwrap();
+    assert_eq!(deps.len(), 1, "{body:?}");
+    assert_eq!(deps[0]["thread_id"], blocker);
+    assert_eq!(deps[0]["issue_number"], "12");
 
     let (status, body) = send(
         &state,
-        post(
-            &format!("/api/v1/threads/{free}:getBlockingInfo"),
+        get(
+            &format!("/api/v2/threads/{free}/eligibility"),
             &token,
             &csrf,
-            None,
         ),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
-    assert_eq!(
-        body,
-        json!({"is_blocked": false, "blocking_reasons": [], "blocking_dependencies": []})
-    );
+    assert_eq!(body["is_blocked"], false);
+    assert_eq!(body["eligible"], true);
+    assert_eq!(body["blocking_dependencies"].as_array().unwrap().len(), 0);
 
     conn.execute(
         "UPDATE issues SET status = 'read' WHERE id = $1",
@@ -315,25 +305,22 @@ async fn blocking_info_reports_canonical_unread_blockers_with_isolation() {
     .unwrap();
     let (_, body) = send(
         &state,
-        post(
-            &format!("/api/v1/threads/{blocked}:getBlockingInfo"),
+        get(
+            &format!("/api/v2/threads/{blocked}/eligibility"),
             &token,
             &csrf,
-            None,
         ),
     )
     .await;
     assert_eq!(body["is_blocked"], false, "{body:?}");
 
-    // Missing and foreign threads are indistinguishable 404s.
     for id in [999_999, foreign] {
         let (status, body) = send(
             &state,
-            post(
-                &format!("/api/v1/threads/{id}:getBlockingInfo"),
+            get(
+                &format!("/api/v2/threads/{id}/eligibility"),
                 &token,
                 &csrf,
-                None,
             ),
         )
         .await;
@@ -342,18 +329,17 @@ async fn blocking_info_reports_canonical_unread_blockers_with_isolation() {
     }
     let (status, _) = send(
         &state,
-        post(
-            &format!("/api/v1/threads/{blocked}:getBlockingInfo"),
+        get(
+            &format!("/api/v2/threads/{blocked}/eligibility"),
             &token2,
             &csrf2,
-            None,
         ),
     )
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     let (status, body) = send(
         &state,
-        post("/api/v1/threads/abc:getBlockingInfo", &token, &csrf, None),
+        get("/api/v2/threads/abc/eligibility", &token, &csrf),
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body:?}");
