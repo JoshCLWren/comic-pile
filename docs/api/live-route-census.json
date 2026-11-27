@@ -8,8 +8,8 @@
     "consumers": [
       "docs/api/v2-route-inventory.json",
       "frontend/src",
-      "scripts",
-      ".github/scripts"
+      "scripts/ops",
+      "native/roll-service/parity"
     ],
     "dispositions": "docs/api/v1-route-dispositions.json",
     "aip_baseline": "docs/api/v2-aip-shapes-baseline.json"
@@ -24,7 +24,7 @@
     "v1_with_owner": 65,
     "v1_needing_owner": 0,
     "unknown_ingress": 0,
-    "first_party_call_sites": 1161
+    "first_party_call_sites": 937
   },
   "routes": [
     {
@@ -208,12 +208,9 @@
       "runtime": "native-rust",
       "runtime_source": "native-router",
       "consumers": [
-        "frontend/src/unit/generated-v1-only-paths.test.ts",
-        "scripts/export_openapi_schema.mjs",
-        "scripts/generate_openapi_types.test.mjs",
-        "scripts/generate_vercel_routes.test.mjs"
+        "frontend/src/unit/generated-v1-only-paths.test.ts"
       ],
-      "caller_count": 5,
+      "caller_count": 2,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4335,
@@ -547,10 +544,8 @@
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
-      "consumers": [
-        "scripts/generate_vercel_routes.test.mjs"
-      ],
-      "caller_count": 1,
+      "consumers": [],
+      "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4836,
@@ -606,11 +601,8 @@
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
-      "consumers": [
-        "scripts/generate_vercel_routes.test.mjs",
-        "scripts/no_background_metadata_repair.test.mjs"
-      ],
-      "caller_count": 2,
+      "consumers": [],
+      "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5276,
@@ -650,10 +642,9 @@
       "runtime": "native-rust",
       "runtime_source": "native-router",
       "consumers": [
-        "frontend/src/services/api-cbl-sources.ts",
-        "scripts/check_native_route_db_tests.test.mjs"
+        "frontend/src/services/api-cbl-sources.ts"
       ],
-      "caller_count": 3,
+      "caller_count": 2,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5712,
@@ -693,10 +684,9 @@
       "runtime": "native-rust",
       "runtime_source": "native-router",
       "consumers": [
-        "frontend/src/services/api-cbl-sources.ts",
-        "scripts/check_native_route_db_tests.test.mjs"
+        "frontend/src/services/api-cbl-sources.ts"
       ],
-      "caller_count": 3,
+      "caller_count": 2,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5712,
@@ -715,10 +705,9 @@
       "runtime": "native-rust",
       "runtime_source": "native-router",
       "consumers": [
-        "frontend/src/services/api-cbl-sources.ts",
-        "scripts/check_native_route_db_tests.test.mjs"
+        "frontend/src/services/api-cbl-sources.ts"
       ],
-      "caller_count": 5,
+      "caller_count": 1,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5712,
@@ -737,10 +726,9 @@
       "runtime": "native-rust",
       "runtime_source": "native-router",
       "consumers": [
-        "frontend/src/services/api-cbl-sources.ts",
-        "scripts/check_native_route_db_tests.test.mjs"
+        "frontend/src/services/api-cbl-sources.ts"
       ],
-      "caller_count": 8,
+      "caller_count": 3,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5712,
@@ -885,10 +873,8 @@
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
-      "consumers": [
-        "scripts/generate_route_burndown.test.mjs"
-      ],
-      "caller_count": 1,
+      "consumers": [],
+      "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4849,
@@ -906,10 +892,8 @@
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
-      "consumers": [
-        "scripts/generate_route_burndown.test.mjs"
-      ],
-      "caller_count": 2,
+      "consumers": [],
+      "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4849,
@@ -927,10 +911,8 @@
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
-      "consumers": [
-        "scripts/generate_route_burndown.test.mjs"
-      ],
-      "caller_count": 2,
+      "consumers": [],
+      "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4849,
@@ -948,10 +930,8 @@
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
-      "consumers": [
-        "scripts/generate_route_burndown.test.mjs"
-      ],
-      "caller_count": 1,
+      "consumers": [],
+      "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4849,
@@ -991,10 +971,9 @@
       "consumers": [
         "frontend/src/services/api-taste.ts",
         "frontend/src/test/p0-auth-outage-recovery.spec.ts",
-        "frontend/src/unit/api-taste.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-taste.test.ts"
       ],
-      "caller_count": 4,
+      "caller_count": 3,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5717,
@@ -1014,10 +993,9 @@
       "runtime_source": "native-router",
       "consumers": [
         "frontend/src/services/api-taste.ts",
-        "frontend/src/unit/api-taste.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-taste.test.ts"
       ],
-      "caller_count": 3,
+      "caller_count": 2,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5717,
@@ -1045,10 +1023,9 @@
         "frontend/src/test/core-views-request-budget.spec.ts",
         "frontend/src/unit/api-auth-recovery.test.ts",
         "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
-        "frontend/src/unit/httpClient.test.ts",
-        "scripts/generate_openapi_types.test.mjs"
+        "frontend/src/unit/httpClient.test.ts"
       ],
-      "caller_count": 9,
+      "caller_count": 8,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5702,
@@ -1073,11 +1050,9 @@
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-reading-orders.ts",
         "frontend/src/services/api-threads.ts",
-        "frontend/src/test/cbl-replace-review.spec.ts",
-        "scripts/check_v2_aip_shapes.test.mjs",
-        "scripts/generate_vercel_routes.test.mjs"
+        "frontend/src/test/cbl-replace-review.spec.ts"
       ],
-      "caller_count": 6,
+      "caller_count": 3,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5705,
@@ -1152,11 +1127,9 @@
       "runtime_source": "native-router",
       "consumers": [
         "frontend/src/services/api-threads.ts",
-        "frontend/src/test/cbl-replace-review.spec.ts",
-        "scripts/check_v2_aip_shapes.test.mjs",
-        "scripts/generate_vercel_routes.test.mjs"
+        "frontend/src/test/cbl-replace-review.spec.ts"
       ],
-      "caller_count": 6,
+      "caller_count": 3,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5711,
@@ -1181,11 +1154,9 @@
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-reading-orders.ts",
         "frontend/src/services/api-threads.ts",
-        "frontend/src/test/cbl-replace-review.spec.ts",
-        "scripts/check_v2_aip_shapes.test.mjs",
-        "scripts/generate_vercel_routes.test.mjs"
+        "frontend/src/test/cbl-replace-review.spec.ts"
       ],
-      "caller_count": 7,
+      "caller_count": 4,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5704,
@@ -1210,11 +1181,9 @@
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-reading-orders.ts",
         "frontend/src/services/api-threads.ts",
-        "frontend/src/test/cbl-replace-review.spec.ts",
-        "scripts/check_v2_aip_shapes.test.mjs",
-        "scripts/generate_vercel_routes.test.mjs"
+        "frontend/src/test/cbl-replace-review.spec.ts"
       ],
-      "caller_count": 7,
+      "caller_count": 4,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5701,
@@ -1242,11 +1211,9 @@
         "frontend/src/unit/api-auth-failure-isolation.test.ts",
         "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
-        "frontend/src/unit/api.test.ts",
-        "scripts/check_v2_aip_shapes.test.mjs",
-        "scripts/generate_vercel_routes.test.mjs"
+        "frontend/src/unit/api.test.ts"
       ],
-      "caller_count": 32,
+      "caller_count": 28,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5701,
@@ -1274,11 +1241,9 @@
         "frontend/src/unit/api-auth-failure-isolation.test.ts",
         "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
-        "frontend/src/unit/api.test.ts",
-        "scripts/check_v2_aip_shapes.test.mjs",
-        "scripts/generate_vercel_routes.test.mjs"
+        "frontend/src/unit/api.test.ts"
       ],
-      "caller_count": 32,
+      "caller_count": 28,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4832,
@@ -1308,11 +1273,9 @@
         "frontend/src/unit/api-auth-failure-isolation.test.ts",
         "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
-        "frontend/src/unit/api.test.ts",
-        "scripts/check_v2_aip_shapes.test.mjs",
-        "scripts/generate_vercel_routes.test.mjs"
+        "frontend/src/unit/api.test.ts"
       ],
-      "caller_count": 32,
+      "caller_count": 28,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5703,
@@ -1342,11 +1305,9 @@
         "frontend/src/unit/api-auth-failure-isolation.test.ts",
         "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
-        "frontend/src/unit/api.test.ts",
-        "scripts/check_v2_aip_shapes.test.mjs",
-        "scripts/generate_vercel_routes.test.mjs"
+        "frontend/src/unit/api.test.ts"
       ],
-      "caller_count": 32,
+      "caller_count": 28,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5703,
@@ -1553,10 +1514,9 @@
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-reading-orders.ts",
         "frontend/src/services/api-threads.ts",
-        "frontend/src/unit/api-issues-coverage.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-issues-coverage.test.ts"
       ],
-      "caller_count": 2,
+      "caller_count": 1,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5706,
@@ -1788,10 +1748,9 @@
         "frontend/src/test/ui-audit/stabilize.ts",
         "frontend/src/unit/api-activity.test.ts",
         "frontend/src/unit/coreRouteRequestBudget.test.tsx",
-        "frontend/src/unit/ui-audit-stabilize.test.ts",
-        "scripts/check_v2_aip_shapes.test.mjs"
+        "frontend/src/unit/ui-audit-stabilize.test.ts"
       ],
-      "caller_count": 9,
+      "caller_count": 8,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4822,
@@ -1962,10 +1921,9 @@
         "frontend/src/unit/auth-provider-recovery.test.tsx",
         "frontend/src/unit/nativeV2Client.test.ts",
         "frontend/src/unit/theme-runtime.test.tsx",
-        "frontend/src/unit/ui-audit-stabilize.test.ts",
-        "scripts/check_v2_aip_shapes.test.mjs"
+        "frontend/src/unit/ui-audit-stabilize.test.ts"
       ],
-      "caller_count": 38,
+      "caller_count": 37,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4459,
@@ -2788,10 +2746,9 @@
         "frontend/src/services/creatorsApi.ts",
         "frontend/src/test/issue-2774-creators-browse.spec.ts",
         "frontend/src/test/issue-3091-creator-comparison.spec.ts",
-        "frontend/src/unit/api-creators.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-creators.test.ts"
       ],
-      "caller_count": 10,
+      "caller_count": 8,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4836,
@@ -2817,10 +2774,9 @@
         "frontend/src/services/creatorTeamChemistryApi.ts",
         "frontend/src/services/creatorsApi.ts",
         "frontend/src/test/issue-3091-creator-comparison.spec.ts",
-        "frontend/src/unit/api-creator-comparison.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-creator-comparison.test.ts"
       ],
-      "caller_count": 5,
+      "caller_count": 4,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4836,
@@ -2844,10 +2800,9 @@
         "frontend/src/services/creatorDiscoveryApi.ts",
         "frontend/src/services/creatorMetricDrilldownApi.ts",
         "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/services/creatorsApi.ts"
       ],
-      "caller_count": 3,
+      "caller_count": 2,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4836,
@@ -2872,10 +2827,9 @@
         "frontend/src/services/creatorMetricDrilldownApi.ts",
         "frontend/src/services/creatorTeamChemistryApi.ts",
         "frontend/src/services/creatorsApi.ts",
-        "frontend/src/unit/api-creators.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-creators.test.ts"
       ],
-      "caller_count": 5,
+      "caller_count": 4,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4836,
@@ -2900,10 +2854,9 @@
         "frontend/src/services/creatorMetricDrilldownApi.ts",
         "frontend/src/services/creatorTeamChemistryApi.ts",
         "frontend/src/services/creatorsApi.ts",
-        "frontend/src/unit/creatorTeamChemistryApi.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/creatorTeamChemistryApi.test.ts"
       ],
-      "caller_count": 4,
+      "caller_count": 3,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4836,
@@ -2932,10 +2885,9 @@
         "frontend/src/unit/api-creator-comparison.test.ts",
         "frontend/src/unit/api-creators.test.ts",
         "frontend/src/unit/api.test.ts",
-        "frontend/src/unit/creatorTeamChemistryApi.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/creatorTeamChemistryApi.test.ts"
       ],
-      "caller_count": 19,
+      "caller_count": 18,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4836,
@@ -3068,10 +3020,9 @@
         "frontend/src/services/creatorMetricDrilldownApi.ts",
         "frontend/src/services/creatorTeamChemistryApi.ts",
         "frontend/src/services/creatorsApi.ts",
-        "frontend/src/unit/api-creators.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-creators.test.ts"
       ],
-      "caller_count": 3,
+      "caller_count": 2,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4836,
@@ -3118,10 +3069,9 @@
         "frontend/src/test/issue-1885-roll-target-sizes.spec.ts",
         "frontend/src/test/p0-dependencies-reading-order.spec.ts",
         "frontend/src/test/reading-plan-reader.spec.ts",
-        "frontend/src/unit/api.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api.test.ts"
       ],
-      "caller_count": 12,
+      "caller_count": 11,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4684,
@@ -3143,10 +3093,9 @@
         "frontend/src/services/api-dependencies.ts",
         "frontend/src/test/fixtures.ts",
         "frontend/src/test/p0-dependencies-reading-order.spec.ts",
-        "frontend/src/unit/api.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api.test.ts"
       ],
-      "caller_count": 7,
+      "caller_count": 6,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4838,
@@ -3168,10 +3117,9 @@
         "frontend/src/services/api-dependencies.ts",
         "frontend/src/test/fixtures.ts",
         "frontend/src/test/p0-dependencies-reading-order.spec.ts",
-        "frontend/src/unit/api.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api.test.ts"
       ],
-      "caller_count": 8,
+      "caller_count": 7,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4838,
@@ -3193,10 +3141,9 @@
         "frontend/src/services/api-dependencies.ts",
         "frontend/src/test/fixtures.ts",
         "frontend/src/test/p0-dependencies-reading-order.spec.ts",
-        "frontend/src/unit/api.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api.test.ts"
       ],
-      "caller_count": 8,
+      "caller_count": 7,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4838,
@@ -3218,10 +3165,9 @@
         "frontend/src/services/api-dependencies.ts",
         "frontend/src/test/fixtures.ts",
         "frontend/src/test/p0-dependencies-reading-order.spec.ts",
-        "frontend/src/unit/api.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api.test.ts"
       ],
-      "caller_count": 8,
+      "caller_count": 7,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4684,
@@ -3334,11 +3280,8 @@
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
-      "consumers": [
-        "scripts/generate_vercel_routes.test.mjs",
-        "scripts/release_recovery.py"
-      ],
-      "caller_count": 2,
+      "consumers": [],
+      "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
@@ -3361,10 +3304,9 @@
         "frontend/src/test/issue-4503-request-budget.spec.ts",
         "frontend/src/test/p0-auth-outage-recovery.spec.ts",
         "frontend/src/unit/api-identity.test.ts",
-        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ],
-      "caller_count": 10,
+      "caller_count": 9,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4335,
@@ -3384,10 +3326,9 @@
       "runtime_source": "native-router",
       "consumers": [
         "frontend/src/services/api-identity.ts",
-        "frontend/src/unit/api-identity.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-identity.test.ts"
       ],
-      "caller_count": 4,
+      "caller_count": 2,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4335,
@@ -3407,10 +3348,9 @@
       "runtime_source": "native-router",
       "consumers": [
         "frontend/src/services/api-identity.ts",
-        "frontend/src/unit/api-identity.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-identity.test.ts"
       ],
-      "caller_count": 4,
+      "caller_count": 2,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4335,
@@ -3431,10 +3371,9 @@
       "consumers": [
         "frontend/src/services/api-identity.ts",
         "frontend/src/unit/api-identity.test.ts",
-        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ],
-      "caller_count": 4,
+      "caller_count": 3,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4335,
@@ -3454,10 +3393,9 @@
       "runtime_source": "native-router",
       "consumers": [
         "frontend/src/services/api-identity.ts",
-        "frontend/src/unit/api-identity.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-identity.test.ts"
       ],
-      "caller_count": 3,
+      "caller_count": 2,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4335,
@@ -3477,10 +3415,9 @@
       "runtime_source": "native-router",
       "consumers": [
         "frontend/src/services/api-identity.ts",
-        "frontend/src/unit/api-identity.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-identity.test.ts"
       ],
-      "caller_count": 3,
+      "caller_count": 2,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4335,
@@ -3500,10 +3437,9 @@
       "runtime_source": "native-router",
       "consumers": [
         "frontend/src/services/api-identity.ts",
-        "frontend/src/unit/api-identity.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-identity.test.ts"
       ],
-      "caller_count": 3,
+      "caller_count": 2,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4335,
@@ -4180,11 +4116,9 @@
         "frontend/src/test/issue-5435-bulk-queue-exclusions.spec.ts",
         "frontend/src/test/reading-plan-reader.spec.ts",
         "frontend/src/unit/api-custom-cbl.test.ts",
-        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
-        "scripts/check_v2_aip_shapes.test.mjs",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ],
-      "caller_count": 23,
+      "caller_count": 14,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4684,
@@ -4211,11 +4145,9 @@
         "frontend/src/test/issue-5435-bulk-queue-exclusions.spec.ts",
         "frontend/src/test/reading-plan-reader.spec.ts",
         "frontend/src/unit/api-custom-cbl.test.ts",
-        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
-        "scripts/check_v2_aip_shapes.test.mjs",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ],
-      "caller_count": 23,
+      "caller_count": 14,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4684,
@@ -4239,10 +4171,9 @@
         "frontend/src/test/custom-cbl-delete-confirm.spec.ts",
         "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
         "frontend/src/test/reading-list-discovery.spec.ts",
-        "frontend/src/unit/api-custom-cbl.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-custom-cbl.test.ts"
       ],
-      "caller_count": 21,
+      "caller_count": 17,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4844,
@@ -4265,10 +4196,9 @@
         "frontend/src/test/cbl-replace-review.spec.ts",
         "frontend/src/test/custom-cbl-delete-confirm.spec.ts",
         "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
-        "frontend/src/test/reading-list-discovery.spec.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/test/reading-list-discovery.spec.ts"
       ],
-      "caller_count": 19,
+      "caller_count": 15,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5435,
@@ -4293,10 +4223,9 @@
         "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
         "frontend/src/test/reading-list-discovery.spec.ts",
         "frontend/src/unit/api-custom-cbl.test.ts",
-        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ],
-      "caller_count": 27,
+      "caller_count": 22,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4684,
@@ -4321,10 +4250,9 @@
         "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
         "frontend/src/test/reading-list-discovery.spec.ts",
         "frontend/src/unit/api-custom-cbl.test.ts",
-        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ],
-      "caller_count": 27,
+      "caller_count": 22,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4684,
@@ -4349,10 +4277,9 @@
         "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
         "frontend/src/test/reading-list-discovery.spec.ts",
         "frontend/src/unit/api-custom-cbl.test.ts",
-        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ],
-      "caller_count": 27,
+      "caller_count": 22,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4684,
@@ -4372,10 +4299,9 @@
       "runtime_source": "native-router",
       "consumers": [
         "frontend/src/services/api-cbl-sources.ts",
-        "frontend/src/unit/api-cbl-sources.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-cbl-sources.test.ts"
       ],
-      "caller_count": 3,
+      "caller_count": 2,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4844,
@@ -4395,10 +4321,9 @@
       "runtime_source": "native-router",
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts",
-        "frontend/src/unit/api-custom-cbl.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-custom-cbl.test.ts"
       ],
-      "caller_count": 3,
+      "caller_count": 2,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4844,
@@ -4417,10 +4342,9 @@
       "runtime": "native-rust",
       "runtime_source": "native-router",
       "consumers": [
-        "frontend/src/services/api-custom-cbl.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/services/api-custom-cbl.ts"
       ],
-      "caller_count": 2,
+      "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4844,
@@ -4439,10 +4363,9 @@
       "runtime": "native-rust",
       "runtime_source": "native-router",
       "consumers": [
-        "frontend/src/services/api-custom-cbl.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/services/api-custom-cbl.ts"
       ],
-      "caller_count": 2,
+      "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4844,
@@ -4461,10 +4384,9 @@
       "runtime": "native-rust",
       "runtime_source": "native-router",
       "consumers": [
-        "frontend/src/services/api-custom-cbl.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/services/api-custom-cbl.ts"
       ],
-      "caller_count": 1,
+      "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4844,
@@ -4485,10 +4407,9 @@
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts",
         "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
-        "frontend/src/test/reading-plan-reader.spec.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/test/reading-plan-reader.spec.ts"
       ],
-      "caller_count": 4,
+      "caller_count": 3,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4684,
@@ -4508,10 +4429,9 @@
       "runtime_source": "native-router",
       "consumers": [
         "frontend/src/services/api-cbl-sources.ts",
-        "frontend/src/unit/api-cbl-sources.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-cbl-sources.test.ts"
       ],
-      "caller_count": 5,
+      "caller_count": 4,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4844,
@@ -4532,10 +4452,9 @@
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
-        "frontend/src/unit/api-custom-cbl.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-custom-cbl.test.ts"
       ],
-      "caller_count": 5,
+      "caller_count": 4,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4844,
@@ -4558,10 +4477,9 @@
         "frontend/src/test/reading-mode-acceptance.spec.ts",
         "frontend/src/test/reading-mode-quiz.spec.ts",
         "frontend/src/unit/nativeV2Client.test.ts",
-        "frontend/src/unit/readingMode.service.test.ts",
-        "scripts/check_v2_aip_shapes.test.mjs"
+        "frontend/src/unit/readingMode.service.test.ts"
       ],
-      "caller_count": 12,
+      "caller_count": 11,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4335,
@@ -4584,10 +4502,9 @@
         "frontend/src/test/reading-mode-acceptance.spec.ts",
         "frontend/src/test/reading-mode-quiz.spec.ts",
         "frontend/src/unit/nativeV2Client.test.ts",
-        "frontend/src/unit/readingMode.service.test.ts",
-        "scripts/check_v2_aip_shapes.test.mjs"
+        "frontend/src/unit/readingMode.service.test.ts"
       ],
-      "caller_count": 12,
+      "caller_count": 11,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4335,
@@ -4983,10 +4900,9 @@
         "frontend/src/unit/coreRouteRequestBudget.test.tsx",
         "frontend/src/unit/generated-v1-only-paths.test.ts",
         "frontend/src/unit/nativeV2Client.test.ts",
-        "frontend/src/unit/rollBootstrapTimezone.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/rollBootstrapTimezone.test.ts"
       ],
-      "caller_count": 22,
+      "caller_count": 20,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
@@ -5013,10 +4929,9 @@
         "frontend/src/unit/coreRouteRequestBudget.test.tsx",
         "frontend/src/unit/generated-v1-only-paths.test.ts",
         "frontend/src/unit/nativeV2Client.test.ts",
-        "frontend/src/unit/rollBootstrapTimezone.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/rollBootstrapTimezone.test.ts"
       ],
-      "caller_count": 22,
+      "caller_count": 20,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
@@ -5036,10 +4951,9 @@
       "runtime_source": "native-router",
       "consumers": [
         "frontend/src/unit/api.test.ts",
-        "frontend/src/unit/generated-v1-only-paths.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/generated-v1-only-paths.test.ts"
       ],
-      "caller_count": 3,
+      "caller_count": 2,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
@@ -5060,10 +4974,9 @@
       "consumers": [
         "frontend/src/unit/api.test.ts",
         "frontend/src/unit/coreRouteRequestBudget.test.tsx",
-        "frontend/src/unit/generated-v1-only-paths.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/generated-v1-only-paths.test.ts"
       ],
-      "caller_count": 5,
+      "caller_count": 4,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
@@ -5084,10 +4997,9 @@
       "consumers": [
         "frontend/src/unit/api.test.ts",
         "frontend/src/unit/coreRouteRequestBudget.test.tsx",
-        "frontend/src/unit/generated-v1-only-paths.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/generated-v1-only-paths.test.ts"
       ],
-      "caller_count": 5,
+      "caller_count": 4,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
@@ -5111,10 +5023,9 @@
         "frontend/src/test/network-budget/auxiliaryRoutes.network.test.tsx",
         "frontend/src/test/whats-new-wiring.test.ts",
         "frontend/src/unit/api-releases.test.ts",
-        "frontend/src/unit/generated-v1-only-paths.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/generated-v1-only-paths.test.ts"
       ],
-      "caller_count": 11,
+      "caller_count": 9,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4849,
@@ -5743,10 +5654,9 @@
         "frontend/src/unit/api.test.ts",
         "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
         "frontend/src/unit/coreRouteRequestBudget.test.tsx",
-        "frontend/src/unit/nativeV2Client.test.ts",
-        "scripts/check_v2_aip_shapes.test.mjs"
+        "frontend/src/unit/nativeV2Client.test.ts"
       ],
-      "caller_count": 31,
+      "caller_count": 28,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4342,
@@ -5835,10 +5745,9 @@
       "consumers": [
         "frontend/src/services/api-issues.ts",
         "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
-        "frontend/src/unit/api-issues-coverage.test.ts",
-        "scripts/check_v2_aip_shapes.test.mjs"
+        "frontend/src/unit/api-issues-coverage.test.ts"
       ],
-      "caller_count": 13,
+      "caller_count": 11,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4684,
@@ -5923,10 +5832,9 @@
       "runtime_source": "native-router",
       "consumers": [
         "frontend/src/services/api-threads.ts",
-        "frontend/src/unit/api-threads.test.ts",
-        "scripts/check_v2_aip_shapes.test.mjs"
+        "frontend/src/unit/api-threads.test.ts"
       ],
-      "caller_count": 4,
+      "caller_count": 3,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
@@ -5947,10 +5855,9 @@
       "consumers": [
         "frontend/src/services/api-undo.ts",
         "frontend/src/unit/api.test.ts",
-        "frontend/src/unit/retired-session-callers.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/retired-session-callers.test.ts"
       ],
-      "caller_count": 4,
+      "caller_count": 3,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4839,
@@ -5971,10 +5878,9 @@
       "consumers": [
         "frontend/src/services/api-undo.ts",
         "frontend/src/unit/api.test.ts",
-        "frontend/src/unit/retired-session-callers.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/retired-session-callers.test.ts"
       ],
-      "caller_count": 4,
+      "caller_count": 3,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4839,

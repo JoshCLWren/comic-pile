@@ -123,10 +123,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/unit/generated-v1-only-paths.test.ts",
-        "scripts/export_openapi_schema.mjs",
-        "scripts/generate_openapi_types.test.mjs",
-        "scripts/generate_vercel_routes.test.mjs"
+        "frontend/src/unit/generated-v1-only-paths.test.ts"
       ]
     },
     {
@@ -326,9 +323,7 @@
       "rollout_status": "migrated-awaiting-retirement",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": [
-        "scripts/generate_vercel_routes.test.mjs"
-      ]
+      "consumers": []
     },
     {
       "method": "GET",
@@ -361,10 +356,7 @@
       "rollout_status": "background-caller-migration",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": [
-        "scripts/generate_vercel_routes.test.mjs",
-        "scripts/no_background_metadata_repair.test.mjs"
-      ]
+      "consumers": []
     },
     {
       "method": "GET",
@@ -389,8 +381,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-cbl-sources.ts",
-        "scripts/check_native_route_db_tests.test.mjs"
+        "frontend/src/services/api-cbl-sources.ts"
       ]
     },
     {
@@ -416,8 +407,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-cbl-sources.ts",
-        "scripts/check_native_route_db_tests.test.mjs"
+        "frontend/src/services/api-cbl-sources.ts"
       ]
     },
     {
@@ -430,8 +420,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-cbl-sources.ts",
-        "scripts/check_native_route_db_tests.test.mjs"
+        "frontend/src/services/api-cbl-sources.ts"
       ]
     },
     {
@@ -444,8 +433,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-cbl-sources.ts",
-        "scripts/check_native_route_db_tests.test.mjs"
+        "frontend/src/services/api-cbl-sources.ts"
       ]
     },
     {
@@ -536,9 +524,7 @@
       "rollout_status": "migrated-awaiting-retirement",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": [
-        "scripts/generate_route_burndown.test.mjs"
-      ]
+      "consumers": []
     },
     {
       "method": "GET",
@@ -549,9 +535,7 @@
       "rollout_status": "migrated-awaiting-retirement",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": [
-        "scripts/generate_route_burndown.test.mjs"
-      ]
+      "consumers": []
     },
     {
       "method": "GET",
@@ -562,9 +546,7 @@
       "rollout_status": "migrated-awaiting-retirement",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": [
-        "scripts/generate_route_burndown.test.mjs"
-      ]
+      "consumers": []
     },
     {
       "method": "POST",
@@ -575,9 +557,7 @@
       "rollout_status": "migrated-awaiting-retirement",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": [
-        "scripts/generate_route_burndown.test.mjs"
-      ]
+      "consumers": []
     },
     {
       "method": "GET",
@@ -602,8 +582,7 @@
       "consumers": [
         "frontend/src/services/api-taste.ts",
         "frontend/src/test/p0-auth-outage-recovery.spec.ts",
-        "frontend/src/unit/api-taste.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-taste.test.ts"
       ]
     },
     {
@@ -617,8 +596,7 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-taste.ts",
-        "frontend/src/unit/api-taste.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-taste.test.ts"
       ]
     },
     {
@@ -640,8 +618,7 @@
         "frontend/src/test/core-views-request-budget.spec.ts",
         "frontend/src/unit/api-auth-recovery.test.ts",
         "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
-        "frontend/src/unit/httpClient.test.ts",
-        "scripts/generate_openapi_types.test.mjs"
+        "frontend/src/unit/httpClient.test.ts"
       ]
     },
     {
@@ -660,9 +637,7 @@
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-reading-orders.ts",
         "frontend/src/services/api-threads.ts",
-        "frontend/src/test/cbl-replace-review.spec.ts",
-        "scripts/check_v2_aip_shapes.test.mjs",
-        "scripts/generate_vercel_routes.test.mjs"
+        "frontend/src/test/cbl-replace-review.spec.ts"
       ]
     },
     {
@@ -715,9 +690,7 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-threads.ts",
-        "frontend/src/test/cbl-replace-review.spec.ts",
-        "scripts/check_v2_aip_shapes.test.mjs",
-        "scripts/generate_vercel_routes.test.mjs"
+        "frontend/src/test/cbl-replace-review.spec.ts"
       ]
     },
     {
@@ -736,9 +709,7 @@
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-reading-orders.ts",
         "frontend/src/services/api-threads.ts",
-        "frontend/src/test/cbl-replace-review.spec.ts",
-        "scripts/check_v2_aip_shapes.test.mjs",
-        "scripts/generate_vercel_routes.test.mjs"
+        "frontend/src/test/cbl-replace-review.spec.ts"
       ]
     },
     {
@@ -757,9 +728,7 @@
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-reading-orders.ts",
         "frontend/src/services/api-threads.ts",
-        "frontend/src/test/cbl-replace-review.spec.ts",
-        "scripts/check_v2_aip_shapes.test.mjs",
-        "scripts/generate_vercel_routes.test.mjs"
+        "frontend/src/test/cbl-replace-review.spec.ts"
       ]
     },
     {
@@ -781,9 +750,7 @@
         "frontend/src/unit/api-auth-failure-isolation.test.ts",
         "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
-        "frontend/src/unit/api.test.ts",
-        "scripts/check_v2_aip_shapes.test.mjs",
-        "scripts/generate_vercel_routes.test.mjs"
+        "frontend/src/unit/api.test.ts"
       ]
     },
     {
@@ -805,9 +772,7 @@
         "frontend/src/unit/api-auth-failure-isolation.test.ts",
         "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
-        "frontend/src/unit/api.test.ts",
-        "scripts/check_v2_aip_shapes.test.mjs",
-        "scripts/generate_vercel_routes.test.mjs"
+        "frontend/src/unit/api.test.ts"
       ]
     },
     {
@@ -831,9 +796,7 @@
         "frontend/src/unit/api-auth-failure-isolation.test.ts",
         "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
-        "frontend/src/unit/api.test.ts",
-        "scripts/check_v2_aip_shapes.test.mjs",
-        "scripts/generate_vercel_routes.test.mjs"
+        "frontend/src/unit/api.test.ts"
       ]
     },
     {
@@ -857,9 +820,7 @@
         "frontend/src/unit/api-auth-failure-isolation.test.ts",
         "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
-        "frontend/src/unit/api.test.ts",
-        "scripts/check_v2_aip_shapes.test.mjs",
-        "scripts/generate_vercel_routes.test.mjs"
+        "frontend/src/unit/api.test.ts"
       ]
     },
     {
@@ -1004,8 +965,7 @@
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-reading-orders.ts",
         "frontend/src/services/api-threads.ts",
-        "frontend/src/unit/api-issues-coverage.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-issues-coverage.test.ts"
       ]
     },
     {
@@ -1549,8 +1509,7 @@
         "frontend/src/services/creatorTeamChemistryApi.ts",
         "frontend/src/services/creatorsApi.ts",
         "frontend/src/test/issue-3091-creator-comparison.spec.ts",
-        "frontend/src/unit/api-creator-comparison.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-creator-comparison.test.ts"
       ]
     },
     {
@@ -1569,8 +1528,7 @@
         "frontend/src/services/creatorMetricDrilldownApi.ts",
         "frontend/src/services/creatorTeamChemistryApi.ts",
         "frontend/src/services/creatorsApi.ts",
-        "frontend/src/unit/creatorTeamChemistryApi.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/creatorTeamChemistryApi.test.ts"
       ]
     },
     {
@@ -1660,8 +1618,7 @@
         "frontend/src/test/issue-1885-roll-target-sizes.spec.ts",
         "frontend/src/test/p0-dependencies-reading-order.spec.ts",
         "frontend/src/test/reading-plan-reader.spec.ts",
-        "frontend/src/unit/api.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api.test.ts"
       ]
     },
     {
@@ -1678,8 +1635,7 @@
         "frontend/src/test/issue-4503-request-budget.spec.ts",
         "frontend/src/test/p0-auth-outage-recovery.spec.ts",
         "frontend/src/unit/api-identity.test.ts",
-        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ]
     },
     {
@@ -1693,8 +1649,7 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-identity.ts",
-        "frontend/src/unit/api-identity.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-identity.test.ts"
       ]
     },
     {
@@ -1708,8 +1663,7 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-identity.ts",
-        "frontend/src/unit/api-identity.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-identity.test.ts"
       ]
     },
     {
@@ -1724,8 +1678,7 @@
       "consumers": [
         "frontend/src/services/api-identity.ts",
         "frontend/src/unit/api-identity.test.ts",
-        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ]
     },
     {
@@ -1739,8 +1692,7 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-identity.ts",
-        "frontend/src/unit/api-identity.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-identity.test.ts"
       ]
     },
     {
@@ -1754,8 +1706,7 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-identity.ts",
-        "frontend/src/unit/api-identity.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-identity.test.ts"
       ]
     },
     {
@@ -1769,8 +1720,7 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-identity.ts",
-        "frontend/src/unit/api-identity.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-identity.test.ts"
       ]
     },
     {
@@ -2066,9 +2016,7 @@
         "frontend/src/test/issue-5435-bulk-queue-exclusions.spec.ts",
         "frontend/src/test/reading-plan-reader.spec.ts",
         "frontend/src/unit/api-custom-cbl.test.ts",
-        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
-        "scripts/check_v2_aip_shapes.test.mjs",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ]
     },
     {
@@ -2089,9 +2037,7 @@
         "frontend/src/test/issue-5435-bulk-queue-exclusions.spec.ts",
         "frontend/src/test/reading-plan-reader.spec.ts",
         "frontend/src/unit/api-custom-cbl.test.ts",
-        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
-        "scripts/check_v2_aip_shapes.test.mjs",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ]
     },
     {
@@ -2109,8 +2055,7 @@
         "frontend/src/test/custom-cbl-delete-confirm.spec.ts",
         "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
         "frontend/src/test/reading-list-discovery.spec.ts",
-        "frontend/src/unit/api-custom-cbl.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-custom-cbl.test.ts"
       ]
     },
     {
@@ -2127,8 +2072,7 @@
         "frontend/src/test/cbl-replace-review.spec.ts",
         "frontend/src/test/custom-cbl-delete-confirm.spec.ts",
         "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
-        "frontend/src/test/reading-list-discovery.spec.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/test/reading-list-discovery.spec.ts"
       ]
     },
     {
@@ -2147,8 +2091,7 @@
         "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
         "frontend/src/test/reading-list-discovery.spec.ts",
         "frontend/src/unit/api-custom-cbl.test.ts",
-        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ]
     },
     {
@@ -2167,8 +2110,7 @@
         "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
         "frontend/src/test/reading-list-discovery.spec.ts",
         "frontend/src/unit/api-custom-cbl.test.ts",
-        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ]
     },
     {
@@ -2187,8 +2129,7 @@
         "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
         "frontend/src/test/reading-list-discovery.spec.ts",
         "frontend/src/unit/api-custom-cbl.test.ts",
-        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ]
     },
     {
@@ -2202,8 +2143,7 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-cbl-sources.ts",
-        "frontend/src/unit/api-cbl-sources.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-cbl-sources.test.ts"
       ]
     },
     {
@@ -2217,8 +2157,7 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts",
-        "frontend/src/unit/api-custom-cbl.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-custom-cbl.test.ts"
       ]
     },
     {
@@ -2231,8 +2170,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-custom-cbl.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/services/api-custom-cbl.ts"
       ]
     },
     {
@@ -2245,8 +2183,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-custom-cbl.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/services/api-custom-cbl.ts"
       ]
     },
     {
@@ -2259,8 +2196,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-custom-cbl.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/services/api-custom-cbl.ts"
       ]
     },
     {
@@ -2275,8 +2211,7 @@
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts",
         "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
-        "frontend/src/test/reading-plan-reader.spec.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/test/reading-plan-reader.spec.ts"
       ]
     },
     {
@@ -2290,8 +2225,7 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-cbl-sources.ts",
-        "frontend/src/unit/api-cbl-sources.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-cbl-sources.test.ts"
       ]
     },
     {
@@ -2306,8 +2240,7 @@
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
-        "frontend/src/unit/api-custom-cbl.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/api-custom-cbl.test.ts"
       ]
     },
     {
@@ -2324,8 +2257,7 @@
         "frontend/src/test/reading-mode-acceptance.spec.ts",
         "frontend/src/test/reading-mode-quiz.spec.ts",
         "frontend/src/unit/nativeV2Client.test.ts",
-        "frontend/src/unit/readingMode.service.test.ts",
-        "scripts/check_v2_aip_shapes.test.mjs"
+        "frontend/src/unit/readingMode.service.test.ts"
       ]
     },
     {
@@ -2342,8 +2274,7 @@
         "frontend/src/test/reading-mode-acceptance.spec.ts",
         "frontend/src/test/reading-mode-quiz.spec.ts",
         "frontend/src/unit/nativeV2Client.test.ts",
-        "frontend/src/unit/readingMode.service.test.ts",
-        "scripts/check_v2_aip_shapes.test.mjs"
+        "frontend/src/unit/readingMode.service.test.ts"
       ]
     },
     {
@@ -2677,8 +2608,7 @@
       "consumers": [
         "frontend/src/services/api-undo.ts",
         "frontend/src/unit/api.test.ts",
-        "frontend/src/unit/retired-session-callers.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/retired-session-callers.test.ts"
       ]
     },
     {
@@ -2693,8 +2623,7 @@
       "consumers": [
         "frontend/src/services/api-undo.ts",
         "frontend/src/unit/api.test.ts",
-        "frontend/src/unit/retired-session-callers.test.ts",
-        "scripts/generate_route_burndown.test.mjs"
+        "frontend/src/unit/retired-session-callers.test.ts"
       ]
     }
   ]

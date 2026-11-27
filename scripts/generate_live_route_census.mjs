@@ -260,7 +260,7 @@ export function parseRouterRoutes(source) {
       path: routePath,
       handler: inline ? '<inline>' : handlerText,
       handler_kind: inline ? 'inline' : 'function',
-      line: start + body.slice(0, at).split('\n').length,
+      line: source.slice(0, start).split('\n').length + body.slice(0, at).split('\n').length,
     });
   }
   return routes;
@@ -484,7 +484,11 @@ export function buildCensus(inputs) {
       ? curatedOp.consumers.filter(value => typeof value === 'string')
       : [];
     const matchedCallers = callers.filter(caller => pathsMatch(caller.path, route.path));
-    const consumers = [...new Set([...curatedConsumers, ...matchedCallers.map(caller => caller.file)])].sort();
+    // Precise per-operation source call sites win over the inventory's
+    // family-level consumer lists; curated consumers are the fallback for
+    // routes whose calls are assembled dynamically.
+    const scannedConsumers = matchedCallers.map(caller => caller.file);
+    const consumers = [...new Set(scannedConsumers.length ? scannedConsumers : curatedConsumers)].sort();
     const ingress = resolveIngress(route, vercelRoutes);
     censusRoutes.push({
       method: route.method,
@@ -531,7 +535,7 @@ export function buildCensus(inputs) {
     sources: {
       router: ROUTER_PATH,
       ingress: VERCEL_PATH,
-      consumers: [INVENTORY_PATH, 'frontend/src', 'scripts', '.github/scripts'],
+      consumers: [INVENTORY_PATH, 'frontend/src', 'scripts/ops', 'native/roll-service/parity'],
       dispositions: DISPOSITIONS_PATH,
       aip_baseline: AIP_BASELINE_PATH,
     },
@@ -662,7 +666,7 @@ export function renderReport(census, allowlist) {
 }
 
 /** Validate invariants that must hold before the artifacts can be committed. */
-export function validate(census, allowlist, dispositions, callers) {
+export function validate(census, allowlist, dispositions, callers, aipBaseline = {}) {
   const failures = [];
   const knownDebt = new Set(
     Array.isArray(dispositions.known_unowned_baseline)
@@ -694,6 +698,11 @@ export function validate(census, allowlist, dispositions, callers) {
   }
   for (const key of knownDebt) {
     if (!allowKeys.has(key)) failures.push(`known baseline debt ${key} is not a live allowlisted route`);
+  }
+  const liveKeys = new Set(census.routes.map(route => `${route.method} ${route.path}`));
+  for (const entry of Array.isArray(aipBaseline.entries) ? aipBaseline.entries : []) {
+    const key = `${entry.method} ${entry.path}`;
+    if (!liveKeys.has(key)) failures.push(`AIP baseline entry ${key} is no longer a live route`);
   }
   const setPending = census.routes.find(
     route => route.method === 'POST' && route.path === '/api/v1/threads/{thread_id}/set-pending',
@@ -741,7 +750,7 @@ export function generate(root = DEFAULT_ROOT) {
   const census = buildCensus({routerText, inventory, dispositions, aipBaseline, vercel, callers});
   const allowlist = buildAllowlist(census, dispositions, aipBaseline);
   const report = renderReport(census, allowlist);
-  const failures = validate(census, allowlist, dispositions, callers);
+  const failures = validate(census, allowlist, dispositions, callers, aipBaseline);
   return {
     census,
     allowlist,
