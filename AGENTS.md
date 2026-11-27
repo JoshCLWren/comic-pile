@@ -63,15 +63,9 @@ factory claims and do not bundle unrelated API refactors.
 > after changing `vercel.json`, route fragments, or the inventory.
 > API version is not implementation language.
 
-<<<<<<< HEAD
 - Live v2 operations: 166 (166 native-rust + 0 python-fastapi).
 - Native ingress: `/api/native_roll.rs` (via `vercel.json`).
 - Full Python-handler surface: 21 operations (v1 21 + unversioned 0); v1 active 0 live Python / 0 migrated (shadowed by Rust); unversioned active 0 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
-=======
-- Live v2 operations: 157 (157 native-rust + 0 python-fastapi).
-- Native ingress: `/api/native_roll.rs` (via `vercel.json`).
-- Full Python-handler surface: 22 operations (v1 22 + unversioned 0); v1 active 0 live Python / 0 migrated (shadowed by Rust); unversioned active 0 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
->>>>>>> main
 - Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404).
 - Full-surface inventory (v2 + v1 + unversioned + catch-all) and per-operation callers: see `docs/api/v2-route-inventory.json` `full_surface` (authoritative).
 - Full caller lists and ingress destinations: see `docs/api/v2-route-inventory.json` (authoritative).
@@ -99,12 +93,9 @@ Deployed runtime by cutover owner (`METHOD path -> runtime`):
 - #4855 (1): `GET /api/v2/demo-roll -> native-rust`
 - #5435 (5): `POST /api/v2/queue-exclusion-groups/{group_id}/restore -> native-rust`; `POST /api/v2/queue-exclusions -> native-rust`; `POST /api/v2/queue-exclusions/restore -> native-rust`; `POST /api/v2/queue-exclusions/status:check -> native-rust`; `POST /api/v2/reading-lists/memberships:check -> native-rust`
 - #5702 (1): `POST /api/v2/threads -> native-rust`
-<<<<<<< HEAD
 - #5703 (2): `DELETE /api/v2/threads/{thread_id} -> native-rust`; `PATCH /api/v2/threads/{thread_id} -> native-rust`
 - #5708 (5): `GET /api/v2/readingSessions -> native-rust`; `POST /api/v2/readingSessions -> native-rust`; `GET /api/v2/readingSessions/{session_id} -> native-rust`; `GET /api/v2/readingSessions/{session_id}/details -> native-rust`; `GET /api/v2/readingSessions/{session_id}/snapshots -> native-rust`
 - #5715 (2): `POST /api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection -> native-rust`; `GET /api/v2/threads/{thread_id}/readingOrders -> native-rust`
-=======
->>>>>>> main
 <!-- route-burndown:end -->
 
 ### Route generation ownership (bot-owned)

@@ -10928,7 +10928,6 @@
         ]
       }
     },
-<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/readingOrders": {
       "get": {
         "tags": [
@@ -10976,8 +10975,6 @@
         ]
       }
     },
-=======
->>>>>>> main
     "/api/v2/undo/{session_id}/snapshots": {
       "get": {
         "tags": [
