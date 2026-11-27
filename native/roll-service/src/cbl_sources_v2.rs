@@ -228,6 +228,9 @@ struct SourcePageCursor {
 struct OccurrencePageCursor {
     o: i64,
     s: i64,
+    /// The effective page limit: binding it prevents a replay with a different
+    /// `limit` from silently changing the continuation stride.
+    l: i64,
     f: String,
 }
 
@@ -268,12 +271,13 @@ fn occurrence_cursor(
     token: Option<&str>,
     issue_id: &str,
     page_size: i64,
+    limit: i64,
 ) -> Result<Option<OccurrencePageCursor>, ApiError> {
     let Some(token) = token.filter(|value| !value.is_empty()) else {
         return Ok(None);
     };
     let cursor: OccurrencePageCursor = decode_cursor(token)?;
-    if cursor.f != issue_id || cursor.s != page_size || cursor.o < 0 {
+    if cursor.f != issue_id || cursor.s != page_size || cursor.l != limit || cursor.o < 0 {
         return Err(bad_page_token());
     }
     Ok(Some(cursor))
@@ -592,17 +596,17 @@ pub async fn list_cbl_occurrences(
         50,
         MAX_OCCURRENCE_PAGE_SIZE,
     )?;
-    let cursor = occurrence_cursor(query.page_token.as_deref(), &issue_id, page_size)?;
-    let offset = match cursor {
-        Some(value) => value.o,
-        None => parse_nonnegative_int("offset", query.offset.as_deref(), 0)?,
-    };
     let limit = parse_bounded_int(
         "limit",
         query.limit.as_deref(),
         page_size,
         MAX_OCCURRENCE_PAGE_SIZE,
     )?;
+    let cursor = occurrence_cursor(query.page_token.as_deref(), &issue_id, page_size, limit)?;
+    let offset = match cursor {
+        Some(value) => value.o,
+        None => parse_nonnegative_int("offset", query.offset.as_deref(), 0)?,
+    };
 
     let conn = db::checkout(&state).await?;
     let page =
@@ -612,6 +616,7 @@ pub async fn list_cbl_occurrences(
             encode_cursor(&OccurrencePageCursor {
                 o: offset.saturating_add(limit),
                 s: page_size,
+                l: limit,
                 f: issue_id.clone(),
             })
         });
@@ -848,21 +853,24 @@ mod tests {
     }
 
     #[test]
-    fn occurrence_token_round_trips_and_rejects_mismatched_ids() {
+    fn occurrence_token_round_trips_and_rejects_mismatched_ids_and_limits() {
         let token = encode_cursor(&OccurrencePageCursor {
             o: 50,
             s: 50,
+            l: 50,
             f: "4000-123".to_string(),
         });
         assert_eq!(
-            occurrence_cursor(Some(&token), "4000-123", 50).expect("valid token"),
+            occurrence_cursor(Some(&token), "4000-123", 50, 50).expect("valid token"),
             Some(OccurrencePageCursor {
                 o: 50,
                 s: 50,
+                l: 50,
                 f: "4000-123".to_string(),
             })
         );
-        assert!(occurrence_cursor(Some(&token), "4000-999", 50).is_err());
+        assert!(occurrence_cursor(Some(&token), "4000-999", 50, 50).is_err());
+        assert!(occurrence_cursor(Some(&token), "4000-123", 50, 25).is_err());
     }
 
     #[test]
