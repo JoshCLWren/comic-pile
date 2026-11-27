@@ -338,7 +338,7 @@ export function createCblSourcesApi(client: HttpClient) {
     discover: async (query: string, limit = 25) => {
       const page = await client.get<CBLCatalogBrowsePage>(CBL_SOURCES_PATH, {
         params: {
-          filter: query.trim() ? `q:${query.trim()}` : '',
+          filter: query.trim() ? `q:${query.trim()}` : 'all',
           order_by: 'name',
           page_size: limit,
         },

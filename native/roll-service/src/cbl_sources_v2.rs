@@ -342,7 +342,11 @@ async fn query_source_page(
                 .query(&sql, &[&page_size, &offset])
                 .await
                 .map_err(db::query_error)?;
-            Ok((rows.iter().map(cbl_catalog::map_item).collect(), total, catalog_total))
+            Ok((
+                rows.iter().map(cbl_catalog::map_item).collect(),
+                total,
+                catalog_total,
+            ))
         }
         SourceFilter::Search(term) => {
             let pattern = format!("%{}%", cbl_catalog::escape_like(term));
@@ -629,7 +633,7 @@ pub async fn list_cbl_occurrences(
     path = "/api/v2/cblSources",
     tag = "cbl-sources",
     params(
-        ("filter" = Option<String>, Query, description = "folder=<path> browse or q=<term>/bare term search"),
+        ("filter" = Option<String>, Query, description = "folder=<path> browse, q=<term>/bare term search, or all for the whole catalog"),
         ("order_by" = Option<String>, Query, description = "Stable ordering: name (default) or path"),
         ("page_size" = Option<String>, Query, description = "Bounded page size (1-100, default 50)"),
         ("page_token" = Option<String>, Query, description = "Opaque continuation cursor")

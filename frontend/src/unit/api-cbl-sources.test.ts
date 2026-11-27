@@ -94,6 +94,15 @@ describe('cblSourcesApi canonical v2 catalog reads (#5712)', () => {
     })
   })
 
+  it('uses the whole-catalog filter for an empty discovery term', async () => {
+    client.get.mockResolvedValue({ items: [], total: 0 })
+
+    await cblSourcesApi.discover('   ')
+    expect(client.get).toHaveBeenCalledWith('/v2/cblSources', {
+      params: { filter: 'all', order_by: 'name', page_size: 25 },
+    })
+  })
+
   it('encodes folder browse positions as opaque page tokens, never a page parameter', async () => {
     client.get.mockResolvedValue({ items: [], folders: [], total: 0 })
 
