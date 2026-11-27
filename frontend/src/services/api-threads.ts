@@ -34,7 +34,7 @@ export function createThreadsApi(client: HttpClient) {
       })
       return response
     },
-    listCompleted: async (search?: string, sort?: string, pageToken?: string | null, pageSize?: number): Promise<ThreadListResponse> => {
+    listCompleted: async (search?: string, sort?: ThreadQueryParams['order_by'], pageToken?: string | null, pageSize?: number): Promise<ThreadListResponse> => {
       const queryParams: ThreadQueryParams = { filter: 'completed' };
       if (search) queryParams.search = search;
       if (sort) queryParams.order_by = sort;
@@ -46,7 +46,7 @@ export function createThreadsApi(client: HttpClient) {
       })
       return response
     },
-    listExcluded: async (search?: string, sort?: string, pageToken?: string | null, pageSize?: number): Promise<ThreadListResponse> => {
+    listExcluded: async (search?: string, sort?: ThreadQueryParams['order_by'], pageToken?: string | null, pageSize?: number): Promise<ThreadListResponse> => {
       const queryParams: ThreadQueryParams = { filter: 'excluded' };
       if (search) queryParams.search = search;
       if (sort) queryParams.order_by = sort;
