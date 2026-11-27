@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../../query/queryKeys'
-import LazyDice3D from '../../components/LazyDice3D'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
 import {
   useRollDieState,
@@ -49,8 +48,8 @@ import { resolveSnoozedSeriesCovers } from './resolveSnoozedSeriesCovers'
 import { RollHeader } from './components/RollHeader'
 import { RollFooter } from './components/RollFooter'
 import { RollModals } from './components/RollModals'
-import { RollCta } from './components/RollCta'
 import { TasteDiscoveryCard } from './components/TasteDiscoveryCard'
+import { CoverFlight, type CoverFlightState } from './components/CoverFlight'
 import ReadingModeLauncher from '../../components/ReadingModeLauncher'
 import { ReadingGraphProblemCard } from '../../components/ReadingGraphProblemCard'
 

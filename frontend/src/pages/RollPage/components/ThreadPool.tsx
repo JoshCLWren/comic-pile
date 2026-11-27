@@ -44,6 +44,7 @@ interface ThreadPoolProps {
   onResetDice?: () => void | Promise<boolean>
   resetDicePending?: boolean
   resetDiceError?: string
+  presentation: RollPresentationProps
 }
 
 export function ThreadPool({
@@ -68,8 +69,10 @@ export function ThreadPool({
   onResetDice,
   resetDicePending = false,
   resetDiceError = '',
+  presentation,
 }: ThreadPoolProps) {
   const navigate = useNavigate()
+  const { isMobile } = useResponsive()
   const wasRatingView = useRef(isRatingView)
   const snoozedTotal = snoozedCount ?? snoozedThreads.length
   // The scoped eligible query applies the browser-owned snooze cookie that
@@ -252,84 +255,33 @@ export function ThreadPool({
               </button>
             </div>
           </div>
+        ) : isMobile ? (
+          <MobileGallery
+            pool={displayPool}
+            cardByIssueId={cardByIssueId}
+            dieSides={presentation.dieSides}
+            isRolling={presentation.isRolling}
+            rolledValue={presentation.rolledValue}
+            hasRolled={presentation.hasRolled}
+            winningThreadId={selectedThreadId != null ? Number(selectedThreadId) : null}
+            mainDieRef={presentation.mainDieRef}
+            onRoll={presentation.onRoll}
+            onThreadClick={onThreadClick}
+          />
         ) : (
-          displayPool.map((thread, index) => {
-            const isSelected = selectedThreadId && Number(selectedThreadId) === thread.id
-            const routeLabels = (thread.route_labels ?? []).filter(Boolean)
-            const tags = thread.tags ?? []
-            const tagNames = tags.map((tag) => tag.name)
-            // The scoped card is authoritative for the identity it carries
-            // (#4719); bootstrap remains the fallback while cards settle.
-            const card = thread.issue_id != null ? cardByIssueId.get(thread.issue_id) : undefined
-            const displayTitle = card?.thread_title ?? thread.title
-            const issueNumber = card?.issue_number ?? thread.issue_number
-            return (
-              <div
-                key={thread.id}
-                onClick={() => onThreadClick(thread)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    onThreadClick(thread)
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-                aria-label={`Die face ${index + 1}: ${displayTitle}${issueNumber ? `, issue ${issueNumber}` : ''}${tagNames.length ? `, tagged ${tagNames.join(', ')}` : ''}${routeLabels.length ? `, connected to ${routeLabels.join(', ')}` : ''}${(thread.overflow_routes_count ?? 0) > 0 ? `, ${thread.overflow_routes_count} more connected routes` : ''}. Open series actions.`}
-                className={`flex items-center gap-3 px-4 py-3 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-[var(--theme-comic-accent)]/30' : ''
-                  }`}
-              >
-                <span className="text-lg font-black text-stone-500/50 group-hover:text-stone-400/50 transition-colors w-6 text-center">
-                  {index + 1}
-                </span>
-                {/* A die face with a canonical owned issue exposes the same
-                    covered read/rate/map entrance as every other exact-issue
-                    row. Stop propagation so opening the card never selects the
-                    die face or rolls. Rows without an owned id keep the series
-                    representative cover and no fabricated issue action. */}
-                {thread.issue_id != null ? (
-                  <div
-                    className="shrink-0"
-                    onClick={(event) => event.stopPropagation()}
-                    onKeyDown={(event) => event.stopPropagation()}
-                  >
-                    <CompactIssueCardTrigger
-                      issueId={thread.issue_id}
-                      threadTitle={displayTitle}
-                      issueNumber={issueNumber ?? ''}
-                      status={card?.status === 'read' ? 'read' : 'unread'}
-                      card={card ?? null}
-                      hideTitle
-                    />
-                  </div>
-                ) : (
-                  <ComicIssueCover
-                    coverImageUrl={card?.cover_image_url ?? null}
-                    threadTitle={displayTitle}
-                    issueNumber={issueNumber ?? ''}
-                    variant="compact"
-                  />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-stone-200 truncate text-sm">{displayTitle}</p>
-                  <p className="truncate text-xs text-stone-400">
-                    {issueNumber ? `#${issueNumber}` : 'Next unread issue'}
-                  </p>
-                  <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mt-0.5">{thread.format}</p>
-                  <ThreadTagChips
-                    tags={tags}
-                    label={`Tags for ${displayTitle}`}
-                    className="mt-1"
-                  />
-                  {routeLabels.length || (thread.overflow_routes_count ?? 0) > 0 ? (
-                    <p className="mt-1 truncate text-[10px] text-[var(--theme-continuity-accent)]">
-                      Connected to: {routeLabels.join(' · ')}{routeLabels.length && (thread.overflow_routes_count ?? 0) > 0 ? ' · ' : ''}{(thread.overflow_routes_count ?? 0) > 0 ? `+${thread.overflow_routes_count} more` : ''}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-            )
-          })
+          <CoverBoard
+            pool={displayPool}
+            cardByIssueId={cardByIssueId}
+            dieSize={dieSize ?? displayPool.length}
+            dieSides={presentation.dieSides}
+            isRolling={presentation.isRolling}
+            rolledValue={presentation.rolledValue}
+            hasRolled={presentation.hasRolled}
+            selectedThreadId={selectedThreadId}
+            mainDieRef={presentation.mainDieRef}
+            onRoll={presentation.onRoll}
+            onThreadClick={onThreadClick}
+          />
         )}
       </div>}
 
