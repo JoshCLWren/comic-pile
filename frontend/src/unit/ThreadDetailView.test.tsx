@@ -109,7 +109,7 @@ beforeEach(() => {
   // SAFETY: the bulk response matches the endpoint contract; issues without stored credits are omitted
   mockedIssuesApiListCreators.mockResolvedValue({ thread_id: 1, issues: [] })
   vi.mocked(dependenciesApi.explainEligibility).mockReset()
-  vi.mocked(dependenciesApi.explainEligibility).mockResolvedValue({ threads: { 1: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] } } })
+  vi.mocked(dependenciesApi.explainEligibility).mockResolvedValue({ threads: { 1: { thread_id: 1, eligible: true, next_issue_id: 1, is_blocked: false, blocking_reasons: [], blocking_dependencies: [] } } })
   mockedConnectedThreads.mockReset()
   mockedConnectedThreads.mockResolvedValue({ thread_id: 1, connected_threads: [] })
   mockedThreadIssuesTags.mockReset()
