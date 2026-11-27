@@ -3482,28 +3482,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-<<<<<<< HEAD
-    "/api/v2/threads:checkDuplicates": {
-=======
     "/api/v2/threads/{thread_id}/reading-order-group-memberships": {
->>>>>>> origin/main
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-<<<<<<< HEAD
-        get?: never;
-        put?: never;
-        /** @description Advisory AIP-136 collection custom method: report existing volumes that may be the proposed series. Does not create a Thread. Results are owner-scoped, exclude a named thread, and are capped at five matches. */
-        post: operations["check_duplicates"];
-=======
         /** Documentation-only operation for listing a thread's group memberships (v2). */
         get: operations["dependency_groups_v2_list_thread_group_memberships"];
         put?: never;
         post?: never;
->>>>>>> origin/main
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/threads:checkDuplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Advisory AIP-136 collection custom method: report existing volumes that may be the proposed series. Does not create a Thread. Results are owner-scoped, exclude a named thread, and are capped at five matches. */
+        post: operations["check_duplicates"];
         delete?: never;
         options?: never;
         head?: never;
@@ -19195,7 +19201,57 @@ export interface operations {
             };
         };
     };
-<<<<<<< HEAD
+    dependency_groups_v2_list_thread_group_memberships: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Groups containing the thread or its issues */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeDependencyGroupSummary"][];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     check_duplicates: {
         parameters: {
             query?: never;
@@ -19210,31 +19266,12 @@ export interface operations {
         };
         responses: {
             /** @description Possible existing volumes */
-=======
-    dependency_groups_v2_list_thread_group_memberships: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Owned thread identifier */
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Groups containing the thread or its issues */
->>>>>>> origin/main
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-<<<<<<< HEAD
                     "application/json": components["schemas"]["CheckDuplicatesResponse"];
-=======
-                    "application/json": components["schemas"]["NativeDependencyGroupSummary"][];
->>>>>>> origin/main
                 };
             };
             /** @description Not authenticated */
@@ -19244,34 +19281,13 @@ export interface operations {
                 };
                 content?: never;
             };
-<<<<<<< HEAD
             /** @description Validation failed */
-=======
-            /** @description Thread not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request validation failed */
->>>>>>> origin/main
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-<<<<<<< HEAD
-=======
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
->>>>>>> origin/main
         };
     };
     list_undo_snapshots_documentation: {
