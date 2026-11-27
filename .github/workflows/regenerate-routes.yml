@@ -67,15 +67,11 @@ jobs:
           # only the route fragments plus the previous document, so
           # regeneration is idempotent and order-independent. The burndown
           # generator owns the inventory, AGENTS.md block and rewrite artifact.
-          # The live route census is generated from the refreshed inventory and
-          # router so the checked all-version census stays deterministic.
           node scripts/generate_route_burndown.mjs
           node scripts/generate_vercel_routes.mjs
           node scripts/generate_route_burndown.mjs
-          node scripts/generate_live_route_census.mjs
           node scripts/generate_vercel_routes.mjs --check
           node scripts/generate_route_burndown.mjs --check
-          node scripts/generate_live_route_census.mjs --check
 
       - name: Open or refresh CI-gated regeneration PR
         env:
@@ -84,9 +80,7 @@ jobs:
         run: |
           set -euo pipefail
           git add vercel.json docs/api/v2-route-inventory.json \
-            docs/api/route-fragments/vercel-rewrites.json AGENTS.md \
-            docs/api/live-route-census.json docs/api/LIVE_ROUTE_CENSUS.md \
-            docs/api/v1-retirement-allowlist.json
+            docs/api/route-fragments/vercel-rewrites.json AGENTS.md
           branch='automation/route-regeneration/current'
           if [[ -z "${GH_TOKEN:-}" ]]; then
             echo '::error::PR_REBASE_TOKEN is required so the generated PR triggers normal CI.'
@@ -114,9 +108,7 @@ jobs:
             git fetch --no-tags origin "$branch"
             if git diff --quiet FETCH_HEAD HEAD -- \
               vercel.json docs/api/v2-route-inventory.json \
-              docs/api/route-fragments/vercel-rewrites.json AGENTS.md \
-              docs/api/live-route-census.json docs/api/LIVE_ROUTE_CENSUS.md \
-              docs/api/v1-retirement-allowlist.json; then
+              docs/api/route-fragments/vercel-rewrites.json AGENTS.md; then
               echo "Regenerated files match existing PR #$existing; preserving its exact CI head."
               exit 0
             fi
