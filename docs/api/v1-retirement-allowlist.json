@@ -282,8 +282,15 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
+<<<<<<< HEAD
         "frontend/src/services/api-reading-orders.ts",
         "frontend/src/unit/api-reading-orders.test.ts"
+=======
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-graph.ts",
+        "frontend/src/services/api-reading-orders.ts"
+>>>>>>> origin/main
       ]
     },
     {
@@ -571,6 +578,11 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
+<<<<<<< HEAD
+=======
+        "frontend/src/services/api-taste.ts",
+        "frontend/src/test/p0-auth-outage-recovery.spec.ts",
+>>>>>>> origin/main
         "frontend/src/unit/api-taste.test.ts"
       ]
     },
@@ -584,6 +596,10 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
+<<<<<<< HEAD
+=======
+        "frontend/src/services/api-taste.ts",
+>>>>>>> origin/main
         "frontend/src/unit/api-taste.test.ts"
       ]
     },
@@ -928,11 +944,15 @@
       "rollout_status": "slice-open",
       "needs_owner_issue": false,
       "runtime": "native-rust",
+<<<<<<< HEAD
       "consumers": [
         "frontend/src/services/api-reading-orders.ts",
         "frontend/src/unit/api-reading-orders.test.ts",
         "frontend/src/unit/api.test.ts"
       ]
+=======
+      "consumers": []
+>>>>>>> origin/main
     },
     {
       "method": "POST",
@@ -1017,7 +1037,14 @@
       "rollout_status": "slice-open",
       "needs_owner_issue": false,
       "runtime": "native-rust",
+<<<<<<< HEAD
       "consumers": []
+=======
+      "consumers": [
+        "frontend/src/services/api-taste.ts",
+        "frontend/src/unit/api-taste.test.ts"
+      ]
+>>>>>>> origin/main
     },
     {
       "method": "POST",

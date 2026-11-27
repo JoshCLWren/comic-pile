@@ -18,7 +18,7 @@ it('uses the shared API client so expired tokens can be refreshed and retried', 
 
   await expect(readingOrdersApi.getForThread(42)).resolves.toEqual({ reading_orders: [] })
 
-  expect(client.get).toHaveBeenCalledWith('/v1/threads/42/reading-orders')
+  expect(client.get).toHaveBeenCalledWith('/v2/threads/42/readingOrders')
 })
 
 it('propagates errors from the shared API client', async () => {
@@ -43,7 +43,7 @@ it('previews a projection with the plan id and selected reading order', async ()
   await expect(readingOrdersApi.previewProjection(9, 3)).resolves.toMatchObject({ plan_id: 9, reading_order_id: 3 })
 
   expect(client.post).toHaveBeenCalledWith(
-    '/v1/continuity-plans/9/reading-orders/project-preview',
+    '/v2/continuityPlans/9:previewReadingOrderProjection',
     { reading_order_id: 3 },
   )
 })
