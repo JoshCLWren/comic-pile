@@ -1125,6 +1125,49 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn v2_cbl_source_preview_ingress_reaches_rust_without_404() {
+        // #5714: the v2 route table in this Vercel entry is separate from the
+        // inner service router. All three canonical paths must reach dispatch
+        // (401/503 here because there is no DB state), never native_not_found.
+        for (method, uri) in [
+            ("GET", "/api/v2/cblSources/1/adoptionPreview"),
+            ("POST", "/api/v2/cblSources/1:planAdoption"),
+            ("POST", "/api/v2/cblSources/1:previewReadingGraph"),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .header("content-type", "application/json")
+                        .body(Body::from("{}"))
+                        .unwrap(),
+                )
+                .await
+                .expect("v2 CBL preview ingress response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{method} {uri} must reach Rust dispatch, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust"
+            );
+            let bytes = to_bytes(response.into_body(), 8192)
+                .await
+                .expect("body bytes");
+            let text = String::from_utf8_lossy(&bytes);
+            assert_ne!(
+                text, r#"{"detail":"Not Found"}"#,
+                "{method} {uri} must not hit native_not_found: {text}"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn cbl_adoption_paths_reach_rust_ingress_and_never_hit_json_404() {
         // Regression for #5484: this Vercel entry registers the source-detail,
         // list-candidates and adoption-commit paths in addition to the
