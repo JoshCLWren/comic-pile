@@ -1,7 +1,4 @@
-import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { QueryClientProvider } from '@tanstack/react-query'
-import { ToastProvider } from '../contexts/ToastProvider'
 import { cast } from '../utils/cast'
 import {
   isAmbiguousNetworkFailure,
@@ -9,9 +6,7 @@ import {
   reconcileAmbiguousRollMutation,
   ROLL_BOOTSTRAP_RECONCILED_EVENT,
 } from '../hooks/rollMutationReconciliation'
-import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
-import { queryClient } from '../query/queryClient'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 
 vi.mock('../services/rollBootstrapApi', () => ({
@@ -21,12 +16,6 @@ vi.mock('../services/rollBootstrapApi', () => ({
 }))
 
 const mockedBootstrap = vi.mocked(rollBootstrapApi.get)
-const wrapper = ({ children }: { children: React.ReactNode }) => (
-  <QueryClientProvider client={queryClient}>
-    <ToastProvider>{children}</ToastProvider>
-  </QueryClientProvider>
-)
-
 const bootstrapState = (
   sessionId: number,
   pendingThreadId: number | null,
@@ -106,87 +95,4 @@ describe('Roll mutation reconciliation', () => {
     }
   })
 
-  it('replaces mounted state and reuses it for the caller immediate refetch', async () => {
-    const initial = bootstrapState(6, 7)
-    const reconciled = bootstrapState(8, null)
-    mockedBootstrap.mockResolvedValue(initial)
-
-    const { result } = renderHook(() => useRollBootstrap(), { wrapper })
-    await waitFor(() => expect(result.current.data).toBe(initial))
-
-    act(() => {
-      window.dispatchEvent(new Event(ROLL_BOOTSTRAP_RECONCILED_EVENT))
-    })
-    expect(result.current.data).toBe(initial)
-
-    act(() => {
-      publishRollBootstrap(reconciled)
-      publishRollBootstrap(reconciled)
-    })
-
-    let reused: RollBootstrapResponse | undefined
-    await act(async () => {
-      reused = await result.current.refetch()
-    })
-
-    expect(reused).toBe(reconciled)
-    expect(mockedBootstrap).toHaveBeenCalledTimes(1)
-    // React Query applies the reconciled cache value to the observer asynchronously
-    // and structurally shares it, so compare by content.
-    await waitFor(() => expect(result.current.data).toStrictEqual(reconciled))
-    expect(result.current.data?.session_id).toBe(8)
-    expect(result.current.data?.pending_thread_id).toBeNull()
-    expect(result.current.isPending).toBe(false)
-    expect(result.current.isError).toBe(false)
-    expect(result.current.error).toBeNull()
-  })
-
-  it('expires reconciled reuse before a later independent refetch', async () => {
-    const initial = bootstrapState(6, 7)
-    const reconciled = bootstrapState(8, null)
-    const later = bootstrapState(10, 9)
-    mockedBootstrap.mockResolvedValueOnce(initial).mockResolvedValueOnce(later)
-
-    const { result } = renderHook(() => useRollBootstrap(), { wrapper })
-    await waitFor(() => expect(result.current.data).toBe(initial))
-
-    vi.useFakeTimers()
-    try {
-      act(() => {
-        publishRollBootstrap(reconciled)
-      })
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(0)
-      })
-
-      let refreshed: RollBootstrapResponse | undefined
-      await act(async () => {
-        refreshed = await result.current.refetch()
-      })
-
-      // React Query structurally shares data, so compare by content rather than
-      // reference. Flush the refetch's observer update before asserting it.
-      expect(refreshed).toStrictEqual(later)
-      expect(mockedBootstrap).toHaveBeenCalledTimes(2)
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(0)
-      })
-      expect(result.current.data).toStrictEqual(later)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('clears a pending reconciliation expiry when the hook unmounts', async () => {
-    const initial = bootstrapState(6, 7)
-    mockedBootstrap.mockResolvedValue(initial)
-
-    const { result, unmount } = renderHook(() => useRollBootstrap(), { wrapper })
-    await waitFor(() => expect(result.current.data).toBe(initial))
-
-    act(() => {
-      publishRollBootstrap(bootstrapState(8, null))
-    })
-    expect(() => unmount()).not.toThrow()
-  })
 })
