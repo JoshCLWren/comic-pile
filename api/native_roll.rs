@@ -520,11 +520,11 @@ fn app() -> Router {
             get(native_dispatch),
         )
         .route(
-            "/api/v1/issue-identity/cbl-sources/compare",
+            "/api/v2/cblSources:compare",
             post(native_dispatch),
         )
         .route(
-            "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
+            "/api/v2/reading-lists/{list_id}/cbl-candidates",
             get(native_dispatch),
         )
         .route(
@@ -1114,10 +1114,10 @@ mod tests {
                 "GET",
                 "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/4000-1",
             ),
-            ("POST", "/api/v1/issue-identity/cbl-sources/compare"),
+            ("POST", "/api/v2/cblSources:compare"),
             (
                 "GET",
-                "/api/v1/issue-identity/reading-lists/26/cbl-candidates",
+                "/api/v2/reading-lists/26/cbl-candidates",
             ),
             ("POST", "/api/v1/issue-identity/cbl/26/adoption-plan"),
             ("POST", "/api/v2/reading-lists/26/adoption-commits"),
