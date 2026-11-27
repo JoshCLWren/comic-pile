@@ -106,8 +106,6 @@
     {
       "bucket": "operations",
       "method": "GET",
-<<<<<<< HEAD
-=======
       "path": "/api/v2/threads/{thread_id}/issues",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v2/threads/[0-9]+/issues$",
@@ -121,7 +119,6 @@
     {
       "bucket": "operations",
       "method": "GET",
->>>>>>> origin/main
       "path": "/api/v2/threads/{thread_id}/reading-order-group-memberships",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v2/threads/[^/]+/reading-order-group-memberships$",
@@ -134,7 +131,6 @@
     },
     {
       "bucket": "operations",
-<<<<<<< HEAD
       "method": "GET",
       "path": "/api/v2/threads/{thread_id}/readingOrders",
       "dest": "/api/native_roll.rs",
@@ -144,7 +140,10 @@
       "owning_issue": 5715,
       "consumers": [
         "frontend/src/services/api-reading-orders.ts"
-=======
+      ]
+    },
+    {
+      "bucket": "operations",
       "method": "POST",
       "path": "/api/v2/threads:checkDuplicates",
       "dest": "/api/native_roll.rs",
@@ -154,7 +153,6 @@
       "owning_issue": 5705,
       "consumers": [
         "frontend/src/services/api-threads.ts"
->>>>>>> origin/main
       ]
     },
     {
