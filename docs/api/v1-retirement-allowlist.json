@@ -8,8 +8,8 @@
   "require_runtime": "native-rust",
   "known_unowned_baseline": [],
   "summary": {
-    "total_entries": 175,
-    "with_owner": 175,
+    "total_entries": 172,
+    "with_owner": 172,
     "baseline_debt": 0,
     "nonconforming_v2": 98
   },
@@ -703,7 +703,6 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-dependencies.ts",
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
@@ -724,11 +723,9 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-dependencies.ts",
         "frontend/src/services/api-issues.ts",
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-threads.ts",
-        "frontend/src/test/cbl-replace-review.spec.ts",
         "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
         "frontend/src/unit/api-auth-failure-isolation.test.ts",
         "frontend/src/unit/api-issues-coverage.test.ts",
@@ -746,10 +743,8 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-dependencies.ts",
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-threads.ts",
-        "frontend/src/test/cbl-replace-review.spec.ts",
         "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
         "frontend/src/unit/api-auth-failure-isolation.test.ts",
         "frontend/src/unit/api-issues-coverage.test.ts",
@@ -767,43 +762,12 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-dependencies.ts",
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-threads.ts",
-        "frontend/src/test/cbl-replace-review.spec.ts",
         "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
         "frontend/src/unit/api-auth-failure-isolation.test.ts",
         "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
-        "frontend/src/unit/api.test.ts"
-      ]
-    },
-    {
-      "method": "GET",
-      "path": "/api/v1/threads/{thread_id}/connected",
-      "version": "v1",
-      "owner_issue": 5709,
-      "disposition": "GET /api/v2/dependencies/blocked",
-      "rollout_status": "slice-open",
-      "needs_owner_issue": false,
-      "runtime": "native-rust",
-      "consumers": [
-        "frontend/src/services/api-dependencies.ts",
-        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx"
-      ]
-    },
-    {
-      "method": "GET",
-      "path": "/api/v1/threads/{thread_id}/dependencies",
-      "version": "v1",
-      "owner_issue": 5709,
-      "disposition": "GET /api/v2/dependencies/blocked",
-      "rollout_status": "slice-open",
-      "needs_owner_issue": false,
-      "runtime": "native-rust",
-      "consumers": [
-        "frontend/src/services/api-dependencies.ts",
-        "frontend/src/test/p0-dependencies-reading-order.spec.ts",
         "frontend/src/unit/api.test.ts"
       ]
     },
@@ -830,19 +794,6 @@
       "consumers": [
         "frontend/src/services/api-threads.ts",
         "frontend/src/unit/api.test.ts"
-      ]
-    },
-    {
-      "method": "GET",
-      "path": "/api/v1/threads/{thread_id}/issue-dependencies",
-      "version": "v1",
-      "owner_issue": 5709,
-      "disposition": "GET /api/v2/dependencies/blocked",
-      "rollout_status": "slice-open",
-      "needs_owner_issue": false,
-      "runtime": "native-rust",
-      "consumers": [
-        "frontend/src/services/api-dependencies.ts"
       ]
     },
     {
@@ -989,16 +940,12 @@
       "method": "POST",
       "path": "/api/v1/threads:getBlockingInfo",
       "version": "v1",
-      "owner_issue": 5709,
-      "disposition": "GET /api/v2/dependencies/blocked",
-      "rollout_status": "slice-open",
+      "owner_issue": 4832,
+      "disposition": "GET|POST|PATCH|DELETE /api/v2/threads[/{thread_id}]",
+      "rollout_status": "slices-5701-5707",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": [
-        "frontend/src/services/api-dependencies.ts",
-        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
-        "frontend/src/unit/useReadingBoundaries.request-budget.test.tsx"
-      ]
+      "consumers": []
     },
     {
       "method": "GET",
