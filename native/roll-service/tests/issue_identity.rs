@@ -527,7 +527,7 @@ async fn reading_list_candidates_reports_gaps_and_ranks() {
     .await
     .unwrap();
 
-    let (status, body) = get(&state, &token, "/api/v2/reading-lists/910/cbl-candidates").await;
+    let (status, body) = get(&state, &token, "/api/v2/readingLists/910/cblCandidates").await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["list_id"], 910);
     assert_eq!(body["list_name"], "My List");
@@ -615,7 +615,7 @@ async fn reading_list_candidates_denies_cross_account_access() {
     let (status, body) = get(
         &state,
         &other_token,
-        "/api/v2/reading-lists/930/cbl-candidates",
+        "/api/v2/readingLists/930/cblCandidates",
     )
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND, "{body}");

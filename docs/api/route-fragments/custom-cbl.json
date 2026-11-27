@@ -180,9 +180,9 @@
     {
       "bucket": "operations",
       "method": "GET",
-      "path": "/api/v2/reading-lists/{list_id}/cbl-candidates",
+      "path": "/api/v2/readingLists/{list_id}/cblCandidates",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/reading-lists/[0-9]+/cbl-candidates$",
+      "src": "^/api/v2/readingLists/[0-9]+/cblCandidates$",
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 5713,

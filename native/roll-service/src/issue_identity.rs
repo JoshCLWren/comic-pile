@@ -5125,7 +5125,7 @@ pub fn compare_cbl_sources_v2_documentation() {}
 /// Documentation-only operation for reading-list CBL candidates (v2, #5713).
 #[utoipa::path(
     get,
-    path = "/api/v2/reading-lists/{list_id}/cbl-candidates",
+    path = "/api/v2/readingLists/{list_id}/cblCandidates",
     tag = "issue-identity",
     params(
         ("list_id" = i32, Path, description = "Owned custom CBL list identifier"),

@@ -1078,7 +1078,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(issue_identity::compare_cbl_sources_v2),
         )
         .route(
-            "/api/v2/reading-lists/{list_id}/cbl-candidates",
+            "/api/v2/readingLists/{list_id}/cblCandidates",
             get(issue_identity::find_cbl_candidates_for_reading_list),
         )
         .route(

@@ -231,7 +231,7 @@ test('real custom CBL source retains native reading-list route ownership', () =>
     ['GET', '/api/v2/reading-lists/{list_id}/overlap-decisions', 4844],
     ['PUT', '/api/v2/reading-lists/{list_id}/overlap-decisions', 4844],
     ['DELETE', '/api/v2/reading-lists/{list_id}/overlap-decisions/{decision_id}', 4844],
-    ['GET', '/api/v2/reading-lists/{list_id}/cbl-candidates', 5713],
+    ['GET', '/api/v2/readingLists/{list_id}/cblCandidates', 5713],
   ]) {
     const op = liveOperation(fragment, method, route);
     assert.equal(op.owning_issue, owningIssue, route);

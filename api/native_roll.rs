@@ -1112,7 +1112,7 @@ mod tests {
                 "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/4000-1",
             ),
             ("POST", "/api/v2/cblSources:compare"),
-            ("GET", "/api/v2/reading-lists/26/cbl-candidates"),
+            ("GET", "/api/v2/readingLists/26/cblCandidates"),
             ("POST", "/api/v1/issue-identity/cbl/26/adoption-plan"),
             ("POST", "/api/v2/reading-lists/26/adoption-commits"),
             (

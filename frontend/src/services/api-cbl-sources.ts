@@ -348,7 +348,7 @@ export function createCblSourcesApi(client: HttpClient) {
     /** Compare one owned Reading List's confirmed identities to shared sources. */
     readingListCandidates: (listId: number, limit = 50) =>
       client.get<CBLReadingListCandidatesResponse>(
-        `/v2/reading-lists/${listId}/cbl-candidates`,
+        `/v2/readingLists/${listId}/cblCandidates`,
         { params: { limit } },
       ),
     preview: (listId: number) =>
