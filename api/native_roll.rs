@@ -330,10 +330,7 @@ fn app() -> Router {
             post(native_dispatch),
         )
         .route("/api/v2/threads", get(native_dispatch))
-<<<<<<< HEAD
         .route("/api/v2/threads/{thread_id}", get(native_dispatch))
-=======
->>>>>>> origin/main
         // #5705: the advisory duplicate check is an AIP-136 collection custom
         // method. The inner service registers it too, but this Vercel entry owns
         // a separate route table: without a matching route here a deployed
@@ -1754,8 +1751,6 @@ mod tests {
     }
 
     #[tokio::test]
-<<<<<<< HEAD
-=======
     async fn series_mappings_preview_v2_ingress_reaches_rust_and_never_hits_json_404() {
         // #5716: `POST /api/v2/seriesMappings:preview` is registered in the
         // inner service, but this Vercel entry has its own route table. Without

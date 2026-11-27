@@ -479,8 +479,6 @@ mod tests {
         );
     }
 
-<<<<<<< HEAD
-=======
     /// #5716: the canonical preview is an AIP-136 stateless collection custom
     /// method on the lowerCamelCase `seriesMappings` collection. It must not be
     /// published as a v1 same-path operation in the v2 contract, and it must
@@ -522,7 +520,6 @@ mod tests {
         );
     }
 
->>>>>>> origin/main
     /// The issue read-state and reader-context operations moved from their
     /// `/api/v1/issues/{id}:action` URLs to v2 resources. Every method must stay
     /// in both the domain document and the aggregate runtime contract with its
