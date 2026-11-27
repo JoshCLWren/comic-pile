@@ -17,8 +17,8 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, SecondsFormat, Utc};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{collections::HashMap, sync::Arc};
 use utoipa::ToSchema;
@@ -453,8 +453,7 @@ mod tests {
     /// extra-field-tolerant Python-parity contract (#5342 review).
     #[test]
     fn published_preview_schema_uses_distinct_names_and_wire_types() {
-        let document =
-            serde_json::to_value(crate::openapi::canonical_openapi()).expect("OpenAPI");
+        let document = serde_json::to_value(crate::openapi::canonical_openapi()).expect("OpenAPI");
         let operation = &document["paths"]
             ["/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection"]["post"];
         assert_eq!(
