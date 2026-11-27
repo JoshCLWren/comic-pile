@@ -8,6 +8,15 @@ import { useRollDieState, useRollEligibleIssueIds, useRollIssueCards } from './u
 import { useRollPendingSelection } from './useRollPendingSelection'
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from './rollMutationReconciliation'
 
+/** Best-effort browser IANA timezone, retained for callers that display it. */
+export function resolveBrowserTimezone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined
+  } catch {
+    return undefined
+  }
+}
+
 const EMPTY_SESSION_MODE: SessionMode = {
   active_bandwidth: null,
   predicted_bandwidth: null,

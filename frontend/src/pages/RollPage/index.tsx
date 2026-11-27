@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../../query/queryKeys'
 import LazyDice3D from '../../components/LazyDice3D'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
+import { useRollPendingSelection } from '../../hooks/useRollPendingSelection'
 import {
   useRollDieState,
   useRollEligibleIssueIds,
@@ -79,6 +80,10 @@ export default function RollPage() {
     error: bootstrapError,
     isRetrying: isBootstrapRetrying,
   } = useRollBootstrap()
+  // The pending roll is an exact browser-owned issue selection, not server
+  // session state. It survives reload and tabs and is cleared only on a
+  // committed read/rate of that same issue or an explicit Reset (#4350).
+  const pendingSelection = useRollPendingSelection()
 
   // Die-header surface migration (#4719): the scoped die resource is
   // authoritative for the selected die, ladder readout, die size and 3D
@@ -116,15 +121,11 @@ export default function RollPage() {
   const showLastRead = lastRead != null && lastReadKey !== dismissedLastReadKey
 
   const handleBackToQueue = useCallback(() => {
-    // Leaving for the queue is navigation, not resolution (issue #3761): the
-    // pending read stays server-side, so the unresolved selection is still
-    // there when the reader comes back. Mark the bootstrap cache stale so the
-    // next active use (returning to Roll) refetches instead of replaying a
-    // snapshot captured before the roll. This avoids an eager HTTP request on
-    // navigation while preserving the no-stale-pending guarantee.
-    void invalidateRollBootstrapOnNavigation(queryClient)
+    // Leaving for the queue is navigation, not resolution: the browser-owned
+    // selection is restored on return without a server round trip or an eager
+    // refresh of the scoped resources (#4350).
     navigate('/queue')
-  }, [navigate, queryClient])
+  }, [navigate])
 
   const setDieMutation = useSetDie()
   const resetDiceMutation = useResetDice()
@@ -171,6 +172,7 @@ export default function RollPage() {
     setResetDiceError('')
     try {
       await resetDiceMutation.mutate()
+      pendingSelection.clearAll()
       state.setIsRolling(false)
       state.setIsRatingView(false)
       state.setRolledResult(null)
@@ -182,11 +184,16 @@ export default function RollPage() {
       setResetDiceError(getApiErrorDetail(error))
       return false
     }
-  }, [resetDiceMutation, state])
+  }, [resetDiceMutation, pendingSelection, state])
 
   const rollPool = useMemo(() => bootstrap?.roll_pool ?? [], [bootstrap?.roll_pool])
 
-  useRollPendingSession({ state, bootstrap, rollPool })
+  useRollPendingSession({
+    state,
+    bootstrap,
+    rollPool,
+    pending: pendingSelection.pending,
+  })
 
   const rating = useRollRating({
     state,
@@ -194,6 +201,8 @@ export default function RollPage() {
     rateMutation,
     dismissPendingMutation,
     refetchBootstrap,
+    clearPending: pendingSelection.clear,
+    selectedIssueId: pendingSelection.pending?.issue_id ?? null,
   })
 
   // Undoing a rating restores the snapshot the rating itself wrote, which is the
