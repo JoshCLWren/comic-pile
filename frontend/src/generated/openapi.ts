@@ -3427,17 +3427,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-<<<<<<< HEAD
         /** Standard resource Get for one owned Thread. */
         get: operations["get_thread_v2_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-=======
-        get?: never;
         put?: never;
         post?: never;
         /** @description Delete an owned Thread (AIP-135). A second delete, or a delete of a foreign or already deleted Thread, returns 404. Never 403. */
@@ -3446,7 +3437,6 @@ export interface paths {
         head?: never;
         /** @description Partially update an owned Thread (AIP-134). Omitted fields are preserved. When `update_mask` is supplied only its fields are applied; a masked field missing from the body is cleared. An `expected` precondition that no longer matches the committed row returns 409 with `detail.code = thread_edit_conflict` and the current values. Foreign or deleted Threads return 404, never 403. */
         patch: operations["patch_thread_documentation"];
->>>>>>> origin/main
         trace?: never;
     };
     "/api/v2/threads/{thread_id}/issue-order": {
@@ -9501,14 +9491,12 @@ export interface components {
             next_page_token?: string | null;
             threads: components["schemas"]["ThreadListItem"][];
         };
-<<<<<<< HEAD
         /**
          * @description One v2 threads list response. The active/completed/excluded filters keep the
          *     queue-list projection; the stale filter keeps the legacy detail-shaped
          *     projection. Both are emitted inline (no envelope variant key).
          */
         ThreadListResult: components["schemas"]["ThreadListResponse"] | components["schemas"]["StaleThreadListResponse"];
-=======
         /** @description Committed values a stale client read before issuing a Thread patch. */
         ThreadPatchPrecondition: {
             /** @description Format observed by the client. */
@@ -9551,7 +9539,6 @@ export interface components {
              */
             update_mask?: string[] | null;
         };
->>>>>>> origin/main
         ThreadProgress: {
             /** Format: int32 */
             issues_remaining: number;
@@ -19160,29 +19147,55 @@ export interface operations {
             };
         };
     };
-<<<<<<< HEAD
     get_thread_v2_documentation: {
-=======
-    delete_thread_v2_documentation: {
->>>>>>> origin/main
         parameters: {
             query?: never;
             header?: never;
             path: {
-<<<<<<< HEAD
                 /** @description Owned Thread identifier */
-=======
-                /** @description Owned thread identifier */
->>>>>>> origin/main
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-<<<<<<< HEAD
             /** @description Owner-scoped thread detail */
-=======
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadDetailResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found or not owned by the reader */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_thread_v2_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
             /** @description Deleted */
             204: {
                 headers: {
@@ -19237,17 +19250,12 @@ export interface operations {
         };
         responses: {
             /** @description Updated thread */
->>>>>>> origin/main
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-<<<<<<< HEAD
-                    "application/json": components["schemas"]["ThreadDetailResponse"];
-=======
                     "application/json": components["schemas"]["NativeThreadResponse"];
->>>>>>> origin/main
                 };
             };
             /** @description Not authenticated */
@@ -19257,19 +19265,13 @@ export interface operations {
                 };
                 content?: never;
             };
-<<<<<<< HEAD
-            /** @description Thread not found or not owned by the reader */
-=======
             /** @description Thread not found (including another reader's thread) */
->>>>>>> origin/main
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-<<<<<<< HEAD
-=======
             /** @description Stale `expected` precondition; reload before retrying */
             409: {
                 headers: {
@@ -19284,7 +19286,6 @@ export interface operations {
                 };
                 content?: never;
             };
->>>>>>> origin/main
         };
     };
     issue_order_documentation: {

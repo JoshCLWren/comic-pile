@@ -226,30 +226,17 @@
       }
     },
     "/api/v2/threads/{thread_id}": {
-<<<<<<< HEAD
       "get": {
         "tags": [
           "threads"
         ],
         "summary": "Standard resource Get for one owned Thread.",
         "operationId": "get_thread_v2_documentation",
-=======
-      "delete": {
-        "tags": [
-          "threads"
-        ],
-        "description": "Delete an owned Thread (AIP-135). A second delete, or a delete of a foreign or already deleted Thread, returns 404. Never 403.",
-        "operationId": "delete_thread_v2_documentation",
->>>>>>> origin/main
         "parameters": [
           {
             "name": "thread_id",
             "in": "path",
-<<<<<<< HEAD
             "description": "Owned Thread identifier",
-=======
-            "description": "Owned thread identifier",
->>>>>>> origin/main
             "required": true,
             "schema": {
               "type": "integer",
@@ -258,14 +245,48 @@
           }
         ],
         "responses": {
-<<<<<<< HEAD
           "200": {
             "description": "Owner-scoped thread detail",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ThreadDetailResponse"
-=======
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found or not owned by the reader"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "threads"
+        ],
+        "description": "Delete an owned Thread (AIP-135). A second delete, or a delete of a foreign or already deleted Thread, returns 404. Never 403.",
+        "operationId": "delete_thread_v2_documentation",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
           "204": {
             "description": "Deleted"
           },
@@ -323,7 +344,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ThreadResponse"
->>>>>>> origin/main
                 }
               }
             }
@@ -332,9 +352,6 @@
             "description": "Not authenticated"
           },
           "404": {
-<<<<<<< HEAD
-            "description": "Thread not found or not owned by the reader"
-=======
             "description": "Thread not found (including another reader's thread)"
           },
           "409": {
@@ -342,7 +359,6 @@
           },
           "422": {
             "description": "Validation failed"
->>>>>>> origin/main
           }
         },
         "security": [
@@ -776,7 +792,6 @@
           }
         }
       },
-<<<<<<< HEAD
       "ThreadListResult": {
         "oneOf": [
           {
@@ -787,7 +802,7 @@
           }
         ],
         "description": "One v2 threads list response. The active/completed/excluded filters keep the\nqueue-list projection; the stale filter keeps the legacy detail-shaped\nprojection. Both are emitted inline (no envelope variant key)."
-=======
+      },
       "ThreadPatchPrecondition": {
         "type": "object",
         "description": "Committed values a stale client read before issuing a Thread patch.",
@@ -893,7 +908,6 @@
             "description": "Explicit field mask (AIP-134). Either an array of field names or one\ncomma-separated string. Omit for presence-based partial update."
           }
         }
->>>>>>> origin/main
       },
       "ThreadResponse": {
         "type": "object",
