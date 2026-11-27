@@ -405,14 +405,7 @@ describe('Visible action Snooze/Unsnooze', () => {
   })
 
   it('removes thread from snooze cookie when Unsnooze action is clicked', async () => {
-    mockedUseRollBootstrap.mockReturnValue({
-      data: {
-        snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }],
-        skipped_thread_ids: [],
-        skipped_threads: [],
-      },
-      refetch: vi.fn(),
-    })
+    writeRollSnoozes([1])
 
     const user = userEvent.setup()
     render(
