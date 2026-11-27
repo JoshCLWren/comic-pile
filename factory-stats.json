@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-27T08:32:48+00:00",
+  "generated_at": "2026-11-27T08:34:57+00:00",
   "models": [
     {
       "health": {
@@ -23819,7 +23819,7 @@
   },
   "counts_generated_at": "2026-11-27T08:00:01.656405+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-27T08:32:49Z",
+    "generated_at": "2026-11-27T08:34:58Z",
     "sources": {
       "nvidia": [
         "google/diffusiongemma-26b-a4b-it",
@@ -23831,6 +23831,7 @@
         "z-ai/glm-5.3"
       ],
       "opencode-free": [
+        "beam-free",
         "hungerg-free"
       ]
     }
@@ -23841,8 +23842,8 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-27T08:32:49.609810+00:00",
-    "days_elapsed": 26.356,
+    "checked_at": "2026-11-27T08:34:58.871839+00:00",
+    "days_elapsed": 26.358,
     "days_in_month": 30.0,
     "days_left": 3.64,
     "in_use": true,
@@ -23860,21 +23861,21 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 55153379,
-        "organization": 55153379,
+        "database": 55188084,
+        "organization": 55188084,
         "owner_target": 50000000,
-        "projected_database": 62778926,
-        "projected_organization": 62778926,
+        "projected_database": 62813663,
+        "projected_organization": 62813663,
         "projected_share": 0.1256,
-        "share_used": 0.1103
+        "share_used": 0.1104
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 209248,
-        "organization": 209248,
+        "database": 209263,
+        "organization": 209263,
         "owner_target": 1000000,
-        "projected_database": 238179,
-        "projected_organization": 238179,
+        "projected_database": 238178,
+        "projected_organization": 238178,
         "projected_share": 0.0238,
         "share_used": 0.0209
       },
@@ -23900,7 +23901,7 @@
     "status": "warn"
   },
   "schema": {
-    "checked_at": "2026-11-27T08:32:52+00:00",
+    "checked_at": "2026-11-27T08:35:01+00:00",
     "code_version": 6,
     "last_upgrade": {
       "at": "2026-11-25T18:11:07+00:00",
@@ -24078,7 +24079,7 @@
     "stored_version": 6
   },
   "crashes": {
-    "generated_at": "2026-11-27T08:32:52Z",
+    "generated_at": "2026-11-27T08:35:01Z",
     "groups": [
       {
         "count": 3,
@@ -24205,7 +24206,7 @@
   },
   "ready": {
     "cycles": [],
-    "generated_at": "2026-11-27T08:31:34+00:00",
+    "generated_at": "2026-11-27T08:33:47+00:00",
     "items": [
       {
         "action": "merge-conflict",
@@ -24246,48 +24247,9 @@
     ]
   },
   "gh_usage": {
-    "generated_at": "2026-11-27T08:32:54Z",
+    "generated_at": "2026-11-27T08:35:04Z",
     "jobs": {
       "dispatch": [
-        {
-          "at": 1795767243,
-          "buckets": {
-            "reader": 38,
-            "workflow": 22
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 2935,
-            "reset": 1795767349
-          },
-          "cache_hits": 0,
-          "github": 60,
-          "label": "dispatch roster",
-          "paginated": 8,
-          "top": [
-            [
-              "api GET repos/R/issues",
-              12
-            ],
-            [
-              "api GET repos/R/issues/N",
-              7
-            ],
-            [
-              "api POST graphql",
-              7
-            ],
-            [
-              "api GET repos/R/pulls/N",
-              6
-            ],
-            [
-              "api GET rate_limit",
-              5
-            ]
-          ],
-          "writes": 10
-        },
         {
           "at": 1795767334,
           "buckets": {
@@ -24716,48 +24678,48 @@
             ]
           ],
           "writes": 11
-        }
-      ],
-      "merge": [
+        },
         {
-          "at": 1795766875,
+          "at": 1795768428,
           "buckets": {
-            "reader": 35,
-            "workflow": 10
+            "reader": 67,
+            "workflow": 23
           },
           "budget": {
             "limit": 5000,
-            "remaining": 3166,
-            "reset": 1795767349
+            "remaining": 4136,
+            "reset": 1795770950
           },
           "cache_hits": 0,
-          "github": 45,
-          "label": "merge drain",
-          "paginated": 19,
+          "github": 90,
+          "label": "dispatch roster",
+          "paginated": 17,
           "top": [
             [
-              "api GET repos/R/issues/N/comments paginate",
+              "api GET repos/R/issues",
               14
             ],
             [
-              "gh pr list",
-              3
+              "api GET repos/R/issues/N",
+              12
             ],
             [
-              "api GET repos/R/issues",
-              2
+              "api GET repos/R/pulls/N",
+              11
             ],
             [
-              "gh pr view",
-              2
+              "api GET repos/R/issues/N/comments paginate",
+              8
             ],
             [
-              "gh issue view",
-              2
+              "api GET rate_limit",
+              7
             ]
           ],
-          "writes": 4
-        },
+          "writes": 9
+        }
+      ],
+      "merge": [
         {
           "at": 1795766947,
           "buckets": {
@@ -25157,6 +25119,45 @@
           "budget": {
             "limit": 5000,
             "remaining": 4255,
+            "reset": 1795770950
+          },
+          "cache_hits": 0,
+          "github": 46,
+          "label": "merge drain",
+          "paginated": 20,
+          "top": [
+            [
+              "api GET repos/R/issues/N/comments paginate",
+              14
+            ],
+            [
+              "gh pr list",
+              3
+            ],
+            [
+              "api GET repos/R/pulls paginate",
+              3
+            ],
+            [
+              "api GET repos/R/issues",
+              2
+            ],
+            [
+              "gh pr view",
+              2
+            ]
+          ],
+          "writes": 4
+        },
+        {
+          "at": 1795768440,
+          "buckets": {
+            "reader": 36,
+            "workflow": 10
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 4130,
             "reset": 1795770950
           },
           "cache_hits": 0,
