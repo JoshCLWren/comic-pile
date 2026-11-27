@@ -2520,6 +2520,51 @@
         ],
         "type": "object"
       },
+      "CheckDuplicatesRequest": {
+        "description": "Body of `POST /api/v1/threads/check-duplicates`.",
+        "properties": {
+          "comicvine_volume_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "exclude_thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "format": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "format"
+        ],
+        "type": "object"
+      },
+      "CheckDuplicatesResponse": {
+        "description": "Response of `POST /api/v1/threads/check-duplicates`.",
+        "properties": {
+          "matches": {
+            "items": {
+              "$ref": "#/components/schemas/NativePotentialDuplicateMatch"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "matches"
+        ],
+        "type": "object"
+      },
       "CheckPotentialDuplicatesRequest": {
         "description": "Request to check for possible existing volumes before create or rename.",
         "properties": {
@@ -9768,6 +9813,61 @@
         },
         "required": [
           "issue_number"
+        ],
+        "type": "object"
+      },
+      "NativePotentialDuplicateMatch": {
+        "description": "One possible existing volume.",
+        "properties": {
+          "comicvine_volume_id": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "format": {
+            "type": "string"
+          },
+          "issues_remaining": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "match_type": {
+            "type": "string"
+          },
+          "start_year": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "thread_id",
+          "title",
+          "format",
+          "status",
+          "issues_remaining",
+          "match_type"
         ],
         "type": "object"
       },
@@ -17820,6 +17920,42 @@
         ],
         "type": "object"
       },
+      "ThreadCreatorCreditsResponse": {
+        "description": "Bounded, paginated thread-scoped issue-credit projection for #5706.\n\nKeeps the frozen per-issue `issue_id`/`creators` wire shape of the legacy\nbulk creator read and adds standard page fields. The `issues` array omits\nunmapped issues and issues without stored credits, exactly like the legacy\nresponse, while `total_count` counts matching confirmed-mapping issue rows.",
+        "properties": {
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeIssueCreatorsEntry"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "page_size": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "total_count": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "thread_id",
+          "issues",
+          "total_count",
+          "page_size"
+        ],
+        "type": "object"
+      },
       "ThreadDependenciesResponse": {
         "description": "Wire parity with Python `ThreadDependenciesResponse`\n(`app/schemas/dependency.py`): the `blocking` list holds edges where this\nthread's issues block others, `blocked_by` holds edges where this thread's\nissues are blocked. Each entry is the enriched `DependencyResponse`.",
         "properties": {
@@ -20835,26 +20971,22 @@
     },
     "/api/v1/reading-order-groups/": {
       "get": {
-        "operationId": "dependency_groups_list",
+        "description": "List the current user's groups and memberships.",
+        "operationId": "list_groups_api_v1_reading_order_groups__get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/NativeDependencyGroupResponse"
+                    "$ref": "#/components/schemas/DependencyGroupResponse"
                   },
+                  "title": "Response List Groups Api V1 Reading Order Groups  Get",
                   "type": "array"
                 }
               }
             },
-            "description": "Owned groups with memberships"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
+            "description": "Successful Response"
           }
         },
         "security": [
@@ -20862,18 +20994,21 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Documentation-only operation for listing reading-order groups.",
+        "summary": "List Groups",
         "tags": [
+          "dependencies",
+          "dependencies",
           "reading-order-groups"
         ]
       },
       "post": {
-        "operationId": "dependency_groups_create",
+        "description": "Create a user-owned named group.",
+        "operationId": "create_group_api_v1_reading_order_groups__post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DependencyGroupCreateRequest"
+                "$ref": "#/components/schemas/DependencyGroupCreate"
               }
             }
           },
@@ -20884,23 +21019,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeDependencyGroupResponse"
+                  "$ref": "#/components/schemas/DependencyGroupResponse"
                 }
               }
             },
-            "description": "Created group"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "409": {
-            "description": "A group with this name already exists"
+            "description": "Successful Response"
           },
           "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -20908,42 +21041,42 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Documentation-only operation for creating a reading-order group.",
+        "summary": "Create Group",
         "tags": [
+          "dependencies",
+          "dependencies",
           "reading-order-groups"
         ]
       }
     },
     "/api/v1/reading-order-groups/{group_id}": {
       "delete": {
-        "operationId": "dependency_groups_delete",
+        "description": "Delete one owned group and its memberships.",
+        "operationId": "delete_group_api_v1_reading_order_groups__group_id__delete",
         "parameters": [
           {
-            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "format": "int32",
+              "title": "Group Id",
               "type": "integer"
             }
           }
         ],
         "responses": {
           "204": {
-            "description": "Group deleted"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Group not found"
+            "description": "Successful Response"
           },
           "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -20951,21 +21084,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Documentation-only operation for deleting one group.",
+        "summary": "Delete Group",
         "tags": [
+          "dependencies",
+          "dependencies",
           "reading-order-groups"
         ]
       },
       "get": {
-        "operationId": "dependency_groups_get",
+        "description": "Return one owned group.",
+        "operationId": "get_group_api_v1_reading_order_groups__group_id__get",
         "parameters": [
           {
-            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "format": "int32",
+              "title": "Group Id",
               "type": "integer"
             }
           }
@@ -20975,23 +21110,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeDependencyGroupResponse"
+                  "$ref": "#/components/schemas/DependencyGroupResponse"
                 }
               }
             },
-            "description": "Owned group"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Group not found"
+            "description": "Successful Response"
           },
           "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -20999,21 +21132,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Documentation-only operation for fetching one group.",
+        "summary": "Get Group",
         "tags": [
+          "dependencies",
+          "dependencies",
           "reading-order-groups"
         ]
       },
       "patch": {
-        "operationId": "dependency_groups_update",
+        "description": "Rename one owned group.",
+        "operationId": "update_group_api_v1_reading_order_groups__group_id__patch",
         "parameters": [
           {
-            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "format": "int32",
+              "title": "Group Id",
               "type": "integer"
             }
           }
@@ -21022,7 +21157,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DependencyGroupUpdateRequest"
+                "$ref": "#/components/schemas/DependencyGroupUpdate"
               }
             }
           },
@@ -21033,26 +21168,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeDependencyGroupResponse"
+                  "$ref": "#/components/schemas/DependencyGroupResponse"
                 }
               }
             },
-            "description": "Renamed group"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Group not found"
-          },
-          "409": {
-            "description": "A group with this name already exists"
+            "description": "Successful Response"
           },
           "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -21060,23 +21190,25 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Documentation-only operation for renaming one group.",
+        "summary": "Update Group",
         "tags": [
+          "dependencies",
+          "dependencies",
           "reading-order-groups"
         ]
       }
     },
     "/api/v1/reading-order-groups/{group_id}/detail": {
       "get": {
-        "operationId": "dependency_groups_get_detail",
+        "description": "Return one owned group with enriched member, plan, and project data.",
+        "operationId": "get_group_detail_api_v1_reading_order_groups__group_id__detail_get",
         "parameters": [
           {
-            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "format": "int32",
+              "title": "Group Id",
               "type": "integer"
             }
           }
@@ -21086,23 +21218,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeDependencyGroupDetailResponse"
+                  "$ref": "#/components/schemas/DependencyGroupDetailResponse"
                 }
               }
             },
-            "description": "Owned group detail"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Group not found"
+            "description": "Successful Response"
           },
           "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -21110,8 +21240,10 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Documentation-only operation for fetching enriched group detail.",
+        "summary": "Get Group Detail",
         "tags": [
+          "dependencies",
+          "dependencies",
           "reading-order-groups"
         ]
       }
@@ -28853,6 +28985,240 @@
         ]
       }
     },
+    "/api/v2/readingOrderGroups": {
+      "get": {
+        "operationId": "reading_order_groups_list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NativeDependencyGroupResponse"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Owned groups with memberships"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for listing v2 reading-order groups.",
+        "tags": [
+          "reading-order-groups"
+        ]
+      },
+      "post": {
+        "operationId": "reading_order_groups_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DependencyGroupCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeDependencyGroupResponse"
+                }
+              }
+            },
+            "description": "Created group"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "409": {
+            "description": "A group with this name already exists"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for creating a v2 reading-order group.",
+        "tags": [
+          "reading-order-groups"
+        ]
+      }
+    },
+    "/api/v2/readingOrderGroups/{group_id}": {
+      "delete": {
+        "operationId": "reading_order_groups_delete",
+        "parameters": [
+          {
+            "description": "Owned reading-order group identifier",
+            "in": "path",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Group deleted"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for deleting a v2 reading-order group.",
+        "tags": [
+          "reading-order-groups"
+        ]
+      },
+      "get": {
+        "description": "The enriched detail view is folded into this resource read; v2 publishes no\nseparate `/detail` action path (#5710).",
+        "operationId": "reading_order_groups_get",
+        "parameters": [
+          {
+            "description": "Owned reading-order group identifier",
+            "in": "path",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeDependencyGroupDetailResponse"
+                }
+              }
+            },
+            "description": "Owned group detail"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the canonical v2 group Get.",
+        "tags": [
+          "reading-order-groups"
+        ]
+      },
+      "patch": {
+        "operationId": "reading_order_groups_update",
+        "parameters": [
+          {
+            "description": "Owned reading-order group identifier",
+            "in": "path",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DependencyGroupUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeDependencyGroupResponse"
+                }
+              }
+            },
+            "description": "Renamed group"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
+          },
+          "409": {
+            "description": "A group with this name already exists"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for renaming a v2 reading-order group.",
+        "tags": [
+          "reading-order-groups"
+        ]
+      }
+    },
     "/api/v2/readingSessions": {
       "get": {
         "operationId": "list_reading_sessions_documentation",
@@ -30395,6 +30761,78 @@
         ]
       }
     },
+    "/api/v2/threads/{thread_id}/creatorCredits": {
+      "get": {
+        "operationId": "thread_creator_credits",
+        "parameters": [
+          {
+            "description": "Owned Thread identifier",
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "1-100 credited issues (default 100)",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "issue_id continuation cursor",
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadCreatorCreditsResponse"
+                }
+              }
+            },
+            "description": "Paginated stored creator credits per mapped issue"
+          },
+          "400": {
+            "description": "Invalid page token"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "422": {
+            "description": "Validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the canonical v2 thread-scoped credit\nprojection (#5706). The v1 bulk creator URL stays on the legacy response;\nthis v2 operation adds bounded pagination around the same stored credits.",
+        "tags": [
+          "issues"
+        ]
+      }
+    },
     "/api/v2/threads/{thread_id}/issue-order": {
       "put": {
         "description": "Replace the complete issue order atomically. The projected Option E graph is validated before commit, so a manual reorder cannot introduce a strict-list/series-order cycle.",
@@ -30453,6 +30891,85 @@
       }
     },
     "/api/v2/threads/{thread_id}/issues": {
+      "get": {
+        "operationId": "list_thread_issues_v2",
+        "parameters": [
+          {
+            "description": "Owned thread ID",
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Optional read or unread filter",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "1-100 issues (default 50)",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "position,id continuation cursor",
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadIssueListResponse"
+                }
+              }
+            },
+            "description": "Owner-scoped, paginated issues"
+          },
+          "400": {
+            "description": "Invalid page token"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "422": {
+            "description": "Validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the canonical v2 thread issue collection\n(#5706). The v2 path is mounted to the same owner-scoped, paginated handler\nas the retained v1 same-path read, so both URLs share one wire contract.",
+        "tags": [
+          "issues"
+        ]
+      },
       "post": {
         "description": "Create issue labels atomically. Natural numeric placement never re-sorts previously persisted issues; a non-monotonic series appends without changing existing relative order. The complete reading graph is validated before commit.",
         "operationId": "create_issues_documentation",
@@ -30691,6 +31208,48 @@
         "summary": "Documentation-only operation for listing a thread's group memberships (v2).",
         "tags": [
           "reading-order-groups"
+        ]
+      }
+    },
+    "/api/v2/threads:checkDuplicates": {
+      "post": {
+        "description": "Advisory AIP-136 collection custom method: report existing volumes that may be the proposed series. Does not create a Thread. Results are owner-scoped, exclude a named thread, and are capped at five matches.",
+        "operationId": "check_duplicates",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckDuplicatesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckDuplicatesResponse"
+                }
+              }
+            },
+            "description": "Possible existing volumes"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "threads"
         ]
       }
     },

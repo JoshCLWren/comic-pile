@@ -528,7 +528,7 @@ describe('comparison and CBL discovery request budgets', () => {
   it('records the actual axios crossover rows before and after expansion', async () => {
     installDomainLedger(
       {
-        'GET /api/v1/reading-order-groups/': () => ({
+        'GET /api/v2/readingOrderGroups': () => ({
           data: [
             {
               id: 7,
@@ -561,7 +561,7 @@ describe('comparison and CBL discovery request budgets', () => {
     // cards, so their ids must not trigger metadata fetches (#4445).
     await waitFor(() => expect(ledger.requests).toHaveLength(1))
     expect(ledger.requests.map((request) => request.url)).toEqual([
-      'GET /api/v1/reading-order-groups/',
+      'GET /api/v2/readingOrderGroups',
     ])
 
     ledger.beginAction('expand crossover')

@@ -74,6 +74,8 @@ use utoipa::OpenApi;
         crate::issue_read::get_issue_dependencies_documentation,
         crate::issue_read::get_thread_issue_dependencies_documentation,
         crate::issue_read::list_thread_issues_documentation,
+        crate::issue_read::list_thread_issues_v2_documentation,
+        crate::thread_issues::creator_credits_documentation,
         crate::tags::list_tags_documentation,
         crate::tags::create_tag_documentation,
         crate::tags::effective_issue_documentation,
@@ -167,9 +169,12 @@ use utoipa::OpenApi;
         crate::creators_v2::rating_distribution_documentation,
         crate::creators_v2::role_documentation,
         crate::creators_v2::series_documentation,
+        // #5712: canonical AIP-122 collection reads for the shared CBL catalog.
         crate::cbl_sources_v2::list_cbl_sources_documentation,
         crate::cbl_sources_v2::get_cbl_source_documentation,
         crate::cbl_sources_v2::list_cbl_occurrences_documentation,
+        // AIP-136 collection custom method for the advisory duplicate lookup (#5705).
+        crate::thread_lifecycle::check_potential_duplicates_v2_documentation,
     ),
     components(schemas(
         crate::cbl_sources_v2::ListCblSourcesResponse,
@@ -266,6 +271,9 @@ use utoipa::OpenApi;
         crate::issue_read::ThreadIssueDependenciesResponse,
         crate::issue_read::ThreadIssueListResponse,
         crate::issue_read::IssueDetailResponse,
+        crate::thread_issues::CreatorCredit,
+        crate::thread_issues::IssueCreatorsEntry,
+        crate::thread_issues::ThreadCreatorCreditsResponse,
         crate::identity_inbox::IdentityInboxSearchResult,
         crate::continuity_rules::ContinuityRuleRequest,
         crate::continuity_rules::ContinuityRuleResponse,
@@ -359,6 +367,10 @@ use utoipa::OpenApi;
         crate::creators_v2::CreatorMetricIssue,
         crate::creators_v2::CreatorMetricPagination,
         crate::creators_v2::CreatorMetricDrilldown,
+        // Advisory duplicate-check DTOs shared with the retained v1 path (#5705).
+        crate::thread_lifecycle::CheckDuplicatesRequest,
+        crate::thread_lifecycle::CheckDuplicatesResponse,
+        crate::thread_lifecycle::PotentialDuplicateMatch,
     )),
     modifiers(&NativeSecurityAddon)
 )]
@@ -401,7 +413,10 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         // #5711: the six crossover-membership operations are v2-only after the
         // retired `/api/v1` aliases were unmounted. Publish them here so the
         // generated frontend client stays aligned with the live ingress.
-        .merge_from(crate::dependency_groups::dependency_groups_v2_openapi());
+        .merge_from(crate::dependency_groups::dependency_groups_v2_openapi())
+        // #5710: canonical v2 reading-order-group collection CRUD; the retired
+        // v1 paths are no longer part of the deployed contract.
+        .merge_from(crate::dependency_groups::reading_order_groups_v2_openapi());
     // The aggregate artifact is the deployed v2 runtime contract. The
     // completed-threads v1 operation has its own same-path contract and must
     // not expand the v2 inventory.
@@ -419,6 +434,49 @@ mod tests {
 
     fn document() -> Value {
         serde_json::to_value(canonical_openapi()).expect("canonical OpenAPI document")
+    }
+
+    /// The advisory duplicate check is a v2 AIP-136 collection custom method
+    /// (#5705). It must be published with its own operation identity and DTOs,
+    /// separate from both the `GET /api/v2/threads` list/filter contract
+    /// (AIP-132) and the standard AIP-133 Create on the same collection (#5702).
+    #[test]
+    fn check_duplicates_custom_method_is_in_v2_contract() {
+        let doc = document();
+        let operation = &doc["paths"]["/api/v2/threads:checkDuplicates"]["post"];
+        assert_eq!(operation["operationId"], "check_duplicates");
+        assert_eq!(
+            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/CheckDuplicatesRequest"
+        );
+        assert_eq!(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/CheckDuplicatesResponse"
+        );
+        for schema in ["CheckDuplicatesRequest", "CheckDuplicatesResponse"] {
+            assert!(
+                doc["components"]["schemas"][schema].is_object(),
+                "missing {schema} in v2 contract"
+            );
+        }
+        // The collection read keeps its AIP-132 search/filter parameters, and
+        // the collection POST remains the standard Create — neither is
+        // overloaded with the advisory custom method.
+        let collection = &doc["paths"]["/api/v2/threads"];
+        assert!(collection["get"].is_object());
+        assert!(collection["get"]["parameters"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["name"] == "search" && p["in"] == "query"));
+        assert_eq!(
+            collection["post"]["operationId"],
+            "create_thread_v2_documentation"
+        );
+        assert_eq!(
+            collection["post"]["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ThreadCreateRequest"
+        );
     }
 
     /// The issue read-state and reader-context operations moved from their
@@ -635,6 +693,67 @@ mod tests {
                 "provider_volume_id",
                 "enabled",
             ],
+        );
+    }
+
+    /// The v2 collection CRUD (#5710) must be published with stable operation
+    /// ids and no `/detail` action path.
+    #[test]
+    fn reading_order_groups_v2_operations_are_in_runtime_contract() {
+        let document = document();
+        for (path, method, operation_id, success) in [
+            (
+                "/api/v2/readingOrderGroups",
+                "get",
+                "reading_order_groups_list",
+                "200",
+            ),
+            (
+                "/api/v2/readingOrderGroups",
+                "post",
+                "reading_order_groups_create",
+                "201",
+            ),
+            (
+                "/api/v2/readingOrderGroups/{group_id}",
+                "get",
+                "reading_order_groups_get",
+                "200",
+            ),
+            (
+                "/api/v2/readingOrderGroups/{group_id}",
+                "patch",
+                "reading_order_groups_update",
+                "200",
+            ),
+            (
+                "/api/v2/readingOrderGroups/{group_id}",
+                "delete",
+                "reading_order_groups_delete",
+                "204",
+            ),
+        ] {
+            let operation = &document["paths"][path][method];
+            assert!(
+                operation.is_object(),
+                "missing {method} {path} in v2 contract"
+            );
+            assert_eq!(operation["operationId"], operation_id, "{method} {path}");
+            assert!(
+                operation["responses"][success].is_object(),
+                "{method} {path} missing {success}"
+            );
+        }
+        assert!(
+            document["paths"]
+                .get("/api/v2/readingOrderGroups/{group_id}/detail")
+                .is_none(),
+            "v2 must not publish a /detail action path"
+        );
+        assert_fields(
+            &document,
+            "DependencyGroupDetailResponse",
+            &["id", "name", "created_at", "memberships", "linked_plans"],
         );
     }
 

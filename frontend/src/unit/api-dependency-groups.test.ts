@@ -18,27 +18,27 @@ describe('dependencyGroupsApi', () => {
     await dependencyGroupsApi.list()
     await dependencyGroupsApi.create('Cosmic')
 
-    expect(client.get).toHaveBeenCalledWith('/v1/reading-order-groups/')
+    expect(client.get).toHaveBeenCalledWith('/v2/readingOrderGroups')
     expect(client.post).toHaveBeenCalledWith(
-      '/v1/reading-order-groups/',
+      '/v2/readingOrderGroups',
       { name: 'Cosmic' },
     )
   })
 
-  it('loads group details', async () => {
+  it('loads the folded detail view from canonical v2 Get without a /detail call', async () => {
     const group = {
       id: 3,
       name: 'Infinity',
       created_at: '2026-01-01T00:00:00Z',
       memberships: [],
+      linked_plans: [],
     }
     client.get.mockResolvedValueOnce(group)
 
     await expect(dependencyGroupsApi.get(3)).resolves.toEqual(group)
 
-    expect(client.get).toHaveBeenCalledWith(
-      '/v1/reading-order-groups/3',
-    )
+    expect(client.get).toHaveBeenCalledTimes(1)
+    expect(client.get).toHaveBeenCalledWith('/v2/readingOrderGroups/3')
   })
 
   it('supports group rename and deletion', async () => {
@@ -49,10 +49,10 @@ describe('dependencyGroupsApi', () => {
     await dependencyGroupsApi.delete(3)
 
     expect(client.patch).toHaveBeenCalledWith(
-      '/v1/reading-order-groups/3',
+      '/v2/readingOrderGroups/3',
       { name: 'Infinity' },
     )
-    expect(client.delete).toHaveBeenCalledWith('/v1/reading-order-groups/3')
+    expect(client.delete).toHaveBeenCalledWith('/v2/readingOrderGroups/3')
   })
 
   it('loads compact group names for the Roll view', async () => {

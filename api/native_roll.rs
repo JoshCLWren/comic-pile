@@ -326,6 +326,11 @@ fn app() -> Router {
             post(native_dispatch),
         )
         .route("/api/v2/threads", get(native_dispatch))
+        // #5705: the advisory duplicate check is an AIP-136 collection custom
+        // method. The inner service registers it too, but this Vercel entry owns
+        // a separate route table: without a matching route here a deployed
+        // request hits native_not_found before the handler runs.
+        .route("/api/v2/threads:checkDuplicates", post(native_dispatch))
         .route("/api/v1/threads/{thread_id}", get(native_dispatch))
         .route("/api/v1/threads/{thread_id}", post(native_dispatch))
         .route("/api/v1/threads:getBlockingInfo", post(native_dispatch))
@@ -389,6 +394,15 @@ fn app() -> Router {
                 .delete(native_dispatch),
         )
         .route("/api/v2/threads/{thread_id}/issues", post(native_dispatch))
+        // Canonical v2 issue collection and creator-credit reads (#5706).
+        // The Vercel entry keeps its own route table: without matching
+        // entries here the fallback returns the Rust JSON 404 before the
+        // dispatched handler runs.
+        .route("/api/v2/threads/{thread_id}/issues", get(native_dispatch))
+        .route(
+            "/api/v2/threads/{thread_id}/creatorCredits",
+            get(native_dispatch),
+        )
         // Edit Series previews (#5863). The inner router registers these
         // handlers, but the Vercel entry owns a separate route table: without
         // matching routes here the fallback returns the Rust JSON 404
@@ -770,23 +784,22 @@ fn app() -> Router {
         )
         .route("/api/bug-reports/", post(native_dispatch))
         .route("/api/v1/bug-reports/", post(native_dispatch))
-        .route("/api/v1/reading-order-groups/", get(native_dispatch))
-        .route("/api/v1/reading-order-groups/", post(native_dispatch))
+        // #5710: the v2 collection is the only group CRUD authority at the
+        // Vercel ingress. Retired v1 list/Get/PATCH/DELETE/detail routes fall
+        // through to the Rust JSON 404 instead of reaching any handler.
+        .route("/api/v2/readingOrderGroups", get(native_dispatch))
+        .route("/api/v2/readingOrderGroups", post(native_dispatch))
         .route(
-            "/api/v1/reading-order-groups/{group_id}",
+            "/api/v2/readingOrderGroups/{group_id}",
             get(native_dispatch),
         )
         .route(
-            "/api/v1/reading-order-groups/{group_id}",
+            "/api/v2/readingOrderGroups/{group_id}",
             patch(native_dispatch),
         )
         .route(
-            "/api/v1/reading-order-groups/{group_id}",
+            "/api/v2/readingOrderGroups/{group_id}",
             delete(native_dispatch),
-        )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}/detail",
-            get(native_dispatch),
         )
         .route(
             "/api/v1/reading-order-groups/{group_id}/order",
@@ -1461,6 +1474,74 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn reading_order_groups_v2_ingress_reaches_rust_and_v1_crud_is_gone() {
+        // #5710: the v2 collection is mounted in the Vercel ingress table as
+        // well as the library router; the retired v1 CRUD/detail paths and a
+        // v2 `/detail` action are not.
+        for (method, uri) in [
+            ("GET", "/api/v2/readingOrderGroups"),
+            ("POST", "/api/v2/readingOrderGroups"),
+            ("GET", "/api/v2/readingOrderGroups/42"),
+            ("PATCH", "/api/v2/readingOrderGroups/42"),
+            ("DELETE", "/api/v2/readingOrderGroups/42"),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .header("content-type", "application/json")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{method} {uri} runtime header"
+            );
+            assert_ne!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "{method} {uri} must reach Rust dispatch, not native_not_found"
+            );
+        }
+
+        for (method, uri) in [
+            ("GET", "/api/v1/reading-order-groups/"),
+            ("POST", "/api/v1/reading-order-groups/"),
+            ("GET", "/api/v1/reading-order-groups/42"),
+            ("PATCH", "/api/v1/reading-order-groups/42"),
+            ("DELETE", "/api/v1/reading-order-groups/42"),
+            ("GET", "/api/v1/reading-order-groups/42/detail"),
+            ("GET", "/api/v2/readingOrderGroups/42/detail"),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert_eq!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "retired {method} {uri} must not be mounted at ingress"
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn v2_reading_order_group_ingress_reaches_rust_and_old_v1_is_404() {
         // #5711: the membership operations moved to v2 URLs. Register them in
         // this Vercel entry table or the fallback returns the Rust JSON 404
@@ -1532,6 +1613,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn v2_thread_issue_read_ingress_reaches_rust_and_never_hits_json_404() {
+        // #5706: both canonical v2 reads must be registered in this Vercel
+        // entry table. An unauthenticated request must reach the dispatched
+        // handler (401) or a cold-start 503; it must never fall through to
+        // native_not_found with the Rust JSON 404.
+        for (method, uri) in [
+            ("GET", "/api/v2/threads/42/issues"),
+            ("GET", "/api/v2/threads/42/creatorCredits"),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("thread issue read ingress response");
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{method} {uri} runtime header"
+            );
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{method} {uri} must reach Rust dispatch, not the 404 fallback, got {}",
+                response.status()
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn edit_series_preview_ingress_reaches_rust_and_never_hits_json_404() {
         // #5863: Edit Series Add posted to the inner-router-only preview paths,
         // so the Vercel ingress returned its JSON 404 ("Not Found") instead of
@@ -1584,6 +1700,49 @@ mod tests {
                 "numeric thread ids must not fail Path extraction for {uri}: {text}"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn check_duplicates_v2_ingress_reaches_rust_and_never_hits_json_404() {
+        // #5705: `POST /api/v2/threads:checkDuplicates` is registered in the
+        // inner service router, but the Vercel entry owns a separate route
+        // table. Without a matching route here a deployed request falls
+        // through to native_not_found and returns the Rust JSON 404. An
+        // unauthenticated request must reach native_dispatch (401 when the
+        // inner router has state, 503 on cold start), never the 404 fallback.
+        let mut router = app();
+        let response = router
+            .call(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v2/threads:checkDuplicates")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"title":"Amazing Spider-Man","format":"Comic"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .expect("duplicate-check ingress response");
+        assert!(
+            response.status() == StatusCode::UNAUTHORIZED
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+            "v2 duplicate check must reach Rust dispatch, not the 404 fallback, got {}",
+            response.status()
+        );
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime").unwrap(),
+            "rust",
+            "v2 duplicate check must be served by the native ingress"
+        );
+        let bytes = to_bytes(response.into_body(), 8192)
+            .await
+            .expect("body bytes");
+        let text = String::from_utf8_lossy(&bytes);
+        assert_ne!(
+            text, r#"{"detail":"Not Found"}"#,
+            "v2 duplicate check must not hit native_not_found: {text}"
+        );
     }
 
     #[tokio::test]

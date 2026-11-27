@@ -6168,6 +6168,240 @@
         ]
       }
     },
+    "/api/v2/readingOrderGroups": {
+      "get": {
+        "tags": [
+          "reading-order-groups"
+        ],
+        "summary": "Documentation-only operation for listing v2 reading-order groups.",
+        "operationId": "reading_order_groups_list",
+        "responses": {
+          "200": {
+            "description": "Owned groups with memberships",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DependencyGroupResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "reading-order-groups"
+        ],
+        "summary": "Documentation-only operation for creating a v2 reading-order group.",
+        "operationId": "reading_order_groups_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DependencyGroupCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyGroupResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "409": {
+            "description": "A group with this name already exists"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/readingOrderGroups/{group_id}": {
+      "get": {
+        "tags": [
+          "reading-order-groups"
+        ],
+        "summary": "Documentation-only operation for the canonical v2 group Get.",
+        "description": "The enriched detail view is folded into this resource read; v2 publishes no\nseparate `/detail` action path (#5710).",
+        "operationId": "reading_order_groups_get",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Owned reading-order group identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owned group detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyGroupDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "reading-order-groups"
+        ],
+        "summary": "Documentation-only operation for deleting a v2 reading-order group.",
+        "operationId": "reading_order_groups_delete",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Owned reading-order group identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Group deleted"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "reading-order-groups"
+        ],
+        "summary": "Documentation-only operation for renaming a v2 reading-order group.",
+        "operationId": "reading_order_groups_update",
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "description": "Owned reading-order group identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DependencyGroupUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Renamed group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyGroupResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
+          },
+          "409": {
+            "description": "A group with this name already exists"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/readingSessions": {
       "get": {
         "tags": [
@@ -7710,6 +7944,78 @@
         ]
       }
     },
+    "/api/v2/threads/{thread_id}/creatorCredits": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for the canonical v2 thread-scoped credit\nprojection (#5706). The v1 bulk creator URL stays on the legacy response;\nthis v2 operation adds bounded pagination around the same stored credits.",
+        "operationId": "thread_creator_credits",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "1-100 credited issues (default 100)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "page_token",
+            "in": "query",
+            "description": "issue_id continuation cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated stored creator credits per mapped issue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadCreatorCreditsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid page token"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "422": {
+            "description": "Validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/threads/{thread_id}/issue-order": {
       "put": {
         "tags": [
@@ -7768,6 +8074,85 @@
       }
     },
     "/api/v2/threads/{thread_id}/issues": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for the canonical v2 thread issue collection\n(#5706). The v2 path is mounted to the same owner-scoped, paginated handler\nas the retained v1 same-path read, so both URLs share one wire contract.",
+        "operationId": "list_thread_issues_v2",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned thread ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Optional read or unread filter",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "1-100 issues (default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "page_token",
+            "in": "query",
+            "description": "position,id continuation cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner-scoped, paginated issues",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadIssueListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid page token"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "422": {
+            "description": "Validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
       "post": {
         "tags": [
           "issues"
@@ -8000,6 +8385,48 @@
           },
           "503": {
             "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/threads:checkDuplicates": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "description": "Advisory AIP-136 collection custom method: report existing volumes that may be the proposed series. Does not create a Thread. Results are owner-scoped, exclude a named thread, and are capped at five matches.",
+        "operationId": "check_duplicates",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckDuplicatesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Possible existing volumes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckDuplicatesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Validation failed"
           }
         },
         "security": [
@@ -9529,6 +9956,7 @@
           }
         }
       },
+<<<<<<< HEAD
       "CblComicvineOccurrence": {
         "type": "object",
         "description": "One Comic Vine occurrence in the shared CBL catalog.",
@@ -9569,12 +9997,31 @@
             "format": "int32"
           },
           "publication_year": {
+=======
+      "CheckDuplicatesRequest": {
+        "type": "object",
+        "description": "Body of `POST /api/v1/threads/check-duplicates`.",
+        "required": [
+          "title",
+          "format"
+        ],
+        "properties": {
+          "comicvine_volume_id": {
             "type": [
               "integer",
               "null"
             ],
             "format": "int32"
           },
+          "exclude_thread_id": {
+>>>>>>> origin/main
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+<<<<<<< HEAD
           "revision_sha": {
             "type": "string"
           },
@@ -9709,6 +10156,28 @@
           },
           "source_repository": {
             "type": "string"
+=======
+          "format": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "CheckDuplicatesResponse": {
+        "type": "object",
+        "description": "Response of `POST /api/v1/threads/check-duplicates`.",
+        "required": [
+          "matches"
+        ],
+        "properties": {
+          "matches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PotentialDuplicateMatch"
+            }
+>>>>>>> origin/main
           }
         }
       },
@@ -11113,6 +11582,32 @@
           },
           "thread_title": {
             "type": "string"
+          }
+        }
+      },
+      "CreatorCredit": {
+        "type": "object",
+        "description": "One credited creator (Python `ComicVineCreator`).",
+        "required": [
+          "name",
+          "roles"
+        ],
+        "properties": {
+          "creator_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -13117,6 +13612,92 @@
         },
         "additionalProperties": false
       },
+      "DependencyGroupCreateRequest": {
+        "type": "object",
+        "description": "Wire request mirroring the Python `DependencyGroupCreate` payload.",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "DependencyGroupDetailMemberResponse": {
+        "type": "object",
+        "description": "Wire response member mirroring the Python `DependencyGroupDetailMemberResponse`.",
+        "required": [
+          "membership",
+          "other_crossovers"
+        ],
+        "properties": {
+          "issue": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/IssueDetailResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "membership": {
+            "$ref": "#/components/schemas/DependencyGroupMemberResponse"
+          },
+          "other_crossovers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "thread": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ThreadDetailResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "DependencyGroupDetailResponse": {
+        "type": "object",
+        "description": "Wire response mirroring the Python `DependencyGroupDetailResponse`.",
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "memberships",
+          "linked_plans"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "linked_plans": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DependencyGroupSummary"
+            }
+          },
+          "memberships": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DependencyGroupDetailMemberResponse"
+            }
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
       "DependencyGroupIssueRangeCreateRequest": {
         "type": "object",
         "description": "Wire request mirroring the Python `DependencyGroupIssueRangeCreate` payload.",
@@ -13252,6 +13833,48 @@
           }
         }
       },
+      "DependencyGroupResponse": {
+        "type": "object",
+        "description": "Wire response mirroring the Python `DependencyGroupResponse`.",
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "memberships",
+          "read_issues",
+          "total_issues",
+          "reading_progress"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "memberships": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DependencyGroupMemberResponse"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "read_issues": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reading_progress": {
+            "type": "string"
+          },
+          "total_issues": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "DependencyGroupSummary": {
         "type": "object",
         "description": "Wire response mirroring the Python `DependencyGroupSummary`.",
@@ -13264,6 +13887,18 @@
             "type": "integer",
             "format": "int32"
           },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "DependencyGroupUpdateRequest": {
+        "type": "object",
+        "description": "Wire request mirroring the Python `DependencyGroupUpdate` payload.",
+        "required": [
+          "name"
+        ],
+        "properties": {
           "name": {
             "type": "string"
           }
@@ -14466,6 +15101,26 @@
               "$ref": "#/components/schemas/IssueCard"
             },
             "description": "Owned cards in first-request order; foreign or missing IDs are omitted."
+          }
+        }
+      },
+      "IssueCreatorsEntry": {
+        "type": "object",
+        "description": "Stored creator credits for one issue (Python `IssueCreatorsEntry`).",
+        "required": [
+          "issue_id",
+          "creators"
+        ],
+        "properties": {
+          "creators": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorCredit"
+            }
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -16172,6 +16827,61 @@
           "all_completed",
           "all_out_of_pool"
         ]
+      },
+      "PotentialDuplicateMatch": {
+        "type": "object",
+        "description": "One possible existing volume.",
+        "required": [
+          "thread_id",
+          "title",
+          "format",
+          "status",
+          "issues_remaining",
+          "match_type"
+        ],
+        "properties": {
+          "comicvine_volume_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "format": {
+            "type": "string"
+          },
+          "issues_remaining": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "match_type": {
+            "type": "string"
+          },
+          "start_year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
       },
       "PreviewIssueItem": {
         "type": "object",
@@ -20305,6 +21015,42 @@
           }
         }
       },
+      "ThreadCreatorCreditsResponse": {
+        "type": "object",
+        "description": "Bounded, paginated thread-scoped issue-credit projection for #5706.\n\nKeeps the frozen per-issue `issue_id`/`creators` wire shape of the legacy\nbulk creator read and adds standard page fields. The `issues` array omits\nunmapped issues and issues without stored credits, exactly like the legacy\nresponse, while `total_count` counts matching confirmed-mapping issue rows.",
+        "required": [
+          "thread_id",
+          "issues",
+          "total_count",
+          "page_size"
+        ],
+        "properties": {
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueCreatorsEntry"
+            }
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "ThreadDependenciesResponse": {
         "type": "object",
         "description": "Wire parity with Python `ThreadDependenciesResponse`\n(`app/schemas/dependency.py`): the `blocking` list holds edges where this\nthread's issues block others, `blocked_by` holds edges where this thread's\nissues are blocked. Each entry is the enriched `DependencyResponse`.",
@@ -20324,6 +21070,107 @@
             "items": {
               "$ref": "#/components/schemas/DependencyResponse"
             }
+          }
+        }
+      },
+      "ThreadDetailResponse": {
+        "type": "object",
+        "description": "The legacy single-thread response retained for the v1 and bare aliases.",
+        "required": [
+          "id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position",
+          "status",
+          "is_test",
+          "is_blocked",
+          "blocking_reasons",
+          "created_at",
+          "manual_creator_credits"
+        ],
+        "properties": {
+          "blocking_reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "is_blocked": {
+            "type": "boolean"
+          },
+          "is_test": {
+            "type": "boolean"
+          },
+          "issues_remaining": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last_activity_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "manual_creator_credits": {},
+          "next_unread_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "next_unread_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "queue_position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reading_progress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
           }
         }
       },

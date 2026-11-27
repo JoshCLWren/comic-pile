@@ -3,7 +3,8 @@
   "owned_path_patterns": [
     "^/api/v1/creators(?:/.*)?$",
     "^/api/v2/creators(?:/.*)?$",
-    "^/api/v1/threads/[^/]+/issues/creators$"
+    "^/api/v1/threads/[^/]+/issues/creators$",
+    "^/api/v2/threads/[^/]+/creatorCredits$"
   ],
   "defaults": {
     "runtime": "python-fastapi",
@@ -51,6 +52,19 @@
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-reading-orders.ts",
         "frontend/src/services/api-threads.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/threads/{thread_id}/creatorCredits",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/threads/[^/]+/creatorCredits$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5706,
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
       ]
     },
     {
