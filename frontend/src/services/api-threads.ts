@@ -59,11 +59,6 @@ export function createThreadsApi(client: HttpClient) {
     },
     get: (id: number) => client.get<Thread>(`/v1/threads/${id}`),
     create: (data: ThreadCreatePayload) => client.post<Thread, ThreadCreatePayload>('/v2/threads', data),
-<<<<<<< HEAD
-    update: (id: number, data: ThreadUpdatePayload) =>
-      client.put<Thread, ThreadUpdatePayload>(`/v1/threads/${id}`, data),
-    delete: (id: number) => client.delete<void>(`/v1/threads/${id}`),
-=======
     /**
      * AIP-134 partial update on the canonical v2 Thread resource. The field mask
      * is derived from the keys the caller actually supplied, so an omitted field
@@ -86,7 +81,6 @@ export function createThreadsApi(client: HttpClient) {
       return client.patch<Thread, ThreadPatchPayload>(`/v2/threads/${id}`, body)
     },
     delete: (id: number) => client.delete<void>(`/v2/threads/${id}`),
->>>>>>> origin/main
     exclude: (id: number) => client.post<Thread>(`/v1/threads/${id}/exclude`),
     restore: (id: number) => client.post<Thread>(`/v1/threads/${id}/restore`),
     bulkExclude: (data: BulkQueueExclusionRequest) =>

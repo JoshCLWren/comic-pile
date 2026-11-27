@@ -16,8 +16,6 @@ describe('threadsApi.create', () => {
   })
 })
 
-<<<<<<< HEAD
-=======
 describe('threadsApi.update', () => {
   it('patches the canonical v2 thread resource and derives update_mask (#5703)', async () => {
     const client = createHttpClientStub()
@@ -53,7 +51,6 @@ describe('threadsApi.delete', () => {
   })
 })
 
->>>>>>> origin/main
 describe('threadsApi.checkExcludedStatus', () => {
   it('aggregates excluded and active ids across chunks', async () => {
     const client = createHttpClientStub()
