@@ -377,8 +377,12 @@ impl utoipa::Modify for NativeSecurityAddon {
 pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
     let mut openapi = NativeSurfaceApi::openapi()
         .merge_from(crate::queue::QueueApi::openapi())
-        .merge_from(crate::threads::ThreadsApi::openapi())
+        // utoipa keeps the first component registered under a given name. Merge
+        // the typed `ThreadResponse` (array-of-objects `manual_creator_credits`)
+        // before `ThreadsApi` contributes its raw-`Value` ToSchema emission, so
+        // the frozen Python wire type is not erased from the generated client.
         .merge_from(crate::threads_v2::ThreadsV2Api::openapi())
+        .merge_from(crate::threads::ThreadsApi::openapi())
         .merge_from(crate::issue_service::IssueApi::openapi())
         .merge_from(crate::issue_read_state::IssueReadStateApi::openapi())
         .merge_from(crate::comicvine_issue::ComicVineIssueApi::openapi())
