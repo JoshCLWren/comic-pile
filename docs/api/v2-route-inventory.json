@@ -6,10 +6,17 @@
     "generated_by": "scripts/generate_route_burndown.mjs",
     "issue": 4739,
     "ingress_source": "vercel.json",
+<<<<<<< HEAD
     "total_live_operations": 166,
     "native_rust": 166,
     "python_fastapi": 0,
     "native_rust_status": 166,
+=======
+    "total_live_operations": 157,
+    "native_rust": 157,
+    "python_fastapi": 0,
+    "native_rust_status": 157,
+>>>>>>> main
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 0
@@ -2532,6 +2539,7 @@
     {
       "runtime": "native-rust",
       "status": "target",
+<<<<<<< HEAD
       "owning_issue": 5703,
       "consumers": [
         "frontend/src/services/api-threads.ts"
@@ -2558,6 +2566,8 @@
     {
       "runtime": "native-rust",
       "status": "target",
+=======
+>>>>>>> main
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-issues.ts"
@@ -2617,6 +2627,7 @@
     {
       "runtime": "native-rust",
       "status": "target",
+<<<<<<< HEAD
       "owning_issue": 5715,
       "consumers": [
         "frontend/src/services/api-reading-orders.ts"
@@ -2630,6 +2641,8 @@
     {
       "runtime": "native-rust",
       "status": "target",
+=======
+>>>>>>> main
       "owning_issue": 4839,
       "consumers": [
         "frontend/src/services/api-undo.ts"
@@ -2690,7 +2703,11 @@
       "ingress_source": "vercel.json",
       "catch_all_src": "/api(?:/.*)?",
       "catch_all_dest": "/api/native_roll.rs",
+<<<<<<< HEAD
       "v1_total": 21,
+=======
+      "v1_total": 22,
+>>>>>>> main
       "v1_shadowed_by_rust": 0,
       "v1_live_python": 0,
       "v1_orphaned": 0,
@@ -2698,7 +2715,11 @@
       "unversioned_shadowed_by_rust": 0,
       "unversioned_live_python": 0,
       "unversioned_orphaned": 0,
+<<<<<<< HEAD
       "total_python_surface": 21,
+=======
+      "total_python_surface": 22,
+>>>>>>> main
       "total_shadowed_by_rust": 0,
       "total_live_python": 0,
       "total_orphaned": 0
