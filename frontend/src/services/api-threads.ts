@@ -35,26 +35,38 @@ export function createThreadsApi(client: HttpClient) {
       return response
     },
     listCompleted: async (search?: string, sort?: string, pageToken?: string | null, pageSize?: number): Promise<ThreadListResponse> => {
+      const queryParams: {
+        filter: 'completed'
+        search?: string
+        order_by?: string
+        page_size?: number
+        page_token?: string
+      } = { filter: 'completed' }
+      if (search) queryParams.search = search
+      if (sort) queryParams.order_by = sort
+      if (pageSize) queryParams.page_size = pageSize
+      if (pageToken) queryParams.page_token = pageToken
+
       const response = await client.get<ThreadListResponse>('/v2/threads', {
-        params: {
-          filter: 'completed',
-          ...(search ? { search } : {}),
-          ...(sort ? { order_by: sort } : {}),
-          ...(pageSize ? { page_size: pageSize } : {}),
-          ...(pageToken ? { page_token: pageToken } : {}),
-        },
+        params: queryParams,
       })
       return response
     },
     listExcluded: async (search?: string, sort?: string, pageToken?: string | null, pageSize?: number): Promise<ThreadListResponse> => {
+      const queryParams: {
+        filter: 'excluded'
+        search?: string
+        order_by?: string
+        page_size?: number
+        page_token?: string
+      } = { filter: 'excluded' }
+      if (search) queryParams.search = search
+      if (sort) queryParams.order_by = sort
+      if (pageSize) queryParams.page_size = pageSize
+      if (pageToken) queryParams.page_token = pageToken
+
       const response = await client.get<ThreadListResponse>('/v2/threads', {
-        params: {
-          filter: 'excluded',
-          ...(search ? { search } : {}),
-          ...(sort ? { order_by: sort } : {}),
-          ...(pageSize ? { page_size: pageSize } : {}),
-          ...(pageToken ? { page_token: pageToken } : {}),
-        },
+        params: queryParams,
       })
       return response
     },
