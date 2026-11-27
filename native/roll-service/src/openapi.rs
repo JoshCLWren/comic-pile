@@ -479,6 +479,47 @@ mod tests {
         );
     }
 
+    /// #5716: the canonical preview is an AIP-136 stateless collection custom
+    /// method on the lowerCamelCase `seriesMappings` collection. It must not be
+    /// published as a v1 same-path operation in the v2 contract, and it must
+    /// share its DTOs with the retained commit so the idempotency token stays
+    /// intelligible end to end.
+    #[test]
+    fn series_mappings_preview_custom_method_is_in_v2_contract() {
+        let doc = document();
+        let operation = &doc["paths"]["/api/v2/seriesMappings:preview"]["post"];
+        assert_eq!(operation["operationId"], "preview_series_mappings");
+        assert_eq!(
+            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/SeriesMappingPreviewRequest"
+        );
+        assert_eq!(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/SeriesMappingPreviewResponse"
+        );
+        for schema in [
+            "SeriesMappingPreviewRequest",
+            "SeriesMappingPreviewResponse",
+            "SeriesMappingPreviewRow",
+            "SeriesMappingPreviewScope",
+            "SeriesMappingPreviewCounts",
+            "SeriesMappingPreviewProviderSeries",
+        ] {
+            assert!(
+                doc["components"]["schemas"][schema].is_object(),
+                "missing {schema} in v2 contract"
+            );
+        }
+        assert!(
+            doc["paths"]["/api/v1/catalog/series-mappings/preview"].is_null(),
+            "v1 preview must not be published in the canonical v2 contract"
+        );
+        assert!(
+            doc["paths"]["/api/v2/series-mapping-commits"]["post"].is_object(),
+            "durable v2 commit must stay registered"
+        );
+    }
+
     /// The issue read-state and reader-context operations moved from their
     /// `/api/v1/issues/{id}:action` URLs to v2 resources. Every method must stay
     /// in both the domain document and the aggregate runtime contract with its
