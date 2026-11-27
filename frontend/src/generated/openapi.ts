@@ -3535,6 +3535,16203 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/undo/{session_id}/snapshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for the undo snapshots list. */
+        get: operations["list_undo_snapshots_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the undo restore. */
+        post: operations["undo_to_snapshot_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/users/me/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for reading user preferences. */
+        get: operations["get_user_preferences_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Documentation-only operation for updating user preferences. */
+        patch: operations["patch_user_preferences_documentation"];
+        trace?: never;
+    };
+    "/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Health Check
+         * @description Public liveness check without opening a billable Neon connection.
+         */
+        get: operations["health_check_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/react": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Serve React Redirect
+         * @description Redirect /react to / for consistent routing.
+         *
+         *     Returns:
+         *         RedirectResponse to root URL.
+         */
+        get: operations["serve_react_redirect_react_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/react/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Serve React Redirect Slash
+         * @description Redirect /react/ to / for consistent routing.
+         *
+         *     Returns:
+         *         RedirectResponse to root URL.
+         */
+        get: operations["serve_react_redirect_slash_react__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/robots.txt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Serve Robots Txt
+         * @description Serve the crawler indexability policy.
+         *
+         *     Prefers the built ``static/react/robots.txt`` (derived from
+         *     ``frontend/public/robots.txt`` at build time), falling back to the
+         *     source file in development and test checkouts.
+         *
+         *     Returns:
+         *         Plain-text robots.txt response with a short public cache.
+         */
+        get: operations["serve_robots_txt_robots_txt_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sitemap.xml": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Serve Sitemap Xml
+         * @description Serve the sitemap of public indexable URLs.
+         *
+         *     Prefers the build-generated ``static/react/sitemap.xml`` so a
+         *     deployment that overrides ``VITE_PRODUCTION_ORIGIN`` serves its own
+         *     absolute URLs, then falls back to rendering the canonical indexable
+         *     path set so ``/sitemap.xml`` never returns the SPA shell.
+         *
+         *     Returns:
+         *         XML sitemap response with a short public cache.
+         */
+        get: operations["serve_sitemap_xml_sitemap_xml_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vite.svg": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Serve Vite Svg
+         * @description Serve vite favicon.
+         *
+         *     Returns:
+         *         FileResponse with vite.svg file.
+         */
+        get: operations["serve_vite_svg_vite_svg_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/{full_path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Serve React Spa
+         * @description Serve the React SPA for non-API routes.
+         *
+         *     The React app owns routing for paths like /rate, /queue, /history, etc.
+         *
+         *     Args:
+         *         full_path: The path to serve.
+         *
+         *     Returns:
+         *         FileResponse with React index.html.
+         *
+         *     Raises:
+         *         StarletteHTTPException: If path is blocked.
+         */
+        get: operations["serve_react_spa__full_path__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    ThreadResponse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    ThreadTag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    TokenResponse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    UndoApplyResponse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    UndoSnapshotItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    UndoSnapshotsResponse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    UnsnoozeRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    UnsnoozeResponse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    UpdateTagRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    UserPreferencesPatchRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    UserPreferencesResponse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    UserResponse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    ValidationErrorItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    ValidationErrorResponse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+}
+export type webhooks = Record<string, never>;
+export interface components {
+    schemas: {
+        ActivityItem: {
+            /** Format: int32 */
+            die_after?: number | null;
+            /** Format: int32 */
+            die_before?: number | null;
+            /** Format: int32 */
+            event_id: number;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number?: string | null;
+            /** Format: double */
+            rating?: number | null;
+            /** Format: int32 */
+            session_id?: number | null;
+            /** Format: int32 */
+            thread_id?: number | null;
+            thread_title?: string | null;
+            timestamp: string;
+            type: string;
+        };
+        ActivityResponse: {
+            activities: components["schemas"]["ActivityItem"][];
+            events: components["schemas"]["ActivityItem"][];
+            items: components["schemas"]["ActivityItem"][];
+            next_cursor?: string | null;
+            next_page_token?: string | null;
+        };
+        AssignTagRequest: {
+            /** Format: int32 */
+            target_id: number;
+            target_type: string;
+        };
+        /**
+         * @description One inert legacy/converted dependency row into the frontier.
+         *
+         *     Source metadata is included only for issues the reader owns; a foreign
+         *     source keeps its stable row and issue identifiers but never a title,
+         *     number or status.
+         */
+        AuditEvidenceEdge: {
+            classification?: string | null;
+            /** Format: int32 */
+            dependency_id: number;
+            evidence_class: string;
+            note?: string | null;
+            origin?: string | null;
+            provenance?: string | null;
+            /** Format: int32 */
+            source_issue_id: number;
+            source_issue_number?: string | null;
+            source_owned: boolean;
+            source_series_title?: string | null;
+            source_status?: string | null;
+            /** Format: int32 */
+            target_issue_id: number;
+        };
+        /** @description One owned Reading List placement of the frontier issue, with its gate. */
+        AuditListMembership: {
+            gate: string;
+            /** Format: int32 */
+            list_id: number;
+            list_name: string;
+            mode: string;
+            skipped: boolean;
+        };
+        /** @description Python `BatchBlockingExplanationRequest` (documentation schema). */
+        BatchBlockingExplanationRequest: {
+            thread_ids: number[];
+        };
+        /** @description Python `BatchBlockingExplanationResponse`. */
+        BatchBlockingExplanationResponse: {
+            threads: components["schemas"]["OrderedExplanations"];
+        };
+        /** @enum {string} */
+        BlockerKind: "strict_order" | "hold" | "after_previous" | "prerequisite" | "reading_cycle";
+        /** @enum {string} */
+        BlockerOrigin: "reading_list" | "reader_prerequisite";
+        /** @description One blocking issue (Python `BlockingDependency`). */
+        BlockingDependency: {
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number: string;
+            label: string;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
+        /** @description Blocked status plus reader-language reasons (Python `BlockingExplanation`). */
+        BlockingExplanation: {
+            blocking_dependencies: components["schemas"]["BlockingDependency"][];
+            blocking_reasons: string[];
+            is_blocked: boolean;
+        };
+        /** Body_set_pending_thread_api_v1_threads__thread_id__set_pending_post */
+        Body_set_pending_thread_api_v1_threads__thread_id__set_pending_post: {
+            /** Expected Issue Id */
+            expected_issue_id?: number | null;
+        };
+        /** @description Currently pending thread shown by the Roll surface. */
+        BootstrapActiveThread: {
+            format: string;
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number?: string | null;
+            /** @description Alternate overall/story number for the same physical comic (#4652). */
+            issue_number_alias?: string | null;
+            /** Format: int32 */
+            issues_read: number;
+            /** Format: int32 */
+            issues_remaining: number;
+            /** Format: double */
+            last_rating?: number | null;
+            /** Format: int32 */
+            last_rolled_result?: number | null;
+            /** Format: int32 */
+            next_issue_id?: number | null;
+            next_issue_number?: string | null;
+            /** @description Provider's own issue number, only from a confirmed identity (#4652). */
+            provider_issue_number?: string | null;
+            /** Format: int32 */
+            queue_position: number;
+            reading_progress?: string | null;
+            /** @description Stored tag records; unknown stored columns are preserved via flatten. */
+            tags: components["schemas"]["BootstrapTag"][];
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
+        };
+        /** @description Compact bandwidth block retained for existing Roll consumers. */
+        BootstrapBandwidth: {
+            active_bandwidth?: string | null;
+            /** Format: double */
+            confidence?: number | null;
+            mode_version?: string | null;
+            predicted_bandwidth?: string | null;
+            source?: string | null;
+        };
+        /** @description Mapping state for a rollable candidate. */
+        BootstrapIdentitySummary: {
+            canonical_series_id?: string | null;
+            series_mapping_state: string;
+            source: string;
+            state: string;
+        };
+        /** @description Candidate issue identity displayed on a Roll face. */
+        BootstrapIssueSummary: {
+            canonical_series_title?: string | null;
+            cover_url?: string | null;
+            /** Format: int32 */
+            id: number;
+            number: string;
+        };
+        /** @description Most recent rated issue for the active session. */
+        BootstrapLastRead: {
+            cover_url?: string | null;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number?: string | null;
+            read_at?: string | null;
+            /** Format: int32 */
+            thread_id?: number | null;
+            thread_title?: string | null;
+        };
+        /** @description Reader statistics for one rollable face or canonical series run. */
+        BootstrapReaderStats: {
+            /** Format: double */
+            average_rating?: number | null;
+            /** Format: int64 */
+            issue_count?: number | null;
+            /** Format: double */
+            latest_rating?: number | null;
+            progress_scope: string;
+            /** Format: int64 */
+            rating_count: number;
+            /** Format: int64 */
+            read_count: number;
+        };
+        /**
+         * @description Full live `GET /api/v2/roll/bootstrap` payload.
+         *
+         *     This is the actual handler response type, so the generated contract and the
+         *     runtime share one authority. It is retained only until the bootstrap
+         *     retirement work removes the route; it is not a new feature surface.
+         */
+        BootstrapResponseV2: {
+            active_thread?: components["schemas"]["BootstrapActiveThread"] | null;
+            bandwidth: components["schemas"]["BootstrapBandwidth"];
+            last_read?: components["schemas"]["BootstrapLastRead"] | null;
+            /** Format: int64 */
+            last_rolled_result?: number | null;
+            /** Format: int32 */
+            pending_thread_id?: number | null;
+            pool_reason: components["schemas"]["PoolReason"];
+            roll_recovery?: components["schemas"]["BootstrapRollRecovery"] | null;
+            rollable: components["schemas"]["BootstrapRollableItem"][];
+            /** Format: int32 */
+            session_id: number;
+            session_mode: components["schemas"]["BootstrapSessionMode"];
+            skipped_thread_ids: number[];
+            skipped_threads: components["schemas"]["BootstrapThreadSummary"][];
+            /** Format: int64 */
+            snoozed_count: number;
+            /**
+             * @description Every owned thread in this browser's temporary snooze set, uncapped
+             *     within the cookie limit, so Queue can resolve per-row snooze state.
+             */
+            snoozed_thread_ids: number[];
+            /**
+             * @description Bounded display summary (at most 20 rows). Use `snoozed_thread_ids`
+             *     for the complete snooze set.
+             */
+            snoozed_threads: components["schemas"]["BootstrapThreadSummary"][];
+            timezone?: string | null;
+            /** Format: int32 */
+            user_id: number;
+        };
+        /**
+         * @description Bounded recovery diagnostic shown when the pending issue is blocked.
+         *
+         *     The stable envelope is typed; each nested blocker/chain/diagnostic entry is
+         *     the existing bounded JSON node shape and remains extensible so no current
+         *     recovery detail is dropped from the live contract.
+         */
+        BootstrapRollRecovery: {
+            chains: unknown[][];
+            diagnostics: unknown[];
+            direct_blockers: unknown[];
+            /** Format: int32 */
+            original_thread_id: number;
+            original_thread_title: string;
+            readable_prerequisites: unknown[];
+        };
+        /** @description One eligible Roll face. */
+        BootstrapRollableItem: {
+            identity: components["schemas"]["BootstrapIdentitySummary"];
+            issue: components["schemas"]["BootstrapIssueSummary"];
+            /** Format: int64 */
+            overflow_routes_count: number;
+            reader: components["schemas"]["BootstrapReaderStats"];
+            routes: components["schemas"]["BootstrapRoute"][];
+            thread: components["schemas"]["BootstrapThreadSummary"];
+        };
+        /** @description One Roll route label attached to a rollable face. */
+        BootstrapRoute: {
+            kind: string;
+            name: string;
+        };
+        /** @description Legacy session-mode bridge retained on the live bootstrap contract. */
+        BootstrapSessionMode: {
+            active_bandwidth?: string | null;
+            active_intent?: string | null;
+            /** Format: double */
+            bandwidth_confidence?: number | null;
+            bandwidth_source?: string | null;
+            bandwidth_version?: string | null;
+            /** Format: double */
+            intent_confidence?: number | null;
+            intent_source?: string | null;
+            intent_version?: string | null;
+            predicted_bandwidth?: string | null;
+            predicted_intent?: string | null;
+            /** @description Extension boundary: stored guidance JSON is passed through verbatim. */
+            session_mode_correction_guidance?: unknown;
+        };
+        /**
+         * @description One tag visible to the reader on a Roll thread row.
+         *
+         *     The stable stored tag columns are typed; `extra` preserves any additional
+         *     stored columns so future tag metadata is never silently dropped.
+         */
+        BootstrapTag: {
+            color: string;
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            name: string;
+            normalized_name: string;
+            /** Format: int32 */
+            owner_user_id?: number | null;
+            scope: string;
+            updated_at: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description Owner-scoped thread summary shown by Roll snooze chips and rollable rows. */
+        BootstrapThreadSummary: {
+            format: string;
+            /** Format: int32 */
+            id: number;
+            last_activity_at?: string | null;
+            tags: components["schemas"]["BootstrapTag"][];
+            title: string;
+        };
+        BoundaryEditorTarget: {
+            /** Format: int32 */
+            issue_id?: number | null;
+            kind: components["schemas"]["EditorKind"];
+            label: string;
+            /** Format: int32 */
+            list_id?: number | null;
+            /** Format: int32 */
+            prerequisite_id?: number | null;
+            /** Format: int32 */
+            thread_id?: number | null;
+        };
+        /**
+         * @description Deployment-level capability for the canonical evaluator behind this batch.
+         *
+         *     It mirrors the same `AppState::option_e` switch every handler resolves, so
+         *     a client that has already observed one batch can skip the canonical read
+         *     entirely on later loads when the evaluator cannot answer (`unavailable`)
+         *     and consult the legacy blocking authority directly.
+         * @enum {string}
+         */
+        BoundaryEvaluator: "enabled" | "unavailable";
+        BoundaryIssue: {
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            label: string;
+            reading_lists: components["schemas"]["BoundaryReadingList"][];
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+            volume_label?: string | null;
+        };
+        /** @enum {string} */
+        BoundaryListMode: "strict" | "loose";
+        BoundaryReadingList: {
+            /** Format: int32 */
+            list_id: number;
+            mode: components["schemas"]["BoundaryListMode"];
+            name: string;
+        };
+        /** @enum {string} */
+        BoundaryState: "blocked" | "available" | "complete" | "unavailable";
+        /** @description Request schema for creating a bug report or feature request. */
+        BugReportCreate: {
+            description: string;
+            diagnostics?: components["schemas"]["BugReportDiagnostics"] | null;
+            report_type?: components["schemas"]["ReportType"];
+            title: string;
+        };
+        /** @description Structured browser diagnostics (`userAgent` alias on the wire). */
+        BugReportDiagnostics: {
+            errors: components["schemas"]["DiagnosticError"][];
+            performance: components["schemas"]["DiagnosticPerformance"];
+            screen: components["schemas"]["DiagnosticScreen"];
+            scroll: components["schemas"]["DiagnosticScroll"];
+            timestamp: string;
+            url: string;
+            userAgent: string;
+            viewport: components["schemas"]["DiagnosticViewport"];
+        };
+        /** @description Response after successfully creating a GitHub issue. */
+        BugReportResponse: {
+            issue_url: string;
+        };
+        BulkAssignRequest: {
+            target_ids: number[];
+            target_type: string;
+        };
+        BulkAssignResponse: {
+            affected_ids: number[];
+            already_ids: number[];
+            requested_ids: number[];
+            still_inherited_ids: number[];
+            /** Format: int32 */
+            tag_id: number;
+            target_type: string;
+        };
+        CBLBreadcrumb: {
+            name: string;
+            path: string;
+        };
+        CBLCatalogBrowseResponse: {
+            breadcrumbs: components["schemas"]["CBLBreadcrumb"][];
+            /**
+             * Format: int64
+             * @description Total active source lists in the whole shared catalog, independent of search and folder.
+             */
+            catalog_total: number;
+            folder: string;
+            folders: components["schemas"]["CBLSourceFolder"][];
+            has_next: boolean;
+            has_previous: boolean;
+            items: components["schemas"]["CBLCatalogListItem"][];
+            /**
+             * Format: int64
+             * @description Echoed requested page number; preserved for extreme values (e.g. 2^63).
+             */
+            page: number;
+            /** Format: int64 */
+            page_size: number;
+            query?: string | null;
+            scope: string;
+            /**
+             * Format: int64
+             * @description Total source lists matching the applied folder/search scope.
+             */
+            total: number;
+            /** Format: int64 */
+            total_pages: number;
+        };
+        CBLCatalogListItem: {
+            content_hash: string;
+            /** Format: int32 */
+            declared_issue_count?: number | null;
+            /** Format: int32 */
+            id: number;
+            name: string;
+            revision_sha: string;
+            source_path: string;
+            source_repository: string;
+        };
+        /** @description Global dependency-acquisition outage shape. */
+        CBLDatabaseUnavailableDetail: {
+            code: string;
+            message: string;
+            status: string;
+        };
+        CBLDatabaseUnavailableResponse: {
+            error: components["schemas"]["CBLDatabaseUnavailableDetail"];
+        };
+        /** @description Error detail for catalog-originated failures (400/404/503). */
+        CBLErrorDetail: {
+            code: string;
+            message: string;
+        };
+        CBLErrorResponse: {
+            detail: components["schemas"]["CBLErrorDetail"];
+        };
+        CBLFolderListingResponse: {
+            breadcrumbs: components["schemas"]["CBLBreadcrumb"][];
+            /** Format: int32 */
+            direct_list_count: number;
+            folder: string;
+            folders: components["schemas"]["CBLSourceFolder"][];
+            /** Format: int32 */
+            total_list_count: number;
+        };
+        CBLSourceFolder: {
+            /** Format: int32 */
+            direct_list_count: number;
+            name: string;
+            path: string;
+            /** Format: int32 */
+            total_list_count: number;
+        };
+        CanonicalCorrection: {
+            canonical_value: string;
+            created_at: string;
+            /** Format: int32 */
+            created_by: number;
+            field_name: string;
+            /** Format: int32 */
+            id: number;
+            provenance: string;
+            provider_value?: string | null;
+        };
+        CblAdoptionCommitRequest: {
+            content_hash: string;
+            entry_decisions?: {
+                [key: string]: string;
+            };
+            idempotency_key?: string | null;
+            revision_sha: string;
+            series_decisions?: components["schemas"]["CommitSeriesDecision"][];
+            series_overrides?: components["schemas"]["CommitEntryOverride"][];
+        };
+        CblAdoptionCommitResponseWire: {
+            created_at: string;
+            created_positions: number[];
+            excluded_positions: number[];
+            /** Format: int32 */
+            id: number;
+            lanes: Record<string, never>;
+            name: string;
+            nodes: Record<string, never>;
+            ordering_mode: string;
+            reused_positions: number[];
+            unresolved_positions: number[];
+            updated_at: string;
+            /** Format: int32 */
+            user_id: number;
+        };
+        CblAdoptionEntryResponse: {
+            adopted: boolean;
+            adoption_class: string;
+            adoption_decision: string;
+            /** Format: int32 */
+            canonical_issue_id?: number | null;
+            /** Format: int32 */
+            cbl_entry_id: number;
+            /** Format: int32 */
+            cbl_position: number;
+            collection_excluded: boolean;
+            collection_exclusion_ids: number[];
+            collection_exclusion_reason?: string | null;
+            comicvine_issue_id?: string | null;
+            comicvine_series_id?: string | null;
+            is_duplicate_identity: boolean;
+            issue_number: string;
+            /** Format: int32 */
+            publication_year?: number | null;
+            read_at?: string | null;
+            read_status?: string | null;
+            resolution_status: string;
+            /** Format: int32 */
+            resolved_issue_id?: number | null;
+            series_external_id?: string | null;
+            series_group_id: string;
+            series_name: string;
+            series_provider?: string | null;
+            /** Format: int32 */
+            volume_year?: number | null;
+        };
+        CblAdoptionPlanRequest: {
+            entry_decisions?: {
+                [key: string]: boolean;
+            };
+            series_decisions?: {
+                [key: string]: boolean;
+            };
+        };
+        CblAdoptionPreviewResponse: {
+            entries: components["schemas"]["CblAdoptionEntryResponse"][];
+            source: components["schemas"]["CblSourceFingerprintResponse"];
+            summary: components["schemas"]["CblAdoptionSummaryResponse"];
+            /** Format: int32 */
+            total_positions: number;
+        };
+        CblAdoptionSummaryResponse: {
+            /** Format: int32 */
+            awaiting_opt_in_count: number;
+            awaiting_opt_in_positions: number[];
+            /** Format: int32 */
+            excluded_count: number;
+            excluded_positions: number[];
+            /** Format: int32 */
+            final_adopted_count: number;
+            final_adopted_order: number[];
+            /** Format: int32 */
+            missing_would_create_count: number;
+            missing_would_create_positions: number[];
+            /** Format: int32 */
+            reused_existing_count: number;
+            reused_existing_positions: number[];
+            /** Format: int32 */
+            unresolved_count: number;
+            unresolved_positions: number[];
+        };
+        /** @description One Comic Vine occurrence in the shared CBL catalog. */
+        CblComicvineOccurrence: {
+            comicvine_issue_id: string;
+            comicvine_volume_id?: string | null;
+            issue_number: string;
+            /** Format: int32 */
+            list_id: number;
+            list_name: string;
+            /** Format: int32 */
+            position: number;
+            /** Format: int32 */
+            publication_year?: number | null;
+            revision_sha: string;
+            series_name: string;
+            source_path: string;
+            source_ref: string;
+            source_repository: string;
+            /** Format: int32 */
+            volume_year?: number | null;
+        };
+        /** @description A page of Comic Vine occurrences with shared-catalog totals. */
+        CblComicvineOccurrencePage: {
+            comicvine_issue_id: string;
+            /** Format: int32 */
+            lists_total: number;
+            occurrences: components["schemas"]["CblComicvineOccurrence"][];
+            /** Format: int32 */
+            occurrences_limit: number;
+            /** Format: int32 */
+            occurrences_offset: number;
+            /** Format: int32 */
+            occurrences_total: number;
+        };
+        CblReadingListCandidatesResponse: {
+            candidates: components["schemas"]["CblSourceComparisonMatch"][];
+            /** Format: int32 */
+            candidates_total: number;
+            entries: components["schemas"]["CblReadingListInputEntry"][];
+            /** Format: int32 */
+            input_confirmed_total: number;
+            /** Format: int32 */
+            input_conflict_count: number;
+            /** Format: int32 */
+            input_entry_count: number;
+            input_ids: string[];
+            /** Format: int32 */
+            input_missing_count: number;
+            /** Format: int32 */
+            list_id: number;
+            list_name: string;
+        };
+        CblReadingListInputEntry: {
+            comicvine_issue_id?: string | null;
+            comicvine_issue_ids: string[];
+            identity_status: string;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+            series_name: string;
+        };
+        CblSourceComparisonMatch: {
+            /** Format: int32 */
+            declared_issue_count?: number | null;
+            /** Format: int32 */
+            distinct_source_issues: number;
+            /** Format: int32 */
+            duplicate_match_count: number;
+            /** Format: int32 */
+            entries_total: number;
+            /** Format: int32 */
+            input_coverage_percentage: number;
+            /** Format: int32 */
+            input_total: number;
+            /** Format: int32 */
+            list_id: number;
+            list_name: string;
+            /** Format: int32 */
+            matched_input_count: number;
+            matched_input_ids: string[];
+            /** Format: int32 */
+            matched_occurrence_count: number;
+            missing_input_ids: string[];
+            /** Format: int32 */
+            order_disagreement_count: number;
+            /** Format: int32 */
+            order_pair_count: number;
+            order_status: string;
+            revision_sha: string;
+            /** Format: int32 */
+            score: number;
+            /** Format: int32 */
+            source_coverage_percentage: number;
+            /** Format: int32 */
+            source_only_issue_count: number;
+            source_path: string;
+            source_ref: string;
+            source_repository: string;
+        };
+        CblSourceComparisonRequest: {
+            comicvine_issue_ids: string[];
+        };
+        CblSourceComparisonResponse: {
+            candidates: components["schemas"]["CblSourceComparisonMatch"][];
+            /** Format: int32 */
+            candidates_total: number;
+            comicvine_issue_ids: string[];
+            /** Format: int32 */
+            input_total: number;
+        };
+        /** @description One ordered source occurrence inside a CBL list. */
+        CblSourceEntryDetail: {
+            comicvine_issue_id?: string | null;
+            comicvine_volume_id?: string | null;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+            /** Format: int32 */
+            publication_year?: number | null;
+            series_name: string;
+            /** Format: int32 */
+            volume_year?: number | null;
+        };
+        CblSourceFingerprintResponse: {
+            content_hash: string;
+            revision_sha: string;
+            /** Format: int32 */
+            source_list_id: number;
+            source_path: string;
+            source_repository: string;
+        };
+        /** @description One active CBL source list with one bounded page of ordered occurrences. */
+        CblSourceListDetail: {
+            content_hash: string;
+            /** Format: int32 */
+            declared_issue_count?: number | null;
+            entries: components["schemas"]["CblSourceEntryDetail"][];
+            /** Format: int32 */
+            entries_limit: number;
+            /** Format: int32 */
+            entries_offset: number;
+            /** Format: int32 */
+            entries_total: number;
+            /** Format: int32 */
+            id: number;
+            name: string;
+            revision_sha: string;
+            source_path: string;
+            source_ref: string;
+            source_repository: string;
+        };
+        /** @description Reader-safe summary of one active persisted CBL source list. */
+        CblSourceListDiscoveryItem: {
+            content_hash: string;
+            /** Format: int32 */
+            declared_issue_count?: number | null;
+            /** Format: int32 */
+            id: number;
+            name: string;
+            revision_sha: string;
+            /**
+             * @description Raw stored path: Python's discovery response deliberately returns the
+             *     unprojected `source_path` (see `list_cbl_source_previews`).
+             */
+            source_path: string;
+            source_repository: string;
+        };
+        /**
+         * CheckPotentialDuplicatesRequest
+         * @description Request to check for possible existing volumes before create or rename.
+         */
+        CheckPotentialDuplicatesRequest: {
+            /**
+             * Comicvine Volume Id
+             * @description Canonical ComicVine volume ID when the candidate has one
+             */
+            comicvine_volume_id?: number | null;
+            /**
+             * Exclude Thread Id
+             * @description Thread to exclude from results, so a rename never warns about itself
+             */
+            exclude_thread_id?: number | null;
+            /**
+             * Format
+             * @description Proposed series format
+             */
+            format: string;
+            /**
+             * Title
+             * @description Proposed series title
+             */
+            title: string;
+        };
+        /**
+         * CheckPotentialDuplicatesResponse
+         * @description Possible existing volumes, strongest match first.
+         */
+        CheckPotentialDuplicatesResponse: {
+            /** Matches */
+            matches?: components["schemas"]["PotentialDuplicateMatch"][];
+        };
+        /** @description Owner-scoped local representations of a related ComicVine issue. */
+        ComicPileMatch: {
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
+        /**
+         * ComicVineCreator
+         * @description One credited creator and their provider-supplied roles.
+         *
+         *     ``creator_id`` is the stable external provider person identifier
+         *     (e.g. the ComicVine person ID).  When the source metadata lacks a
+         *     usable stable ID the field is ``None`` and the row must not be
+         *     treated as analytics-addressable.
+         */
+        ComicVineCreator: {
+            /** Creator Id */
+            creator_id?: number | null;
+            /** Name */
+            name: string;
+            /** Roles */
+            roles?: string[];
+        };
+        ComicVineIssueCandidate: {
+            /** Format: int32 */
+            comicvine_issue_id: number;
+            cover_date?: string | null;
+            image_url?: string | null;
+            issue_number?: string | null;
+            name?: string | null;
+            site_detail_url?: string | null;
+            store_date?: string | null;
+        };
+        /**
+         * ComicVineMappingHealth
+         * @description Compact ComicVine mapping health projection for a queue thread.
+         *
+         *     Derived from stored canonical issue mappings only. No live provider calls.
+         *     Counts are scoped to the issues represented by the Queue thread.
+         */
+        ComicVineMappingHealth: {
+            /**
+             * Confirmed Issue Count
+             * @description Issues with confirmed ComicVine mappings
+             */
+            confirmed_issue_count: number;
+            /**
+             * Metadata Missing Count
+             * @description Confirmed mappings without usable issue and series metadata
+             * @default 0
+             */
+            metadata_missing_count: number;
+            /**
+             * Needs Mapping Count
+             * @description Issues with no confirmed mapping (unresolved/candidate)
+             */
+            needs_mapping_count: number;
+            /**
+             * Needs Review Count
+             * @description Issues with conflicting/ambiguous mappings
+             */
+            needs_review_count: number;
+            status: components["schemas"]["ComicVineMappingStatus"];
+            /**
+             * Tracked Issue Count
+             * @description Total issues in this thread's scope
+             */
+            tracked_issue_count: number;
+        };
+        /**
+         * ComicVineMappingStatus
+         * @description ComicVine mapping health status for a thread.
+         *
+         *     - ``not_applicable``: Thread does not use issue tracking (legacy counter-based).
+         *     - ``fully_mapped``: All in-scope issues have confirmed ComicVine mappings.
+         *     - ``partial``: Some issues confirmed, some unresolved/unmapped.
+         *     - ``unresolved``: Issues exist but none have confirmed mappings.
+         *     - ``needs_review``: Conflicting/ambiguous mappings requiring human review.
+         * @enum {string}
+         */
+        ComicVineMappingStatus: "not_applicable" | "fully_mapped" | "partial" | "unresolved" | "needs_review";
+        ComicVineResolveResponse: {
+            input: string;
+            issue?: components["schemas"]["ComicVineResolvedIssue"] | null;
+            issues: components["schemas"]["ComicVineIssueCandidate"][];
+            /** @description `issue`, `volume` or `search`. */
+            kind: string;
+            validation_error?: string | null;
+            volume?: components["schemas"]["ComicVineSeriesResult"] | null;
+        };
+        ComicVineResolvedIssue: {
+            /** Format: int32 */
+            comicvine_issue_id: number;
+            cover_date?: string | null;
+            image_url?: string | null;
+            issue_number?: string | null;
+            name?: string | null;
+            series_name?: string | null;
+            site_detail_url?: string | null;
+            store_date?: string | null;
+            /** Format: int32 */
+            volume_id?: number | null;
+        };
+        ComicVineSeriesIssuesResponse: {
+            /** Format: int32 */
+            comicvine_volume_id: number;
+            issues: components["schemas"]["ComicVineIssueCandidate"][];
+            series_name: string;
+        };
+        ComicVineSeriesResult: {
+            /** Format: int32 */
+            comicvine_volume_id: number;
+            image_url?: string | null;
+            /** Format: int32 */
+            issue_count?: number | null;
+            name: string;
+            publisher?: string | null;
+            site_detail_url?: string | null;
+            /** Format: int32 */
+            start_year?: number | null;
+        };
+        ComicVineSeriesSearchResponse: {
+            has_more: boolean;
+            /** Format: int32 */
+            limit: number;
+            /**
+             * Format: int64
+             * @description `offset + results` can exceed `i32` at the accepted offset bound, so
+             *     paging arithmetic is widened (#4636390843).
+             */
+            next_offset?: number | null;
+            /** Format: int32 */
+            offset: number;
+            query: string;
+            results: components["schemas"]["ComicVineSeriesResult"][];
+            /** Format: int64 */
+            total_available?: number | null;
+        };
+        CommitEntryOverride: {
+            /** Format: int32 */
+            cbl_position: number;
+            decision: string;
+        };
+        CommitRequest: {
+            approved_row_ids?: string[];
+            idempotency_key: string;
+            preview_token: string;
+        };
+        CommitResponse: {
+            already_confirmed_issue_ids: number[];
+            confirmed_issue_ids: number[];
+            hydration_queued_issue_ids: number[];
+            idempotency_key: string;
+            needs_review_issue_ids: number[];
+            series_mapping: components["schemas"]["CommitSeriesMapping"];
+        };
+        CommitSeriesDecision: {
+            decision: string;
+            series_name: string;
+        };
+        CommitSeriesMapping: {
+            evidence_source: string;
+            external_id: string;
+            provider: string;
+            status: string;
+        };
+        /** @description Python `ConfirmIdentityRequest` (lax `int`). */
+        ConfirmIdentityRequest: {
+            /** Format: int32 */
+            comicvine_issue_id: number;
+        };
+        /** @description Python `ConnectedThreadInfo`. */
+        ConnectedThreadInfo: {
+            connection_type: string;
+            /** Format: int32 */
+            dependency_id: number;
+            is_circular: boolean;
+            issue_number?: string | null;
+            /** Format: int32 */
+            thread_id: number;
+            title: string;
+        };
+        ContinuityPlanLane: {
+            id: string;
+            inferred_gate_kind?: string | null;
+            migration_contract?: unknown;
+            name: string;
+            /** Format: int32 */
+            order: number;
+        };
+        ContinuityPlanListItem: {
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            lane_count: number;
+            name: string;
+            ordering_mode: string;
+            source_names: unknown;
+            source_paths: string[];
+            /** Format: int32 */
+            step_count: number;
+            updated_at: string;
+        };
+        ContinuityPlanNode: {
+            /** Format: int32 */
+            checkpoint_target_ref_id?: number | null;
+            checkpoint_target_ref_ids?: number[];
+            convergence_gate: unknown[];
+            id: string;
+            is_checkpoint?: boolean;
+            label: string | null;
+            lane_id: string;
+            node_type: string;
+            /** Format: int32 */
+            position: number;
+            reader_optional: boolean | null;
+            reader_role: string | null;
+            /** Format: int32 */
+            ref_id: number;
+            source_cbl_placements: unknown[] | null;
+            source_confidence: string | null;
+            source_explanation: string | null;
+            source_paths: string[] | null;
+            source_role: string | null;
+            source_story_arc_ids: string[] | null;
+            source_target_story_arc_id: string | null;
+        };
+        ContinuityPlanResponse: {
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            lanes: components["schemas"]["ContinuityPlanLane"][];
+            name: string;
+            nodes: components["schemas"]["ContinuityPlanNode"][];
+            ordering_mode: string;
+            updated_at: string;
+            /** Format: int32 */
+            user_id: number;
+        };
+        ContinuityPlanResponseWire: {
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            lanes: Record<string, never>;
+            name: string;
+            nodes: Record<string, never>;
+            ordering_mode: string;
+            updated_at: string;
+            /** Format: int32 */
+            user_id: number;
+        };
+        ContinuityPlanWrite: {
+            expected_updated_at?: string | null;
+            lanes?: components["schemas"]["ContinuityPlanLane"][];
+            name: string;
+            nodes?: components["schemas"]["ContinuityPlanNode"][];
+            ordering_mode?: string;
+        };
+        ContinuityReleaseSourceResponse: {
+            created_at: string;
+            /** Format: int32 */
+            custom_cbl_list_id?: number | null;
+            enabled: boolean;
+            /** Format: int32 */
+            external_identity_id: number;
+            /** Format: int32 */
+            id: number;
+            last_synced_at?: string | null;
+            /** Format: int32 */
+            plan_id: number;
+            provider: string;
+            provider_title?: string | null;
+            provider_volume_id: string;
+            /** Format: int32 */
+            thread_id: number;
+            updated_at: string;
+        };
+        ContinuityRuleRequest: {
+            /** Format: int32 */
+            checkpoint_issue_id?: number | null;
+            convergence_targets?: components["schemas"]["ConvergenceTarget"][];
+            note?: string | null;
+            satisfaction_type: string;
+            selected_member_issue_ids?: number[];
+            /** Format: int32 */
+            source_id: number;
+            source_type: string;
+            /** Format: int32 */
+            target_id: number;
+            target_type: string;
+        };
+        ContinuityRuleResponse: {
+            /** Format: int32 */
+            checkpoint_issue_id?: number | null;
+            convergence_targets: components["schemas"]["ConvergenceTarget"][];
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            note?: string | null;
+            satisfaction_type: string;
+            selected_member_issue_ids: number[];
+            /** Format: int32 */
+            source_id: number;
+            source_type: string;
+            /** Format: int32 */
+            target_id: number;
+            target_type: string;
+            updated_at: string;
+            /** Format: int32 */
+            user_id: number;
+        };
+        ConvergenceTarget: {
+            /** Format: int32 */
+            id: number;
+            type: string;
+        };
+        CreateIssuesRequest: {
+            /**
+             * @description Requested numbers the reader explicitly accepted as aliases of already
+             *     mapped issues instead of creating physical duplicates (#4654).
+             */
+            accepted_alias_numbers?: string[];
+            /** @description Explicit "At the end" choice. Distinct from an omitted anchor. */
+            append_to_end?: boolean;
+            /**
+             * @description Issue IDs observed in the accepted preview. A changed set means the
+             *     preview is stale; the edit is refused before any write (#4654).
+             */
+            expected_issue_ids?: number[] | null;
+            /**
+             * Format: int32
+             * @description Explicit anchor. Omit for natural placement.
+             */
+            insert_after_issue_id?: number | null;
+            /** @description Reader-facing range, e.g. `1-3, 5` or `Annual 1`. */
+            issue_range: string;
+            /** @description Placement strategy. Defaults to safe_default. */
+            strategy?: components["schemas"]["IssuePlacementStrategy"];
+        };
+        CreateTagRequest: {
+            color?: string;
+            include_near_matches?: boolean;
+            name: string;
+            scope?: string;
+        };
+        CreateTagResponse: {
+            near_matches: components["schemas"]["NearMatch"][];
+            redirected_to_global: boolean;
+            tag: components["schemas"]["Tag"];
+        };
+        /** @description An issue's credited creator with stable provider identity and merged roles. */
+        Creator: {
+            /** Format: int64 */
+            creator_id?: number | null;
+            name: string;
+            roles: string[];
+        };
+        CreatorComparisonCoverage: {
+            /** Format: int64 */
+            rated_issues_total: number;
+            /** Format: int64 */
+            rated_issues_with_creator_metadata: number;
+            ratings_complete: boolean;
+            read_unrated_complete: boolean;
+            /** Format: int64 */
+            read_unrated_issues_total: number;
+            /** Format: int64 */
+            read_unrated_issues_with_creator_metadata: number;
+            /** Format: int64 */
+            unread_issues_total: number;
+            /** Format: int64 */
+            unread_issues_with_creator_metadata: number;
+            upcoming_complete: boolean;
+        };
+        CreatorComparisonIssueRef: {
+            /** Format: int64 */
+            issue_id: number;
+            issue_number: string;
+            status: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        CreatorComparisonItem: {
+            /** Format: double */
+            average_rating?: number | null;
+            canonical_creator_key: string;
+            display_name: string;
+            insufficient_data: boolean;
+            /** Format: int64 */
+            max_issue_refs_per_group: number;
+            /** Format: double */
+            median_rating?: number | null;
+            /** Format: int64 */
+            min_rated_issues_per_series: number;
+            normalized_roles: string[];
+            rating_distribution: {
+                [key: string]: number;
+            };
+            /** Format: int64 */
+            ratings_count: number;
+            /** Format: int64 */
+            read_unrated_count: number;
+            read_unrated_issue_refs: components["schemas"]["CreatorComparisonIssueRef"][];
+            role_stats: components["schemas"]["CreatorComparisonRoleStat"][];
+            strongest_series: components["schemas"]["CreatorComparisonSeriesAggregate"][];
+            /** Format: double */
+            top_rating_rate?: number | null;
+            unread_issue_refs: components["schemas"]["CreatorComparisonIssueRef"][];
+            /** Format: int64 */
+            unread_upcoming_count: number;
+        };
+        CreatorComparisonResponse: {
+            comparisons: {
+                [key: string]: components["schemas"]["CreatorComparisonItem"];
+            };
+            coverage: components["schemas"]["CreatorComparisonCoverage"];
+            insufficient_data_keys: string[];
+        };
+        CreatorComparisonRoleStat: {
+            /** Format: double */
+            average_rating?: number | null;
+            /** Format: int64 */
+            issue_count: number;
+            /** Format: int64 */
+            rated_issue_count: number;
+            role: string;
+        };
+        CreatorComparisonSeriesAggregate: {
+            /** Format: double */
+            average_rating: number;
+            /** Format: int64 */
+            issue_count: number;
+            /** Format: int64 */
+            rated_issue_count: number;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        /** @description One credited creator (Python `ComicVineCreator`). */
+        CreatorCredit: {
+            /** Format: int64 */
+            creator_id?: number | null;
+            name: string;
+            roles: string[];
+        };
+        CreatorDetailResponse: {
+            coverage: components["schemas"]["CreatorSummaryCoverage"];
+            headline_roles: string[];
+            insights?: components["schemas"]["CreatorInsights"] | null;
+            next_cursor?: string | null;
+            rated_issues: components["schemas"]["CreatorIssueRow"][];
+            rated_population_scope: string;
+            rating_distribution?: components["schemas"]["CreatorRatingDistribution"] | null;
+            read_unrated_issues: components["schemas"]["CreatorIssueRow"][];
+            role_stats: components["schemas"]["CreatorRoleStat"][];
+            series_groups: components["schemas"]["CreatorSeriesGroup"][];
+            series_groups_complete: boolean;
+            /** Format: int64 */
+            series_groups_total: number;
+            summary: components["schemas"]["CreatorSummaryItem"];
+            upcoming_issues: components["schemas"]["CreatorIssueRow"][];
+        };
+        CreatorDiscoveryCoverage: {
+            /** Format: int64 */
+            rated_issues_total: number;
+            /** Format: int64 */
+            rated_issues_with_creator_metadata: number;
+            ratings_complete: boolean;
+        };
+        CreatorDiscoveryEntry: {
+            /** Format: double */
+            average_rating?: number | null;
+            canonical_creator_key: string;
+            display_name: string;
+            /** Format: double */
+            earlier_average_rating?: number | null;
+            /** Format: double */
+            max_rating?: number | null;
+            /** Format: double */
+            median_rating?: number | null;
+            /** Format: double */
+            min_rating?: number | null;
+            normalized_roles: string[];
+            /** Format: int64 */
+            rated_issue_count: number;
+            /** Format: double */
+            rating_spread?: number | null;
+            /** Format: double */
+            rating_stddev?: number | null;
+            /** Format: int64 */
+            read_unrated_issue_count: number;
+            reasons: components["schemas"]["CreatorDiscoveryReason"][];
+            /** Format: double */
+            recent_average_rating?: number | null;
+            /** Format: int64 */
+            top_rating_count: number;
+            /** Format: double */
+            top_rating_rate?: number | null;
+            /** Format: double */
+            trend_delta?: number | null;
+            trend_direction?: string | null;
+            /** Format: int64 */
+            trend_sample_count: number;
+            /** Format: int64 */
+            unread_issue_count: number;
+        };
+        CreatorDiscoveryReason: {
+            comparison: string;
+            label: string;
+            metric: string;
+            /** Format: double */
+            threshold: number;
+            /** Format: double */
+            value: number;
+        };
+        CreatorDiscoveryResponse: {
+            coverage: components["schemas"]["CreatorDiscoveryCoverage"];
+            /** Format: int64 */
+            max_entries_per_view: number;
+            /** Format: int64 */
+            minimum_reliable_sample: number;
+            views: components["schemas"]["CreatorDiscoveryView"][];
+        };
+        CreatorDiscoveryView: {
+            description: string;
+            entries: components["schemas"]["CreatorDiscoveryEntry"][];
+            /** Format: int64 */
+            max_entries: number;
+            /** Format: int64 */
+            min_sample: number;
+            mode: string;
+            title: string;
+            /** Format: int64 */
+            total: number;
+            truncated: boolean;
+        };
+        CreatorInsights: {
+            /** Format: int64 */
+            excluded_incomplete_series_count: number;
+            highest_rated_issues: components["schemas"]["CreatorIssueInsight"][];
+            /** Format: int64 */
+            individual_issue_limit: number;
+            individual_issues_combined: boolean;
+            lowest_rated_issues: components["schemas"]["CreatorIssueInsight"][];
+            /** Format: int64 */
+            min_series_sample: number;
+            most_rated_series?: components["schemas"]["CreatorSeriesInsight"] | null;
+            series_message?: string | null;
+            series_sample_met: boolean;
+            strongest_series?: components["schemas"]["CreatorSeriesInsight"] | null;
+            weakest_series?: components["schemas"]["CreatorSeriesInsight"] | null;
+        };
+        CreatorIssueInsight: {
+            /** Format: double */
+            effective_rating: number;
+            /** Format: int64 */
+            issue_id: number;
+            issue_number: string;
+            roles: string[];
+            sort_key: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        CreatorIssueRow: {
+            /** Format: double */
+            effective_rating?: number | null;
+            /** Format: int64 */
+            issue_id: number;
+            issue_number: string;
+            rating_timestamp?: string | null;
+            roles: string[];
+            sort_key: string;
+            status: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        CreatorListItem: {
+            /** Format: double */
+            average_rating?: number | null;
+            canonical_creator_key: string;
+            display_name: string;
+            normalized_roles: string[];
+            /** Format: int64 */
+            ratings_count: number;
+        };
+        CreatorListResponse: {
+            coverage: components["schemas"]["CreatorSummaryCoverage"];
+            items: components["schemas"]["CreatorListItem"][];
+            /** Format: int64 */
+            limit: number;
+            /** Format: int64 */
+            offset: number;
+            /** Format: int64 */
+            total: number;
+        };
+        CreatorMetricCalculation: {
+            denominator?: string | null;
+            formula: string;
+            numerator: string;
+            percentage?: string | null;
+        };
+        CreatorMetricDrilldown: {
+            /** Format: int64 */
+            bucket_count?: number | null;
+            /** Format: double */
+            bucket_percentage?: number | null;
+            calculation: components["schemas"]["CreatorMetricCalculation"];
+            creator_key: string;
+            excluded_issues: components["schemas"]["CreatorMetricIssue"][];
+            included_issues: components["schemas"]["CreatorMetricIssue"][];
+            metric_type: string;
+            pagination: components["schemas"]["CreatorMetricPagination"];
+            rating_value?: string | null;
+            role?: string | null;
+            /** Format: double */
+            role_average_rating?: number | null;
+            /** Format: int64 */
+            role_issue_count?: number | null;
+            /** Format: int64 */
+            role_rated_issue_count?: number | null;
+            /** Format: double */
+            series_average_rating?: number | null;
+            /** Format: int64 */
+            series_id?: number | null;
+            /** Format: int64 */
+            series_issue_count?: number | null;
+            /** Format: int64 */
+            series_rated_issue_count?: number | null;
+            series_title?: string | null;
+            /** Format: int64 */
+            total_count: number;
+        };
+        CreatorMetricIssue: {
+            creator_roles: string[];
+            /** Format: double */
+            effective_rating?: number | null;
+            effective_rating_source?: string | null;
+            effective_rating_timestamp?: string | null;
+            exclusion_reason?: string | null;
+            /** Format: int64 */
+            issue_id: number;
+            issue_number: string;
+            missing_rating_cause?: string | null;
+            status: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        CreatorMetricPagination: {
+            /** Format: int64 */
+            next_page_token?: number | null;
+            /** Format: int64 */
+            page: number;
+            /** Format: int64 */
+            page_size: number;
+            /** Format: int64 */
+            total_pages: number;
+        };
+        CreatorRatingBucket: {
+            /** Format: int64 */
+            count: number;
+            /** Format: double */
+            rating: number;
+        };
+        CreatorRatingDistribution: {
+            buckets: components["schemas"]["CreatorRatingBucket"][];
+            /** Format: double */
+            max_rating: number;
+            /** Format: double */
+            mean_rating: number;
+            /** Format: double */
+            median_rating: number;
+            /** Format: double */
+            min_rating: number;
+            /** Format: int64 */
+            sample_count: number;
+        };
+        CreatorRoleStat: {
+            /** Format: double */
+            average_rating?: number | null;
+            /** Format: int64 */
+            issue_count: number;
+            /** Format: int64 */
+            rated_issue_count: number;
+            role: string;
+        };
+        CreatorSeriesGroup: {
+            /** Format: double */
+            average_rating?: number | null;
+            /** Format: double */
+            highest_rating?: number | null;
+            /** Format: double */
+            lowest_rating?: number | null;
+            metadata_complete: boolean;
+            population_scope: string;
+            /** Format: int64 */
+            rated_issue_count: number;
+            /** Format: int64 */
+            read_unrated_issue_count: number;
+            roles: string[];
+            series_key: string;
+            sort_key: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+            /** Format: int64 */
+            unread_issue_count: number;
+        };
+        CreatorSeriesInsight: {
+            /** Format: double */
+            average_rating: number;
+            /** Format: double */
+            highest_rating: number;
+            /** Format: double */
+            lowest_rating: number;
+            metadata_complete: boolean;
+            /** Format: int64 */
+            rated_issue_count: number;
+            roles: string[];
+            series_key: string;
+            sort_key: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        CreatorSeriesIssueListResponse: {
+            /** Format: double */
+            average_rating?: number | null;
+            /** Format: double */
+            highest_rating?: number | null;
+            issues: components["schemas"]["CreatorIssueRow"][];
+            /** Format: int64 */
+            limit: number;
+            /** Format: double */
+            lowest_rating?: number | null;
+            metadata_complete: boolean;
+            next_cursor?: string | null;
+            /** Format: int64 */
+            offset: number;
+            population_scope: string;
+            /** Format: int64 */
+            rated_issue_count: number;
+            roles: string[];
+            series_key: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+            /** Format: int64 */
+            total: number;
+        };
+        CreatorSummariesResponse: {
+            coverage: components["schemas"]["CreatorSummaryCoverage"];
+            summaries: {
+                [key: string]: components["schemas"]["CreatorSummaryItem"];
+            };
+        };
+        CreatorSummaryCoverage: {
+            /** Format: int64 */
+            rated_issues_total: number;
+            /** Format: int64 */
+            rated_issues_with_creator_metadata: number;
+            ratings_complete: boolean;
+            read_unrated_complete: boolean;
+            /** Format: int64 */
+            read_unrated_issues_total: number;
+            /** Format: int64 */
+            read_unrated_issues_with_creator_metadata: number;
+            /** Format: int64 */
+            unread_issues_total: number;
+            /** Format: int64 */
+            unread_issues_with_creator_metadata: number;
+            upcoming_complete: boolean;
+        };
+        CreatorSummaryItem: {
+            /** Format: double */
+            average_rating?: number | null;
+            canonical_creator_key: string;
+            display_name: string;
+            normalized_roles: string[];
+            /** Format: int64 */
+            ratings_count: number;
+            /** Format: int64 */
+            read_unrated_count: number;
+            /** Format: int64 */
+            upcoming_count: number;
+        };
+        CreatorTeamChemistryResponse: {
+            coverage: components["schemas"]["CreatorTeamCoverage"];
+            /** Format: int64 */
+            max_ranked_pairs: number;
+            /** Format: int64 */
+            min_shared_team_sample: number;
+            pairs: components["schemas"]["CreatorTeamPair"][];
+            /** Format: int64 */
+            pairs_total: number;
+        };
+        CreatorTeamCoverage: {
+            /** Format: int64 */
+            rated_issues_total: number;
+            /** Format: int64 */
+            rated_issues_with_creator_metadata: number;
+            ratings_complete: boolean;
+        };
+        CreatorTeamIssueRef: {
+            /** Format: double */
+            effective_rating?: number | null;
+            /** Format: int64 */
+            issue_id: number;
+            issue_number: string;
+            status: string;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        CreatorTeamMember: {
+            /** Format: double */
+            baseline_average_rating?: number | null;
+            /** Format: int64 */
+            baseline_rated_count: number;
+            canonical_creator_key: string;
+            /** Format: double */
+            difference_from_baseline?: number | null;
+            display_name: string;
+            roles: string[];
+        };
+        CreatorTeamPair: {
+            creators: components["schemas"]["CreatorTeamMember"][];
+            /** Format: int64 */
+            max_shared_issue_refs: number;
+            pair_key: string;
+            /** Format: double */
+            shared_average_rating?: number | null;
+            shared_issue_refs: components["schemas"]["CreatorTeamIssueRef"][];
+            /** Format: double */
+            shared_median_rating?: number | null;
+            /** Format: int64 */
+            shared_rated_issue_count: number;
+            shared_rating_distribution: {
+                [key: string]: number;
+            };
+            shared_series: components["schemas"]["CreatorTeamSeriesRef"][];
+        };
+        CreatorTeamSeriesRef: {
+            /** Format: int64 */
+            shared_issue_count: number;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title: string;
+        };
+        /** @description Response body carrying a double-submit CSRF token. */
+        CsrfResponse: {
+            csrf_token: string;
+        };
+        CustomCBLApplyRequest: {
+            expected_updated_at?: string | null;
+            lane_id?: string | null;
+        };
+        CustomCBLApplyResponse: {
+            added_issue_ids: number[];
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            lanes: unknown[];
+            name: string;
+            nodes: unknown[];
+            ordering_mode: string;
+            skipped_existing_issue_ids: number[];
+            updated_at: string;
+            /** Format: int32 */
+            user_id: number;
+        };
+        CustomCBLEntryIntent: {
+            gate: string;
+            skipped?: boolean;
+        };
+        CustomCBLEntryResponse: {
+            checkpoint_target_issue_ids: number[];
+            gate: string;
+            /** Format: int32 */
+            id: number;
+            is_checkpoint: boolean;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+            series_name: string;
+            skipped: boolean;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        CustomCBLIssueSearchResult: {
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            series_name: string;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        CustomCBLListItem: {
+            description?: string | null;
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            issue_count: number;
+            mode: string;
+            name: string;
+            updated_at: string;
+        };
+        CustomCBLPredecessorChange: {
+            after_issue_ids: number[];
+            after_issue_names: string[];
+            before_issue_ids: number[];
+            before_issue_names: string[];
+            /** Format: int32 */
+            issue_id: number;
+            issue_name: string;
+        };
+        CustomCBLResponse: {
+            created_at: string;
+            description?: string | null;
+            entries: components["schemas"]["CustomCBLEntryResponse"][];
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            issue_count: number;
+            mode: string;
+            name: string;
+            predecessor_changes?: components["schemas"]["CustomCBLPredecessorChange"][];
+            updated_at: string;
+            /** Format: int32 */
+            user_id: number;
+            warnings?: string[];
+        };
+        CustomCBLWrite: {
+            checkpoint_issue_ids?: number[] | null;
+            checkpoint_targets?: {
+                [key: string]: number[];
+            } | null;
+            confirmed_predecessor_changes?: unknown;
+            description?: string | null;
+            entry_intents?: {
+                [key: string]: components["schemas"]["CustomCBLEntryIntent"];
+            } | null;
+            issue_ids?: number[];
+            mode?: string | null;
+            name: string;
+        };
+        /** @description The product-owned deterministic guest Roll fixture. */
+        DemoRoll: {
+            /** Format: int32 */
+            die_size: number;
+            explanation?: string | null;
+            format: string;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number?: string | null;
+            /** Format: int32 */
+            issues_remaining: number;
+            /** Format: int32 */
+            next_issue_id?: number | null;
+            next_issue_number?: string | null;
+            /** Format: int32 */
+            offset: number;
+            /** Format: int32 */
+            queue_position: number;
+            reading_progress?: string | null;
+            /** Format: int32 */
+            result: number;
+            /** Format: int32 */
+            snoozed_count: number;
+            /** Format: int32 */
+            thread_id: number;
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
+        };
+        /**
+         * @description Flat wire request mirroring the Python `DependencyCreate` payload so the
+         *     Dependency Builder migrates without changing its semantics.
+         */
+        DependencyCreateRequest: {
+            /** Format: int32 */
+            source_id: number;
+            source_type: string;
+            /** Format: int32 */
+            target_id: number;
+            target_type: string;
+        };
+        /**
+         * DependencyGroupCreate
+         * @description Create a named dependency group.
+         */
+        DependencyGroupCreate: {
+            /** Name */
+            name: string;
+        };
+        /** @description Wire request mirroring the Python `DependencyGroupCreate` payload. */
+        DependencyGroupCreateRequest: {
+            name: string;
+        };
+        /**
+         * DependencyGroupDetailMemberResponse
+         * @description Enriched member with thread and issue objects for crossover detail view.
+         */
+        DependencyGroupDetailMemberResponse: {
+            issue?: components["schemas"]["IssueResponse"] | null;
+            membership: components["schemas"]["DependencyGroupMemberResponse"];
+            /**
+             * Other Crossovers
+             * @default []
+             */
+            other_crossovers: string[];
+            thread?: components["schemas"]["ThreadResponse"] | null;
+        };
+        /**
+         * DependencyGroupDetailResponse
+         * @description Full crossover detail with enriched members and linked plans.
+         */
+        DependencyGroupDetailResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /**
+             * Linked Plans
+             * @default []
+             */
+            linked_plans: components["schemas"]["DependencyGroupSummary"][];
+            /** Memberships */
+            memberships: components["schemas"]["DependencyGroupDetailMemberResponse"][];
+            /** Name */
+            name: string;
+        };
+        /**
+         * DependencyGroupIssueRangeCreate
+         * @description Add a bounded inclusive issue-position range from one owned thread.
+         */
+        DependencyGroupIssueRangeCreate: {
+            /** End Position */
+            end_position: number;
+            /** Start Position */
+            start_position: number;
+            /** Thread Id */
+            thread_id: number;
+        };
+        /** @description Wire request mirroring the Python `DependencyGroupIssueRangeCreate` payload. */
+        DependencyGroupIssueRangeCreateRequest: {
+            /** Format: int32 */
+            end_position: number;
+            /** Format: int32 */
+            start_position: number;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        /**
+         * DependencyGroupIssueRangeResponse
+         * @description Summary of an idempotent issue-range membership operation.
+         */
+        DependencyGroupIssueRangeResponse: {
+            /** Added Issue Ids */
+            added_issue_ids: number[];
+            /** Already Present Issue Ids */
+            already_present_issue_ids: number[];
+            /** End Position */
+            end_position: number;
+            /** Start Position */
+            start_position: number;
+            /** Thread Id */
+            thread_id: number;
+        };
+        /**
+         * DependencyGroupMemberCreate
+         * @description Add exactly one thread or issue to a group.
+         */
+        DependencyGroupMemberCreate: {
+            /** Issue Id */
+            issue_id?: number | null;
+            /**
+             * Sequence Order
+             * @description Authoritative position of an issue-level member within the crossover's reading order. Only issue-level memberships participate in crossover sequencing; thread memberships ignore this field.
+             */
+            sequence_order?: number | null;
+            /** Thread Id */
+            thread_id?: number | null;
+        };
+        /** @description Wire request mirroring the Python `DependencyGroupMemberCreate` payload. */
+        DependencyGroupMemberCreateRequest: {
+            /** Format: int32 */
+            issue_id?: number | null;
+            /** Format: int32 */
+            sequence_order?: number | null;
+            /** Format: int32 */
+            thread_id?: number | null;
+        };
+        /**
+         * DependencyGroupMemberResponse
+         * @description One persisted group membership with human-readable target metadata.
+         *
+         *     ``series_title`` carries the owning thread's title for both membership
+         *     kinds. For issue-level memberships, ``issue_number`` identifies the exact
+         *     issue inside that series. A missing value means the target could not be
+         *     resolved and the client must render a readable fallback instead of raw IDs.
+         */
+        DependencyGroupMemberResponse: {
+            /** Id */
+            id: number;
+            /** Issue Id */
+            issue_id: number | null;
+            /** Issue Number */
+            issue_number?: string | null;
+            /** Sequence Order */
+            sequence_order?: number | null;
+            /** Series Title */
+            series_title?: string | null;
+            /** Thread Id */
+            thread_id: number | null;
+        };
+        /**
+         * DependencyGroupOrderItem
+         * @description One crossover membership assigned a reading-sequence position.
+         */
+        DependencyGroupOrderItem: {
+            /** Issue Id */
+            issue_id: number;
+            /** Sequence Order */
+            sequence_order: number;
+        };
+        /**
+         * DependencyGroupOrderUpdate
+         * @description Set the authoritative ordered reading sequence of a crossover.
+         */
+        DependencyGroupOrderUpdate: {
+            /** Items */
+            items: components["schemas"]["DependencyGroupOrderItem"][];
+        };
+        /** @description Wire request mirroring the Python `DependencyGroupOrderUpdate` payload. */
+        DependencyGroupOrderUpdateRequest: {
+            items: components["schemas"]["NativeDependencyGroupOrderItem"][];
+        };
+        /**
+         * DependencyGroupResponse
+         * @description A named dependency group with its members.
+         */
+        DependencyGroupResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Memberships */
+            memberships: components["schemas"]["DependencyGroupMemberResponse"][];
+            /** Name */
+            name: string;
+            /**
+             * Read Issues
+             * @default 0
+             */
+            read_issues: number;
+            /**
+             * Reading Progress
+             * @default 0%
+             */
+            reading_progress: string;
+            /**
+             * Total Issues
+             * @default 0
+             */
+            total_issues: number;
+        };
+        /**
+         * DependencyGroupSummary
+         * @description Compact group metadata for the Roll view.
+         */
+        DependencyGroupSummary: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+        };
+        /**
+         * DependencyGroupUpdate
+         * @description Rename a named dependency group.
+         */
+        DependencyGroupUpdate: {
+            /** Name */
+            name: string;
+        };
+        /** @description Wire request mirroring the Python `DependencyGroupUpdate` payload. */
+        DependencyGroupUpdateRequest: {
+            name: string;
+        };
+        DependencyNoteUpdate: {
+            note?: string | null;
+        };
+        /** @description Python `DependencyOrderConflict`. */
+        DependencyOrderConflict: {
+            conflict: string;
+            dependency_requires_before: components["schemas"]["DependencyOrderRequirement"][];
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+        };
+        /** @description Python `DependencyOrderRequirement`. */
+        DependencyOrderRequirement: {
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+        };
+        /**
+         * @description Issue-level dependency response mirroring the Python `DependencyResponse`
+         *     fields the Dependency Builder consumes (`warning`, labels, thread ids).
+         */
+        DependencyResponse: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            /** @default true */
+            is_issue_level: boolean;
+            note?: string | null;
+            /** Format: int32 */
+            source_issue_id?: number | null;
+            /** Format: int32 */
+            source_issue_thread_id?: number | null;
+            source_label?: string | null;
+            /** Format: int32 */
+            source_thread_id?: number | null;
+            /** Format: int32 */
+            target_issue_id?: number | null;
+            /** Format: int32 */
+            target_issue_thread_id?: number | null;
+            target_label?: string | null;
+            /** Format: int32 */
+            target_thread_id?: number | null;
+            warning?: string | null;
+        };
+        /** @description A captured console error entry. */
+        DiagnosticError: {
+            message: string;
+            timestamp: string;
+        };
+        /** @description Performance timing diagnostic information (both fields optional). */
+        DiagnosticPerformance: {
+            /** Format: double */
+            domContentLoaded?: number | null;
+            /** Format: double */
+            loadComplete?: number | null;
+        };
+        /** @description Screen diagnostic information (`pixelRatio` alias on the wire). */
+        DiagnosticScreen: {
+            height: number;
+            /** Format: double */
+            pixelRatio: number;
+            width: number;
+        };
+        /** @description Scroll position diagnostic information. */
+        DiagnosticScroll: {
+            x: number;
+            y: number;
+        };
+        /** @description Viewport diagnostic information. */
+        DiagnosticViewport: {
+            height: number;
+            width: number;
+        };
+        DiceCommandReceipt: {
+            /** Format: int32 */
+            die_after: number;
+            /** Format: int32 */
+            die_before: number;
+            /** Format: int32 */
+            event_id: number;
+            replayed: boolean;
+        };
+        DuplicateCandidateGroup: {
+            confidence: string;
+            evidence: components["schemas"]["DuplicateIssueEvidence"][];
+            group_key: string;
+            reason: string;
+            /** Format: int32 */
+            suggested_canonical_issue_id?: number | null;
+            suggested_duplicate_issue_ids: number[];
+        };
+        DuplicateDetectionResponse: {
+            groups: components["schemas"]["DuplicateCandidateGroup"][];
+        };
+        DuplicateIssueEvidence: {
+            comicvine_issue_id?: string | null;
+            comicvine_issue_number?: string | null;
+            comicvine_story_number?: string | null;
+            /** Format: int32 */
+            comicvine_volume_id?: number | null;
+            created_at: string;
+            is_synthetic_placeholder_read: boolean;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            list_memberships: components["schemas"]["DuplicateListMembership"][];
+            /** Format: int32 */
+            merged_into_issue_id?: number | null;
+            rating_events: components["schemas"]["DuplicateRatingEvent"][];
+            read_at?: string | null;
+            read_events: components["schemas"]["DuplicateReadEvent"][];
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
+        DuplicateListMembership: {
+            /** Format: int32 */
+            entry_id: number;
+            /** Format: int32 */
+            list_id: number;
+            list_name: string;
+            /** Format: int32 */
+            position: number;
+        };
+        DuplicateRatingEvent: {
+            /** Format: int32 */
+            event_id: number;
+            /** Format: double */
+            rating: number;
+            timestamp: string;
+        };
+        DuplicateReadEvent: {
+            /** Format: int32 */
+            event_id: number;
+            /** @description Per-event synthetic flag: true when the read timestamp predates its issue's creation. */
+            is_synthetic: boolean;
+            issue_number?: string | null;
+            timestamp: string;
+        };
+        /** @enum {string} */
+        EditorKind: "reading_list" | "prerequisite" | "issue";
+        EffectiveTag: {
+            direct: boolean;
+            sources: components["schemas"]["InheritanceSource"][];
+            tag: components["schemas"]["Tag"];
+        };
+        EffectiveTagsResponse: {
+            direct_tags: components["schemas"]["Tag"][];
+            effective_tags: components["schemas"]["EffectiveTag"][];
+            /** Format: int32 */
+            target_id: number;
+            target_type: string;
+        };
+        /** @description Request body for an enumeration-safe password-recovery email. */
+        ForgotPasswordRequest: {
+            email: string;
+        };
+        /** @description One unprotected current unread frontier with its inert evidence. */
+        FrontierAuditFinding: {
+            /** Format: int32 */
+            frontier_issue_id: number;
+            frontier_issue_number: string;
+            frontier_status: string;
+            /** @description Inert dependency rows into this frontier from an incomplete source. */
+            legacy_evidence: components["schemas"]["AuditEvidenceEdge"][];
+            /** @description Owned Reading List placements of the frontier issue and their gates. */
+            list_memberships: components["schemas"]["AuditListMembership"][];
+            recommendation: string;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
+        /** @description The complete read-only audit response for one owner. */
+        FrontierAuditReport: {
+            /** @description Reader-authored prerequisites currently loaded with execution authority. */
+            actionable_reader_prerequisites: number;
+            /** @description The gap findings, bounded at [`MAX_REPORTED_FINDINGS`]. */
+            findings: components["schemas"]["FrontierAuditFinding"][];
+            /** @description Findings beyond [`MAX_REPORTED_FINDINGS`] omitted from `findings`. */
+            findings_omitted: number;
+            /** @description Live frontiers examined (active queued Threads, one next unread each). */
+            frontiers_examined: number;
+            /**
+             * @description Examined frontiers an actionable Option E constraint currently blocks
+             *     (reader prerequisite or list order).
+             */
+            frontiers_protected: number;
+            /** @description Those rows grouped by evidence class. */
+            inert_evidence_counts: {
+                [key: string]: number;
+            };
+            /** @description Inert dependency rows examined (owned unread target, incomplete source). */
+            inert_evidence_rows: number;
+            /** @description Report-only disclaimer; the audit is never an execution input. */
+            note: string;
+            /**
+             * @description Examined frontiers with no actionable Option E constraint while inert
+             *     legacy evidence records possible reader intent: the reported gaps.
+             */
+            unprotected_frontiers: number;
+        };
+        /** @description Body of `POST /api/v2/reading-order-groups:resolveMemberships`. */
+        GroupsBatchRequest: {
+            thread_ids: number[];
+        };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
+        };
+        IdentityInboxActionResponse: {
+            message: string;
+            success: boolean;
+            updated_item?: components["schemas"]["IdentityInboxItem"] | null;
+        };
+        IdentityInboxCandidate: {
+            comicvine_id?: string | null;
+            /** Format: double */
+            confidence?: number | null;
+            evidence_json: unknown;
+            evidence_source?: string | null;
+            /** Format: int32 */
+            external_identity_id: number;
+            external_url?: string | null;
+            metadata_json: unknown;
+            provider: string;
+            rejection_reason?: string | null;
+            status: string;
+        };
+        /** @description Body for confirming an identity inbox candidate. */
+        IdentityInboxConfirmRequest: {
+            /** Format: int32 */
+            external_identity_id: number;
+        };
+        IdentityInboxItem: {
+            candidates: components["schemas"]["IdentityInboxCandidate"][];
+            /** Format: double */
+            created_at?: number | null;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            mapping_id: number;
+            /**
+             * @description Actionable next steps for the reviewer when the match is unresolved,
+             *     ambiguous, or missing. Empty when no guidance is needed.
+             */
+            next_steps?: string[];
+            provider?: string | null;
+            source_entry_summary: string;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+            /** Format: double */
+            updated_at?: number | null;
+            why_stopped: string;
+        };
+        IdentityInboxPartialMatch: {
+            actionable_reason: string;
+            /** Format: int32 */
+            comicvine_volume_id: number;
+            matched: components["schemas"]["IdentityInboxPartialMatchIssue"][];
+            unmatched: components["schemas"]["IdentityInboxPartialMatchIssue"][];
+            volume_name: string;
+        };
+        /**
+         * @description One issue in an explainable partial series match. When a stored candidate
+         *     exists, `mapping_id`/`external_identity_id` let the UI confirm it through
+         *     the existing confirmation endpoint; otherwise the issue stays for review.
+         */
+        IdentityInboxPartialMatchIssue: {
+            /** Format: int32 */
+            comicvine_issue_id: number;
+            /** Format: int32 */
+            external_identity_id?: number | null;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            mapping_id?: number | null;
+            reason: string;
+        };
+        /** @description Body for rejecting an identity inbox candidate. */
+        IdentityInboxRejectRequest: {
+            /** Format: int32 */
+            external_identity_id: number;
+            rejection_reason: string;
+        };
+        IdentityInboxResponse: {
+            items: components["schemas"]["IdentityInboxItem"][];
+            /** Format: int64 */
+            limit: number;
+            /** Format: int64 */
+            offset: number;
+            /** Format: int64 */
+            total: number;
+        };
+        IdentityInboxSearchResponse: {
+            /** Format: int32 */
+            issue_id: number;
+            /**
+             * @description Explainable reason when discovery found nothing, produced by the same
+             *     matcher that scores successful searches.
+             */
+            no_match_reason?: string | null;
+            /**
+             * @description Series-level partial matches derived from the same provider response.
+             *     Always emitted (empty when no volume resolves) for wire stability.
+             */
+            partial_matches: components["schemas"]["IdentityInboxPartialMatch"][];
+            query: string;
+            results: components["schemas"]["IdentityInboxSearchResult"][];
+            /** Format: int64 */
+            total_available?: number | null;
+        };
+        IdentityInboxSearchResult: {
+            /** Format: int32 */
+            comicvine_issue_id: number;
+            /** Format: int32 */
+            comicvine_volume_id?: number | null;
+            evidence: string[];
+            image_url?: string | null;
+            issue_name?: string | null;
+            issue_number?: string | null;
+            publisher?: string | null;
+            /** Format: double */
+            score?: number | null;
+            site_detail_url?: string | null;
+            /** Format: int32 */
+            start_year?: number | null;
+            volume_name?: string | null;
+        };
+        /**
+         * @description Python `ImportIssueRequest`: `title` 1-200 characters (stored stripped),
+         *     `comicvine_issue_id > 0`, `issue_number` at most 50 characters, and the
+         *     optional reading-order ids `> 0`.
+         */
+        ImportIssueRequest: {
+            /** Format: int32 */
+            anchor_after_thread_id?: number | null;
+            /** Format: int32 */
+            anchor_before_thread_id?: number | null;
+            /** Format: int32 */
+            comicvine_issue_id: number;
+            issue_number?: string | null;
+            /** Format: int32 */
+            reading_order_id?: number | null;
+            title: string;
+        };
+        ImportIssueResponse: {
+            /** Format: int32 */
+            external_identity_id: number;
+            /** Format: int32 */
+            issue_id: number;
+            /** Format: int32 */
+            position?: number | null;
+            /** Format: int32 */
+            reading_order_id?: number | null;
+            /** Format: int32 */
+            thread_id: number;
+            /** Format: int32 */
+            total_items?: number | null;
+        };
+        ImportSeriesIssueResult: {
+            /** Format: int32 */
+            comicvine_issue_id: number;
+            conflict_detail?: string | null;
+            hydration: string;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number?: string | null;
+            outcome: string;
+        };
+        ImportSeriesRequest: {
+            /** Format: int32 */
+            already_read_count?: number;
+            /** Format: int32 */
+            anchor_after_thread_id?: number | null;
+            /** Format: int32 */
+            anchor_before_thread_id?: number | null;
+            /** Format: int32 */
+            comicvine_volume_id: number;
+            /** Format: int32 */
+            reading_order_id?: number | null;
+        };
+        ImportSeriesResponse: {
+            /** Format: int32 */
+            comicvine_volume_id: number;
+            issue_results: components["schemas"]["ImportSeriesIssueResult"][];
+            /** Format: int32 */
+            issues_adopted: number;
+            /** Format: int32 */
+            issues_conflict: number;
+            /** Format: int32 */
+            issues_skipped: number;
+            /** Format: int32 */
+            position?: number | null;
+            /** Format: int32 */
+            reading_order_id?: number | null;
+            series_name: string;
+            thread_created: boolean;
+            /** Format: int32 */
+            thread_id: number;
+            /** Format: int32 */
+            total_issues_in_series: number;
+            /** Format: int32 */
+            total_items?: number | null;
+        };
+        InheritanceSource: {
+            display_name: string;
+            /** Format: int32 */
+            target_id: number;
+            target_type: string;
+        };
+        /**
+         * @description Temporary explicit write boundary for legacy reading-session consumers.
+         *     GET /api/v2/roll/bootstrap never creates or mutates a session.
+         */
+        InitializeSessionRequest: {
+            timezone?: string | null;
+        };
+        /** @description Python `InsertReadingOrderItemRequest`. */
+        InsertReadingOrderItemRequest: {
+            /** Format: int32 */
+            position: number;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        /** @description Python `InsertReadingOrderItemResponse`. */
+        InsertReadingOrderItemResponse: {
+            /** Format: int32 */
+            position: number;
+            /** Format: int32 */
+            reading_order_id: number;
+            /** Format: int32 */
+            thread_id: number;
+            /** Format: int64 */
+            total_items: number;
+        };
+        /** @description Request body for the bulk read-state operations. */
+        IssueBulkRequest: {
+            issue_ids: number[];
+        };
+        IssueCard: {
+            /** @description Confirmed provider issue identifier, never a provisional candidate. */
+            comicvine_issue_id?: string | null;
+            /** @description Exact provider-supplied CDN URL. Null when unmapped; never image bytes. */
+            cover_image_url?: string | null;
+            /** @description Display number combining authored and alias when present. */
+            display_issue_number?: string;
+            /** @description Whether a confirmed ComicVine issue mapping exists. */
+            has_confirmed_identity: boolean;
+            /**
+             * Format: int32
+             * @description Owned issue identifier.
+             */
+            issue_id: number;
+            /** @description Authored issue number within the run (reader's label). */
+            issue_number: string;
+            /** @description Alternate overall/story-arc number when the physical comic has dual numbering. */
+            issue_number_alias?: string | null;
+            /** @description Stored mapping state (``confirmed``, ``candidate``, ...). */
+            mapping_state: string;
+            /** @description Provider's own issue number from confirmed identity metadata, when known. */
+            provider_issue_number?: string | null;
+            /**
+             * Format: double
+             * @description Effective per-issue saved rating.
+             */
+            rating?: number | null;
+            /** @description UTC read timestamp, when read. */
+            read_at?: string | null;
+            /** @description Stored read state (``read`` or ``unread``). */
+            status: string;
+            /**
+             * Format: int32
+             * @description Owning thread identifier.
+             */
+            thread_id: number;
+            /** @description Display series/run title. */
+            thread_title: string;
+        };
+        IssueCardsRequest: {
+            /** @description Visible issue identifiers requested for one bounded batch. */
+            issue_ids: number[];
+        };
+        IssueCardsResponse: {
+            /** @description Owned cards in first-request order; foreign or missing IDs are omitted. */
+            items: components["schemas"]["IssueCard"][];
+        };
+        /** @description Request body of `POST /api/v1/threads/{thread_id}/issues`. */
+        IssueCreateRange: {
+            /**
+             * Format: int32
+             * @description Insert after this issue id; omit for natural placement, null to append.
+             */
+            insert_after_issue_id?: number | null;
+            /** @description Range such as `1-25` or `1, 3, 5-7`. */
+            issue_range: string;
+        };
+        /**
+         * IssueCreatorsEntry
+         * @description Stored ComicVine creator credits for one thread issue.
+         */
+        IssueCreatorsEntry: {
+            /** Creators */
+            creators?: components["schemas"]["ComicVineCreator"][];
+            /** Issue Id */
+            issue_id: number;
+        };
+        /** @description Wire parity with Python `IssueDependenciesResponse`. */
+        IssueDependenciesResponse: {
+            incoming: components["schemas"]["IssueDependencyEdge"][];
+            /** Format: int32 */
+            issue_id: number;
+            outgoing: components["schemas"]["IssueDependencyEdge"][];
+        };
+        /** @description Wire parity with Python `IssueDependencyEdge` (`app/schemas/dependency.py`). */
+        IssueDependencyEdge: {
+            /** Format: int32 */
+            dependency_id: number;
+            /** Format: int32 */
+            source_issue_id: number;
+            source_issue_number: string;
+            /** Format: int32 */
+            source_thread_id: number;
+            source_thread_title: string;
+        };
+        /** @description Wire parity with Python `IssueResponse` (`app/schemas/issue.py`). */
+        IssueDetailResponse: {
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            issue_number: string;
+            issue_number_alias?: string | null;
+            /** Format: int32 */
+            position: number;
+            read_at?: string | null;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        /** @description A source-preserving alternative to creating a new physical issue (#4654). */
+        IssueEditAliasOffer: {
+            /** @description Concrete identity evidence, not a generic duplicate warning. */
+            evidence: string;
+            /**
+             * Format: int32
+             * @description Existing identity-mapped issue that can be aliased instead.
+             */
+            existing_issue_id: number;
+            existing_issue_number: string;
+            /** @description Issue number the reader asked to add. */
+            requested_issue_number: string;
+            /** @description Human-readable series the existing issue belongs to. */
+            series_title: string;
+        };
+        IssueEditPreviewOutcome: {
+            added_issue_numbers: string[];
+            after: components["schemas"]["PreviewIssueItem"][];
+            before: components["schemas"]["PreviewIssueItem"][];
+            can_commit: boolean;
+            conflict_message?: string | null;
+            graph: components["schemas"]["ReadingGraphResponse"];
+            preserves_existing_relative_order: boolean;
+            strategy: components["schemas"]["IssuePlacementStrategy"];
+        };
+        IssueEditPreviewResponse: {
+            /**
+             * @description Source-preserving alternatives for numbers that already exist as
+             *     identity-mapped issues in another owned series (#4654).
+             */
+            alias_offers: components["schemas"]["IssueEditAliasOffer"][];
+            default_outcome: components["schemas"]["IssueEditPreviewOutcome"];
+            /** @description IDs shown in Before, echoed so the commit can reject a stale preview. */
+            expected_issue_ids: number[];
+            numeric_resort_outcome?: components["schemas"]["IssueEditPreviewOutcome"] | null;
+            requested_strategy: components["schemas"]["IssuePlacementStrategy"];
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
+        IssueIdentityMapping: {
+            comicvine_id: string;
+            /** Format: double */
+            confidence?: number | null;
+            created_at?: string | null;
+            evidence_source?: string | null;
+            /** Format: int32 */
+            external_identity_id: number;
+            provider: string;
+            status: string;
+        };
+        IssueIdentityResponse: {
+            candidate_mappings: components["schemas"]["IssueIdentityMapping"][];
+            comicvine_issue_id?: string | null;
+            confirmed_mappings: components["schemas"]["IssueIdentityMapping"][];
+            has_confirmed_identity: boolean;
+            has_unresolved: boolean;
+            /** Format: int32 */
+            issue_id: number;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
+        /** @description Wire parity with Python's ComicVineIssueIntelligence. */
+        IssueIntelligence: {
+            comicvine_issue_id: string;
+            comicvine_url?: string | null;
+            cover_date?: string | null;
+            creators: components["schemas"]["Creator"][];
+            description?: string | null;
+            image_url?: string | null;
+            issue_number?: string | null;
+            metadata_status: string;
+            name?: string | null;
+            /** Format: int64 */
+            refresh_retry_after_seconds?: number | null;
+            /** Format: int64 */
+            series_id?: number | null;
+            series_name?: string | null;
+            store_date?: string | null;
+            story_arcs: components["schemas"]["StoryArc"][];
+        };
+        IssueListResponse: {
+            issues: components["schemas"]["IssueMutationItem"][];
+            next_page_token?: string | null;
+            /** Format: int64 */
+            page_size: number;
+            /** Format: int32 */
+            total_count: number;
+            /**
+             * Format: int32
+             * @description Reading session that received the pre-edit undo point, if one is active.
+             */
+            undo_session_id?: number | null;
+            /**
+             * Format: int32
+             * @description Snapshot a reader can restore to reverse this committed edit (#4654).
+             */
+            undo_snapshot_id?: number | null;
+        };
+        /** @description Request body for `PUT /api/v2/issues/{issue_id}/position`. */
+        IssueMoveRequest: {
+            /**
+             * Format: int32
+             * @description Move after this issue. `null` moves the issue to position 1.
+             */
+            after_issue_id: number | null;
+        };
+        IssueMutationItem: {
+            /** Format: int32 */
+            id: number;
+            issue_number: string;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        IssueOrderRequest: {
+            issue_ids: number[];
+        };
+        /** @description Python `IssueOrderValidationResponse`. */
+        IssueOrderValidationResponse: {
+            warnings: string[];
+        };
+        /** @enum {string} */
+        IssuePlacementStrategy: "safe_default" | "numeric_resort";
+        /** @description One issue affected by a bulk read/unread operation. */
+        IssueReadOperationItem: {
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            previous_status: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        /** @description Reviewable, reversible record of a bulk read/unread operation (#4655). */
+        IssueReadOperationResponse: {
+            created_at: string;
+            /** Format: int64 */
+            id: number;
+            items: components["schemas"]["IssueReadOperationItem"][];
+            operation_type: string;
+            undone_at?: string | null;
+        };
+        /** @description Result of undoing a bulk read/unread operation (#4655). */
+        IssueReadOperationUndoResponse: {
+            operation: components["schemas"]["IssueReadOperationResponse"];
+            skipped_issue_ids: number[];
+            undone_issue_ids: number[];
+        };
+        IssueReadRateRequest: {
+            /** @description Client-generated retry key. Same key/payload replays the same receipt. */
+            idempotency_key: string;
+            /**
+             * @description Alternate overall/story number for the same physical comic (#4652).
+             *     Set to a string to assign, empty string or null to clear. Omit to leave unchanged.
+             */
+            issue_number_alias?: string | null;
+            /**
+             * Format: double
+             * @description Effective issue rating in 0.5-point steps. Omit to keep the stored rating.
+             */
+            rating?: number | null;
+            /**
+             * @description Source of the issue action. Omitted or "direct" is a manual read from a
+             *     Thread row: it never steps the die and never repositions the queue.
+             *     "roll_offer" is a Roll completion: it applies the Roll rating semantics
+             *     (die stepping, queue placement, and a link back to the originating offer
+             *     event) in the same transaction as the read.
+             */
+            source?: string | null;
+            /** @description Explicit new status. Omit to leave read state unchanged. */
+            status?: string | null;
+        };
+        IssueReadRateResponse: {
+            /**
+             * Format: int32
+             * @description Die after this rating, when source is "roll_offer". Null for "direct" source.
+             */
+            die_after?: number | null;
+            /** Format: double */
+            final_rating?: number | null;
+            issue: components["schemas"]["IssueCard"];
+            rating_event_created: boolean;
+            read_event_created: boolean;
+            replayed: boolean;
+            thread: components["schemas"]["ThreadProgress"];
+        };
+        /** @description Request body of `POST /api/v1/threads/{thread_id}/issues:reorder`. */
+        IssueReorderRequest: {
+            issue_ids: number[];
+        };
+        /**
+         * IssueResponse
+         * @description Schema for issue response.
+         */
+        IssueResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Issue Number */
+            issue_number: string;
+            /** Position */
+            position: number;
+            /** Read At */
+            read_at: string | null;
+            /** Status */
+            status: string;
+            /** Thread Id */
+            thread_id: number;
+        };
+        /** @description One bounded page of the canonical reading-session collection. */
+        ListReadingSessionsResponse: {
+            next_page_token?: string | null;
+            reading_sessions: components["schemas"]["ReadingSessionResource"][];
+        };
+        /**
+         * @description Request body for username/password login.
+         *
+         *     Login deliberately does not impose the registration minimum length: accounts
+         *     created before the current policy must still be able to sign in. An empty
+         *     password is rejected by bcrypt verification with the same non-enumerating
+         *     401 as any other incorrect credential, matching Python.
+         */
+        LoginRequest: {
+            password: string;
+            username: string;
+        };
+        ManualDieRequest: {
+            /** Format: int32 */
+            die: number;
+            idempotency_key: string;
+            /** @enum {string} */
+            kind: "manual_select";
+        };
+        /**
+         * @description Python `MetadataCorrectionRequest`: unconstrained `str` fields (empty is
+         *     accepted), `reason` `max_length=500`.
+         */
+        MetadataCorrectionRequest: {
+            canonical_value: string;
+            field_name: string;
+            reason?: string | null;
+        };
+        /** @description Python `MetadataCorrectionRevertRequest` (lax `int`). */
+        MetadataCorrectionRevertRequest: {
+            /** Format: int32 */
+            correction_id: number;
+        };
+        MetadataCorrectionsResponse: {
+            corrections: components["schemas"]["CanonicalCorrection"][];
+            /** Format: int32 */
+            issue_id: number;
+        };
+        MetadataRefreshResponse: {
+            comicvine_issue_id?: string | null;
+            /** Format: int32 */
+            issue_id: number;
+            refreshed: boolean;
+        };
+        /**
+         * MigrateToIssuesRequest
+         * @description Schema for migrating thread to issue tracking.
+         */
+        MigrateToIssuesRequest: {
+            /**
+             * Last Issue Read
+             * @description The issue number user just finished reading (e.g., 15)
+             */
+            last_issue_read: number;
+            /**
+             * Total Issues
+             * @description Total number of issues in the series (e.g., 25)
+             */
+            total_issues: number;
+        };
+        /**
+         * MigrateToIssuesSimpleRequest
+         * @description Schema for simplified migration (infers total_issues from current state).
+         */
+        MigrateToIssuesSimpleRequest: {
+            /**
+             * Issue Number
+             * @description The issue number user just read (e.g., '5', 'Annual 1')
+             */
+            issue_number: string;
+        };
+        /** @description Minimal release data for reconciliation endpoints (no body). */
+        MinimalReleaseResponse: {
+            category: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            /** Format: date-time */
+            merged_at: string;
+            provenance_json: unknown;
+            /** Format: date-time */
+            released_at: string;
+            /** Format: int32 */
+            sort_order: number;
+            source_merge_sha?: string | null;
+            /** Format: int32 */
+            source_pr_number?: number | null;
+            source_repository: string;
+            status: string;
+            summary: string;
+            title: string;
+            /** Format: date-time */
+            updated_at: string;
+            visibility: string;
+        };
+        /** @description Compact confirmed ComicVine mapping health for one queue row. */
+        NativeComicVineMappingHealth: {
+            /** Format: int32 */
+            confirmed_issue_count: number;
+            /** Format: int32 */
+            metadata_missing_count: number;
+            /** Format: int32 */
+            needs_mapping_count: number;
+            /** Format: int32 */
+            needs_review_count: number;
+            status: string;
+            /** Format: int32 */
+            tracked_issue_count: number;
+        };
+        /** @description Wire response member mirroring the Python `DependencyGroupDetailMemberResponse`. */
+        NativeDependencyGroupDetailMemberResponse: {
+            issue?: components["schemas"]["IssueDetailResponse"] | null;
+            membership: components["schemas"]["NativeDependencyGroupMemberResponse"];
+            other_crossovers: string[];
+            thread?: components["schemas"]["ThreadDetailResponse"] | null;
+        };
+        /** @description Wire response mirroring the Python `DependencyGroupDetailResponse`. */
+        NativeDependencyGroupDetailResponse: {
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            linked_plans: components["schemas"]["NativeDependencyGroupSummary"][];
+            memberships: components["schemas"]["NativeDependencyGroupDetailMemberResponse"][];
+            name: string;
+        };
+        /** @description Wire response mirroring the Python `DependencyGroupIssueRangeResponse`. */
+        NativeDependencyGroupIssueRangeResponse: {
+            added_issue_ids: number[];
+            already_present_issue_ids: number[];
+            /** Format: int32 */
+            end_position: number;
+            /** Format: int32 */
+            start_position: number;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        /** @description Wire response mirroring the Python `DependencyGroupMemberResponse`. */
+        NativeDependencyGroupMemberResponse: {
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number?: string | null;
+            /** Format: int32 */
+            sequence_order?: number | null;
+            series_title?: string | null;
+            /** Format: int32 */
+            thread_id?: number | null;
+        };
+        /** @description Wire request item mirroring the Python `DependencyGroupOrderItem` payload. */
+        NativeDependencyGroupOrderItem: {
+            /** Format: int32 */
+            issue_id: number;
+            /** Format: int32 */
+            sequence_order: number;
+        };
+        /** @description Wire response mirroring the Python `DependencyGroupResponse`. */
+        NativeDependencyGroupResponse: {
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            memberships: components["schemas"]["NativeDependencyGroupMemberResponse"][];
+            name: string;
+            /** Format: int32 */
+            read_issues: number;
+            reading_progress: string;
+            /** Format: int64 */
+            total_issues: number;
+        };
+        /** @description Wire response mirroring the Python `DependencyGroupSummary`. */
+        NativeDependencyGroupSummary: {
+            /** Format: int32 */
+            id: number;
+            name: string;
+        };
+        /** @description Stored creator credits for one issue (Python `IssueCreatorsEntry`). */
+        NativeIssueCreatorsEntry: {
+            creators: components["schemas"]["CreatorCredit"][];
+            /** Format: int32 */
+            issue_id: number;
+        };
+        /** @description One issue row (Python `IssueResponse`). */
+        NativeIssueResponse: {
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+            read_at?: string | null;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssues`. */
+        NativeMigrateToIssuesRequest: {
+            /** Format: int32 */
+            last_issue_read: number;
+            /** Format: int32 */
+            total_issues: number;
+        };
+        /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssuesSimple`. */
+        NativeMigrateToIssuesSimpleRequest: {
+            issue_number: string;
+        };
+        /** @description Confirmed provider series metadata for one queue row. */
+        NativeQueueSeriesMetadata: {
+            publisher?: string | null;
+            volume?: string | null;
+            /** Format: int32 */
+            year?: number | null;
+        };
+        NativeReadingGraphBlocker: {
+            explanation: string;
+            /** Format: int64 */
+            gate_issue_id?: number | null;
+            kind: string;
+            /** Format: int64 */
+            list_id?: number | null;
+            waiting_on_issue_ids: number[];
+        };
+        NativeReadingGraphChoiceEffect: {
+            choice: string;
+            detail: string;
+            label: string;
+            rollable_issue_ids: number[];
+            series: components["schemas"]["NativeReadingGraphSeriesNode"][];
+            waiting_issue_ids: number[];
+        };
+        NativeReadingGraphCycleError: {
+            code: string;
+            message: string;
+        };
+        NativeReadingGraphIssueReference: {
+            blockers: components["schemas"]["NativeReadingGraphBlocker"][];
+            comicvine_volume_id?: string | null;
+            /** Format: int64 */
+            issue_id: number;
+            issue_number: string;
+            series_name: string;
+        };
+        NativeReadingGraphOverlap: {
+            blocked_issue_ids: number[];
+            choices: components["schemas"]["NativeReadingGraphChoiceEffect"][];
+            continuing_series: components["schemas"]["NativeReadingGraphSeriesReference"];
+            overlap_id: string;
+            question: string;
+            selected_choice?: string | null;
+            waiting_series: components["schemas"]["NativeReadingGraphSeriesReference"];
+        };
+        NativeReadingGraphOverlapChoice: {
+            choice: string;
+            overlap_id: string;
+        };
+        NativeReadingGraphPreview: {
+            content_hash: string;
+            cycle_errors: components["schemas"]["NativeReadingGraphCycleError"][];
+            issues: components["schemas"]["NativeReadingGraphIssueReference"][];
+            overlaps: components["schemas"]["NativeReadingGraphOverlap"][];
+            revision_sha: string;
+            rollable_issue_ids: number[];
+            series: components["schemas"]["NativeReadingGraphSeriesNode"][];
+            /** Format: int64 */
+            source_list_id: number;
+            waiting_issue_ids: number[];
+        };
+        NativeReadingGraphPreviewRequest: {
+            included_positions?: number[];
+            overlap_choices?: components["schemas"]["NativeReadingGraphOverlapChoice"][];
+            /** Format: int64 */
+            target_list_id?: number | null;
+        };
+        NativeReadingGraphSeriesNode: {
+            comicvine_volume_id: string;
+            /** Format: int64 */
+            rollable_count: number;
+            series_name: string;
+            state: string;
+            /** Format: int64 */
+            unread_count: number;
+            /** Format: int64 */
+            waiting_count: number;
+            waits_for_issue_ids: number[];
+            /** Format: int64 */
+            year?: number | null;
+        };
+        NativeReadingGraphSeriesReference: {
+            comicvine_volume_id: string;
+            series_name: string;
+            /** Format: int64 */
+            year?: number | null;
+        };
+        NativeReadingOrderProjectionConflict: {
+            code: string;
+            existing_positions: number[];
+            message: string;
+            node_id: string;
+            /** Format: int32 */
+            thread_id?: number | null;
+        };
+        NativeReadingOrderProjectionEntry: {
+            /** Format: int32 */
+            position: number;
+            source: string;
+            source_node_id?: string | null;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title?: string | null;
+        };
+        NativeReadingOrderProjectionPreview: {
+            conflicts: components["schemas"]["NativeReadingOrderProjectionConflict"][];
+            dropped_node_ids: string[];
+            entries: components["schemas"]["NativeReadingOrderProjectionEntry"][];
+            /** Format: int32 */
+            plan_id: number;
+            plan_name: string;
+            plan_ordering_mode: string;
+            plan_updated_at: string;
+            /** Format: int32 */
+            reading_order_id: number;
+            reading_order_name: string;
+            /** Format: int32 */
+            total_positions: number;
+        };
+        NativeReadingOrderProjectionRequest: {
+            plan_updated_at?: string | null;
+            /** Format: int32 */
+            reading_order_id: number;
+        };
+        /** @description Response body: the Python `RollResponse` projection for a manual pick. */
+        NativeRollResponse: {
+            /** Format: int32 */
+            die_size: number;
+            explanation?: string | null;
+            format: string;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number?: string | null;
+            /** Format: int32 */
+            issues_remaining: number;
+            /** Format: int32 */
+            next_issue_id?: number | null;
+            next_issue_number?: string | null;
+            /** Format: int32 */
+            offset: number;
+            /** Format: int32 */
+            queue_position: number;
+            reading_progress?: string | null;
+            /** Format: int32 */
+            result: number;
+            /** Format: int32 */
+            snoozed_count: number;
+            /** Format: int32 */
+            thread_id: number;
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
+        };
+        NativeSeriesMappingPreviewCounts: {
+            /** Format: int64 */
+            already_confirmed: number;
+            /** Format: int64 */
+            excluded_special: number;
+            /** Format: int64 */
+            needs_review_ambiguous: number;
+            /** Format: int64 */
+            needs_review_conflict: number;
+            /** Format: int64 */
+            safe_exact_match: number;
+            /** Format: int64 */
+            unresolved: number;
+        };
+        /**
+         * @description Wire-exact mirror of
+         *     `app/schemas/catalog.py::SeriesMappingPreviewProviderSeries`.
+         *
+         *     Pydantic coerces `start_year` and `count_of_issues` from strings to integers;
+         *     the conversion helper below does the same so the generated contract types
+         *     these as integers rather than `unknown`.
+         */
+        NativeSeriesMappingPreviewProviderSeries: {
+            /** Format: int32 */
+            count_of_issues?: number | null;
+            id: string;
+            image?: unknown;
+            name?: string | null;
+            publisher?: string | null;
+            site_detail_url?: string | null;
+            /** Format: int32 */
+            start_year?: number | null;
+        };
+        /** @description Request contract for `app/schemas/catalog.py::SeriesMappingPreviewRequest`. */
+        NativeSeriesMappingPreviewRequest: {
+            /** Format: int32 */
+            origin_issue_id: number;
+            provider: string;
+            provider_series_external_id: string;
+            scope_mode?: string;
+        };
+        NativeSeriesMappingPreviewResponse: {
+            counts: components["schemas"]["NativeSeriesMappingPreviewCounts"];
+            /** Format: double */
+            expires_at?: number | null;
+            /** Format: double */
+            issued_at: number;
+            preview_token?: string | null;
+            provider_series?: components["schemas"]["NativeSeriesMappingPreviewProviderSeries"] | null;
+            rows: components["schemas"]["NativeSeriesMappingPreviewRow"][];
+            scope: components["schemas"]["NativeSeriesMappingPreviewScope"];
+        };
+        /**
+         * @description Wire-exact mirror of `app/schemas/catalog.py::SeriesMappingPreviewRow`.
+         *
+         *     Every field is always emitted, including the nullable ones and the two
+         *     defaults (`metadata_refresh_required: false`, `reason: null`). Internal plan
+         *     fields (`_identity_metadata`, `_provider_metadata`, `confidence`, `_roster_*`,
+         *     `_sibling_roster`, `_is_origin`, `_roster_only`) are deliberately absent: the
+         *     Python Pydantic model drops them, so a raw `Value` would leak them and omit
+         *     the defaults.
+         */
+        NativeSeriesMappingPreviewRow: {
+            classification: string;
+            current_mapping_status?: string | null;
+            default_selected: boolean;
+            external_id?: string | null;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            metadata_refresh_required: boolean;
+            proposed_mapping: boolean;
+            provider?: string | null;
+            reason?: string | null;
+            row_id: string;
+            /** Format: int32 */
+            thread_id?: number | null;
+            thread_title?: string | null;
+            title?: string | null;
+        };
+        NativeSeriesMappingPreviewScope: {
+            basis?: string | null;
+            /** Format: int32 */
+            origin_issue_id: number;
+            scope_key?: string | null;
+            series_label?: string | null;
+            status: string;
+        };
+        /** @description Request body of `POST /api/v1/threads/{thread_id}:setCurrentIssue`. */
+        NativeSetCurrentIssueRequest: {
+            issue_number: string;
+        };
+        /** @description Python `SetCurrentIssueResponse`. */
+        NativeSetCurrentIssueResponse: {
+            format: string;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number?: string | null;
+            /** Format: int32 */
+            issues_remaining: number;
+            /** Format: int32 */
+            next_issue_id?: number | null;
+            next_issue_number?: string | null;
+            /** Format: int32 */
+            queue_position: number;
+            reading_progress?: string | null;
+            /** Format: int32 */
+            thread_id: number;
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
+        };
+        /** @description Bulk creator credits for one thread (Python `ThreadIssueCreatorsResponse`). */
+        NativeThreadIssueCreatorsResponse: {
+            issues: components["schemas"]["NativeIssueCreatorsEntry"][];
+            /** Format: int32 */
+            thread_id: number;
+        };
+        /** @description The Python `ThreadResponse` projection every lifecycle writer returns. */
+        NativeThreadResponse: {
+            blocking_reasons: string[];
+            created_at: string;
+            format: string;
+            /** Format: int32 */
+            id: number;
+            is_blocked: boolean;
+            is_test: boolean;
+            /** Format: int32 */
+            issues_remaining: number;
+            last_activity_at?: string | null;
+            /** Format: double */
+            last_rating?: number | null;
+            manual_creator_credits: unknown;
+            /** Format: int32 */
+            next_unread_issue_id?: number | null;
+            next_unread_issue_number?: string | null;
+            notes?: string | null;
+            /** Format: int32 */
+            queue_position: number;
+            reading_progress?: string | null;
+            status: string;
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
+        };
+        NearMatch: {
+            color: string;
+            /** Format: int32 */
+            id: number;
+            name: string;
+            normalized_name: string;
+            scope: string;
+        };
+        /** @description Ordered `thread_id -> explanation` object (Python `dict[int, ...]`). */
+        OrderedExplanations: {
+            [key: string]: components["schemas"]["BlockingExplanation"];
+        };
+        OverlapDecisionItem: {
+            continuing_volume_id: string;
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            list_id: number;
+            updated_at: string;
+            waiting_volume_id: string;
+        };
+        OverlapDecisionSetResponse: {
+            candidate_volumes?: components["schemas"]["OverlapVolumeCandidate"][];
+            decisions?: components["schemas"]["OverlapDecisionItem"][];
+            /** Format: int32 */
+            list_id: number;
+            updated_at: string;
+        };
+        OverlapDecisionWrite: {
+            continuing_volume_id: string;
+            expected_updated_at?: string | null;
+            waiting_volume_id: string;
+        };
+        OverlapVolumeCandidate: {
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+            volume_id: string;
+        };
+        /** @description Safe acknowledgement returned whether or not an account exists. */
+        PasswordResetResponse: {
+            message: string;
+        };
+        PlanReaderBlocker: {
+            explanation: string;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
+        PlanReaderIssue: {
+            availability: string;
+            blockers: components["schemas"]["PlanReaderBlocker"][];
+            /** Format: int32 */
+            display_position: number;
+            is_checkpoint: boolean;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            lane_id: string;
+            occurrence_id: string;
+            source_paths: string[];
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
+        PlanReaderLane: {
+            id: string;
+            issues: components["schemas"]["PlanReaderIssue"][];
+            name: string;
+            /** Format: int32 */
+            order: number;
+        };
+        PlanReaderProgress: {
+            read_issues: number;
+            total_issues: number;
+        };
+        PlanReaderResponse: {
+            available_now: components["schemas"]["PlanReaderIssue"][];
+            blocked_next: components["schemas"]["PlanReaderIssue"][];
+            execution_mode: string;
+            lanes: components["schemas"]["PlanReaderLane"][];
+            name: string;
+            ordering_mode: string;
+            /** Format: int32 */
+            plan_id: number;
+            progress: components["schemas"]["PlanReaderProgress"];
+            release_candidates: components["schemas"]["PlanReleaseCandidate"][];
+            release_sources: components["schemas"]["PlanReleaseSourceStatus"][];
+            sources: components["schemas"]["PlanReaderSource"][];
+        };
+        PlanReaderSource: {
+            adopted_at?: string | null;
+            content_hash?: string | null;
+            display_name?: string | null;
+            /** Format: int32 */
+            id: number;
+            raw_source_path: string;
+            recorded_at: string;
+            repository?: string | null;
+            revision_sha?: string | null;
+            source_path?: string | null;
+        };
+        PlanRecoveryPreview: {
+            candidates: components["schemas"]["RecoveryCandidate"][];
+            /** Format: int32 */
+            linked_list_id?: number | null;
+            /** Format: int32 */
+            plan_id: number;
+            plan_name: string;
+            plan_updated_at: string;
+            retained_steps: components["schemas"]["RecoveryStep"][];
+            /** @description A linked plan is not eligible for destructive association changes. */
+            status: string;
+        };
+        PlanReleaseCandidate: {
+            enableable: boolean;
+            /** Format: int32 */
+            external_identity_id?: number | null;
+            followed: boolean;
+            mapping_state: string;
+            mapping_status?: string | null;
+            /** Format: int32 */
+            provider_issue_count?: number | null;
+            provider_publisher?: string | null;
+            /** Format: int32 */
+            provider_start_year?: number | null;
+            provider_title?: string | null;
+            provider_volume_id?: string | null;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
+        PlanReleaseSourceStatus: {
+            enabled: boolean;
+            /** Format: int32 */
+            external_identity_id: number;
+            last_synced_at?: string | null;
+            /** Format: int32 */
+            provider_issue_count?: number | null;
+            provider_publisher?: string | null;
+            /** Format: int32 */
+            provider_start_year?: number | null;
+            provider_title?: string | null;
+            provider_volume_id: string;
+            /** Format: int32 */
+            source_id: number;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        PlanRelinkRequest: {
+            /** @description Explicit confirmation of the candidate's membership and order differences. */
+            confirm: boolean;
+            expected_list_updated_at: string;
+            expected_plan_updated_at: string;
+            /** Format: int32 */
+            list_id: number;
+        };
+        PlanRelinkResult: {
+            /** Format: int32 */
+            list_id: number;
+            /** Format: int32 */
+            plan_id: number;
+            status: string;
+        };
+        /**
+         * @description Why the Roll pool has no in-play faces.
+         *
+         *     Derived from the already-loaded Option E inputs and the eligible frontier
+         *     set. This is a single reason, never a list or a whole-library report, and it
+         *     adds no database work: it exists so a genuinely non-empty library does not
+         *     render the false "reading queue is empty" state (#4441).
+         * @enum {string}
+         */
+        PoolReason: "ready" | "no_series" | "all_blocked" | "all_completed" | "all_out_of_pool";
+        /**
+         * PotentialDuplicateMatch
+         * @description One existing series that may already represent the proposed series.
+         *
+         *     Advisory only: a title resemblance is never treated as identity, and nothing
+         *     about an existing series is merged, deleted, or rewritten by producing this
+         *     match.
+         */
+        PotentialDuplicateMatch: {
+            /**
+             * Comicvine Volume Id
+             * @description ComicVine volume the existing series is confirmed as, when known. For a title-only match this is context, never proof of identity.
+             */
+            comicvine_volume_id?: number | null;
+            /**
+             * Format
+             * @description Normalized format of the existing series
+             */
+            format: string;
+            /**
+             * Issues Remaining
+             * @description Unread issues on the existing series
+             */
+            issues_remaining: number;
+            /** @description ``same_comicvine_volume`` only when canonical provider identity matches; ``similar_title`` is an uncertain suggestion */
+            match_type: components["schemas"]["PotentialDuplicateMatchType"];
+            /**
+             * Start Year
+             * @description Confirmed ComicVine publication start year, when known
+             */
+            start_year?: number | null;
+            /**
+             * Status
+             * @description Current status of the existing series
+             */
+            status: string;
+            /**
+             * Thread Id
+             * @description Stable ID of the reader's existing thread
+             */
+            thread_id: number;
+            /**
+             * Title
+             * @description Display title of the existing series
+             */
+            title: string;
+            /**
+             * Total Issues
+             * @description Tracked issue total, or None for counter-based series
+             */
+            total_issues?: number | null;
+        };
+        /**
+         * PotentialDuplicateMatchType
+         * @description How strongly an existing series resembles the proposed series.
+         * @enum {string}
+         */
+        PotentialDuplicateMatchType: "same_comicvine_volume" | "similar_title";
+        /**
+         * @description Per-issue human-readable context carried in the preview payload so the
+         *     Before/After rows can identify a specific series, its list memberships,
+         *     identity/rating/read state and the Queue/Roll frontier it affects (#4654).
+         */
+        PreviewIssueItem: {
+            /** @description Human-readable description of the order effect on this issue. */
+            effect: string;
+            /** @description Human label for the Queue/Roll frontier affected by this issue, if any. */
+            frontier_label?: string | null;
+            /** @description Whether rating history exists for this issue. */
+            has_rating: boolean;
+            /** @description Whether a second physical issue with the same number exists in the series. */
+            is_duplicate: boolean;
+            /** @description Whether the issue has a confirmed external identity/catalog mapping. */
+            is_mapped: boolean;
+            is_new: boolean;
+            /** @description Whether the issue has already been read. */
+            is_read: boolean;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+            /** @description Title of the series (thread) this issue belongs to. */
+            series_title: string;
+            /** @description Names of every custom reading list the issue is a member of. */
+            source_lists: string[];
+        };
+        /**
+         * @description Body of `POST /api/v2/threads/{thread_id}/issues/structure-preview`.
+         *
+         *     Delete and reorder are structural issue edits too, so A4 requires the same
+         *     before/after, constraint and frontier preview that create/insert receives
+         *     (#4654). The operation is deliberately described by a string plus optional
+         *     fields rather than a tagged enum so an unsupported shape is a plain 400 and
+         *     never a deserialization-shaped 500.
+         */
+        PreviewIssueStructureRequest: {
+            /**
+             * Format: int32
+             * @description Issue to remove. Required for `delete`, ignored for `reorder`.
+             */
+            issue_id?: number | null;
+            /** @description Every issue id in the requested order. Required for `reorder`. */
+            issue_ids?: number[] | null;
+            /** @description `delete` removes one issue; `reorder` applies a complete new order. */
+            operation: string;
+        };
+        PreviewIssuesRequest: {
+            /** @description Numbers the reader explicitly chose to alias instead of duplicating. */
+            accepted_alias_numbers?: string[];
+            /** @description Explicit "At the end" choice. Distinct from an omitted anchor. */
+            append_to_end?: boolean;
+            /**
+             * @description Issue IDs shown in the preview's Before rows. Used at commit time to
+             *     reject a stale preview (#4654).
+             */
+            expected_issue_ids?: number[] | null;
+            /**
+             * Format: int32
+             * @description Explicit anchor. Omit for natural placement.
+             */
+            insert_after_issue_id?: number | null;
+            /** @description Reader-facing range, e.g. `1-3, 5` or `Annual 1`. */
+            issue_range: string;
+            /** @description Requested placement strategy. Defaults to safe_default. */
+            strategy?: components["schemas"]["IssuePlacementStrategy"];
+        };
+        /** @description One release ledger record returned by public-facing endpoints. */
+        PublicReleaseResponse: {
+            body?: string | null;
+            category: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            /** Format: date-time */
+            released_at: string;
+            /** Format: int32 */
+            sort_order: number;
+            summary: string;
+            title: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /** @description Resource patch for one queue entry. */
+        QueueEntryPatch: {
+            /**
+             * Format: int32
+             * @description Target reader-visible ordinal. Ranks beyond the end place the entry last.
+             */
+            position: number;
+        };
+        /** @description Queue entry resource returned by GET and PATCH. */
+        QueueEntryResponse: {
+            /**
+             * Format: int64
+             * @description Content revision of the reader's current queue order.
+             *
+             *     Derived from the durable ordering state on every read, so it changes
+             *     whenever any writer changes the order and stays equal while the order is
+             *     unchanged. It is a change-detection token, not a persisted per-entry
+             *     counter and not the #3227 sparse order key.
+             */
+            ordering_version: number;
+            /**
+             * Format: int32
+             * @description One-based dense reader-visible Queue ordinal.
+             */
+            position: number;
+            /**
+             * Format: int32
+             * @description Canonical queue-entry identity: the owned Thread id.
+             */
+            thread_id: number;
+        };
+        /** @description Bulk exclusion provenance attached to an excluded queue thread (#5435). */
+        QueueExclusionGroupRef: {
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            source_id: number;
+            source_kind: string;
+            source_name: string;
+        };
+        /** @description Queue-order (shuffle) creation request. */
+        QueueOrderRequest: {
+            /** @description Client retry key. Replaying a committed key returns the same revision. */
+            idempotency_key?: string | null;
+        };
+        /** @description Durable queue-order revision. */
+        QueueOrderResponse: {
+            /**
+             * Format: int32
+             * @description Persisted `events.id` of this queue-order revision.
+             */
+            event_id: number;
+            /** @description True when an identical `idempotency_key` was already committed. */
+            replayed: boolean;
+            /**
+             * Format: int32
+             * @description Number of entries whose position this revision wrote.
+             */
+            shuffled: number;
+        };
+        /**
+         * QueueSeriesMetadata
+         * @description Confirmed provider series metadata projected for one Queue row.
+         *
+         *     Values come only from the reader-owned Thread's own confirmed provider
+         *     series identity. A value that is not stored stays ``None`` instead of being
+         *     inferred from the display title or a provider numeric id.
+         */
+        QueueSeriesMetadata: {
+            /**
+             * Publisher
+             * @description Confirmed publisher name
+             */
+            publisher?: string | null;
+            /**
+             * Volume
+             * @description Confirmed provider run/volume name when it adds identification beyond the thread title. Never a fabricated numeric volume.
+             */
+            volume?: string | null;
+            /**
+             * Year
+             * @description Confirmed publication/start year.
+             */
+            year?: number | null;
+        };
+        /**
+         * QueueThreadListItem
+         * @description Schema for a single thread in the list/queue view.
+         *
+         *     A deliberate subset of ThreadResponse. The list view does not need
+         *     detail-only fields like last_rating, is_test, or reading_progress,
+         *     which reduces payload size for large lists. Queue rows additionally carry
+         *     series metadata projected only from the thread's own confirmed provider
+         *     identity, so readers can tell same-titled runs apart (issue #3605).
+         */
+        QueueThreadListItem: {
+            /**
+             * Blocking Reasons
+             * @default []
+             */
+            blocking_reasons: string[];
+            comicvine_mapping?: components["schemas"]["ComicVineMappingHealth"] | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Format */
+            format: string;
+            /** Id */
+            id: number;
+            /**
+             * Is Blocked
+             * @default false
+             */
+            is_blocked: boolean;
+            /** Issues Remaining */
+            issues_remaining: number;
+            /** Last Activity At */
+            last_activity_at: string | null;
+            /** Manual Creator Credits */
+            manual_creator_credits?: {
+                name: string;
+                roles: string[];
+            }[];
+            /** Next Unread Issue Number */
+            next_unread_issue_number?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /** Queue Position */
+            queue_position: number;
+            /** @description Confirmed provider series metadata for this thread. ``None`` means the reader-owned thread has no confirmed series identity (unmapped series). */
+            series_metadata?: components["schemas"]["QueueSeriesMetadata"] | null;
+            /** Status */
+            status: string;
+            /** Tags */
+            tags?: components["schemas"]["TagResponse"][];
+            /** Title */
+            title: string;
+            /** Total Issues */
+            total_issues?: number | null;
+        };
+        /**
+         * QueueThreadListResponse
+         * @description Schema for paginated thread list response using the queue-optimized item.
+         *
+         *     ``active_count`` is the authoritative total number of active threads in the
+         *     user's queue. It is computed from the whole queue, never from the loaded
+         *     page, and is independent of any search or sort filter (see issue #2568).
+         */
+        QueueThreadListResponse: {
+            /**
+             * Active Count
+             * @default 0
+             */
+            active_count: number;
+            /** Next Page Token */
+            next_page_token?: string | null;
+            /** Threads */
+            threads: components["schemas"]["QueueThreadListItem"][];
+        };
+        /**
+         * ReactivateRequest
+         * @description Schema for reactivating a completed thread.
+         */
+        ReactivateRequest: {
+            /** Issues To Add */
+            issues_to_add: number;
+            /** Thread Id */
+            thread_id: number;
+        };
+        /** @description Python `ReaderContextCrossover`. */
+        ReaderContextCrossover: {
+            applies_to_current_issue: boolean;
+            /** Format: double */
+            average_rating?: number | null;
+            /** Format: int32 */
+            id: number;
+            /** @description `issue` or `thread`. */
+            membership_kind: string;
+            name: string;
+            next_member?: components["schemas"]["ReaderContextCrossoverNextMember"] | null;
+            /** Format: int64 */
+            ratings_count: number;
+            /** Format: int64 */
+            read_count: number;
+        };
+        /** @description Python `ReaderContextCrossoverMembership`. */
+        ReaderContextCrossoverMembership: {
+            /** Format: int32 */
+            id: number;
+            name: string;
+        };
+        /** @description Python `ReaderContextCrossoverNextMember`. */
+        ReaderContextCrossoverNextMember: {
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+        };
+        /** @description Python `ReaderContextEdge`. */
+        ReaderContextEdge: {
+            explanation?: string | null;
+            /** Format: int32 */
+            id: number;
+            /** @description `dependency` or `continuity`. */
+            kind: string;
+            note?: string | null;
+            /** Format: int32 */
+            source_issue_id: number;
+            source_issue_number?: string | null;
+            source_label?: string | null;
+            source_status?: string | null;
+            /** Format: int32 */
+            source_thread_id?: number | null;
+            source_thread_title?: string | null;
+            /** Format: int32 */
+            target_issue_id: number;
+            target_issue_number?: string | null;
+            target_label?: string | null;
+            target_status?: string | null;
+            /** Format: int32 */
+            target_thread_id?: number | null;
+            target_thread_title?: string | null;
+        };
+        /** @description Python `ReaderContextLocalChain`. */
+        ReaderContextLocalChain: {
+            edges: components["schemas"]["ReaderContextEdge"][];
+            issues: components["schemas"]["ReaderContextLocalIssue"][];
+        };
+        /** @description Python `ReaderContextLocalIssue`. */
+        ReaderContextLocalIssue: {
+            crossover_memberships: components["schemas"]["ReaderContextCrossoverMembership"][];
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+            /** Format: double */
+            rating?: number | null;
+            /** @description `previous`, `current`, `next` or `future`. */
+            relation: string;
+            status: string;
+        };
+        /** @description Python `ReaderContextPreviousIssue`. */
+        ReaderContextPreviousIssue: {
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: double */
+            rating?: number | null;
+        };
+        /** @description Python `ReaderContextRecentRating`. */
+        ReaderContextRecentRating: {
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: double */
+            rating: number;
+        };
+        /** @description Python `ReaderContextResponse`. */
+        ReaderContextResponse: {
+            crossovers: components["schemas"]["ReaderContextCrossover"][];
+            /** Format: int32 */
+            issue_id: number;
+            local_chain: components["schemas"]["ReaderContextLocalChain"];
+            series: components["schemas"]["ReaderContextSeries"];
+        };
+        /** @description Python `ReaderContextSeries`. */
+        ReaderContextSeries: {
+            /** Format: double */
+            average_rating?: number | null;
+            canonical_series_id?: string | null;
+            /** Format: double */
+            highest_rating?: number | null;
+            /** @description `comicvine` or `unavailable`. */
+            identity_source: string;
+            /** Format: double */
+            lowest_rating?: number | null;
+            previous_issue?: components["schemas"]["ReaderContextPreviousIssue"] | null;
+            /** Format: int64 */
+            ratings_count: number;
+            recent_ratings: components["schemas"]["ReaderContextRecentRating"][];
+            series_name?: string | null;
+        };
+        ReadingBoundaryBatchRequest: {
+            thread_ids: number[];
+        };
+        ReadingBoundaryBatchResponseV2: {
+            evaluator: components["schemas"]["BoundaryEvaluator"];
+            threads: {
+                [key: string]: components["schemas"]["ReadingBoundaryExplanationV2"];
+            };
+        };
+        ReadingBoundaryBlocker: {
+            editor?: components["schemas"]["BoundaryEditorTarget"] | null;
+            kind: components["schemas"]["BlockerKind"];
+            origin: components["schemas"]["BlockerOrigin"];
+            reason: string;
+            waiting_on: components["schemas"]["BoundaryIssue"][];
+        };
+        ReadingBoundaryExplanationV2: {
+            blockers: components["schemas"]["ReadingBoundaryBlocker"][];
+            next?: components["schemas"]["ReadingBoundaryNext"] | null;
+            state: components["schemas"]["BoundaryState"];
+            summary: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        ReadingBoundaryNext: {
+            editor?: components["schemas"]["BoundaryEditorTarget"] | null;
+            issue: components["schemas"]["BoundaryIssue"];
+        };
+        /**
+         * ReadingGraphBlocker
+         * @description One active unread restriction in the reader's language.
+         */
+        ReadingGraphBlocker: {
+            /** Explanation */
+            explanation: string;
+            /** Gate Issue Id */
+            gate_issue_id?: number | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "strict_order" | "hold" | "after_previous" | "prerequisite";
+            /** List Id */
+            list_id?: number | null;
+            /** Waiting On Issue Ids */
+            waiting_on_issue_ids?: number[];
+        };
+        /**
+         * ReadingGraphChoiceEffect
+         * @description Prospective effect of one answer to a genuine series conflict.
+         */
+        ReadingGraphChoiceEffect: {
+            /**
+             * Choice
+             * @enum {string}
+             */
+            choice: "protect_order" | "continue_series";
+            /** Detail */
+            detail: string;
+            /** Label */
+            label: string;
+            /** Rollable Issue Ids */
+            rollable_issue_ids?: number[];
+            /** Series */
+            series?: components["schemas"]["ReadingGraphSeriesNode"][];
+            /** Waiting Issue Ids */
+            waiting_issue_ids?: number[];
+        };
+        /** @description One cycle with its concrete edge path. */
+        ReadingGraphCycle: {
+            edges: components["schemas"]["ReadingGraphEdge"][];
+            message: string;
+        };
+        /**
+         * ReadingGraphCycleError
+         * @description A cycle or invalid relationship rejected before any write.
+         */
+        ReadingGraphCycleError: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+        };
+        /** @description One stored requirement that participates in a cycle. */
+        ReadingGraphEdge: {
+            kind: string;
+            /** Format: int32 */
+            list_id?: number | null;
+            list_name?: string | null;
+            origin: string;
+            /** Format: int32 */
+            prerequisite_id?: number | null;
+            source: components["schemas"]["ReadingGraphIssue"];
+            target: components["schemas"]["ReadingGraphIssue"];
+        };
+        /** @description One issue endpoint as a reader sees it, never a bare database identifier. */
+        ReadingGraphIssue: {
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            series_title: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        /**
+         * ReadingGraphIssueReference
+         * @description One concrete comic the prospective graph may name as waiting or rollable.
+         */
+        ReadingGraphIssueReference: {
+            /** Blockers */
+            blockers?: components["schemas"]["ReadingGraphBlocker"][];
+            /** Comicvine Volume Id */
+            comicvine_volume_id?: string | null;
+            /** Issue Id */
+            issue_id: number;
+            /** Issue Number */
+            issue_number: string;
+            /** Series Name */
+            series_name: string;
+        };
+        /** @description One affected Reading List. */
+        ReadingGraphList: {
+            /** Format: int32 */
+            list_id: number;
+            mode: string;
+            name: string;
+        };
+        /**
+         * ReadingGraphOverlap
+         * @description One conflict between two exact volumes in the prospective list.
+         */
+        ReadingGraphOverlap: {
+            /** Blocked Issue Ids */
+            blocked_issue_ids?: number[];
+            /** Choices */
+            choices?: components["schemas"]["ReadingGraphChoiceEffect"][];
+            continuing_series: components["schemas"]["ReadingGraphSeriesReference"];
+            /** Overlap Id */
+            overlap_id: string;
+            /** Question */
+            question: string;
+            /** Selected Choice */
+            selected_choice?: ("protect_order" | "continue_series") | null;
+            waiting_series: components["schemas"]["ReadingGraphSeriesReference"];
+        };
+        /**
+         * ReadingGraphOverlapChoice
+         * @description One answer the reader has already given during this preview session.
+         */
+        ReadingGraphOverlapChoice: {
+            /**
+             * Choice
+             * @enum {string}
+             */
+            choice: "protect_order" | "continue_series";
+            /** Overlap Id */
+            overlap_id: string;
+        };
+        /**
+         * ReadingGraphPreview
+         * @description Complete read-only graph preview for one source selection.
+         */
+        ReadingGraphPreview: {
+            /** Content Hash */
+            content_hash: string;
+            /** Cycle Errors */
+            cycle_errors?: components["schemas"]["ReadingGraphCycleError"][];
+            /** Issues */
+            issues?: components["schemas"]["ReadingGraphIssueReference"][];
+            /** Overlaps */
+            overlaps?: components["schemas"]["ReadingGraphOverlap"][];
+            /** Revision Sha */
+            revision_sha: string;
+            /** Rollable Issue Ids */
+            rollable_issue_ids?: number[];
+            /** Series */
+            series?: components["schemas"]["ReadingGraphSeriesNode"][];
+            /** Source List Id */
+            source_list_id: number;
+            /** Waiting Issue Ids */
+            waiting_issue_ids?: number[];
+        };
+        /**
+         * ReadingGraphPreviewRequest
+         * @description Read-only request: included source positions plus answers already given.
+         */
+        ReadingGraphPreviewRequest: {
+            /** Included Positions */
+            included_positions?: number[];
+            /** Overlap Choices */
+            overlap_choices?: components["schemas"]["ReadingGraphOverlapChoice"][];
+            /** Target List Id */
+            target_list_id?: number | null;
+        };
+        /** @description One owner-scoped repair the reader can preview and apply. */
+        ReadingGraphRepairOption: {
+            action: string;
+            detail: string;
+            /** Format: int32 */
+            issue_id?: number | null;
+            label: string;
+            /** Format: int32 */
+            list_id?: number | null;
+            /** Format: int32 */
+            prerequisite_id?: number | null;
+        };
+        /** @description Flat wire request so a preview never depends on tagged-enum deserialization. */
+        ReadingGraphRepairRequest: {
+            action: string;
+            /** @description Preview by default. A repair applies only when this is explicitly true. */
+            confirm?: boolean;
+            /** Format: int32 */
+            issue_id?: number | null;
+            /** Format: int32 */
+            list_id?: number | null;
+            /** Format: int32 */
+            prerequisite_id?: number | null;
+        };
+        ReadingGraphRepairResponse: {
+            applied: boolean;
+            graph: components["schemas"]["ReadingGraphResponse"];
+            removed: string;
+            status_after: string;
+            status_before: string;
+        };
+        /** @description Complete graph state. `status` is `ok`, `cycle`, or `invalid`. */
+        ReadingGraphResponse: {
+            affected_lists: components["schemas"]["ReadingGraphList"][];
+            affected_threads: components["schemas"]["ReadingGraphThread"][];
+            cycles: components["schemas"]["ReadingGraphCycle"][];
+            cyclic_issue_ids: number[];
+            frontier_audit?: components["schemas"]["FrontierAuditReport"] | null;
+            repairs: components["schemas"]["ReadingGraphRepairOption"][];
+            status: string;
+            /** @description Total count of unresolved references. */
+            unresolved_reference_count: number;
+        };
+        /**
+         * ReadingGraphSeriesNode
+         * @description One series node with its prospective eligibility totals.
+         */
+        ReadingGraphSeriesNode: {
+            /** Comicvine Volume Id */
+            comicvine_volume_id: string;
+            /** Rollable Count */
+            rollable_count: number;
+            /** Series Name */
+            series_name: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "continues" | "waits" | "mixed";
+            /** Unread Count */
+            unread_count: number;
+            /** Waiting Count */
+            waiting_count: number;
+            /** Waits For Issue Ids */
+            waits_for_issue_ids?: number[];
+            /** Year */
+            year?: number | null;
+        };
+        /**
+         * ReadingGraphSeriesReference
+         * @description Exact Comic Vine series/volume identity plus reader-facing labels.
+         */
+        ReadingGraphSeriesReference: {
+            /** Comicvine Volume Id */
+            comicvine_volume_id: string;
+            /** Series Name */
+            series_name: string;
+            /** Year */
+            year?: number | null;
+        };
+        /** @description One affected Thread. */
+        ReadingGraphThread: {
+            /** Format: int32 */
+            thread_id: number;
+            title: string;
+        };
+        ReadingList: {
+            created_at: string;
+            description?: string | null;
+            entries: components["schemas"]["ReadingListEntry"][];
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            issue_count: number;
+            mode: string;
+            name: string;
+            updated_at: string;
+            /** Format: int32 */
+            user_id: number;
+            warnings?: string[];
+        };
+        ReadingListBlockerExplanation: {
+            blocking_dependencies: components["schemas"]["ReadingListDependency"][];
+            blocking_reasons: string[];
+            is_blocked: boolean;
+        };
+        ReadingListDependency: {
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number: string;
+            label: string;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
+        ReadingListEntry: {
+            checkpoint_target_issue_ids: number[];
+            gate: string;
+            /** Format: int32 */
+            id: number;
+            is_checkpoint: boolean;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+            series_name: string;
+            skipped: boolean;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        ReadingListEntryIntent: {
+            gate: string;
+            skipped?: boolean;
+        };
+        ReadingListPredecessorChange: {
+            after_issue_ids: number[];
+            after_issue_names: string[];
+            before_issue_ids: number[];
+            before_issue_names: string[];
+            /** Format: int32 */
+            issue_id: number;
+            issue_name: string;
+        };
+        ReadingListReader: {
+            entries: components["schemas"]["ReadingListReaderEntry"][];
+            execution_mode: string;
+            /** Format: int32 */
+            list_id: number;
+            mode: string;
+            name: string;
+        };
+        ReadingListReaderEntry: {
+            availability: string;
+            checkpoint_target_issue_ids: number[];
+            explanation?: components["schemas"]["ReadingListBlockerExplanation"] | null;
+            gate: string;
+            /** Format: int32 */
+            id: number;
+            is_checkpoint: boolean;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+            series_name: string;
+            skipped: boolean;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        ReadingListSummary: {
+            description?: string | null;
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            issue_count: number;
+            mode: string;
+            name: string;
+            updated_at: string;
+        };
+        ReadingListWrite: {
+            checkpoint_issue_ids?: number[] | null;
+            checkpoint_targets?: {
+                [key: string]: number[];
+            } | null;
+            /**
+             * @description Creation has no predecessor changes to confirm; only update accepts
+             *     them. A present value is rejected exactly like the Python create path.
+             */
+            confirmed_predecessor_changes?: unknown;
+            description?: string | null;
+            entry_intents?: {
+                [key: string]: components["schemas"]["ReadingListEntryIntent"];
+            } | null;
+            /**
+             * @description Optimistic concurrency token. When present on update, the write is
+             *     rejected if the list changed since the client last read it.
+             */
+            expected_updated_at?: string | null;
+            issue_ids: number[];
+            mode?: string | null;
+            name: string;
+        };
+        /** @description Current reading-mode state for the active session (wire response). */
+        ReadingModeResponse: {
+            bandwidth?: string | null;
+            intent?: string | null;
+            source?: string | null;
+            suggested: boolean;
+        };
+        /**
+         * @description Set request: `source` is required; `answers` (quiz) or resolved
+         *     `bandwidth`+`intent` (manual) supplies the mode, as in Python.
+         */
+        ReadingModeSetRequest: {
+            answers?: {
+                [key: string]: string;
+            } | null;
+            bandwidth?: string | null;
+            intent?: string | null;
+            source: string;
+        };
+        ReadingOrderAdoptRequest: {
+            lane_id?: string | null;
+            lane_name?: string | null;
+            plan_name?: string | null;
+            /** Format: int32 */
+            reading_order_id: number;
+        };
+        /** @description Python `ReadingOrderItemResponse`. */
+        ReadingOrderItemResponse: {
+            is_read: boolean;
+            issue_number?: string | null;
+            /** Format: int32 */
+            position: number;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
+        /** @description Python `ReadingOrderListResponse`. */
+        ReadingOrderListResponse: {
+            reading_orders: components["schemas"]["ReadingOrderSummary"][];
+        };
+        ReadingOrderProjectPreviewConflict: {
+            code: string;
+            existing_positions: number[];
+            message: string;
+            node_id: string;
+            /** Format: int64 */
+            thread_id?: number | null;
+        };
+        ReadingOrderProjectPreviewEntry: {
+            /** Format: int64 */
+            position: number;
+            source: string;
+            source_node_id?: string | null;
+            /** Format: int64 */
+            thread_id: number;
+            thread_title?: string | null;
+        };
+        ReadingOrderProjectPreviewRequest: {
+            /** Format: int64 */
+            reading_order_id: number;
+        };
+        ReadingOrderProjectPreviewResponse: {
+            conflicts: components["schemas"]["ReadingOrderProjectPreviewConflict"][];
+            dropped_node_ids: string[];
+            entries: components["schemas"]["ReadingOrderProjectPreviewEntry"][];
+            /** Format: int64 */
+            plan_id: number;
+            plan_name: string;
+            plan_ordering_mode: string;
+            plan_updated_at: string;
+            /** Format: int64 */
+            reading_order_id: number;
+            reading_order_name: string;
+            /** Format: int64 */
+            total_positions: number;
+        };
+        /**
+         * ReadingOrderProjectionConflict
+         * @description A single conflict blocking a projection.
+         */
+        ReadingOrderProjectionConflict: {
+            /** Code */
+            code: string;
+            /**
+             * Existing Positions
+             * @default []
+             */
+            existing_positions: number[];
+            /** Message */
+            message: string;
+            /** Node Id */
+            node_id: string;
+            /** Thread Id */
+            thread_id?: number | null;
+        };
+        /**
+         * ReadingOrderProjectionEntry
+         * @description One row in a projected reading order preview.
+         */
+        ReadingOrderProjectionEntry: {
+            /** Position */
+            position: number;
+            /** Source */
+            source: string;
+            /** Source Node Id */
+            source_node_id?: string | null;
+            /** Thread Id */
+            thread_id: number;
+            /** Thread Title */
+            thread_title: string | null;
+        };
+        /**
+         * ReadingOrderProjectionPreview
+         * @description Response contract for the preview endpoint.
+         */
+        ReadingOrderProjectionPreview: {
+            /** Conflicts */
+            conflicts: components["schemas"]["ReadingOrderProjectionConflict"][];
+            /**
+             * Dropped Node Ids
+             * @default []
+             */
+            dropped_node_ids: string[];
+            /** Entries */
+            entries: components["schemas"]["ReadingOrderProjectionEntry"][];
+            /** Plan Id */
+            plan_id: number;
+            /** Plan Name */
+            plan_name: string;
+            /** Plan Ordering Mode */
+            plan_ordering_mode: string;
+            /** Reading Order Id */
+            reading_order_id: number;
+            /** Reading Order Name */
+            reading_order_name: string;
+            /** Total Positions */
+            total_positions: number;
+        };
+        /**
+         * ReadingOrderProjectionRequest
+         * @description Request contract for the Python preview; confirmation is served by Rust.
+         */
+        ReadingOrderProjectionRequest: {
+            /** Reading Order Id */
+            reading_order_id: number;
+        };
+        ReadingOrderProjectionResult: {
+            /** Format: int32 */
+            added_count: number;
+            /** Format: int32 */
+            kept_count: number;
+            /** Format: int32 */
+            plan_id: number;
+            /** Format: int32 */
+            reading_order_id: number;
+            /** Format: int32 */
+            total_positions: number;
+            /** Format: int32 */
+            updated_count: number;
+        };
+        /** @description Python `ReadingOrderResponse`. */
+        ReadingOrderResponse: {
+            /** Format: int64 */
+            completed_items: number;
+            description?: string | null;
+            /** Format: int32 */
+            id: number;
+            items: components["schemas"]["ReadingOrderItemResponse"][];
+            name: string;
+            /** Format: int64 */
+            total_items: number;
+        };
+        /** @description One row of the reading-orders list (Python `ReadingOrderSummary`). */
+        ReadingOrderSummary: {
+            description?: string | null;
+            /** Format: int32 */
+            id: number;
+            name: string;
+            /** Format: int64 */
+            total_items: number;
+        };
+        ReadingPlanDependencyLink: {
+            /** Format: int32 */
+            dependency_id: number;
+            explanation?: string | null;
+            /** Format: int32 */
+            source_issue_id: number;
+            /** Format: int32 */
+            target_issue_id: number;
+        };
+        ReadingPlanDependencyLinkRequest: {
+            explanation?: string | null;
+        };
+        ReadingPlanMemberIssue: {
+            /** Format: int32 */
+            display_position: number;
+            is_checkpoint: boolean;
+            /** Format: int32 */
+            issue_id: number;
+            label?: string | null;
+            lane_id: string;
+            occurrence_id: string;
+            reader_optional?: boolean | null;
+            reader_role?: string | null;
+            source_metadata?: unknown;
+        };
+        /** @description Mirrors Python `app/schemas/reading_plan_membership.py::ReadingPlanMembershipResponse`. */
+        ReadingPlanMembershipResponse: {
+            dependencies: components["schemas"]["ReadingPlanDependencyLink"][];
+            issues: components["schemas"]["ReadingPlanMemberIssue"][];
+            placements: components["schemas"]["ReadingPlanSourcePlacementView"][];
+            /** Format: int32 */
+            plan_id: number;
+            progress: components["schemas"]["ReadingPlanProgress"];
+            sources: components["schemas"]["ReadingPlanSourceSnapshot"][];
+        };
+        ReadingPlanProgress: {
+            /** Format: int32 */
+            read_issues: number;
+            /** Format: int32 */
+            total_issues: number;
+        };
+        ReadingPlanReleaseSourceStatus: {
+            enabled: boolean;
+            /** Format: int32 */
+            external_identity_id: number;
+            last_synced_at?: string | null;
+            /** Format: int32 */
+            provider_issue_count?: number | null;
+            provider_publisher?: string | null;
+            /** Format: int32 */
+            provider_start_year?: number | null;
+            provider_title?: string | null;
+            provider_volume_id: string;
+            /** Format: int32 */
+            source_id: number;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        ReadingPlanSourcePlacementView: {
+            /** Format: int32 */
+            id: number;
+            occurrence_id: string;
+            /** Format: int32 */
+            plan_source_id: number;
+            /** Format: int32 */
+            source_position?: number | null;
+        };
+        ReadingPlanSourceSnapshot: {
+            adopted_at?: string | null;
+            content_hash?: string | null;
+            display_name?: string | null;
+            /** Format: int32 */
+            id: number;
+            raw_source_path: string;
+            recorded_at: string;
+            repository?: string | null;
+            revision_sha?: string | null;
+            source_path?: string | null;
+        };
+        /** @description Result of the explicit v2 reading-session initialization write. */
+        ReadingSessionCreatedResponse: {
+            created: boolean;
+            /** Format: int32 */
+            session_id: number;
+        };
+        /** @description One durable, event-derived reading session in the canonical collection. */
+        ReadingSessionResource: {
+            /**
+             * Format: int32
+             * @description Event-derived die, with the legacy `manual_die` column as fallback only.
+             */
+            current_die: number;
+            ended_at?: string | null;
+            /** Format: int32 */
+            event_count: number;
+            /** @description `start_die` followed by the session's recorded `die_after` values. */
+            ladder_path: string;
+            /** @description Stable AIP-122 resource name: `readingSessions/{session_id}`. */
+            name: string;
+            /** Format: int32 */
+            session_id: number;
+            /** Format: int32 */
+            snapshot_count: number;
+            /** Format: int32 */
+            start_die: number;
+            started_at: string;
+            timezone?: string | null;
+        };
+        ReconcileApplyRequest: {
+            /** Format: int32 */
+            canonical_issue_id: number;
+            decisions?: {
+                [key: string]: string;
+            };
+            duplicate_issue_ids: number[];
+            preview_token: string;
+        };
+        ReconcileApplyResponse: {
+            /** Format: int32 */
+            canonical_issue_id: number;
+            merged_issue_ids: number[];
+            moved_event_ids: number[];
+            moved_list_entry_ids: number[];
+            moved_mapping_ids: number[];
+            suppressed_duplicate_issue_ids: number[];
+            /** Format: int32 */
+            undo_snapshot_id?: number | null;
+            warnings: string[];
+        };
+        ReconcilePreviewAction: {
+            decision_key?: string | null;
+            description: string;
+            kind: string;
+            requires_decision: boolean;
+            safe: boolean;
+        };
+        ReconcilePreviewRequest: {
+            /** Format: int32 */
+            canonical_issue_id: number;
+            /** @description Explicit choices for ambiguous actions: "merge" (default) or "keep_distinct" */
+            decisions?: {
+                [key: string]: string;
+            };
+            duplicate_issue_ids: number[];
+        };
+        ReconcilePreviewResponse: {
+            actions: components["schemas"]["ReconcilePreviewAction"][];
+            can_apply: boolean;
+            canonical: components["schemas"]["DuplicateIssueEvidence"];
+            /** Format: int32 */
+            canonical_issue_id: number;
+            duplicate_issue_ids: number[];
+            duplicates: components["schemas"]["DuplicateIssueEvidence"][];
+            preview_token: string;
+            warnings: string[];
+        };
+        ReconcileUndoRequest: {
+            /** Format: int32 */
+            reconciliation_id: number;
+        };
+        ReconcileUndoResponse: {
+            /** Format: int32 */
+            reconciliation_id: number;
+            undone: boolean;
+            warnings: string[];
+        };
+        RecoveryCandidate: {
+            added_steps: components["schemas"]["RecoveryStep"][];
+            /** Format: int32 */
+            list_id: number;
+            list_updated_at: string;
+            mode: string;
+            name: string;
+            order_changed: boolean;
+            removed_steps: components["schemas"]["RecoveryStep"][];
+            steps: components["schemas"]["RecoveryStep"][];
+        };
+        RecoveryStep: {
+            /** Format: int32 */
+            issue_id: number;
+            label: string;
+        };
+        /** @description Optional request body for token refresh; the refresh cookie is also accepted. */
+        RefreshTokenRequest: {
+            refresh_token: string;
+        };
+        /** @description Request body for account registration. */
+        RegisterRequest: {
+            email: string;
+            password: string;
+            username: string;
+        };
+        /** @description Related issue derived from a confirmed explicit story-arc relationship. */
+        RelatedIssue: {
+            comicpile_matches: components["schemas"]["ComicPileMatch"][];
+            comicvine_issue_id: string;
+            comicvine_url?: string | null;
+            cover_date?: string | null;
+            issue_number?: string | null;
+            name?: string | null;
+            series_name?: string | null;
+        };
+        /** @description Paginated published releases for What's New. */
+        ReleaseListResponse: {
+            /** Format: int32 */
+            limit: number;
+            /** Format: int32 */
+            offset: number;
+            releases: components["schemas"]["PublicReleaseResponse"][];
+            /** Format: int64 */
+            total: number;
+        };
+        /** @description One complete release ledger record returned to trusted automation. */
+        ReleaseResponse: {
+            body?: string | null;
+            category: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            /** Format: date-time */
+            merged_at: string;
+            provenance_json: unknown;
+            /** Format: date-time */
+            released_at: string;
+            /** Format: int32 */
+            sort_order: number;
+            source_merge_sha?: string | null;
+            /** Format: int32 */
+            source_pr_number?: number | null;
+            source_repository: string;
+            status: string;
+            summary: string;
+            title: string;
+            /** Format: date-time */
+            updated_at: string;
+            visibility: string;
+        };
+        ReleaseSourceCreate: {
+            /** Format: int32 */
+            custom_cbl_list_id?: number | null;
+            /** Format: int32 */
+            external_identity_id: number;
+            /** Format: int32 */
+            plan_id: number;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        /** @description Result of reconciling a GitHub source identity with the ledger. */
+        ReleaseSourceResponse: {
+            exists: boolean;
+            release?: components["schemas"]["MinimalReleaseResponse"] | null;
+        };
+        ReleaseSourceUpdate: {
+            enabled: boolean;
+        };
+        /** @description Idempotent release publication payload from trusted automation. */
+        ReleaseUpsertRequest: {
+            body?: string | null;
+            category: string;
+            /** Format: date-time */
+            merged_at?: string;
+            provenance_json?: unknown;
+            /** Format: date-time */
+            released_at: string;
+            /** Format: int32 */
+            sort_order?: number;
+            source_merge_sha?: string | null;
+            /** Format: int32 */
+            source_pr_number?: number | null;
+            source_repository: string;
+            status?: string;
+            summary: string;
+            title: string;
+            visibility?: string;
+        };
+        /** @description Python `ReplaceIdentityRequest` (`reason` `max_length=500`). */
+        ReplaceIdentityRequest: {
+            /** Format: int32 */
+            comicvine_issue_id: number;
+            reason?: string | null;
+        };
+        /**
+         * @description Report kind, mirroring Python `ReportType = Literal["bug", "feature"]`.
+         * @enum {string}
+         */
+        ReportType: "bug" | "feature";
+        ResetDiceRequest: {
+            idempotency_key: string;
+        };
+        ResetDiceResponse: {
+            /** Format: int32 */
+            die: number;
+            replayed: boolean;
+        };
+        /** @description Request body for completing a password reset with a single-use token. */
+        ResetPasswordRequest: {
+            new_password: string;
+            token: string;
+        };
+        /** @description The reader's current logical die and the approved ladder. */
+        RollDieStateResponse: {
+            /**
+             * Format: int32
+             * @description The die an explicit reset returns to.
+             */
+            default_die: number;
+            /**
+             * Format: int32
+             * @description The current logical die.
+             */
+            die: number;
+            /** @description The approved dice ladder, smallest to largest. */
+            ladder: number[];
+            last_roll?: components["schemas"]["RollLastRoll"] | null;
+        };
+        /** @description The ordered eligible issue identifiers for the current die. */
+        RollEligibleIssueIdsResponse: {
+            /**
+             * Format: int32
+             * @description The logical die that bounded the list.
+             */
+            die: number;
+            /** @description The eligible issue identifiers, in queue order. */
+            issue_ids: number[];
+            /**
+             * @description Why an empty in-play pool has no faces, when it does.
+             *     Derived from the already-loaded Option E inputs and the eligible
+             *     frontiers before the die bound and browser snoozes, exactly as
+             *     `GET /api/v2/roll/bootstrap` reports it. `ready` means at least one
+             *     frontier is eligible; the other variants name why an empty pool has
+             *     no in-play faces (`no_series`, `all_blocked`, `all_completed`,
+             *     `all_out_of_pool`). It never carries a list or whole-library report.
+             */
+            pool_reason: components["schemas"]["PoolReason"];
+            /** @description The owning thread identifiers, parallel to `issue_ids`. */
+            thread_ids: number[];
+        };
+        /** @description The most recent Roll recorded for this reader. */
+        RollLastRoll: {
+            /**
+             * Format: int32
+             * @description The die that produced the roll.
+             */
+            die?: number | null;
+            /**
+             * Format: int32
+             * @description The rolled issue.
+             */
+            issue_id?: number | null;
+            /** @description The rolled issue number. */
+            issue_number?: string | null;
+            /**
+             * Format: int32
+             * @description The recorded roll result.
+             */
+            result?: number | null;
+            /** @description When the roll was recorded. */
+            rolled_at?: string | null;
+            /**
+             * Format: int32
+             * @description The rolled thread.
+             */
+            thread_id?: number | null;
+        };
+        RollOfferRequest: {
+            /**
+             * Format: int32
+             * @description A Queue action may only reroll the exact pending thread shown to the user.
+             */
+            expected_pending_thread_id?: number | null;
+            /** @description Stable client key; retries return the original offer without re-rolling. */
+            idempotency_key: string;
+            /** @description Threads this browser has temporarily snoozed (cookie authority only). */
+            snoozed_thread_ids?: number[];
+            /** @description Browser timezone used only by the retained session bridge. */
+            timezone?: string | null;
+        };
+        RollOfferResponse: {
+            /** Format: int32 */
+            die_size: number;
+            explanation?: string | null;
+            format: string;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number?: string | null;
+            /** Format: int32 */
+            issues_remaining: number;
+            /** Format: int32 */
+            last_rolled_result?: number | null;
+            /** Format: int32 */
+            next_issue_id?: number | null;
+            next_issue_number?: string | null;
+            /** Format: int32 */
+            offset: number;
+            /** Format: int32 */
+            queue_position: number;
+            reading_progress?: string | null;
+            /** Format: int32 */
+            result: number;
+            /** Format: int32 */
+            snoozed_count: number;
+            /**
+             * Format: int32
+             * @description Thread snoozed by this request so the browser can extend its cookie.
+             */
+            snoozed_thread_id?: number | null;
+            /** Format: int32 */
+            thread_id: number;
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
+        };
+        /** @description Request body for the manual override. */
+        RollOverrideRequest: {
+            /**
+             * Format: int32
+             * @description Reader-selected thread identifier.
+             */
+            thread_id: number;
+        };
+        /** @description Request body for accepting one current recovery recommendation. */
+        RollPrerequisiteSwitchRequest: {
+            /**
+             * Format: int32
+             * @description Recommended continuity-node identifier.
+             */
+            node_id: number;
+            /** @description Recommended continuity-node type. Only concrete issues are accepted. */
+            node_type: string;
+        };
+        /** @description Durable active-target state after accepting a recovery recommendation. */
+        RollPrerequisiteSwitchResponse: {
+            changed: boolean;
+            /** Format: int32 */
+            original_thread_id: number;
+            /** Format: int32 */
+            target_issue_id: number;
+            target_issue_number: string;
+            /** Format: int32 */
+            target_thread_id: number;
+            target_thread_title: string;
+        };
+        /**
+         * RollResponse
+         * @description Schema for roll response.
+         */
+        RollResponse: {
+            /** Die Size */
+            die_size: number;
+            /** Explanation */
+            explanation?: string | null;
+            /** Format */
+            format: string;
+            /** Issue Id */
+            issue_id?: number | null;
+            /** Issue Number */
+            issue_number?: string | null;
+            /** Issues Remaining */
+            issues_remaining: number;
+            /** Next Issue Id */
+            next_issue_id?: number | null;
+            /** Next Issue Number */
+            next_issue_number?: string | null;
+            /** Offset */
+            offset: number;
+            /** Queue Position */
+            queue_position: number;
+            /** Reading Progress */
+            reading_progress?: string | null;
+            /** Result */
+            result: number;
+            /** Snoozed Count */
+            snoozed_count: number;
+            /** Thread Id */
+            thread_id: number;
+            /** Title */
+            title: string;
+            /** Total Issues */
+            total_issues?: number | null;
+        };
+        /** @description Wire parity with Python `SeriesImportStatusResponse`. */
+        SeriesImportStatusResponse: {
+            /** Format: int32 */
+            comicvine_volume_id: number;
+            imported: boolean;
+            /** Format: int32 */
+            issue_count?: number | null;
+            series_name?: string | null;
+            /** Format: int32 */
+            thread_id?: number | null;
+        };
+        /**
+         * SeriesMappingPreviewCounts
+         * @description Schema for classification counts in preview responses.
+         */
+        SeriesMappingPreviewCounts: {
+            /**
+             * Already Confirmed
+             * @description Number of already confirmed mappings
+             */
+            already_confirmed: number;
+            /**
+             * Excluded Special
+             * @description Number of excluded special/annual issues
+             */
+            excluded_special: number;
+            /**
+             * Needs Review Ambiguous
+             * @description Number of issues needing review due to ambiguity
+             */
+            needs_review_ambiguous: number;
+            /**
+             * Needs Review Conflict
+             * @description Number of issues needing review due to conflicts
+             */
+            needs_review_conflict: number;
+            /**
+             * Safe Exact Match
+             * @description Number of safe exact matches
+             */
+            safe_exact_match: number;
+            /**
+             * Unresolved
+             * @description Number of unresolved issues
+             */
+            unresolved: number;
+        };
+        /**
+         * SeriesMappingPreviewProviderSeries
+         * @description Schema for provider series information in preview responses.
+         */
+        SeriesMappingPreviewProviderSeries: {
+            /**
+             * Count Of Issues
+             * @description Total number of issues in the series
+             */
+            count_of_issues?: number | null;
+            /**
+             * Id
+             * @description Provider series ID
+             */
+            id: string;
+            /**
+             * Image
+             * @description Image information
+             */
+            image?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Name
+             * @description Series name, when provider metadata is available
+             */
+            name?: string | null;
+            /**
+             * Publisher
+             * @description Publisher name
+             */
+            publisher?: string | null;
+            /**
+             * Site Detail Url
+             * @description URL to the series on the provider site
+             */
+            site_detail_url?: string | null;
+            /**
+             * Start Year
+             * @description Start year
+             */
+            start_year?: number | null;
+        };
+        /**
+         * SeriesMappingPreviewRequest
+         * @description Schema for series mapping preview requests.
+         */
+        SeriesMappingPreviewRequest: {
+            /**
+             * Origin Issue Id
+             * @description The anchor issue ID for the mapping preview
+             */
+            origin_issue_id: number;
+            /**
+             * Provider
+             * @description External provider name (e.g., comicvine)
+             */
+            provider: string;
+            /**
+             * Provider Series External Id
+             * @description Provider-specific series identifier
+             */
+            provider_series_external_id: string;
+            /**
+             * Scope Mode
+             * @description Preview scope mode: 'confirmed_origin' (generic, requires confirmed origin evidence for sibling scope) or 'queue_thread_bootstrap' (queue repair may propose the anchor's whole owned thread, including its first issue)
+             * @default confirmed_origin
+             */
+            scope_mode: string;
+        };
+        /**
+         * SeriesMappingPreviewResponse
+         * @description Schema for series mapping preview responses.
+         */
+        SeriesMappingPreviewResponse: {
+            /** @description Classification counts */
+            counts: components["schemas"]["SeriesMappingPreviewCounts"];
+            /**
+             * Expires At
+             * @description Token expiration timestamp (Unix epoch)
+             */
+            expires_at?: number | null;
+            /**
+             * Issued At
+             * @description Token issuance timestamp (Unix epoch)
+             */
+            issued_at: number;
+            /**
+             * Preview Token
+             * @description Preview token when scope is available
+             */
+            preview_token?: string | null;
+            /** @description Provider series information */
+            provider_series?: components["schemas"]["SeriesMappingPreviewProviderSeries"] | null;
+            /**
+             * Rows
+             * @description Individual issue mappings
+             */
+            rows?: components["schemas"]["SeriesMappingPreviewRow"][];
+            /** @description Scope information */
+            scope: components["schemas"]["SeriesMappingPreviewScope"];
+        };
+        /**
+         * SeriesMappingPreviewRow
+         * @description Schema for individual rows in preview responses.
+         */
+        SeriesMappingPreviewRow: {
+            /**
+             * Classification
+             * @description Classification: already_confirmed, safe_exact_match, needs_review_ambiguous, needs_review_conflict, unresolved, excluded_special
+             */
+            classification: string;
+            /**
+             * Current Mapping Status
+             * @description Current mapping status if any
+             */
+            current_mapping_status?: string | null;
+            /**
+             * Default Selected
+             * @description Whether this safe mapping or verified metadata refresh is selected by default
+             */
+            default_selected: boolean;
+            /**
+             * External Id
+             * @description Provider-specific identifier
+             */
+            external_id?: string | null;
+            /**
+             * Issue Id
+             * @description Internal issue ID
+             */
+            issue_id: number;
+            /**
+             * Issue Number
+             * @description Issue number
+             */
+            issue_number: string;
+            /**
+             * Metadata Refresh Required
+             * @description Verified existing identity has no usable metadata and may be refreshed without replacing it
+             * @default false
+             */
+            metadata_refresh_required: boolean;
+            /**
+             * Proposed Mapping
+             * @description Whether this issue would be mapped in the proposed scope
+             */
+            proposed_mapping: boolean;
+            /**
+             * Provider
+             * @description External provider name
+             */
+            provider?: string | null;
+            /**
+             * Reason
+             * @description Explanation for the classification
+             */
+            reason?: string | null;
+            /**
+             * Row Id
+             * @description Stable row identifier, for example 'issue:789'
+             */
+            row_id: string;
+            /**
+             * Thread Id
+             * @description Thread ID if the issue belongs to a thread
+             */
+            thread_id?: number | null;
+            /**
+             * Thread Title
+             * @description Thread title if applicable
+             */
+            thread_title?: string | null;
+            /**
+             * Title
+             * @description Issue title
+             */
+            title?: string | null;
+        };
+        /**
+         * SeriesMappingPreviewScope
+         * @description Schema for the scope information in preview responses.
+         */
+        SeriesMappingPreviewScope: {
+            /**
+             * Basis
+             * @description Basis for scope determination
+             */
+            basis?: string | null;
+            /**
+             * Origin Issue Id
+             * @description Origin issue ID
+             */
+            origin_issue_id: number;
+            /**
+             * Scope Key
+             * @description Opaque scope key when available
+             */
+            scope_key?: string | null;
+            /**
+             * Series Label
+             * @description Series label when available
+             */
+            series_label?: string | null;
+            /**
+             * Status
+             * @description Scope status: 'available' or 'unavailable'
+             */
+            status: string;
+        };
+        /** @description Active thread projection. */
+        SessionActiveThread: {
+            format: string;
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number?: string | null;
+            /** Format: int32 */
+            issues_read?: number | null;
+            /** Format: int32 */
+            issues_remaining: number;
+            /** Format: double */
+            last_rating?: number | null;
+            /** Format: int32 */
+            last_rolled_result?: number | null;
+            /** Format: int32 */
+            next_issue_id?: number | null;
+            next_issue_number?: string | null;
+            /** Format: int32 */
+            queue_position: number;
+            reading_progress?: string | null;
+            tags: components["schemas"]["SessionTag"][];
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
+        };
+        /** @description Canonical bandwidth state. */
+        SessionBandwidthState: {
+            active_bandwidth?: string | null;
+            /** Format: double */
+            confidence?: number | null;
+            mode_version?: string | null;
+            predicted_bandwidth?: string | null;
+            source?: string | null;
+        };
+        /** @description Full session details response with events and narrative summary. */
+        SessionDetailsResponse: {
+            /** Format: int32 */
+            current_die: number;
+            ended_at?: string | null;
+            events: components["schemas"]["SessionEventDetail"][];
+            ladder_path: string;
+            narrative_summary: {
+                [key: string]: string[];
+            };
+            /** Format: int32 */
+            session_id: number;
+            /** Format: int32 */
+            start_die: number;
+            started_at: string;
+            timezone?: string | null;
+        };
+        /** @description Event detail for session details response. */
+        SessionEventDetail: {
+            description?: string | null;
+            /** Format: int32 */
+            die?: number | null;
+            /** Format: int32 */
+            die_after?: number | null;
+            /** Format: int32 */
+            id: number;
+            issue_number?: string | null;
+            /** Format: int32 */
+            issues_read?: number | null;
+            queue_move?: string | null;
+            /** Format: double */
+            rating?: number | null;
+            /** Format: int32 */
+            result?: number | null;
+            selection_method?: string | null;
+            thread_deleted: boolean;
+            thread_title?: string | null;
+            timestamp: string;
+            type: string;
+        };
+        /** @description Canonical intent state. */
+        SessionIntentState: {
+            active_intent?: string | null;
+            /** Format: double */
+            confidence?: number | null;
+            mode_version?: string | null;
+            predicted_intent?: string | null;
+            source?: string | null;
+        };
+        SessionSnapshotItem: {
+            created_at: string;
+            description?: string | null;
+            /** Format: int32 */
+            event_id?: number | null;
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            session_id: number;
+        };
+        SessionSnapshotsResponse: {
+            /** Format: int32 */
+            session_id: number;
+            snapshots: components["schemas"]["SessionSnapshotItem"][];
+        };
+        /** @description Direct visible tag. */
+        SessionTag: {
+            color: string;
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            name: string;
+            normalized_name: string;
+            /** Format: int32 */
+            owner_user_id?: number | null;
+            scope: string;
+            updated_at: string;
+        };
+        /** @description Compact thread summary. */
+        SessionThreadSummary: {
+            /** Format: int32 */
+            id: number;
+            title: string;
+        };
+        /**
+         * SetCurrentIssueRequest
+         * @description Schema for atomically correcting the current issue in an active thread.
+         */
+        SetCurrentIssueRequest: {
+            /**
+             * Issue Number
+             * @description Target issue number to set as current
+             */
+            issue_number: string;
+        };
+        /**
+         * SetCurrentIssueResponse
+         * @description Response after atomically correcting the current issue.
+         */
+        SetCurrentIssueResponse: {
+            /** Format */
+            format: string;
+            /** Issue Id */
+            issue_id?: number | null;
+            /** Issue Number */
+            issue_number?: string | null;
+            /** Issues Remaining */
+            issues_remaining: number;
+            /** Next Issue Id */
+            next_issue_id?: number | null;
+            /** Next Issue Number */
+            next_issue_number?: string | null;
+            /** Queue Position */
+            queue_position: number;
+            /** Reading Progress */
+            reading_progress?: string | null;
+            /** Thread Id */
+            thread_id: number;
+            /** Title */
+            title: string;
+            /** Total Issues */
+            total_issues?: number | null;
+        };
+        SourceSyncFailure: {
+            error: string;
+            /** Format: int32 */
+            plan_id: number;
+            /** Format: int32 */
+            source_id: number;
+            /** Format: int32 */
+            thread_id: number;
+            /** Format: int32 */
+            volume_id: number;
+        };
+        StartupMetricsResponse: {
+            /** Format: double */
+            startup_duration?: number | null;
+            /** Format: double */
+            startup_time?: number | null;
+        };
+        /** @description A provider story arc with bounded related issues and a correct total. */
+        StoryArc: {
+            /** Format: int32 */
+            comicvine_arc_id: number;
+            comicvine_url?: string | null;
+            name: string;
+            related_issues: components["schemas"]["RelatedIssue"][];
+            /** Format: int32 */
+            total_related_count?: number | null;
+        };
+        SyncReport: {
+            /** Format: int64 */
+            checked_sources: number;
+            /** Format: int64 */
+            conflicts: number;
+            /** Format: int64 */
+            created_issues: number;
+            /** Format: int64 */
+            enabled_sources: number;
+            /** Format: int64 */
+            excluded_issues?: number;
+            /** Format: int64 */
+            excluded_sources?: number;
+            /** Format: int64 */
+            failed_sources: number;
+            failures: components["schemas"]["SourceSyncFailure"][];
+            /** Format: int64 */
+            future_skips: number;
+            /** Format: int64 */
+            issue_failures: number;
+            /** Format: int64 */
+            issues_checked: number;
+            /** Format: int64 */
+            reused_issues: number;
+            /** Format: int64 */
+            skipped_sources?: number;
+            /** Format: int64 */
+            successful_sources: number;
+            /** Format: int64 */
+            total_sources: number;
+            /** Format: int64 */
+            unknown_date_skips: number;
+        };
+        SyncRequest: {
+            /** Format: date-time */
+            as_of: string;
+            refresh?: boolean;
+        };
+        SyncResponse: {
+            message: string;
+            result: components["schemas"]["SyncReport"];
+            success: boolean;
+        };
+        SyncStatusResponse: {
+            /** Format: int64 */
+            enabled_sources: number;
+            sources: components["schemas"]["SyncStatusSource"][];
+            /** Format: int64 */
+            total_sources: number;
+        };
+        SyncStatusSource: {
+            enabled: boolean;
+            /** Format: int32 */
+            external_identity_id: number;
+            /** Format: int32 */
+            id: number;
+            last_synced_at?: string | null;
+            provider_volume_id: string;
+            /** Format: int32 */
+            reading_plan_id: number;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        Tag: {
+            color: string;
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            name: string;
+            normalized_name: string;
+            /** Format: int32 */
+            owner_user_id?: number | null;
+            scope: string;
+            updated_at: string;
+        };
+        TagAssignmentResponse: {
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            tag_id: number;
+            /** Format: int32 */
+            target_id: number;
+            target_type: string;
+        };
+        TagDeleteResponse: {
+            /** Format: int64 */
+            assignments_removed: number;
+            references_removed_by_consumers: {
+                [key: string]: number;
+            };
+            /** Format: int32 */
+            tag_id: number;
+        };
+        TagListResponse: {
+            tags: components["schemas"]["Tag"][];
+        };
+        /**
+         * TagResponse
+         * @description A tag response.
+         */
+        TagResponse: {
+            /** Color */
+            color: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Normalized Name */
+            normalized_name: string;
+            /** Owner User Id */
+            owner_user_id: number | null;
+            /** Scope */
+            scope: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        TagUsageResponse: {
+            assignments_by_target_type: {
+                [key: string]: number;
+            };
+            references_removed_by_consumers: {
+                [key: string]: number;
+            };
+            /** Format: int32 */
+            tag_id: number;
+            /** Format: int64 */
+            total_assignments: number;
+        };
+        /** @description One prompt-eligible inferred taste pattern shown on Roll. */
+        TasteDiscovery: {
+            display_name: string;
+            /** Format: int32 */
+            distinct_thread_count: number;
+            /** Format: int32 */
+            evidence_count: number;
+            external_key: string;
+            /** Format: int32 */
+            id: number;
+            prompt: string;
+            signal_type: string;
+        };
+        /** @description Ranked prompt-eligible discoveries for the authenticated reader. */
+        TasteDiscoveryListResponse: {
+            discoveries: components["schemas"]["TasteDiscovery"][];
+            generated_at: string;
+        };
+        /** @description Wire parity with Python `{"dismissed": True}`. */
+        TasteDismissResponse: {
+            dismissed: boolean;
+        };
+        /** @description All Taste Bank signals owned by the authenticated user. */
+        TasteSignalListResponse: {
+            signals: components["schemas"]["TasteSignalResponse"][];
+        };
+        /** @description Canonical representation of one persisted Taste Bank signal. */
+        TasteSignalResponse: {
+            /** Format: double */
+            affinity_estimate?: number | null;
+            /** Format: double */
+            confidence?: number | null;
+            display_name: string;
+            /** Format: int32 */
+            distinct_thread_count: number;
+            /** Format: int32 */
+            evidence_count: number;
+            external_key: string;
+            first_observed_at?: string | null;
+            last_observed_at?: string | null;
+            last_prompted_at?: string | null;
+            signal_type: string;
+            /** Format: int32 */
+            user_id: number;
+            user_verdict?: string | null;
+            verdict_at?: string | null;
+        };
+        /** @description Explicit user verdict on one Taste Bank signal. */
+        TasteVerdictRequest: {
+            verdict: string;
+        };
+        /** @description Python `ThreadConnectedResponse`. */
+        ThreadConnectedResponse: {
+            connected_threads: components["schemas"]["ConnectedThreadInfo"][];
+            /** Format: int32 */
+            thread_id: number;
+        };
+        /**
+         * ThreadCreate
+         * @description Schema for creating a new thread.
+         */
+        ThreadCreate: {
+            /** Format */
+            format: string;
+            /**
+             * Is Test
+             * @default false
+             */
+            is_test: boolean;
+            /** Issues Remaining */
+            issues_remaining: number;
+            /** Manual Creator Credits */
+            manual_creator_credits?: {
+                name: string;
+                roles: string[];
+            }[];
+            /** Notes */
+            notes?: string | null;
+            /** Title */
+            title: string;
+            /** Total Issues */
+            total_issues?: number | null;
+        };
+        /** @description Body of `POST /api/v1/threads/`. */
+        ThreadCreateRequest: {
+            format: string;
+            is_test?: boolean;
+            /** Format: int32 */
+            issues_remaining: number;
+            manual_creator_credits?: unknown[];
+            notes?: string | null;
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
+        };
+        /**
+         * @description Wire parity with Python `ThreadDependenciesResponse`
+         *     (`app/schemas/dependency.py`): the `blocking` list holds edges where this
+         *     thread's issues block others, `blocked_by` holds edges where this thread's
+         *     issues are blocked. Each entry is the enriched `DependencyResponse`.
+         */
+        ThreadDependenciesResponse: {
+            blocked_by: components["schemas"]["DependencyResponse"][];
+            blocking: components["schemas"]["DependencyResponse"][];
+        };
+        /** @description Python `ThreadDependencyOrderCheckResponse`. */
+        ThreadDependencyOrderCheckResponse: {
+            conflicts: components["schemas"]["DependencyOrderConflict"][];
+            /** Format: int32 */
+            thread_id: number;
+        };
+        /** @description The legacy single-thread response retained for the v1 and bare aliases. */
+        ThreadDetailResponse: {
+            blocking_reasons: string[];
+            created_at: string;
+            format: string;
+            /** Format: int32 */
+            id: number;
+            is_blocked: boolean;
+            is_test: boolean;
+            /** Format: int32 */
+            issues_remaining: number;
+            last_activity_at?: string | null;
+            /** Format: double */
+            last_rating?: number | null;
+            manual_creator_credits: unknown;
+            /** Format: int32 */
+            next_unread_issue_id?: number | null;
+            next_unread_issue_number?: string | null;
+            notes?: string | null;
+            /** Format: int32 */
+            queue_position: number;
+            reading_progress?: string | null;
+            status: string;
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
+        };
+        /** @description Newly created issues (Python `IssueListResponse`). Named distinctly from the v2 `IssueListResponse` so merged contracts never collide. */
+        ThreadIssueCreateListResponse: {
+            issues: components["schemas"]["NativeIssueResponse"][];
+            next_page_token?: string | null;
+            /** Format: int32 */
+            page_size: number;
+            /** Format: int32 */
+            total_count: number;
+        };
+        /**
+         * ThreadIssueCreatorsResponse
+         * @description Bulk per-issue ComicVine creator credits for one thread.
+         *
+         *     Issues without a confirmed ComicVine mapping (or without stored credit
+         *     arrays) are omitted; callers fall back to the series' manual creator
+         *     credits for those rows.
+         */
+        ThreadIssueCreatorsResponse: {
+            /** Issues */
+            issues?: components["schemas"]["IssueCreatorsEntry"][];
+            /** Thread Id */
+            thread_id: number;
+        };
+        /** @description Wire parity with Python `ThreadIssueDependenciesResponse`. */
+        ThreadIssueDependenciesResponse: {
+            issues: components["schemas"]["IssueDependenciesResponse"][];
+            /** Format: int32 */
+            thread_id: number;
+        };
+        ThreadIssueListResponse: {
+            issues: components["schemas"]["IssueDetailResponse"][];
+            next_page_token?: string | null;
+            /** Format: int64 */
+            page_size: number;
+            /** Format: int64 */
+            total_count: number;
+        };
+        ThreadIssuesEffectiveTagsResponse: {
+            issues: components["schemas"]["EffectiveTagsResponse"][];
+            /** Format: int32 */
+            thread_id: number;
+        };
+        /** @description One reader threads collection item. */
+        ThreadListItem: {
+            blocking_reasons: string[];
+            comicvine_mapping?: components["schemas"]["NativeComicVineMappingHealth"] | null;
+            created_at: string;
+            format: string;
+            /** Format: int32 */
+            id: number;
+            is_blocked: boolean;
+            /** Format: int32 */
+            issues_remaining: number;
+            last_activity_at?: string | null;
+            manual_creator_credits: unknown;
+            next_unread_issue_number?: string | null;
+            notes?: string | null;
+            queue_exclusion_group?: components["schemas"]["QueueExclusionGroupRef"] | null;
+            /** Format: int32 */
+            queue_position: number;
+            /**
+             * @description Derived series cover: the exact provider CDN URL of the thread's next
+             *     unread confirmed issue, falling back to the first confirmed issue with a
+             *     cover. Null when the series has no confirmed issue cover.
+             */
+            series_cover_image_url?: string | null;
+            series_metadata?: components["schemas"]["NativeQueueSeriesMetadata"] | null;
+            status: string;
+            tags: components["schemas"]["ThreadTag"][];
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
+        };
+        /** @description Paginated reader threads collection. */
+        ThreadListResponse: {
+            /** Format: int32 */
+            active_count: number;
+            /**
+             * Format: int32
+             * @description Total active Queue rows matching the applied search, independent of the bounded page.
+             */
+            filtered_count?: number | null;
+            next_page_token?: string | null;
+            threads: components["schemas"]["ThreadListItem"][];
+        };
+        /** @description Committed values a stale client read before issuing a Thread patch. */
+        ThreadPatchPrecondition: {
+            /** @description Format observed by the client. */
+            format?: string | null;
+            /** @description Manual creator credits observed by the client. */
+            manual_creator_credits?: unknown[] | null;
+            /** @description Notes observed by the client; `null` means it observed no notes. */
+            notes?: string | null;
+            /** @description Title observed by the client. */
+            title?: string | null;
+        };
+        /**
+         * @description Body of `PATCH /api/v2/threads/{thread_id}`.
+         *
+         *     `update_mask` follows AIP-134: when supplied, only the named fields are
+         *     applied; a named field missing from the body is explicitly cleared. When it
+         *     is omitted or empty, every field present in the body is applied and every
+         *     omitted field is preserved (the legacy partial-update behavior).
+         */
+        ThreadPatchRequest: {
+            expected?: components["schemas"]["ThreadPatchPrecondition"] | null;
+            /** @description New format; normalized to the reader's canonical vocabulary. */
+            format?: string | null;
+            /** @description Test-series flag. Omit to preserve it. */
+            is_test?: boolean | null;
+            /**
+             * Format: int32
+             * @description Manual issue counter for untracked series (legacy queue transition).
+             */
+            issues_remaining?: number | null;
+            /** @description Manual creator credits. `null` clears them; names and roles are bounded. */
+            manual_creator_credits?: unknown[] | null;
+            /** @description Notes. `null` or a blank string clears the stored value; omit to keep it. */
+            notes?: string | null;
+            /** @description New series title. Omitted fields are preserved. */
+            title?: string | null;
+            /**
+             * @description Explicit field mask (AIP-134). Either an array of field names or one
+             *     comma-separated string. Omit for presence-based partial update.
+             */
+            update_mask?: string[] | null;
+        };
+        ThreadProgress: {
+            /** Format: int32 */
+            issues_remaining: number;
+            /** Format: double */
+            last_rating?: number | null;
+            /** Format: int32 */
+            next_unread_issue_id?: number | null;
+            reading_progress?: string | null;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        /** @description Python `ThreadReadingOrdersResponse`. */
+        ThreadReadingOrdersResponse: {
+            reading_orders: components["schemas"]["ReadingOrderResponse"][];
+        };
+        /**
+         * ThreadResponse
+         * @description Schema for thread response.
+         */
+        ThreadResponse: {
+            /**
+             * Blocking Reasons
+             * @default []
+             */
+            blocking_reasons: string[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Format */
+            format: string;
+            /** Id */
+            id: number;
+            /**
+             * Is Blocked
+             * @default false
+             */
+            is_blocked: boolean;
+            /** Is Test */
+            is_test: boolean;
+            /** Issues Remaining */
+            issues_remaining: number;
+            /** Last Activity At */
+            last_activity_at: string | null;
+            /** Last Rating */
+            last_rating: number | null;
+            /** Manual Creator Credits */
+            manual_creator_credits?: {
+                name: string;
+                roles: string[];
+            }[];
+            /** Next Unread Issue Id */
+            next_unread_issue_id?: number | null;
+            /** Next Unread Issue Number */
+            next_unread_issue_number?: string | null;
+            /** Notes */
+            notes: string | null;
+            /** Queue Position */
+            queue_position: number;
+            /** Reading Progress */
+            reading_progress?: string | null;
+            /** Status */
+            status: string;
+            /** Title */
+            title: string;
+            /** Total Issues */
+            total_issues?: number | null;
+        };
+        /** @description One tag visible to the reader. */
+        ThreadTag: {
+            color: string;
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            name: string;
+            normalized_name: string;
+            /** Format: int32 */
+            owner_user_id?: number | null;
+            scope: string;
+            updated_at: string;
+        };
+        /**
+         * ThreadUpdate
+         * @description Schema for updating a thread.
+         */
+        ThreadUpdate: {
+            /** Format */
+            format?: string | null;
+            /** Is Test */
+            is_test?: boolean | null;
+            /** Issues Remaining */
+            issues_remaining?: number | null;
+            /** Manual Creator Credits */
+            manual_creator_credits?: {
+                name: string;
+                roles: string[];
+            }[] | null;
+            /** Notes */
+            notes?: string | null;
+            /** Title */
+            title?: string | null;
+        };
+        /** @description Response body for token endpoints, matching the Python wire contract. */
+        TokenResponse: {
+            access_token: string;
+            refresh_token: string;
+            token_type: string;
+        };
+        /** @description Full session response matching Python SessionResponse. */
+        UndoApplyResponse: {
+            active_thread?: components["schemas"]["SessionActiveThread"] | null;
+            bandwidth?: components["schemas"]["SessionBandwidthState"] | null;
+            /** Format: int32 */
+            current_die: number;
+            ended_at?: string | null;
+            has_restore_point: boolean;
+            /** Format: int32 */
+            id: number;
+            intent?: components["schemas"]["SessionIntentState"] | null;
+            ladder_path: string;
+            /** Format: int32 */
+            last_rolled_result?: number | null;
+            /** Format: int32 */
+            manual_die?: number | null;
+            /** Format: int32 */
+            pending_thread_id?: number | null;
+            reading_bandwidth?: string | null;
+            reading_intent?: string | null;
+            reading_mode_source?: string | null;
+            reading_mode_suggested: boolean;
+            skipped_thread_ids: number[];
+            skipped_threads: components["schemas"]["SessionThreadSummary"][];
+            /** Format: int32 */
+            snapshot_count: number;
+            snoozed_thread_ids: number[];
+            snoozed_threads: components["schemas"]["SessionThreadSummary"][];
+            /** Format: int32 */
+            start_die: number;
+            started_at: string;
+            timezone?: string | null;
+            /** Format: int32 */
+            user_id: number;
+        };
+        /** @description Snapshot item in the list response. */
+        UndoSnapshotItem: {
+            created_at: string;
+            description?: string | null;
+            /** Format: int32 */
+            event_id?: number | null;
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            session_id: number;
+        };
+        /** @description Undo snapshots list response. */
+        UndoSnapshotsResponse: {
+            /** Format: int32 */
+            session_id: number;
+            snapshots: components["schemas"]["UndoSnapshotItem"][];
+        };
+        /** @description Request body for unsnoozing a thread. */
+        UnsnoozeRequest: {
+            /**
+             * Format: int32
+             * @description The thread ID to unsnooze. Idempotent: an already-removed snooze succeeds.
+             */
+            thread_id: number;
+        };
+        /** @description Response for unsnooze, mirroring the roll offer shape so the UI can rehydrate. */
+        UnsnoozeResponse: {
+            /** Format: int32 */
+            die_size: number;
+            explanation?: string | null;
+            format: string;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number?: string | null;
+            /** Format: int32 */
+            issues_remaining: number;
+            /** Format: int32 */
+            last_rolled_result?: number | null;
+            /** Format: int32 */
+            next_issue_id?: number | null;
+            next_issue_number?: string | null;
+            /** Format: int32 */
+            offset: number;
+            /** Format: int32 */
+            queue_position: number;
+            reading_progress?: string | null;
+            /**
+             * @description True when the pending roll and die were restored; false when only the
+             *     snooze was removed (older snooze, later die choice, or an already-removed
+             *     snooze replayed after a lost response).
+             */
+            restored: boolean;
+            /** Format: int32 */
+            result: number;
+            /** Format: int32 */
+            snoozed_count: number;
+            /** Format: int32 */
+            thread_id: number;
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
+            /** Format: int32 */
+            unsnoozed_thread_id?: number | null;
+        };
+        UpdateTagRequest: {
+            color?: string | null;
+            name?: string | null;
+        };
+        /**
+         * @description Partial update of the authenticated user's preferences.
+         *
+         *     `theme` is optional: when omitted or explicit JSON null the current
+         *     preference is left unchanged and a missing row is seeded with the
+         *     default, exactly like the Python `UserPreferencesPatchRequest`.
+         */
+        UserPreferencesPatchRequest: {
+            theme?: string | null;
+        };
+        /** @description Current preference values for the authenticated user. */
+        UserPreferencesResponse: {
+            theme: string;
+            /** Format: int32 */
+            user_id: number;
+        };
+        /** @description Response body for the current-user endpoint. */
+        UserResponse: {
+            email?: string | null;
+            /** Format: int32 */
+            id: number;
+            is_admin: boolean;
+            username: string;
+        };
+        /** ValidationError */
+        ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
+        };
+        /** @description FastAPI/Pydantic validation error item shape (422). */
+        ValidationErrorItem: {
+            ctx?: unknown;
+            input: unknown;
+            loc: string[];
+            msg: string;
+            type: string;
+        };
+        ValidationErrorResponse: {
+            detail: components["schemas"]["ValidationErrorItem"][];
+        };
+    };
+    responses: never;
+    parameters: never;
+    requestBodies: never;
+    headers: never;
+    pathItems: never;
+}
+export type $defs = Record<string, never>;
+export interface operations {
+    serve_root__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_metrics_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Simple application startup metrics */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartupMetricsResponse"];
+                };
+            };
+        };
+    };
+    csrf_documentation___api_v1_auth_csrf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Double-submit CSRF token */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CsrfResponse"];
+                };
+            };
+        };
+    };
+    forgot_password_documentation___api_v1_auth_forgot_password: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForgotPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Enumeration-safe acknowledgement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasswordResetResponse"];
+                };
+            };
+            /** @description Request payload failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Password-recovery rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    login_documentation___api_v1_auth_login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Credentials accepted and bearer tokens issued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Username field contained an email address */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Incorrect username or password */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request payload failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Login rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    logout_documentation___api_v1_auth_logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bearer token revoked and refresh cookie cleared */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    me_documentation___api_v1_auth_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authenticated account profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+            /** @description Not authenticated or token invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    refresh_documentation___api_v1_auth_refresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RefreshTokenRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Refreshed bearer tokens issued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Missing, invalid, revoked or stale refresh token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Refresh rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    register_documentation___api_v1_auth_register: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Account created and bearer tokens issued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Username or email is already registered */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request payload failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Registration rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reset_password_documentation___api_v1_auth_reset_password: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Password reset completed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasswordResetResponse"];
+                };
+            };
+            /** @description Invalid or expired reset request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request payload failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Password-recovery rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_v1_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BugReportCreate"];
+            };
+        };
+        responses: {
+            /** @description GitHub issue created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BugReportResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid or blank title/description, or invalid diagnostics */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Non-admin GitHub issue rate limit reached */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description GitHub issue creation failed */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description GitHub integration not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    preview_series_mapping_api_v1_catalog_series_mappings_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NativeSeriesMappingPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Read-only series mapping preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeSeriesMappingPreviewResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    series_import_status_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ComicVine volume ID */
+                comicvine_volume_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned import status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesImportStatusResponse"];
+                };
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    continuity_rules_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityRuleResponse"][];
+                };
+            };
+        };
+    };
+    continuity_rules_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContinuityRuleRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityRuleResponse"];
+                };
+            };
+        };
+    };
+    continuity_rules_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityRuleResponse"];
+                };
+            };
+        };
+    };
+    continuity_rules_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContinuityRuleRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityRuleResponse"];
+                };
+            };
+        };
+    };
+    continuity_rules_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_creators_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                search: string | null;
+                sort: string | null;
+                limit: number | null;
+                offset: number | null;
+                min_ratings: number | null;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorListResponse"];
+                };
+            };
+            /** @description Invalid filters */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_summaries_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                keys: string | null;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorSummariesResponse"];
+                };
+            };
+            /** @description Invalid creator keys */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    discover_cbl_source_lists_documentation: {
+        parameters: {
+            query?: {
+                /** @description Case-insensitive list-name filter, max 200 characters */
+                q?: string;
+                /** @description Maximum results, 1-100 (default 25) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active CBL source lists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CblSourceListDiscoveryItem"][];
+                };
+            };
+            /** @description Query failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
+                };
+            };
+        };
+    };
+    browse_cbl_source_catalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folder: string | null;
+                q: string | null;
+                page: string | null;
+                page_size: string | null;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLCatalogBrowseResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLErrorResponse"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLErrorResponse"];
+                };
+            };
+        };
+    };
+    find_cbl_sources_by_comicvine_issue_documentation: {
+        parameters: {
+            query?: {
+                /** @description Occurrence offset, 0-based (default 0) */
+                offset?: number;
+                /** @description Occurrence limit, 1-200 (default 50) */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Comic Vine issue identifier, max 100 characters */
+                comicvine_issue_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Shared-catalog occurrences for the Comic Vine issue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CblComicvineOccurrencePage"];
+                };
+            };
+            /** @description Identifier or query failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
+                };
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    compare_cbl_sources_documentation: {
+        parameters: {
+            query?: {
+                /** @description Maximum ranked candidates, 1-100 (default 50) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CblSourceComparisonRequest"];
+            };
+        };
+        responses: {
+            /** @description Ranked coverage comparison */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CblSourceComparisonResponse"];
+                };
+            };
+            /** @description Request or query failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
+                };
+            };
+        };
+    };
+    list_cbl_source_folders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folder: string | null;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLFolderListingResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLErrorResponse"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CBLErrorResponse"];
+                };
+            };
+        };
+    };
+    get_cbl_source_list_documentation: {
+        parameters: {
+            query?: {
+                /** @description Entry offset, 0-based (default 0) */
+                offset?: number;
+                /** @description Entry limit, 1-2000 (default 1000) */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description CBL source list identifier */
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description CBL source list with a bounded page of entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CblSourceListDetail"];
+                };
+            };
+            /** @description CBL source list not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Query failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
+                };
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    cbl_adoption_plan_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description CBL source list identifier */
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CblAdoptionPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description Adoption preview for the active CBL list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CblAdoptionPreviewResponse"];
+                };
+            };
+            /** @description Inactive list or invalid request */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
+                };
+            };
+        };
+    };
+    api_cbl_adoption_preview_api_v1_issue_identity_cbl__list_id__adoption_preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description CBL source list id */
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Read-only adoption preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CblAdoptionPreviewResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CBL source list not found or not active */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    preview_cbl_reading_graph_api_v1_issue_identity_cbl__list_id__reading_graph_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description CBL source list id */
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NativeReadingGraphPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Read-only graph preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeReadingGraphPreview"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CBL source list or target reading list not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed, or unknown/unresolved source position or overlap answer */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    find_cbl_candidates_for_reading_list_documentation: {
+        parameters: {
+            query?: {
+                /** @description Maximum ranked candidates, 1-100 (default 50) */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Owned custom CBL list identifier */
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reading-list gaps and ranked CBL candidates */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CblReadingListCandidatesResponse"];
+                };
+            };
+            /** @description Custom CBL not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Query failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
+                };
+            };
+        };
+    };
+    issue_intelligence_docs___api_v1_issues__issue_id__comicvine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owner-scoped ComicPile issue id */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stored ComicVine intelligence, or null without a mapping */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueIntelligence"] | null;
+                };
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue is not owned by the reader */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_issue_dependencies_documentation___api_v1_issues__issue_id__dependencies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Issue identifier */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Issue dependencies */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueDependenciesResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dependency_groups_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned groups with memberships */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeDependencyGroupResponse"][];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dependency_groups_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DependencyGroupCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created group */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeDependencyGroupResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A group with this name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dependency_groups_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned group identifier */
+                group_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned group */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeDependencyGroupResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Group not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dependency_groups_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned group identifier */
+                group_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Group deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Group not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dependency_groups_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned group identifier */
+                group_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DependencyGroupUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Renamed group */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeDependencyGroupResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Group not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A group with this name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dependency_groups_get_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned group identifier */
+                group_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned group detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeDependencyGroupDetailResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Group not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dependency_groups_set_order: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned group identifier */
+                group_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DependencyGroupOrderUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated group with reordered memberships */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeDependencyGroupResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Group, issue, or membership not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    releases_publish: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Server-only release-writer credential */
+                "x-release-writer-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReleaseUpsertRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseResponse"];
+                };
+            };
+            /** @description Invalid release writer credential */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Source identities conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request payload failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Release writer authorization is not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    releases_reconcile: {
+        parameters: {
+            query: {
+                source_repository: string;
+                source_pr_number?: number;
+                source_merge_sha?: string;
+            };
+            header: {
+                /** @description Server-only release-writer credential */
+                "x-release-writer-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseSourceResponse"];
+                };
+            };
+            /** @description Invalid release writer credential */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Source identities identify different records */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing source identity or invalid query */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Release writer authorization is not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    releases_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                release_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicReleaseResponse"];
+                };
+            };
+            /** @description Release not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    releases_retract: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Server-only release-writer credential */
+                "x-release-writer-token": string;
+            };
+            path: {
+                release_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseResponse"];
+                };
+            };
+            /** @description Invalid release writer credential */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Release not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Release writer authorization is not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    taste_discoveries_list: {
+        parameters: {
+            query?: {
+                /** @description Maximum discoveries to return. */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ranked discoveries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TasteDiscoveryListResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description limit is outside the allowed range */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dismiss_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned taste signal identifier */
+                signal_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Dismissed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TasteDismissResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Taste discovery not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_thread_api_v1_threads__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThreadCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_potential_duplicates_api_v1_threads_check_duplicates_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckPotentialDuplicatesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckPotentialDuplicatesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_completed_threads_documentation: {
+        parameters: {
+            query?: {
+                /** @description Case-insensitive title search */
+                search?: string;
+                /** @description position, title, or created */
+                sort?: string;
+                /** @description 1-200 rows per page (default 50) */
+                page_size?: number;
+                /** @description Opaque continuation cursor */
+                page_token?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped completed threads page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadListResponse"];
+                };
+            };
+            /** @description Invalid sort or page token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid bounds */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_excluded_threads_api_v1_threads_excluded_threads_get: {
+        parameters: {
+            query?: {
+                search?: string | null;
+                /** @description Sort order: title or created */
+                sort?: string;
+                /** @description Number of threads to return per page (default 50, max 200) */
+                page_size?: number;
+                /** @description Opaque cursor token for pagination continuation */
+                page_token?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueThreadListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reactivate_thread_api_v1_threads_reactivate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReactivateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_stale_threads_api_v1_threads_stale_get: {
+        parameters: {
+            query?: {
+                days?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_thread_detail_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned thread detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadDetailResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_thread_api_v1_threads__thread_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThreadUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_thread_api_v1_threads__thread_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    thread_ordering_connected_threads: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Threads connected through dependencies */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadConnectedResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_thread_dependencies_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thread dependencies */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadDependenciesResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    thread_ordering_dependency_order_check: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Dependency edges that disagree with issue positions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadDependencyOrderCheckResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    exclude_thread_api_v1_threads__thread_id__exclude_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_thread_issue_dependencies_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thread issue dependencies */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadIssueDependenciesResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_thread_issues_documentation: {
+        parameters: {
+            query?: {
+                /** @description Optional read or unread filter */
+                status?: string;
+                /** @description 1-100 issues (default 50) */
+                page_size?: number;
+                /** @description position,id continuation cursor */
+                page_token?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Owned thread ID */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped, paginated issues */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadIssueListResponse"];
+                };
+            };
+            /** @description Invalid page token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    thread_issues_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueCreateRange"];
+            };
+        };
+        responses: {
+            /** @description Newly created issues */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadIssueCreateListResponse"];
+                };
+            };
+            /** @description Invalid or fully duplicate range */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread or anchor issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue number already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    thread_issues_creators: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stored creator credits per mapped issue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeThreadIssueCreatorsResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    thread_issues_reorder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueReorderRequest"];
+            };
+        };
+        responses: {
+            /** @description Order rewritten */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description issue_ids must name every issue exactly once */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    thread_ordering_validate_order: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Human-readable ordering warnings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueOrderValidationResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    restore_thread_api_v1_threads__thread_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_pending_thread_api_v1_threads__thread_id__set_pending_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["Body_set_pending_thread_api_v1_threads__thread_id__set_pending_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    backdate_thread_for_testing_api_v1_threads__thread_id__test_backdate_put: {
+        parameters: {
+            query: {
+                /** @description Number of days to backdate the thread */
+                days_ago: number;
+            };
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    thread_ordering_get_blocking_info: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Blocked status and reasons */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockingExplanation"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    thread_issues_migrate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NativeMigrateToIssuesRequest"];
+            };
+        };
+        responses: {
+            /** @description Migrated thread */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeThreadResponse"];
+                };
+            };
+            /** @description Already migrated or inconsistent range */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    thread_issues_migrate_simple: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NativeMigrateToIssuesSimpleRequest"];
+            };
+        };
+        responses: {
+            /** @description Migrated thread */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeThreadResponse"];
+                };
+            };
+            /** @description Already migrated or issue cannot be created */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    thread_issues_set_current: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NativeSetCurrentIssueRequest"];
+            };
+        };
+        responses: {
+            /** @description Corrected current issue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeSetCurrentIssueResponse"];
+                };
+            };
+            /** @description Thread inactive, untracked or issue unavailable */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread or issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    thread_ordering_get_threads_blocking_info: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchBlockingExplanationRequest"];
+            };
+        };
+        responses: {
+            /** @description Blocking explanations keyed by thread id */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchBlockingExplanationResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description One or more threads not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_taste_signals_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every Taste Bank signal owned by the authenticated user */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TasteSignalListResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_taste_signal_verdict_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Category of the targeted signal */
+                signal_type: string;
+                /** @description Stable normalized key of the targeted feature */
+                external_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TasteVerdictRequest"];
+            };
+        };
+        responses: {
+            /** @description The canonical updated signal after the verdict is persisted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TasteSignalResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown signal type, verdict, or oversized external key */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_activity_documentation: {
+        parameters: {
+            query?: {
+                /** @description Maximum number of activity rows */
+                limit?: number;
+                /** @description Opaque continuation cursor */
+                page_token?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped activity history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityResponse"];
+                };
+            };
+            /** @description Malformed or unrecognized page token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    csrf_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Double-submit CSRF token */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CsrfResponse"];
+                };
+            };
+        };
+    };
+    forgot_password_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForgotPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Enumeration-safe acknowledgement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasswordResetResponse"];
+                };
+            };
+            /** @description Request payload failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Password-recovery rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    login_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Credentials accepted and bearer tokens issued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Username field contained an email address */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Incorrect username or password */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request payload failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Login rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    logout_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bearer token revoked and refresh cookie cleared */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    me_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authenticated account profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+            /** @description Not authenticated or token invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    refresh_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RefreshTokenRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Refreshed bearer tokens issued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Missing, invalid, revoked or stale refresh token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Refresh rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    register_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Account created and bearer tokens issued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Username or email is already registered */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request payload failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Registration rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reset_password_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Password reset completed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasswordResetResponse"];
+                };
+            };
+            /** @description Invalid or expired reset request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request payload failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Password-recovery rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_issue_identity_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ComicPile issue ID */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned identity state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueIdentityResponse"];
+                };
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_identity_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ComicPile issue ID */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Identity removed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueIdentityResponse"];
+                };
+            };
+            /** @description Identity or correction conflict */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CSRF validation failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    confirm_identity_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ComicPile issue ID */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmIdentityRequest"];
+            };
+        };
+        responses: {
+            /** @description Confirmed identity state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueIdentityResponse"];
+                };
+            };
+            /** @description Identity or correction conflict */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CSRF validation failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    replace_identity_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ComicPile issue ID */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceIdentityRequest"];
+            };
+        };
+        responses: {
+            /** @description Replaced identity state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueIdentityResponse"];
+                };
+            };
+            /** @description Identity or correction conflict */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CSRF validation failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    apply_correction_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ComicPile issue ID */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetadataCorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Active corrections after the write */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataCorrectionsResponse"];
+                };
+            };
+            /** @description Identity or correction conflict */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CSRF validation failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_corrections_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ComicPile issue ID */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active corrections */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataCorrectionsResponse"];
+                };
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    refresh_metadata_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ComicPile issue ID */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Confirmed identity to refresh */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataRefreshResponse"];
+                };
+            };
+            /** @description Identity or correction conflict */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CSRF validation failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    revert_correction_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ComicPile issue ID */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetadataCorrectionRevertRequest"];
+            };
+        };
+        responses: {
+            /** @description Active corrections after the revert */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MetadataCorrectionsResponse"];
+                };
+            };
+            /** @description Identity or correction conflict */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CSRF validation failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not owned */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    import_issue_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportIssueRequest"];
+            };
+        };
+        responses: {
+            /** @description Imported thread, issue and identity */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportIssueResponse"];
+                };
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CSRF validation failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading order not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description ComicVine issue already exists for this reader */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resolve_input_documentation: {
+        parameters: {
+            query: {
+                /** @description Search text or ComicVine URL */
+                input: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resolved input */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComicVineResolveResponse"];
+                };
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    search_series_documentation: {
+        parameters: {
+            query: {
+                /** @description Series title query */
+                q: string;
+                /** @description Maximum results (1-50, default 10) */
+                limit?: number;
+                /** @description Zero-based offset */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated series search */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComicVineSeriesSearchResponse"];
+                };
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    series_import_status_v2_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ComicVine volume ID */
+                comicvine_volume_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned import status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesImportStatusResponse"];
+                };
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    comicvine_series_issues_documentation: {
+        parameters: {
+            query?: {
+                /** @description Pre-fetched series name */
+                series_name?: string;
+            };
+            header?: never;
+            path: {
+                /** @description ComicVine volume ID */
+                comicvine_volume_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Volume issue roster */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComicVineSeriesIssuesResponse"];
+                };
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    import_series_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportSeriesRequest"];
+            };
+        };
+        responses: {
+            /** @description Imported or reused series thread */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportSeriesResponse"];
+                };
+            };
+            /** @description Series has no issues or already_read_count is too large */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description CSRF validation failed */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading order not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description ComicVine returned an error or an incomplete roster */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description ComicVine is not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    continuity_plans_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityPlanListItem"][];
+                };
+            };
+        };
+    };
+    continuity_plans_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContinuityPlanWrite"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityPlanResponse"];
+                };
+            };
+        };
+    };
+    continuity_plans_adopt_reading_order: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingOrderAdoptRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityPlanResponse"];
+                };
+            };
+        };
+    };
+    release_sources_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReleaseSourceCreate"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityReleaseSourceResponse"];
+                };
+            };
+        };
+    };
+    release_sources_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Release source deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    release_sources_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReleaseSourceUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityReleaseSourceResponse"];
+                };
+            };
+        };
+    };
+    continuity_plans_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityPlanResponse"];
+                };
+            };
+        };
+    };
+    continuity_plans_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContinuityPlanWrite"];
+            };
+        };
+        responses: {
+            /** @description Updated continuity plan */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityPlanResponse"];
+                };
+            };
+            /** @description Stale expected_updated_at: detail.code is plan_version_conflict and detail.expected_updated_at is the current version; reload before retrying */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    continuity_plans_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plan deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    continuity_plans_link_dependency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+                dependency_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingPlanDependencyLinkRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingPlanDependencyLink"];
+                };
+            };
+        };
+    };
+    continuity_plans_unlink_dependency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+                dependency_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Dependency unlinked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    continuity_plans_membership: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingPlanMembershipResponse"];
+                };
+            };
+        };
+    };
+    read_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Reading Plan identifier */
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Option E plan projected from its authoritative Reading List */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanReaderResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading Plan not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan missing its authoritative Reading List */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    continuity_plans_project_to_reading_order: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NativeReadingOrderProjectionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingOrderProjectionResult"];
+                };
+            };
+        };
+    };
+    preview_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Reading Plan identifier */
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped recovery preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanRecoveryPreview"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    relink_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Reading Plan identifier */
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanRelinkRequest"];
+            };
+        };
+        responses: {
+            /** @description Relinked or idempotently already linked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanRelinkResult"];
+                };
+            };
+            /** @description Confirmation required */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan or list not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale preview or different authoritative list */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    release_sources_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinuityReleaseSourceResponse"][];
+                };
+            };
+        };
+    };
+    release_sources_list_reader: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingPlanReleaseSourceStatus"][];
+                };
+            };
+        };
+    };
+    continuity_plans_preview_reading_order_projection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Continuity plan id */
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingOrderProjectPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Deterministic projection preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingOrderProjectPreviewResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan or reading order not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Malformed plan */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    creators_list: {
+        parameters: {
+            query?: {
+                search?: string;
+                sort?: string;
+                limit?: number;
+                offset?: number;
+                min_ratings?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorListResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid filters */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    compare_documentation: {
+        parameters: {
+            query?: {
+                keys?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator comparison */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorComparisonResponse"];
+                };
+            };
+            /** @description Invalid creator keys */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    discoveries_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator discoveries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorDiscoveryResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    summaries_documentation: {
+        parameters: {
+            query?: {
+                keys?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorSummariesResponse"];
+                };
+            };
+            /** @description Invalid creator keys */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    team_chemistry_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator team chemistry */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorTeamChemistryResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    detail_documentation: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Canonical creator key */
+                creator_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorDetailResponse"];
+                };
+            };
+            /** @description Invalid key */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Creator not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    rating_distribution_documentation: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Canonical creator key */
+                creator_key: string;
+                /** @description Rating value */
+                rating_value: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rating distribution drilldown */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorMetricDrilldown"];
+                };
+            };
+            /** @description Invalid value */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not available */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    role_documentation: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Canonical creator key */
+                creator_key: string;
+                /** @description Creator role */
+                role: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Role drilldown */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorMetricDrilldown"];
+                };
+            };
+            /** @description Invalid role */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not available */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    series_documentation: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Canonical creator key */
+                creator_key: string;
+                /** @description Series key */
+                series_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Series drilldown */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorMetricDrilldown"];
+                };
+            };
+            /** @description Invalid series */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not available */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    metric_documentation: {
+        parameters: {
+            query?: {
+                role?: string;
+                rating_value?: string;
+                series_key?: string;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Canonical creator key */
+                creator_key: string;
+                /** @description Metric type */
+                metric_type: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator metric drilldown */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorMetricDrilldown"];
+                };
+            };
+            /** @description Invalid metric */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Metric not available */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    series_issues_documentation: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Canonical creator key */
+                creator_key: string;
+                /** @description Series key */
+                series_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator series issues */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorSeriesIssueListResponse"];
+                };
+            };
+            /** @description Invalid keys */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Series not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    read_demo_roll_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deterministic sample Roll */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DemoRoll"];
+                };
+            };
+        };
+    };
+    create_dependency_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DependencyCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created dependency */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DependencyResponse"];
+                };
+            };
+            /** @description Invalid or duplicate dependency */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading constraint cycle: nothing was changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_blocked_legacy_dependencies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Blocked thread ids */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": number[];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_legacy_dependency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Dependency id */
+                dependency_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Dependency */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DependencyResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Dependency not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_dependency_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Dependency id */
+                dependency_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Dependency not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_legacy_dependency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Dependency id */
+                dependency_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DependencyNoteUpdate"];
+            };
+        };
+        responses: {
+            /** @description Dependency */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DependencyResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Dependency not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Note must be at most 255 characters or validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_documentation: {
+        parameters: {
+            query?: {
+                /** @description Items to skip (default 0) */
+                offset?: number;
+                /** @description Page size, 1-100 (default 50) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityInboxResponse"];
+                };
+            };
+        };
+    };
+    search_documentation: {
+        parameters: {
+            query: {
+                /** @description Non-blank search text, at most 200 UTF-8 bytes (required) */
+                q: string;
+                /** @description Maximum results, 1-50 (default 10) */
+                limit?: number;
+                /** @description Issue id echoed back in the response (default 0) */
+                issue_id?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityInboxSearchResponse"];
+                };
+            };
+        };
+    };
+    get_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Mapping id */
+                mapping_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityInboxResponse"];
+                };
+            };
+        };
+    };
+    confirm_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Mapping id */
+                mapping_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IdentityInboxConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
+                };
+            };
+        };
+    };
+    defer_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Mapping id */
+                mapping_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
+                };
+            };
+        };
+    };
+    reject_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Mapping id */
+                mapping_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IdentityInboxRejectRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
+                };
+            };
+        };
+    };
+    skip_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Mapping id */
+                mapping_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
+                };
+            };
+        };
+    };
+    issue_duplicate_reconciliation_apply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconcileApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Apply reconciliation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconcileApplyResponse"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_duplicate_reconciliation_detect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Detected duplicate groups */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateDetectionResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_duplicate_reconciliation_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconcilePreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Preview reconciliation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconcilePreviewResponse"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_duplicate_reconciliation_undo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconcileUndoRequest"];
+            };
+        };
+        responses: {
+            /** @description Undo reconciliation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconcileUndoResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_read_state_bulk_mark_unread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueBulkRequest"];
+            };
+        };
+        responses: {
+            /** @description Every issue marked unread atomically; returns a reviewable undo operation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueReadOperationResponse"];
+                };
+            };
+            /** @description An issue is already marked as unread */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_read_state_bulk_mark_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueBulkRequest"];
+            };
+        };
+        responses: {
+            /** @description Every issue marked read atomically; returns a reviewable undo operation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueReadOperationResponse"];
+                };
+            };
+            /** @description An issue is already marked as read */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_read_operation_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned bulk issue-read operation */
+                operation_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bulk issue-read operation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueReadOperationResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Operation not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_read_operation_undo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned bulk issue-read operation */
+                operation_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operation undone with compensating events; concurrently changed issues are skipped */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueReadOperationUndoResponse"];
+                };
+            };
+            /** @description Operation already undone */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Operation not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_cards_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueCardsRequest"];
+            };
+        };
+        responses: {
+            /** @description Owner-scoped cards in request order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueCardsResponse"];
+                };
+            };
+            /** @description Invalid or unbounded issue id list */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_issue_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Issue identifier */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Issue detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueDetailResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_issue_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Issue identifier */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Issue deleted and positions compacted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue is referenced; nothing was changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_read_rate_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Exact owned issue identifier */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueReadRateRequest"];
+            };
+        };
+        responses: {
+            /** @description Reconciled issue and thread state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueReadRateResponse"];
+                };
+            };
+            /** @description Issue not found for this reader */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Idempotency key reused for a different action */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid status, rating or idempotency key */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_intelligence_docs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owner-scoped ComicPile issue id */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stored ComicVine intelligence, or null without a mapping */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueIntelligence"] | null;
+                };
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue is not owned by the reader */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_issue_dependencies_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Issue identifier */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Issue dependencies */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueDependenciesResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_read_state_move: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Issue identifier */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Issue moved within its thread */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue or anchor issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_read_state_mark_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Issue identifier */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Issue marked read and the thread counters refreshed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue is already marked as read */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_read_state_mark_unread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Issue identifier */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Issue marked unread; a completed thread is reactivated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue is already marked as unread */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_read_state_reader_context: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Issue identifier */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded reader context */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReaderContextResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_queue_entry_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queue entry */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueEntryResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Queue entry not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_queue_entry_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QueueEntryPatch"];
+            };
+        };
+        responses: {
+            /** @description Updated queue entry */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueEntryResponse"];
+                };
+            };
+            /** @description Invalid target position */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Queue entry not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_queue_order_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QueueOrderRequest"];
+            };
+        };
+        responses: {
+            /** @description Idempotent replay of the recorded revision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueOrderResponse"];
+                };
+            };
+            /** @description Queue-order revision created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueOrderResponse"];
+                };
+            };
+            /** @description Invalid idempotency key */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reading_boundary_batch_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingBoundaryBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Explanation projection for the requested owned threads */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingBoundaryBatchResponseV2"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A requested thread is not owned by the reader */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Batch must contain between 1 and 200 thread ids */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reading_graph_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Graph status, cycles and safe repair options */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingGraphResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid reading snapshot */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    repair_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingGraphRepairRequest"];
+            };
+        };
+        responses: {
+            /** @description Repair preview or applied result with the remaining graph */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingGraphRepairResponse"];
+                };
+            };
+            /** @description Invalid repair request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Constraint not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid reading snapshot */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_reading_lists_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned Reading Lists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingListSummary"][];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_reading_list_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingListWrite"];
+            };
+        };
+        responses: {
+            /** @description Created Reading List */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingList"];
+                };
+            };
+            /** @description Invalid list metadata or membership */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Projected reading graph would cycle; nothing was changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    search_custom_cbl_issues_documentation: {
+        parameters: {
+            query?: {
+                /** @description Case-insensitive title or issue-number filter, max 200 characters */
+                q?: string;
+                /** @description Maximum results, 1-100 (default 30) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching owned issues */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomCBLIssueSearchResult"][];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Query failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
+                };
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_reading_list_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Reading List identifier */
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reading List with ordered entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingList"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_reading_list_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Reading List identifier */
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingListWrite"];
+            };
+        };
+        responses: {
+            /** @description Updated owner-scoped Reading List */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingList"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Predecessor changes must be acknowledged */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid Issue or checkpoint */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_reading_list_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Reading List identifier */
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reading List deleted; entries cascade */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    cbl_adoption_commit_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description CBL source list identifier */
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CblAdoptionCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Reading Plan created with adopted CBL issues */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CblAdoptionCommitResponseWire"];
+                };
+            };
+            /** @description Stale source fingerprint */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    export_custom_cbl_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned custom CBL identifier */
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Portable .cbl XML document */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/xml": string;
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_overlap_decisions_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned custom CBL identifier */
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saved overlap decisions and version token */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverlapDecisionSetResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    save_overlap_decision_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned custom CBL identifier */
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OverlapDecisionWrite"];
+            };
+        };
+        responses: {
+            /** @description Updated overlap decisions and version token */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverlapDecisionSetResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale version token */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unusable or cyclic choice */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_overlap_decision_documentation: {
+        parameters: {
+            query?: {
+                /** @description Decision version token the client last read */
+                expected_updated_at?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Owned custom CBL identifier */
+                list_id: number;
+                /** @description Overlap decision identifier */
+                decision_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Updated overlap decisions and version token */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverlapDecisionSetResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale version token */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cycle conflict */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    read_reading_list_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Reading List identifier */
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reader with canonical availability */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingListReader"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    cbl_targeted_adoption_commit_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description CBL source list identifier */
+                list_id: number;
+                /** @description Owned continuity plan identifier */
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CblAdoptionCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Reading Plan updated with adopted CBL issues */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CblAdoptionCommitResponseWire"];
+                };
+            };
+            /** @description Stale source fingerprint */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request failed validation or plan not found */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    apply_custom_cbl_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned custom CBL identifier */
+                list_id: number;
+                /** @description Continuity plan identifier */
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomCBLApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Reading Plan updated with the custom CBL merged into one lane */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomCBLApplyResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale plan version token */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Empty list, unknown lane, or cycle conflict */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_reading_mode_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current reading-mode state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingModeResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_reading_mode_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingModeSetRequest"];
+            };
+        };
+        responses: {
+            /** @description Newly stored reading-mode state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingModeResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid source, quiz resolution, or mode values */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dismiss_reading_mode_suggestion_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unchanged reading-mode state with suggestion cleared */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingModeResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    suggest_reading_mode_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reading-mode state with suggestion enabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingModeResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dependency_groups_v2_add_issue_range: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned group identifier */
+                group_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DependencyGroupIssueRangeCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Range membership result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeDependencyGroupIssueRangeResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Group or thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dependency_groups_v2_add_member: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned group identifier */
+                group_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DependencyGroupMemberCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created membership */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeDependencyGroupMemberResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Group, thread, or issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description This member is already in the group */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dependency_groups_v2_remove_member: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned group identifier */
+                group_id: number;
+                /** @description Membership identifier */
+                member_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Membership removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Group or member not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dependency_groups_v2_list_reading_plans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned group identifier */
+                group_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Linked continuity plans */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeDependencyGroupSummary"][];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Group not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dependency_groups_v2_resolve_memberships: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupsBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Map of thread id to crossover groups */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: components["schemas"]["NativeDependencyGroupSummary"][];
+                    };
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A requested thread is not owned by the reader */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reading_orders_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reading orders owned by the caller, ordered by name */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingOrderListResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reading_orders_insert_item: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reading_order_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InsertReadingOrderItemRequest"];
+            };
+        };
+        responses: {
+            /** @description Thread seated at the requested position */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InsertReadingOrderItemResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading order or thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request payload failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reading_plan_sync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyncRequest"];
+            };
+        };
+        responses: {
+            /** @description User-triggered sync report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reading_plan_sync_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sync state for every release source owned by the caller */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncStatusResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_reading_sessions_documentation: {
+        parameters: {
+            query?: {
+                /** @description Bounded page size (1-100, default 50) */
+                page_size?: number;
+                /** @description Opaque continuation token */
+                page_token?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of event-derived reading sessions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListReadingSessionsResponse"];
+                };
+            };
+            /** @description Invalid page size or token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    initialize_session_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InitializeSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Created or resumed reading-session identity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingSessionCreatedResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_reading_session_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned reading session */
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Event-derived reading session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingSessionResource"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_session_details_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned reading session */
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session details with events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionDetailsResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_session_snapshots_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned reading session */
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session restore snapshots */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionSnapshotsResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    releases_list: {
+        parameters: {
+            query?: {
+                /** @description Maximum releases to return (1-100, default 20) */
+                limit?: number;
+                /** @description Number of matching releases to skip (default 0) */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseListResponse"];
+                };
+            };
+            /** @description Invalid pagination */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    bootstrap_documentation: {
+        parameters: {
+            query?: {
+                /** @description IANA timezone override for the active session */
+                timezone?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Projected Roll bootstrap payload */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BootstrapResponseV2"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid native Roll projection */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    manual_die_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualDieRequest"];
+            };
+        };
+        responses: {
+            /** @description Manual die command receipt */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiceCommandReceipt"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid die or idempotency key */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    die_state_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current logical die, approved ladder and last roll */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollDieStateResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid native Roll projection */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dismiss_pending_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content. Pending thread cleared. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    eligible_issue_ids_documentation: {
+        parameters: {
+            query?: {
+                /** @description Comma-separated browser-owned temporary snoozed thread identifiers */
+                snoozed?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ordered eligible issue identifiers for the current die */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollEligibleIssueIdsResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid temporary snooze identifiers */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid native Roll projection */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    offer_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RollOfferRequest"];
+            };
+        };
+        responses: {
+            /** @description Recorded Roll offer for the active session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollOfferResponse"];
+                };
+            };
+            /** @description No eligible thread remains for this roll */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading session changed during the offer */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid idempotency key or too many temporary snoozes */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Roll offer projection unavailable */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    override_roll_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RollOverrideRequest"];
+            };
+        };
+        responses: {
+            /** @description Manually selected thread */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeRollResponse"];
+                };
+            };
+            /** @description Thread is skipped or on snooze backoff */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread was not found for this reader */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread is blocked or not active */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reset_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetDiceRequest"];
+            };
+        };
+        responses: {
+            /** @description Reset die command receipt */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResetDiceResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading session changed during the reset */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid idempotency key */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    switch_prerequisite_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RollPrerequisiteSwitchRequest"];
+            };
+        };
+        responses: {
+            /** @description Durable active target after accepting the prerequisite */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollPrerequisiteSwitchResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Selected issue was not found for this reader */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No pending roll, or the guidance is stale */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unsupported continuity-node type */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    unsnooze_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnsnoozeRequest"];
+            };
+        };
+        responses: {
+            /** @description Restored the previously snoozed roll */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnsnoozeResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading session changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unsnooze projection unavailable */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    commit_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommitRequest"];
+            };
+        };
+        responses: {
+            /** @description Commit result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommitResponse"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description preview_stale, preview_expired, confirmed_mapping_conflict, or idempotency_conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description invalid_approved_row */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_tags_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagListResponse"];
+                };
+            };
+        };
+    };
+    create_tag_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTagRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateTagResponse"];
+                };
+            };
+        };
+    };
+    effective_issue_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Issue id */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectiveTagsResponse"];
+                };
+            };
+        };
+    };
+    effective_plan_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Plan id */
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectiveTagsResponse"];
+                };
+            };
+        };
+    };
+    effective_thread_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Thread id */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectiveTagsResponse"];
+                };
+            };
+        };
+    };
+    effective_thread_issues_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Thread id */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadIssuesEffectiveTagsResponse"];
+                };
+            };
+        };
+    };
+    get_tag_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Tag id */
+                tag_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tag"];
+                };
+            };
+        };
+    };
+    delete_tag_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Tag id */
+                tag_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagDeleteResponse"];
+                };
+            };
+        };
+    };
+    update_tag_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Tag id */
+                tag_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTagRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tag"];
+                };
+            };
+        };
+    };
+    bulk_assign_tag_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Tag id */
+                tag_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkAssignRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkAssignResponse"];
+                };
+            };
+        };
+    };
+    assign_tag_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Tag id */
+                tag_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignTagRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagAssignmentResponse"];
+                };
+            };
+        };
+    };
+    unassign_tag_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Tag id */
+                tag_id: number;
+                /** @description Target type */
+                target_type: string;
+                /** @description Target id */
+                target_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagAssignmentResponse"];
+                };
+            };
+        };
+    };
+    bulk_unassign_tag_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Tag id */
+                tag_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkAssignRequest"];
+            };
+        };
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkAssignResponse"];
+                };
+            };
+        };
+    };
+    usage_tag_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Tag id */
+                tag_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ok */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagUsageResponse"];
+                };
+            };
+        };
+    };
+    list_threads_documentation: {
+        parameters: {
+            query?: {
+                /** @description Case-insensitive title search */
+                search?: string;
+                /** @description position, title, or created */
+                sort?: string;
+                /** @description 1-200 rows per page (default 50) */
+                page_size?: number;
+                /** @description Opaque continuation cursor */
+                page_token?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped active threads page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadListResponse"];
+                };
+            };
+            /** @description Invalid sort or page token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid bounds or retired collection_id */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_thread_v2_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThreadCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created (or the duplicate created seconds earlier) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeThreadResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_thread_v2_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The database refused the deletion */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    patch_thread_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThreadPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated thread */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeThreadResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found (including another reader's thread) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale `expected` precondition; reload before retrying */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_order_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueOrderRequest"];
+            };
+        };
+        responses: {
+            /** @description Issue order replaced */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description issue_ids must contain every thread issue exactly once */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Projected reading graph would cycle; nothing was changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_issues_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateIssuesRequest"];
+            };
+        };
+        responses: {
+            /** @description Created issues */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueListResponse"];
+                };
+            };
+            /** @description Invalid issue range or no new issues */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Projected reading graph would cycle; nothing was changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid reading snapshot */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    preview_issue_create_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewIssuesRequest"];
+            };
+        };
+        responses: {
+            /** @description Preview outcomes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueEditPreviewResponse"];
+                };
+            };
+            /** @description Invalid issue range or no new issues */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    preview_issue_structure_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewIssueStructureRequest"];
+            };
+        };
+        responses: {
+            /** @description Preview outcome */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueEditPreviewResponse"];
+                };
+            };
+            /** @description Invalid operation or issue set */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread or issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dependency_groups_v2_list_thread_group_memberships: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Groups containing the thread or its issues */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeDependencyGroupSummary"][];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    thread_ordering_reading_orders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned reading orders containing the thread */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadReadingOrdersResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_undo_snapshots_documentation: {
         parameters: {
             query?: never;
