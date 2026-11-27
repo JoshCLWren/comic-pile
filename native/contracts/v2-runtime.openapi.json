@@ -7637,6 +7637,7 @@
         ]
       }
     },
+<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/readingOrders": {
       "get": {
         "tags": [
@@ -7684,6 +7685,8 @@
         ]
       }
     },
+=======
+>>>>>>> origin/main
     "/api/v2/undo/{session_id}/snapshots": {
       "get": {
         "tags": [
@@ -20009,6 +20012,7 @@
           }
         }
       },
+<<<<<<< HEAD
       "ThreadReadingOrdersResponse": {
         "type": "object",
         "description": "Python `ThreadReadingOrdersResponse`.",
@@ -20024,6 +20028,8 @@
           }
         }
       },
+=======
+>>>>>>> origin/main
       "ThreadResponse": {
         "type": "object",
         "description": "The Python `ThreadResponse` projection every lifecycle writer returns.",

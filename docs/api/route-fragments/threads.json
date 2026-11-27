@@ -91,6 +91,7 @@
       "owning_issue": 4841
     },
     {
+<<<<<<< HEAD
       "bucket": "operations",
       "method": "GET",
       "path": "/api/v2/threads/{thread_id}/readingOrders",
@@ -104,6 +105,8 @@
       ]
     },
     {
+=======
+>>>>>>> origin/main
       "bucket": "unversioned_operations",
       "method": "GET",
       "path": "/api/threads/{thread_id}",
