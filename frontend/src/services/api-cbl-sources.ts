@@ -341,14 +341,14 @@ export function createCblSourcesApi(client: HttpClient) {
     /** Rank shared sources by distinct coverage and relative order. */
     compare: (comicvineIssueIds: string[], limit = 50) =>
       client.post<CBLSourceComparisonResponse>(
-        '/v1/issue-identity/cbl-sources/compare',
+        '/v2/cblSources:compare',
         { comicvine_issue_ids: comicvineIssueIds },
         { params: { limit } },
       ),
     /** Compare one owned Reading List's confirmed identities to shared sources. */
     readingListCandidates: (listId: number, limit = 50) =>
       client.get<CBLReadingListCandidatesResponse>(
-        `/v1/issue-identity/reading-lists/${listId}/cbl-candidates`,
+        `/v2/reading-lists/${listId}/cbl-candidates`,
         { params: { limit } },
       ),
     preview: (listId: number) =>

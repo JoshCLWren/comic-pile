@@ -176,6 +176,19 @@
       "consumers": [
         "frontend/src/services/api-cbl-sources.ts"
       ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/reading-lists/{list_id}/cbl-candidates",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/reading-lists/[0-9]+/cbl-candidates$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5713,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ]
     }
   ]
 }

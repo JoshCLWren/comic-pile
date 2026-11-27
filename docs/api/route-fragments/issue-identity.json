@@ -6,8 +6,7 @@
     "^/api/v1/issue\\-identity/cbl\\-sources$",
     "^/api/v1/issue\\-identity/cbl\\-sources/\\{list_id\\}$",
     "^/api/v1/issue\\-identity/cbl\\-sources/by\\-comicvine\\-issue/\\{comicvine_issue_id\\}$",
-    "^/api/v1/issue\\-identity/cbl\\-sources/compare$",
-    "^/api/v1/issue\\-identity/reading\\-lists/\\{list_id\\}/cbl\\-candidates$"
+    "^/api/v2/cblSources:compare$"
   ],
   "defaults": {
     "runtime": "python-fastapi",
@@ -61,34 +60,17 @@
       "exclude_from_inventory": true
     },
     {
-      "bucket": "v1_operations",
+      "bucket": "v2_operations",
       "method": "POST",
-      "path": "/api/v1/issue-identity/cbl-sources/compare",
+      "path": "/api/v2/cblSources:compare",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/issue\\-identity/cbl\\-sources/compare$",
+      "src": "^/api/v2/cblSources:compare$",
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 4843,
+      "owning_issue": 5713,
       "consumers": [
-        "frontend/src/services/api-cbl-sources.ts",
-        "frontend/src/services/api-reading-graph.ts"
-      ],
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/issue\\-identity/reading\\-lists/[0-9]+/cbl\\-candidates$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4843,
-      "consumers": [
-        "frontend/src/services/api-cbl-sources.ts",
-        "frontend/src/services/api-reading-graph.ts"
-      ],
-      "exclude_from_inventory": true
+        "frontend/src/services/api-cbl-sources.ts"
+      ]
     },
     {
       "bucket": "v1_operations",
