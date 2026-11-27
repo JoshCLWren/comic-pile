@@ -2501,6 +2501,22 @@ pub async fn check_potential_duplicates(
     ))
 }
 
+/// `POST /api/v2/threads:checkDuplicates` (AIP-136 collection custom method).
+///
+/// This is the canonical v2 surface for the advisory existing-volume check. It
+/// is deliberately an advisory read, not a Thread creation: the request and
+/// response wire shapes are identical to the retained v1 path, so both routes
+/// share one implementation and one bounded, owner-scoped query. Keeping the
+/// operation on the collection (`:camelCase` suffix) avoids overloading
+/// `GET /api/v2/threads`'s filter/search contract.
+pub async fn check_potential_duplicates_v2(
+    state: State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    body: Bytes,
+) -> HandlerResult {
+    check_potential_duplicates(state, user, body).await
+}
+
 // ---------------------------------------------------------------------------
 // POST /api/v1/threads/groups:batch
 // ---------------------------------------------------------------------------
