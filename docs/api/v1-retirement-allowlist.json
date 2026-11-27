@@ -616,6 +616,11 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/services/api-dependency-groups.ts",
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/api-migration.ts",
+        "frontend/src/services/api-reading-orders.ts",
         "frontend/src/services/api-threads.ts"
       ]
     },
@@ -629,10 +634,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-threads.ts",
-        "frontend/src/test/p0-auth-outage-recovery.spec.ts",
-        "frontend/src/unit/api.test.ts",
-        "frontend/src/unit/coreRouteRequestBudget.test.tsx"
+        "frontend/src/test/p0-snooze-unsnooze.spec.ts"
       ]
     },
     {
@@ -645,12 +647,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-threads.ts",
-        "frontend/src/test/p0-auth-outage-recovery.spec.ts",
-        "frontend/src/test/p0-snooze-unsnooze.spec.ts",
-        "frontend/src/unit/api.test.ts",
-        "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
-        "frontend/src/unit/coreRouteRequestBudget.test.tsx"
+        "frontend/src/test/p0-snooze-unsnooze.spec.ts"
       ]
     },
     {
@@ -662,9 +659,7 @@
       "rollout_status": "pinned-404",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": [
-        "frontend/src/services/api-threads.ts"
-      ]
+      "consumers": []
     },
     {
       "method": "POST",
@@ -689,8 +684,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-threads.ts",
-        "frontend/src/test/cbl-replace-review.spec.ts"
+        "frontend/src/test/p0-snooze-unsnooze.spec.ts"
       ]
     },
     {
@@ -707,11 +701,11 @@
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
-        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
-        "frontend/src/unit/api-auth-failure-isolation.test.ts",
+        "frontend/src/test/p0-snooze-unsnooze.spec.ts",
         "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
-        "frontend/src/unit/api.test.ts"
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx"
       ]
     },
     {
@@ -729,11 +723,11 @@
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
-        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
-        "frontend/src/unit/api-auth-failure-isolation.test.ts",
+        "frontend/src/test/p0-snooze-unsnooze.spec.ts",
         "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
-        "frontend/src/unit/api.test.ts"
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx"
       ]
     },
     {
@@ -750,11 +744,11 @@
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
-        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
-        "frontend/src/unit/api-auth-failure-isolation.test.ts",
+        "frontend/src/test/p0-snooze-unsnooze.spec.ts",
         "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
-        "frontend/src/unit/api.test.ts"
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx"
       ]
     },
     {
@@ -771,11 +765,11 @@
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
-        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
-        "frontend/src/unit/api-auth-failure-isolation.test.ts",
+        "frontend/src/test/p0-snooze-unsnooze.spec.ts",
         "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
-        "frontend/src/unit/api.test.ts"
+        "frontend/src/unit/api.test.ts",
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx"
       ]
     },
     {
