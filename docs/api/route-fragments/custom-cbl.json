@@ -1,7 +1,8 @@
 {
   "family": "custom-cbl",
   "owned_path_patterns": [
-    "^/api/v2/reading-lists(?:/.*)?$"
+    "^/api/v2/reading-lists(?:/.*)?$",
+    "^/api/v2/readingLists(?:/.*)?$"
   ],
   "defaults": {
     "runtime": "python-fastapi",
