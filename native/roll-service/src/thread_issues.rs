@@ -1388,7 +1388,7 @@ FROM owned CROSS JOIN totals
 fn thread_issues_v2_page_sql() -> String {
     THREAD_ISSUES_V2_PAGE_SQL_TEMPLATE.replace(
         "{cover}",
-        &COVER_URL_SQL.replace("{x}", "x.metadata_json"),
+        &COVER_URL_SQL.replace("{x}", "x"),
     )
 }
 
@@ -1470,17 +1470,11 @@ pub async fn list_thread_issues_v2(
             ],
         )
         .await
-        .map_err(|error| {
-            let detail = error
-                .as_db_error()
-                .map(|db_error| db_error.message().to_string())
-                .unwrap_or_else(|| error.to_string());
-            ApiError::Internal(format!("SQLDIAG {detail}"))
-        })?
+        .map_err(db::query_error)?
         .ok_or_else(|| thread_not_found(thread_id))?;
     let payload: String = row.get(1);
     let mut issues: Vec<ThreadIssueV2Item> = serde_json::from_str(&payload)
-        .map_err(|error| ApiError::Internal(format!("DIAG {error} payload={payload}")))?;
+        .map_err(|_| ApiError::Internal("Internal Server Error".into()))?;
     let next_page_token = if issues.len() as i64 > page_size {
         issues.truncate(page_size as usize);
         issues.last().map(|issue| format!("{},{}", issue.position, issue.id))
