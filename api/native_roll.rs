@@ -284,7 +284,7 @@ fn app() -> Router {
             post(native_dispatch),
         )
         .route(
-            "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
+            "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection",
             post(native_dispatch),
         )
         .route(
@@ -340,7 +340,7 @@ fn app() -> Router {
             get(native_dispatch),
         )
         .route(
-            "/api/v1/threads/{thread_id}/reading-orders",
+            "/api/v2/threads/{thread_id}/readingOrders",
             get(native_dispatch),
         )
         .route("/api/v1/threads/{thread_id}/issues", get(native_dispatch))
@@ -1464,6 +1464,71 @@ mod tests {
             assert!(
                 !text.contains("Wrong number of path arguments"),
                 "numeric thread ids must not fail Path extraction for {uri}: {text}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn reading_order_projection_ingress_reaches_rust_and_retires_v1_paths() {
+        // #5715: the canonical v2 preview and thread-order reads must be
+        // registered on the Vercel ingress. An unauthenticated request must
+        // reach Rust dispatch (401, or 503 on cold start), never the
+        // `native_not_found` JSON 404. The retired v1 paths must fall through.
+        for (method, uri, body) in [
+            (
+                "POST",
+                "/api/v2/continuityPlans/101:previewReadingOrderProjection",
+                r#"{"reading_order_id":7}"#,
+            ),
+            ("GET", "/api/v2/threads/102/readingOrders", ""),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .header("content-type", "application/json")
+                        .body(Body::from(body))
+                        .unwrap(),
+                )
+                .await
+                .expect("preview ingress response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{uri} must reach Rust dispatch, not the 404 fallback, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{uri} must be served by the native ingress"
+            );
+        }
+
+        for (method, uri) in [
+            (
+                "POST",
+                "/api/v1/continuity-plans/101/reading-orders/project-preview",
+            ),
+            ("GET", "/api/v1/threads/102/reading-orders"),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("retired ingress response");
+            assert_eq!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "{uri} must no longer be registered"
             );
         }
     }

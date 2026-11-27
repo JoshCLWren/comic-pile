@@ -671,11 +671,7 @@ async fn thread_reading_orders_are_enriched_ordered_and_owner_scoped() {
 
     let (status, body) = send(
         &state,
-        get(
-            &format!("/api/v1/threads/{a}/reading-orders"),
-            &token,
-            &csrf,
-        ),
+        get(&format!("/api/v2/threads/{a}/readingOrders"), &token, &csrf),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
