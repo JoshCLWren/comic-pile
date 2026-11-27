@@ -44,6 +44,10 @@ miniz_oxide = "0.9"
 quick-xml = "0.42"
 url = "2"
 
+[[bin]]
+name = "cbl_ingest"
+path = "src/bin/cbl_ingest.rs"
+
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
 
