@@ -31,6 +31,7 @@ What’s New is backed by the release API and Neon release ledger. A dedicated p
 - [Historical changelog](changelog.md): frozen pre-release-ledger source retained for provenance and auditability.
 - [Release writer](RELEASE_WRITER.md): post-merge publication and reconciliation contract for the database release ledger.
 - [API documentation](API.md): REST API contracts and examples.
+- [Live v1 route census](api/LIVE_ROUTE_CENSUS.md): generated all-version route matrix, retirement owner cross-reference, and the CI drift-check command.
 - [Operational health](OPERATIONAL_HEALTH.md): native liveness, identity evidence, logging, and database-readiness checks.
 - [Reading List runtime](READING_LIST_RUNTIME.md): canonical reading order, Roll eligibility, manual Read/Rate, and current rollout-setting behavior.
 - [Reading List authoring](api/READING_LIST_AUTHORING.md): v2 write contract, graph validation, confirmation, and known cycle-response discrepancy.
