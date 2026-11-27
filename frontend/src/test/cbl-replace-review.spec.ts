@@ -372,17 +372,21 @@ test.describe('CBL replacement review', () => {
 
     await page.route('**/api/v2/cblSources*', (route) =>
       route.fulfill({
-        json: [
-          {
-            id: 9101,
-            name: 'Same Name Source',
-            source_path: `same-name-${suffix}.cbl`,
-            source_repository: 'shared/cbls',
-            declared_issue_count: 1,
-            content_hash: 'same-name-hash',
-            revision_sha: 'same-name-revision',
-          },
-        ],
+        json: {
+          items: [
+            {
+              id: 9101,
+              name: 'Same Name Source',
+              source_path: `same-name-${suffix}.cbl`,
+              source_repository: 'shared/cbls',
+              declared_issue_count: 1,
+              content_hash: 'same-name-hash',
+              revision_sha: 'same-name-revision',
+            },
+          ],
+          total: 1,
+          catalog_total: 1,
+        },
       }),
     )
     await page.route('**/api/v1/issue-identity/cbl/9101/adoption-preview', (route) =>
@@ -474,17 +478,21 @@ test.describe('CBL replacement review', () => {
 
     await page.route('**/api/v2/cblSources*', (route) =>
       route.fulfill({
-        json: [
-          {
-            id: 9201,
-            name: 'Stale Source',
-            source_path: `stale-${suffix}.cbl`,
-            source_repository: 'shared/cbls',
-            declared_issue_count: 1,
-            content_hash: 'stale-hash',
-            revision_sha: 'stale-revision',
-          },
-        ],
+        json: {
+          items: [
+            {
+              id: 9201,
+              name: 'Stale Source',
+              source_path: `stale-${suffix}.cbl`,
+              source_repository: 'shared/cbls',
+              declared_issue_count: 1,
+              content_hash: 'stale-hash',
+              revision_sha: 'stale-revision',
+            },
+          ],
+          total: 1,
+          catalog_total: 1,
+        },
       }),
     )
     await page.route('**/api/v1/issue-identity/cbl/9201/adoption-preview', (route) =>
@@ -608,17 +616,21 @@ test.describe('CBL replacement review', () => {
 
     await page.route('**/api/v2/cblSources*', (route) =>
       route.fulfill({
-        json: [
-          {
-            id: 9301,
-            name: 'Rated Source',
-            source_path: `rated-${suffix}.cbl`,
-            source_repository: 'shared/cbls',
-            declared_issue_count: 1,
-            content_hash: 'rated-hash',
-            revision_sha: 'rated-revision',
-          },
-        ],
+        json: {
+          items: [
+            {
+              id: 9301,
+              name: 'Rated Source',
+              source_path: `rated-${suffix}.cbl`,
+              source_repository: 'shared/cbls',
+              declared_issue_count: 1,
+              content_hash: 'rated-hash',
+              revision_sha: 'rated-revision',
+            },
+          ],
+          total: 1,
+          catalog_total: 1,
+        },
       }),
     )
     await page.route('**/api/v1/issue-identity/cbl/9301/adoption-preview', (route) =>
@@ -701,17 +713,21 @@ test.describe('CBL replacement review', () => {
 
     await page.route('**/api/v2/cblSources*', (route) =>
       route.fulfill({
-        json: [
-          {
-            id: 9401,
-            name: 'Overlap Source',
-            source_path: `overlap-${suffix}.cbl`,
-            source_repository: 'shared/cbls',
-            declared_issue_count: 2,
-            content_hash: 'overlap-hash',
-            revision_sha: 'overlap-revision',
-          },
-        ],
+        json: {
+          items: [
+            {
+              id: 9401,
+              name: 'Overlap Source',
+              source_path: `overlap-${suffix}.cbl`,
+              source_repository: 'shared/cbls',
+              declared_issue_count: 2,
+              content_hash: 'overlap-hash',
+              revision_sha: 'overlap-revision',
+            },
+          ],
+          total: 1,
+          catalog_total: 1,
+        },
       }),
     )
     await page.route('**/api/v1/issue-identity/cbl/9401/adoption-preview', (route) =>
