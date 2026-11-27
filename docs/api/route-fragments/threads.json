@@ -310,20 +310,7 @@
     {
       "bucket": "v1_operations",
       "method": "GET",
-<<<<<<< HEAD
-=======
-      "path": "/api/v1/threads/{thread_id}/connected",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/threads/[^/]+/connected$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "GET",
->>>>>>> origin/main
+
       "path": "/api/v1/threads/{thread_id}/dependency-order-check",
       "dest": "/api/native_api.rs",
       "src": "^/api/v1/threads/[^/]+/dependency\\-order\\-check$",
@@ -383,20 +370,7 @@
     {
       "bucket": "v1_operations",
       "method": "POST",
-<<<<<<< HEAD
-=======
-      "path": "/api/v1/threads/{thread_id}:getBlockingInfo",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/threads/[^/]+:getBlockingInfo$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "POST",
->>>>>>> origin/main
+
       "path": "/api/v1/threads/{thread_id}:migrateToIssues",
       "dest": "/api/native_api.rs",
       "src": "^/api/v1/threads/[^/]+:migrateToIssues$",
