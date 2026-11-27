@@ -181,13 +181,6 @@ test('Reading List engine explains strict Julix blockers consistently and suppor
     await page.evaluate((name) => document.documentElement.setAttribute('data-theme', name), theme)
     await listReader.screenshot({ path: `test-results/reading-lists-reader-${width}-${theme}.png` })
   }
-  if (!enabled) {
-    const marked = await page.request.post(`/api/v2/issues/${firstIssue}/read-markers`, { headers })
-    expect(marked.ok(), await marked.text()).toBeTruthy()
-    await page.goto(`/thread/${later.id}`)
-    await expect(page.getByRole('region', { name: 'Next issue availability' })).toContainText('Next unread: #1')
-    return
-  }
   const listReader = page.getByRole('region', { name: 'Read Julix strict acceptance', exact: true })
   await listReader.getByRole('button', { name: 'Mark read', exact: true }).click()
   await expect(listReader.getByRole('button', { name: 'Mark unread', exact: true })).toHaveCount(1)

@@ -1755,7 +1755,7 @@ mod tests {
     /// deployment switch. Production always injects the canonical engine; the
     /// stored-flag case remains a deterministic negative control.
     #[tokio::test]
-    async fn reading_lists_setting_combinations_select_one_grouping_authority() {
+    async fn reading_lists_grouping_authority_is_state_scoped() {
         let _guard = DB_LOCK.lock().await;
         let state = state().await;
         reset(&state).await;
