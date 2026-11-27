@@ -559,6 +559,27 @@ mod tests {
         let body = &operation["requestBody"]["content"]["application/json"]["schema"]["$ref"];
         assert_eq!(body, "#/components/schemas/ReactivateThreadRequest");
         assert!(aggregate["components"]["schemas"]["ReactivateThreadRequest"].is_object());
+
+        // Merging ThreadsV2Api must not overwrite the canonical ThreadResponse
+        // manual_creator_credits schema with an empty object (#5704 review).
+        let response_ref = operation["responses"]["200"]["content"]["application/json"]["schema"]
+            ["$ref"]
+            .as_str()
+            .expect("reactivate 200 response schema $ref");
+        let schema_name = response_ref
+            .rsplit('/')
+            .next()
+            .expect("ThreadResponse component name");
+        let mcc = &aggregate["components"]["schemas"][schema_name]["properties"]
+            ["manual_creator_credits"];
+        assert_eq!(
+            mcc["type"], "array",
+            "manual_creator_credits must remain an array in {schema_name}"
+        );
+        assert!(
+            mcc["items"].is_object(),
+            "manual_creator_credits items must be an object schema in {schema_name}"
+        );
     }
 
     /// Generated clients must be able to page the inbox, search issue matches
