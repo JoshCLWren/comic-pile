@@ -2511,6 +2511,23 @@ pub async fn list_thread_groups_batch(
     user: AuthenticatedUser,
     body: Bytes,
 ) -> HandlerResult {
+    resolve_memberships_inner(State(state), user, body).await
+}
+
+/// `POST /api/v2/reading-order-groups:resolveMemberships`
+pub async fn resolve_memberships_v2(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    body: Bytes,
+) -> HandlerResult {
+    resolve_memberships_inner(State(state), user, body).await
+}
+
+async fn resolve_memberships_inner(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    body: Bytes,
+) -> HandlerResult {
     let map = require_object(parse_body(&body)?)?;
     let raw_body = Value::Object(map.clone());
     let mut check = Check::default();
