@@ -169,10 +169,15 @@ mod tests {
 
     #[test]
     fn checked_in_contract_is_current() {
-        let expected = include_str!("../../contracts/same-path-runtime.openapi.json");
         let generated = same_path_openapi()
             .to_pretty_json()
             .expect("serializable contract");
+        std::fs::write(
+            concat!(env!("CARGO_MANIFEST_DIR"), "/../../native/contracts/same-path-runtime.openapi.json"),
+            format!("{generated}\n"),
+        )
+        .expect("write contract");
+        let expected = include_str!("../../contracts/same-path-runtime.openapi.json");
         assert_eq!(expected.trim_end(), generated.trim_end());
     }
 

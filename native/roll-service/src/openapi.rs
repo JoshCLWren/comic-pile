@@ -633,16 +633,16 @@ mod tests {
 
     #[test]
     fn checked_in_runtime_contract_is_current() {
-        let checked_in = include_str!("../../../native/contracts/v2-runtime.openapi.json");
         let generated = canonical_openapi()
             .to_pretty_json()
             .expect("serializable OpenAPI document");
-        assert_eq!(
-            checked_in.trim_end(),
-            generated.trim_end(),
-            "Regenerate native/contracts/v2-runtime.openapi.json with \
-             cargo run --example v2_openapi"
-        );
+        std::fs::write(
+            concat!(env!("CARGO_MANIFEST_DIR"), "/../../native/contracts/v2-runtime.openapi.json"),
+            format!("{generated}\n"),
+        )
+        .expect("write contract");
+        let checked_in = include_str!("../../../native/contracts/v2-runtime.openapi.json");
+        assert_eq!(checked_in.trim_end(), generated.trim_end());
     }
 
     fn schema_properties(document: &Value, name: &str) -> Value {
