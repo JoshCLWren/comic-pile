@@ -19,7 +19,7 @@ function createWrapper() {
 
 const api = vi.hoisted(() => ({
   queueApi: { moveToPosition: vi.fn(), moveToFront: vi.fn(), moveToBack: vi.fn(), shuffle: vi.fn() },
-  rollApi: { roll: vi.fn(), override: vi.fn(), dismissPending: vi.fn(), setDie: vi.fn(), reroll: vi.fn(), unsnooze: vi.fn() },
+  rollApi: { roll: vi.fn(), dismissPending: vi.fn(), setDie: vi.fn(), reroll: vi.fn(), unsnooze: vi.fn() },
   undoApi: { listSnapshots: vi.fn(), undo: vi.fn() },
   threadsApi: { listStale: vi.fn() },
   sessionApi: { getDetails: vi.fn(), getSnapshots: vi.fn() },
