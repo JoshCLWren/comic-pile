@@ -269,12 +269,16 @@ test('real session and undo fragments retain native-only supported operations', 
   const sessions = liveFragment('sessions');
   const undo = liveFragment('undo');
 
-  // Session details/snapshots moved to the resource-shaped v2 surface; the
-  // legacy v1/unversioned single-session and list reads are retired (#4343,
-  // #4839). Undo snapshots/restore are served on the native v2 surface.
+  // The whole session family is the canonical AIP-122 lowerCamelCase
+  // collection (#5708): List/Get/Create plus the details and snapshots reads.
+  // Legacy v1/unversioned session reads remain retired (#4343, #4839). Undo
+  // snapshots/restore are served on the native v2 surface.
   const expectedSessions = [
-    ['GET', '/api/v2/reading-sessions/{session_id}/details'],
-    ['GET', '/api/v2/reading-sessions/{session_id}/snapshots'],
+    ['GET', '/api/v2/readingSessions'],
+    ['POST', '/api/v2/readingSessions'],
+    ['GET', '/api/v2/readingSessions/{session_id}'],
+    ['GET', '/api/v2/readingSessions/{session_id}/details'],
+    ['GET', '/api/v2/readingSessions/{session_id}/snapshots'],
   ];
   const undoExpected = [
     ['GET', '/api/v2/undo/{session_id}/snapshots'],
@@ -286,7 +290,10 @@ test('real session and undo fragments retain native-only supported operations', 
     const op = liveOperation(sessions, method, route);
     assert.equal(op.dest, '/api/native_roll.rs', route);
     assert.equal(op.bucket, 'operations', route);
-    assert.ok(op.consumers.includes('frontend/src/services/api-sessions.ts'), route);
+    const expectedConsumer = method === 'POST'
+      ? 'frontend/src/services/rollBootstrapApi.ts'
+      : 'frontend/src/services/api-sessions.ts';
+    assert.ok(op.consumers.includes(expectedConsumer), route);
   }
 
   assert.equal(undo.operations.length, undoExpected.length);
