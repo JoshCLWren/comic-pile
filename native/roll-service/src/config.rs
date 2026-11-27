@@ -309,4 +309,23 @@ mod vercel_tests {
         assert_eq!(defaults.access_token_expire_minutes, 720);
         assert_eq!(defaults.refresh_token_expire_days, 7);
     }
+
+    #[test]
+    fn reading_order_engine_has_no_deployment_switch() {
+        // Retired activation variables must be ignored even when an old
+        // deployment still sets them. The canonical engine is unconditional.
+        let config = Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/app".into()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic".into()),
+            "READING_LISTS_ENABLED" => Some("false".into()),
+            "READING_LISTS_APPROVED_PREVIEW" => Some("".into()),
+            _ => None,
+        })
+        .expect("legacy activation variables are ignored, not required");
+        let state = crate::AppState::new(config).expect("state without a switch");
+        assert!(
+            state.reading_lists,
+            "the Reading List engine is the sole automatic-eligibility authority"
+        );
+    }
 }
