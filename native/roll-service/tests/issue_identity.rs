@@ -3117,6 +3117,7 @@ async fn project_preview_projects_plan_and_enforces_ownership() {
     assert_eq!(body, validation_failed());
 }
 
+<<<<<<< HEAD
 // ---------------------------------------------------------------------------
 // Canonical v2 CBL preview surface (#5714). Every assertion below drives the
 // mounted router against the same seeded rows as the v1 preview tests, so the
@@ -3302,6 +3303,8 @@ async fn v2_reading_graph_preview_uses_canonical_option_e_and_is_owner_scoped() 
     assert_eq!(body["detail"]["code"], "unresolved_source_position");
 }
 
+=======
+>>>>>>> origin/main
 /// #5715: the canonical AIP-136 resource custom method has the same read-only
 /// wire contract as the retained v1 preview. It must not write a plan, reading
 /// order or item; the durable v2 commit remains the only writer and revalidates

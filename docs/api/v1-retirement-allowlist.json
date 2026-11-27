@@ -441,7 +441,9 @@
       "rollout_status": "slice-open",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": []
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ]
     },
     {
       "method": "GET",
@@ -452,7 +454,9 @@
       "rollout_status": "slice-open",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": []
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ]
     },
     {
       "method": "POST",
@@ -464,10 +468,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-cbl-sources.ts",
-        "frontend/src/services/api-continuity-plans.ts",
-        "frontend/src/services/api-reading-graph.ts",
-        "frontend/src/services/api-reading-orders.ts"
+        "frontend/src/services/api-reading-graph.ts"
       ]
     },
     {
