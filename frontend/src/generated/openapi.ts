@@ -3505,6 +3505,7 @@ export interface paths {
         };
         /** Standard resource Get for one owned Thread. */
         get: operations["get_thread_v2_documentation"];
+        get?: never;
         put?: never;
         post?: never;
         /** @description Delete an owned Thread (AIP-135). A second delete, or a delete of a foreign or already deleted Thread, returns 404. Never 403. */
