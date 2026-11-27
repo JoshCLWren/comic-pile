@@ -101,13 +101,14 @@ function mockState(overrides: Partial<RollPageState & RollPageStateSetters> = {}
 const mockRateMutation = { mutate: vi.fn().mockResolvedValue({ rate: undefined, bootstrap: null }), isPending: false }
 const mockDismissPendingMutation = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false }
 const mockRefetchBootstrap = vi.fn().mockResolvedValue(undefined)
+const mockClearPending = vi.fn()
 
 function renderUseRollRating(
   stateOverrides: Partial<RollPageState & RollPageStateSetters> = {},
 ) {
   const state = mockState({ activeRatingThread: ACTIVE_THREAD, ...stateOverrides })
   const { result } = renderHook(
-    () => useRollRating({ state, bootstrap: null, rateMutation: mockRateMutation, dismissPendingMutation: mockDismissPendingMutation, refetchBootstrap: mockRefetchBootstrap }),
+    () => useRollRating({ state, bootstrap: null, rateMutation: mockRateMutation, dismissPendingMutation: mockDismissPendingMutation, refetchBootstrap: mockRefetchBootstrap, clearPending: mockClearPending }),
     { wrapper: createWrapper() },
   )
   return { result, state }
@@ -223,7 +224,9 @@ it('a failed reading-orders request stays local and leaves rating actions usable
   await act(async () => { await result.current.handleSubmitRating(false) })
   await act(async () => { await result.current.handleCancelRating() })
   expect(mockRateMutation.mutate).toHaveBeenCalled()
-  expect(mockDismissPendingMutation.mutate).toHaveBeenCalled()
+  // Cancel clears only the browser-owned selection; no server call is made.
+  expect(mockClearPending).toHaveBeenCalled()
+  expect(mockDismissPendingMutation.mutate).not.toHaveBeenCalled()
   // Those actions only ever clear the channel; the optional failure never wrote to it.
   for (const call of setErrorMessage.mock.calls) {
     expect(call[0]).not.toContain('reading orders')
