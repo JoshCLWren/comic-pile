@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-27T19:02:55+00:00",
+  "generated_at": "2026-11-27T19:04:16+00:00",
   "models": [
     {
       "health": {
@@ -23717,7 +23717,7 @@
   },
   "counts_generated_at": "2026-11-27T18:47:31.543434+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-27T19:02:55Z",
+    "generated_at": "2026-11-27T19:04:16Z",
     "sources": {
       "nvidia": [
         "google/diffusiongemma-26b-a4b-it",
@@ -23739,8 +23739,8 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-27T19:02:56.026625+00:00",
-    "days_elapsed": 26.794,
+    "checked_at": "2026-11-27T19:04:17.068460+00:00",
+    "days_elapsed": 26.795,
     "days_in_month": 30.0,
     "days_left": 3.21,
     "in_use": true,
@@ -23761,8 +23761,8 @@
         "database": 64155577,
         "organization": 64155577,
         "owner_target": 50000000,
-        "projected_database": 71832026,
-        "projected_organization": 71832026,
+        "projected_database": 71829345,
+        "projected_organization": 71829345,
         "projected_share": 0.1437,
         "share_used": 0.1283
       },
@@ -23771,8 +23771,8 @@
         "database": 226290,
         "organization": 226290,
         "owner_target": 1000000,
-        "projected_database": 253366,
-        "projected_organization": 253366,
+        "projected_database": 253357,
+        "projected_organization": 253357,
         "projected_share": 0.0253,
         "share_used": 0.0226
       },
@@ -23800,7 +23800,7 @@
     "top_queries_error": "Turso database stats answered HTTP 404 (check FACTORY_TURSO_ORG / FACTORY_TURSO_DATABASE)"
   },
   "schema": {
-    "checked_at": "2026-11-27T19:02:58+00:00",
+    "checked_at": "2026-11-27T19:04:20+00:00",
     "code_version": 6,
     "last_upgrade": {
       "at": "2026-11-25T18:11:07+00:00",
@@ -23978,7 +23978,7 @@
     "stored_version": 6
   },
   "crashes": {
-    "generated_at": "2026-11-27T19:02:58Z",
+    "generated_at": "2026-11-27T19:04:20Z",
     "groups": [
       {
         "count": 4,
@@ -24141,87 +24141,9 @@
     ]
   },
   "gh_usage": {
-    "generated_at": "2026-11-27T19:02:58Z",
+    "generated_at": "2026-11-27T19:04:21Z",
     "jobs": {
       "dispatch": [
-        {
-          "at": 1795805437,
-          "buckets": {
-            "reader": 20,
-            "workflow": 5
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 3940,
-            "reset": 1795807198
-          },
-          "cache_hits": 0,
-          "github": 25,
-          "label": "dispatch issue:5956",
-          "paginated": 4,
-          "top": [
-            [
-              "api GET repos/R/pulls/N",
-              9
-            ],
-            [
-              "api GET repos/R/issues/N",
-              3
-            ],
-            [
-              "api GET repos/R/issues",
-              2
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ],
-            [
-              "api GET repos/R/pulls",
-              1
-            ]
-          ],
-          "writes": 0
-        },
-        {
-          "at": 1795805505,
-          "buckets": {
-            "reader": 20,
-            "workflow": 5
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 3939,
-            "reset": 1795807198
-          },
-          "cache_hits": 0,
-          "github": 25,
-          "label": "dispatch issue:5433",
-          "paginated": 4,
-          "top": [
-            [
-              "api GET repos/R/pulls/N",
-              9
-            ],
-            [
-              "api GET repos/R/issues/N",
-              3
-            ],
-            [
-              "api GET repos/R/issues",
-              2
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ],
-            [
-              "api GET repos/R/pulls",
-              1
-            ]
-          ],
-          "writes": 0
-        },
         {
           "at": 1795805556,
           "buckets": {
@@ -24587,6 +24509,84 @@
           "cache_hits": 0,
           "github": 25,
           "label": "dispatch issue:3231",
+          "paginated": 4,
+          "top": [
+            [
+              "api GET repos/R/pulls/N",
+              9
+            ],
+            [
+              "api GET repos/R/issues/N",
+              3
+            ],
+            [
+              "api GET repos/R/issues",
+              2
+            ],
+            [
+              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
+              2
+            ],
+            [
+              "api GET repos/R/pulls",
+              1
+            ]
+          ],
+          "writes": 0
+        },
+        {
+          "at": 1795806195,
+          "buckets": {
+            "reader": 20,
+            "workflow": 5
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 3877,
+            "reset": 1795807198
+          },
+          "cache_hits": 0,
+          "github": 25,
+          "label": "dispatch issue:3232",
+          "paginated": 4,
+          "top": [
+            [
+              "api GET repos/R/pulls/N",
+              9
+            ],
+            [
+              "api GET repos/R/issues/N",
+              3
+            ],
+            [
+              "api GET repos/R/issues",
+              2
+            ],
+            [
+              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
+              2
+            ],
+            [
+              "api GET repos/R/pulls",
+              1
+            ]
+          ],
+          "writes": 0
+        },
+        {
+          "at": 1795806255,
+          "buckets": {
+            "reader": 20,
+            "workflow": 5
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 3825,
+            "reset": 1795807198
+          },
+          "cache_hits": 0,
+          "github": 25,
+          "label": "dispatch issue:5920",
           "paginated": 4,
           "top": [
             [
