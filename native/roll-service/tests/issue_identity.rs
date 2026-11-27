@@ -3049,3 +3049,82 @@ async fn project_preview_projects_plan_and_enforces_ownership() {
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(body, validation_failed());
 }
+
+/// #5715: the preview is stateless, but confirmation carries its revision so a
+/// plan edited after the preview cannot be silently overwritten. A matching
+/// token confirms once; a stale token must 409 without touching the order.
+#[tokio::test]
+async fn projection_confirm_rejects_a_stale_preview_revision() {
+    let (state, token, csrf, _guard) = setup().await;
+    let user_id = me_id(&state, &token).await;
+    seed_overlap_scenario(&state, user_id).await;
+    let conn = state.pool.get().await.unwrap();
+    conn.batch_execute(&format!(
+        r#"
+        INSERT INTO continuity_plans (id, user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at)
+        VALUES (702, {user_id}, 'Revision plan', 'informational',
+                '[{{"id":"n1","node_type":"thread","ref_id":941,"lane_id":"main","position":0}}]'::json,
+                '[{{"id":"main","order":0}}]'::json, NOW(), NOW());
+        INSERT INTO reading_orders (id, name, user_id) VALUES (801, 'Revision order', {user_id});
+        "#
+    ))
+    .await
+    .unwrap();
+    drop(conn);
+
+    let preview_uri = "/api/v2/continuityPlans/702:previewReadingOrderProjection";
+    let (status, preview) = post_json(
+        &state,
+        &token,
+        &csrf,
+        preview_uri,
+        json!({"reading_order_id": 801}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{preview}");
+    let revision = preview["plan_updated_at"]
+        .as_str()
+        .expect("preview exposes the plan revision")
+        .to_string();
+    let confirm_uri = "/api/v2/continuity-plans/702/reading-orders/project";
+
+    let (status, result) = post_json(
+        &state,
+        &token,
+        &csrf,
+        confirm_uri,
+        json!({"reading_order_id": 801, "plan_updated_at": revision}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{result}");
+    assert_eq!(result["added_count"], 1, "{result}");
+
+    // A later plan edit advances updated_at; replaying the preview revision
+    // must conflict with the current version instead of rewriting the order.
+    let conn = state.pool.get().await.unwrap();
+    conn.execute(
+        "UPDATE continuity_plans SET name = 'Edited', updated_at = NOW() + interval '1 second' WHERE id = 702",
+        &[],
+    )
+    .await
+    .unwrap();
+    drop(conn);
+
+    let (status, conflict) = post_json(
+        &state,
+        &token,
+        &csrf,
+        confirm_uri,
+        json!({"reading_order_id": 801, "plan_updated_at": revision}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{conflict}");
+    assert_eq!(
+        conflict["detail"]["code"], "plan_version_conflict",
+        "{conflict}"
+    );
+    assert!(
+        conflict["detail"]["expected_updated_at"].as_str().is_some(),
+        "conflict must expose the current revision: {conflict}"
+    );
+}
