@@ -19595,6 +19595,25 @@
           }
         }
       },
+      "ManualCreatorCredit": {
+        "type": "object",
+        "description": "One manual creator credit entry preserved on thread responses.",
+        "required": [
+          "name",
+          "roles"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "ManualDieRequest": {
         "oneOf": [
           {
@@ -25961,7 +25980,7 @@
           "manual_creator_credits": {
             "type": "array",
             "items": {
-              "type": "object"
+              "$ref": "#/components/schemas/ManualCreatorCredit"
             }
           },
           "next_unread_issue_id": {
@@ -26187,7 +26206,7 @@
           "manual_creator_credits": {
             "type": "array",
             "items": {
-              "type": "object"
+              "$ref": "#/components/schemas/ManualCreatorCredit"
             }
           },
           "next_unread_issue_number": {
@@ -26404,7 +26423,7 @@
           "manual_creator_credits": {
             "type": "array",
             "items": {
-              "type": "object"
+              "$ref": "#/components/schemas/ManualCreatorCredit"
             }
           },
           "next_unread_issue_id": {

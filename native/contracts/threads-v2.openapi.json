@@ -196,6 +196,25 @@
           }
         }
       },
+      "ManualCreatorCredit": {
+        "type": "object",
+        "description": "One manual creator credit entry preserved on thread responses.",
+        "required": [
+          "name",
+          "roles"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "QueueExclusionGroupRef": {
         "type": "object",
         "description": "Bulk exclusion provenance attached to an excluded queue thread (#5435).",
@@ -306,7 +325,7 @@
           "manual_creator_credits": {
             "type": "array",
             "items": {
-              "type": "object"
+              "$ref": "#/components/schemas/ManualCreatorCredit"
             }
           },
           "next_unread_issue_number": {
