@@ -10614,7 +10614,12 @@
               "null"
             ]
           },
-          "manual_creator_credits": {},
+          "manual_creator_credits": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
           "next_unread_issue_id": {
             "format": "int32",
             "type": [
@@ -17646,7 +17651,12 @@
               "null"
             ]
           },
-          "manual_creator_credits": {},
+          "manual_creator_credits": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
           "next_unread_issue_id": {
             "format": "int32",
             "type": [
@@ -17868,7 +17878,12 @@
               "null"
             ]
           },
-          "manual_creator_credits": {},
+          "manual_creator_credits": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
           "next_unread_issue_number": {
             "type": [
               "string",
