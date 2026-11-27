@@ -351,6 +351,122 @@ mod tests {
         }
     }
 
+    /// #5885: the browser-called session and undo drill-downs are served by
+    /// native handlers at the exact v2 paths the frontend calls. Their
+    /// documented success/error responses and DTOs must keep the retired
+    /// Python wire contract, including the `type` event key and the always
+    /// emitted snapshot/thread arrays.
+    #[test]
+    fn same_path_contract_preserves_migrated_session_and_undo_wire_contract() {
+        let document = serde_json::to_value(same_path_openapi()).expect("OpenAPI");
+        let paths = document["paths"].as_object().expect("paths");
+        for (path, method, operation_id, schema, errors) in [
+            (
+                "/api/v2/readingSessions/{session_id}/details",
+                "get",
+                "get_session_details_documentation",
+                "SessionDetailsResponse",
+                &["401", "404", "503"][..],
+            ),
+            (
+                "/api/v2/readingSessions/{session_id}/snapshots",
+                "get",
+                "list_session_snapshots_documentation",
+                "SessionSnapshotsResponse",
+                &["401", "404"][..],
+            ),
+            (
+                "/api/v2/undo/{session_id}/snapshots",
+                "get",
+                "list_undo_snapshots_documentation",
+                "UndoSnapshotsResponse",
+                &["401", "404", "503"][..],
+            ),
+            (
+                "/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore",
+                "post",
+                "undo_to_snapshot_documentation",
+                "UndoApplyResponse",
+                &["401", "404", "409", "503"][..],
+            ),
+        ] {
+            let operation = &paths[path][method];
+            assert!(operation.is_object(), "missing {method} {path}");
+            assert_eq!(operation["operationId"].as_str(), Some(operation_id));
+            assert_eq!(
+                operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+                serde_json::json!(format!("#/components/schemas/{schema}")),
+                "{method} {path} must keep its Python response schema"
+            );
+            for error in errors {
+                assert!(
+                    operation["responses"][error].is_object(),
+                    "{method} {path} must document {error}"
+                );
+            }
+        }
+
+        let schemas = document["components"]["schemas"]
+            .as_object()
+            .expect("schemas");
+        for (name, required) in [
+            (
+                "SessionDetailsResponse",
+                vec![
+                    "session_id",
+                    "started_at",
+                    "start_die",
+                    "ladder_path",
+                    "narrative_summary",
+                    "current_die",
+                    "events",
+                ],
+            ),
+            ("SessionSnapshotsResponse", vec!["session_id", "snapshots"]),
+            ("UndoSnapshotsResponse", vec!["session_id", "snapshots"]),
+            (
+                "UndoApplyResponse",
+                vec![
+                    "id",
+                    "started_at",
+                    "start_die",
+                    "user_id",
+                    "ladder_path",
+                    "current_die",
+                    "has_restore_point",
+                    "snapshot_count",
+                    "snoozed_thread_ids",
+                    "snoozed_threads",
+                    "skipped_thread_ids",
+                    "skipped_threads",
+                    "reading_mode_suggested",
+                ],
+            ),
+        ] {
+            assert_eq!(
+                schemas[name]["required"],
+                serde_json::json!(required),
+                "{name} must keep its Python required wire fields"
+            );
+        }
+        let event_properties = &schemas["SessionEventDetail"]["properties"];
+        assert!(
+            event_properties["type"].is_object(),
+            "events must expose the Python/frontend `type` key"
+        );
+        assert!(
+            event_properties.get("type_").is_none(),
+            "the Rust field name must not leak onto the wire"
+        );
+        for snapshot in ["SessionSnapshotItem", "UndoSnapshotItem"] {
+            assert_eq!(
+                schemas[snapshot]["required"],
+                serde_json::json!(["id", "session_id", "created_at"]),
+                "{snapshot} must keep the Python required keys"
+            );
+        }
+    }
+
     /// Both browser-called taste-discovery operations (#4853) must keep their
     /// wire contract in the native same-path document. Without the GET listing
     /// here, retiring the shadowed Python handler would drop it from the

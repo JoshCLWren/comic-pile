@@ -51,6 +51,7 @@
       "status": "not-live",
       "disposition": "GET|POST|PATCH|DELETE /api/v2/readingOrderGroups[/{group_id}]",
       "notes": "Collection CRUD and /detail are absent from the live Rust router; memberships, ranges and /order remain with #5711."
+<<<<<<< HEAD
     },
     {
       "issue": 5709,
@@ -91,6 +92,8 @@
       "status": "not-live",
       "disposition": "GET /api/v2/threads/{thread_id}/connections",
       "notes": "Retired by #5709; the canonical v2 related-Thread collection is the only authority."
+=======
+>>>>>>> origin/main
     }
   ],
   "families": [
@@ -134,6 +137,33 @@
       "rollout_status": "slice-open"
     },
     {
+<<<<<<< HEAD
+=======
+      "prefix": "/api/v1/threads/{thread_id}/issue-dependencies",
+      "owner_issue": 5709,
+      "replacement": "GET /api/v2/dependencies/blocked",
+      "rollout_status": "slice-open"
+    },
+    {
+      "prefix": "/api/v1/threads/{thread_id}/dependencies",
+      "owner_issue": 5709,
+      "replacement": "GET /api/v2/dependencies/blocked",
+      "rollout_status": "slice-open"
+    },
+    {
+      "prefix": "/api/v1/threads/{thread_id}/connected",
+      "owner_issue": 5709,
+      "replacement": "GET /api/v2/dependencies/blocked",
+      "rollout_status": "slice-open"
+    },
+    {
+      "prefix": "/api/v1/threads:getBlockingInfo",
+      "owner_issue": 5709,
+      "replacement": "GET /api/v2/dependencies/blocked",
+      "rollout_status": "slice-open"
+    },
+    {
+>>>>>>> origin/main
       "prefix": "/api/v1/threads/{thread_id}/reading-orders",
       "owner_issue": 5715,
       "replacement": "GET /api/v2/threads/{thread_id}/readingOrders",
