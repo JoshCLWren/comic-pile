@@ -4,7 +4,7 @@
  * projection supplies a canonical issue id; title + number must never be
  * turned into a guessed issue, cover or mapping target.
  */
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -142,12 +142,14 @@ describe('session event issue-card gate (#5904)', () => {
       issue_id: 909,
     }])
 
-    await userEvent.click(screen.getByTestId('issue-card-trigger-909'))
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Reading and mapping actions for Saga #6' }),
+    )
     const card = await screen.findByTestId('comic-issue-card')
-    expect(screen.getByTestId('comic-issue-cover-placeholder')).toBeVisible()
-    expect(screen.getByTestId('shared-map-action')).toHaveTextContent('909')
+    expect(within(card).getByTestId('comic-issue-cover-placeholder')).toBeVisible()
+    expect(within(card).getByTestId('shared-map-action')).toHaveTextContent('909')
     const user = userEvent.setup()
-    await user.click(screen.getByRole('button', { name: 'Read now' }))
+    await user.click(within(card).getByRole('button', { name: 'Read now' }))
     expect(screen.getByTestId('comic-issue-rating-editor')).toBeVisible()
   })
 })
