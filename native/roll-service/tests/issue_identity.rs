@@ -3116,3 +3116,175 @@ async fn project_preview_projects_plan_and_enforces_ownership() {
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(body, validation_failed());
 }
+
+/// #5715: the canonical AIP-136 resource custom method has the same read-only
+/// wire contract as the retained v1 preview. It must not write a plan, reading
+/// order or item; the durable v2 commit remains the only writer and revalidates
+/// the current plan with conflict/idempotency semantics.
+#[tokio::test]
+async fn v2_reading_order_projection_preview_is_read_only_and_commit_is_idempotent() {
+    let (state, token, csrf, _guard) = setup().await;
+    let user_id = me_id(&state, &token).await;
+    seed_overlap_scenario(&state, user_id).await;
+    {
+        let conn = state.pool.get().await.unwrap();
+        conn.batch_execute(&format!(
+            r#"
+            INSERT INTO continuity_plans (id, user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at)
+            VALUES
+              (710, {user_id}, 'Event plan', 'informational',
+               '[{{"id":"n1","node_type":"thread","ref_id":941,"lane_id":"main","position":0}},
+                 {{"id":"n2","node_type":"thread","ref_id":940,"lane_id":"main","position":1}}]'::json,
+               '[{{"id":"main","order":0}}]'::json, NOW(), NOW()),
+              (711, {user_id}, 'Bad plan', 'informational',
+               '[{{"id":"n1","node_type":"thread","ref_id":941,"lane_id":"main","position":0}},
+                 {{"id":"n2","node_type":"thread","ref_id":941,"lane_id":"main","position":1}},
+                 {{"id":"n3","node_type":"series","ref_id":5,"lane_id":"main","position":2}}]'::json,
+               '[{{"id":"main","order":0}}]'::json, NOW(), NOW());
+            INSERT INTO reading_orders (id, name, user_id) VALUES (810, 'My order', {user_id});
+            INSERT INTO reading_order_items (reading_order_id, thread_id, "position") VALUES (810, 940, 1);
+            "#
+        ))
+        .await
+        .unwrap();
+    }
+    let preview_uri = "/api/v2/continuityPlans/710:previewReadingOrderProjection";
+    let commit_uri = "/api/v2/continuity-plans/710/reading-orders/project";
+
+    let (status, _) = raw_request(&state, "POST", preview_uri, None, &csrf, "{}").await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    for bad in [json!({}), json!({"reading_order_id": 0}), json!({"reading_order_id": "x"})] {
+        let (status, body) = post_json(&state, &token, &csrf, preview_uri, bad.clone()).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{bad}");
+        assert_eq!(body, validation_failed(), "{bad}");
+    }
+
+    let (other_token, other_csrf) = create_test_user(&state, "v2-projection-other-reader").await;
+    let (status, _) = post_json(
+        &state,
+        &other_token,
+        &other_csrf,
+        preview_uri,
+        json!({"reading_order_id": 810}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = post_json(
+        &state,
+        &token,
+        &csrf,
+        preview_uri,
+        json!({"reading_order_id": 9999}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        preview_uri,
+        json!({"reading_order_id": 810}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["plan_name"], "Event plan");
+    assert_eq!(body["reading_order_name"], "My order");
+    assert_eq!(body["conflicts"], json!([]));
+    let entries = body["entries"].as_array().unwrap();
+    assert_eq!(entries[0]["thread_id"], 941);
+    assert_eq!(entries[0]["source"], "added");
+    assert_eq!(entries[1]["thread_id"], 940);
+    assert_eq!(entries[1]["source"], "updated");
+
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/continuityPlans/711:previewReadingOrderProjection",
+        json!({"reading_order_id": 810}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let codes: Vec<&str> = body["conflicts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["code"].as_str().unwrap())
+        .collect();
+    assert_eq!(codes, vec!["duplicate_thread", "non_thread_node"]);
+    assert_eq!(body["entries"], json!([]));
+
+    // Preview never writes, including when the plan has conflicts.
+    {
+        let conn = state.pool.get().await.unwrap();
+        let rows: Vec<(i32, i32)> = conn
+            .query(
+                "SELECT thread_id, position FROM reading_order_items
+                 WHERE reading_order_id = 810 ORDER BY position",
+                &[],
+            )
+            .await
+            .unwrap()
+            .iter()
+            .map(|row| (row.get(0), row.get(1)))
+            .collect();
+        assert_eq!(rows, vec![(940, 1)], "preview must not write items");
+    }
+
+    // The durable confirmation is the only writer. Replaying it with the same
+    // plan keeps every position, proving the commit is idempotent.
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        commit_uri,
+        json!({"reading_order_id": 810}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["added_count"], 1);
+    assert_eq!(body["updated_count"], 1);
+    assert_eq!(body["kept_count"], 0);
+    assert_eq!(body["total_positions"], 2);
+    let (status, replay) = post_json(
+        &state,
+        &token,
+        &csrf,
+        commit_uri,
+        json!({"reading_order_id": 810}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{replay}");
+    assert_eq!(replay["added_count"], 0);
+    assert_eq!(replay["updated_count"], 0);
+    assert_eq!(replay["kept_count"], 2);
+
+    // A conflicting plan cannot confirm: 409 projection_conflicts and no write.
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/continuity-plans/711/reading-orders/project",
+        json!({"reading_order_id": 810}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+    assert_eq!(body["detail"]["code"], "projection_conflicts");
+    {
+        let conn = state.pool.get().await.unwrap();
+        let rows: Vec<(i32, i32)> = conn
+            .query(
+                "SELECT thread_id, position FROM reading_order_items
+                 WHERE reading_order_id = 810 ORDER BY position",
+                &[],
+            )
+            .await
+            .unwrap()
+            .iter()
+            .map(|row| (row.get(0), row.get(1)))
+            .collect();
+        assert_eq!(rows, vec![(941, 1), (940, 2)]);
+    }
+}
