@@ -723,6 +723,9 @@ struct ExistingList {
 /// The caller owns the transaction; a dry run performs reads only. No row is
 /// ever hard-deleted, and paths that failed to parse are protected from
 /// deactivation so a malformed source cannot erase last known-good data.
+// The CLI and DB-backed tests both call this single entry point; bundling the
+// inputs in a struct would only duplicate the argument list at both edges.
+#[allow(clippy::too_many_arguments)]
 pub async fn sync_cbl_lists<C: GenericClient>(
     client: &C,
     repository: &str,

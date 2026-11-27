@@ -156,7 +156,7 @@ fn cbl(name: &str, entries: &[(&str, &str, Option<&str>, Option<&str>)]) -> Stri
         .map(|(series, number, series_id, issue_id)| {
             let database = series_id
                 .or(*issue_id)
-                .map(|_| format!("<Database Name=\"ComicVine\" />"));
+                .map(|_| "<Database Name=\"ComicVine\" />".to_string());
             let ids = series_id.map(|id| format!(" SeriesID=\"{id}\"")).unwrap_or_default();
             let ids = format!(
                 "{ids}{}",
@@ -213,7 +213,7 @@ async fn dry_run_reports_counts_without_writing_any_rows() {
     .unwrap();
     assert!(summary.dry_run);
     assert!(summary.changed);
-    assert_eq!(summary.source_created, true);
+    assert!(summary.source_created);
     assert_eq!(summary.inserted_lists, 2);
     assert_eq!(summary.entries_written, 2);
     let sources: i64 = scalar(&state, "SELECT COUNT(*) FROM cbl_sources").await;
