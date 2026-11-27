@@ -176,6 +176,17 @@ async fn list_browses_root_and_continues_with_an_opaque_token() {
 }
 
 #[tokio::test]
+async fn all_filter_discovers_sources_across_every_folder() {
+    let (state, token, _guard) = setup().await;
+    let (status, body) = get(&state, &token, "/api/v2/cblSources?filter=all&page_size=50").await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["total"], 3);
+    assert_eq!(body["items"].as_array().unwrap().len(), 3);
+    // The discovery picker is catalog-wide, not limited to root-level lists.
+    assert!(body["items"].to_string().contains("JLI"));
+}
+
+#[tokio::test]
 async fn search_is_literal_and_never_leaks_a_private_reader_list() {
     let (state, token, _guard) = setup().await;
     // `%` must be a literal character, not a LIKE wildcard.
