@@ -1,4 +1,4 @@
-import type { Issue } from '../../types'
+import type { Issue, ThreadPatchPayload } from '../../types'
 
 export interface ManualCreatorCredit {
   name: string
