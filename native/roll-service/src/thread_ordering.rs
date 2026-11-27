@@ -399,8 +399,14 @@ fn parse_batch_thread_ids(body: &[u8]) -> Result<Vec<i64>, ApiError> {
     Ok(ids)
 }
 
-/// Serve `POST /api/v1/threads:getBlockingInfo`.
-pub async fn get_threads_blocking_info(
+/// Serve `POST /api/v2/threads:explainEligibility` (#5709).
+///
+/// A bounded AIP-136 batch explanation over the canonical Reading List
+/// evaluator. Every id is authorized in one set-based query, and the graph is
+/// evaluated once for the whole batch rather than once per thread. Converted
+/// dependencies, inert CBL notes and stale `is_blocked` flags cannot appear as
+/// blocking reasons; cycles are isolated by `ValidatedReadingInputs::contained`.
+pub async fn explain_eligibility(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     body: axum::body::Bytes,
@@ -429,9 +435,91 @@ pub async fn get_threads_blocking_info(
             return Err(not_found());
         }
     }
-    let details = blocking_details(&state, user, &thread_ids).await?;
+    let details = canonical_explanations(&state, user, &thread_ids).await?;
     Ok(Json(BatchBlockingExplanationResponse {
         threads: OrderedExplanations(details),
+    }))
+}
+
+/// One canonical restriction on a derived thread eligibility resource (#5709).
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct EligibilityBlockerInfo {
+    pub kind: String,
+    pub list_id: Option<i32>,
+    pub origin: Option<String>,
+    pub waiting_on_issue_ids: Vec<i32>,
+}
+
+/// `GET /api/v2/threads/{thread_id}/eligibility`: derived singleton resource.
+///
+/// `state` is one of `available`, `blocked`, `complete` or `unavailable`.
+/// `manual_read_now_allowed` is derived from the unread frontier, never from
+/// the denormalized `threads.is_blocked` flag or historical converted edges:
+/// an explicit Read Now is a reader action and automatic eligibility does not
+/// authorize or veto it.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct ThreadEligibilityResponse {
+    pub thread_id: i32,
+    pub eligible: bool,
+    pub next_issue_id: Option<i32>,
+    pub state: String,
+    pub manual_read_now_allowed: bool,
+    pub blockers: Vec<EligibilityBlockerInfo>,
+}
+
+fn eligibility_state(status: &str, eligible: bool, has_next: bool) -> &'static str {
+    if status != "active" {
+        "unavailable"
+    } else if eligible {
+        "available"
+    } else if has_next {
+        "blocked"
+    } else {
+        "complete"
+    }
+}
+
+/// Serve `GET /api/v2/threads/{thread_id}/eligibility` (#5709).
+pub async fn get_thread_eligibility(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    thread_id: Result<Path<String>, PathRejection>,
+) -> Result<Json<ThreadEligibilityResponse>, ApiError> {
+    let thread_id = parse_thread_id(thread_id)?;
+    {
+        let connection = db::checkout(&state).await?;
+        require_owned_thread(&**connection, user, thread_id).await?;
+    }
+    let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
+    let status = validated
+        .inputs()
+        .core
+        .threads
+        .iter()
+        .find(|thread| thread.id == thread_id)
+        .map_or("missing", |thread| thread.status.as_str());
+    let evaluated = reading_eligibility::evaluate(&validated)?;
+    let eligibility = evaluated
+        .get(&thread_id)
+        .cloned()
+        .ok_or_else(|| thread_not_found(thread_id))?;
+    let manual_read_now_allowed = eligibility.next_issue_id.is_some();
+    Ok(Json(ThreadEligibilityResponse {
+        thread_id,
+        eligible: eligibility.eligible,
+        next_issue_id: eligibility.next_issue_id,
+        state: eligibility_state(status, eligibility.eligible, manual_read_now_allowed).to_string(),
+        manual_read_now_allowed,
+        blockers: eligibility
+            .blockers
+            .into_iter()
+            .map(|blocker| EligibilityBlockerInfo {
+                kind: blocker.kind,
+                list_id: blocker.list_id,
+                origin: blocker.origin,
+                waiting_on_issue_ids: blocker.waiting_on_issue_ids,
+            })
+            .collect(),
     }))
 }
 
@@ -679,8 +767,13 @@ fn dependency_rows(rows: &[tokio_postgres::Row]) -> Vec<DependencyRow> {
         .collect()
 }
 
-/// Serve `GET /api/v1/threads/{thread_id}/connected`.
-pub async fn get_thread_connected_threads(
+/// Serve `GET /api/v2/threads/{thread_id}/connections` (#5709).
+///
+/// The v2 collection is the single authority: it always reports only
+/// reader-authored connections and derives circularity from stored reader
+/// prerequisites plus required within-series order. Historical converted
+/// edges never appear as live connections.
+pub async fn get_thread_connections(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     thread_id: Result<Path<String>, PathRejection>,
@@ -689,7 +782,7 @@ pub async fn get_thread_connected_threads(
     let connection = db::checkout(&state).await?;
     require_owned_thread(&**connection, user, thread_id).await?;
 
-    let reader_only = state.option_e;
+    let reader_only = true;
     let blocking = dependency_rows(
         &connection
             .query(CONNECTED_BLOCKING_SQL, &[&thread_id, &reader_only])
@@ -989,15 +1082,16 @@ pub async fn get_thread_reading_orders(
 // OpenAPI documentation
 // ---------------------------------------------------------------------------
 
-/// Documentation-only operation for the single-thread blocking explanation.
+/// Documentation-only operation for the derived singleton eligibility resource.
 #[utoipa::path(
-    post,
-    path = "/api/v1/threads/{thread_id}:getBlockingInfo",
+    get,
+    path = "/api/v2/threads/{thread_id}/eligibility",
     tag = "dependencies",
-    operation_id = "thread_ordering_get_blocking_info",
+    operation_id = "thread_ordering_get_thread_eligibility",
+    description = "Derive one owner-scoped thread's eligibility from the canonical Reading List evaluator. Converted dependencies and stale is_blocked flags are inert.",
     params(("thread_id" = i32, Path, description = "Owned Thread identifier")),
     responses(
-        (status = 200, description = "Blocked status and reasons", body = BlockingExplanation),
+        (status = 200, description = "Derived thread eligibility", body = ThreadEligibilityResponse),
         (status = 401, description = "Not authenticated"),
         (status = 404, description = "Thread not found"),
         (status = 422, description = "Request validation failed"),
@@ -1006,14 +1100,15 @@ pub async fn get_thread_reading_orders(
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn get_blocking_info_documentation() {}
+pub fn thread_eligibility_documentation() {}
 
-/// Documentation-only operation for the batch blocking explanation.
+/// Documentation-only operation for the bounded batch explanation action.
 #[utoipa::path(
     post,
-    path = "/api/v1/threads:getBlockingInfo",
+    path = "/api/v2/threads:explainEligibility",
     tag = "dependencies",
-    operation_id = "thread_ordering_get_threads_blocking_info",
+    operation_id = "thread_ordering_explain_eligibility",
+    description = "Explain eligibility for 1..500 owner-scoped threads in one canonical graph evaluation. Explanations use strict/loose/hold/prerequisite/exclusion logic and isolate cycles.",
     request_body = BatchBlockingExplanationRequest,
     responses(
         (status = 200, description = "Blocking explanations keyed by thread id", body = BatchBlockingExplanationResponse),
@@ -1025,17 +1120,18 @@ pub fn get_blocking_info_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn get_threads_blocking_info_documentation() {}
+pub fn explain_eligibility_documentation() {}
 
 /// Documentation-only operation for connected threads.
 #[utoipa::path(
     get,
-    path = "/api/v1/threads/{thread_id}/connected",
+    path = "/api/v2/threads/{thread_id}/connections",
     tag = "dependencies",
-    operation_id = "thread_ordering_connected_threads",
+    operation_id = "thread_ordering_thread_connections",
+    description = "List owner-scoped threads connected through reader-authored dependencies, with circularity derived from the effective reading precedence graph.",
     params(("thread_id" = i32, Path, description = "Owned Thread identifier")),
     responses(
-        (status = 200, description = "Threads connected through dependencies", body = ThreadConnectedResponse),
+        (status = 200, description = "Threads connected through reader-authored dependencies", body = ThreadConnectedResponse),
         (status = 401, description = "Not authenticated"),
         (status = 404, description = "Thread not found"),
         (status = 422, description = "Request validation failed"),
@@ -1044,7 +1140,7 @@ pub fn get_threads_blocking_info_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn connected_documentation() {}
+pub fn thread_connections_documentation() {}
 
 /// Documentation-only operation for the dependency order check.
 #[utoipa::path(
@@ -1111,21 +1207,11 @@ pub fn thread_reading_orders_documentation() {}
         description = "Generated contract for the native thread ordering and dependency-inspection handlers that retain their original method and path."
     ),
     paths(
-        get_blocking_info_documentation,
-        get_threads_blocking_info_documentation,
-        connected_documentation,
         dependency_order_check_documentation,
         validate_order_documentation,
         thread_reading_orders_documentation
     ),
     components(schemas(
-        BlockingDependency,
-        BlockingExplanation,
-        OrderedExplanations,
-        BatchBlockingExplanationRequest,
-        BatchBlockingExplanationResponse,
-        ConnectedThreadInfo,
-        ThreadConnectedResponse,
         DependencyOrderRequirement,
         DependencyOrderConflict,
         ThreadDependencyOrderCheckResponse,
@@ -1137,6 +1223,34 @@ pub fn thread_reading_orders_documentation() {}
     modifiers(&ThreadOrderingSecurityAddon)
 )]
 pub struct ThreadOrderingApi;
+
+/// OpenAPI document for the v2-only canonical diagnosis surface (#5709).
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    info(
+        title = "ComicPile native thread eligibility API",
+        version = "2.0.0",
+        description = "Generated contract for canonical v2 thread eligibility, batch explanations and reader-authored connections."
+    ),
+    paths(
+        thread_eligibility_documentation,
+        explain_eligibility_documentation,
+        thread_connections_documentation
+    ),
+    components(schemas(
+        EligibilityBlockerInfo,
+        ThreadEligibilityResponse,
+        BlockingDependency,
+        BlockingExplanation,
+        OrderedExplanations,
+        BatchBlockingExplanationRequest,
+        BatchBlockingExplanationResponse,
+        ConnectedThreadInfo,
+        ThreadConnectedResponse
+    )),
+    modifiers(&ThreadOrderingSecurityAddon)
+)]
+pub struct ThreadOrderingV2Api;
 
 struct ThreadOrderingSecurityAddon;
 impl utoipa::Modify for ThreadOrderingSecurityAddon {
