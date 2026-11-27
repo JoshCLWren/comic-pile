@@ -54,7 +54,7 @@ vi.mock('../services/api', () => ({
   },
   dependenciesApi: {
     getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),
-    getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
+    getThreadEligibility: vi.fn().mockResolvedValue({ thread_id: 0, eligible: true, state: 'available', manual_read_now_allowed: true, next_issue_id: null, blockers: [] }),
   },
 }))
 vi.mock('../services/api-reading-orders', () => ({

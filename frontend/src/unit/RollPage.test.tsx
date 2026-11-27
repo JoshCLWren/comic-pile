@@ -88,7 +88,7 @@ vi.mock('../services/api', async (importOriginal) => {
       setPending: vi.fn(),
     },
     dependenciesApi: {
-      getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
+      getThreadEligibility: vi.fn().mockResolvedValue({ thread_id: 0, eligible: true, state: 'available', manual_read_now_allowed: true, next_issue_id: null, blockers: [] }),
       getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),
     },
   }

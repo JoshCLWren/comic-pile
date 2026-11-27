@@ -62,8 +62,8 @@ describe('generated OpenAPI client surface', () => {
       '/api/v1/threads/{thread_id}/dependencies',
       '/api/v1/threads/{thread_id}/issue-dependencies',
       '/api/v1/threads/{thread_id}/connected',
-      '/api/v1/threads/{thread_id}:getBlockingInfo',
-      '/api/v1/threads:getBlockingInfo',
+      '/api/v1/threads/{thread_id}:getThreadEligibility',
+      '/api/v1/threads:getThreadEligibility',
     ]) {
       expect(paths).not.toContain(path)
     }

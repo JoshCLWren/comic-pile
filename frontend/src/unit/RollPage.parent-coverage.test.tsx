@@ -103,7 +103,7 @@ vi.mock('../hooks/useReaderContext', async (importOriginal) => {
 vi.mock('../services/api-threads', () => ({ threadsApi: { setPending: spies.setPending, list: vi.fn().mockResolvedValue({ threads: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active' }], next_page_token: null }) } }))
 vi.mock('../services/api-sessions', () => ({ sessionApi: {} }))
 vi.mock('../services/api', () => ({ default: {} }))
-vi.mock('../services/api-dependencies', () => ({ dependenciesApi: { getConnectedThreads: relatedApi.connectedThreads, getBlockingInfo: relatedApi.blockingInfo, getBatchBlockingInfo: relatedApi.batchBlockingInfo } }))
+vi.mock('../services/api-dependencies', () => ({ dependenciesApi: { getConnectedThreads: relatedApi.connectedThreads, getThreadEligibility: relatedApi.eligibility, getBatchBlockingInfo: relatedApi.batchBlockingInfo } }))
 vi.mock('../services/api-reading-orders', () => ({ readingOrdersApi: { getForThread: relatedApi.readingOrders } }))
 vi.mock('../query/cacheEffects', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../query/cacheEffects')>()
@@ -184,7 +184,7 @@ describe('RollPage parent handlers', () => {
     dieStateHook.value = null
     relatedApi.readingOrders.mockResolvedValue({ reading_orders: [] })
     relatedApi.connectedThreads.mockResolvedValue({ connected_threads: [] })
-    relatedApi.blockingInfo.mockResolvedValue({ blocking_reasons: ['Read the prerequisite first'] })
+    relatedApi.eligibility.mockResolvedValue({ blocking_reasons: ['Read the prerequisite first'] })
     relatedApi.batchBlockingInfo.mockResolvedValue({
       threads: { 2: { blocking_dependencies: [{ thread_id: 9, thread_title: 'Prequel', issue_number: '1', label: 'Read the prerequisite first' }] } },
     })

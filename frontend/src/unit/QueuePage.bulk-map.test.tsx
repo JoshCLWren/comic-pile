@@ -50,7 +50,7 @@ vi.mock('../services/api-threads', () => ({
 vi.mock('../services/api-dependencies', () => ({
   dependenciesApi: {
     listBlockedThreadIds: vi.fn().mockResolvedValue([]),
-    getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
+    getThreadEligibility: vi.fn().mockResolvedValue({ thread_id: 0, eligible: true, state: 'available', manual_read_now_allowed: true, next_issue_id: null, blockers: [] }),
   },
 }))
 

@@ -86,7 +86,7 @@ vi.mock('../services/api-threads', () => ({
 vi.mock('../services/api-dependencies', () => ({
   dependenciesApi: {
     listBlockedThreadIds: vi.fn().mockResolvedValue([]),
-    getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
+    getThreadEligibility: vi.fn().mockResolvedValue({ thread_id: 0, eligible: true, state: 'available', manual_read_now_allowed: true, next_issue_id: null, blockers: [] }),
   },
 }))
 
@@ -1024,7 +1024,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   mockedUseQueueThreads.mockReturnValue({ data: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active', is_blocked: true, queue_position: 1, issues_remaining: 2, total_issues: null }], isPending: false, refetch: vi.fn() })
   render(<BrowserRouter><ToastProvider><QueuePage /></ToastProvider></BrowserRouter>)
   expect(mockedDependenciesApi.listBlockedThreadIds).not.toHaveBeenCalled()
-  expect(mockedDependenciesApi.getBlockingInfo).not.toHaveBeenCalled()
+  expect(mockedDependenciesApi.getThreadEligibility).not.toHaveBeenCalled()
   await user.click(screen.getByRole('button', { name: /series actions/i }))
   await user.click(screen.getByRole('menuitem', { name: /dependencies/i }))
   expect(screen.getByRole('heading', { name: /dependencies:/i })).toBeInTheDocument()
@@ -1187,7 +1187,7 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   await waitFor(() => expect(screen.getByTestId('queue-thread-list')).toBeInTheDocument())
   expect(screen.getByRole('list', { name: 'Series queue' })).toBeInTheDocument()
   expect(mockedDependenciesApi.listBlockedThreadIds).not.toHaveBeenCalled()
-  expect(mockedDependenciesApi.getBlockingInfo).not.toHaveBeenCalled()
+  expect(mockedDependenciesApi.getThreadEligibility).not.toHaveBeenCalled()
   vi.unstubAllGlobals()
 })
 

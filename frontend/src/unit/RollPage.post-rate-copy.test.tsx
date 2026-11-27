@@ -178,7 +178,7 @@ vi.mock('../services/api', () => ({
   threadsApi: { setPending: spies.setPending, list: vi.fn().mockResolvedValue({ threads: [], next_page_token: null }) },
   dependenciesApi: {
     getConnectedThreads: relatedApi.connectedThreads,
-    getBlockingInfo: relatedApi.blockingInfo,
+    getThreadEligibility: relatedApi.eligibility,
     getBatchBlockingInfo: relatedApi.batchBlockingInfo,
   },
 }))
@@ -208,7 +208,7 @@ beforeEach(() => {
   undoSpies.refetchSnapshots.mockResolvedValue({ data: ratingSnapshots })
   relatedApi.readingOrders.mockResolvedValue({ reading_orders: [] })
   relatedApi.connectedThreads.mockResolvedValue({ connected_threads: [] })
-  relatedApi.blockingInfo.mockResolvedValue({ blocking_reasons: [] })
+  relatedApi.eligibility.mockResolvedValue({ blocking_reasons: [] })
   relatedApi.batchBlockingInfo.mockResolvedValue({ threads: {} })
   spies.refetch.mockResolvedValue({})
   spies.setPending.mockResolvedValue({
