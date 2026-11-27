@@ -2936,14 +2936,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/reading-sessions": {
+    "/api/v2/readingSessions": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Documentation-only List operation for the canonical collection. */
+        get: operations["list_reading_sessions_documentation"];
         put?: never;
         /** Documentation-only operation for the mounted v2 reading-session initializer. */
         post: operations["initialize_session_documentation"];
@@ -2953,7 +2954,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/reading-sessions/{session_id}/details": {
+    "/api/v2/readingSessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only Get operation for the canonical collection. */
+        get: operations["get_reading_session_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/readingSessions/{session_id}/details": {
         parameters: {
             query?: never;
             header?: never;
@@ -2970,7 +2988,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/reading-sessions/{session_id}/snapshots": {
+    "/api/v2/readingSessions/{session_id}/snapshots": {
         parameters: {
             query?: never;
             header?: never;
@@ -3409,6 +3427,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+<<<<<<< HEAD
         /** Standard resource Get for one owned Thread. */
         get: operations["get_thread_v2_documentation"];
         put?: never;
@@ -3417,6 +3436,17 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+=======
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Delete an owned Thread (AIP-135). A second delete, or a delete of a foreign or already deleted Thread, returns 404. Never 403. */
+        delete: operations["delete_thread_v2_documentation"];
+        options?: never;
+        head?: never;
+        /** @description Partially update an owned Thread (AIP-134). Omitted fields are preserved. When `update_mask` is supplied only its fields are applied; a masked field missing from the body is cleared. An `expected` precondition that no longer matches the committed row returns 409 with `detail.code = thread_edit_conflict` and the current values. Foreign or deleted Threads return 404, never 403. */
+        patch: operations["patch_thread_documentation"];
+>>>>>>> origin/main
         trace?: never;
     };
     "/api/v2/threads/{thread_id}/issue-order": {
@@ -6472,6 +6502,11 @@ export interface components {
             /** Thread Id */
             thread_id: number;
         };
+        /** @description One bounded page of the canonical reading-session collection. */
+        ListReadingSessionsResponse: {
+            next_page_token?: string | null;
+            reading_sessions: components["schemas"]["ReadingSessionResource"][];
+        };
         /**
          * @description Request body for username/password login.
          *
@@ -8245,6 +8280,29 @@ export interface components {
             /** Format: int32 */
             session_id: number;
         };
+        /** @description One durable, event-derived reading session in the canonical collection. */
+        ReadingSessionResource: {
+            /**
+             * Format: int32
+             * @description Event-derived die, with the legacy `manual_die` column as fallback only.
+             */
+            current_die: number;
+            ended_at?: string | null;
+            /** Format: int32 */
+            event_count: number;
+            /** @description `start_die` followed by the session's recorded `die_after` values. */
+            ladder_path: string;
+            /** @description Stable AIP-122 resource name: `readingSessions/{session_id}`. */
+            name: string;
+            /** Format: int32 */
+            session_id: number;
+            /** Format: int32 */
+            snapshot_count: number;
+            /** Format: int32 */
+            start_die: number;
+            started_at: string;
+            timezone?: string | null;
+        };
         ReconcileApplyRequest: {
             /** Format: int32 */
             canonical_issue_id: number;
@@ -9443,12 +9501,57 @@ export interface components {
             next_page_token?: string | null;
             threads: components["schemas"]["ThreadListItem"][];
         };
+<<<<<<< HEAD
         /**
          * @description One v2 threads list response. The active/completed/excluded filters keep the
          *     queue-list projection; the stale filter keeps the legacy detail-shaped
          *     projection. Both are emitted inline (no envelope variant key).
          */
         ThreadListResult: components["schemas"]["ThreadListResponse"] | components["schemas"]["StaleThreadListResponse"];
+=======
+        /** @description Committed values a stale client read before issuing a Thread patch. */
+        ThreadPatchPrecondition: {
+            /** @description Format observed by the client. */
+            format?: string | null;
+            /** @description Manual creator credits observed by the client. */
+            manual_creator_credits?: unknown[] | null;
+            /** @description Notes observed by the client; `null` means it observed no notes. */
+            notes?: string | null;
+            /** @description Title observed by the client. */
+            title?: string | null;
+        };
+        /**
+         * @description Body of `PATCH /api/v2/threads/{thread_id}`.
+         *
+         *     `update_mask` follows AIP-134: when supplied, only the named fields are
+         *     applied; a named field missing from the body is explicitly cleared. When it
+         *     is omitted or empty, every field present in the body is applied and every
+         *     omitted field is preserved (the legacy partial-update behavior).
+         */
+        ThreadPatchRequest: {
+            expected?: components["schemas"]["ThreadPatchPrecondition"] | null;
+            /** @description New format; normalized to the reader's canonical vocabulary. */
+            format?: string | null;
+            /** @description Test-series flag. Omit to preserve it. */
+            is_test?: boolean | null;
+            /**
+             * Format: int32
+             * @description Manual issue counter for untracked series (legacy queue transition).
+             */
+            issues_remaining?: number | null;
+            /** @description Manual creator credits. `null` clears them; names and roles are bounded. */
+            manual_creator_credits?: unknown[] | null;
+            /** @description Notes. `null` or a blank string clears the stored value; omit to keep it. */
+            notes?: string | null;
+            /** @description New series title. Omitted fields are preserved. */
+            title?: string | null;
+            /**
+             * @description Explicit field mask (AIP-134). Either an array of field names or one
+             *     comma-separated string. Omit for presence-based partial update.
+             */
+            update_mask?: string[] | null;
+        };
+>>>>>>> origin/main
         ThreadProgress: {
             /** Format: int32 */
             issues_remaining: number;
@@ -17858,6 +17961,52 @@ export interface operations {
             };
         };
     };
+    list_reading_sessions_documentation: {
+        parameters: {
+            query?: {
+                /** @description Bounded page size (1-100, default 50) */
+                page_size?: number;
+                /** @description Opaque continuation token */
+                page_token?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of event-derived reading sessions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListReadingSessionsResponse"];
+                };
+            };
+            /** @description Invalid page size or token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     initialize_session_documentation: {
         parameters: {
             query?: never;
@@ -17882,6 +18031,50 @@ export interface operations {
             };
             /** @description Not authenticated */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_reading_session_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned reading session */
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Event-derived reading session */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingSessionResource"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Session not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18967,25 +19160,94 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
     get_thread_v2_documentation: {
+=======
+    delete_thread_v2_documentation: {
+>>>>>>> origin/main
         parameters: {
             query?: never;
             header?: never;
             path: {
+<<<<<<< HEAD
                 /** @description Owned Thread identifier */
+=======
+                /** @description Owned thread identifier */
+>>>>>>> origin/main
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
+<<<<<<< HEAD
             /** @description Owner-scoped thread detail */
+=======
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The database refused the deletion */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    patch_thread_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThreadPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated thread */
+>>>>>>> origin/main
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
+<<<<<<< HEAD
                     "application/json": components["schemas"]["ThreadDetailResponse"];
+=======
+                    "application/json": components["schemas"]["NativeThreadResponse"];
+>>>>>>> origin/main
                 };
             };
             /** @description Not authenticated */
@@ -18995,13 +19257,34 @@ export interface operations {
                 };
                 content?: never;
             };
+<<<<<<< HEAD
             /** @description Thread not found or not owned by the reader */
+=======
+            /** @description Thread not found (including another reader's thread) */
+>>>>>>> origin/main
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
+<<<<<<< HEAD
+=======
+            /** @description Stale `expected` precondition; reload before retrying */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+>>>>>>> origin/main
         };
     };
     issue_order_documentation: {

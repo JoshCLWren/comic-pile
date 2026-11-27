@@ -79,37 +79,37 @@ describe('retired session/undo callers (#4839)', () => {
     expect(RETIRED_SESSION_WIRE_TYPES.test(typeSource)).toBe(false)
   })
 
-  it('no longer ships the unused session pager hook', () => {
+  it('no longer ships the retired session pager hook or current-session read', () => {
     const hookSource = readFileSync(resolve(srcRoot, 'hooks/useSession.ts'), 'utf-8')
     const barrelSource = readFileSync(resolve(srcRoot, 'hooks/index.ts'), 'utf-8')
     const serviceSource = readFileSync(resolve(srcRoot, 'services/api-sessions.ts'), 'utf-8')
 
     expect(hookSource).not.toMatch(/\buseSessions\b/)
     expect(barrelSource).not.toMatch(/\buseSessions\b/)
-    expect(serviceSource).not.toMatch(/\blist:\s*async/)
-    expect(serviceSource).not.toMatch(/\bget:\s*\(/)
+    expect(serviceSource).not.toMatch(/\bgetCurrent\b/)
+    expect(serviceSource).not.toMatch(/\brestoreSessionStart\b/)
   })
 
-  it('keeps the supported session and undo reads on resource-shaped v2 paths', () => {
+  it('keeps the supported session and undo reads on canonical v2 paths', () => {
     const serviceSource = readFileSync(resolve(srcRoot, 'services/api-sessions.ts'), 'utf-8')
     const undoSource = readFileSync(resolve(srcRoot, 'services/api-undo.ts'), 'utf-8')
 
-    expect(serviceSource).toContain('/v2/reading-sessions/${id}/details')
-    expect(serviceSource).toContain('/v2/reading-sessions/${id}/snapshots')
+    expect(serviceSource).toMatch(/listReadingSessions/)
+    expect(serviceSource).toMatch(/getReadingSession/)
+    expect(serviceSource).not.toMatch(/reading-sessions/)
     expect(undoSource).toContain('/v2/undo/${sessionId}/snapshots')
     expect(undoSource).toContain('/v2/undo/${sessionId}/snapshots/${snapshotId}/restore')
   })
 
   it('does not rebuild the retired session current/index cache namespace (#4839)', () => {
     // `session.current` and `session.pages` described the retired v1 session
-    // reads. No query key builder, cache effect, or shipped caller may bring
-    // them back now that only v2 details/snapshots/undo reads remain.
+    // reads with server lifetime/pending state. The canonical AIP-122 list key
+    // below is an event-derived history view, not a resurrection of that index.
     expect(queryKeys.session).not.toHaveProperty('current')
     expect(queryKeys.session).not.toHaveProperty('pages')
-    expect(queryKeys.session).not.toHaveProperty('list')
-    expect(queryKeys.session).not.toHaveProperty('page')
+    expect(queryKeys.session.list).toBeTypeOf('function')
 
-    const retiredKeyPattern = /queryKeys\.session\.(?:current|pages|list|page)\b/
+    const retiredKeyPattern = /queryKeys\.session\.(?:current|pages)\b/
     const violations = liveSourceFiles().flatMap((path) =>
       retiredKeyPattern.test(readFileSync(path, 'utf-8')) ? [path.replace(`${srcRoot}/`, '')] : [],
     )

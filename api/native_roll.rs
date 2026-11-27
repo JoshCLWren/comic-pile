@@ -259,13 +259,15 @@ fn app() -> Router {
         )
         .route("/api/v2/activity", get(native_dispatch))
         .route("/api/v2/roll/bootstrap", get(native_dispatch))
-        .route("/api/v2/reading-sessions", post(native_dispatch))
+        .route("/api/v2/readingSessions", get(native_dispatch))
+        .route("/api/v2/readingSessions", post(native_dispatch))
+        .route("/api/v2/readingSessions/{session_id}", get(native_dispatch))
         .route(
-            "/api/v2/reading-sessions/{session_id}/snapshots",
+            "/api/v2/readingSessions/{session_id}/snapshots",
             get(native_dispatch),
         )
         .route(
-            "/api/v2/reading-sessions/{session_id}/details",
+            "/api/v2/readingSessions/{session_id}/details",
             get(native_dispatch),
         )
         .route("/api/v2/undo/{session_id}/snapshots", get(native_dispatch))
@@ -1354,8 +1356,10 @@ mod tests {
     #[tokio::test]
     async fn v2_reading_session_ingress_reaches_rust_and_requires_auth() {
         for uri in [
-            "/api/v2/reading-sessions/7/details",
-            "/api/v2/reading-sessions/7/snapshots",
+            "/api/v2/readingSessions",
+            "/api/v2/readingSessions/7",
+            "/api/v2/readingSessions/7/details",
+            "/api/v2/readingSessions/7/snapshots",
         ] {
             let mut router = app();
             let response = router
@@ -1385,6 +1389,39 @@ mod tests {
             assert!(
                 !text.contains("Wrong number of path arguments"),
                 "numeric session ids must not fail Path extraction for {uri}: {text}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn retired_session_paths_are_not_registered_at_the_ingress() {
+        // #4343 retired the v1 session index/current/single reads and #5708
+        // moved the live v2 family to the canonical lowerCamelCase collection.
+        // No compatibility alias is mounted here, so Vercel's catch-all cannot
+        // revive either shape.
+        for (method, uri) in [
+            ("GET", "/api/v1/sessions/"),
+            ("GET", "/api/v1/sessions/7"),
+            ("GET", "/api/v1/sessions/current/"),
+            ("GET", "/api/v2/reading-sessions"),
+            ("POST", "/api/v2/reading-sessions"),
+            ("GET", "/api/v2/reading-sessions/7/details"),
+            ("GET", "/api/v2/reading-sessions/7/snapshots"),
+        ] {
+            let response = app()
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert_eq!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "{method} {uri} must stay retired"
             );
         }
     }

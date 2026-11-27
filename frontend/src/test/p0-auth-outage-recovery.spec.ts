@@ -55,7 +55,7 @@ test.describe('Auth Outage Recovery', () => {
       unresolved_reference_count: 0,
     })
     mockApi.get('/api/v2/auth/csrf').as('csrf').replyAlways(200, { csrf_token: 'test-csrf-token' })
-    mockApi.post('/api/v2/reading-sessions').as('readingSession').replyAlways(200, { session_id: 1, created: true })
+    mockApi.post('/api/v2/readingSessions').as('readingSession').replyAlways(200, { session_id: 1, created: true })
     mockApi.get('/api/v2/roll/bootstrap').as('rollBootstrap').replyAlways(200, {
       session_id: 1,
       user_id: 1,

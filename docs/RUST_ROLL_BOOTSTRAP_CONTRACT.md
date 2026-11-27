@@ -66,7 +66,7 @@ change and fresh isolated Python capture; that path no longer exists.
 
 The matrix below records the retired Python oracle's fixture design. It is not a
 description of current GET side effects: the native GET is read-only, and explicit
-session initialization now belongs to `POST /api/v2/reading-sessions`.
+session initialization now belongs to `POST /api/v2/readingSessions`.
 
 All historical happy-path fixtures used Option E enabled with a local-only
 approval reference. Unless specified, Alpha and Beta each had two unread issues,
@@ -104,7 +104,7 @@ issue read state, event count, full undo snapshot content, and live thread state
 1. `get_current_user` verifies the signed access JWT, expiry, string subject/jti,
    access-token type, revocation, and credential epoch before reading history.
    Reading-history sessions are not login credentials.
-2. `POST /api/v2/reading-sessions` is the explicit initialization boundary. It
+2. `POST /api/v2/readingSessions` is the explicit initialization boundary. It
    creates or reuses the reader's active session and performs the required
    initialization writes. `GET /api/v2/roll/bootstrap` then reads that session in a
    read-only transaction and returns `404 No active session` when none exists.
@@ -161,7 +161,7 @@ Evidence captured in that session:
 - Roll page (`/`) rendered the `Roll` heading, die selector (`d20`
   pressed), account identity `Josh_Digital_Comics`, and "20 in play / 20
   mapped results" with all 20 die faces.
-- Browser network ledger showed `POST /api/v2/reading-sessions => 200`,
+- Browser network ledger showed `POST /api/v2/readingSessions => 200`,
   `GET /api/v2/roll/bootstrap?timezone=America%2FChicago => 200` on
   initial load, and `GET /api/v2/roll/bootstrap => 200` plus `POST
   /api/v2/roll/offer => 200` after clicking "Roll the dice"

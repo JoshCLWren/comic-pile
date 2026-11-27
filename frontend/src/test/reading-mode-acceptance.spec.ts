@@ -73,7 +73,7 @@ async function mockRustRollReadApi(page: Page): Promise<void> {
     if (endpoint === 'csrf') {
       return route.fulfill({ json: { csrf_token: 'test-csrf' } })
     }
-    if (path === '/api/v2/reading-sessions') {
+    if (path === '/api/v2/readingSessions') {
       return route.fulfill({ json: { session_id: 1, created: false } })
     }
     if (path === '/api/v2/roll/bootstrap') {

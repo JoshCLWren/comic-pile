@@ -12,7 +12,7 @@ ingress in `api/native_roll.rs` / `native/roll-service/src`.
 
 - Cold Roll: `useRollBootstrap` (`frontend/src/hooks/useRollBootstrap.ts`) calls
   `rollBootstrapApi.get(timezone)` (`frontend/src/services/rollBootstrapApi.ts`),
-  which resolves the reading session with `POST /v2/reading-sessions` and then
+  which resolves the reading session with `POST /v2/readingSessions` and then
   reads the projection with `GET /v2/roll/bootstrap` (both Rust,
   `api/native_roll.rs` routes). Since #4719, the page also reads the scoped
   `GET /v2/roll/die-state`, `GET /v2/roll/eligible-issue-ids` (with the
@@ -47,8 +47,8 @@ ownership stay server-side; the client never sends a user id.
 
 | Scenario | Before | After |
 | --- | --- | --- |
-| Cold Roll load | `POST /v2/reading-sessions` + `GET /v2/roll/bootstrap` | same two calls, plus `GET /v2/roll/die-state`, `GET /v2/roll/eligible-issue-ids` and one bounded `POST /v2/issues/cards` after the #4719 scoped-surface mounts |
-| Bootstrap refetch (retry probe, post-mutation reconciliation, undo refresh, Roll re-entry) | `POST /v2/reading-sessions` + `GET /v2/roll/bootstrap` | `GET /v2/roll/bootstrap` only |
+| Cold Roll load | `POST /v2/readingSessions` + `GET /v2/roll/bootstrap` | same two calls, plus `GET /v2/roll/die-state`, `GET /v2/roll/eligible-issue-ids` and one bounded `POST /v2/issues/cards` after the #4719 scoped-surface mounts |
+| Bootstrap refetch (retry probe, post-mutation reconciliation, undo refresh, Roll re-entry) | `POST /v2/readingSessions` + `GET /v2/roll/bootstrap` | `GET /v2/roll/bootstrap` only |
 | Session gap lapsed / different reader | `POST` + 404 `GET` | `POST` + 404 `GET` + one `POST` + one `GET` (bounded recovery) |
 | Cold Queue load | 6 batched reads (list, excluded, session, boundaries, legacy blocking, crossovers) | unchanged (see "Not in this change") |
 | Read/Rate → next Roll | rate PATCH + bootstrap `POST` + `GET` | rate PATCH + bootstrap `GET` |
@@ -66,7 +66,7 @@ persistence). The bootstrap read queries are unchanged.
 - `frontend/src/unit/coreRouteRequestBudget.test.tsx` — exact transport counts
   for Roll cold load and the move-front bootstrap refresh.
 - `frontend/src/test/p0-roll-selection.spec.ts` — Chromium budget: post-mutation
-  refresh is one `GET /v2/roll/bootstrap` and zero `POST /v2/reading-sessions`.
+  refresh is one `GET /v2/roll/bootstrap` and zero `POST /v2/readingSessions`.
 - Local run (this session): `pnpm exec vitest run` over the request-scope files
   (68 tests) and `pnpm run typecheck` / `eslint` / `build` — green. Chromium
   specs require a local backend and are covered by CI, not claimed locally.

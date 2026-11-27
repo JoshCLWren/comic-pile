@@ -19,7 +19,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri("/api/v2/reading-sessions")
+                    .uri("/api/v2/readingSessions")
                     .header("authorization", format!("Bearer {token}"))
                     .header("content-type", "application/json")
                     .header("cookie", "csrf_token=synthetic-parity-csrf")

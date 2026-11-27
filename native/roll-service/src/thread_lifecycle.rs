@@ -4,6 +4,9 @@
 //! * `POST /api/v1/threads/` (create; retained until live v2 proof)
 //! * `POST /api/v2/threads` (AIP-133 standard Create, #5702)
 //! * `PUT` / `DELETE /api/v1/threads/{thread_id}`
+//! * `PATCH` / `DELETE /api/v2/threads/{thread_id}` (#5703, canonical AIP-134/135
+//!   resource methods; the v1 pair remains mounted until live callers are
+//!   migrated and authenticated production proof exists)
 //! * `POST /api/v1/threads/{thread_id}/exclude`, `/restore`, `/set-pending`
 //! * `POST /api/v1/threads/reactivate`
 //! * `GET /api/v1/threads/stale`
@@ -131,6 +134,57 @@ pub struct ThreadUpdateRequest {
     pub notes: Option<String>,
     pub manual_creator_credits: Option<Vec<Value>>,
     pub is_test: Option<bool>,
+}
+
+/// Fields a caller may name in an AIP-134 `update_mask` for a Thread patch.
+pub const THREAD_PATCH_FIELDS: [&str; 6] = [
+    "title",
+    "format",
+    "issues_remaining",
+    "notes",
+    "manual_creator_credits",
+    "is_test",
+];
+
+/// Body of `PATCH /api/v2/threads/{thread_id}`.
+///
+/// `update_mask` follows AIP-134: when supplied, only the named fields are
+/// applied; a named field missing from the body is explicitly cleared. When it
+/// is omitted or empty, every field present in the body is applied and every
+/// omitted field is preserved (the legacy partial-update behavior).
+#[derive(Debug, utoipa::ToSchema)]
+pub struct ThreadPatchRequest {
+    /// New series title. Omitted fields are preserved.
+    pub title: Option<String>,
+    /// New format; normalized to the reader's canonical vocabulary.
+    pub format: Option<String>,
+    /// Manual issue counter for untracked series (legacy queue transition).
+    pub issues_remaining: Option<i32>,
+    /// Notes. `null` or a blank string clears the stored value; omit to keep it.
+    pub notes: Option<Option<String>>,
+    /// Manual creator credits. `null` clears them; names and roles are bounded.
+    pub manual_creator_credits: Option<Option<Vec<Value>>>,
+    /// Test-series flag. Omit to preserve it.
+    pub is_test: Option<bool>,
+    /// Explicit field mask (AIP-134). Either an array of field names or one
+    /// comma-separated string. Omit for presence-based partial update.
+    pub update_mask: Option<Vec<String>>,
+    /// Optional stale-client precondition. Every supplied value must still
+    /// match the committed row; otherwise the patch returns HTTP 409.
+    pub expected: Option<ThreadPatchPrecondition>,
+}
+
+/// Committed values a stale client read before issuing a Thread patch.
+#[derive(Debug, utoipa::ToSchema)]
+pub struct ThreadPatchPrecondition {
+    /// Title observed by the client.
+    pub title: Option<String>,
+    /// Format observed by the client.
+    pub format: Option<String>,
+    /// Notes observed by the client; `null` means it observed no notes.
+    pub notes: Option<Option<String>>,
+    /// Manual creator credits observed by the client.
+    pub manual_creator_credits: Option<Vec<Value>>,
 }
 
 /// Body of `POST /api/v1/threads/reactivate`.
@@ -568,6 +622,9 @@ struct OwnedThread {
     reading_progress: Option<String>,
     status: String,
     queue_position: i32,
+    /// Read by the v2 patch precondition; unused by the v1 writers.
+    notes: Option<String>,
+    manual_creator_credits: Value,
 }
 
 async fn find_owned(
@@ -579,7 +636,7 @@ async fn find_owned(
     let id = i32::try_from(thread_id).map_err(|_| not_found(thread_id))?;
     let sql = format!(
         "SELECT id, title, format, issues_remaining, total_issues, reading_progress,
-                status, queue_position
+                status, queue_position, notes, manual_creator_credits
          FROM threads WHERE id = $1 AND user_id = $2{}",
         if for_update { " FOR UPDATE" } else { "" }
     );
@@ -597,6 +654,8 @@ async fn find_owned(
         reading_progress: row.get(5),
         status: row.get(6),
         queue_position: row.get(7),
+        notes: row.get(8),
+        manual_creator_credits: row.get(9),
     })
 }
 
@@ -934,7 +993,16 @@ fn parse_update(
         true,
         false,
     );
-    let credits = credits_field(check, map.get("manual_creator_credits"), true);
+    let credits = if map.contains_key("manual_creator_credits") {
+        match map.get("manual_creator_credits") {
+            Some(Value::Null) => Some(json!([])),
+            Some(_) => credits_field(check, map.get("manual_creator_credits"), true)
+                .map(|items| normalize_manual_creator_credits(&items)),
+            None => None,
+        }
+    } else {
+        None
+    };
     let is_test = match map.get("is_test") {
         None | Some(Value::Null) => None,
         Some(value) => match coerce_bool(value) {
@@ -956,7 +1024,7 @@ fn parse_update(
             issues_remaining,
             notes_present: map.contains_key("notes"),
             notes,
-            credits: credits.map(|items| normalize_manual_creator_credits(&items)),
+            credits,
             is_test,
         },
         raw_body,
@@ -967,22 +1035,233 @@ fn check_errors(check: &Check) -> Vec<Value> {
     check.errors_snapshot()
 }
 
+/// Committed values a stale-client patch must still observe before it can write.
+#[derive(Debug, Default)]
+struct PatchPrecondition {
+    title: Option<String>,
+    format: Option<String>,
+    notes_present: bool,
+    notes: Option<String>,
+    credits: Option<Vec<Value>>,
+}
+
+/// Parse the AIP-134 field mask. Both the array form and the canonical
+/// comma-separated string form are accepted; empty means "use body presence".
+fn parse_update_mask(check: &mut Check, value: Option<&Value>) -> Option<Vec<String>> {
+    let value = value?;
+    let names: Vec<String> = match value {
+        Value::String(text) => text
+            .split(',')
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(str::to_owned)
+            .collect(),
+        Value::Array(items) => items
+            .iter()
+            .filter_map(|item| match item.as_str() {
+                Some(name) => Some(name.to_owned()),
+                None => {
+                    check.push(
+                        &["body", "update_mask"],
+                        "string_type",
+                        "Input should be a valid string",
+                    );
+                    None
+                }
+            })
+            .collect(),
+        _ => {
+            check.push(
+                &["body", "update_mask"],
+                "list_type",
+                "Input should be a valid list",
+            );
+            Vec::new()
+        }
+    };
+    for name in &names {
+        if !THREAD_PATCH_FIELDS.contains(&name.as_str()) {
+            check.push(
+                &["body", "update_mask"],
+                "value_error",
+                format!("Unsupported field mask: {name}"),
+            );
+        }
+    }
+    (!names.is_empty()).then_some(names)
+}
+
+/// Parse the optional stale-client precondition object.
+fn parse_precondition(check: &mut Check, value: &Value) -> PatchPrecondition {
+    let mut precondition = PatchPrecondition::default();
+    let Some(object) = value.as_object() else {
+        check.push(
+            &["body", "expected"],
+            "model_attributes_type",
+            "Input should be a valid dictionary or object to extract fields from",
+        );
+        return precondition;
+    };
+    for key in object.keys() {
+        if !matches!(
+            key.as_str(),
+            "title" | "format" | "notes" | "manual_creator_credits"
+        ) {
+            check.push(
+                &["body", "expected", key],
+                "extra_forbidden",
+                "Extra inputs are not permitted",
+            );
+        }
+    }
+    precondition.title = str_field(
+        check,
+        &["body", "expected", "title"],
+        object.get("title"),
+        StrRules {
+            min: Some(1),
+            max: Some(200),
+        },
+        false,
+        false,
+    );
+    precondition.format = str_field(
+        check,
+        &["body", "expected", "format"],
+        object.get("format"),
+        StrRules {
+            min: Some(1),
+            max: None,
+        },
+        false,
+        false,
+    );
+    if object.contains_key("notes") {
+        precondition.notes_present = true;
+        precondition.notes = str_field(
+            check,
+            &["body", "expected", "notes"],
+            object.get("notes"),
+            StrRules::default(),
+            true,
+            false,
+        );
+    }
+    match object.get("manual_creator_credits") {
+        None => {}
+        Some(Value::Null) => precondition.credits = Some(Vec::new()),
+        Some(Value::Array(items)) => precondition.credits = Some(items.clone()),
+        Some(_) => check.push(
+            &["body", "expected", "manual_creator_credits"],
+            "list_type",
+            "Input should be a valid list",
+        ),
+    }
+    precondition
+}
+
+/// Translate a v2 PATCH body into the shared update input. An explicit mask
+/// restricts writes to its fields; a missing masked field clears that field.
+fn parse_patch(
+    check: &mut Check,
+    body: Option<Value>,
+) -> Result<(UpdateInput, Option<PatchPrecondition>), LifecycleError> {
+    let mut map = require_object(body)?;
+    let mask = parse_update_mask(check, map.get("update_mask"));
+    let expected = map
+        .get("expected")
+        .map(|value| parse_precondition(check, value));
+    map.remove("update_mask");
+    map.remove("expected");
+    if let Some(fields) = mask {
+        let mut masked = serde_json::Map::new();
+        for field in fields {
+            // A masked field absent from the body is explicitly cleared to its
+            // zero value. `null` cannot clear a required title/count, so those
+            // correctly fail validation instead.
+            let value = match map.get(&field) {
+                Some(value) => value.clone(),
+                None if field == "is_test" => Value::Bool(false),
+                None => Value::Null,
+            };
+            masked.insert(field, value);
+        }
+        map = masked;
+    }
+    let (input, _) = parse_update(check, Some(Value::Object(map)))?;
+    Ok((input, expected))
+}
+
+/// Verify a stale-client precondition against the locked, owned row.
+fn check_precondition(
+    thread: &OwnedThread,
+    expected: &PatchPrecondition,
+) -> Result<(), LifecycleError> {
+    let mut current = serde_json::Map::new();
+    if let Some(title) = &expected.title {
+        if *title != thread.title {
+            current.insert("title".to_owned(), json!(thread.title));
+        }
+    }
+    if let Some(format) = &expected.format {
+        let normalized = normalize_format_value(format);
+        if normalized != thread.format {
+            current.insert("format".to_owned(), json!(thread.format));
+        }
+    }
+    if expected.notes_present {
+        let observed = normalize_notes_value(expected.notes.as_deref());
+        if observed != thread.notes {
+            current.insert(
+                "notes".to_owned(),
+                thread.notes.clone().map_or(Value::Null, Value::String),
+            );
+        }
+    }
+    if let Some(credits) = &expected.credits {
+        let normalized = normalize_manual_creator_credits(credits);
+        if normalized != thread.manual_creator_credits {
+            current.insert(
+                "manual_creator_credits".to_owned(),
+                thread.manual_creator_credits.clone(),
+            );
+        }
+    }
+    if current.is_empty() {
+        return Ok(());
+    }
+    Err(ApiError::structured(
+        StatusCode::CONFLICT,
+        json!({
+            "code": "thread_edit_conflict",
+            "message": "Thread changed since it was loaded; reload before retrying",
+            "current": Value::Object(current),
+        }),
+    )
+    .into())
+}
+
 async fn update_once(
     state: &AppState,
     user: AuthenticatedUser,
     thread_id: i64,
     input: &UpdateInput,
+    expected: Option<&PatchPrecondition>,
+    lock_queue: bool,
 ) -> Result<(), LifecycleError> {
     with_tx!(state, tx, db::tx_error, {
-        // Take the queue lock before the row lock when this update can mutate the
-        // active queue, matching every other queue writer (exclude/restore/delete/
-        // reactivate/renormalize) so concurrent operations cannot deadlock.
-        if input.issues_remaining.is_some() {
+        // Take the queue lock before the row lock when this writer can touch the
+        // active queue (including every v2 patch), matching every other queue
+        // writer (exclude/restore/delete/reactivate/renormalize).
+        if lock_queue {
             acquire_queue_lock(&tx, user.id()).await?;
         }
         // Lock the owned row so a concurrent writer cannot change fields that this
-        // partial PUT does not supply while we decide/apply queue transitions.
+        // partial update does not supply while we decide/apply queue transitions.
         let thread = find_owned(&tx, user.id(), thread_id, true).await?;
+        if let Some(expected) = expected {
+            check_precondition(&thread, expected)?;
+        }
 
         // Python applies the legacy issues_remaining transition in-place (and may
         // flush status before computing an append position) instead of rewriting the
@@ -1081,7 +1360,12 @@ async fn update_once(
     })
 }
 
-/// `PUT /api/v1/threads/{thread_id}`
+/// `PUT /api/v1/threads/{thread_id}` (retained temporarily for live callers).
+///
+/// This is a partial update in practice, but AIP-134 names `PATCH` as the
+/// standard resource method; `patch_thread` is the v2 destination. No full
+/// replacement PUT contract exists, so no v2 PUT is introduced. The v1 route is
+/// removed only after #5703's v2 callers are proven in production.
 pub async fn update_thread(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1094,7 +1378,41 @@ pub async fn update_thread(
     let (input, raw_body) = parse_update(&mut check, parsed_body)?;
     check.finish(raw_body)?;
     let thread_id = thread_id.unwrap_or_default();
-    update_once(&state, user, thread_id, &input).await?;
+    update_once(
+        &state,
+        user,
+        thread_id,
+        &input,
+        None,
+        input.issues_remaining.is_some(),
+    )
+    .await?;
+    respond_thread(&state, user, thread_id as i32, StatusCode::OK).await
+}
+
+// ---------------------------------------------------------------------------
+// PATCH /api/v2/threads/{thread_id}
+// ---------------------------------------------------------------------------
+
+/// `PATCH /api/v2/threads/{thread_id}` (AIP-134 partial update).
+///
+/// The URL and response are v2-only. Ownership is checked inside the same
+/// transaction as the write, so a deleted or foreign Thread is always a 404 and
+/// never confirms that somebody else's series exists.
+pub async fn patch_thread(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(raw_id): Path<String>,
+    body: Bytes,
+) -> HandlerResult {
+    let mut check = Check::default();
+    let thread_id = path_int(&mut check, "thread_id", &raw_id);
+    let parsed_body = parse_body(&body)?;
+    let raw_body = parsed_body.clone().unwrap_or(Value::Null);
+    let (input, expected) = parse_patch(&mut check, parsed_body)?;
+    check.finish(raw_body)?;
+    let thread_id = thread_id.unwrap_or_default();
+    update_once(&state, user, thread_id, &input, expected.as_ref(), true).await?;
     respond_thread(&state, user, thread_id as i32, StatusCode::OK).await
 }
 
@@ -1368,6 +1686,23 @@ async fn delete_once(
 
 /// `DELETE /api/v1/threads/{thread_id}`
 pub async fn delete_thread(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(raw_id): Path<String>,
+) -> HandlerResult {
+    let mut check = Check::default();
+    let thread_id = path_int(&mut check, "thread_id", &raw_id);
+    check.finish(Value::Null)?;
+    delete_once(&state, user, thread_id.unwrap_or_default()).await?;
+    Ok(StatusCode::NO_CONTENT.into_response())
+}
+
+/// `DELETE /api/v2/threads/{thread_id}` (AIP-135).
+///
+/// Idempotent at the HTTP contract level: a second delete (or a delete of a
+/// foreign/deleted Thread) returns 404 from the owner-scoped lookup, because
+/// 404 never confirms that another reader's resource exists.
+pub async fn delete_thread_v2(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     Path(raw_id): Path<String>,
@@ -2834,6 +3169,49 @@ pub fn update_thread_documentation() {}
 pub fn delete_thread_documentation() {}
 
 #[utoipa::path(
+    patch,
+    path = "/api/v2/threads/{thread_id}",
+    tag = "threads",
+    description = "Partially update an owned Thread (AIP-134). Omitted fields are \
+                   preserved. When `update_mask` is supplied only its fields are applied; \
+                   a masked field missing from the body is cleared. An `expected` \
+                   precondition that no longer matches the committed row returns 409 with \
+                   `detail.code = thread_edit_conflict` and the current values. Foreign or \
+                   deleted Threads return 404, never 403.",
+    params(("thread_id" = i32, Path, description = "Owned thread identifier")),
+    request_body = ThreadPatchRequest,
+    responses(
+        (status = 200, description = "Updated thread", body = ThreadResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Thread not found (including another reader's thread)"),
+        (status = 409, description = "Stale `expected` precondition; reload before retrying"),
+        (status = 422, description = "Validation failed")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn patch_thread_documentation() {}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v2/threads/{thread_id}",
+    tag = "threads",
+    description = "Delete an owned Thread (AIP-135). A second delete, or a delete of a \
+                   foreign or already deleted Thread, returns 404. Never 403.",
+    params(("thread_id" = i32, Path, description = "Owned thread identifier")),
+    responses(
+        (status = 204, description = "Deleted"),
+        (status = 400, description = "The database refused the deletion"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Thread not found"),
+        (status = 422, description = "Validation failed")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn delete_thread_v2_documentation() {}
+
+#[utoipa::path(
     post,
     path = "/api/v1/threads/{thread_id}/exclude",
     tag = "threads",
@@ -3084,5 +3462,105 @@ mod tests {
         assert_eq!(pruned[0]["position"], 0);
         assert_eq!(pruned[1]["position"], 0);
         assert!(prune_plan_nodes(&nodes, 99, &HashSet::new()).is_none());
+    }
+
+    #[test]
+    fn patch_mask_restricts_writes_and_clears_a_masked_absent_field() {
+        let mut check = Check::default();
+        let body = json!({
+            "title": "A newer title",
+            "format": "Comic",
+            "update_mask": ["notes"]
+        });
+        let (input, expected) = parse_patch(&mut check, Some(body)).unwrap();
+        assert!(check.is_clean());
+        assert!(expected.is_none());
+        assert_eq!(input.title, None);
+        assert_eq!(input.format, None);
+        assert!(input.notes_present);
+        assert_eq!(input.notes, None);
+
+        let mut check = Check::default();
+        let (input, _) = parse_patch(
+            &mut check,
+            Some(json!({"title": "kept", "update_mask": ["is_test"]})),
+        )
+        .unwrap();
+        assert!(check.is_clean());
+        assert_eq!(input.is_test, Some(false));
+    }
+
+    #[test]
+    fn patch_without_mask_preserves_omitted_fields() {
+        let mut check = Check::default();
+        let (input, _) =
+            parse_patch(&mut check, Some(json!({"notes": null, "title": "Renamed"}))).unwrap();
+        assert!(check.is_clean());
+        assert_eq!(input.title.as_deref(), Some("Renamed"));
+        assert!(input.notes_present);
+        assert_eq!(input.notes, None);
+        assert_eq!(input.format, None);
+        assert_eq!(input.credits, None);
+    }
+
+    #[test]
+    fn patch_mask_rejects_unknown_fields() {
+        let mut check = Check::default();
+        assert!(parse_patch(
+            &mut check,
+            Some(json!({"title": "x", "update_mask": ["status"]})),
+        )
+        .is_ok());
+        assert!(!check.is_clean());
+        assert!(check_errors(&check)
+            .iter()
+            .any(|error| error["field"] == "body.update_mask"));
+    }
+
+    fn owned_thread_for_precondition() -> OwnedThread {
+        OwnedThread {
+            id: 7,
+            title: "Committed title".to_owned(),
+            format: "Comic".to_owned(),
+            issues_remaining: 3,
+            total_issues: None,
+            reading_progress: None,
+            status: "active".to_owned(),
+            queue_position: 1,
+            notes: Some("committed notes".to_owned()),
+            manual_creator_credits: json!([{"name": "Jane Doe", "roles": ["Writer"]}]),
+        }
+    }
+
+    #[test]
+    fn patch_precondition_accepts_the_committed_snapshot() {
+        let expected = PatchPrecondition {
+            title: Some("Committed title".to_owned()),
+            format: Some("comics".to_owned()),
+            notes_present: true,
+            notes: Some("committed notes".to_owned()),
+            credits: Some(vec![json!({"name": "  Jane   Doe ", "roles": ["Writer"]})]),
+        };
+        check_precondition(&owned_thread_for_precondition(), &expected).unwrap();
+    }
+
+    #[test]
+    fn patch_precondition_returns_409_with_current_values_when_stale() {
+        let expected = PatchPrecondition {
+            title: Some("Stale title".to_owned()),
+            format: Some("Comic".to_owned()),
+            notes_present: true,
+            notes: Some("stale notes".to_owned()),
+            credits: None,
+        };
+        let failure = check_precondition(&owned_thread_for_precondition(), &expected).unwrap_err();
+        let LifecycleError::Api(error) = failure else {
+            panic!("expected an API conflict, not a validation failure");
+        };
+        assert_eq!(error.status(), StatusCode::CONFLICT);
+        let detail = error.structured_detail().expect("structured conflict");
+        assert_eq!(detail["code"], "thread_edit_conflict");
+        assert_eq!(detail["current"]["title"], "Committed title");
+        assert_eq!(detail["current"]["notes"], "committed notes");
     }
 }

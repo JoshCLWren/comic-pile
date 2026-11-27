@@ -175,6 +175,25 @@ export interface ThreadUpdatePayload {
   manual_creator_credits?: ManualCreatorCredit[];
 }
 
+/** AIP-134 partial update body for `PATCH /api/v2/threads/{thread_id}`. */
+export interface ThreadPatchPayload {
+  title?: string;
+  format?: string;
+  issues_remaining?: number | null;
+  notes?: string | null;
+  manual_creator_credits?: ManualCreatorCredit[] | null;
+  is_test?: boolean;
+  /** Explicit field mask. Derived from supplied keys when omitted. */
+  update_mask?: string[];
+  /** Stale-client precondition; 409 with current values on mismatch. */
+  expected?: {
+    title?: string;
+    format?: string;
+    notes?: string | null;
+    manual_creator_credits?: ManualCreatorCredit[];
+  };
+}
+
 /**
  * How strongly a possible existing volume resembles the candidate series.
  *

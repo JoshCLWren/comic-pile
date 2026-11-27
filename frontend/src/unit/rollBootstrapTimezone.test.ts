@@ -18,7 +18,7 @@ beforeEach(() => {
 it('sends a valid browser IANA timezone as the bootstrap query parameter', async () => {
   await rollBootstrapApi.get('America/Chicago')
 
-  expect(client.post).toHaveBeenCalledWith('/v2/reading-sessions', { timezone: 'America/Chicago' })
+  expect(client.post).toHaveBeenCalledWith('/v2/readingSessions', { timezone: 'America/Chicago' })
   expect(client.get).toHaveBeenCalledWith('/v2/roll/bootstrap', {
     params: { timezone: 'America/Chicago' },
   })
@@ -29,13 +29,13 @@ it('keeps the canonical bootstrap path when no timezone is available', async () 
 
   expect(client.get).toHaveBeenCalledWith('/v2/roll/bootstrap')
   expect(client.get).toHaveBeenCalledTimes(1)
-  expect(client.post).toHaveBeenCalledWith('/v2/reading-sessions', {})
+  expect(client.post).toHaveBeenCalledWith('/v2/readingSessions', {})
 })
 
 it('treats a blank timezone like a missing value instead of sending garbage', async () => {
   await rollBootstrapApi.get('')
 
-  expect(client.post).toHaveBeenCalledWith('/v2/reading-sessions', {})
+  expect(client.post).toHaveBeenCalledWith('/v2/readingSessions', {})
   expect(client.get).toHaveBeenCalledWith('/v2/roll/bootstrap')
 })
 
@@ -119,5 +119,5 @@ it('re-resolves when the browser timezone changes (#4276)', async () => {
   // The stored session timezone tracks the reader's current zone, so a zone
   // change is a new resolution (one more write), never a skipped one.
   expect(client.post).toHaveBeenCalledTimes(2)
-  expect(client.post).toHaveBeenLastCalledWith('/v2/reading-sessions', { timezone: 'Europe/London' })
+  expect(client.post).toHaveBeenLastCalledWith('/v2/readingSessions', { timezone: 'Europe/London' })
 })

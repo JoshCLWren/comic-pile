@@ -1287,8 +1287,8 @@ pub fn bootstrap_documentation() {}
 /// Documentation-only operation for the mounted v2 reading-session initializer.
 #[utoipa::path(
     post,
-    path = "/api/v2/reading-sessions",
-    tag = "reading-sessions",
+    path = "/api/v2/readingSessions",
+    tag = "readingSessions",
     request_body = InitializeSessionRequest,
     responses(
         (status = 200, description = "Created or resumed reading-session identity", body = ReadingSessionCreatedResponse),

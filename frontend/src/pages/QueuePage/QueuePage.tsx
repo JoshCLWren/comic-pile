@@ -13,7 +13,7 @@ import { useToast } from '../../contexts/useToast'
 import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../../query/cacheEffects'
 import { queryClient } from '../../query/queryClient'
 import { PositionMenuProvider } from '../../contexts/PositionMenuProvider'
-import type { ThreadListItem, ThreadCreatePayload, ThreadUpdatePayload } from '../../types'
+import type { ThreadListItem, ThreadCreatePayload, ThreadPatchPayload } from '../../types'
 import CompletedThreadsSection from './CompletedThreadsSection'
 import ExcludedThreadsSection from './ExcludedThreadsSection'
 import { QueueControls } from './QueueControls'
@@ -95,7 +95,7 @@ export default function QueuePage() {
     [createMutation],
   )
   const submitEdit = useCallback(
-    (input: { id: number; data: ThreadUpdatePayload }) => updateMutation.mutate(input),
+    (input: { id: number; data: ThreadPatchPayload }) => updateMutation.mutate(input),
     [updateMutation],
   )
   const submitReactivate = useCallback(
