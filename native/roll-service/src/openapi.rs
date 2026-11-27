@@ -39,6 +39,504 @@ use utoipa::OpenApi;
         // #5716: stateless AIP-136 preview, deliberately separate from the
         // durable commit operation registered above.
         crate::catalog_series_mapping_preview::preview_series_mappings_v2_documentation,
+        // #5715: canonical AIP-136 projection preview and AIP-122 thread
+        // reading-order collection. The retained v1 aliases stay in the
+        // same-path contract only and must not be published here.
+        crate::continuity_plans_project_preview::preview_reading_order_projection_v2_documentation,
+        crate::thread_ordering::thread_reading_orders_v2_documentation,
+        crate::issue_identity::cbl_adoption_commit_documentation,
+        crate::issue_identity::cbl_targeted_adoption_commit_documentation,
+        crate::activity::list_activity_documentation,
+        crate::bootstrap::bootstrap_documentation,
+        crate::bootstrap::initialize_session_documentation,
+        crate::dice_api::manual_die_documentation,
+        crate::roll_offer::offer_documentation,
+        crate::roll_offer::unsnooze_documentation,
+        crate::roll_reset::reset_documentation,
+        crate::roll_override::override_roll_documentation,
+        crate::roll_switch_prerequisite::switch_prerequisite_documentation,
+        crate::dismiss_pending::dismiss_pending_documentation,
+        crate::session_history::list_session_snapshots_documentation,
+        crate::session_details::get_session_details_documentation,
+        crate::session_list::list_reading_sessions_documentation,
+        crate::session_list::get_reading_session_documentation,
+        crate::roll_resources::die_state_documentation,
+        crate::roll_resources::eligible_issue_ids_documentation,
+        crate::reading_boundary::reading_boundary_batch_documentation,
+        crate::demo::read_demo_roll_documentation,
+        crate::metrics::get_metrics_documentation,
+        crate::reading_graph::reading_graph_documentation,
+        crate::reading_graph::repair_documentation,
+        crate::dependencies::create_dependency_documentation,
+        crate::dependencies::delete_dependency_documentation,
+        crate::dependencies::get_thread_dependencies_documentation,
+        crate::legacy_dependencies::blocked_documentation,
+        crate::legacy_dependencies::get_documentation,
+        crate::legacy_dependencies::update_documentation,
+        crate::issue_mutation::create_issues_documentation,
+        crate::issue_mutation::delete_issue_documentation,
+        crate::issue_mutation::issue_order_documentation,
+        crate::issue_mutation::preview_issue_create_documentation,
+        crate::issue_mutation::preview_issue_structure_documentation,
+        crate::issue_read::get_issue_documentation,
+        crate::issue_read::get_issue_dependencies_documentation,
+        crate::issue_read::get_thread_issue_dependencies_documentation,
+        crate::issue_read::list_thread_issues_documentation,
+        crate::issue_read::list_thread_issues_v2_documentation,
+        crate::thread_issues::creator_credits_documentation,
+        crate::tags::list_tags_documentation,
+        crate::tags::create_tag_documentation,
+        crate::tags::effective_issue_documentation,
+        crate::tags::effective_plan_documentation,
+        crate::tags::effective_thread_documentation,
+        crate::tags::effective_thread_issues_documentation,
+        crate::tags::get_tag_documentation,
+        crate::tags::update_tag_documentation,
+        crate::tags::delete_tag_documentation,
+        crate::tags::assign_tag_documentation,
+        crate::tags::bulk_assign_tag_documentation,
+        crate::tags::bulk_unassign_tag_documentation,
+        crate::tags::unassign_tag_documentation,
+        crate::tags::usage_tag_documentation,
+        crate::reading_mode::get_reading_mode_documentation,
+        crate::reading_mode::set_reading_mode_documentation,
+        crate::reading_mode::dismiss_reading_mode_suggestion_documentation,
+        crate::reading_mode::suggest_reading_mode_documentation,
+        crate::preferences::get_user_preferences_documentation,
+        crate::preferences::patch_user_preferences_documentation,
+        crate::preferences::patch_taste_signal_v2_documentation,
+        crate::taste_discoveries::list_v2_documentation,
+        crate::taste_discoveries::dismiss_v2_documentation,
+        crate::reading_list::list_reading_lists_documentation,
+        crate::reading_list::get_reading_list_documentation,
+        crate::reading_list::create_reading_list_documentation,
+        crate::reading_list::delete_reading_list_documentation,
+        crate::reading_list::update_reading_list_documentation,
+        crate::reading_list::read_reading_list_documentation,
+        crate::reading_plan_recovery::preview_documentation,
+        crate::reading_plan_recovery::relink_documentation,
+        crate::reading_plan_reader::read_documentation,
+        crate::identity_inbox::list_documentation,
+        crate::identity_inbox::search_documentation,
+        crate::identity_inbox::get_documentation,
+        crate::identity_inbox::confirm_documentation,
+        crate::identity_inbox::defer_documentation,
+        crate::identity_inbox::reject_documentation,
+        crate::identity_inbox::skip_documentation,
+        crate::continuity_rules::list_documentation,
+        crate::continuity_rules::create_documentation,
+        crate::continuity_rules::get_documentation,
+        crate::continuity_rules::update_documentation,
+        crate::continuity_rules::delete_documentation,
+        // Same-path v1 continuity-plans operations cut over to native Rust.
+        crate::continuity_plans::list_documentation,
+        crate::continuity_plans::create_documentation,
+        crate::continuity_plans::get_documentation,
+        crate::continuity_plans::update_documentation,
+        crate::continuity_plans::delete_documentation,
+        crate::continuity_plans::adopt_reading_order_documentation,
+        crate::continuity_plans::membership_documentation,
+        crate::continuity_plans::link_dependency_documentation,
+        crate::continuity_plans::unlink_dependency_documentation,
+        crate::continuity_plans::project_reading_order_documentation,
+        crate::continuity_plans::release_source_create_documentation,
+        crate::continuity_plans::release_source_list_documentation,
+        crate::continuity_plans::release_source_list_reader_documentation,
+        crate::continuity_plans::release_source_update_documentation,
+        crate::continuity_plans::release_source_delete_documentation,
+        // All five same-path releases operations are documented in this
+        // browser-facing native contract: the two public reads plus the
+        // writer-authorized source/publish/retract operations, which carry
+        // an x-release-writer-token header and keep the wire contract the
+        // Python handler previously served.
+        crate::releases::list_documentation,
+        crate::releases::get_documentation,
+        crate::releases::reconcile_documentation,
+        crate::releases::publish_documentation,
+        crate::releases::retract_documentation,
+        crate::comicvine_resolution::series_import_status_documentation,
+        crate::comicvine_v2::search_series_documentation,
+        crate::comicvine_v2::resolve_input_documentation,
+        crate::comicvine_v2::comicvine_series_issues_documentation,
+        crate::comicvine_v2::import_series_documentation,
+        crate::comicvine_v2::series_import_status_v2_documentation,
+        crate::comicvine_v2::import_issue_documentation,
+        crate::comicvine_v2::confirm_identity_documentation,
+        crate::comicvine_v2::replace_identity_documentation,
+        crate::comicvine_v2::remove_identity_documentation,
+        crate::comicvine_v2::apply_correction_documentation,
+        crate::comicvine_v2::revert_correction_documentation,
+        crate::comicvine_v2::refresh_metadata_documentation,
+        crate::comicvine_v2::get_issue_identity_documentation,
+        crate::comicvine_v2::list_corrections_documentation,
+        crate::creators_v2::list_documentation,
+        crate::creators_v2::summaries_documentation,
+        crate::creators_v2::compare_documentation,
+        crate::creators_v2::discoveries_documentation,
+        crate::creators_v2::team_chemistry_documentation,
+        crate::creators_v2::detail_documentation,
+        crate::creators_v2::series_issues_documentation,
+        crate::creators_v2::metric_documentation,
+        crate::creators_v2::rating_distribution_documentation,
+        crate::creators_v2::role_documentation,
+        crate::creators_v2::series_documentation,
+        // AIP-136 collection custom method for the advisory duplicate lookup (#5705).
+        crate::thread_lifecycle::check_potential_duplicates_v2_documentation,
+    ),
+    components(schemas(
+        crate::auth::dto::RegisterRequest,
+        crate::auth::dto::LoginRequest,
+        crate::auth::dto::RefreshTokenRequest,
+        crate::auth::dto::TokenResponse,
+        crate::auth::dto::UserResponse,
+        crate::auth::dto::ForgotPasswordRequest,
+        crate::auth::dto::ResetPasswordRequest,
+        crate::auth::dto::PasswordResetResponse,
+        crate::auth::dto::CsrfResponse,
+        crate::bootstrap::InitializeSessionRequest,
+        crate::dice_api::ManualDieRequest,
+        crate::dice_api::DiceCommandReceipt,
+        crate::roll_offer::RollOfferRequest,
+        crate::roll_offer::RollOfferResponse,
+        crate::roll_offer::UnsnoozeRequest,
+        crate::roll_offer::UnsnoozeResponse,
+        crate::roll_reset::ResetDiceRequest,
+        crate::roll_reset::ResetDiceResponse,
+        crate::roll_resources::RollDieStateResponse,
+        crate::roll_resources::RollLastRoll,
+        crate::roll_resources::RollEligibleIssueIdsResponse,
+        crate::reading_boundary::ReadingBoundaryBatchRequest,
+        crate::demo::DemoRoll,
+        crate::metrics::StartupMetricsResponse,
+        crate::reading_boundary::ReadingBoundaryBatchResponseV2,
+        crate::reading_graph::ReadingGraphIssue,
+        crate::reading_graph::ReadingGraphEdge,
+        crate::reading_graph::ReadingGraphCycle,
+        crate::reading_graph::ReadingGraphList,
+        crate::reading_graph::ReadingGraphThread,
+        crate::reading_graph::ReadingGraphRepairOption,
+        crate::reading_graph::ReadingGraphResponse,
+        crate::reading_graph::ReadingGraphRepairRequest,
+        crate::reading_graph::ReadingGraphRepairResponse,
+        crate::frontier_audit::FrontierAuditReport,
+        crate::frontier_audit::FrontierAuditFinding,
+        crate::frontier_audit::AuditListMembership,
+        crate::frontier_audit::AuditEvidenceEdge,
+        crate::dependencies::DependencyCreateRequest,
+        crate::dependencies::DependencyResponse,
+        crate::dependencies::ThreadDependenciesResponse,
+        crate::legacy_dependencies::DependencyNoteUpdate,
+        crate::issue_mutation::CreateIssuesRequest,
+        crate::issue_mutation::IssueMutationItem,
+        crate::issue_mutation::IssueListResponse,
+        crate::issue_mutation::IssueOrderRequest,
+        crate::issue_mutation::PreviewIssuesRequest,
+        crate::issue_mutation::PreviewIssueItem,
+        crate::issue_mutation::IssueEditPreviewOutcome,
+        crate::issue_mutation::IssueEditPreviewResponse,
+        crate::issue_mutation::IssueEditAliasOffer,
+        crate::issue_mutation::IssuePlacementStrategy,
+        crate::reading_list::ReadingListEntryIntent,
+        crate::reading_list::ReadingListEntry,
+        crate::reading_list::ReadingListSummary,
+        crate::reading_list::ReadingList,
+        crate::reading_list::ReadingListDependency,
+        crate::reading_list::ReadingListBlockerExplanation,
+        crate::reading_list::ReadingListReaderEntry,
+        crate::reading_list::ReadingListReader,
+        crate::reading_list::ReadingListWrite,
+        crate::reading_list::ReadingListPredecessorChange,
+        crate::reading_plan_recovery::RecoveryStep,
+        crate::reading_plan_recovery::RecoveryCandidate,
+        crate::reading_plan_recovery::PlanRecoveryPreview,
+        crate::reading_plan_recovery::PlanRelinkRequest,
+        crate::reading_plan_recovery::PlanRelinkResult,
+        crate::reading_plan_reader::PlanReaderBlocker,
+        crate::reading_plan_reader::PlanReaderIssue,
+        crate::reading_plan_reader::PlanReaderLane,
+        crate::reading_plan_reader::PlanReaderProgress,
+        crate::reading_plan_reader::PlanReaderSource,
+        crate::reading_plan_reader::PlanReleaseSourceStatus,
+        crate::reading_plan_reader::PlanReleaseCandidate,
+        crate::reading_plan_reader::PlanReaderResponse,
+        crate::identity_inbox::IdentityInboxConfirmRequest,
+        crate::identity_inbox::IdentityInboxRejectRequest,
+        crate::identity_inbox::IdentityInboxCandidate,
+        crate::identity_inbox::IdentityInboxItem,
+        crate::identity_inbox::IdentityInboxResponse,
+        crate::identity_inbox::IdentityInboxSearchResponse,
+        crate::identity_inbox::IdentityInboxActionResponse,
+        crate::issue_read::IssueDependencyEdge,
+        crate::issue_read::IssueDependenciesResponse,
+        crate::issue_read::ThreadIssueDependenciesResponse,
+        crate::issue_read::ThreadIssueListResponse,
+        crate::issue_read::IssueDetailResponse,
+        crate::thread_issues::CreatorCredit,
+        crate::thread_issues::IssueCreatorsEntry,
+        crate::thread_issues::ThreadCreatorCreditsResponse,
+        crate::identity_inbox::IdentityInboxSearchResult,
+        crate::continuity_rules::ContinuityRuleRequest,
+        crate::continuity_rules::ContinuityRuleResponse,
+        crate::continuity_rules::ConvergenceTarget,
+        crate::continuity_plans::ContinuityPlanLane,
+        crate::continuity_plans::ContinuityPlanNode,
+        crate::continuity_plans::ContinuityPlanWrite,
+        crate::continuity_plans::ContinuityPlanResponse,
+        crate::continuity_plans::ContinuityPlanListItem,
+        crate::continuity_plans::ReadingOrderProjectionRequest,
+        crate::continuity_plans::ReadingOrderProjectionEntry,
+        crate::continuity_plans::ReadingOrderProjectionConflict,
+        crate::continuity_plans::ReadingOrderProjectionPreview,
+        crate::continuity_plans::ReadingOrderProjectionResult,
+        crate::continuity_plans::ReadingOrderAdoptRequest,
+        // #5715: preview DTOs are shared with the retained v1 alias, while the
+        // thread reading-order collection keeps its frozen wire shape.
+        crate::continuity_plans_project_preview::ReadingOrderProjectPreviewRequest,
+        crate::continuity_plans_project_preview::ReadingOrderProjectPreviewResponse,
+        crate::continuity_plans_project_preview::ReadingOrderProjectPreviewEntry,
+        crate::continuity_plans_project_preview::ReadingOrderProjectPreviewConflict,
+        crate::thread_ordering::ThreadReadingOrdersResponse,
+        crate::thread_ordering::ReadingOrderResponse,
+        crate::thread_ordering::ReadingOrderItemResponse,
+        crate::continuity_plans::ReleaseSourceCreate,
+        crate::continuity_plans::ReleaseSourceUpdate,
+        crate::continuity_plans::ReleaseSourceResponse,
+        crate::continuity_plans::ReadingPlanReleaseSourceStatus,
+        crate::continuity_plans::ReadingPlanMemberIssue,
+        crate::continuity_plans::ReadingPlanSourceSnapshot,
+        crate::continuity_plans::ReadingPlanSourcePlacementView,
+        crate::continuity_plans::ReadingPlanProgress,
+        crate::continuity_plans::ReadingPlanMembershipResponse,
+        crate::continuity_plans::ReadingPlanDependencyLink,
+        crate::continuity_plans::ReadingPlanDependencyLinkRequest,
+        crate::catalog_commit::CommitRequest,
+        crate::catalog_commit::CommitResponse,
+        crate::catalog_commit::CommitSeriesMapping,
+        // #5716: the preview DTOs are shared by the retained v1 alias, but the
+        // canonical v2 custom method must publish them in the v2 contract too.
+        crate::catalog_series_mapping_preview::SeriesMappingPreviewRequest,
+        crate::catalog_series_mapping_preview::SeriesMappingPreviewResponse,
+        crate::catalog_series_mapping_preview::SeriesMappingPreviewRow,
+        crate::catalog_series_mapping_preview::SeriesMappingPreviewScope,
+        crate::catalog_series_mapping_preview::SeriesMappingPreviewCounts,
+        crate::catalog_series_mapping_preview::SeriesMappingPreviewProviderSeries,
+        crate::issue_identity::CommitSeriesDecision,
+        crate::issue_identity::CommitEntryOverride,
+        crate::issue_identity::CblAdoptionCommitRequest,
+        crate::issue_identity::ContinuityPlanResponseWire,
+        crate::issue_identity::CblAdoptionCommitResponseWire,
+        crate::releases::PublicReleaseResponse,
+        crate::releases::ReleaseListResponse,
+        crate::comicvine_resolution::SeriesImportStatusResponse,
+        crate::comicvine_v2::ComicVineSeriesResult,
+        crate::comicvine_v2::ComicVineSeriesSearchResponse,
+        crate::comicvine_v2::ComicVineResolvedIssue,
+        crate::comicvine_v2::ComicVineIssueCandidate,
+        crate::comicvine_v2::ComicVineResolveResponse,
+        crate::comicvine_v2::ComicVineSeriesIssuesResponse,
+        crate::comicvine_v2::ImportSeriesRequest,
+        crate::comicvine_v2::ImportSeriesIssueResult,
+        crate::comicvine_v2::ImportSeriesResponse,
+        crate::comicvine_v2::ImportIssueRequest,
+        crate::comicvine_v2::ImportIssueResponse,
+        crate::comicvine_v2::MetadataRefreshResponse,
+        crate::comicvine_v2::ConfirmIdentityRequest,
+        crate::comicvine_v2::ReplaceIdentityRequest,
+        crate::comicvine_v2::MetadataCorrectionRequest,
+        crate::comicvine_v2::MetadataCorrectionRevertRequest,
+        crate::comicvine_v2::IssueIdentityMapping,
+        crate::comicvine_v2::IssueIdentityResponse,
+        crate::comicvine_v2::CanonicalCorrection,
+        crate::comicvine_v2::MetadataCorrectionsResponse,
+        crate::creators_v2::CreatorSummaryCoverage,
+        crate::creators_v2::CreatorSummaryItem,
+        crate::creators_v2::CreatorSummariesResponse,
+        crate::creators_v2::CreatorListItem,
+        crate::creators_v2::CreatorListResponse,
+        crate::creators_v2::CreatorRoleStat,
+        crate::creators_v2::CreatorIssueRow,
+        crate::creators_v2::CreatorRatingBucket,
+        crate::creators_v2::CreatorRatingDistribution,
+        crate::creators_v2::CreatorSeriesGroup,
+        crate::creators_v2::CreatorSeriesIssueListResponse,
+        crate::creators_v2::CreatorIssueInsight,
+        crate::creators_v2::CreatorSeriesInsight,
+        crate::creators_v2::CreatorInsights,
+        crate::creators_v2::CreatorDetailResponse,
+        crate::creators_v2::CreatorComparisonRoleStat,
+        crate::creators_v2::CreatorComparisonSeriesAggregate,
+        crate::creators_v2::CreatorComparisonIssueRef,
+        crate::creators_v2::CreatorComparisonItem,
+        crate::creators_v2::CreatorComparisonCoverage,
+        crate::creators_v2::CreatorComparisonResponse,
+        crate::creators_v2::CreatorDiscoveryReason,
+        crate::creators_v2::CreatorDiscoveryEntry,
+        crate::creators_v2::CreatorDiscoveryView,
+        crate::creators_v2::CreatorDiscoveryCoverage,
+        crate::creators_v2::CreatorDiscoveryResponse,
+        crate::creators_v2::CreatorTeamMember,
+        crate::creators_v2::CreatorTeamIssueRef,
+        crate::creators_v2::CreatorTeamSeriesRef,
+        crate::creators_v2::CreatorTeamPair,
+        crate::creators_v2::CreatorTeamCoverage,
+        crate::creators_v2::CreatorTeamChemistryResponse,
+        crate::creators_v2::CreatorMetricCalculation,
+        crate::creators_v2::CreatorMetricIssue,
+        crate::creators_v2::CreatorMetricPagination,
+        crate::creators_v2::CreatorMetricDrilldown,
+        // Advisory duplicate-check DTOs shared with the retained v1 path (#5705).
+        crate::thread_lifecycle::CheckDuplicatesRequest,
+        crate::thread_lifecycle::CheckDuplicatesResponse,
+        crate::thread_lifecycle::PotentialDuplicateMatch,
+    )),
+    modifiers(&NativeSecurityAddon)
+)]
+pub struct NativeSurfaceApi;
+
+struct NativeSecurityAddon;
+
+impl utoipa::Modify for NativeSecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "HTTPBearer",
+                utoipa::openapi::security::SecurityScheme::Http(
+                    utoipa::openapi::security::Http::new(
+                        utoipa::openapi::security::HttpAuthScheme::Bearer,
+                    ),
+                ),
+            );
+        }
+    }
+}
+
+/// Merge every native v2 domain document into one canonical contract.
+///
+/// `NativeSurfaceApi` is the base so its info block is retained; the existing
+/// per-domain documents contribute their paths, component schemas and security
+/// scheme. Merge order is deterministic and the surfaces are disjoint.
+pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
+    let mut openapi = NativeSurfaceApi::openapi()
+        .merge_from(crate::queue::QueueApi::openapi())
+        .merge_from(crate::threads::ThreadsApi::openapi())
+        .merge_from(crate::issue_service::IssueApi::openapi())
+        .merge_from(crate::issue_read_state::IssueReadStateApi::openapi())
+        .merge_from(crate::comicvine_issue::ComicVineIssueApi::openapi())
+        .merge_from(crate::custom_cbl::CustomCblApi::openapi())
+        .merge_from(crate::reading_orders::ReadingOrdersApi::openapi())
+        .merge_from(crate::reading_plan_sync::ReadingPlanSyncApi::openapi())
+        .merge_from(crate::undo_snapshots::UndoSnapshotsApi::openapi())
+        .merge_from(crate::undo_apply::UndoApplyApi::openapi())
+        // #5711: the six crossover-membership operations are v2-only after the
+        // retired `/api/v1` aliases were unmounted. Publish them here so the
+        // generated frontend client stays aligned with the live ingress.
+        .merge_from(crate::dependency_groups::dependency_groups_v2_openapi())
+        // #5710: canonical v2 reading-order-group collection CRUD; the retired
+        // v1 paths are no longer part of the deployed contract.
+        .merge_from(crate::dependency_groups::reading_order_groups_v2_openapi());
+    // The aggregate artifact is the deployed v2 runtime contract. The
+    // completed-threads v1 operation has its own same-path contract and must
+    // not expand the v2 inventory.
+    openapi
+        .paths
+        .paths
+        .remove("/api/v1/threads/completed/threads");
+    openapi
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::Value;
+
+    fn document() -> Value {
+        serde_json::to_value(canonical_openapi()).expect("canonical OpenAPI document")
+    }
+
+    /// The advisory duplicate check is a v2 AIP-136 collection custom method
+    /// (#5705). It must be published with its own operation identity and DTOs,
+    /// separate from both the `GET /api/v2/threads` list/filter contract
+    /// (AIP-132) and the standard AIP-133 Create on the same collection (#5702).
+    #[test]
+    fn check_duplicates_custom_method_is_in_v2_contract() {
+        let doc = document();
+        let operation = &doc["paths"]["/api/v2/threads:checkDuplicates"]["post"];
+        assert_eq!(operation["operationId"], "check_duplicates");
+        assert_eq!(
+            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/CheckDuplicatesRequest"
+        );
+        assert_eq!(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/CheckDuplicatesResponse"
+        );
+        for schema in ["CheckDuplicatesRequest", "CheckDuplicatesResponse"] {
+            assert!(
+                doc["components"]["schemas"][schema].is_object(),
+                "missing {schema} in v2 contract"
+            );
+        }
+        // The collection read keeps its AIP-132 search/filter parameters, and
+        // the collection POST remains the standard Create — neither is
+        // overloaded with the advisory custom method.
+        let collection = &doc["paths"]["/api/v2/threads"];
+        assert!(collection["get"].is_object());
+        assert!(collection["get"]["parameters"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["name"] == "search" && p["in"] == "query"));
+        assert_eq!(
+            collection["post"]["operationId"],
+            "create_thread_v2_documentation"
+        );
+        assert_eq!(
+            collection["post"]["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ThreadCreateRequest"
+        );
+    }
+
+    /// #5716: the canonical preview is an AIP-136 stateless collection custom
+    /// method on the lowerCamelCase `seriesMappings` collection. It must not be
+    /// published as a v1 same-path operation in the v2 contract, and it must
+    /// share its DTOs with the retained commit so the idempotency token stays
+    /// intelligible end to end.
+    #[test]
+    fn series_mappings_preview_custom_method_is_in_v2_contract() {
+        let doc = document();
+        let operation = &doc["paths"]["/api/v2/seriesMappings:preview"]["post"];
+        assert_eq!(operation["operationId"], "preview_series_mappings");
+        assert_eq!(
+            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/SeriesMappingPreviewRequest"
+        );
+        assert_eq!(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/SeriesMappingPreviewResponse"
+        );
+        for schema in [
+            "SeriesMappingPreviewRequest",
+            "SeriesMappingPreviewResponse",
+            "SeriesMappingPreviewRow",
+            "SeriesMappingPreviewScope",
+            "SeriesMappingPreviewCounts",
+            "SeriesMappingPreviewProviderSeries",
+        ] {
+            assert!(
+                doc["components"]["schemas"][schema].is_object(),
+                "missing {schema} in v2 contract"
+            );
+        }
+        assert!(
+            doc["paths"]["/api/v1/catalog/series-mappings/preview"].is_null(),
+            "v1 preview must not be published in the canonical v2 contract"
+        );
+        assert!(
+            doc["paths"]["/api/v2/series-mapping-commits"]["post"].is_object(),
+            "durable v2 commit must stay registered"
+        );
+    }
+
     /// #5715: the canonical projection preview is an AIP-136 custom method on
     /// the lowerCamelCase `continuityPlans` resource, and the thread collection
     /// read is an AIP-122 nested collection. Both publish the frozen wire DTOs;
@@ -93,6 +591,7 @@ use utoipa::OpenApi;
             "durable v2 projection commit must stay registered"
         );
     }
+
     /// The issue read-state and reader-context operations moved from their
     /// `/api/v1/issues/{id}:action` URLs to v2 resources. Every method must stay
     /// in both the domain document and the aggregate runtime contract with its
