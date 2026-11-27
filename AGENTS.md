@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Use **Reading List engine** or **reading-order eligibility** in active code, APIs, UI, tests, docs and issue titles. Retire the old option-letter terminology, including internal symbols, feature flag remnants, log/metric/error names and generated contracts; there is no selectable execution mode. Preserve historical migration files and immutable Git history; if an obsolete persisted identifier requires a forward migration, migrate it rather than editing applied migrations. #3676 owns the naming cleanup and final negative inventory, coordinating with deletion owners.
+Use **Reading List engine** or **reading-order eligibility** in active code, APIs, UI, tests, docs and issue titles. Retire the old option-letter terminology, including internal symbols, feature flag remnants, log/metric/error names, and regenerate generated contracts with the canonical generator (never hand-edit generated output). The target is one canonical evaluator with no selectable execution mode; the v2 reader projection and UI still carry a per-list `execution_mode` discriminator with a `legacy` branch, which #3676/#3677/#3678 retire. Preserve historical migration files and immutable Git history; if an obsolete persisted identifier requires a forward migration, migrate it rather than editing applied migrations. #3676 owns the naming cleanup and final negative inventory, coordinating with deletion owners.
 
 
 ## Binding product target
