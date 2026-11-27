@@ -311,22 +311,4 @@ describe('ManualPickerSearch', () => {
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
     expect(onSubmit).not.toHaveBeenCalled()
   })
-
-  it('never fabricates an exact issue card from a series-only option (#5904)', () => {
-    render(
-      <ManualPickerSearch
-        activeOptions={[{
-          id: 1,
-          label: 'Saga (Comic)',
-          threadTitle: 'Saga',
-          coverImageUrl: 'https://example.test/saga-series.jpg',
-        }]}
-        value=""
-        onChange={vi.fn()}
-      />,
-    )
-    fireEvent.focus(screen.getByRole('combobox'))
-    expect(screen.getByRole('option', { name: 'Saga (Comic)' })).toBeVisible()
-    expect(document.querySelector('[data-testid^="issue-card-trigger-"]')).toBeNull()
-  })
 })

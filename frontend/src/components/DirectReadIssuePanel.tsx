@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { ComicIssueCard } from './ComicIssueCard'
-import CompactIssueCardTrigger from './CompactIssueCardTrigger'
 import { ComicIdentity } from '../pages/RollPage/components/ComicIdentity'
 import { TagSection } from './Tags/TagSection'
-import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
+import { useIssueCards } from '../hooks/useIssueCards'
 import { useComicVineIssueIntelligence } from '../hooks/useComicVineIssueIntelligence'
 import { issuesApi } from '../services/api-issues'
 import { queryKeys } from '../query/queryKeys'
@@ -101,18 +100,7 @@ export function DirectReadIssuePanel({
   // remain usable when optional metadata/cover lookups fail.
   const canShowEditor = issue?.status !== 'read' || card != null
   const lookup = preferredIssueId == null ? nextUnread : preferredIssue
-  const choices = useMemo(
-    () => browse.data?.pages.flatMap((page) => page.issues) ?? [],
-    [browse.data],
-  )
-  // The opt-in picker lists exact owned issues too. One bounded batch serves
-  // all visible choices; collapsed rows issue no provider or card request.
-  const browseIssueIds = useMemo(() => choices.map((candidate) => candidate.id), [choices])
-  const browseCards = useIssueCards(browseIssueIds, { enabled: browseOpen })
-  const browseCardsByIssue = useMemo(
-    () => indexIssueCards(browseCards.data),
-    [browseCards.data],
-  )
+  const choices = browse.data?.pages.flatMap((page) => page.issues) ?? []
 
   return (
     <section className="space-y-3" data-testid="direct-read-issue-panel">
@@ -224,29 +212,17 @@ export function DirectReadIssuePanel({
           )}
           <div className="max-h-64 space-y-1 overflow-y-auto" role="group" aria-label="Owned issues">
             {choices.map((candidate) => (
-              <div
+              <button
                 key={candidate.id}
-                className="space-y-1 rounded-lg border border-[var(--theme-border)] px-3 py-2"
+                type="button"
+                onClick={() => {
+                  setSelectedIssue(candidate)
+                  setBrowseOpen(false)
+                }}
+                className="block min-h-11 w-full rounded-lg border border-[var(--theme-border)] px-3 text-left text-sm hover:bg-[var(--theme-bg-hover)]"
               >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedIssue(candidate)
-                    setBrowseOpen(false)
-                  }}
-                  className="block min-h-11 w-full text-left text-sm hover:bg-[var(--theme-bg-hover)]"
-                >
-                  {threadTitle} #{candidate.issue_number} ({candidate.status})
-                </button>
-                <CompactIssueCardTrigger
-                  issueId={candidate.id}
-                  threadTitle={threadTitle}
-                  issueNumber={String(candidate.issue_number)}
-                  status={candidate.status === 'read' ? 'read' : 'unread'}
-                  card={browseCardsByIssue.get(candidate.id) ?? null}
-                  hideTitle
-                />
-              </div>
+                {threadTitle} #{candidate.issue_number} ({candidate.status})
+              </button>
             ))}
           </div>
           {browse.hasNextPage && (

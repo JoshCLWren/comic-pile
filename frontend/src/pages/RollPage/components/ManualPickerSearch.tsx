@@ -30,11 +30,6 @@ export interface ManualPickerSearchProps {
  * Filtering never mutates, rolls, rates, or marks anything read; it only
  * narrows the visible choices. Selection still resolves to the exact Thread
  * id carried by each option.
- *
- * Options are series-level (thread id + cover), never a canonical owned issue.
- * This picker therefore mounts no shared issue card: a series title or cover
- * is not an owned issue identity and must not produce a fabricated card
- * (issue #5904).
  */
 export function ManualPickerSearch({
   activeOptions,
@@ -201,8 +196,6 @@ export function ManualPickerSearch({
                 id={`${listboxId}-option-${option.id}`}
                 role="option"
                 aria-label={option.label}
-                data-testid="manual-picker-option"
-                data-thread-id={option.id}
                 aria-selected={index === highlighted}
                 className={`cursor-pointer px-3 py-2 text-sm ${
                   index === highlighted

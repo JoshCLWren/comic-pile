@@ -26,15 +26,6 @@ function splitPrerequisiteLabel(label: string) {
   }
 }
 
-/**
- * Only an owned issue node with a canonical id may mount a shared card.
- * Crossover/group nodes and placeholder ids stay labelled text: the label is a
- * display hint, never an owned issue identity (issue #5904).
- */
-function canonicalPrerequisiteIssueId(nodeType: string, nodeId: number): number | null {
-  return nodeType === 'issue' && Number.isInteger(nodeId) && nodeId > 0 ? nodeId : null
-}
-
 /** Explain a blocked pending roll without replacing the original selection. */
 export function RollRecoveryCard({
   recovery,
@@ -46,9 +37,10 @@ export function RollRecoveryCard({
   // Exact owned issue prerequisites share one bounded card batch; crossover
   // group nodes never produce one. Hooks run before the early returns.
   const issuePrerequisiteIds = useMemo(
-    () => (recovery?.readable_prerequisites ?? [])
-      .map((prerequisite) => canonicalPrerequisiteIssueId(prerequisite.node_type, prerequisite.node_id))
-      .filter((id): id is number => id != null),
+    () =>
+      (recovery?.readable_prerequisites ?? [])
+        .filter((prerequisite) => prerequisite.node_type === 'issue')
+        .map((prerequisite) => prerequisite.node_id),
     [recovery],
   )
   const cardsQuery = useIssueCards(issuePrerequisiteIds)
@@ -188,11 +180,8 @@ export function RollRecoveryCard({
             const rowClass =
               'flex w-full flex-col gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left sm:flex-row sm:items-center sm:justify-between sm:gap-3'
 
-            const canonicalIssueId = canonicalPrerequisiteIssueId(
-              prerequisite.node_type,
-              prerequisite.node_id,
-            )
-            const splitLabel = canonicalIssueId != null ? splitPrerequisiteLabel(prerequisite.label) : null
+            const isIssue = prerequisite.node_type === 'issue'
+            const splitLabel = isIssue ? splitPrerequisiteLabel(prerequisite.label) : null
             return (
               <div key={`${prerequisite.node_type}-${prerequisite.node_id}`} className="space-y-1">
                 {isClickable ? (
@@ -211,13 +200,13 @@ export function RollRecoveryCard({
                     {content}
                   </div>
                 )}
-                {canonicalIssueId != null && (
-                  <div className="pl-4" data-testid="roll-recovery-issue-actions">
+                {isIssue && (
+                  <div className="pl-4">
                     <CompactIssueCardTrigger
-                      issueId={canonicalIssueId}
+                      issueId={prerequisite.node_id}
                       threadTitle={splitLabel?.title ?? prerequisite.label}
                       issueNumber={splitLabel?.number ?? '?'}
-                      card={cardsByIssue.get(canonicalIssueId) ?? null}
+                      card={cardsByIssue.get(prerequisite.node_id) ?? null}
                       hideTitle
                       actionLabel="Read directly"
                     />

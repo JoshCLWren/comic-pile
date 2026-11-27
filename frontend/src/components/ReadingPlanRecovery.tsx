@@ -18,21 +18,16 @@ function StepNames({ steps, cardsByIssue }: { steps: RecoveryStep[]; cardsByIssu
         const match = /^(?<title>.+) #(?<number>[^#]+)$/.exec(step.label)
         const title = match?.groups?.title ?? step.label
         const number = match?.groups?.number ?? '?'
-        const canonicalIssueId = canonicalRecoveryIssueId(step.issue_id)
         return (
           <li key={step.issue_id} className="flex flex-wrap items-center gap-2">
             <span className="min-w-0">{step.label} <span className="text-xs">(issue ID {step.issue_id})</span></span>
-            {canonicalIssueId != null && (
-              <span data-testid="plan-recovery-issue-actions">
-                <CompactIssueCardTrigger
-                  issueId={canonicalIssueId}
-                  threadTitle={title}
-                  issueNumber={number}
-                  card={cardsByIssue.get(canonicalIssueId) ?? null}
-                  hideTitle
-                />
-              </span>
-            )}
+            <CompactIssueCardTrigger
+              issueId={step.issue_id}
+              threadTitle={title}
+              issueNumber={number}
+              card={cardsByIssue.get(step.issue_id) ?? null}
+              hideTitle
+            />
           </li>
         )
       })}
@@ -90,15 +85,6 @@ function CandidateChanges({
 }
 
 /**
- * Recovery steps arrive from the owner-scoped preview with a canonical issue
- * id. A malformed placeholder must not become a card target: the label is split
- * for display only and never turned into an inferred owned issue (issue #5904).
- */
-function canonicalRecoveryIssueId(id: number | null | undefined): number | null {
-  return id != null && Number.isInteger(id) && id > 0 ? id : null
-}
-
-/**
  * Plan A's original list primary key was deleted. Recovery never infers authority
  * from a matching title or copies old Plan steps into a new Reading List.
  */
@@ -127,21 +113,17 @@ export function ReadingPlanRecovery({
     () => {
       if (!previewForCards) return []
       const ids = new Set<number>()
-      const addStep = (step: RecoveryStep) => {
-        const canonicalIssueId = canonicalRecoveryIssueId(step.issue_id)
-        if (canonicalIssueId != null) ids.add(canonicalIssueId)
-      }
       if (showSavedRefs) {
-        for (const step of previewForCards.retained_steps) addStep(step)
+        for (const step of previewForCards.retained_steps) ids.add(step.issue_id)
       }
       const selectedCandidate = previewForCards.candidates.find(
         (candidate) => candidate.list_id === selectedId,
       )
       if (selectedCandidate) {
-        for (const step of selectedCandidate.added_steps) addStep(step)
-        for (const step of selectedCandidate.removed_steps) addStep(step)
+        for (const step of selectedCandidate.added_steps) ids.add(step.issue_id)
+        for (const step of selectedCandidate.removed_steps) ids.add(step.issue_id)
         if (showFullOrder) {
-          for (const step of selectedCandidate.steps) addStep(step)
+          for (const step of selectedCandidate.steps) ids.add(step.issue_id)
         }
       }
       return [...ids]

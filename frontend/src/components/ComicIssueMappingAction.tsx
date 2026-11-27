@@ -56,13 +56,8 @@ export default function ComicIssueMappingAction({
   onAddToLibrary,
   compact = false,
 }: ComicIssueMappingActionProps) {
-  // Only a canonical owned issue may enter the owner-scoped mapping workflow.
-  // A provider-only reference or a legacy placeholder id must never trigger an
-  // identity lookup or open a dialog that could map a different comic.
-  const ownedIssueId =
-    isOwned && issueId != null && Number.isInteger(issueId) && issueId > 0 ? issueId : null
   const mapping = useComicIssueMapping({
-    issueId: ownedIssueId,
+    issueId,
     threadTitle,
     issueNumber,
     initialIdentity,
@@ -73,7 +68,7 @@ export default function ComicIssueMappingAction({
 
   if (!isOwned) {
     return (
-      <span className="inline-flex items-center gap-2" data-testid="comic-mapping-action" data-mapping-scope="provider-only">
+      <span className="inline-flex items-center gap-2" data-testid="comic-mapping-action">
         <button
           type="button"
           onClick={onAddToLibrary}
@@ -166,10 +161,10 @@ export default function ComicIssueMappingAction({
         </>
       )}
 
-      {mapping.isSearchDialogOpen && ownedIssueId != null && (
+      {mapping.isSearchDialogOpen && issueId && (
         <ComicVineSearchDialog
           isOpen
-          issueId={ownedIssueId}
+          issueId={issueId}
           threadTitle={threadTitle}
           issueNumber={issueNumber}
           issueNumberAlias={issueNumberAlias}
