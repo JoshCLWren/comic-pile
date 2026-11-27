@@ -453,7 +453,7 @@ async fn connected_threads_report_direction_and_issue_level_cycles() {
 
     let (status, body) = send(
         &state,
-        get(&format!("/api/v1/threads/{a}/connected"), &token, &csrf),
+        get(&format!("/api/v2/threads/{a}/connections"), &token, &csrf),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
@@ -475,7 +475,7 @@ async fn connected_threads_report_direction_and_issue_level_cycles() {
         .unwrap();
     let (_, body) = send(
         &state,
-        get(&format!("/api/v1/threads/{a}/connected"), &token, &csrf),
+        get(&format!("/api/v2/threads/{a}/connections"), &token, &csrf),
     )
     .await;
     assert_eq!(
@@ -488,7 +488,7 @@ async fn connected_threads_report_direction_and_issue_level_cycles() {
     let (status, body) = send(
         &state,
         get(
-            &format!("/api/v1/threads/{lonely}/connected"),
+            &format!("/api/v2/threads/{lonely}/connections"),
             &token,
             &csrf,
         ),
@@ -502,7 +502,7 @@ async fn connected_threads_report_direction_and_issue_level_cycles() {
         let csrf_for = if who == &token { &csrf } else { &csrf2 };
         let (status, body) = send(
             &state,
-            get(&format!("/api/v1/threads/{id}/connected"), who, csrf_for),
+            get(&format!("/api/v2/threads/{id}/connections"), who, csrf_for),
         )
         .await;
         assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
@@ -1122,7 +1122,7 @@ async fn julix_strict_order_is_shared_by_roll_queue_reader_and_explanations() {
 
     let (status, king_detail) = send(
         &state,
-        get(&format!("/api/v1/threads/{king_thread}"), &token, &csrf),
+        get(&format!("/api/v2/threads/{king_thread}"), &token, &csrf),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{king_detail:?}");
@@ -1135,7 +1135,7 @@ async fn julix_strict_order_is_shared_by_roll_queue_reader_and_explanations() {
     let (status, king_info) = send(
         &state,
         post(
-            &format!("/api/v1/threads/{king_thread}:getBlockingInfo"),
+            &format!("/api/v2/threads/{king_thread}:getBlockingInfo"),
             &token,
             &csrf,
             None,
@@ -1182,7 +1182,7 @@ async fn julix_strict_order_is_shared_by_roll_queue_reader_and_explanations() {
     let (status, dead_info) = send(
         &state,
         post(
-            &format!("/api/v1/threads/{dead_thread}:getBlockingInfo"),
+            &format!("/api/v2/threads/{dead_thread}:getBlockingInfo"),
             &token,
             &csrf,
             None,
@@ -1337,7 +1337,7 @@ async fn roll_offer_queue_position_matches_queue_and_detail() {
 
     let (detail_status, detail_body) = send(
         &state,
-        get(&format!("/api/v1/threads/{pick}"), &token, &csrf),
+        get(&format!("/api/v2/threads/{pick}"), &token, &csrf),
     )
     .await;
     assert_eq!(detail_status, StatusCode::OK, "{detail_body:?}");
@@ -1425,7 +1425,7 @@ async fn bootstrap_reload_pending_offer_queue_position_matches_queue_and_detail(
 
     let (detail_status, detail_body) = send(
         &state,
-        get(&format!("/api/v1/threads/{pick}"), &token, &csrf),
+        get(&format!("/api/v2/threads/{pick}"), &token, &csrf),
     )
     .await;
     assert_eq!(detail_status, StatusCode::OK, "{detail_body:?}");
