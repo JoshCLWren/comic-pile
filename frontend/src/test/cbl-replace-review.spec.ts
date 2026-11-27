@@ -249,7 +249,7 @@ test.describe('CBL replacement review', () => {
         resolution_status: 'resolved_exact',
       },
     ]
-    await page.route('**/api/v1/issue-identity/cbl-sources*', (route) =>
+    await page.route('**/api/v2/cblSources*', (route) =>
       route.fulfill({
         json: [
           {
@@ -366,7 +366,7 @@ test.describe('CBL replacement review', () => {
     )
     expect(firstListId).not.toBe(secondListId)
 
-    await page.route('**/api/v1/issue-identity/cbl-sources*', (route) =>
+    await page.route('**/api/v2/cblSources*', (route) =>
       route.fulfill({
         json: [
           {
@@ -468,7 +468,7 @@ test.describe('CBL replacement review', () => {
       [firstIssueId, secondIssueId],
     )
 
-    await page.route('**/api/v1/issue-identity/cbl-sources*', (route) =>
+    await page.route('**/api/v2/cblSources*', (route) =>
       route.fulfill({
         json: [
           {
@@ -602,7 +602,7 @@ test.describe('CBL replacement review', () => {
       'loose',
     )
 
-    await page.route('**/api/v1/issue-identity/cbl-sources*', (route) =>
+    await page.route('**/api/v2/cblSources*', (route) =>
       route.fulfill({
         json: [
           {
@@ -695,7 +695,7 @@ test.describe('CBL replacement review', () => {
     await applyReadingList(page, listId, planId)
     expect(await isThreadBlocked(page, second.id)).toBe(true)
 
-    await page.route('**/api/v1/issue-identity/cbl-sources*', (route) =>
+    await page.route('**/api/v2/cblSources*', (route) =>
       route.fulfill({
         json: [
           {

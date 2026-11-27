@@ -69,6 +69,70 @@ const reviewedPreview = {
   ],
 } as CBLAdoptionPreview
 
+describe('cblSourcesApi canonical v2 catalog reads (#5712)', () => {
+  beforeEach(() => {
+    client.get.mockReset()
+  })
+
+  it('discovers sources through the canonical List collection and unwraps items', async () => {
+    const items = [
+      {
+        id: 7,
+        name: 'JLI',
+        source_path: 'DC/JLI/JLI.cbl',
+        source_repository: 'JoshCLWren/CBL-ReadingLists',
+        declared_issue_count: 10,
+        content_hash: 'h-jli',
+        revision_sha: 'rev-1',
+      },
+    ]
+    client.get.mockResolvedValue({ items, total: 1, catalog_total: 1 })
+
+    await expect(cblSourcesApi.discover('  JLI  ', 10)).resolves.toEqual(items)
+    expect(client.get).toHaveBeenCalledWith('/v2/cblSources', {
+      params: { filter: 'q:JLI', order_by: 'name', page_size: 10 },
+    })
+  })
+
+  it('encodes folder browse positions as opaque page tokens, never a page parameter', async () => {
+    client.get.mockResolvedValue({ items: [], folders: [], total: 0 })
+
+    await cblSourcesApi.browse({ folder: 'DC/Marvel', page: 3, pageSize: 25 })
+    const [path, config] = client.get.mock.calls[0] as [string, { params: Record<string, unknown> }]
+    expect(path).toBe('/v2/cblSources')
+    expect(config.params.filter).toBe('folder:DC/Marvel')
+    expect(config.params.order_by).toBe('name')
+    expect(config.params.page_size).toBe(25)
+    expect(config.params.page).toBeUndefined()
+    const token = String(config.params.page_token)
+    expect(token).not.toContain('=')
+    expect(atob(token)).toBe(JSON.stringify({ p: 3, f: 'folder:DC/Marvel', o: 'name', s: 25 }))
+  })
+
+  it('turns a search query into a catalog-wide filter and ignores folder scope', async () => {
+    client.get.mockResolvedValue({ items: [], folders: [], total: 0 })
+
+    await cblSourcesApi.browse({ folder: 'DC', query: '  Secret Wars ', page: 1 })
+    const [, config] = client.get.mock.calls[0] as [string, { params: Record<string, unknown> }]
+    expect(config.params.filter).toBe('q:Secret Wars')
+    expect(config.params.page_token).toBeUndefined()
+  })
+
+  it('reads detail and exact occurrences from the canonical v2 resources', async () => {
+    client.get.mockResolvedValue({ id: 42 })
+    await cblSourcesApi.detail(42, { offset: 10, limit: 100 })
+    expect(client.get).toHaveBeenCalledWith('/v2/cblSources/42', {
+      params: { offset: 10, limit: 100 },
+    })
+
+    client.get.mockResolvedValue({ occurrences: [] })
+    await cblSourcesApi.findByComicvineIssue('4000-123', { limit: 25 })
+    expect(client.get).toHaveBeenCalledWith('/v2/cblOccurrences', {
+      params: { filter: 'comicvine_issue_id:4000-123', limit: 25 },
+    })
+  })
+})
+
 describe('cblSourcesApi.commit', () => {
   beforeEach(() => {
     client.post.mockReset()

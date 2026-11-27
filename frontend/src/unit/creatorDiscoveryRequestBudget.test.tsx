@@ -205,7 +205,7 @@ const creatorHandlers = {
   'GET /api/v2/creators/team-chemistry': () => ({ data: teamChemistryFixture() }),
   'GET /api/v2/creators/compare': () => ({ data: comparisonFixture() }),
   'GET /api/v2/creators/creator%3A7': () => ({ data: creatorDetailFixture() }),
-  'GET /api/v1/issue-identity/cbl-sources/browse': () => ({ data: cblBrowseFixture() }),
+  'GET /api/v2/cblSources': () => ({ data: cblBrowseFixture() }),
 } satisfies Record<string, LedgerHandler>
 
 function teamChemistryRequests() {
@@ -521,7 +521,7 @@ describe('comparison and CBL discovery request budgets', () => {
     expect(await screen.findByRole('heading', { name: 'CBL Sources' })).toBeInTheDocument()
     await waitFor(() => expect(ledger.requests).toHaveLength(1))
     expect(ledger.requests[0]?.url).toBe(
-      'GET /api/v1/issue-identity/cbl-sources/browse?folder=&page=1&page_size=50',
+      'GET /api/v2/cblSources?filter=&order_by=name&page_size=50',
     )
   })
 
