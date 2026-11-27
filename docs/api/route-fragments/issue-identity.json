@@ -60,7 +60,7 @@
       "exclude_from_inventory": true
     },
     {
-      "bucket": "v2_operations",
+      "bucket": "operations",
       "method": "POST",
       "path": "/api/v2/cblSources:compare",
       "dest": "/api/native_roll.rs",
