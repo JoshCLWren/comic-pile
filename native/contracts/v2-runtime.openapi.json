@@ -5494,7 +5494,7 @@
         "tags": [
           "reading-order-groups"
         ],
-        "summary": "Documentation-only operation for adding an issue-position range (v2).",
+        "summary": "Documentation-only operation for adding an issue-position range.",
         "operationId": "dependency_groups_v2_add_issue_range",
         "parameters": [
           {
@@ -12657,7 +12657,6 @@
         },
         "additionalProperties": false
       },
-<<<<<<< HEAD
       "DependencyGroupCreateRequest": {
         "type": "object",
         "description": "Wire request mirroring the Python `DependencyGroupCreate` payload.",
@@ -12741,7 +12740,9 @@
           },
           "name": {
             "type": "string"
-=======
+          }
+        }
+      },
       "DependencyGroupIssueRangeCreateRequest": {
         "type": "object",
         "description": "Wire request mirroring the Python `DependencyGroupIssueRangeCreate` payload.",
@@ -12828,7 +12829,6 @@
               "null"
             ],
             "format": "int32"
->>>>>>> origin/main
           }
         }
       },
@@ -12878,7 +12878,6 @@
           }
         }
       },
-<<<<<<< HEAD
       "DependencyGroupResponse": {
         "type": "object",
         "description": "Wire response mirroring the Python `DependencyGroupResponse`.",
@@ -12921,8 +12920,6 @@
           }
         }
       },
-=======
->>>>>>> origin/main
       "DependencyGroupSummary": {
         "type": "object",
         "description": "Wire response mirroring the Python `DependencyGroupSummary`.",
@@ -12940,7 +12937,6 @@
           }
         }
       },
-<<<<<<< HEAD
       "DependencyGroupUpdateRequest": {
         "type": "object",
         "description": "Wire request mirroring the Python `DependencyGroupUpdate` payload.",
@@ -12953,8 +12949,6 @@
           }
         }
       },
-=======
->>>>>>> origin/main
       "DependencyNoteUpdate": {
         "type": "object",
         "properties": {
@@ -20795,3 +20789,4 @@
     }
   }
 }
+
