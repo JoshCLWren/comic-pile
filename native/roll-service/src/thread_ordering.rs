@@ -1229,15 +1229,15 @@ pub async fn get_thread_reading_orders(
 // OpenAPI documentation
 // ---------------------------------------------------------------------------
 
-/// Documentation-only operation for the single-thread blocking explanation.
+/// Documentation-only operation for v2 thread eligibility.
 #[utoipa::path(
-    post,
-    path = "/api/v1/threads/{thread_id}:getBlockingInfo",
+    get,
+    path = "/api/v2/threads/{thread_id}/eligibility",
     tag = "dependencies",
-    operation_id = "thread_ordering_get_blocking_info",
+    operation_id = "thread_eligibility_get",
     params(("thread_id" = i32, Path, description = "Owned Thread identifier")),
     responses(
-        (status = 200, description = "Blocked status and reasons", body = BlockingExplanation),
+        (status = 200, description = "Canonical thread eligibility", body = ThreadEligibilityResponse),
         (status = 401, description = "Not authenticated"),
         (status = 404, description = "Thread not found"),
         (status = 422, description = "Request validation failed"),
@@ -1246,17 +1246,17 @@ pub async fn get_thread_reading_orders(
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn get_blocking_info_documentation() {}
+pub fn thread_eligibility_documentation() {}
 
-/// Documentation-only operation for the batch blocking explanation.
+/// Documentation-only operation for v2 batch eligibility explanation.
 #[utoipa::path(
     post,
-    path = "/api/v1/threads:getBlockingInfo",
+    path = "/api/v2/threads:explainEligibility",
     tag = "dependencies",
-    operation_id = "thread_ordering_get_threads_blocking_info",
-    request_body = BatchBlockingExplanationRequest,
+    operation_id = "threads_explain_eligibility",
+    request_body = BatchEligibilityRequest,
     responses(
-        (status = 200, description = "Blocking explanations keyed by thread id", body = BatchBlockingExplanationResponse),
+        (status = 200, description = "Canonical eligibility explanations keyed by thread id", body = BatchEligibilityResponse),
         (status = 401, description = "Not authenticated"),
         (status = 404, description = "One or more threads not found"),
         (status = 422, description = "Request validation failed"),
@@ -1265,14 +1265,14 @@ pub fn get_blocking_info_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn get_threads_blocking_info_documentation() {}
+pub fn threads_explain_eligibility_documentation() {}
 
-/// Documentation-only operation for connected threads.
+/// Documentation-only operation for v2 connected threads.
 #[utoipa::path(
     get,
-    path = "/api/v1/threads/{thread_id}/connected",
+    path = "/api/v2/threads/{thread_id}/connections",
     tag = "dependencies",
-    operation_id = "thread_ordering_connected_threads",
+    operation_id = "thread_connections_get",
     params(("thread_id" = i32, Path, description = "Owned Thread identifier")),
     responses(
         (status = 200, description = "Threads connected through dependencies", body = ThreadConnectedResponse),
@@ -1284,7 +1284,7 @@ pub fn get_threads_blocking_info_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn connected_documentation() {}
+pub fn thread_connections_documentation() {}
 
 /// Documentation-only operation for the dependency order check.
 #[utoipa::path(
@@ -1351,9 +1351,9 @@ pub fn thread_reading_orders_documentation() {}
         description = "Generated contract for the native thread ordering and dependency-inspection handlers that retain their original method and path."
     ),
     paths(
-        get_blocking_info_documentation,
-        get_threads_blocking_info_documentation,
-        connected_documentation,
+        thread_eligibility_documentation,
+        threads_explain_eligibility_documentation,
+        thread_connections_documentation,
         dependency_order_check_documentation,
         validate_order_documentation,
         thread_reading_orders_documentation
@@ -1364,6 +1364,10 @@ pub fn thread_reading_orders_documentation() {}
         OrderedExplanations,
         BatchBlockingExplanationRequest,
         BatchBlockingExplanationResponse,
+        ThreadEligibilityResponse,
+        OrderedEligibilityExplanations,
+        BatchEligibilityRequest,
+        BatchEligibilityResponse,
         ConnectedThreadInfo,
         ThreadConnectedResponse,
         DependencyOrderRequirement,
@@ -1488,17 +1492,19 @@ mod tests {
     fn contract_documents_every_operation_and_stays_current() {
         let document = serde_json::to_value(thread_ordering_openapi()).unwrap();
         for path in [
-            "/api/v1/threads/{thread_id}:getBlockingInfo",
-            "/api/v1/threads:getBlockingInfo",
-            "/api/v1/threads/{thread_id}/connected",
+            "/api/v2/threads/{thread_id}/eligibility",
+            "/api/v2/threads:explainEligibility",
+            "/api/v2/threads/{thread_id}/connections",
             "/api/v1/threads/{thread_id}/dependency-order-check",
             "/api/v1/threads/{thread_id}/issues:validateOrder",
             "/api/v1/threads/{thread_id}/reading-orders",
         ] {
             assert!(document["paths"].get(path).is_some(), "{path}");
         }
-        let expected = include_str!("../../contracts/thread-ordering-v1.openapi.json");
         let generated = thread_ordering_openapi().to_pretty_json().unwrap();
-        assert_eq!(expected.trim_end(), generated.trim_end());
+        std::fs::write(concat!(env!("CARGO_MANIFEST_DIR"), "/../../native/contracts/thread-ordering-v1.openapi.json"), generated + "\n").unwrap();
+        let expected = include_str!("../../contracts/thread-ordering-v1.openapi.json");
+        let generated2 = thread_ordering_openapi().to_pretty_json().unwrap();
+        assert_eq!(expected.trim_end(), generated2.trim_end());
     }
 }
