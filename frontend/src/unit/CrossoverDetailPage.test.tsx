@@ -16,6 +16,7 @@ import { issueCardsApi } from '../services/issueCardsApi'
 vi.mock('../services/api-dependency-groups', () => ({
   dependencyGroupsApi: {
     get: vi.fn(),
+    getDetail: vi.fn(),
     listForThread: vi.fn(),
     plansForGroup: vi.fn(),
   },
@@ -139,7 +140,7 @@ beforeEach(() => {
 describe('CrossoverDetailPage', () => {
   it('shows a loading state while the crossover request is pending', async () => {
     let resolveGet: ((detail: DependencyGroupDetail) => void) | undefined
-    mockedGroups.get.mockImplementation(
+    mockedGroups.getDetail.mockImplementation(
       () => new Promise<DependencyGroupDetail>((resolve) => { resolveGet = resolve }),
     )
 
@@ -150,7 +151,7 @@ describe('CrossoverDetailPage', () => {
   })
 
   it('renders factual project data without a readiness verdict', async () => {
-    mockedGroups.get.mockResolvedValue(makeDetail(populatedMembers))
+    mockedGroups.getDetail.mockResolvedValue(makeDetail(populatedMembers))
 
     renderPage()
 
@@ -168,13 +169,14 @@ describe('CrossoverDetailPage', () => {
   })
 
   it('loads the whole crossover with one detail request and no secondary evaluation call', async () => {
-    mockedGroups.get.mockResolvedValue(makeDetail(populatedMembers))
+    mockedGroups.getDetail.mockResolvedValue(makeDetail(populatedMembers))
 
     renderPage()
 
     expect(await screen.findByRole('heading', { name: 'Annihilation' })).toBeInTheDocument()
-    expect(mockedGroups.get).toHaveBeenCalledTimes(1)
-    expect(mockedGroups.get).toHaveBeenCalledWith(7)
+    expect(mockedGroups.getDetail).toHaveBeenCalledTimes(1)
+    expect(mockedGroups.getDetail).toHaveBeenCalledWith(7)
+    expect(mockedGroups.get).not.toHaveBeenCalled()
     expect(mockedGroups.listForThread).not.toHaveBeenCalled()
     expect(mockedGroups.plansForGroup).not.toHaveBeenCalled()
     expect(mockedThreads.get).not.toHaveBeenCalled()
@@ -184,7 +186,7 @@ describe('CrossoverDetailPage', () => {
   it('sorts provenance ordering and marks read entries', async () => {
     const firstIssue = { ...warlockIssue, id: 11, issue_number: '3', position: 2, status: 'read' as const }
     const secondIssue = { ...warlockIssue, id: 12, issue_number: '4', position: 9, status: 'unread' as const }
-    mockedGroups.get.mockResolvedValue(
+    mockedGroups.getDetail.mockResolvedValue(
       makeDetail([
         makeDetailMember(2, { issue: secondIssue, thread: warlockThread, sequence_order: 5 }),
         makeDetailMember(1, { issue: firstIssue, thread: warlockThread, sequence_order: 1 }),
@@ -203,7 +205,7 @@ describe('CrossoverDetailPage', () => {
   })
 
   it('keeps linked Reading Plans available', async () => {
-    mockedGroups.get.mockResolvedValue(
+    mockedGroups.getDetail.mockResolvedValue(
       makeDetail(populatedMembers, {
         linkedPlans: [
           { id: 12, name: 'Annihilation Reading Order' },
@@ -226,7 +228,7 @@ describe('CrossoverDetailPage', () => {
   })
 
   it('surfaces load errors and retries successfully', async () => {
-    mockedGroups.get
+    mockedGroups.getDetail
       .mockRejectedValueOnce({ response: { status: 404, data: { detail: 'Crossover not found' } } })
       .mockResolvedValueOnce(makeDetail(populatedMembers))
 
@@ -236,11 +238,11 @@ describe('CrossoverDetailPage', () => {
     expect(screen.getByText('Crossover not found')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Annihilation' })).toBeInTheDocument())
-    expect(mockedGroups.get).toHaveBeenCalledTimes(2)
+    expect(mockedGroups.getDetail).toHaveBeenCalledTimes(2)
   })
 
   it('renders the no-members state without next-up or member actions', async () => {
-    mockedGroups.get.mockResolvedValue(makeDetail([]))
+    mockedGroups.getDetail.mockResolvedValue(makeDetail([]))
 
     renderPage()
 
@@ -250,7 +252,7 @@ describe('CrossoverDetailPage', () => {
   })
 
   it('links every reading-flow action to the working /thread/:id route', async () => {
-    mockedGroups.get.mockResolvedValue(makeDetail(populatedMembers))
+    mockedGroups.getDetail.mockResolvedValue(makeDetail(populatedMembers))
 
     renderPage()
 
