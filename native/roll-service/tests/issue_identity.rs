@@ -3049,3 +3049,171 @@ async fn project_preview_projects_plan_and_enforces_ownership() {
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(body, validation_failed());
 }
+
+// ---------------------------------------------------------------------------
+// Canonical v2 CBL preview surface (#5714). Every assertion below drives the
+// mounted router against the same seeded rows as the v1 preview tests, so the
+// v2 resource is proven to be a transport over the one eligibility engine.
+// ---------------------------------------------------------------------------
+
+/// Counts of tables whose mutation would mean a preview wrote owned state.
+/// The v2 operations must leave every one of them untouched.
+async fn v2_preview_state_counts(state: &Arc<AppState>) -> Vec<i64> {
+    let conn = state.pool.get().await.unwrap();
+    let mut counts = Vec::new();
+    for table in [
+        "continuity_plans",
+        "sessions",
+        "threads",
+        "issues",
+        "reading_plan_issues",
+        "reading_plan_dependencies",
+        "collection_exclusions",
+    ] {
+        let row = conn
+            .query_one(&format!("SELECT count(*) FROM {table}"), &[])
+            .await
+            .unwrap();
+        counts.push(row.get::<_, i64>(0));
+    }
+    counts
+}
+
+#[tokio::test]
+async fn v2_cbl_source_previews_are_repeatable_and_write_nothing() {
+    let (state, token, csrf, _guard) = setup().await;
+    let user_id = me_id(&state, &token).await;
+    seed_overlap_scenario(&state, user_id).await;
+    let before = v2_preview_state_counts(&state).await;
+    let decisions = json!({"series_decisions": {}, "entry_decisions": {}});
+
+    let (status, preview) = get(&state, &token, "/api/v2/cblSources/40/adoptionPreview").await;
+    assert_eq!(status, StatusCode::OK, "{preview}");
+    let (status, again) = get(&state, &token, "/api/v2/cblSources/40/adoptionPreview").await;
+    assert_eq!(status, StatusCode::OK, "{again}");
+    assert_eq!(preview, again, "a read-only singleton must be repeatable");
+
+    let (status, plan) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/cblSources/40:planAdoption",
+        decisions.clone(),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{plan}");
+    assert_eq!(plan, preview, "empty decisions equal the singleton projection");
+    let (status, plan_again) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/cblSources/40:planAdoption",
+        decisions,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{plan_again}");
+    assert_eq!(plan_again, plan, "a stateless calculation must be repeatable");
+
+    // The fingerprint is authoritative from the database on every call. The
+    // commit path, not these previews, rejects a stale client fingerprint.
+    assert_eq!(preview["source"]["content_hash"], "h-ov");
+    assert_eq!(preview["source"]["revision_sha"], "rev-40");
+    assert_eq!(v2_preview_state_counts(&state).await, before);
+}
+
+#[tokio::test]
+async fn v2_plan_adoption_applies_decisions_and_scopes_to_owner() {
+    let (state, token, csrf, _guard) = setup().await;
+    let user_id = me_id(&state, &token).await;
+    seed_overlap_scenario(&state, user_id).await;
+    let before = v2_preview_state_counts(&state).await;
+
+    let (status, preview) = get(&state, &token, "/api/v2/cblSources/40/adoptionPreview").await;
+    assert_eq!(status, StatusCode::OK, "{preview}");
+    let group = preview["entries"][0]["series_group_id"]
+        .as_str()
+        .expect("series group id")
+        .to_string();
+    let (status, excluded) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/cblSources/40:planAdoption",
+        json!({"series_decisions": {group: false}, "entry_decisions": {}}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{excluded}");
+    assert_eq!(
+        excluded["summary"]["excluded_positions"],
+        json!([1]),
+        "{excluded}"
+    );
+    assert_eq!(preview["summary"]["excluded_positions"], json!([]));
+    assert_eq!(v2_preview_state_counts(&state).await, before);
+
+    // Another reader can preview the shared source, but the owner's issue
+    // identities are never resolved for them.
+    let (other_token, _) = create_test_user(&state, "other-v2-reader").await;
+    let (status, other) = get(&state, &other_token, "/api/v2/cblSources/40/adoptionPreview").await;
+    assert_eq!(status, StatusCode::OK, "{other}");
+    assert!(
+        other["entries"][0]["resolved_issue_id"].is_null(),
+        "cross-user adoption preview must not leak owner resolution: {other}"
+    );
+
+    // Path validation keeps the same envelope as the v1 previews.
+    let (status, body) = get(&state, &token, "/api/v2/cblSources/abc/adoptionPreview").await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body, validation_failed());
+    let (status, _) = get(&state, &token, "/api/v2/cblSources/999999/adoptionPreview").await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, body) = post_json(
+        &state,
+        &token,
+        &csrf,
+        "/api/v2/cblSources/40:planAdoption",
+        json!({}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "decision maps default to empty: {body}");
+}
+
+#[tokio::test]
+async fn v2_reading_graph_preview_uses_canonical_option_e_and_is_owner_scoped() {
+    let (state, token, csrf, _guard) = setup().await;
+    let user_id = me_id(&state, &token).await;
+    seed_overlap_scenario(&state, user_id).await;
+    let before = v2_preview_state_counts(&state).await;
+    let request = json!({"included_positions": [1, 2]});
+    let legacy_uri = "/api/v1/issue-identity/cbl/40/reading-graph-preview";
+    let v2_uri = "/api/v2/cblSources/40:previewReadingGraph";
+
+    let (status, legacy) = post_json(&state, &token, &csrf, legacy_uri, request.clone()).await;
+    assert_eq!(status, StatusCode::OK, "{legacy}");
+    let (status, projected) = post_json(&state, &token, &csrf, v2_uri, request.clone()).await;
+    assert_eq!(status, StatusCode::OK, "{projected}");
+    assert_eq!(
+        projected, legacy,
+        "the v2 custom method must not carry a second eligibility engine"
+    );
+    assert_eq!(projected["source_list_id"], 40);
+    assert_eq!(projected["content_hash"], "h-ov");
+    assert_eq!(projected["revision_sha"], "rev-40");
+    // Strict order makes Alpha wait on Beta; the overlap question offers both
+    // choice effects from the same evaluator.
+    assert_eq!(projected["rollable_issue_ids"], json!([9411]));
+    assert_eq!(projected["waiting_issue_ids"], json!([9401]));
+    let overlaps = projected["overlaps"].as_array().unwrap();
+    assert_eq!(overlaps.len(), 1, "{projected}");
+    assert_eq!(overlaps[0]["choices"].as_array().unwrap().len(), 2);
+
+    let (status, again) = post_json(&state, &token, &csrf, v2_uri, request.clone()).await;
+    assert_eq!(status, StatusCode::OK, "{again}");
+    assert_eq!(again, projected, "a preview must be repeatable");
+    assert_eq!(v2_preview_state_counts(&state).await, before);
+
+    let (other_token, other_csrf) = create_test_user(&state, "other-v2-graph-reader").await;
+    let (status, body) = post_json(&state, &other_token, &other_csrf, v2_uri, request).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+    assert_eq!(body["detail"]["code"], "unresolved_source_position");
+}
