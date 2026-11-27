@@ -784,8 +784,6 @@ export interface ListThreadIssuesV2Request {
   path: {
     thread_id: number
   }
-<<<<<<< HEAD
-=======
   query?: {
     status?: string
     page_size?: number
@@ -802,17 +800,6 @@ export interface ListThreadReadingOrdersRequest {
 }
 
 export type ListThreadReadingOrdersResponse = components['schemas']['ThreadReadingOrdersResponse']
-
-export interface ListThreadsRequest {
->>>>>>> origin/main
-  query?: {
-    status?: string
-    page_size?: number
-    page_token?: string
-  }
-}
-
-export type ListThreadIssuesV2Response = components['schemas']['ThreadIssueListResponse']
 
 export interface ListThreadsRequest {
   query?: {
@@ -921,8 +908,6 @@ export interface PreviewIssueStructureRequest {
 
 export type PreviewIssueStructureResponse = components['schemas']['IssueEditPreviewResponse']
 
-<<<<<<< HEAD
-=======
 export interface PreviewReadingOrderProjectionRequest {
   path: {
     plan_id: number
@@ -932,7 +917,6 @@ export interface PreviewReadingOrderProjectionRequest {
 
 export type PreviewReadingOrderProjectionResponse = components['schemas']['ReadingOrderProjectPreviewResponse']
 
->>>>>>> origin/main
 export interface PreviewSeriesMappingsRequest {
   body: components['schemas']['NativeSeriesMappingPreviewRequest']
 }
@@ -1520,10 +1504,7 @@ export interface NativeV2Client {
   listTags(): Promise<ListTagsResponse>
   listThreadIssues(args: ListThreadIssuesRequest): Promise<ListThreadIssuesResponse>
   listThreadIssuesV2(args: ListThreadIssuesV2Request): Promise<ListThreadIssuesV2Response>
-<<<<<<< HEAD
-=======
   listThreadReadingOrders(args: ListThreadReadingOrdersRequest): Promise<ListThreadReadingOrdersResponse>
->>>>>>> origin/main
   listThreads(args?: ListThreadsRequest): Promise<ListThreadsResponse>
   listUndoSnapshots(args: ListUndoSnapshotsRequest): Promise<ListUndoSnapshotsResponse>
   login(args: LoginRequest): Promise<LoginResponse>
@@ -1538,10 +1519,7 @@ export interface NativeV2Client {
   preview(args: PreviewRequest): Promise<PreviewResponse>
   previewIssueCreate(args: PreviewIssueCreateRequest): Promise<PreviewIssueCreateResponse>
   previewIssueStructure(args: PreviewIssueStructureRequest): Promise<PreviewIssueStructureResponse>
-<<<<<<< HEAD
-=======
   previewReadingOrderProjection(args: PreviewReadingOrderProjectionRequest): Promise<PreviewReadingOrderProjectionResponse>
->>>>>>> origin/main
   previewSeriesMappings(args: PreviewSeriesMappingsRequest): Promise<PreviewSeriesMappingsResponse>
   ratingDistribution(args: RatingDistributionRequest): Promise<RatingDistributionResponse>
   read(args: ReadRequest): Promise<ReadResponse>
@@ -2145,14 +2123,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         { params: compactQuery(args.query) },
       )
     },
-<<<<<<< HEAD
-=======
     listThreadReadingOrders(args: ListThreadReadingOrdersRequest) {
       return client.get<ListThreadReadingOrdersResponse>(
         `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/readingOrders`,
       )
     },
->>>>>>> origin/main
     listThreads(args: ListThreadsRequest = {}) {
       return client.get<ListThreadsResponse>(
         "/v2/threads",
@@ -2229,15 +2204,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
-<<<<<<< HEAD
-=======
     previewReadingOrderProjection(args: PreviewReadingOrderProjectionRequest) {
       return client.post<PreviewReadingOrderProjectionResponse, PreviewReadingOrderProjectionRequest['body']>(
         `/v2/continuityPlans/${encodeURIComponent(String(args.path.plan_id))}:previewReadingOrderProjection`,
         args.body,
       )
     },
->>>>>>> origin/main
     previewSeriesMappings(args: PreviewSeriesMappingsRequest) {
       return client.post<PreviewSeriesMappingsResponse, PreviewSeriesMappingsRequest['body']>(
         "/v2/seriesMappings:preview",

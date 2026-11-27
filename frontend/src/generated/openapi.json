@@ -18282,7 +18282,6 @@
         ],
         "type": "object"
       },
-<<<<<<< HEAD
       "ThreadListResult": {
         "description": "One v2 threads list response. The active/completed/excluded filters keep the\nqueue-list projection; the stale filter keeps the legacy detail-shaped\nprojection. Both are emitted inline (no envelope variant key).",
         "oneOf": [
@@ -18294,8 +18293,6 @@
           }
         ]
       },
-=======
->>>>>>> origin/main
       "ThreadPatchPrecondition": {
         "description": "Committed values a stale client read before issuing a Thread patch.",
         "properties": {
@@ -30523,7 +30520,6 @@
           "threads"
         ]
       },
-<<<<<<< HEAD
       "get": {
         "operationId": "get_thread_v2_documentation",
         "parameters": [
@@ -30566,8 +30562,6 @@
           "threads"
         ]
       },
-=======
->>>>>>> origin/main
       "patch": {
         "description": "Partially update an owned Thread (AIP-134). Omitted fields are preserved. When `update_mask` is supplied only its fields are applied; a masked field missing from the body is cleared. An `expected` precondition that no longer matches the committed row returns 409 with `detail.code = thread_edit_conflict` and the current values. Foreign or deleted Threads return 404, never 403.",
         "operationId": "patch_thread_documentation",
@@ -31077,8 +31071,6 @@
         ]
       }
     },
-<<<<<<< HEAD
-=======
     "/api/v2/threads/{thread_id}/readingOrders": {
       "get": {
         "description": "List the authenticated reader's reading orders that contain the given thread. A foreign or unknown thread is an empty collection.",
@@ -31126,7 +31118,6 @@
         ]
       }
     },
->>>>>>> origin/main
     "/api/v2/threads:checkDuplicates": {
       "post": {
         "description": "Advisory AIP-136 collection custom method: report existing volumes that may be the proposed series. Does not create a Thread. Results are owner-scoped, exclude a named thread, and are capped at five matches.",
