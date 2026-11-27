@@ -535,30 +535,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/reading-order-groups/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Groups
-         * @description List the current user's groups and memberships.
-         */
-        get: operations["list_groups_api_v1_reading_order_groups__get"];
-        put?: never;
-        /**
-         * Create Group
-         * @description Create a user-owned named group.
-         */
-        post: operations["create_group_api_v1_reading_order_groups__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/reading-order-groups/threads/{thread_id}/groups": {
         parameters: {
             query?: never;
@@ -568,54 +544,6 @@ export interface paths {
         };
         /** Documentation-only operation for listing groups for a thread. */
         get: operations["dependency_groups_list_thread_groups"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/reading-order-groups/{group_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Group
-         * @description Return one owned group.
-         */
-        get: operations["get_group_api_v1_reading_order_groups__group_id__get"];
-        put?: never;
-        post?: never;
-        /**
-         * Delete Group
-         * @description Delete one owned group and its memberships.
-         */
-        delete: operations["delete_group_api_v1_reading_order_groups__group_id__delete"];
-        options?: never;
-        head?: never;
-        /**
-         * Update Group
-         * @description Rename one owned group.
-         */
-        patch: operations["update_group_api_v1_reading_order_groups__group_id__patch"];
-        trace?: never;
-    };
-    "/api/v1/reading-order-groups/{group_id}/detail": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Group Detail
-         * @description Return one owned group with enriched member, plan, and project data.
-         */
-        get: operations["get_group_detail_api_v1_reading_order_groups__group_id__detail_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -10976,59 +10904,6 @@ export interface operations {
             };
         };
     };
-    list_groups_api_v1_reading_order_groups__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DependencyGroupResponse"][];
-                };
-            };
-        };
-    };
-    create_group_api_v1_reading_order_groups__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DependencyGroupCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DependencyGroupResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     dependency_groups_list_thread_groups: {
         parameters: {
             query?: never;
@@ -11077,132 +10952,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    get_group_api_v1_reading_order_groups__group_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                group_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DependencyGroupResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_group_api_v1_reading_order_groups__group_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                group_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_group_api_v1_reading_order_groups__group_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                group_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DependencyGroupUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DependencyGroupResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_group_detail_api_v1_reading_order_groups__group_id__detail_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                group_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DependencyGroupDetailResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
             };
         };
     };
