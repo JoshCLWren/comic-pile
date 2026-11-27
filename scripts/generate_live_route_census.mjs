@@ -325,6 +325,8 @@ function listFiles(dir, relative, found) {
     }
     if (SELF_SCRIPTS.has(entry)) continue;
     if (entry.endsWith('.d.ts')) continue;
+    // Tests about generated path tables are fixture references, not calls.
+    if (/^generated-/.test(entry)) continue;
     if (!CALLER_EXTENSIONS.has(path.extname(entry))) continue;
     found.push({absolute, relative: rel});
   }
@@ -513,7 +515,9 @@ export function buildCensus(inputs) {
       ingress_destination: ingress.destination,
       ingress_source: ingress.source,
       owner_issue: ownerIssue,
-      needs_owner_issue: ownerIssue === null && !knownDebt.has(key),
+      needs_owner_issue:
+        (version === 'v1' || version === 'unversioned' || aipKeys.has(key))
+        && ownerIssue === null && !knownDebt.has(key),
       disposition: replacement,
       rollout_status: rolloutStatus,
       notes: typeof disposition.notes === 'string' ? disposition.notes : '',
@@ -602,6 +606,11 @@ export function buildAllowlist(census, dispositions, aipBaseline) {
   };
 }
 
+/** Escape a value so it stays in one Markdown table cell. */
+function mdCell(value) {
+  return String(value).replaceAll('|', '\\|');
+}
+
 /** Human-readable published ownership matrix with the #5719 columns. */
 export function renderReport(census, allowlist) {
   const lines = [
@@ -652,9 +661,32 @@ export function renderReport(census, allowlist) {
     const consumers = route.consumers.length ? route.consumers.join(', ') : 'none';
     lines.push(
       `| ${route.method} | \`${route.path}\` | \`${route.handler}\` | ${route.version} `
-      + `| ${consumers} | ${route.ingress_destination} | ${owner} `
-      + `| ${route.disposition} | ${route.rollout_status} |`,
+      + `| ${mdCell(consumers)} | ${route.ingress_destination} | ${owner} `
+      + `| ${mdCell(route.disposition)} | ${route.rollout_status} |`,
     );
+  }
+  const ownerIssues = [...new Set(census.routes
+    .map(route => route.owner_issue)
+    .filter(owner => owner !== null))].sort((a, b) => a - b);
+  lines.push('', '## Owner issue cross-reference', '');
+  lines.push(
+    `Existing owner/disposition issues resolved for this census: ${ownerIssues.map(owner => `#${owner}`).join(', ')}.`,
+  );
+  lines.push(
+    'No new backlog issue is created by this tooling task: every current live '
+    + 'v1 method resolves to an existing owner issue and an AIP destination or '
+    + 'an explicit retire-without-replacement decision.',
+  );
+  const specialStatuses = new Set([
+    'background-caller-migration', 'test-helper-debt', 'active-infrastructure',
+    'compatibility-alias-debt', 'pinned-404',
+  ]);
+  const special = census.routes.filter(route => specialStatuses.has(route.rollout_status));
+  if (special.length) {
+    lines.push('', 'Non-browser / helper / infrastructure surface included in the census:', '');
+    for (const route of special) {
+      lines.push(`- \`${route.method} ${route.path}\` — ${route.rollout_status} (owner #${route.owner_issue}).`);
+    }
   }
   lines.push('', '## Baseline debt requiring an owner issue', '');
   const debt = census.routes.filter(route => route.needs_owner_issue);

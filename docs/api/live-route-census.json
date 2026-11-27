@@ -24,7 +24,7 @@
     "v1_with_owner": 65,
     "v1_needing_owner": 0,
     "unknown_ingress": 0,
-    "first_party_call_sites": 937,
+    "first_party_call_sites": 921,
     "stale_aip_baseline_entries": 4
   },
   "routes": [
@@ -208,10 +208,8 @@
       "version": "unversioned",
       "runtime": "native-rust",
       "runtime_source": "native-router",
-      "consumers": [
-        "frontend/src/unit/generated-v1-only-paths.test.ts"
-      ],
-      "caller_count": 2,
+      "consumers": [],
+      "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4335,
@@ -3046,7 +3044,7 @@
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
-      "needs_owner_issue": true,
+      "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
       "notes": ""
@@ -3065,7 +3063,7 @@
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
-      "needs_owner_issue": true,
+      "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
       "notes": ""
@@ -3084,7 +3082,7 @@
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
-      "needs_owner_issue": true,
+      "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
       "notes": ""
@@ -3103,7 +3101,7 @@
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
-      "needs_owner_issue": true,
+      "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
       "notes": ""
@@ -3122,7 +3120,7 @@
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
-      "needs_owner_issue": true,
+      "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
       "notes": ""
@@ -3141,7 +3139,7 @@
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
-      "needs_owner_issue": true,
+      "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
       "notes": ""
@@ -3450,7 +3448,7 @@
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
-      "needs_owner_issue": true,
+      "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
       "notes": ""
@@ -3471,7 +3469,7 @@
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
-      "needs_owner_issue": true,
+      "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
       "notes": ""
@@ -4611,7 +4609,7 @@
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
-      "needs_owner_issue": true,
+      "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
       "notes": ""
@@ -4639,7 +4637,7 @@
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
-      "needs_owner_issue": true,
+      "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
       "notes": ""
@@ -4661,7 +4659,7 @@
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
-      "needs_owner_issue": true,
+      "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
       "notes": ""
@@ -4683,7 +4681,7 @@
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
-      "needs_owner_issue": true,
+      "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
       "notes": ""
@@ -4705,7 +4703,7 @@
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
-      "needs_owner_issue": true,
+      "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
       "notes": ""
@@ -4725,15 +4723,14 @@
         "frontend/src/test/reading-mode-acceptance.spec.ts",
         "frontend/src/unit/api.test.ts",
         "frontend/src/unit/coreRouteRequestBudget.test.tsx",
-        "frontend/src/unit/generated-v1-only-paths.test.ts",
         "frontend/src/unit/nativeV2Client.test.ts",
         "frontend/src/unit/rollBootstrapTimezone.test.ts"
       ],
-      "caller_count": 19,
+      "caller_count": 18,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
-      "needs_owner_issue": true,
+      "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
       "notes": ""
@@ -4754,15 +4751,14 @@
         "frontend/src/test/reading-mode-acceptance.spec.ts",
         "frontend/src/unit/api.test.ts",
         "frontend/src/unit/coreRouteRequestBudget.test.tsx",
-        "frontend/src/unit/generated-v1-only-paths.test.ts",
         "frontend/src/unit/nativeV2Client.test.ts",
         "frontend/src/unit/rollBootstrapTimezone.test.ts"
       ],
-      "caller_count": 20,
+      "caller_count": 19,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
-      "needs_owner_issue": true,
+      "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
       "notes": ""
@@ -4777,14 +4773,13 @@
       "runtime": "native-rust",
       "runtime_source": "native-router",
       "consumers": [
-        "frontend/src/unit/api.test.ts",
-        "frontend/src/unit/generated-v1-only-paths.test.ts"
+        "frontend/src/unit/api.test.ts"
       ],
-      "caller_count": 2,
+      "caller_count": 1,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
-      "needs_owner_issue": true,
+      "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
       "notes": ""
@@ -4800,14 +4795,13 @@
       "runtime_source": "native-router",
       "consumers": [
         "frontend/src/unit/api.test.ts",
-        "frontend/src/unit/coreRouteRequestBudget.test.tsx",
-        "frontend/src/unit/generated-v1-only-paths.test.ts"
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx"
       ],
-      "caller_count": 4,
+      "caller_count": 3,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
-      "needs_owner_issue": true,
+      "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
       "notes": ""
@@ -4823,14 +4817,13 @@
       "runtime_source": "native-router",
       "consumers": [
         "frontend/src/unit/api.test.ts",
-        "frontend/src/unit/coreRouteRequestBudget.test.tsx",
-        "frontend/src/unit/generated-v1-only-paths.test.ts"
+        "frontend/src/unit/coreRouteRequestBudget.test.tsx"
       ],
-      "caller_count": 4,
+      "caller_count": 3,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
-      "needs_owner_issue": true,
+      "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
       "notes": ""
@@ -4849,10 +4842,9 @@
         "frontend/src/test/network-budget/authTransitions.network.test.tsx",
         "frontend/src/test/network-budget/auxiliaryRoutes.network.test.tsx",
         "frontend/src/test/whats-new-wiring.test.ts",
-        "frontend/src/unit/api-releases.test.ts",
-        "frontend/src/unit/generated-v1-only-paths.test.ts"
+        "frontend/src/unit/api-releases.test.ts"
       ],
-      "caller_count": 9,
+      "caller_count": 8,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4849,
@@ -4951,10 +4943,9 @@
       "runtime": "native-rust",
       "runtime_source": "native-router",
       "consumers": [
-        "frontend/src/services/api-roll.ts",
-        "frontend/src/unit/generated-v1-only-paths.test.ts"
+        "frontend/src/services/api-roll.ts"
       ],
-      "caller_count": 2,
+      "caller_count": 1,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4850,
@@ -5022,10 +5013,9 @@
       "runtime_source": "native-router",
       "consumers": [
         "frontend/src/services/api-roll.ts",
-        "frontend/src/unit/generated-v1-only-paths.test.ts",
         "frontend/src/unit/httpClient.test.ts"
       ],
-      "caller_count": 4,
+      "caller_count": 3,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4850,
@@ -5067,10 +5057,9 @@
       "runtime": "native-rust",
       "runtime_source": "native-router",
       "consumers": [
-        "frontend/src/services/rollBootstrapApi.ts",
-        "frontend/src/unit/generated-v1-only-paths.test.ts"
+        "frontend/src/services/rollBootstrapApi.ts"
       ],
-      "caller_count": 2,
+      "caller_count": 1,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4850,
@@ -5508,7 +5497,7 @@
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
-      "needs_owner_issue": true,
+      "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
       "notes": ""
@@ -5531,7 +5520,7 @@
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
-      "needs_owner_issue": true,
+      "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
       "notes": ""
@@ -5598,7 +5587,7 @@
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
-      "needs_owner_issue": true,
+      "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
       "notes": ""
@@ -5619,7 +5608,7 @@
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
-      "needs_owner_issue": true,
+      "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
       "notes": ""
@@ -5663,7 +5652,7 @@
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
-      "needs_owner_issue": true,
+      "needs_owner_issue": false,
       "disposition": "canonical-v2",
       "rollout_status": "live-target",
       "notes": ""

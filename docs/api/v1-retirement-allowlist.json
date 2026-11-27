@@ -122,9 +122,7 @@
       "rollout_status": "active-infrastructure",
       "needs_owner_issue": false,
       "runtime": "native-rust",
-      "consumers": [
-        "frontend/src/unit/generated-v1-only-paths.test.ts"
-      ]
+      "consumers": []
     },
     {
       "method": "GET",
@@ -2343,8 +2341,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-roll.ts",
-        "frontend/src/unit/generated-v1-only-paths.test.ts"
+        "frontend/src/services/api-roll.ts"
       ]
     },
     {
@@ -2387,8 +2384,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/rollBootstrapApi.ts",
-        "frontend/src/unit/generated-v1-only-paths.test.ts"
+        "frontend/src/services/rollBootstrapApi.ts"
       ]
     },
     {

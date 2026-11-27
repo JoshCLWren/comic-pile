@@ -26,7 +26,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | Method | Canonical path | Rust handler | Version | Actual consumers | Production ingress | Owner | Proposed v2 replacement / disposition | Rollout status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | GET | `/api/threads/{thread_id}` | `threads::get_thread_detail` | unversioned | none | /api/native_roll.rs | #5701 | GET /api/v2/threads/{thread_id} | compatibility-alias-debt |
-| GET | `/api/v1/threads/stale` | `thread_lifecycle::list_stale_threads` | v1 | frontend/src/services/api-threads.ts, scripts/ops/cli.mjs | /api/native_roll.rs | #4832 | GET|POST|PATCH|DELETE /api/v2/threads[/{thread_id}] | slice-open |
+| GET | `/api/v1/threads/stale` | `thread_lifecycle::list_stale_threads` | v1 | frontend/src/services/api-threads.ts, scripts/ops/cli.mjs | /api/native_roll.rs | #4832 | GET\|POST\|PATCH\|DELETE /api/v2/threads[/{thread_id}] | slice-open |
 | POST | `/api/v1/threads/{thread_id}/set-pending` | `thread_lifecycle::set_pending_thread` | v1 | frontend/src/services/api-threads.ts, frontend/src/test/api.spec.ts | /api/native_roll.rs | #4344 | retire-without-replacement | owner-issue-open |
 | GET | `/api/v2/threads` | `threads_v2::list_threads` | v2 | frontend/src/services/api-threads.ts | /api/native_roll.rs | #5701 | canonical-v2 | live-target |
 | POST | `/api/v2/threads:preview` | `threads_v2::preview_threads` | v2 | none | /api/native_roll.rs | #5705 | canonical-v2 | live-target |
