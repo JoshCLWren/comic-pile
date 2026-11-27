@@ -18282,6 +18282,7 @@
         ],
         "type": "object"
       },
+<<<<<<< HEAD
       "ThreadListResult": {
         "description": "One v2 threads list response. The active/completed/excluded filters keep the\nqueue-list projection; the stale filter keeps the legacy detail-shaped\nprojection. Both are emitted inline (no envelope variant key).",
         "oneOf": [
@@ -18293,6 +18294,8 @@
           }
         ]
       },
+=======
+>>>>>>> origin/main
       "ThreadPatchPrecondition": {
         "description": "Committed values a stale client read before issuing a Thread patch.",
         "properties": {
@@ -24992,6 +24995,66 @@
         ]
       }
     },
+    "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection": {
+      "post": {
+        "description": "Stateless AIP-136 custom method: deterministically preview how a continuity plan would project into a reading order. No plan, reading order or item is written; confirmation is a separate durable v2 operation that revalidates the plan.",
+        "operationId": "preview_reading_order_projection",
+        "parameters": [
+          {
+            "description": "Continuity plan id",
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingOrderProjectPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingOrderProjectPreviewResponse"
+                }
+              }
+            },
+            "description": "Deterministic projection preview"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Plan or reading order not found"
+          },
+          "409": {
+            "description": "Malformed plan"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "reading-orders"
+        ]
+      }
+    },
     "/api/v2/creators": {
       "get": {
         "operationId": "creators_list",
@@ -30460,6 +30523,7 @@
           "threads"
         ]
       },
+<<<<<<< HEAD
       "get": {
         "operationId": "get_thread_v2_documentation",
         "parameters": [
@@ -30502,6 +30566,8 @@
           "threads"
         ]
       },
+=======
+>>>>>>> origin/main
       "patch": {
         "description": "Partially update an owned Thread (AIP-134). Omitted fields are preserved. When `update_mask` is supplied only its fields are applied; a masked field missing from the body is cleared. An `expected` precondition that no longer matches the committed row returns 409 with `detail.code = thread_edit_conflict` and the current values. Foreign or deleted Threads return 404, never 403.",
         "operationId": "patch_thread_documentation",
@@ -31011,6 +31077,56 @@
         ]
       }
     },
+<<<<<<< HEAD
+=======
+    "/api/v2/threads/{thread_id}/readingOrders": {
+      "get": {
+        "description": "List the authenticated reader's reading orders that contain the given thread. A foreign or unknown thread is an empty collection.",
+        "operationId": "list_thread_reading_orders",
+        "parameters": [
+          {
+            "description": "Thread identifier",
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadReadingOrdersResponse"
+                }
+              }
+            },
+            "description": "Owned reading orders containing the thread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "reading-orders"
+        ]
+      }
+    },
+>>>>>>> origin/main
     "/api/v2/threads:checkDuplicates": {
       "post": {
         "description": "Advisory AIP-136 collection custom method: report existing volumes that may be the proposed series. Does not create a Thread. Results are owner-scoped, exclude a named thread, and are capped at five matches.",

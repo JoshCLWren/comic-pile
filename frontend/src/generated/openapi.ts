@@ -1861,6 +1861,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Stateless AIP-136 custom method: deterministically preview how a continuity plan would project into a reading order. No plan, reading order or item is written; confirmation is a separate durable v2 operation that revalidates the plan. */
+        post: operations["preview_reading_order_projection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/creators": {
         parameters: {
             query?: never;
@@ -3503,8 +3520,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+<<<<<<< HEAD
         /** Standard resource Get for one owned Thread. */
         get: operations["get_thread_v2_documentation"];
+=======
+        get?: never;
+>>>>>>> origin/main
         put?: never;
         post?: never;
         /** @description Delete an owned Thread (AIP-135). A second delete, or a delete of a foreign or already deleted Thread, returns 404. Never 403. */
@@ -3638,6 +3659,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+<<<<<<< HEAD
+=======
+    "/api/v2/threads/{thread_id}/readingOrders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List the authenticated reader's reading orders that contain the given thread. A foreign or unknown thread is an empty collection. */
+        get: operations["list_thread_reading_orders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+>>>>>>> origin/main
     "/api/v2/threads:checkDuplicates": {
         parameters: {
             query?: never;
@@ -9660,12 +9701,15 @@ export interface components {
             next_page_token?: string | null;
             threads: components["schemas"]["ThreadListItem"][];
         };
+<<<<<<< HEAD
         /**
          * @description One v2 threads list response. The active/completed/excluded filters keep the
          *     queue-list projection; the stale filter keeps the legacy detail-shaped
          *     projection. Both are emitted inline (no envelope variant key).
          */
         ThreadListResult: components["schemas"]["ThreadListResponse"] | components["schemas"]["StaleThreadListResponse"];
+=======
+>>>>>>> origin/main
         /** @description Committed values a stale client read before issuing a Thread patch. */
         ThreadPatchPrecondition: {
             /** @description Format observed by the client. */
@@ -14712,6 +14756,61 @@ export interface operations {
             };
         };
     };
+    preview_reading_order_projection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Continuity plan id */
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingOrderProjectPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Deterministic projection preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingOrderProjectPreviewResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan or reading order not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Malformed plan */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     creators_list: {
         parameters: {
             query?: {
@@ -19482,6 +19581,7 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
     get_thread_v2_documentation: {
         parameters: {
             query?: never;
@@ -19519,6 +19619,8 @@ export interface operations {
             };
         };
     };
+=======
+>>>>>>> origin/main
     delete_thread_v2_documentation: {
         parameters: {
             query?: never;
@@ -20041,6 +20143,53 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
+=======
+    list_thread_reading_orders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned reading orders containing the thread */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadReadingOrdersResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+>>>>>>> origin/main
     check_duplicates: {
         parameters: {
             query?: never;
