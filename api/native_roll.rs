@@ -712,6 +712,18 @@ fn app() -> Router {
         .route("/api/v2/roll/switch-prerequisite", post(native_dispatch))
         .route("/api/v2/users/me/preferences", get(native_dispatch))
         .route("/api/v2/users/me/preferences", patch(native_dispatch))
+        .route(
+            "/api/v2/users/me/tasteDiscoveries",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/users/me/tasteDiscoveries/{segment}",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/users/me/tasteSignals/{signal_name}",
+            patch(native_dispatch),
+        )
         .route("/api/v1/users/me/taste-signals", get(native_dispatch))
         .route(
             "/api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict",
