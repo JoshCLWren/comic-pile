@@ -36,6 +36,8 @@ test.describe('Sidebar footer containment (#1941, #5980)', () => {
     await expect(toggle).toBeVisible()
     await toggle.click()
     await expect(desktopNav.getByRole('button', { name: 'Collapse navigation' })).toBeVisible()
+    // The rail animates from 4rem to 18rem; measure only after the width settles.
+    await expect.poll(async () => (await desktopNav.boundingBox())?.width).toBe(288)
 
     const navBox = await desktopNav.boundingBox()
     expect(navBox, 'desktop navigation must have a rendered bounding box').not.toBeNull()
