@@ -417,9 +417,9 @@ pub(crate) fn escape_like(value: &str) -> String {
 
 #[derive(Debug, Clone)]
 pub(crate) struct FolderSummary {
-    folders: Vec<CBLSourceFolder>,
-    direct_list_count: i32,
-    total_list_count: i32,
+    pub(crate) folders: Vec<CBLSourceFolder>,
+    pub(crate) direct_list_count: i32,
+    pub(crate) total_list_count: i32,
 }
 
 pub(crate) async fn read_folder(

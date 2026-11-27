@@ -1103,6 +1103,17 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/issues/{issue_id}/comicvine",
             get(comicvine_issue::issue_intelligence),
         )
+        // Canonical v2 CBL source catalog resource (#5712). One List collection
+        // serves discovery and folder browse; Get and occurrences are standard.
+        .route("/api/v2/cblSources", get(cbl_sources_v2::list_cbl_sources))
+        .route(
+            "/api/v2/cblSources/{source_id}",
+            get(cbl_sources_v2::get_cbl_source),
+        )
+        .route(
+            "/api/v2/cblOccurrences",
+            get(cbl_sources_v2::list_cbl_occurrences),
+        )
         .route(
             "/api/v1/issue-identity/cbl-sources/browse",
             get(cbl_catalog::browse_cbl_source_catalog),

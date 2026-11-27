@@ -67,7 +67,7 @@ pub struct ListCblSourcesResponse {
 }
 
 /// One bounded page of exact Comic Vine occurrences in the shared catalog.
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ListCblOccurrencesResponse {
     pub comicvine_issue_id: String,
     pub occurrences_total: i64,
