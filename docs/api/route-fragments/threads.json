@@ -136,8 +136,8 @@
       "dest": "/api/native_roll.rs",
       "src": "^/api/v2/threads/[^/]+/readingOrders$",
       "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 5715,
+      "status": "native Rust",
+      "owning_issue": 5898,
       "consumers": [
         "frontend/src/services/api-reading-orders.ts",
         "frontend/src/hooks/useReaderContext.ts"
