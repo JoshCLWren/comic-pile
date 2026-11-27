@@ -22,11 +22,11 @@ export default function LoadingSpinner({
   const content = (
     <div className="flex flex-col items-center justify-center gap-3">
       <div
-        className={`${spinnerClass} border-stone-600 border-t-amber-500 rounded-full animate-spin`}
+        className={`${spinnerClass} border-[var(--theme-border)] border-t-[var(--theme-comic-accent)] rounded-full animate-spin`}
         role="status"
         aria-label="Loading"
       />
-      {message && <span className="text-stone-400 text-sm">{message}</span>}
+      {message && <span className="text-sm text-[var(--theme-text-muted)]">{message}</span>}
     </div>
   )
 

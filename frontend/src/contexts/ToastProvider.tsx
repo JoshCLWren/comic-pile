@@ -68,7 +68,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             className={`pointer-events-auto px-4 py-3 rounded-lg shadow-lg border backdrop-blur-sm max-w-md animate-slide-in surface-glass
                ${
                  toast.type === "error"
-                   ? "bg-red-900/90 border-red-700 text-red-100"
+                   ? "border-[var(--theme-danger)] text-[var(--theme-danger)]"
                    : toast.type === "success"
                      ? "bg-green-900/90 border-green-700 text-green-100"
                      : toast.type === "warning"
