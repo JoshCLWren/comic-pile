@@ -914,37 +914,33 @@ mod tests {
         pool_size: usize,
         connection_recovery: bool,
     ) -> Arc<AppState> {
-        state_with_reading_lists_values(url, pool_size, connection_recovery, None, None)
+        state_with_reading_lists_values(url, pool_size, connection_recovery, false)
     }
 
-    /// Build a state whose Reading List engine setting is effective-enabled.
-    ///
-    /// The setting is injected through the config lookup; no test mutates the
-    /// process environment, so tests stay deterministic under parallel runs.
+    /// Build a state with the canonical engine active (the production state).
     async fn state_with_reading_lists(pool_size: usize) -> Arc<AppState> {
         let url = test_database_url().await;
-        state_with_reading_lists_values(&url, pool_size, true, Some("true"), Some("queue-unit-test"))
+        state_with_reading_lists_values(&url, pool_size, true, true)
     }
 
-    /// Build a state from raw `READING_LISTS_*` values, exercising the real parser.
+    /// Build a state with an explicit engine setting, injected on the state
+    /// rather than through a deployment switch (which no longer exists).
     fn state_with_reading_lists_values(
         url: &str,
         pool_size: usize,
         connection_recovery: bool,
-        enabled: Option<&str>,
-        approval: Option<&str>,
+        reading_lists: bool,
     ) -> Arc<AppState> {
         let config = Config::from_lookup(|name| match name {
             "RUST_ROLL_DATABASE_URL" => Some(url.to_string()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-queue-test".into()),
             "RUST_ROLL_POOL_SIZE" => Some(pool_size.to_string()),
-            "READING_LISTS_ENABLED" => enabled.map(str::to_string),
-            "READING_LISTS_APPROVED_PREVIEW" => approval.map(str::to_string),
             _ => None,
         })
         .expect("queue test config");
         let mut state = AppState::new(config).expect("queue test state");
         state.connection_recovery = connection_recovery;
+        state.reading_lists = reading_lists;
         Arc::new(state)
     }
 
@@ -1119,12 +1115,12 @@ mod tests {
                 "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
                 "RUST_ROLL_JWT_SECRET" => Some("synthetic-queue-test".into()),
                 "RUST_ROLL_POOL_SIZE" => Some("4".into()),
-                "READING_LISTS_ENABLED" if reading_lists => Some("true".into()),
-                "READING_LISTS_APPROVED_PREVIEW" if reading_lists => Some("measurement".into()),
                 _ => None,
             })
             .expect("measurement config");
-            Arc::new(AppState::new(config).expect("measurement state"))
+            let mut state = AppState::new(config).expect("measurement state");
+            state.reading_lists = reading_lists;
+            Arc::new(state)
         };
         let state = measurement_state(false);
         reset(&state).await;
@@ -1755,9 +1751,9 @@ mod tests {
         }
     }
 
-    /// Every env combination resolves through the one shared accessor: only an
-    /// enabled switch plus a non-blank approval changes ordering authority, all
-    /// other combinations keep the stored legacy grouping with identical results.
+    /// The grouping authority is a property of the injected state, not a
+    /// deployment switch. Production always injects the canonical engine; the
+    /// stored-flag case remains a deterministic negative control.
     #[tokio::test]
     async fn reading_lists_setting_combinations_select_one_grouping_authority() {
         let _guard = DB_LOCK.lock().await;
@@ -1772,26 +1768,19 @@ mod tests {
         // Stored: 1,2 readable then 3 blocked. Evaluated: 2,3 readable then 1.
         let legacy = [(1, 1), (2, 2), (3, 3)];
         let evaluated = [(1, 3), (2, 1), (3, 2)];
-        type Case<'a> = (Option<&'a str>, Option<&'a str>, [(i32, i32); 3]);
-        let cases: [Case<'_>; 7] = [
-            (None, None, legacy),
-            (Some("true"), None, legacy),
-            (Some("true"), Some("   "), legacy),
-            (None, Some("ref"), legacy),
-            (Some("false"), Some("ref"), legacy),
-            (Some("TRUE"), Some("ref"), evaluated),
-            (Some("1"), Some("ref"), evaluated),
+        let cases: [(bool, [(i32, i32); 3]); 2] = [
+            (false, legacy),
+            (true, evaluated),
         ];
-        for (enabled, approval, expected) in cases {
-            // The real startup parser resolves the injected values; no env mutation.
-            let case_state = state_with_reading_lists_values(&url, 2, true, enabled, approval);
+        for (reading_lists, expected) in cases {
+            let case_state = state_with_reading_lists_values(&url, 2, true, reading_lists);
             for (thread_id, position) in expected {
                 let entry = get_queue_entry(State(case_state.clone()), user, Path(thread_id))
                     .await
                     .expect("queue entry");
                 assert_eq!(
                     entry.0.position, position,
-                    "enabled={enabled:?} approval={approval:?} thread {thread_id}"
+                    "reading_lists={reading_lists} thread {thread_id}"
                 );
             }
         }

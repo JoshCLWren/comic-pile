@@ -205,7 +205,6 @@ impl Config {
                 7 * 24 * 60,
             )? as i64,
             refresh_token_expire_days: number(&get, "REFRESH_TOKEN_EXPIRE_DAYS", 7, 365)? as i64,
-            reading_lists: crate::reading_lists_setting::reading_lists_from_lookup(&get),
         })
     }
 }
