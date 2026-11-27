@@ -2,8 +2,6 @@
 //!
 //! `GET /api/v2/threads` replaces the v1 `/api/v1/threads/` collection read
 //! with a bounded, resource-oriented projection of the reader's active queue.
-//! `POST /api/v2/threads` is the paired AIP-133 standard Create (#5702); its
-//! handler lives in `thread_lifecycle` and shares the legacy write path.
 //! It preserves the real consumer contract: deterministic cursor pagination for
 //! `position`, `title` and `created`, the authoritative whole-queue
 //! `active_count`, case-insensitive title search, next-unread issue identity,
