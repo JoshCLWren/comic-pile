@@ -849,15 +849,6 @@ export interface RatingDistributionRequest {
 
 export type RatingDistributionResponse = components['schemas']['CreatorMetricDrilldown']
 
-export interface ReactivateThreadV2Request {
-  path: {
-    thread_id: number
-  }
-  body: components['schemas']['ReactivateThreadRequest']
-}
-
-export type ReactivateThreadV2Response = components['schemas']['NativeThreadResponse']
-
 export interface ReadRequest {
   path: {
     plan_id: number
@@ -1389,7 +1380,6 @@ export interface NativeV2Client {
   previewIssueCreate(args: PreviewIssueCreateRequest): Promise<PreviewIssueCreateResponse>
   previewIssueStructure(args: PreviewIssueStructureRequest): Promise<PreviewIssueStructureResponse>
   ratingDistribution(args: RatingDistributionRequest): Promise<RatingDistributionResponse>
-  reactivateThreadV2(args: ReactivateThreadV2Request): Promise<ReactivateThreadV2Response>
   read(args: ReadRequest): Promise<ReadResponse>
   readDemoRoll(): Promise<ReadDemoRollResponse>
   readReadingList(args: ReadReadingListRequest): Promise<ReadReadingListResponse>
@@ -2026,12 +2016,6 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.get<RatingDistributionResponse>(
         `/v2/creators/${encodeURIComponent(String(args.path.creator_key))}/metrics/rating-distribution/${encodeURIComponent(String(args.path.rating_value))}`,
         { params: compactQuery(args.query) },
-      )
-    },
-    reactivateThreadV2(args: ReactivateThreadV2Request) {
-      return client.post<ReactivateThreadV2Response, ReactivateThreadV2Request['body']>(
-        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}:reactivate`,
-        args.body,
       )
     },
     read(args: ReadRequest) {

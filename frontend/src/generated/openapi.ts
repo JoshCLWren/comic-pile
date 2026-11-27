@@ -3482,27 +3482,17 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-<<<<<<< ours
     "/api/v2/threads/{thread_id}/reading-order-group-memberships": {
-=======
-    "/api/v2/threads/{thread_id}:reactivate": {
->>>>>>> theirs
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-<<<<<<< ours
         /** Documentation-only operation for listing a thread's group memberships (v2). */
         get: operations["dependency_groups_v2_list_thread_group_memberships"];
         put?: never;
         post?: never;
-=======
-        get?: never;
-        put?: never;
-        post: operations["reactivate_thread_v2"];
->>>>>>> theirs
         delete?: never;
         options?: never;
         head?: never;
@@ -7460,14 +7450,6 @@ export interface components {
             issues_to_add: number;
             /** Thread Id */
             thread_id: number;
-        };
-        /** @description Body of `POST /api/v2/threads/{thread_id}:reactivate`. */
-        ReactivateThreadRequest: {
-            /**
-             * Format: int32
-             * @description Number of new unread issues to create for the completed series.
-             */
-            issues_to_add: number;
         };
         /** @description Python `ReaderContextCrossover`. */
         ReaderContextCrossover: {
@@ -19172,83 +19154,48 @@ export interface operations {
             };
         };
     };
-<<<<<<< ours
     dependency_groups_v2_list_thread_group_memberships: {
-=======
-    reactivate_thread_v2: {
->>>>>>> theirs
         parameters: {
             query?: never;
             header?: never;
             path: {
-<<<<<<< ours
                 /** @description Owned thread identifier */
-=======
-                /** @description Identifier of the completed thread to reactivate */
->>>>>>> theirs
                 thread_id: number;
             };
             cookie?: never;
         };
-<<<<<<< ours
         requestBody?: never;
         responses: {
             /** @description Groups containing the thread or its issues */
-=======
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReactivateThreadRequest"];
-            };
-        };
-        responses: {
-            /** @description Completed thread reactivated with the requested unread issues */
->>>>>>> theirs
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-<<<<<<< ours
                     "application/json": components["schemas"]["NativeDependencyGroupSummary"][];
                 };
             };
             /** @description Not authenticated */
             401: {
-=======
-                    "application/json": components["schemas"]["NativeThreadResponse"];
-                };
-            };
-            /** @description Thread is not completed */
-            400: {
->>>>>>> theirs
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-<<<<<<< ours
             /** @description Thread not found */
-=======
-            /** @description Thread not found for this reader */
->>>>>>> theirs
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-<<<<<<< ours
             /** @description Request validation failed */
-=======
-            /** @description Validation failed */
->>>>>>> theirs
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-<<<<<<< ours
             /** @description Database temporarily unavailable */
             503: {
                 headers: {
@@ -19256,8 +19203,6 @@ export interface operations {
                 };
                 content?: never;
             };
-=======
->>>>>>> theirs
         };
     };
     list_undo_snapshots_documentation: {

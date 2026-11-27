@@ -10720,7 +10720,6 @@
         ]
       }
     },
-<<<<<<< ours
     "/api/v2/threads/{thread_id}/reading-order-group-memberships": {
       "get": {
         "tags": [
@@ -10728,23 +10727,11 @@
         ],
         "summary": "Documentation-only operation for listing a thread's group memberships (v2).",
         "operationId": "dependency_groups_v2_list_thread_group_memberships",
-=======
-    "/api/v2/threads/{thread_id}:reactivate": {
-      "post": {
-        "tags": [
-          "threads"
-        ],
-        "operationId": "reactivate_thread_v2",
->>>>>>> theirs
         "parameters": [
           {
             "name": "thread_id",
             "in": "path",
-<<<<<<< ours
             "description": "Owned thread identifier",
-=======
-            "description": "Identifier of the completed thread to reactivate",
->>>>>>> theirs
             "required": true,
             "schema": {
               "type": "integer",
@@ -10752,7 +10739,6 @@
             }
           }
         ],
-<<<<<<< ours
         "responses": {
           "200": {
             "description": "Groups containing the thread or its issues",
@@ -10763,30 +10749,10 @@
                   "items": {
                     "$ref": "#/components/schemas/DependencyGroupSummary"
                   }
-=======
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReactivateThreadRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Completed thread reactivated with the requested unread issues",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ThreadResponse"
->>>>>>> theirs
                 }
               }
             }
           },
-<<<<<<< ours
           "401": {
             "description": "Not authenticated"
           },
@@ -10805,18 +10771,6 @@
             "HTTPBearer": []
           }
         ]
-=======
-          "400": {
-            "description": "Thread is not completed"
-          },
-          "404": {
-            "description": "Thread not found for this reader"
-          },
-          "422": {
-            "description": "Validation failed"
-          }
-        }
->>>>>>> theirs
       }
     },
     "/api/v2/undo/{session_id}/snapshots": {
@@ -20898,22 +20852,6 @@
               "null"
             ],
             "format": "int32"
-          }
-        }
-      },
-      "ReactivateThreadRequest": {
-        "type": "object",
-        "description": "Body of `POST /api/v2/threads/{thread_id}:reactivate`.",
-        "required": [
-          "issues_to_add"
-        ],
-        "properties": {
-          "issues_to_add": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Number of new unread issues to create for the completed series.",
-            "maximum": 10000,
-            "minimum": 1
           }
         }
       },

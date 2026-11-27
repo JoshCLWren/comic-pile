@@ -11996,22 +11996,6 @@
         "title": "ReactivateRequest",
         "type": "object"
       },
-      "ReactivateThreadRequest": {
-        "description": "Body of `POST /api/v2/threads/{thread_id}:reactivate`.",
-        "properties": {
-          "issues_to_add": {
-            "description": "Number of new unread issues to create for the completed series.",
-            "format": "int32",
-            "maximum": 10000,
-            "minimum": 1,
-            "type": "integer"
-          }
-        },
-        "required": [
-          "issues_to_add"
-        ],
-        "type": "object"
-      },
       "ReaderContextCrossover": {
         "description": "Python `ReaderContextCrossover`.",
         "properties": {
@@ -29903,21 +29887,12 @@
         ]
       }
     },
-<<<<<<< ours
     "/api/v2/threads/{thread_id}/reading-order-group-memberships": {
       "get": {
         "operationId": "dependency_groups_v2_list_thread_group_memberships",
         "parameters": [
           {
             "description": "Owned thread identifier",
-=======
-    "/api/v2/threads/{thread_id}:reactivate": {
-      "post": {
-        "operationId": "reactivate_thread_v2",
-        "parameters": [
-          {
-            "description": "Identifier of the completed thread to reactivate",
->>>>>>> theirs
             "in": "path",
             "name": "thread_id",
             "required": true,
@@ -29927,25 +29902,11 @@
             }
           }
         ],
-<<<<<<< ours
-=======
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReactivateThreadRequest"
-              }
-            }
-          },
-          "required": true
-        },
->>>>>>> theirs
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-<<<<<<< ours
                   "items": {
                     "$ref": "#/components/schemas/NativeDependencyGroupSummary"
                   },
@@ -29976,26 +29937,6 @@
         "summary": "Documentation-only operation for listing a thread's group memberships (v2).",
         "tags": [
           "reading-order-groups"
-=======
-                  "$ref": "#/components/schemas/NativeThreadResponse"
-                }
-              }
-            },
-            "description": "Completed thread reactivated with the requested unread issues"
-          },
-          "400": {
-            "description": "Thread is not completed"
-          },
-          "404": {
-            "description": "Thread not found for this reader"
-          },
-          "422": {
-            "description": "Validation failed"
-          }
-        },
-        "tags": [
-          "threads"
->>>>>>> theirs
         ]
       }
     },
