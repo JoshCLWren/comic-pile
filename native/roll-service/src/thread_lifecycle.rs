@@ -8,8 +8,10 @@
 //! * `POST /api/v1/threads/reactivate`
 //! * `GET /api/v1/threads/stale`
 //! * `POST /api/v1/threads/check-duplicates`
-//! * `POST /api/v1/threads/groups:batch`
 //! * `GET /api/v1/threads/excluded/threads`
+//!
+//! The membership batch was retired from `/api/v1/threads/groups:batch` and is
+//! now the single v2 operation `POST /api/v2/reading-order-groups:resolveMemberships` (#5711).
 //! * `PUT /api/v1/threads/{thread_id}/test-backdate` (TEST_ENVIRONMENT-only)
 //!
 //! The Python handlers (`app/api/thread.py`, `app/api/dependency_group_batch.py`
@@ -63,7 +65,7 @@ use unicode_casefold::UnicodeCaseFold;
 
 type HandlerResult = Result<Response, LifecycleError>;
 
-/// Maximum threads one `groups:batch` request may name.
+/// Maximum threads one `resolveMemberships` request may name.
 const MAX_BATCH_THREADS: usize = 200;
 /// Maximum possible-existing-volume matches one advisory check returns.
 const MAX_POTENTIAL_DUPLICATE_MATCHES: usize = 5;
@@ -152,7 +154,7 @@ pub struct CheckDuplicatesRequest {
     pub exclude_thread_id: Option<i32>,
 }
 
-/// Body of `POST /api/v1/threads/groups:batch`.
+/// Body of `POST /api/v2/reading-order-groups:resolveMemberships`.
 #[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 pub struct GroupsBatchRequest {
     pub thread_ids: Vec<i32>,
@@ -2528,11 +2530,15 @@ pub async fn check_potential_duplicates(
 }
 
 // ---------------------------------------------------------------------------
-// POST /api/v1/threads/groups:batch
+// POST /api/v2/reading-order-groups:resolveMemberships
 // ---------------------------------------------------------------------------
 
-/// `POST /api/v1/threads/groups:batch`
-pub async fn list_thread_groups_batch(
+/// `POST /api/v2/reading-order-groups:resolveMemberships`
+///
+/// Single bounded request that resolves group memberships for every owned
+/// thread named in the body. This is the only mounted membership batch route;
+/// the retired `/api/v1/threads/groups:batch` alias is gone.
+pub async fn resolve_memberships(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     body: Bytes,
@@ -2836,23 +2842,6 @@ pub fn list_excluded_threads_documentation() {}
 )]
 #[allow(dead_code)]
 pub fn check_potential_duplicates_documentation() {}
-
-#[utoipa::path(
-    post,
-    path = "/api/v1/threads/groups:batch",
-    tag = "threads",
-    description = "List crossover groups for several owned threads in one request.",
-    request_body = GroupsBatchRequest,
-    responses(
-        (status = 200, description = "Map of thread id to crossover groups", body = HashMap<String, Vec<DependencyGroupSummary>>),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "A requested thread is not owned by the reader"),
-        (status = 422, description = "Validation failed")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn list_thread_groups_batch_documentation() {}
 
 #[cfg(test)]
 mod tests {

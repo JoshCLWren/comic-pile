@@ -390,7 +390,11 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::reading_orders::ReadingOrdersApi::openapi())
         .merge_from(crate::reading_plan_sync::ReadingPlanSyncApi::openapi())
         .merge_from(crate::undo_snapshots::UndoSnapshotsApi::openapi())
-        .merge_from(crate::undo_apply::UndoApplyApi::openapi());
+        .merge_from(crate::undo_apply::UndoApplyApi::openapi())
+        // #5711: the six crossover-membership operations are v2-only after the
+        // retired `/api/v1` aliases were unmounted. Publish them here so the
+        // generated frontend client stays aligned with the live ingress.
+        .merge_from(crate::dependency_groups::dependency_groups_v2_openapi());
     // The aggregate artifact is the deployed v2 runtime contract. The
     // completed-threads v1 operation has its own same-path contract and must
     // not expand the v2 inventory.

@@ -104,6 +104,19 @@
       ]
     },
     {
+      "bucket": "operations",
+      "method": "GET",
+"path": "/api/v2/threads/{thread_id}/reading-order-group-memberships",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/threads/[^/]+/reading-order-group-memberships$",
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": [
+        "frontend/src/services/api-dependency-groups.ts"
+      ],
+      "owning_issue": 4841
+    },
+    {
       "bucket": "unversioned_operations",
       "method": "GET",
       "path": "/api/threads/{thread_id}",
