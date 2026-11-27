@@ -102,7 +102,7 @@ pub struct TasteSignalListResponse {
     pub signals: Vec<TasteSignalResponse>,
 }
 
-/// Explicit user verdict on one Taste Bank signal (retained v1 spelling).
+/// Explicit user verdict on one Taste Bank signal.
 #[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 pub struct TasteVerdictRequest {
     pub verdict: String,
