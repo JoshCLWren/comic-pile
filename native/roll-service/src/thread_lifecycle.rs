@@ -111,9 +111,7 @@ pub struct ThreadResponse {
     pub manual_creator_credits: Value,
 }
 
-/// Python-shaped `RollResponse` projection returned by the retained v1
-/// `set-pending` manual selection (#4344). The retired override endpoint no
-/// longer owns this wire contract.
+/// Response body: the Python `RollResponse` projection for a manual pick.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct RollResponse {
     pub thread_id: i32,
