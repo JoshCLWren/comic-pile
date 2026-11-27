@@ -526,7 +526,7 @@ async fn v2_direct_exclusion_needs_no_source_group_and_preserves_issue_rows() {
         "no source means no provenance group"
     );
 
-    let row: (String, i32) = ctx
+    let row = ctx
         .state
         .pool
         .get()
@@ -538,7 +538,8 @@ async fn v2_direct_exclusion_needs_no_source_group_and_preserves_issue_rows() {
         )
         .await
         .unwrap();
-    assert_eq!(row, ("excluded".to_string(), 0));
+    assert_eq!(row.get::<_, String>(0), "excluded");
+    assert_eq!(row.get::<_, i32>(1), 0);
     assert!(is_blocked(&ctx, thread).await);
     assert_eq!(
         issue_rows(&ctx, thread).await,
