@@ -2896,7 +2896,11 @@ pub async fn check_potential_duplicates_v2(
     check_potential_duplicates(state, user, body).await
 }
 
-// -------------------------------------------------------/// `POST /api/v2/reading-order-groups:resolveMemberships`
+// ---------------------------------------------------------------------------
+// POST /api/v2/reading-order-groups:resolveMemberships
+// ---------------------------------------------------------------------------
+
+/// `POST /api/v2/reading-order-groups:resolveMemberships`
 ///
 /// Single bounded request that resolves group memberships for every owned
 /// thread named in the body. This is the only mounted membership batch route;
@@ -3266,7 +3270,9 @@ pub fn check_potential_duplicates_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn check_potential_duplicates_v2#[cfg(test)]
+pub fn check_potential_duplicates_v2_documentation() {}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
