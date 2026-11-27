@@ -2178,18 +2178,23 @@ mod tests {
     }
 
     fn test_state(url: &str) -> Arc<AppState> {
-        Arc::new(
-            AppState::new(
-                Config::from_lookup(|key| match key {
-                    "RUST_ROLL_DATABASE_URL" => Some(url.into()),
-                    "RUST_ROLL_JWT_SECRET" => Some(JWT_SECRET.into()),
-                    "RUST_ROLL_POOL_SIZE" => Some("2".into()),
-                    _ => None,
-                })
-                .expect("ingress test config"),
-            )
-            .expect("ingress test state"),
+        let mut state = AppState::new(
+            Config::from_lookup(|key| match key {
+                "RUST_ROLL_DATABASE_URL" => Some(url.into()),
+                "RUST_ROLL_JWT_SECRET" => Some(JWT_SECRET.into()),
+                "RUST_ROLL_POOL_SIZE" => Some("2".into()),
+                _ => None,
+            })
+            .expect("ingress test config"),
         )
+        .expect("ingress test state");
+        // These ingress fixtures deliberately create a minimal schema that only
+        // carries the queue/auth tables. The canonical reading-order snapshot
+        // needs the full migrated schema, so keep this routing-focused state on
+        // the stored-flag seam. Engine grouping itself is covered by the
+        // DB-backed queue tests in native/roll-service/src/queue.rs.
+        state.reading_lists = false;
+        Arc::new(state)
     }
 
     async fn call_app(request: Request<Body>) -> (StatusCode, Value, Vec<String>, String) {
