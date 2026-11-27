@@ -6946,7 +6946,7 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
-        /** @description The Python `ThreadResponse` projection every lifecycle writer returns. */
+        /** @description Python `ThreadResponse`. */
         NativeThreadResponse: {
             blocking_reasons: string[];
             created_at: string;
@@ -6960,7 +6960,7 @@ export interface components {
             last_activity_at?: string | null;
             /** Format: double */
             last_rating?: number | null;
-            manual_creator_credits: unknown;
+            manual_creator_credits: Record<string, never>[];
             /** Format: int32 */
             next_unread_issue_id?: number | null;
             next_unread_issue_number?: string | null;
