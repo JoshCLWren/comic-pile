@@ -1946,22 +1946,7 @@ pub fn delete_group_v2_documentation() {}
         description = "Generated contract for the native reading-order-group handlers that retain their original method and path."
     ),
     paths(
-<<<<<<< HEAD
-        list_thread_groups_documentation,
-        add_issue_range_documentation,
-        add_member_documentation,
-        remove_member_documentation,
-        set_group_order_documentation,
-        list_crossover_plans_documentation
-=======
-        list_groups_documentation,
-        create_group_documentation,
-        get_group_documentation,
-        update_group_documentation,
-        delete_group_documentation,
-        get_group_detail_documentation,
         set_group_order_documentation
->>>>>>> origin/main
     ),
     components(schemas(
         DependencyGroupCreateRequest,
@@ -2003,7 +1988,6 @@ pub fn dependency_groups_openapi() -> utoipa::openapi::OpenApi {
     DependencyGroupsApi::openapi()
 }
 
-<<<<<<< HEAD
 /// v2 collection CRUD contract (#5710). Kept as a separate domain document so
 /// the canonical `/api/v2` surface can merge it without re-declaring the
 /// retained v1 same-path operations.
@@ -2038,7 +2022,8 @@ pub struct ReadingOrderGroupsV2Api;
 pub fn reading_order_groups_v2_openapi() -> utoipa::openapi::OpenApi {
     use utoipa::OpenApi;
     ReadingOrderGroupsV2Api::openapi()
-=======
+}
+
 /// OpenAPI document for the v2 reading-order-group membership surface.
 ///
 /// These six operations are the single authority for group membership reads and
@@ -2074,7 +2059,6 @@ pub struct DependencyGroupsV2Api;
 pub fn dependency_groups_v2_openapi() -> utoipa::openapi::OpenApi {
     use utoipa::OpenApi;
     DependencyGroupsV2Api::openapi()
->>>>>>> origin/main
 }
 
 #[cfg(test)]
@@ -2499,20 +2483,15 @@ mod tests {
     #[test]
     fn contract_documents_every_operation_and_stays_current() {
         let document = serde_json::to_value(dependency_groups_openapi()).unwrap();
+        assert!(
+            document["paths"]
+                .get("/api/v1/reading-order-groups/{group_id}/order")
+                .is_some(),
+            "retained v1 group order path must stay documented"
+        );
+        // The CRUD and membership operations are v2-only: their retired v1 URLs
+        // must not remain documented as live operations.
         for path in [
-<<<<<<< HEAD
-=======
-            "/api/v1/reading-order-groups/",
-            "/api/v1/reading-order-groups/{group_id}",
-            "/api/v1/reading-order-groups/{group_id}/detail",
-            "/api/v1/reading-order-groups/{group_id}/order",
-        ] {
-            assert!(document["paths"].get(path).is_some(), "{path}");
-        }
-        // The membership operations are v2-only: their retired v1 URLs must not
-        // remain documented as live operations.
-        for path in [
->>>>>>> origin/main
             "/api/v1/reading-order-groups/threads/{thread_id}/groups",
             "/api/v1/reading-order-groups/{group_id}/issue-ranges",
             "/api/v1/reading-order-groups/{group_id}/members",
