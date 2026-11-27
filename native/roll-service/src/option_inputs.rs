@@ -1083,9 +1083,7 @@ mod tests {
         (state, guard)
     }
 
-    fn volume_map(
-        snapshot: &SnapshotRows,
-    ) -> BTreeMap<i32, BTreeSet<(String, String)>> {
+    fn volume_map(snapshot: &SnapshotRows) -> BTreeMap<i32, BTreeSet<(String, String)>> {
         let mut map: BTreeMap<i32, BTreeSet<(String, String)>> = BTreeMap::new();
         for row in &snapshot.issue_volumes {
             map.entry(row.issue_id)
@@ -1147,7 +1145,10 @@ mod tests {
         }
         assert_eq!(
             before.get(&9201),
-            Some(&BTreeSet::from([("comicvine".to_string(), "1000".to_string())]))
+            Some(&BTreeSet::from([(
+                "comicvine".to_string(),
+                "1000".to_string()
+            )]))
         );
 
         let a_snapshot = snapshot_for(&state, 9101).await;
@@ -1155,7 +1156,9 @@ mod tests {
         for (issue_id, keys) in &before {
             for key in keys {
                 assert!(
-                    a_after.get(issue_id).is_some_and(|after| after.contains(key)),
+                    a_after
+                        .get(issue_id)
+                        .is_some_and(|after| after.contains(key)),
                     "catalog-only evidence {issue_id} {key:?} lost: {a_after:?}"
                 );
             }
@@ -1165,17 +1168,27 @@ mod tests {
         let b_after = volume_map(&b_snapshot);
         assert_eq!(
             b_after.get(&9401),
-            Some(&BTreeSet::from([("comicvine".to_string(), "2000".to_string())]))
+            Some(&BTreeSet::from([(
+                "comicvine".to_string(),
+                "2000".to_string()
+            )]))
         );
         assert_eq!(
             b_after.get(&9402),
-            Some(&BTreeSet::from([("comicvine".to_string(), "1000".to_string())]))
+            Some(&BTreeSet::from([(
+                "comicvine".to_string(),
+                "1000".to_string()
+            )]))
         );
 
         let a_inputs = assemble_snapshot(a_snapshot).expect("A snapshot");
         a_inputs.require_resolved().expect("A resolved");
         assert_eq!(
-            a_inputs.excluded_issue_ids.iter().copied().collect::<Vec<_>>(),
+            a_inputs
+                .excluded_issue_ids
+                .iter()
+                .copied()
+                .collect::<Vec<_>>(),
             vec![9201]
         );
         assert_eq!(a_inputs.lists[0].mode, "strict");
@@ -1190,7 +1203,11 @@ mod tests {
         b_inputs.require_resolved().expect("B resolved");
         // A's volume exclusion must not leak to B even though B's issue 9402
         // carries the same comicvine:1000 volume via confirmed metadata.
-        assert!(b_inputs.excluded_issue_ids.is_empty(), "{:?}", b_inputs.excluded_issue_ids);
+        assert!(
+            b_inputs.excluded_issue_ids.is_empty(),
+            "{:?}",
+            b_inputs.excluded_issue_ids
+        );
         assert_eq!(b_inputs.lists[0].mode, "loose");
         assert_eq!(b_inputs.lists[0].entries[1].gate, "hold");
         let b_validated = validated_contained(b_inputs).expect("B validated");

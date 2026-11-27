@@ -5335,10 +5335,7 @@ mod guard_db_tests {
         (state, guard)
     }
 
-    fn fact(
-        issue_id: Option<i32>,
-        thread_id: Option<i32>,
-    ) -> serde_json::Map<String, JsonValue> {
+    fn fact(issue_id: Option<i32>, thread_id: Option<i32>) -> serde_json::Map<String, JsonValue> {
         let mut fact = serde_json::Map::new();
         if let Some(id) = issue_id {
             fact.insert("resolved_issue_id".into(), json!(id));
