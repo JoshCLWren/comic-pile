@@ -964,7 +964,16 @@ fn parse_update(
         true,
         false,
     );
-    let credits = credits_field(check, map.get("manual_creator_credits"), true);
+    let credits = if map.contains_key("manual_creator_credits") {
+        match map.get("manual_creator_credits") {
+            Some(Value::Null) => Some(json!([])),
+            Some(_) => credits_field(check, map.get("manual_creator_credits"), true)
+                .map(|items| normalize_manual_creator_credits(&items)),
+            None => None,
+        }
+    } else {
+        None
+    };
     let is_test = match map.get("is_test") {
         None | Some(Value::Null) => None,
         Some(value) => match coerce_bool(value) {
@@ -986,7 +995,7 @@ fn parse_update(
             issues_remaining,
             notes_present: map.contains_key("notes"),
             notes,
-            credits: credits.map(|items| normalize_manual_creator_credits(&items)),
+            credits,
             is_test,
         },
         raw_body,
