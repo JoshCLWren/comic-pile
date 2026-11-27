@@ -826,7 +826,9 @@ mod tests {
         .expect("rate offered comic");
         assert!(rolled_rating.read_event_created);
         assert!(rolled_rating.rating_event_created);
-        let rated_die = rolled_rating.die_after.expect("Roll rating changes the die");
+        let rated_die = rolled_rating
+            .die_after
+            .expect("Roll rating changes the die");
         assert_eq!(rated_die, 10);
 
         let Json(direct_rating) = read_rate_issue(
@@ -875,7 +877,10 @@ mod tests {
         for limit in [1, 2, 50] {
             let items = all_pages(&state, 1, limit).await;
             let types: Vec<&str> = items.iter().map(|item| item.event_type.as_str()).collect();
-            assert_eq!(types, ["roll", "snooze", "roll", "rate", "rate", "reset_dice"]);
+            assert_eq!(
+                types,
+                ["roll", "snooze", "roll", "rate", "rate", "reset_dice"]
+            );
             assert_eq!(items[0].thread_id, Some(first.thread_id));
             assert_eq!(items[0].die_before, Some(6));
             assert_eq!(items[1].thread_id, Some(first.thread_id));
