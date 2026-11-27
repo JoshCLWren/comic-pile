@@ -1148,11 +1148,10 @@ async fn julix_strict_order_is_shared_by_roll_queue_reader_and_explanations() {
     // read Wild Hunt node. The read prerequisite emits no blocker at all.
     let (status, king_info) = send(
         &state,
-        post(
-            &format!("/api/v1/threads/{king_thread}:getBlockingInfo"),
+        get(
+            &format!("/api/v2/threads/{king_thread}/eligibility"),
             &token,
             &csrf,
-            None,
         ),
     )
     .await;
@@ -1195,11 +1194,10 @@ async fn julix_strict_order_is_shared_by_roll_queue_reader_and_explanations() {
 
     let (status, dead_info) = send(
         &state,
-        post(
-            &format!("/api/v1/threads/{dead_thread}:getBlockingInfo"),
+        get(
+            &format!("/api/v2/threads/{dead_thread}/eligibility"),
             &token,
             &csrf,
-            None,
         ),
     )
     .await;
