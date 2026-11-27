@@ -273,17 +273,13 @@ fn resolve_list_query(query: &ThreadListQuery) -> Result<ResolvedListQuery, ApiE
         (ThreadFilter::Completed | ThreadFilter::Excluded, "title" | "created") => {
             requested_order.to_string()
         }
-        (ThreadFilter::Stale, "position") => {
-            // Preserve the legacy stale read's oldest-activity-first ordering
-            // when an old client carries the Queue's default sort.
+        (ThreadFilter::Stale, "last_activity" | "position") => {
+            // Stale rows are always oldest-activity-first. `position` is the
+            // Queue's default sort and is mapped to that ordering for old
+            // clients; title/created ordering is not defined for stale rows.
             "last_activity".to_string()
         }
-        (ThreadFilter::Stale, "last_activity" | "title" | "created") => requested_order.to_string(),
-        _ => {
-            return Err(bad_request(
-                "order_by must be one of: position, title, created, last_activity",
-            ))
-        }
+        _ => return Err(bad_request("order_by is not supported with this filter")),
     };
     let raw_search = query.search.as_deref();
     if raw_search.is_some_and(str::is_empty) {
@@ -2007,6 +2003,17 @@ mod tests {
         })
         .unwrap_err();
         assert_eq!(too_old.detail(), "days must be between 0 and 3650");
+
+        let stale_order = resolve_list_query(&ThreadListQuery {
+            filter: Some("stale".to_string()),
+            order_by: Some("title".to_string()),
+            ..ThreadListQuery::default()
+        })
+        .unwrap_err();
+        assert_eq!(
+            stale_order.detail(),
+            "order_by is not supported with this filter"
+        );
 
         let too_large = resolve_list_query(&ThreadListQuery {
             page_size: Some(MAX_PAGE_SIZE + 1),
