@@ -1386,6 +1386,39 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn retired_session_paths_are_not_registered_at_the_ingress() {
+        // #4343 retired the v1 session index/current/single reads and #5708
+        // moved the live v2 family to the canonical lowerCamelCase collection.
+        // No compatibility alias is mounted here, so Vercel's catch-all cannot
+        // revive either shape.
+        for (method, uri) in [
+            ("GET", "/api/v1/sessions/"),
+            ("GET", "/api/v1/sessions/7"),
+            ("GET", "/api/v1/sessions/current/"),
+            ("GET", "/api/v2/reading-sessions"),
+            ("POST", "/api/v2/reading-sessions"),
+            ("GET", "/api/v2/reading-sessions/7/details"),
+            ("GET", "/api/v2/reading-sessions/7/snapshots"),
+        ] {
+            let response = app()
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert_eq!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "{method} {uri} must stay retired"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn migrated_v2_roll_and_release_ingress_never_hits_json_404() {
         // The Vercel ingress owns a route table separate from the library
         // router. Every browser-facing path moved in this cutover must be
