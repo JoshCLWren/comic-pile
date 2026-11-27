@@ -94,6 +94,11 @@ The List method accepts documented AIP-132 parameters:
 - `page_size` (`1..200`) and `page_token`: bounded keyset pagination. The token
   is bound to the filter, search, ordering and execution projection.
 
+Reads are idempotent. An invalid filter, conflicting `order_by`/`sort` pair or
+malformed page token is `400`; out-of-bounds parameters and the retired
+`collection_id` are `422`; an unauthenticated request is `401`; and a detail
+resource that is missing or not owned by the reader is `404`.
+
 Active, completed and excluded pages keep the queue-list item projection and
 their original count semantics (`active_count` is the whole active queue only on
 the active filter; completed/excluded return `0` and omit `filtered_count`).
