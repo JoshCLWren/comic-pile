@@ -10066,6 +10066,9 @@
           "plan_ordering_mode": {
             "type": "string"
           },
+          "plan_updated_at": {
+            "type": "string"
+          },
           "reading_order_id": {
             "format": "int32",
             "type": "integer"
@@ -10082,6 +10085,7 @@
           "plan_id",
           "plan_name",
           "plan_ordering_mode",
+          "plan_updated_at",
           "reading_order_id",
           "reading_order_name",
           "entries",
@@ -10094,6 +10098,12 @@
       "NativeReadingOrderProjectionRequest": {
         "additionalProperties": false,
         "properties": {
+          "plan_updated_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "reading_order_id": {
             "format": "int32",
             "type": "integer"
@@ -13970,6 +13980,9 @@
           "plan_ordering_mode": {
             "type": "string"
           },
+          "plan_updated_at": {
+            "type": "string"
+          },
           "reading_order_id": {
             "format": "int64",
             "type": "integer"
@@ -13986,6 +13999,7 @@
           "plan_id",
           "plan_name",
           "plan_ordering_mode",
+          "plan_updated_at",
           "reading_order_id",
           "reading_order_name",
           "entries",
@@ -19348,17 +19362,17 @@
         ]
       }
     },
-    "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection": {
+    "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview": {
       "post": {
+        "description": "Preview a deterministic projection without mutating any resource.\n\nThe preview is recomputed from the persisted plan JSON on every call so\nthat callers always see the current state, even after concurrent edits.\nDuplicate thread references, missing owned threads, and non-thread\nnodes are reported as conflicts before any mutation is permitted.",
         "operationId": "preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post",
         "parameters": [
           {
-            "description": "Continuity plan id",
             "in": "path",
             "name": "plan_id",
             "required": true,
             "schema": {
-              "format": "int64",
+              "title": "Plan Id",
               "type": "integer"
             }
           }
@@ -19367,7 +19381,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ReadingOrderProjectPreviewRequest"
+                "$ref": "#/components/schemas/ReadingOrderProjectionRequest"
               }
             }
           },
@@ -19378,23 +19392,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReadingOrderProjectPreviewResponse"
+                  "$ref": "#/components/schemas/ReadingOrderProjectionPreview"
                 }
               }
             },
-            "description": "Deterministic projection preview"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Plan or reading order not found"
-          },
-          "409": {
-            "description": "Malformed plan"
+            "description": "Successful Response"
           },
           "422": {
-            "description": "Validation failed"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -19402,8 +19414,11 @@
             "HTTPBearer": []
           }
         ],
+        "summary": "Preview Plan Projection",
         "tags": [
-          "crate::continuity_plans_project_preview"
+          "dependencies",
+          "dependencies",
+          "reading-orders"
         ]
       }
     },
@@ -22457,53 +22472,6 @@
         ]
       }
     },
-    "/api/v2/threads/{thread_id}/readingOrders": {
-      "get": {
-        "operationId": "thread_ordering_reading_orders",
-        "parameters": [
-          {
-            "description": "Thread identifier",
-            "in": "path",
-            "name": "thread_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ThreadReadingOrdersResponse"
-                }
-              }
-            },
-            "description": "Owned reading orders containing the thread"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for reading orders containing a thread.",
-        "tags": [
-          "reading-orders"
-        ]
-      }
-    },
     "/api/v1/threads/{thread_id}/restore": {
       "post": {
         "description": "Restore an excluded thread back to the active queue.\n\nRaises:\n    HTTPException: 404 when not found; 400 when thread is not excluded.",
@@ -24838,6 +24806,65 @@
                 }
               }
             }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "continuity-plans"
+        ]
+      }
+    },
+    "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection": {
+      "post": {
+        "operationId": "continuity_plans_preview_reading_order_projection",
+        "parameters": [
+          {
+            "description": "Continuity plan id",
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingOrderProjectPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingOrderProjectPreviewResponse"
+                }
+              }
+            },
+            "description": "Deterministic projection preview"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Plan or reading order not found"
+          },
+          "409": {
+            "description": "Malformed plan"
+          },
+          "422": {
+            "description": "Validation failed"
           }
         },
         "security": [
@@ -29789,6 +29816,53 @@
         "summary": "Documentation-only operation for the delete/reorder structure preview.",
         "tags": [
           "issues"
+        ]
+      }
+    },
+    "/api/v2/threads/{thread_id}/readingOrders": {
+      "get": {
+        "operationId": "thread_ordering_reading_orders",
+        "parameters": [
+          {
+            "description": "Thread identifier",
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadReadingOrdersResponse"
+                }
+              }
+            },
+            "description": "Owned reading orders containing the thread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for reading orders containing a thread.",
+        "tags": [
+          "reading-orders"
         ]
       }
     },

@@ -249,7 +249,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection": {
+    "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview": {
         parameters: {
             query?: never;
             header?: never;
@@ -258,6 +258,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Preview Plan Projection
+         * @description Preview a deterministic projection without mutating any resource.
+         *
+         *     The preview is recomputed from the persisted plan JSON on every call so
+         *     that callers always see the current state, even after concurrent edits.
+         *     Duplicate thread references, missing owned threads, and non-thread
+         *     nodes are reported as conflicts before any mutation is permitted.
+         */
         post: operations["preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post"];
         delete?: never;
         options?: never;
@@ -1162,23 +1171,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/threads/{thread_id}/readingOrders": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Documentation-only operation for reading orders containing a thread. */
-        get: operations["thread_ordering_reading_orders"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/threads/{thread_id}/restore": {
         parameters: {
             query?: never;
@@ -1922,6 +1914,22 @@ export interface paths {
         get: operations["release_sources_list_reader"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["continuity_plans_preview_reading_order_projection"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3466,6 +3474,23 @@ export interface paths {
          * @description Preview a delete or reorder edit before commit. Returns exact before/after issues, list memberships, read/rating/identity state, affected Queue/Roll frontier, duplicate risk and projected graph conflicts.
          */
         post: operations["preview_issue_structure_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/threads/{thread_id}/readingOrders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for reading orders containing a thread. */
+        get: operations["thread_ordering_reading_orders"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6742,6 +6767,7 @@ export interface components {
             plan_id: number;
             plan_name: string;
             plan_ordering_mode: string;
+            plan_updated_at: string;
             /** Format: int32 */
             reading_order_id: number;
             reading_order_name: string;
@@ -6749,6 +6775,7 @@ export interface components {
             total_positions: number;
         };
         NativeReadingOrderProjectionRequest: {
+            plan_updated_at?: string | null;
             /** Format: int32 */
             reading_order_id: number;
         };
@@ -8001,6 +8028,7 @@ export interface components {
             plan_id: number;
             plan_name: string;
             plan_ordering_mode: string;
+            plan_updated_at: string;
             /** Format: int64 */
             reading_order_id: number;
             reading_order_name: string;
@@ -10160,53 +10188,33 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Continuity plan id */
                 plan_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ReadingOrderProjectPreviewRequest"];
+                "application/json": components["schemas"]["ReadingOrderProjectionRequest"];
             };
         };
         responses: {
-            /** @description Deterministic projection preview */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReadingOrderProjectPreviewResponse"];
+                    "application/json": components["schemas"]["ReadingOrderProjectionPreview"];
                 };
             };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Plan or reading order not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Malformed plan */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation failed */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -12647,50 +12655,6 @@ export interface operations {
             };
         };
     };
-    thread_ordering_reading_orders: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Thread identifier */
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Owned reading orders containing the thread */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ThreadReadingOrdersResponse"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request validation failed */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     restore_thread_api_v1_threads__thread_id__restore_post: {
         parameters: {
             query?: never;
@@ -14751,6 +14715,61 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ReadingPlanReleaseSourceStatus"][];
                 };
+            };
+        };
+    };
+    continuity_plans_preview_reading_order_projection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Continuity plan id */
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingOrderProjectPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Deterministic projection preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingOrderProjectPreviewResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan or reading order not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Malformed plan */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -19063,6 +19082,50 @@ export interface operations {
             };
             /** @description Thread or issue not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    thread_ordering_reading_orders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned reading orders containing the thread */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadReadingOrdersResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

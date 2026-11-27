@@ -187,6 +187,15 @@ export interface ContinuityPlansMembershipRequest {
 
 export type ContinuityPlansMembershipResponse = components['schemas']['ReadingPlanMembershipResponse']
 
+export interface ContinuityPlansPreviewReadingOrderProjectionRequest {
+  path: {
+    plan_id: number
+  }
+  body: components['schemas']['ReadingOrderProjectPreviewRequest']
+}
+
+export type ContinuityPlansPreviewReadingOrderProjectionResponse = components['schemas']['ReadingOrderProjectPreviewResponse']
+
 export interface ContinuityPlansProjectToReadingOrderRequest {
   path: {
     plan_id: number
@@ -1143,6 +1152,14 @@ export type SwitchPrerequisiteResponse = components['schemas']['RollPrerequisite
 
 export type TeamChemistryResponse = components['schemas']['CreatorTeamChemistryResponse']
 
+export interface ThreadOrderingReadingOrdersRequest {
+  path: {
+    thread_id: number
+  }
+}
+
+export type ThreadOrderingReadingOrdersResponse = components['schemas']['ThreadReadingOrdersResponse']
+
 export interface UnassignTagRequest {
   path: {
     tag_id: number
@@ -1233,6 +1250,7 @@ export interface NativeV2Client {
   continuityPlansLinkDependency(args: ContinuityPlansLinkDependencyRequest): Promise<ContinuityPlansLinkDependencyResponse>
   continuityPlansList(): Promise<ContinuityPlansListResponse>
   continuityPlansMembership(args: ContinuityPlansMembershipRequest): Promise<ContinuityPlansMembershipResponse>
+  continuityPlansPreviewReadingOrderProjection(args: ContinuityPlansPreviewReadingOrderProjectionRequest): Promise<ContinuityPlansPreviewReadingOrderProjectionResponse>
   continuityPlansProjectToReadingOrder(args: ContinuityPlansProjectToReadingOrderRequest): Promise<ContinuityPlansProjectToReadingOrderResponse>
   continuityPlansUnlinkDependency(args: ContinuityPlansUnlinkDependencyRequest): Promise<ContinuityPlansUnlinkDependencyResponse>
   continuityPlansUpdate(args: ContinuityPlansUpdateRequest): Promise<ContinuityPlansUpdateResponse>
@@ -1364,6 +1382,7 @@ export interface NativeV2Client {
   summaries(args?: SummariesRequest): Promise<SummariesResponse>
   switchPrerequisite(args: SwitchPrerequisiteRequest): Promise<SwitchPrerequisiteResponse>
   teamChemistry(): Promise<TeamChemistryResponse>
+  threadOrderingReadingOrders(args: ThreadOrderingReadingOrdersRequest): Promise<ThreadOrderingReadingOrdersResponse>
   unassignTag(args: UnassignTagRequest): Promise<UnassignTagResponse>
   undoToSnapshot(args: UndoToSnapshotRequest): Promise<UndoToSnapshotResponse>
   unsnooze(args: UnsnoozeRequest): Promise<UnsnoozeResponse>
@@ -1488,6 +1507,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     continuityPlansMembership(args: ContinuityPlansMembershipRequest) {
       return client.get<ContinuityPlansMembershipResponse>(
         `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/membership`,
+      )
+    },
+    continuityPlansPreviewReadingOrderProjection(args: ContinuityPlansPreviewReadingOrderProjectionRequest) {
+      return client.post<ContinuityPlansPreviewReadingOrderProjectionResponse, ContinuityPlansPreviewReadingOrderProjectionRequest['body']>(
+        `/v2/continuityPlans/${encodeURIComponent(String(args.path.plan_id))}:previewReadingOrderProjection`,
+        args.body,
       )
     },
     continuityPlansProjectToReadingOrder(args: ContinuityPlansProjectToReadingOrderRequest) {
@@ -2161,6 +2186,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     teamChemistry() {
       return client.get<TeamChemistryResponse>("/v2/creators/team-chemistry")
+    },
+    threadOrderingReadingOrders(args: ThreadOrderingReadingOrdersRequest) {
+      return client.get<ThreadOrderingReadingOrdersResponse>(
+        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/readingOrders`,
+      )
     },
     unassignTag(args: UnassignTagRequest) {
       return client.delete<UnassignTagResponse>(
