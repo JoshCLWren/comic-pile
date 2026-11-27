@@ -8851,43 +8851,6 @@
         ]
       }
     },
-<<<<<<< HEAD
-    "/api/v2/readingSessions": {
-      "get": {
-        "tags": [
-          "sessions"
-        ],
-        "summary": "Documentation-only List operation for the canonical collection.",
-        "operationId": "list_reading_sessions_documentation",
-        "parameters": [
-          {
-            "name": "page_size",
-            "in": "query",
-            "description": "Bounded page size (1-100, default 50)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "page_token",
-            "in": "query",
-            "description": "Opaque continuation token",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "One page of event-derived reading sessions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ListReadingSessionsResponse"
-=======
     "/api/v2/readingOrderGroups": {
       "get": {
         "tags": [
@@ -8905,17 +8868,10 @@
                   "items": {
                     "$ref": "#/components/schemas/DependencyGroupResponse"
                   }
->>>>>>> origin/main
                 }
               }
             }
           },
-<<<<<<< HEAD
-          "400": {
-            "description": "Invalid page size or token"
-          },
-=======
->>>>>>> origin/main
           "401": {
             "description": "Not authenticated"
           },
@@ -8931,8 +8887,6 @@
       },
       "post": {
         "tags": [
-<<<<<<< HEAD
-=======
           "reading-order-groups"
         ],
         "summary": "Documentation-only operation for creating a v2 reading-order group.",
@@ -9188,7 +9142,6 @@
       },
       "post": {
         "tags": [
->>>>>>> origin/main
           "readingSessions"
         ],
         "summary": "Documentation-only operation for the mounted v2 reading-session initializer.",
@@ -10467,18 +10420,9 @@
         "operationId": "list_threads_documentation",
         "parameters": [
           {
-            "name": "filter",
+            "name": "search",
             "in": "query",
-            "description": "Resource filter: active (default), completed, stale, excluded",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "order_by",
-            "in": "query",
-            "description": "Canonical ordering: position, title, created; last_activity for stale",
+            "description": "Case-insensitive title search",
             "required": false,
             "schema": {
               "type": "string"
@@ -10487,35 +10431,16 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Legacy alias of order_by; supplying both with different values is rejected",
+            "description": "position, title, or created",
             "required": false,
             "schema": {
               "type": "string"
-            }
-          },
-          {
-            "name": "search",
-            "in": "query",
-            "description": "Case-insensitive title search; unsupported for filter=stale",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "days",
-            "in": "query",
-            "description": "Stale age threshold in days (0-3650, default 30); only with filter=stale",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
             }
           },
           {
             "name": "page_size",
             "in": "query",
-            "description": "1-200 rows per page (default 50, 200 for stale)",
+            "description": "1-200 rows per page (default 50)",
             "required": false,
             "schema": {
               "type": "integer",
@@ -10525,7 +10450,7 @@
           {
             "name": "page_token",
             "in": "query",
-            "description": "Opaque continuation cursor bound to filter, search and order_by",
+            "description": "Opaque continuation cursor",
             "required": false,
             "schema": {
               "type": "string"
@@ -10534,23 +10459,23 @@
         ],
         "responses": {
           "200": {
-            "description": "Owner-scoped threads page; stale rows keep the detail-shaped projection",
+            "description": "Owner-scoped active threads page",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ThreadListResult"
+                  "$ref": "#/components/schemas/ThreadListResponse"
                 }
               }
             }
           },
           "400": {
-            "description": "Invalid filter, order_by, sort or page token"
+            "description": "Invalid sort or page token"
           },
           "401": {
             "description": "Not authenticated"
           },
           "422": {
-            "description": "Invalid bounds, unsupported parameter or retired collection_id"
+            "description": "Invalid bounds or retired collection_id"
           }
         },
         "security": [
@@ -10602,51 +10527,6 @@
       }
     },
     "/api/v2/threads/{thread_id}": {
-<<<<<<< HEAD
-      "get": {
-        "tags": [
-          "threads"
-        ],
-        "summary": "Standard resource Get for one owned Thread.",
-        "operationId": "get_thread_v2_documentation",
-        "parameters": [
-          {
-            "name": "thread_id",
-            "in": "path",
-            "description": "Owned Thread identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Owner-scoped thread detail",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ThreadDetailResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Thread not found or not owned by the reader"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-=======
->>>>>>> origin/main
       "delete": {
         "tags": [
           "threads"
@@ -25668,41 +25548,6 @@
           }
         }
       },
-      "StaleThreadListResponse": {
-        "type": "object",
-        "description": "Stale threads page returned by `filter=stale` on the v2 collection.\n\nStale rows are still active queue rows, but the legacy stale read projects\nthe full detail-shaped `ThreadResponse` instead of the queue-list item. The\ndistinction is kept on the wire so callers of the retired v1 stale read can\nmigrate without losing fields; counts stay zero/absent because the stale\nread never published a whole-queue total.",
-        "required": [
-          "threads",
-          "active_count"
-        ],
-        "properties": {
-          "active_count": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Always zero: a stale page is not a whole-active-queue read."
-          },
-          "filtered_count": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32",
-            "description": "Always absent: the stale read never measured a filtered whole-queue total."
-          },
-          "next_page_token": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "threads": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ThreadResponse"
-            }
-          }
-        }
-      },
       "StartupMetricsResponse": {
         "type": "object",
         "properties": {
@@ -26754,20 +26599,6 @@
           }
         }
       },
-<<<<<<< HEAD
-      "ThreadListResult": {
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/ThreadListResponse"
-          },
-          {
-            "$ref": "#/components/schemas/StaleThreadListResponse"
-          }
-        ],
-        "description": "One v2 threads list response. The active/completed/excluded filters keep the\nqueue-list projection; the stale filter keeps the legacy detail-shaped\nprojection. Both are emitted inline (no envelope variant key)."
-      },
-=======
->>>>>>> origin/main
       "ThreadPatchPrecondition": {
         "type": "object",
         "description": "Committed values a stale client read before issuing a Thread patch.",
