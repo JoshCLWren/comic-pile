@@ -492,6 +492,17 @@ mod tests {
         let body = &operation["requestBody"]["content"]["application/json"]["schema"]["$ref"];
         assert_eq!(body, "#/components/schemas/ReactivateThreadRequest");
         assert!(aggregate["components"]["schemas"]["ReactivateThreadRequest"].is_object());
+        assert_eq!(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ThreadResponse"
+        );
+        // Merging the v2 Thread surface must not overwrite the canonical typed
+        // ThreadResponse with a ToSchema emission of a raw JSON `Value`. The
+        // frozen Python wire type is an array of creator-credit objects.
+        let credits =
+            &aggregate["components"]["schemas"]["ThreadResponse"]["properties"]["manual_creator_credits"];
+        assert_eq!(credits["type"], "array");
+        assert!(credits["items"].is_object());
     }
 
     /// Generated clients must be able to page the inbox, search issue matches
