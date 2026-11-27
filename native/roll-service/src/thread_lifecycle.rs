@@ -129,6 +129,57 @@ pub struct ThreadUpdateRequest {
     pub is_test: Option<bool>,
 }
 
+/// Fields a caller may name in an AIP-134 `update_mask` for a Thread patch.
+pub const THREAD_PATCH_FIELDS: [&str; 6] = [
+    "title",
+    "format",
+    "issues_remaining",
+    "notes",
+    "manual_creator_credits",
+    "is_test",
+];
+
+/// Body of `PATCH /api/v2/threads/{thread_id}`.
+///
+/// `update_mask` follows AIP-134: when supplied, only the named fields are
+/// applied; a named field missing from the body is explicitly cleared. When it
+/// is omitted or empty, every field present in the body is applied and every
+/// omitted field is preserved (the legacy partial-update behavior).
+#[derive(Debug, utoipa::ToSchema)]
+pub struct ThreadPatchRequest {
+    /// New series title. Omitted fields are preserved.
+    pub title: Option<String>,
+    /// New format; normalized to the reader's canonical vocabulary.
+    pub format: Option<String>,
+    /// Manual issue counter for untracked series (legacy queue transition).
+    pub issues_remaining: Option<i32>,
+    /// Notes. `null` or a blank string clears the stored value; omit to keep it.
+    pub notes: Option<Option<String>>,
+    /// Manual creator credits. `null` clears them; names and roles are bounded.
+    pub manual_creator_credits: Option<Option<Vec<Value>>>,
+    /// Test-series flag. Omit to preserve it.
+    pub is_test: Option<bool>,
+    /// Explicit field mask (AIP-134). Either an array of field names or one
+    /// comma-separated string. Omit for presence-based partial update.
+    pub update_mask: Option<Vec<String>>,
+    /// Optional stale-client precondition. Every supplied value must still
+    /// match the committed row; otherwise the patch returns HTTP 409.
+    pub expected: Option<ThreadPatchPrecondition>,
+}
+
+/// Committed values a stale client read before issuing a Thread patch.
+#[derive(Debug, utoipa::ToSchema)]
+pub struct ThreadPatchPrecondition {
+    /// Title observed by the client.
+    pub title: Option<String>,
+    /// Format observed by the client.
+    pub format: Option<String>,
+    /// Notes observed by the client; `null` means it observed no notes.
+    pub notes: Option<Option<String>>,
+    /// Manual creator credits observed by the client.
+    pub manual_creator_credits: Option<Vec<Value>>,
+}
+
 /// Body of `POST /api/v1/threads/reactivate`.
 #[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 pub struct ReactivateRequest {
