@@ -602,6 +602,44 @@ pub fn list_documentation() {}
 #[allow(dead_code)]
 pub fn dismiss_documentation() {}
 
+/// Documentation-only operation for the canonical v2 discoveries resource.
+#[utoipa::path(
+    get,
+    path = "/api/v2/users/me/tasteDiscoveries",
+    tag = "taste",
+    operation_id = "list_taste_discoveries_v2",
+    description = "List prompt-eligible taste discoveries for the authenticated reader. Applies the same evidence/confidence/affinity/diversity gates, 14-day cooldown, dismissal suppression and creator-role dedup as the retained v1 path, and records last_prompted_at for exactly the returned signals.",
+    params(TasteDiscoveryQuery),
+    responses(
+        (status = 200, description = "Ranked discoveries", body = TasteDiscoveryListResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 422, description = "limit is outside the allowed range"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn list_v2_documentation() {}
+
+/// Documentation-only operation for the canonical v2 dismiss custom method.
+#[utoipa::path(
+    post,
+    path = "/api/v2/users/me/tasteDiscoveries/{signal_id}:dismiss",
+    tag = "taste",
+    operation_id = "dismiss_taste_discovery_v2",
+    description = "Dismiss one owner-scoped taste discovery without recording a verdict. Event-style custom method (AIP-136): writes prompt_suppressed_until = NOW() + interval '14 days' and returns {dismissed: true}. Repeated dismissals are idempotent; missing or foreign signals return 404.",
+    params(("signal_id" = i32, Path, description = "Owned taste signal identifier")),
+    responses(
+        (status = 200, description = "Dismissed", body = TasteDismissResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Taste discovery not found"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn dismiss_v2_documentation() {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -976,6 +1014,108 @@ mod tests {
             .get(0);
         drop(connection);
         assert!(!suppressed, "foreign dismiss must not write");
+    }
+
+    #[tokio::test]
+    async fn v2_list_ranks_prompts_and_records_prompting_once() {
+        let (state, _user, _guard) = database_fixture().await;
+        let Json(first) = list_taste_discoveries_v2(
+            State(state.clone()),
+            RawQuery(Some("limit=1".to_string())),
+            VerifiedAccessClaims::for_test("taste-dismiss-test", "jti-7001", 0),
+        )
+        .await
+        .expect("v2 discoveries list");
+        assert_eq!(first.discoveries.len(), 1);
+        assert_eq!(first.discoveries[0].id, 8001);
+        assert_eq!(
+            first.discoveries[0].external_key,
+            "creator:writer:alan-moore"
+        );
+        assert!(first.discoveries[0].prompt.contains("Alan Moore"));
+        assert!(first.generated_at.ends_with('Z'));
+
+        let connection = db::checkout(&state).await.expect("verify connection");
+        let prompted: Option<DateTime<Utc>> = connection
+            .query_one(
+                "SELECT last_prompted_at FROM taste_signals WHERE id = 8001",
+                &[],
+            )
+            .await
+            .expect("verify v2 prompting write")
+            .get(0);
+        drop(connection);
+        assert!(prompted.is_some(), "v2 listing must record last_prompted_at");
+
+        let Json(second) = list_taste_discoveries_v2(
+            State(state.clone()),
+            RawQuery(None),
+            VerifiedAccessClaims::for_test("taste-dismiss-test", "jti-7001", 0),
+        )
+        .await
+        .expect("second v2 list");
+        assert!(
+            second.discoveries.is_empty(),
+            "the 14-day cooldown must suppress a repeated prompt"
+        );
+    }
+
+    #[tokio::test]
+    async fn v2_list_rejects_invalid_limit_with_house_validation_detail() {
+        let (state, _user, _guard) = database_fixture().await;
+        for raw in ["0", "4", "abc", "2e0"] {
+            let error = list_taste_discoveries_v2(
+                State(state.clone()),
+                RawQuery(Some(format!("limit={raw}"))),
+                VerifiedAccessClaims::for_test("taste-dismiss-test", "jti-7001", 0),
+            )
+            .await
+            .expect_err("invalid limit must 422");
+            assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY);
+            assert_eq!(error.detail(), "Validation failed", "limit={raw}");
+        }
+    }
+
+    #[tokio::test]
+    async fn v2_dismiss_is_owner_scoped_verdict_safe_and_idempotent() {
+        let (state, user, _guard) = database_fixture().await;
+        for _ in 0..2 {
+            let Json(response) = dismiss_taste_discovery_v2(
+                State(state.clone()),
+                user.clone(),
+                Path(8001),
+            )
+            .await
+            .expect("v2 dismiss");
+            assert!(response.dismissed, "duplicate dismiss stays idempotent");
+        }
+
+        let connection = db::checkout(&state).await.expect("verify connection");
+        let row = connection
+            .query_one(
+                "SELECT prompt_suppressed_until IS NOT NULL, user_verdict, verdict_at IS NOT NULL, \
+                        evidence_count, distinct_thread_count FROM taste_signals WHERE id = 8001",
+                &[],
+            )
+            .await
+            .expect("verify v2 dismissal write");
+        let suppressed: bool = row.get(0);
+        let verdict: Option<String> = row.get(1);
+        let verdict_at: bool = row.get(2);
+        let evidence_count: i32 = row.get(3);
+        let distinct_thread_count: i32 = row.get(4);
+        drop(connection);
+        assert!(suppressed);
+        assert_eq!(verdict, None, "dismiss must never write user_verdict");
+        assert!(!verdict_at, "dismiss must never write verdict_at");
+        assert_eq!(evidence_count, 5, "dismiss must not mutate evidence");
+        assert_eq!(distinct_thread_count, 3, "dismiss must not mutate threads");
+
+        let foreign = dismiss_taste_discovery_v2(State(state.clone()), user, Path(8002))
+            .await
+            .expect_err("foreign signal must 404");
+        assert_eq!(foreign.status(), StatusCode::NOT_FOUND);
+        assert_eq!(foreign.detail(), "Taste discovery 8002 not found");
     }
 
     #[test]
