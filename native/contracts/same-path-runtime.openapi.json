@@ -10720,32 +10720,6 @@
         ]
       }
     },
-<<<<<<< HEAD
-    "/api/v2/threads:checkDuplicates": {
-      "post": {
-        "tags": [
-          "threads"
-        ],
-        "description": "Advisory AIP-136 collection custom method: report existing volumes that may be the proposed series. Does not create a Thread. Results are owner-scoped, exclude a named thread, and are capped at five matches.",
-        "operationId": "check_duplicates",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CheckDuplicatesRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Possible existing volumes",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CheckDuplicatesResponse"
-=======
     "/api/v2/threads/{thread_id}/reading-order-group-memberships": {
       "get": {
         "tags": [
@@ -10775,7 +10749,6 @@
                   "items": {
                     "$ref": "#/components/schemas/DependencyGroupSummary"
                   }
->>>>>>> origin/main
                 }
               }
             }
@@ -10783,10 +10756,6 @@
           "401": {
             "description": "Not authenticated"
           },
-<<<<<<< HEAD
-          "422": {
-            "description": "Validation failed"
-=======
           "404": {
             "description": "Thread not found"
           },
@@ -10795,7 +10764,48 @@
           },
           "503": {
             "description": "Database temporarily unavailable"
->>>>>>> origin/main
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/threads:checkDuplicates": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "description": "Advisory AIP-136 collection custom method: report existing volumes that may be the proposed series. Does not create a Thread. Results are owner-scoped, exclude a named thread, and are capped at five matches.",
+        "operationId": "check_duplicates",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckDuplicatesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Possible existing volumes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckDuplicatesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Validation failed"
           }
         },
         "security": [
