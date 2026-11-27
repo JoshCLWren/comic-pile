@@ -5786,6 +5786,13 @@
       },
       "CustomCBLIssueSearchResult": {
         "properties": {
+          "cover_image_url": {
+            "description": "Exact provider-supplied CDN URL. Null when unmapped; never image bytes.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "issue_id": {
             "format": "int32",
             "type": "integer"

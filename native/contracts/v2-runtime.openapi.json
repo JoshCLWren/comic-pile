@@ -12808,6 +12808,13 @@
           "status"
         ],
         "properties": {
+          "cover_image_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Exact provider-supplied CDN URL. Null when unmapped; never image bytes."
+          },
           "issue_id": {
             "type": "integer",
             "format": "int32"

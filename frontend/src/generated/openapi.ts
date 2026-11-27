@@ -5554,6 +5554,8 @@ export interface components {
             thread_id: number;
         };
         CustomCBLIssueSearchResult: {
+            /** @description Exact provider-supplied CDN URL. Null when unmapped; never image bytes. */
+            cover_image_url?: string | null;
             /** Format: int32 */
             issue_id: number;
             issue_number: string;
