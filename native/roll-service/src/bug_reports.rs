@@ -182,6 +182,66 @@ pub struct BugReportResponse {
     pub issue_url: String,
 }
 
+/// AIP-133 Create response for `POST /api/v2/bugReports` (#5718).
+///
+/// The created GitHub issue is the resource: `id` is its stable issue number
+/// and `name` is the AIP-122 collection-qualified resource name. `issue_url`
+/// remains on the wire so the feedback UI and downstream issue/email behavior
+/// keep working unchanged.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct BugReportV2Response {
+    /// AIP-122 resource name, `bugReports/<issue number>`.
+    pub name: String,
+    /// Stable resource id: the GitHub issue number.
+    pub id: String,
+    /// HTML URL of the created GitHub issue (retained from the v1 contract).
+    pub issue_url: String,
+}
+
+/// Outcome of the shared submit flow: either the created issue URL or the
+/// rate-limit response (which carries `Retry-After` / `X-RateLimit-Reset`).
+enum SubmitOutcome {
+    Created(String),
+    RateLimited(Response),
+}
+
+/// Derive the stable AIP-122 resource name and id from a GitHub issue URL.
+///
+/// GitHub issue HTML URLs end in `/issues/{number}`; that number is the stable
+/// identifier for the created bug report. A payload without a numeric issue
+/// segment is rejected as an invalid provider response so no fabricated
+/// resource name is ever published.
+fn issue_resource(issue_url: &str) -> Result<(String, String), BugReportError> {
+    let segment = issue_url.trim_end_matches('/').rsplit('/').next().unwrap_or("");
+    if !segment.is_empty() && segment.bytes().all(|byte| byte.is_ascii_digit()) {
+        Ok((segment.to_string(), format!("bugReports/{segment}")))
+    } else {
+        Err(BugReportError::Api(ApiError::with_status(
+            StatusCode::BAD_GATEWAY,
+            "Failed to create GitHub issue: invalid provider payload".to_string(),
+        )))
+    }
+}
+
+/// Build the AIP-133 `201 Created` response for the v2 collection, including
+/// the `Location` header naming the new resource member.
+fn created_v2_response(issue_url: &str) -> Result<Response, BugReportError> {
+    let (id, name) = issue_resource(issue_url)?;
+    let mut response = (
+        StatusCode::CREATED,
+        Json(BugReportV2Response {
+            name,
+            id: id.clone(),
+            issue_url: issue_url.to_string(),
+        }),
+    )
+        .into_response();
+    if let Ok(location) = HeaderValue::from_str(&format!("/api/v2/bugReports/{id}")) {
+        response.headers_mut().insert("Location", location);
+    }
+    Ok(response)
+}
+
 /// Error for the bug-report handler.
 ///
 /// The retired FastAPI handler had two distinct 422 shapes: Pydantic request
@@ -1329,7 +1389,7 @@ async fn submit_with_issuer(
     request: BugReportCreate,
     settings: GithubSettings,
     issuer: &GithubIssuer<'_>,
-) -> Result<Response, BugReportError> {
+) -> Result<SubmitOutcome, BugReportError> {
     let (title, description) = validate_create(&request)?;
     if !settings.is_configured() {
         return Err(BugReportError::Api(not_configured()));
@@ -1351,7 +1411,7 @@ async fn submit_with_issuer(
             .map_err(|detail| {
                 BugReportError::Api(ApiError::with_status(StatusCode::BAD_GATEWAY, detail))
             })?;
-        return Ok((StatusCode::CREATED, Json(BugReportResponse { issue_url })).into_response());
+        return Ok(SubmitOutcome::Created(issue_url));
     }
 
     let mut connection = db::checkout(state).await?;
@@ -1372,7 +1432,9 @@ async fn submit_with_issuer(
             None => Utc::now() + chrono::Duration::seconds(WINDOW_SECONDS),
         };
         let retry = retry_after_seconds(resets_at, Utc::now());
-        return Ok(rate_limit_response(retry, resets_at));
+        return Ok(SubmitOutcome::RateLimited(rate_limit_response(
+            retry, resets_at,
+        )));
     }
     let issue_url = match issuer(settings, title, body, labels).await {
         Ok(url) => url,
@@ -1387,7 +1449,7 @@ async fn submit_with_issuer(
     let submitted_at_seconds = Utc::now().timestamp_micros() as f64 / 1_000_000.0;
     record_success(&tx, user_id, submitted_at_seconds).await?;
     tx.commit().await.map_err(db::query_error)?;
-    Ok((StatusCode::CREATED, Json(BugReportResponse { issue_url })).into_response())
+    Ok(SubmitOutcome::Created(issue_url))
 }
 
 /// Same create flow as the axum handler with an explicitly injected issuer.
