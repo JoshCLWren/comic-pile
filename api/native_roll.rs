@@ -1627,7 +1627,6 @@ mod tests {
     }
 
     #[tokio::test]
-<<<<<<< HEAD
     async fn v2_thread_dependency_diagnosis_ingress_reaches_rust_and_v1_is_404() {
         // #5709: the canonical dependency/blocking diagnosis resources moved
         // to v2 URLs. Register them in this Vercel entry table or the fallback

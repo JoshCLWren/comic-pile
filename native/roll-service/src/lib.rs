@@ -1622,7 +1622,6 @@ mod tests {
     }
 
     #[tokio::test]
-<<<<<<< HEAD
     async fn retired_v1_dependency_diagnosis_routes_return_404_in_inner_router() {
         // #5709: dependency/blocking/connection diagnosis is v2-only. The
         // retired aliases must not fall through to a live handler or to the
