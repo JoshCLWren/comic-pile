@@ -562,7 +562,8 @@ fn parse_batch_thread_ids(body: &[u8]) -> Result<Vec<i64>, ApiError> {
     Ok(ids)
 }
 
-/// Serve `POST /api/v1/threads:getBlockingInfo`.
+/// Retired v1 batch blocking handler, retained only for wire-parity tests;
+/// the routed equivalent is `POST /api/v2/threads:explainEligibility`.
 pub async fn get_threads_blocking_info(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,

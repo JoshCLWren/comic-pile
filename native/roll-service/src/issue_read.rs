@@ -798,7 +798,7 @@ mod tests {
             "/api/v2/issues/7",
             "/api/v1/issues/7/comicvine",
             "/api/v2/issues/7/dependencies",
-            "/api/v1/threads/7/issue-dependencies",
+            "/api/v2/threads/7/issueDependencies",
             "/api/v1/threads/7/issues",
         ] {
             let response = app
