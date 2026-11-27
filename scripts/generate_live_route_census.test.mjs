@@ -108,18 +108,12 @@ test('generator matches golden fixtures and --check detects drift', t => {
   assert.throws(() => run(tmp, '--check'), error => error.status === 1);
 });
 
-test('set-pending stays in the census because Rust implementation is not v1 retirement', () => {
+test('the retired direct thread-selection route is absent from the live census', () => {
   const fixture = JSON.parse(readFileSync(path.join(goldenRoot, 'live-route-census.json'), 'utf8'));
   const checkedIn = JSON.parse(readFileSync(path.join(repoRoot, 'docs/api/live-route-census.json'), 'utf8'));
   for (const census of [fixture, checkedIn]) {
-    const route = census.routes.find(item =>
-      item.method === 'POST' && item.path === '/api/v1/threads/{thread_id}/set-pending');
-    assert.ok(route, 'Rust-served v1 set-pending must be counted, not omitted');
-    assert.equal(route.version, 'v1');
-    assert.equal(route.runtime, 'native-rust');
-    assert.equal(route.owner_issue, SET_PENDING_OWNER);
-    assert.equal(route.disposition, 'retire-without-replacement');
-    assert.match(route.handler, /set_pending_thread/);
+    assert.ok(!census.routes.some(item => item.path.endsWith('/pending')));
+    assert.ok(!census.routes.some(item => item.handler?.includes('set_pending')));
   }
 });
 
