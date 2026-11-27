@@ -29854,21 +29854,12 @@
         ]
       }
     },
-<<<<<<< HEAD
-    "/api/v2/threads/{thread_id}/readingOrders": {
-      "get": {
-        "operationId": "thread_ordering_reading_orders",
-        "parameters": [
-          {
-            "description": "Thread identifier",
-=======
     "/api/v2/threads/{thread_id}/reading-order-group-memberships": {
       "get": {
         "operationId": "dependency_groups_v2_list_thread_group_memberships",
         "parameters": [
           {
             "description": "Owned thread identifier",
->>>>>>> origin/main
             "in": "path",
             "name": "thread_id",
             "required": true,
@@ -29883,13 +29874,6 @@
             "content": {
               "application/json": {
                 "schema": {
-<<<<<<< HEAD
-                  "$ref": "#/components/schemas/ThreadReadingOrdersResponse"
-                }
-              }
-            },
-            "description": "Owned reading orders containing the thread"
-=======
                   "items": {
                     "$ref": "#/components/schemas/NativeDependencyGroupSummary"
                   },
@@ -29898,17 +29882,13 @@
               }
             },
             "description": "Groups containing the thread or its issues"
->>>>>>> origin/main
           },
           "401": {
             "description": "Not authenticated"
           },
-<<<<<<< HEAD
-=======
           "404": {
             "description": "Thread not found"
           },
->>>>>>> origin/main
           "422": {
             "description": "Request validation failed"
           },
@@ -29921,15 +29901,56 @@
             "HTTPBearer": []
           }
         ],
-<<<<<<< HEAD
-        "summary": "Documentation-only operation for reading orders containing a thread.",
-        "tags": [
-          "reading-orders"
-=======
         "summary": "Documentation-only operation for listing a thread's group memberships (v2).",
         "tags": [
           "reading-order-groups"
->>>>>>> origin/main
+        ]
+      }
+    },
+    "/api/v2/threads/{thread_id}/readingOrders": {
+      "get": {
+        "operationId": "thread_ordering_reading_orders",
+        "parameters": [
+          {
+            "description": "Thread identifier",
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadReadingOrdersResponse"
+                }
+              }
+            },
+            "description": "Owned reading orders containing the thread"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for reading orders containing a thread.",
+        "tags": [
+          "reading-orders"
         ]
       }
     },

@@ -80,17 +80,6 @@
     {
       "bucket": "operations",
       "method": "GET",
-<<<<<<< HEAD
-      "path": "/api/v2/threads/{thread_id}/readingOrders",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/threads/[0-9]+/readingOrders$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 5715,
-      "consumers": [
-        "frontend/src/services/api-reading-orders.ts"
-      ]
-=======
       "path": "/api/v2/threads/{thread_id}/reading-order-group-memberships",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v2/threads/[^/]+/reading-order-group-memberships$",
@@ -100,7 +89,19 @@
         "frontend/src/services/api-dependency-groups.ts"
       ],
       "owning_issue": 4841
->>>>>>> origin/main
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/threads/{thread_id}/readingOrders",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/threads/[0-9]+/readingOrders$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5715,
+      "consumers": [
+        "frontend/src/services/api-reading-orders.ts"
+      ]
     },
     {
       "bucket": "unversioned_operations",

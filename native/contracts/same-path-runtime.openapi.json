@@ -10673,15 +10673,6 @@
         ]
       }
     },
-<<<<<<< HEAD
-    "/api/v2/threads/{thread_id}/readingOrders": {
-      "get": {
-        "tags": [
-          "reading-orders"
-        ],
-        "summary": "Documentation-only operation for reading orders containing a thread.",
-        "operationId": "thread_ordering_reading_orders",
-=======
     "/api/v2/threads/{thread_id}/reading-order-group-memberships": {
       "get": {
         "tags": [
@@ -10689,16 +10680,11 @@
         ],
         "summary": "Documentation-only operation for listing a thread's group memberships (v2).",
         "operationId": "dependency_groups_v2_list_thread_group_memberships",
->>>>>>> origin/main
         "parameters": [
           {
             "name": "thread_id",
             "in": "path",
-<<<<<<< HEAD
-            "description": "Thread identifier",
-=======
             "description": "Owned thread identifier",
->>>>>>> origin/main
             "required": true,
             "schema": {
               "type": "integer",
@@ -10708,13 +10694,6 @@
         ],
         "responses": {
           "200": {
-<<<<<<< HEAD
-            "description": "Owned reading orders containing the thread",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ThreadReadingOrdersResponse"
-=======
             "description": "Groups containing the thread or its issues",
             "content": {
               "application/json": {
@@ -10723,7 +10702,6 @@
                   "items": {
                     "$ref": "#/components/schemas/DependencyGroupSummary"
                   }
->>>>>>> origin/main
                 }
               }
             }
@@ -10731,12 +10709,56 @@
           "401": {
             "description": "Not authenticated"
           },
-<<<<<<< HEAD
-=======
           "404": {
             "description": "Thread not found"
           },
->>>>>>> origin/main
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/threads/{thread_id}/readingOrders": {
+      "get": {
+        "tags": [
+          "reading-orders"
+        ],
+        "summary": "Documentation-only operation for reading orders containing a thread.",
+        "operationId": "thread_ordering_reading_orders",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owned reading orders containing the thread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadReadingOrdersResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
           "422": {
             "description": "Request validation failed"
           },
