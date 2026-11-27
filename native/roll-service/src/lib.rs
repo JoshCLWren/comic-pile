@@ -672,13 +672,6 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/series-mapping-commits",
             post(catalog_commit::commit_series_mapping_handler),
         )
-        // #5716: AIP-136 stateless collection custom method. The v1 preview
-        // alias stays mounted only until production proof retires it; no new
-        // caller may use it.
-        .route(
-            "/api/v2/seriesMappings:preview",
-            post(catalog_series_mapping_preview::preview_series_mappings_v2),
-        )
         .route(
             "/api/v1/catalog/series-mappings/preview",
             post(catalog_series_mapping_preview::preview_series_mapping_handler),

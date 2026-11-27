@@ -24,7 +24,7 @@
     "v1_with_owner": 65,
     "v1_needing_owner": 0,
     "unknown_ingress": 0,
-    "first_party_call_sites": 921,
+    "first_party_call_sites": 924,
     "stale_aip_baseline_entries": 4
   },
   "routes": [
@@ -440,10 +440,9 @@
       "runtime": "native-rust",
       "runtime_source": "native-router",
       "consumers": [
-        "frontend/src/services/api-series-mapping.ts",
-        "frontend/src/unit/api-proxy.test.ts"
+        "frontend/src/services/api-series-mapping.ts"
       ],
-      "caller_count": 2,
+      "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5716,
@@ -5100,9 +5099,10 @@
       "runtime": "native-rust",
       "runtime_source": "native-router",
       "consumers": [
-        "frontend/src/services/api-series-mapping.ts"
+        "frontend/src/services/api-series-mapping.ts",
+        "frontend/src/unit/api-series-mapping.test.ts"
       ],
-      "caller_count": 1,
+      "caller_count": 2,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4844,
@@ -5120,8 +5120,12 @@
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
-      "consumers": [],
-      "caller_count": 0,
+      "consumers": [
+        "frontend/src/services/api-series-mapping.ts",
+        "frontend/src/unit/api-proxy.test.ts",
+        "frontend/src/unit/api-series-mapping.test.ts"
+      ],
+      "caller_count": 4,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": null,
