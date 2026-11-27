@@ -689,9 +689,12 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         // #5715: canonical AIP-136 stateless resource custom method. The v1
         // preview alias stays mounted only until production proof retires it;
-        // no new caller may use it.
+        // no new caller may use it. matchit (axum 0.8) requires a capture to own
+        // its whole segment, so the mounted pattern captures the final segment
+        // and the handler dispatches on the exact `:previewReadingOrderProjection`
+        // suffix. The wire URL and published contract stay canonical.
         .route(
-            "/api/v2/continuityPlans/{plan_id}/:previewReadingOrderProjection",
+            "/api/v2/continuityPlans/{*custom_method}",
             post(continuity_plans_project_preview::preview_reading_order_projection_v2),
         )
         .route(

@@ -293,10 +293,11 @@ fn app() -> Router {
             "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
             post(native_dispatch),
         )
-        // #5715: the Vercel entry has its own route table. Without this entry
-        // the canonical custom method falls through to native_not_found.
+        // #5715: the Vercel entry has its own route table. Without a matching
+        // catch-all the canonical custom method falls through to
+        // native_not_found; axum requires a capture to own its whole segment.
         .route(
-            "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection",
+            "/api/v2/continuityPlans/{*custom_method}",
             post(native_dispatch),
         )
         .route(
