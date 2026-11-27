@@ -351,6 +351,10 @@ use utoipa::OpenApi;
         crate::creators_v2::CreatorMetricIssue,
         crate::creators_v2::CreatorMetricPagination,
         crate::creators_v2::CreatorMetricDrilldown,
+        // Advisory duplicate-check DTOs shared with the retained v1 path (#5705).
+        crate::thread_lifecycle::CheckDuplicatesRequest,
+        crate::thread_lifecycle::CheckDuplicatesResponse,
+        crate::thread_lifecycle::PotentialDuplicateMatch,
     )),
     modifiers(&NativeSecurityAddon)
 )]
@@ -411,6 +415,49 @@ mod tests {
 
     fn document() -> Value {
         serde_json::to_value(canonical_openapi()).expect("canonical OpenAPI document")
+    }
+
+    /// The advisory duplicate check is a v2 AIP-136 collection custom method
+    /// (#5705). It must be published with its own operation identity and DTOs,
+    /// separate from both the `GET /api/v2/threads` list/filter contract
+    /// (AIP-132) and the standard AIP-133 Create on the same collection (#5702).
+    #[test]
+    fn check_duplicates_custom_method_is_in_v2_contract() {
+        let doc = document();
+        let operation = &doc["paths"]["/api/v2/threads:checkDuplicates"]["post"];
+        assert_eq!(operation["operationId"], "check_duplicates");
+        assert_eq!(
+            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/CheckDuplicatesRequest"
+        );
+        assert_eq!(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/CheckDuplicatesResponse"
+        );
+        for schema in ["CheckDuplicatesRequest", "CheckDuplicatesResponse"] {
+            assert!(
+                doc["components"]["schemas"][schema].is_object(),
+                "missing {schema} in v2 contract"
+            );
+        }
+        // The collection read keeps its AIP-132 search/filter parameters, and
+        // the collection POST remains the standard Create — neither is
+        // overloaded with the advisory custom method.
+        let collection = &doc["paths"]["/api/v2/threads"];
+        assert!(collection["get"].is_object());
+        assert!(collection["get"]["parameters"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["name"] == "search" && p["in"] == "query"));
+        assert_eq!(
+            collection["post"]["operationId"],
+            "create_thread_v2_documentation"
+        );
+        assert_eq!(
+            collection["post"]["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ThreadCreateRequest"
+        );
     }
 
     /// The issue read-state and reader-context operations moved from their
