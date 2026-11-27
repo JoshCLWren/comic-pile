@@ -20510,7 +20510,6 @@
         ]
       }
     },
-
     "/api/v1/reading-order-groups/{group_id}/order": {
       "put": {
         "operationId": "dependency_groups_set_order",
