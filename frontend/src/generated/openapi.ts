@@ -1618,7 +1618,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/continuity-plans/": {
+    "/api/v2/continuityPlans/": {
         parameters: {
             query?: never;
             header?: never;
@@ -1634,7 +1634,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/continuity-plans/from-reading-order": {
+    "/api/v2/continuityPlans/from-reading-order": {
         parameters: {
             query?: never;
             header?: never;
@@ -1650,7 +1650,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/continuity-plans/release-sources/": {
+    "/api/v2/continuityPlans/release-sources/": {
         parameters: {
             query?: never;
             header?: never;
@@ -1666,7 +1666,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/continuity-plans/release-sources/{source_id}": {
+    "/api/v2/continuityPlans/release-sources/{source_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1682,7 +1682,7 @@ export interface paths {
         patch: operations["release_sources_update"];
         trace?: never;
     };
-    "/api/v2/continuity-plans/{plan_id}": {
+    "/api/v2/continuityPlans/{plan_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1698,7 +1698,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}": {
+    "/api/v2/continuityPlans/{plan_id}/dependencies/{dependency_id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1714,7 +1714,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/continuity-plans/{plan_id}/membership": {
+    "/api/v2/continuityPlans/{plan_id}/membership": {
         parameters: {
             query?: never;
             header?: never;
@@ -1730,7 +1730,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/continuity-plans/{plan_id}/reader": {
+    "/api/v2/continuityPlans/{plan_id}/reader": {
         parameters: {
             query?: never;
             header?: never;
@@ -1746,7 +1746,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/continuity-plans/{plan_id}/reading-orders/project": {
+    "/api/v2/continuityPlans/{plan_id}/reading-orders/project": {
         parameters: {
             query?: never;
             header?: never;
@@ -1762,7 +1762,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/continuity-plans/{plan_id}/recovery": {
+    "/api/v2/continuityPlans/{plan_id}/recovery": {
         parameters: {
             query?: never;
             header?: never;
@@ -1778,7 +1778,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/continuity-plans/{plan_id}/release-sources/": {
+    "/api/v2/continuityPlans/{plan_id}/release-sources/": {
         parameters: {
             query?: never;
             header?: never;
@@ -1794,7 +1794,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/continuity-plans/{plan_id}/release-sources/reader": {
+    "/api/v2/continuityPlans/{plan_id}/release-sources/reader": {
         parameters: {
             query?: never;
             header?: never;

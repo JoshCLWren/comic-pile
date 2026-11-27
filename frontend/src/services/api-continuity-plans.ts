@@ -277,20 +277,20 @@ export interface ReleaseSourceUpdateRequest {
 export function createContinuityPlansApi(client: HttpClient) {
   return {
     list: (): Promise<ContinuityPlanListItem[]> =>
-      client.get<ContinuityPlanListItem[]>('/v2/continuity-plans/'),
+      client.get<ContinuityPlanListItem[]>('/v2/continuityPlans/'),
     create: (payload: ContinuityPlanWrite) =>
-      client.post<ContinuityPlan, ContinuityPlanWrite>('/v2/continuity-plans/', payload),
+      client.post<ContinuityPlan, ContinuityPlanWrite>('/v2/continuityPlans/', payload),
     get: (planId: number) =>
-      client.get<ContinuityPlan>(`/v2/continuity-plans/${planId}`),
+      client.get<ContinuityPlan>(`/v2/continuityPlans/${planId}`),
     getReader: (planId: number) =>
-      client.get<ReadingPlanReaderView>(`/v2/continuity-plans/${planId}/reader`),
+      client.get<ReadingPlanReaderView>(`/v2/continuityPlans/${planId}/reader`),
     listReleaseSources: (planId: number) =>
       client.get<ReadingPlanReleaseSourceStatus[]>(
-        `/v2/continuity-plans/${planId}/release-sources/reader`,
+        `/v2/continuityPlans/${planId}/release-sources/reader`,
       ),
     createReleaseSource: (payload: ReleaseSourceCreateRequest) =>
       client.post<ReadingPlanReleaseSource, ReleaseSourceCreateRequest>(
-        '/v2/continuity-plans/release-sources/',
+        '/v2/continuityPlans/release-sources/',
         payload,
       ),
     updateReleaseSource: (sourceId: number, payload: ReleaseSourceUpdateRequest) =>
@@ -308,9 +308,9 @@ export function createContinuityPlansApi(client: HttpClient) {
     syncReleaseSources: (payload: SyncRequest) =>
       client.post<SyncResponse>('/v2/reading-plan-sync/runs', payload),
     update: (planId: number, payload: ContinuityPlanWrite) =>
-      client.put<ContinuityPlan, ContinuityPlanWrite>(`/v2/continuity-plans/${planId}`, payload),
+      client.put<ContinuityPlan, ContinuityPlanWrite>(`/v2/continuityPlans/${planId}`, payload),
     delete: (planId: number) =>
-      client.delete<void>(`/v2/continuity-plans/${planId}`),
+      client.delete<void>(`/v2/continuityPlans/${planId}`),
   }
 }
 

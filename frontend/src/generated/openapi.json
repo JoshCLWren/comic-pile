@@ -23828,7 +23828,7 @@
         ]
       }
     },
-    "/api/v2/continuity-plans/": {
+    "/api/v2/continuityPlans/": {
       "get": {
         "operationId": "continuity_plans_list",
         "responses": {
@@ -23887,7 +23887,7 @@
         ]
       }
     },
-    "/api/v2/continuity-plans/from-reading-order": {
+    "/api/v2/continuityPlans/from-reading-order": {
       "post": {
         "operationId": "continuity_plans_adopt_reading_order",
         "requestBody": {
@@ -23921,7 +23921,7 @@
         ]
       }
     },
-    "/api/v2/continuity-plans/release-sources/": {
+    "/api/v2/continuityPlans/release-sources/": {
       "post": {
         "operationId": "release_sources_create",
         "requestBody": {
@@ -23955,7 +23955,7 @@
         ]
       }
     },
-    "/api/v2/continuity-plans/release-sources/{source_id}": {
+    "/api/v2/continuityPlans/release-sources/{source_id}": {
       "delete": {
         "operationId": "release_sources_delete",
         "parameters": [
@@ -24027,7 +24027,7 @@
         ]
       }
     },
-    "/api/v2/continuity-plans/{plan_id}": {
+    "/api/v2/continuityPlans/{plan_id}": {
       "delete": {
         "operationId": "continuity_plans_delete",
         "parameters": [
@@ -24136,7 +24136,7 @@
         ]
       }
     },
-    "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}": {
+    "/api/v2/continuityPlans/{plan_id}/dependencies/{dependency_id}": {
       "delete": {
         "operationId": "continuity_plans_unlink_dependency",
         "parameters": [
@@ -24226,7 +24226,7 @@
         ]
       }
     },
-    "/api/v2/continuity-plans/{plan_id}/membership": {
+    "/api/v2/continuityPlans/{plan_id}/membership": {
       "get": {
         "operationId": "continuity_plans_membership",
         "parameters": [
@@ -24261,7 +24261,7 @@
         ]
       }
     },
-    "/api/v2/continuity-plans/{plan_id}/reader": {
+    "/api/v2/continuityPlans/{plan_id}/reader": {
       "get": {
         "operationId": "read_documentation",
         "parameters": [
@@ -24307,7 +24307,7 @@
         ]
       }
     },
-    "/api/v2/continuity-plans/{plan_id}/reading-orders/project": {
+    "/api/v2/continuityPlans/{plan_id}/reading-orders/project": {
       "post": {
         "operationId": "continuity_plans_project_to_reading_order",
         "parameters": [
@@ -24352,7 +24352,7 @@
         ]
       }
     },
-    "/api/v2/continuity-plans/{plan_id}/recovery": {
+    "/api/v2/continuityPlans/{plan_id}/recovery": {
       "get": {
         "operationId": "preview_documentation",
         "parameters": [
@@ -24452,7 +24452,7 @@
         ]
       }
     },
-    "/api/v2/continuity-plans/{plan_id}/release-sources/": {
+    "/api/v2/continuityPlans/{plan_id}/release-sources/": {
       "get": {
         "operationId": "release_sources_list",
         "parameters": [
@@ -24490,7 +24490,7 @@
         ]
       }
     },
-    "/api/v2/continuity-plans/{plan_id}/release-sources/reader": {
+    "/api/v2/continuityPlans/{plan_id}/release-sources/reader": {
       "get": {
         "operationId": "release_sources_list_reader",
         "parameters": [

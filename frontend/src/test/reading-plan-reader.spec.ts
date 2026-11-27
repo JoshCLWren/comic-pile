@@ -73,7 +73,7 @@ test.describe('Reading Plan reader surface', () => {
       },
     })
     expect(dependency.ok(), await dependency.text()).toBeTruthy()
-    const created = await page.request.post('/api/v2/continuity-plans/', {
+    const created = await page.request.post('/api/v2/continuityPlans/', {
       headers,
       data: {
         name: 'Reader AoA Plan',
@@ -151,7 +151,7 @@ test('Option E explains strict Julix blockers consistently and supports direct l
   const enabled = projection.execution_mode === 'option_e'
   const dependency = await page.request.post('/api/v2/dependencies/', { headers, data: { source_type: 'issue', source_id: firstIssue, target_type: 'issue', target_id: laterIssue } })
   expect(dependency.ok(), await dependency.text()).toBeTruthy()
-  const createPlan = await page.request.post('/api/v2/continuity-plans/', { headers, data: { name: 'Reader entry point', lanes: [{ id: 'main', name: 'Main', order: 0 }], nodes: [] } })
+  const createPlan = await page.request.post('/api/v2/continuityPlans/', { headers, data: { name: 'Reader entry point', lanes: [{ id: 'main', name: 'Main', order: 0 }], nodes: [] } })
   expect(createPlan.ok(), await createPlan.text()).toBeTruthy()
   // SAFETY: successful plan creation returns a numeric id; this test reads only that id.
   const plan = await createPlan.json() as { id: number }

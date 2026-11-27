@@ -2,7 +2,7 @@
   "family": "dependencies",
   "owned_path_patterns": [
     "^/api/v2/dependencies(?:/.*)?$",
-    "^/api/v2/continuity-plans/[^/]+/dependencies/[^/]+$",
+    "^/api/v2/continuityPlans/[^/]+/dependencies/[^/]+$",
     "^/api/v1/issues/[0-9]+/dependencies$",
     "^/api/v1/threads/.*dependencies(?:/.*)?$"
   ],
@@ -80,7 +80,7 @@
     {
       "bucket": "operations",
       "method": "POST",
-      "path": "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+      "path": "/api/v2/continuityPlans/{plan_id}/dependencies/{dependency_id}",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v2/continuity\\-plans/[^/]+/dependencies/[^/]+$",
       "runtime": "native-rust",
@@ -94,7 +94,7 @@
     {
       "bucket": "operations",
       "method": "DELETE",
-      "path": "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+      "path": "/api/v2/continuityPlans/{plan_id}/dependencies/{dependency_id}",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v2/continuity\\-plans/[^/]+/dependencies/[^/]+$",
       "runtime": "native-rust",

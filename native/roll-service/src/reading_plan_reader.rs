@@ -205,7 +205,7 @@ fn capitalize_first(s: &str) -> String {
     }
 }
 
-/// GET /api/v2/continuity-plans/{plan_id}/reader
+/// GET /api/v2/continuityPlans/{plan_id}/reader
 pub async fn read(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -596,7 +596,7 @@ pub async fn read(
 
 #[utoipa::path(
     get,
-    path = "/api/v2/continuity-plans/{plan_id}/reader",
+    path = "/api/v2/continuityPlans/{plan_id}/reader",
     tag = "continuity-plans",
     params(("plan_id" = i32, Path, description = "Owned Reading Plan identifier")),
     responses(

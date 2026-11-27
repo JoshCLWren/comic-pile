@@ -1710,7 +1710,7 @@
         ]
       }
     },
-    "/api/v2/continuity-plans/": {
+    "/api/v2/continuityPlans/": {
       "get": {
         "tags": [
           "continuity-plans"
@@ -1769,7 +1769,7 @@
         ]
       }
     },
-    "/api/v2/continuity-plans/from-reading-order": {
+    "/api/v2/continuityPlans/from-reading-order": {
       "post": {
         "tags": [
           "continuity-plans"
@@ -1803,7 +1803,7 @@
         ]
       }
     },
-    "/api/v2/continuity-plans/release-sources/": {
+    "/api/v2/continuityPlans/release-sources/": {
       "post": {
         "tags": [
           "continuity-plans"
@@ -1837,7 +1837,7 @@
         ]
       }
     },
-    "/api/v2/continuity-plans/release-sources/{source_id}": {
+    "/api/v2/continuityPlans/release-sources/{source_id}": {
       "delete": {
         "tags": [
           "continuity-plans"
@@ -1909,7 +1909,7 @@
         ]
       }
     },
-    "/api/v2/continuity-plans/{plan_id}": {
+    "/api/v2/continuityPlans/{plan_id}": {
       "get": {
         "tags": [
           "continuity-plans"
@@ -2018,7 +2018,7 @@
         ]
       }
     },
-    "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}": {
+    "/api/v2/continuityPlans/{plan_id}/dependencies/{dependency_id}": {
       "post": {
         "tags": [
           "continuity-plans"
@@ -2108,7 +2108,7 @@
         ]
       }
     },
-    "/api/v2/continuity-plans/{plan_id}/membership": {
+    "/api/v2/continuityPlans/{plan_id}/membership": {
       "get": {
         "tags": [
           "continuity-plans"
@@ -2143,7 +2143,7 @@
         ]
       }
     },
-    "/api/v2/continuity-plans/{plan_id}/reader": {
+    "/api/v2/continuityPlans/{plan_id}/reader": {
       "get": {
         "tags": [
           "continuity-plans"
@@ -2189,7 +2189,7 @@
         ]
       }
     },
-    "/api/v2/continuity-plans/{plan_id}/reading-orders/project": {
+    "/api/v2/continuityPlans/{plan_id}/reading-orders/project": {
       "post": {
         "tags": [
           "reading-orders"
@@ -2234,7 +2234,7 @@
         ]
       }
     },
-    "/api/v2/continuity-plans/{plan_id}/recovery": {
+    "/api/v2/continuityPlans/{plan_id}/recovery": {
       "get": {
         "tags": [
           "continuity-plans"
@@ -2334,7 +2334,7 @@
         ]
       }
     },
-    "/api/v2/continuity-plans/{plan_id}/release-sources/": {
+    "/api/v2/continuityPlans/{plan_id}/release-sources/": {
       "get": {
         "tags": [
           "continuity-plans"
@@ -2372,7 +2372,7 @@
         ]
       }
     },
-    "/api/v2/continuity-plans/{plan_id}/release-sources/reader": {
+    "/api/v2/continuityPlans/{plan_id}/release-sources/reader": {
       "get": {
         "tags": [
           "continuity-plans"

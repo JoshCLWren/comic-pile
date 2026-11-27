@@ -90,7 +90,7 @@ fn candidate_diff(
     (added, removed, old_common != new_common)
 }
 
-/// `GET /api/v2/continuity-plans/{plan_id}/recovery`
+/// `GET /api/v2/continuityPlans/{plan_id}/recovery`
 ///
 /// Only owner-owned plans and owner-owned candidate lists are ever returned.
 pub async fn preview(
@@ -199,7 +199,7 @@ pub async fn preview(
     }))
 }
 
-/// `POST /api/v2/continuity-plans/{plan_id}/recovery`
+/// `POST /api/v2/continuityPlans/{plan_id}/recovery`
 ///
 /// Adds new provenance for a deliberately chosen list. Never mutates the Plan
 /// snapshot, membership, issue identities, reading events or ratings.
@@ -306,7 +306,7 @@ pub async fn relink(
 
 #[utoipa::path(
     get,
-    path = "/api/v2/continuity-plans/{plan_id}/recovery",
+    path = "/api/v2/continuityPlans/{plan_id}/recovery",
     tag = "continuity-plans",
     params(("plan_id" = i32, Path, description = "Owned Reading Plan identifier")),
     responses(
@@ -321,7 +321,7 @@ pub fn preview_documentation() {}
 
 #[utoipa::path(
     post,
-    path = "/api/v2/continuity-plans/{plan_id}/recovery",
+    path = "/api/v2/continuityPlans/{plan_id}/recovery",
     tag = "continuity-plans",
     params(("plan_id" = i32, Path, description = "Owned Reading Plan identifier")),
     request_body = PlanRelinkRequest,

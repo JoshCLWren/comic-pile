@@ -251,7 +251,7 @@ test('MQA-LIST-004 explicit prerequisite and history survive canonical Reading L
   // provenance, producing the reading_plan_sources row protected by deletion.
   const guardedList = await createReadingList(page, `Plan Linked List ${suffix}`, [sourceIssueId])
   const guardedSourcePath = `custom-cbl:${guardedList.id}`
-  const planResponse = await page.request.post('/api/v2/continuity-plans/', {
+  const planResponse = await page.request.post('/api/v2/continuityPlans/', {
     headers,
     data: {
       name: `Linked Plan ${suffix}`,

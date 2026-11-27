@@ -1459,7 +1459,7 @@ async fn plan_a_orphan_recovery_preserves_history_and_plan_b_authority() {
     assert_eq!(status, StatusCode::OK, "{b_reader}");
     assert_eq!(b_reader["entries"].as_array().unwrap().len(), 5);
 
-    let endpoint = format!("/api/v2/continuity-plans/{plan_a}/recovery");
+    let endpoint = format!("/api/v2/continuityPlans/{plan_a}/recovery");
     let (status, foreign) = send(&state, other_auth, "GET", &endpoint, None).await;
     assert_eq!(status, StatusCode::NOT_FOUND, "{foreign}");
     let (status, preview) = send(&state, auth, "GET", &endpoint, None).await;
@@ -1647,7 +1647,7 @@ async fn list_update_requires_exact_predecessor_review_and_preserves_plan_refere
         &state,
         auth,
         "GET",
-        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+        &format!("/api/v2/continuityPlans/{plan_id}/reader"),
         None,
     )
     .await;
@@ -1673,7 +1673,7 @@ async fn list_update_requires_exact_predecessor_review_and_preserves_plan_refere
         &state,
         auth,
         "GET",
-        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+        &format!("/api/v2/continuityPlans/{plan_id}/reader"),
         None,
     )
     .await;

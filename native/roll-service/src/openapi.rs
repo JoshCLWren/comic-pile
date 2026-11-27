@@ -592,15 +592,15 @@ mod tests {
     fn continuity_plans_same_path_operations_and_schemas_are_documented() {
         let document = document();
         for path in [
-            "/api/v2/continuity-plans/",
-            "/api/v2/continuity-plans/from-reading-order",
-            "/api/v2/continuity-plans/{plan_id}",
-            "/api/v2/continuity-plans/{plan_id}/membership",
-            "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
-            "/api/v2/continuity-plans/{plan_id}/reading-orders/project",
-            "/api/v2/continuity-plans/release-sources/",
-            "/api/v2/continuity-plans/release-sources/{source_id}",
-            "/api/v2/continuity-plans/{plan_id}/release-sources/",
+            "/api/v2/continuityPlans/",
+            "/api/v2/continuityPlans/from-reading-order",
+            "/api/v2/continuityPlans/{plan_id}",
+            "/api/v2/continuityPlans/{plan_id}/membership",
+            "/api/v2/continuityPlans/{plan_id}/dependencies/{dependency_id}",
+            "/api/v2/continuityPlans/{plan_id}/reading-orders/project",
+            "/api/v2/continuityPlans/release-sources/",
+            "/api/v2/continuityPlans/release-sources/{source_id}",
+            "/api/v2/continuityPlans/{plan_id}/release-sources/",
         ] {
             assert!(
                 document["paths"].get(path).is_some(),

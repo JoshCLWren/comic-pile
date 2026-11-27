@@ -119,7 +119,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/v2/continuity-plans/{plan_id}/reader",
+      "path": "/api/v2/continuityPlans/{plan_id}/reader",
       "sql_budget": {
         "application_statements": 8,
         "transaction_control_statements": 2,
@@ -133,7 +133,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/v2/continuity-plans/{plan_id}/recovery",
+      "path": "/api/v2/continuityPlans/{plan_id}/recovery",
       "sql_budget": {
         "application_statements": 5,
         "transaction_control_statements": 0,
@@ -147,7 +147,7 @@
     },
     {
       "method": "POST",
-      "path": "/api/v2/continuity-plans/{plan_id}/recovery",
+      "path": "/api/v2/continuityPlans/{plan_id}/recovery",
       "sql_budget": {
         "application_statements": 6,
         "transaction_control_statements": 2,

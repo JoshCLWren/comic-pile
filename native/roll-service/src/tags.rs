@@ -513,7 +513,7 @@ async fn visible_assignments_conn(
 
 // Plan membership for tag inheritance.
 //
-// The v2 plan reader (GET /api/v2/continuity-plans/{plan_id}/reader) renders
+// The v2 plan reader (GET /api/v2/continuityPlans/{plan_id}/reader) renders
 // plan steps from the plan's linked authoritative Reading List alone
 // (`reading_plan_sources.custom_cbl_list_id` -> `custom_cbl_entries`), and
 // relinking a plan never rewrites the retained `reading_plan_issues` snapshot.

@@ -32,7 +32,7 @@ for (const width of [390, 1280]) {
         return { id: 1, username: 'reader', email: 'reader@example.test', preferences: { theme: 'classic' } }
       } else if (path === '/api/v2/auth/csrf') {
         return { csrf_token: 'test-csrf' }
-      } else if (path === '/api/v2/continuity-plans/12/reader') {
+      } else if (path === '/api/v2/continuityPlans/12/reader') {
         return view
       } else if (path.includes('/tags/effective/thread/')) {
         return { thread_id: 8, issues: [] }

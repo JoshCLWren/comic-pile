@@ -704,7 +704,7 @@ async fn adoption_commit_persists_canonical_reading_list_and_plan_projection_iss
     let (reader_status, reader_body) = get(
         &state,
         &token,
-        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+        &format!("/api/v2/continuityPlans/{plan_id}/reader"),
     )
     .await;
     assert_eq!(reader_status, StatusCode::OK, "{reader_body}");
@@ -824,7 +824,7 @@ async fn targeted_adoption_commit_uses_plan_lane_and_reconciles_exclusions_issue
     let issue_id = issue_nodes[0]["ref_id"].as_i64().unwrap() as i32;
 
     // The edit-lane projection shows the step too (not just "No steps in lane").
-    let (edit_status, edit_body) = get(&state, &token, "/api/v2/continuity-plans/552310").await;
+    let (edit_status, edit_body) = get(&state, &token, "/api/v2/continuityPlans/552310").await;
     assert_eq!(edit_status, StatusCode::OK, "{edit_body}");
     let edit_nodes = edit_body["nodes"].as_array().unwrap();
     let lane_nodes: Vec<&Value> = edit_nodes
@@ -834,7 +834,7 @@ async fn targeted_adoption_commit_uses_plan_lane_and_reconciles_exclusions_issue
     assert_eq!(lane_nodes.len(), 1, "{edit_body}");
 
     let (reader_status, reader_body) =
-        get(&state, &token, "/api/v2/continuity-plans/552310/reader").await;
+        get(&state, &token, "/api/v2/continuityPlans/552310/reader").await;
     assert_eq!(reader_status, StatusCode::OK, "{reader_body}");
     assert_eq!(reader_body["progress"]["total_issues"], 1, "{reader_body}");
 
@@ -892,7 +892,7 @@ async fn targeted_adoption_commit_uses_plan_lane_and_reconciles_exclusions_issue
         "excluded issue must not survive in the canonical list: {body2}"
     );
     let (reader_status2, reader_body2) =
-        get(&state, &token, "/api/v2/continuity-plans/552310/reader").await;
+        get(&state, &token, "/api/v2/continuityPlans/552310/reader").await;
     assert_eq!(reader_status2, StatusCode::OK, "{reader_body2}");
     assert_eq!(
         reader_body2["progress"]["total_issues"], 0,
@@ -1282,7 +1282,7 @@ async fn adoption_commit_large_source_commits_and_replays_receipt_5522() {
     let (reader_status, reader_body) = get(
         &state,
         &token,
-        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+        &format!("/api/v2/continuityPlans/{plan_id}/reader"),
     )
     .await;
     assert_eq!(reader_status, StatusCode::OK, "{reader_body}");
@@ -3086,7 +3086,7 @@ async fn projection_confirm_rejects_a_stale_preview_revision() {
         .as_str()
         .expect("preview exposes the plan revision")
         .to_string();
-    let confirm_uri = "/api/v2/continuity-plans/702/reading-orders/project";
+    let confirm_uri = "/api/v2/continuityPlans/702/reading-orders/project";
 
     let (status, result) = post_json(
         &state,

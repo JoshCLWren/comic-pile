@@ -122,7 +122,7 @@ export function createReadingOrdersApi(client: HttpClient) {
         payload.plan_updated_at = planUpdatedAt
       }
       return client.post<ReadingOrderProjectionResult>(
-        `/v2/continuity-plans/${planId}/reading-orders/project`,
+        `/v2/continuityPlans/${planId}/reading-orders/project`,
         payload,
       )
     },
@@ -135,7 +135,7 @@ export function createReadingOrdersApi(client: HttpClient) {
       laneId?: string
       laneName?: string
     }): Promise<ContinuityPlan> => {
-      return client.post(`/v2/continuity-plans/from-reading-order`, {
+      return client.post(`/v2/continuityPlans/from-reading-order`, {
         reading_order_id: params.readingOrderId,
         plan_name: params.planName ?? null,
         lane_id: params.laneId ?? 'adopted',
