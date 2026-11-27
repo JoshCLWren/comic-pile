@@ -511,6 +511,75 @@ async fn connected_threads_report_direction_and_issue_level_cycles() {
 }
 
 #[tokio::test]
+async fn eligibility_singleton_ignores_converted_edges_and_stale_blocked_flags() {
+    let (state, token, csrf, user_id, _guard) = setup_user("tord-v2-elig").await;
+    let (token2, csrf2, user2) = register_extra_user(&state, "tord-v2-elig2").await;
+    let conn = state.pool.get().await.unwrap();
+    let blocked = thread(&conn, user_id, "Blocked").await;
+    let blocker = thread(&conn, user_id, "Blocker").await;
+    let healthy = thread(&conn, user_id, "Healthy").await;
+    let blocked_issue = issue(&conn, blocked, "5", 1, "unread").await;
+    let blocker_issue = issue(&conn, blocker, "12", 1, "unread").await;
+    let healthy_issue = issue(&conn, healthy, "1", 1, "unread").await;
+    frontier(&conn, blocked, blocked_issue).await;
+    frontier(&conn, blocker, blocker_issue).await;
+    frontier(&conn, healthy, healthy_issue).await;
+    dependency(&conn, blocker_issue, blocked_issue, None).await;
+    // Converted rows are audit data and must never veto an explicit Read Now.
+    conn.execute(
+        "INSERT INTO dependencies (created_at, source_issue_id, target_issue_id, origin, classification) \
+         VALUES (NOW(), $1, $2, 'converted', 'C')",
+        &[&healthy_issue, &blocked_issue],
+    )
+    .await
+    .unwrap();
+    // The denormalized flag is deliberately stale on every thread.
+    conn.execute(
+        "UPDATE threads SET is_blocked = true WHERE id = ANY($1)",
+        &[&vec![blocked, blocker, healthy]],
+    )
+    .await
+    .unwrap();
+
+    let (status, body) = send(
+        &state,
+        get(&format!("/api/v2/threads/{blocked}/eligibility"), &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["thread_id"], blocked);
+    assert_eq!(body["eligible"], false);
+    assert_eq!(body["state"], "blocked");
+    assert_eq!(body["next_issue_id"], blocked_issue);
+    assert_eq!(body["manual_read_now_allowed"], true);
+    assert_eq!(body["blockers"][0]["kind"], "prerequisite");
+    assert_eq!(body["blockers"][0]["origin"], "reader");
+    assert_eq!(body["blockers"][0]["waiting_on_issue_ids"], json!([blocker_issue]));
+
+    let (status, body) = send(
+        &state,
+        get(&format!("/api/v2/threads/{healthy}/eligibility"), &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["eligible"], true);
+    assert_eq!(body["state"], "available");
+    assert_eq!(body["blockers"], json!([]));
+    assert_eq!(body["manual_read_now_allowed"], true, "converted edge is inert");
+
+    let foreign = thread(&conn, user2, "Foreign").await;
+    for (who, csrf_for, id) in [(&token, &csrf, foreign), (&token2, &csrf2, blocked)] {
+        let (status, body) = send(
+            &state,
+            get(&format!("/api/v2/threads/{id}/eligibility"), who, csrf_for),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
+        assert_eq!(body["detail"], format!("Thread {id} not found"));
+    }
+}
+
+#[tokio::test]
 async fn order_check_and_validate_order_report_position_conflicts() {
     let (state, token, csrf, user_id, _guard) = setup_user("tord-order").await;
     let (token2, csrf2, user2) = register_extra_user(&state, "tord-order2").await;
@@ -1132,17 +1201,9 @@ async fn julix_strict_order_is_shared_by_roll_queue_reader_and_explanations() {
 
     // Explanations name every earlier unread list entry, not just the adjacent
     // read Wild Hunt node. The read prerequisite emits no blocker at all.
-    let (status, king_info) = send(
-        &state,
-        post(
-            &format!("/api/v2/threads/{king_thread}:getBlockingInfo"),
-            &token,
-            &csrf,
-            None,
-        ),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK, "{king_info:?}");
+    let (status, king_body) = send(&state, explain_one(king_thread, &token, &csrf)).await;
+    assert_eq!(status, StatusCode::OK, "{king_body:?}");
+    let king_info = explanation(&king_body, king_thread);
     assert_eq!(king_info["is_blocked"], true);
     let mut read_issues = BTreeSet::from([dead_1]);
     read_issues.extend(wild_hunt.iter().copied());
@@ -1179,17 +1240,9 @@ async fn julix_strict_order_is_shared_by_roll_queue_reader_and_explanations() {
             .contains("B.P.R.D.: The Dead Remembered #2")
     }));
 
-    let (status, dead_info) = send(
-        &state,
-        post(
-            &format!("/api/v2/threads/{dead_thread}:getBlockingInfo"),
-            &token,
-            &csrf,
-            None,
-        ),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK, "{dead_info:?}");
+    let (status, dead_body) = send(&state, explain_one(dead_thread, &token, &csrf)).await;
+    assert_eq!(status, StatusCode::OK, "{dead_body:?}");
+    let dead_info = explanation(&dead_body, dead_thread);
     assert_eq!(dead_info["is_blocked"], false);
     assert_eq!(dead_info["blocking_dependencies"], json!([]));
 
