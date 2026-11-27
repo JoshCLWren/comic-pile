@@ -1053,16 +1053,6 @@ export async function applyMigratedThreadCache(
 }
 
 /**
- * Apply updated preferences to the cache after a successful mutation.
- */
-export function applyUpdatedPreferencesCache(
-  client: QueryClient,
-  preferences: { theme: 'classic' | 'ink-gold' | 'command-center'; user_id: number },
-): void {
-  client.setQueryData(queryKeys.preferences.detail(), preferences)
-}
-
-/**
  * Refresh the resources that carry the die after a die command
  * (`POST /v2/roll/dice-command` or `POST /v2/roll/reset`).
  *
