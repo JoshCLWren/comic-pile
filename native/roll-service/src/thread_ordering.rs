@@ -1083,6 +1083,37 @@ pub async fn get_thread_reading_orders(
     Ok(Json(ThreadReadingOrdersResponse { reading_orders }))
 }
 
+/// Serve `GET /api/v2/threads/{thread_id}/readingOrders`.
+///
+/// Canonical AIP-122 spelling of the retained v1 alias above. It delegates to
+/// the same owner-scoped read, so an unknown or foreign thread still yields an
+/// empty collection instead of revealing that another reader owns a thread.
+pub async fn get_thread_reading_orders_v2(
+    state: State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    thread_id: Result<Path<String>, PathRejection>,
+) -> Result<Json<ThreadReadingOrdersResponse>, ApiError> {
+    get_thread_reading_orders(state, user, thread_id).await
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v2/threads/{thread_id}/readingOrders",
+    operation_id = "list_thread_reading_orders",
+    tag = "reading-orders",
+    description = "List the authenticated reader's reading orders that contain the given thread. A foreign or unknown thread is an empty collection.",
+    params(("thread_id" = i32, Path, description = "Thread identifier")),
+    responses(
+        (status = 200, description = "Owned reading orders containing the thread", body = ThreadReadingOrdersResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 422, description = "Request validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn thread_reading_orders_v2_documentation() {}
+
 // ---------------------------------------------------------------------------
 // OpenAPI documentation
 // ---------------------------------------------------------------------------

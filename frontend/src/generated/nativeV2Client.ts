@@ -785,6 +785,17 @@ export interface ListThreadIssuesV2Request {
 
 export type ListThreadIssuesV2Response = components['schemas']['ThreadIssueListResponse']
 
+<<<<<<< HEAD
+=======
+export interface ListThreadReadingOrdersRequest {
+  path: {
+    thread_id: number
+  }
+}
+
+export type ListThreadReadingOrdersResponse = components['schemas']['ThreadReadingOrdersResponse']
+
+>>>>>>> origin/main
 export interface ListThreadsRequest {
   query?: {
     search?: string
@@ -889,6 +900,18 @@ export interface PreviewIssueStructureRequest {
 
 export type PreviewIssueStructureResponse = components['schemas']['IssueEditPreviewResponse']
 
+<<<<<<< HEAD
+=======
+export interface PreviewReadingOrderProjectionRequest {
+  path: {
+    plan_id: number
+  }
+  body: components['schemas']['ReadingOrderProjectPreviewRequest']
+}
+
+export type PreviewReadingOrderProjectionResponse = components['schemas']['ReadingOrderProjectPreviewResponse']
+
+>>>>>>> origin/main
 export interface PreviewSeriesMappingsRequest {
   body: components['schemas']['NativeSeriesMappingPreviewRequest']
 }
@@ -1302,6 +1325,7 @@ export interface ThreadCreatorCreditsRequest {
 
 export type ThreadCreatorCreditsResponse = components['schemas']['ThreadCreatorCreditsResponse']
 
+<<<<<<< HEAD
 export interface ThreadOrderingExplainEligibilityRequest {
   body: components['schemas']['BatchBlockingExplanationRequest']
 }
@@ -1324,6 +1348,8 @@ export interface ThreadOrderingThreadConnectionsRequest {
 
 export type ThreadOrderingThreadConnectionsResponse = components['schemas']['ThreadConnectedResponse']
 
+=======
+>>>>>>> origin/main
 export interface UnassignTagRequest {
   path: {
     tag_id: number
@@ -1497,6 +1523,10 @@ export interface NativeV2Client {
   listTags(): Promise<ListTagsResponse>
   listThreadIssues(args: ListThreadIssuesRequest): Promise<ListThreadIssuesResponse>
   listThreadIssuesV2(args: ListThreadIssuesV2Request): Promise<ListThreadIssuesV2Response>
+<<<<<<< HEAD
+=======
+  listThreadReadingOrders(args: ListThreadReadingOrdersRequest): Promise<ListThreadReadingOrdersResponse>
+>>>>>>> origin/main
   listThreads(args?: ListThreadsRequest): Promise<ListThreadsResponse>
   listUndoSnapshots(args: ListUndoSnapshotsRequest): Promise<ListUndoSnapshotsResponse>
   login(args: LoginRequest): Promise<LoginResponse>
@@ -1511,6 +1541,10 @@ export interface NativeV2Client {
   preview(args: PreviewRequest): Promise<PreviewResponse>
   previewIssueCreate(args: PreviewIssueCreateRequest): Promise<PreviewIssueCreateResponse>
   previewIssueStructure(args: PreviewIssueStructureRequest): Promise<PreviewIssueStructureResponse>
+<<<<<<< HEAD
+=======
+  previewReadingOrderProjection(args: PreviewReadingOrderProjectionRequest): Promise<PreviewReadingOrderProjectionResponse>
+>>>>>>> origin/main
   previewSeriesMappings(args: PreviewSeriesMappingsRequest): Promise<PreviewSeriesMappingsResponse>
   ratingDistribution(args: RatingDistributionRequest): Promise<RatingDistributionResponse>
   read(args: ReadRequest): Promise<ReadResponse>
@@ -1565,9 +1599,12 @@ export interface NativeV2Client {
   switchPrerequisite(args: SwitchPrerequisiteRequest): Promise<SwitchPrerequisiteResponse>
   teamChemistry(): Promise<TeamChemistryResponse>
   threadCreatorCredits(args: ThreadCreatorCreditsRequest): Promise<ThreadCreatorCreditsResponse>
+<<<<<<< HEAD
   threadOrderingExplainEligibility(args: ThreadOrderingExplainEligibilityRequest): Promise<ThreadOrderingExplainEligibilityResponse>
   threadOrderingGetThreadEligibility(args: ThreadOrderingGetThreadEligibilityRequest): Promise<ThreadOrderingGetThreadEligibilityResponse>
   threadOrderingThreadConnections(args: ThreadOrderingThreadConnectionsRequest): Promise<ThreadOrderingThreadConnectionsResponse>
+=======
+>>>>>>> origin/main
   unassignTag(args: UnassignTagRequest): Promise<UnassignTagResponse>
   undoToSnapshot(args: UndoToSnapshotRequest): Promise<UndoToSnapshotResponse>
   unsnooze(args: UnsnoozeRequest): Promise<UnsnoozeResponse>
@@ -2112,6 +2149,14 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         { params: compactQuery(args.query) },
       )
     },
+<<<<<<< HEAD
+=======
+    listThreadReadingOrders(args: ListThreadReadingOrdersRequest) {
+      return client.get<ListThreadReadingOrdersResponse>(
+        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/readingOrders`,
+      )
+    },
+>>>>>>> origin/main
     listThreads(args: ListThreadsRequest = {}) {
       return client.get<ListThreadsResponse>(
         "/v2/threads",
@@ -2188,6 +2233,15 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
+<<<<<<< HEAD
+=======
+    previewReadingOrderProjection(args: PreviewReadingOrderProjectionRequest) {
+      return client.post<PreviewReadingOrderProjectionResponse, PreviewReadingOrderProjectionRequest['body']>(
+        `/v2/continuityPlans/${encodeURIComponent(String(args.path.plan_id))}:previewReadingOrderProjection`,
+        args.body,
+      )
+    },
+>>>>>>> origin/main
     previewSeriesMappings(args: PreviewSeriesMappingsRequest) {
       return client.post<PreviewSeriesMappingsResponse, PreviewSeriesMappingsRequest['body']>(
         "/v2/seriesMappings:preview",
@@ -2476,6 +2530,7 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         { params: compactQuery(args.query) },
       )
     },
+<<<<<<< HEAD
     threadOrderingExplainEligibility(args: ThreadOrderingExplainEligibilityRequest) {
       return client.post<ThreadOrderingExplainEligibilityResponse, ThreadOrderingExplainEligibilityRequest['body']>(
         "/v2/threads:explainEligibility",
@@ -2492,6 +2547,8 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/connections`,
       )
     },
+=======
+>>>>>>> origin/main
     unassignTag(args: UnassignTagRequest) {
       return client.delete<UnassignTagResponse>(
         `/v2/tags/${encodeURIComponent(String(args.path.tag_id))}/assignments/${encodeURIComponent(String(args.path.target_type))}/${encodeURIComponent(String(args.path.target_id))}`,

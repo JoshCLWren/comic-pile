@@ -243,6 +243,7 @@ async fn every_operation_requires_authentication() {
         ("GET", "/api/v1/threads/1/dependency-order-check"),
         ("GET", "/api/v1/threads/1/issues:validateOrder"),
         ("GET", "/api/v1/threads/1/reading-orders"),
+        ("GET", "/api/v2/threads/1/readingOrders"),
     ] {
         let (status, body) = send(
             &state,
@@ -720,17 +721,25 @@ async fn thread_reading_orders_are_enriched_ordered_and_owner_scoped() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
-    assert_eq!(
-        body,
-        json!({"reading_orders": [{
-            "id": order, "name": "Event", "description": "Big event",
-            "total_items": 2, "completed_items": 1,
-            "items": [
-                {"thread_id": a, "thread_title": "Alpha", "position": 1, "issue_number": "1", "is_read": true},
-                {"thread_id": b, "thread_title": "Beta", "position": 2, "issue_number": "9", "is_read": false}
-            ]
-        }]})
-    );
+    let expected = json!({"reading_orders": [{
+        "id": order, "name": "Event", "description": "Big event",
+        "total_items": 2, "completed_items": 1,
+        "items": [
+            {"thread_id": a, "thread_title": "Alpha", "position": 1, "issue_number": "1", "is_read": true},
+            {"thread_id": b, "thread_title": "Beta", "position": 2, "issue_number": "9", "is_read": false}
+        ]
+    }]});
+    assert_eq!(body, expected);
+
+    // #5715: the canonical v2 collection spelling returns the exact same
+    // owner-scoped wire body as the retained v1 alias.
+    let (status, v2_body) = send(
+        &state,
+        get(&format!("/api/v2/threads/{a}/readingOrders"), &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{v2_body:?}");
+    assert_eq!(v2_body, expected);
 
     // Each reader sees only their own order containing the thread.
     let (_, body) = send(
@@ -753,6 +762,18 @@ async fn thread_reading_orders_are_enriched_ordered_and_owner_scoped() {
         "Alpha"
     );
 
+    let (_, v2_body) = send(
+        &state,
+        get(
+            &format!("/api/v2/threads/{a}/readingOrders"),
+            &token2,
+            &csrf2,
+        ),
+    )
+    .await;
+    assert_eq!(v2_body["reading_orders"].as_array().unwrap().len(), 1);
+    assert_eq!(v2_body["reading_orders"][0]["name"], "Theirs");
+
     let (status, body) = send(
         &state,
         get("/api/v1/threads/999999/reading-orders", &token, &csrf),
@@ -760,9 +781,22 @@ async fn thread_reading_orders_are_enriched_ordered_and_owner_scoped() {
     .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body, json!({"reading_orders": []}));
+    let (status, v2_body) = send(
+        &state,
+        get("/api/v2/threads/999999/readingOrders", &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(v2_body, json!({"reading_orders": []}));
     let (status, _) = send(
         &state,
         get("/api/v1/threads/x/reading-orders", &token, &csrf),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    let (status, _) = send(
+        &state,
+        get("/api/v2/threads/x/readingOrders", &token, &csrf),
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);

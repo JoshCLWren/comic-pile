@@ -229,3 +229,7 @@ test('fixture artifacts are complete and checked-in outputs are current', () => 
   const check = execFileSync(process.execPath, [script, '--check'], {cwd: repoRoot, encoding: 'utf8'});
   assert.match(check, /Verified live route census/);
 });
+<<<<<<< HEAD
+=======
+
+>>>>>>> origin/main

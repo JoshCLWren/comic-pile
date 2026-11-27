@@ -78,7 +78,7 @@ function minimalReaderContext() {
 }
 
 async function installRoutes(page: Page, intelligence: ComicVineIssueIntelligence): Promise<void> {
-  await page.route('**/v1/threads/*/reading-orders', (route) =>
+  await page.route('**/v2/threads/*/readingOrders', (route) =>
     route.fulfill({ json: { reading_orders: [] } }),
   )
   await page.route('**/v2/threads/*/connections', (route) =>

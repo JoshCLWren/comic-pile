@@ -1770,6 +1770,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Stateless AIP-136 custom method: deterministically preview how a continuity plan would project into a reading order. No plan, reading order or item is written; confirmation is a separate durable v2 operation that revalidates the plan. */
+        post: operations["preview_reading_order_projection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/creators": {
         parameters: {
             query?: never;
@@ -3423,6 +3440,7 @@ export interface paths {
         patch: operations["patch_thread_documentation"];
         trace?: never;
     };
+<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/connections": {
         parameters: {
             query?: never;
@@ -3443,6 +3461,8 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+=======
+>>>>>>> origin/main
     "/api/v2/threads/{thread_id}/creatorCredits": {
         parameters: {
             query?: never;
@@ -3464,6 +3484,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/dependencies": {
         parameters: {
             query?: never;
@@ -3504,6 +3525,8 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+=======
+>>>>>>> origin/main
     "/api/v2/threads/{thread_id}/issue-order": {
         parameters: {
             query?: never;
@@ -3626,6 +3649,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+<<<<<<< HEAD
+=======
+    "/api/v2/threads/{thread_id}/readingOrders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List the authenticated reader's reading orders that contain the given thread. A foreign or unknown thread is an empty collection. */
+        get: operations["list_thread_reading_orders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+>>>>>>> origin/main
     "/api/v2/threads:checkDuplicates": {
         parameters: {
             query?: never;
@@ -3643,6 +3686,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+<<<<<<< HEAD
     "/api/v2/threads:explainEligibility": {
         parameters: {
             query?: never;
@@ -3663,6 +3707,8 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+=======
+>>>>>>> origin/main
     "/api/v2/undo/{session_id}/snapshots": {
         parameters: {
             query?: never;
@@ -14476,6 +14522,61 @@ export interface operations {
             };
         };
     };
+    preview_reading_order_projection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Continuity plan id */
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingOrderProjectPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Deterministic projection preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingOrderProjectPreviewResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan or reading order not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Malformed plan */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     creators_list: {
         parameters: {
             query?: {
@@ -19344,6 +19445,7 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
     thread_ordering_thread_connections: {
         parameters: {
             query?: never;
@@ -19395,6 +19497,8 @@ export interface operations {
             };
         };
     };
+=======
+>>>>>>> origin/main
     thread_creator_credits: {
         parameters: {
             query?: {
@@ -19458,6 +19562,7 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
     dependencies_list_thread_dependencies: {
         parameters: {
             query?: never;
@@ -19553,6 +19658,8 @@ export interface operations {
             };
         };
     };
+=======
+>>>>>>> origin/main
     issue_order_documentation: {
         parameters: {
             query?: never;
@@ -19613,6 +19720,7 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
     dependencies_list_thread_issue_dependencies: {
         parameters: {
             query?: never;
@@ -19657,6 +19765,8 @@ export interface operations {
             };
         };
     };
+=======
+>>>>>>> origin/main
     list_thread_issues_v2: {
         parameters: {
             query?: {
@@ -19952,6 +20062,53 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
+=======
+    list_thread_reading_orders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned reading orders containing the thread */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadReadingOrdersResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+>>>>>>> origin/main
     check_duplicates: {
         parameters: {
             query?: never;
@@ -19990,6 +20147,7 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
     thread_ordering_explain_eligibility: {
         parameters: {
             query?: never;
@@ -20042,6 +20200,8 @@ export interface operations {
             };
         };
     };
+=======
+>>>>>>> origin/main
     list_undo_snapshots_documentation: {
         parameters: {
             query?: never;

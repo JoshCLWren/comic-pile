@@ -36,9 +36,21 @@ use utoipa::OpenApi;
         crate::auth::dto::forgot_password_documentation,
         crate::auth::dto::reset_password_documentation,
         crate::catalog_commit::commit_documentation,
+<<<<<<< ours
         // #5716: stateless AIP-136 preview, deliberately separate from the
         // durable commit operation registered above.
         crate::catalog_series_mapping_preview::preview_series_mappings_v2_documentation,
+||||||| base
+=======
+        // #5716: stateless AIP-136 preview, deliberately separate from the
+        // durable commit operation registered above.
+        crate::catalog_series_mapping_preview::preview_series_mappings_v2_documentation,
+        // #5715: canonical AIP-136 projection preview and AIP-122 thread
+        // reading-order collection. The retained v1 aliases stay in the
+        // same-path contract only and must not be published here.
+        crate::continuity_plans_project_preview::preview_reading_order_projection_v2_documentation,
+        crate::thread_ordering::thread_reading_orders_v2_documentation,
+>>>>>>> theirs
         crate::issue_identity::cbl_adoption_commit_documentation,
         crate::issue_identity::cbl_targeted_adoption_commit_documentation,
         crate::activity::list_activity_documentation,
@@ -281,6 +293,15 @@ use utoipa::OpenApi;
         crate::continuity_plans::ReadingOrderProjectionPreview,
         crate::continuity_plans::ReadingOrderProjectionResult,
         crate::continuity_plans::ReadingOrderAdoptRequest,
+        // #5715: preview DTOs are shared with the retained v1 alias, while the
+        // thread reading-order collection keeps its frozen wire shape.
+        crate::continuity_plans_project_preview::ReadingOrderProjectPreviewRequest,
+        crate::continuity_plans_project_preview::ReadingOrderProjectPreviewResponse,
+        crate::continuity_plans_project_preview::ReadingOrderProjectPreviewEntry,
+        crate::continuity_plans_project_preview::ReadingOrderProjectPreviewConflict,
+        crate::thread_ordering::ThreadReadingOrdersResponse,
+        crate::thread_ordering::ReadingOrderResponse,
+        crate::thread_ordering::ReadingOrderItemResponse,
         crate::continuity_plans::ReleaseSourceCreate,
         crate::continuity_plans::ReleaseSourceUpdate,
         crate::continuity_plans::ReleaseSourceResponse,
@@ -413,6 +434,7 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         // #5711: the six crossover-membership operations are v2-only after the
         // retired `/api/v1` aliases were unmounted. Publish them here so the
         // generated frontend client stays aligned with the live ingress.
+<<<<<<< ours
         .merge_from(crate::dependency_groups::dependency_groups_v2_openapi())
         // #5709: canonical eligibility, batch explanations and reader-authored
         // connections are v2-only; the v1 diagnostics were retired outright.
@@ -420,6 +442,14 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         // #5710: canonical v2 reading-order-group collection CRUD; the retired
         // v1 paths are no longer part of the deployed contract.
         .merge_from(crate::dependency_groups::reading_order_groups_v2_openapi());
+||||||| base
+        .merge_from(crate::dependency_groups::dependency_groups_v2_openapi());
+=======
+        .merge_from(crate::dependency_groups::dependency_groups_v2_openapi())
+        // #5710: canonical v2 reading-order-group collection CRUD; the retired
+        // v1 paths are no longer part of the deployed contract.
+        .merge_from(crate::dependency_groups::reading_order_groups_v2_openapi());
+>>>>>>> theirs
     // The aggregate artifact is the deployed v2 runtime contract. The
     // completed-threads v1 operation has its own same-path contract and must
     // not expand the v2 inventory.
@@ -439,6 +469,7 @@ mod tests {
         serde_json::to_value(canonical_openapi()).expect("canonical OpenAPI document")
     }
 
+<<<<<<< ours
     /// The advisory duplicate check is a v2 AIP-136 collection custom method
     /// (#5705). It must be published with its own operation identity and DTOs,
     /// separate from both the `GET /api/v2/threads` list/filter contract
@@ -523,6 +554,148 @@ mod tests {
         );
     }
 
+||||||| base
+=======
+    /// The advisory duplicate check is a v2 AIP-136 collection custom method
+    /// (#5705). It must be published with its own operation identity and DTOs,
+    /// separate from both the `GET /api/v2/threads` list/filter contract
+    /// (AIP-132) and the standard AIP-133 Create on the same collection (#5702).
+    #[test]
+    fn check_duplicates_custom_method_is_in_v2_contract() {
+        let doc = document();
+        let operation = &doc["paths"]["/api/v2/threads:checkDuplicates"]["post"];
+        assert_eq!(operation["operationId"], "check_duplicates");
+        assert_eq!(
+            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/CheckDuplicatesRequest"
+        );
+        assert_eq!(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/CheckDuplicatesResponse"
+        );
+        for schema in ["CheckDuplicatesRequest", "CheckDuplicatesResponse"] {
+            assert!(
+                doc["components"]["schemas"][schema].is_object(),
+                "missing {schema} in v2 contract"
+            );
+        }
+        // The collection read keeps its AIP-132 search/filter parameters, and
+        // the collection POST remains the standard Create — neither is
+        // overloaded with the advisory custom method.
+        let collection = &doc["paths"]["/api/v2/threads"];
+        assert!(collection["get"].is_object());
+        assert!(collection["get"]["parameters"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["name"] == "search" && p["in"] == "query"));
+        assert_eq!(
+            collection["post"]["operationId"],
+            "create_thread_v2_documentation"
+        );
+        assert_eq!(
+            collection["post"]["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ThreadCreateRequest"
+        );
+    }
+
+    /// #5716: the canonical preview is an AIP-136 stateless collection custom
+    /// method on the lowerCamelCase `seriesMappings` collection. It must not be
+    /// published as a v1 same-path operation in the v2 contract, and it must
+    /// share its DTOs with the retained commit so the idempotency token stays
+    /// intelligible end to end.
+    #[test]
+    fn series_mappings_preview_custom_method_is_in_v2_contract() {
+        let doc = document();
+        let operation = &doc["paths"]["/api/v2/seriesMappings:preview"]["post"];
+        assert_eq!(operation["operationId"], "preview_series_mappings");
+        assert_eq!(
+            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/SeriesMappingPreviewRequest"
+        );
+        assert_eq!(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/SeriesMappingPreviewResponse"
+        );
+        for schema in [
+            "SeriesMappingPreviewRequest",
+            "SeriesMappingPreviewResponse",
+            "SeriesMappingPreviewRow",
+            "SeriesMappingPreviewScope",
+            "SeriesMappingPreviewCounts",
+            "SeriesMappingPreviewProviderSeries",
+        ] {
+            assert!(
+                doc["components"]["schemas"][schema].is_object(),
+                "missing {schema} in v2 contract"
+            );
+        }
+        assert!(
+            doc["paths"]["/api/v1/catalog/series-mappings/preview"].is_null(),
+            "v1 preview must not be published in the canonical v2 contract"
+        );
+        assert!(
+            doc["paths"]["/api/v2/series-mapping-commits"]["post"].is_object(),
+            "durable v2 commit must stay registered"
+        );
+    }
+
+    /// #5715: the canonical projection preview is an AIP-136 custom method on
+    /// the lowerCamelCase `continuityPlans` resource, and the thread collection
+    /// read is an AIP-122 nested collection. Both publish the frozen wire DTOs;
+    /// neither v1 alias leaks into the v2 contract, while the durable v2 commit
+    /// stays registered for the confirmation step.
+    #[test]
+    fn reading_order_v2_operations_are_in_v2_contract() {
+        let doc = document();
+        let preview = &doc["paths"]
+            ["/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection"]["post"];
+        assert_eq!(preview["operationId"], "preview_reading_order_projection");
+        assert_eq!(
+            preview["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ReadingOrderProjectPreviewRequest"
+        );
+        assert_eq!(
+            preview["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ReadingOrderProjectPreviewResponse"
+        );
+        let thread_orders = &doc["paths"]["/api/v2/threads/{thread_id}/readingOrders"]["get"];
+        assert_eq!(thread_orders["operationId"], "list_thread_reading_orders");
+        assert_eq!(
+            thread_orders["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ThreadReadingOrdersResponse"
+        );
+        for schema in [
+            "ReadingOrderProjectPreviewRequest",
+            "ReadingOrderProjectPreviewResponse",
+            "ReadingOrderProjectPreviewEntry",
+            "ReadingOrderProjectPreviewConflict",
+            "ThreadReadingOrdersResponse",
+            "ReadingOrderResponse",
+            "ReadingOrderItemResponse",
+        ] {
+            assert!(
+                doc["components"]["schemas"][schema].is_object(),
+                "missing {schema} in v2 contract"
+            );
+        }
+        assert!(
+            doc["paths"]["/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview"]
+                .is_null(),
+            "v1 preview must not be published in the canonical v2 contract"
+        );
+        assert!(
+            doc["paths"]["/api/v1/threads/{thread_id}/reading-orders"].is_null(),
+            "v1 thread read must not be published in the canonical v2 contract"
+        );
+        assert!(
+            doc["paths"]["/api/v2/continuity-plans/{plan_id}/reading-orders/project"]["post"]
+                .is_object(),
+            "durable v2 projection commit must stay registered"
+        );
+    }
+
+>>>>>>> theirs
     /// The issue read-state and reader-context operations moved from their
     /// `/api/v1/issues/{id}:action` URLs to v2 resources. Every method must stay
     /// in both the domain document and the aggregate runtime contract with its

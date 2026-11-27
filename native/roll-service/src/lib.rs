@@ -687,6 +687,16 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
             post(continuity_plans_project_preview::preview_plan_projection_handler),
         )
+        // #5715: canonical AIP-136 stateless resource custom method. The v1
+        // preview alias stays mounted only until production proof retires it;
+        // no new caller may use it. matchit (axum 0.8) requires a capture to own
+        // its whole segment, so the mounted pattern captures the final segment
+        // and the handler dispatches on the exact `:previewReadingOrderProjection`
+        // suffix. The wire URL and published contract stay canonical.
+        .route(
+            "/api/v2/continuityPlans/{*custom_method}",
+            post(continuity_plans_project_preview::preview_reading_order_projection_v2),
+        )
         .route(
             "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
             get(issue_identity_adoption_preview::api_cbl_adoption_preview_handler),
@@ -926,6 +936,12 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/threads/{thread_id}/reading-orders",
             get(thread_ordering::get_thread_reading_orders),
+        )
+        // #5715: canonical AIP-122 collection spelling for the same
+        // owner-scoped read. The v1 alias remains only for legacy callers.
+        .route(
+            "/api/v2/threads/{thread_id}/readingOrders",
+            get(thread_ordering::get_thread_reading_orders_v2),
         )
         .route(
             "/api/v1/threads/completed/threads",
@@ -1621,6 +1637,7 @@ mod tests {
         }
     }
 
+<<<<<<< ours
     #[tokio::test]
     async fn retired_v1_dependency_diagnosis_routes_return_404_in_inner_router() {
         // #5709: dependency/blocking/connection diagnosis is v2-only. The
@@ -1744,6 +1761,66 @@ mod tests {
         }
     }
 
+||||||| base
+=======
+    #[tokio::test]
+    async fn v2_group_crud_is_mounted_and_retired_v1_crud_returns_404_in_inner_router() {
+        let config = Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
+            _ => None,
+        })
+        .unwrap();
+        let state = Arc::new(AppState::new(config).unwrap());
+        for (method, uri) in [
+            ("GET", "/api/v2/readingOrderGroups"),
+            ("POST", "/api/v2/readingOrderGroups"),
+            ("GET", "/api/v2/readingOrderGroups/7"),
+            ("PATCH", "/api/v2/readingOrderGroups/7"),
+            ("DELETE", "/api/v2/readingOrderGroups/7"),
+        ] {
+            let response = router(Arc::clone(&state))
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_ne!(response.status(), StatusCode::NOT_FOUND, "{method} {uri}");
+        }
+        for (method, uri) in [
+            ("GET", "/api/v1/reading-order-groups/"),
+            ("POST", "/api/v1/reading-order-groups/"),
+            ("GET", "/api/v1/reading-order-groups/7"),
+            ("PATCH", "/api/v1/reading-order-groups/7"),
+            ("DELETE", "/api/v1/reading-order-groups/7"),
+            ("GET", "/api/v1/reading-order-groups/7/detail"),
+            ("GET", "/api/v2/readingOrderGroups/7/detail"),
+        ] {
+            let response = router(Arc::clone(&state))
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{method} {uri}");
+            let bytes = to_bytes(response.into_body(), 1024).await.unwrap();
+            assert_eq!(
+                String::from_utf8_lossy(&bytes),
+                r#"{"detail":"Not Found"}"#,
+                "{method} {uri}"
+            );
+        }
+    }
+
+>>>>>>> theirs
     #[test]
     fn api_error_variants_carry_typed_status_and_detail() {
         let cases = [

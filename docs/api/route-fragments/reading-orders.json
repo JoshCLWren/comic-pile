@@ -16,7 +16,7 @@
       "bucket": "operations",
       "method": "GET",
       "path": "/api/v2/reading-orders/",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "src": "^/api/v2/reading-orders/$",
       "owning_issue": 4851
     },
@@ -24,7 +24,7 @@
       "bucket": "operations",
       "method": "POST",
       "path": "/api/v2/reading-orders/{reading_order_id}/items",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "src": "^/api/v2/reading-orders/[0-9]+/items$",
       "owning_issue": 4851
     }
