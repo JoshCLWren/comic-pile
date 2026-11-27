@@ -1823,7 +1823,7 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     findCblCandidatesForReadingListV2(args: FindCblCandidatesForReadingListV2Request) {
       return client.get<FindCblCandidatesForReadingListV2Response>(
-        `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/cbl-candidates`,
+        `/v2/readingLists/${encodeURIComponent(String(args.path.list_id))}/cblCandidates`,
         { params: compactQuery(args.query) },
       )
     },

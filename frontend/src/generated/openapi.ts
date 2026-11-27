@@ -2614,23 +2614,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/reading-lists/{list_id}/cbl-candidates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Documentation-only operation for reading-list CBL candidates (v2, #5713). */
-        get: operations["find_cbl_candidates_for_reading_list_v2_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v2/reading-lists/{list_id}/export": {
         parameters: {
             query?: never;
@@ -2928,6 +2911,23 @@ export interface paths {
             cookie?: never;
         };
         get: operations["reading_plan_sync_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/readingLists/{list_id}/cblCandidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for reading-list CBL candidates (v2, #5713). */
+        get: operations["find_cbl_candidates_for_reading_list_v2_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -16925,48 +16925,6 @@ export interface operations {
             };
         };
     };
-    find_cbl_candidates_for_reading_list_v2_documentation: {
-        parameters: {
-            query?: {
-                /** @description Maximum ranked candidates, 1-100 (default 50) */
-                limit?: number;
-            };
-            header?: never;
-            path: {
-                /** @description Owned custom CBL list identifier */
-                list_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Reading-list gaps and ranked CBL candidates */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CblReadingListCandidatesResponse"];
-                };
-            };
-            /** @description Custom CBL not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Query failed validation */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ValidationErrorResponse"];
-                };
-            };
-        };
-    };
     export_custom_cbl_documentation: {
         parameters: {
             query?: never;
@@ -17915,6 +17873,48 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    find_cbl_candidates_for_reading_list_v2_documentation: {
+        parameters: {
+            query?: {
+                /** @description Maximum ranked candidates, 1-100 (default 50) */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Owned custom CBL list identifier */
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reading-list gaps and ranked CBL candidates */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CblReadingListCandidatesResponse"];
+                };
+            };
+            /** @description Custom CBL not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Query failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
+                };
             };
         };
     };

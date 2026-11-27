@@ -443,12 +443,6 @@
         },
         {
             "method": "GET",
-            "path": "/api/v2/reading-lists/{list_id}/cbl-candidates",
-            "owning_issue": 5713,
-            "reason": "non-lowercamelcase-segment"
-        },
-        {
-            "method": "GET",
             "path": "/api/v2/reading-mode",
             "owning_issue": 4335,
             "reason": "non-lowercamelcase-segment"

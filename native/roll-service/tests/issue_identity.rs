@@ -1748,7 +1748,7 @@ async fn reading_list_candidates_other_user_returns_404() {
     )
     .await;
 
-    let (status, body) = get(&state, &token2, "/api/v2/reading-lists/920/cbl-candidates").await;
+    let (status, body) = get(&state, &token2, "/api/v2/readingLists/920/cblCandidates").await;
     assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
     assert_eq!(body["detail"], "Custom CBL 920 not found", "{body}");
 }
