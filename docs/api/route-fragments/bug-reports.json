@@ -31,7 +31,7 @@
       "bucket": "unversioned_operations",
       "method": "POST",
       "path": "/api/bug-reports/",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "src": "^/api/bug\\-reports/$",
       "owning_issue": 4852,
       "exclude_from_inventory": true
@@ -40,7 +40,7 @@
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/bug-reports/",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "src": "^/api/v1/bug\\-reports/$",
       "owning_issue": 4852,
       "exclude_from_inventory": true
