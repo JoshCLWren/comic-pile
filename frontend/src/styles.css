@@ -241,7 +241,7 @@ body {
 .result-reveal {
   padding: 1rem;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+  scrollbar-color: var(--theme-border) transparent;
 }
 
 .result-reveal::-webkit-scrollbar {
@@ -253,14 +253,14 @@ body {
 }
 
 .result-reveal::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--theme-border);
   border-radius: 3px;
 }
 
 #rating-value {
   font-size: 2.5rem;
   font-weight: 900;
-  text-shadow: 0 0 30px rgba(212, 137, 14, 0.4);
+  text-shadow: 0 0 30px color-mix(in srgb, var(--theme-comic-accent) 40%, transparent);
   transition: all 0.2s;
 }
 
@@ -282,26 +282,26 @@ body {
   left: 0;
   right: 0;
   z-index: 40;
-  background: var(--bg-darker);
-  border-top: 1px solid var(--glass-border);
+  background: var(--theme-bg-panel);
+  border-top: 1px solid var(--theme-border);
   padding-bottom: env(safe-area-inset-bottom);
 }
 
 .nav-item {
-  color: var(--text-muted);
+  color: var(--theme-text-muted);
 }
 
 .nav-item:hover {
-  color: var(--text-primary);
+  color: var(--theme-text-primary);
 }
 
 .nav-item.active {
-  color: var(--text-primary);
-  background: rgba(212, 137, 14, 0.12);
+  color: var(--theme-comic-accent);
+  background: color-mix(in srgb, var(--theme-comic-accent) 12%, transparent);
 }
 
 .nav-item.active .nav-label {
-  color: var(--text-primary);
+  color: var(--theme-comic-accent);
 }
 
 /* Semantic surface classes - replacing legacy glass-card vocabulary */
@@ -319,7 +319,7 @@ body {
 }
 
 .surface-modal {
-  background: rgba(17, 14, 10, 0.95);
+  background: var(--theme-bg-panel);
   border: 1px solid var(--theme-border);
   border-radius: 0.5rem;
   box-shadow:
@@ -350,7 +350,7 @@ body {
 .dice-state-idle {
   opacity: 0.95;
   filter: brightness(0.95);
-  box-shadow: 0 0 24px rgba(212, 137, 14, 0.15);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--die-light) 15%, transparent);
   transition: all 0.3s ease;
 }
 
@@ -364,7 +364,7 @@ body {
 .dice-state-rolled {
   opacity: 1;
   filter: brightness(1);
-  box-shadow: 0 0 40px rgba(212, 137, 14, 0.25);
+  box-shadow: 0 0 40px color-mix(in srgb, var(--die-light) 25%, transparent);
 }
 
 .dice-state-reroll {
@@ -379,8 +379,8 @@ body {
 }
 
 .pool-thread-selected {
-  border-color: rgba(212, 137, 14, 0.5);
-  box-shadow: 0 0 20px rgba(212, 137, 14, 0.2);
+  border-color: var(--theme-comic-accent);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--theme-comic-accent) 20%, transparent);
 }
 
 .text-glow {
