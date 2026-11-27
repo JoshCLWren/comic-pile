@@ -77,7 +77,7 @@ async fn run() -> Result<(bool, serde_json::Value), String> {
     let url = database_url().ok_or_else(|| {
         "set CBL_INGEST_DATABASE_URL (or RUST_ROLL_DATABASE_URL / DATABASE_URL)".to_string()
     })?;
-    let client = connect(&url).await?;
+    let client = connect(&url).await.map_err(|error| error.to_string())?;
     let synced_at = Utc::now();
     let protected: std::collections::BTreeSet<String> = failures
         .iter()

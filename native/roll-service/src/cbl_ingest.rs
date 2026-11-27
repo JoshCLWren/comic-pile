@@ -14,7 +14,7 @@
 use chrono::{DateTime, Utc};
 use native_tls::TlsConnector;
 use postgres_native_tls::MakeTlsConnector;
-use quick_xml::{escape::unescape, events::Event, Reader};
+use quick_xml::{escape::unescape, events::Event, Reader, XmlVersion};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{
@@ -289,7 +289,7 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
             "CBL source path must be non-empty and at most 1000 characters",
         ));
     }
-    let mut reader = Reader::from_ref(raw);
+    let mut reader = Reader::from_reader(raw);
     reader.config_mut().trim_text(true);
     let mut buffer = Vec::new();
     let mut root_seen = false;
@@ -436,11 +436,11 @@ fn attribute(element: &quick_xml::events::BytesStart<'_>, key: &[u8]) -> Result<
     for candidate in element.attributes() {
         let attribute =
             candidate.map_err(|error| IngestError::new(format!("invalid CBL attribute: {error}")))?;
-        if attribute.key.as_ref() != key {
+        if attribute.key.as_ref().as_bytes() != key {
             continue;
         }
         let value = attribute
-            .normalized_value()
+            .normalized_value(XmlVersion::Implicit1_0)
             .map_err(|error| IngestError::new(format!("invalid CBL attribute: {error}")))?;
         let value = value.trim();
         return Ok(if value.is_empty() {
@@ -701,7 +701,6 @@ pub async fn connect(database_url: &str) -> Result<Client, IngestError> {
 
 #[derive(Debug)]
 struct ExistingList {
-    id: i32,
     active: bool,
     content_hash: String,
 }
@@ -791,7 +790,6 @@ pub async fn sync_cbl_lists<C: GenericClient>(
                     (
                         row.get::<_, String>(1),
                         ExistingList {
-                            id: row.get::<_, i32>(0),
                             active: row.get::<_, bool>(2),
                             content_hash: row.get::<_, String>(3),
                         },
@@ -860,7 +858,6 @@ pub async fn sync_cbl_lists<C: GenericClient>(
         &repository,
         &revision_sha,
         synced_at,
-        repository_reconciled,
     )
     .await?;
     let list_ids = upsert_lists(client, source_id, &pending, &revision_sha, synced_at).await?;
@@ -941,7 +938,6 @@ async fn upsert_source<C: GenericClient>(
     repository: &str,
     revision: &str,
     synced_at: DateTime<Utc>,
-    repository_reconciled: bool,
 ) -> Result<i32, IngestError> {
     match source_id {
         Some(id) => {
@@ -954,7 +950,6 @@ async fn upsert_source<C: GenericClient>(
                 )
                 .await
                 .map_err(|error| IngestError::new(format!("cbl source update failed: {error}")))?;
-            let _ = repository_reconciled;
             Ok(id)
         }
         None => {
