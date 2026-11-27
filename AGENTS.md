@@ -63,15 +63,9 @@ factory claims and do not bundle unrelated API refactors.
 > after changing `vercel.json`, route fragments, or the inventory.
 > API version is not implementation language.
 
-<<<<<<< HEAD
 - Live v2 operations: 166 (166 native-rust + 0 python-fastapi).
 - Native ingress: `/api/native_roll.rs` (via `vercel.json`).
 - Full Python-handler surface: 21 operations (v1 21 + unversioned 0); v1 active 0 live Python / 0 migrated (shadowed by Rust); unversioned active 0 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
-=======
-- Live v2 operations: 157 (157 native-rust + 0 python-fastapi).
-- Native ingress: `/api/native_roll.rs` (via `vercel.json`).
-- Full Python-handler surface: 22 operations (v1 22 + unversioned 0); v1 active 0 live Python / 0 migrated (shadowed by Rust); unversioned active 0 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
->>>>>>> origin/main
 - Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404).
 - Full-surface inventory (v2 + v1 + unversioned + catch-all) and per-operation callers: see `docs/api/v2-route-inventory.json` `full_surface` (authoritative).
 - Full caller lists and ingress destinations: see `docs/api/v2-route-inventory.json` (authoritative).

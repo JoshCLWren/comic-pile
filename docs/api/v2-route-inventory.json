@@ -6,17 +6,10 @@
     "generated_by": "scripts/generate_route_burndown.mjs",
     "issue": 4739,
     "ingress_source": "vercel.json",
-<<<<<<< HEAD
     "total_live_operations": 166,
     "native_rust": 166,
     "python_fastapi": 0,
     "native_rust_status": 166,
-=======
-    "total_live_operations": 157,
-    "native_rust": 157,
-    "python_fastapi": 0,
-    "native_rust_status": 157,
->>>>>>> origin/main
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 0
@@ -2539,7 +2532,6 @@
     {
       "runtime": "native-rust",
       "status": "target",
-<<<<<<< HEAD
       "owning_issue": 5703,
       "consumers": [
         "frontend/src/services/api-threads.ts"
@@ -2566,83 +2558,6 @@
     {
       "runtime": "native-rust",
       "status": "target",
-=======
->>>>>>> origin/main
-      "owning_issue": 4684,
-      "consumers": [
-        "frontend/src/services/api-issues.ts"
-      ],
-      "method": "PUT",
-      "path": "/api/v2/threads/{thread_id}/issue-order",
-      "sql_budget": {
-        "application_statements": 8,
-        "transaction_control_statements": 2,
-        "total_statements": 10,
-        "grows_with_data": false,
-        "basis": "auth 1 + reader lock 1 + thread lock 1 + issues load 1 + constraints defer 1 + reseat positions 1 + recreate tracking 1 + graph_preflight 1 (+2 tx control); set-based",
-        "max_statements": 10,
-        "proof_reference": "native/roll-service/src/issue_mutation.rs",
-        "measurement_status": "pending-fixture"
-      },
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
-    },
-    {
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4684,
-      "consumers": [
-        "frontend/src/services/api-issues.ts"
-      ],
-      "method": "POST",
-      "path": "/api/v2/threads/{thread_id}/issues",
-      "sql_budget": {
-        "application_statements": 11,
-        "transaction_control_statements": 2,
-        "total_statements": 13,
-        "grows_with_data": true,
-        "basis": "auth 1 + reader lock 1 + thread lock 1 + existing issues load 1 + constraints defer 1 + (optional position reseat 1) + one issue insert 1 + recreate tracking 1 + graph_preflight 1 + audit event 1 + total count 1 (+2 tx control); grows with issue count",
-        "max_statements": 13,
-        "proof_reference": "native/roll-service/src/issue_mutation.rs",
-        "measurement_status": "pending-fixture"
-      },
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
-    },
-    {
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4841,
-      "consumers": [
-        "frontend/src/services/api-dependency-groups.ts"
-      ],
-      "method": "GET",
-      "path": "/api/v2/threads/{thread_id}/reading-order-group-memberships",
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
-    },
-    {
-      "runtime": "native-rust",
-      "status": "target",
-<<<<<<< HEAD
-      "owning_issue": 5715,
-      "consumers": [
-        "frontend/src/services/api-reading-orders.ts"
-      ],
-      "method": "GET",
-      "path": "/api/v2/threads/{thread_id}/readingOrders",
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
-    },
-    {
-      "runtime": "native-rust",
-      "status": "target",
-=======
->>>>>>> origin/main
       "owning_issue": 4839,
       "consumers": [
         "frontend/src/services/api-undo.ts"
@@ -2703,11 +2618,7 @@
       "ingress_source": "vercel.json",
       "catch_all_src": "/api(?:/.*)?",
       "catch_all_dest": "/api/native_roll.rs",
-<<<<<<< HEAD
       "v1_total": 21,
-=======
-      "v1_total": 22,
->>>>>>> origin/main
       "v1_shadowed_by_rust": 0,
       "v1_live_python": 0,
       "v1_orphaned": 0,
@@ -2715,11 +2626,7 @@
       "unversioned_shadowed_by_rust": 0,
       "unversioned_live_python": 0,
       "unversioned_orphaned": 0,
-<<<<<<< HEAD
       "total_python_surface": 21,
-=======
-      "total_python_surface": 22,
->>>>>>> origin/main
       "total_shadowed_by_rust": 0,
       "total_live_python": 0,
       "total_orphaned": 0
