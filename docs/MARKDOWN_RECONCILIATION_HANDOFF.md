@@ -87,7 +87,7 @@ Not executed locally: `uv`-driven pytest, Ruff, ty, `bash scripts/lint.sh` (it e
 Carried forward from the PR #5759 handoff; these are outside the documentation-only delivery boundary of #5757:
 
 - Core Reading List cycle writes return plain `409` while the builder expects structured `422`.
-- Roll offer/bootstrap evaluates canonical inputs even while the rollout setting is off.
+- ~~Roll offer/bootstrap evaluates canonical inputs even while the rollout setting is off.~~ Resolved under #3676: the activation setting is deleted and canonical eligibility is unconditional.
 - Native server sessions/pending state conflict with #4405's sessionless/browser-owned target.
 - A one-candidate pool shows Begin instead of Read Now; post-rate Roll does not auto-roll the next comic.
 - ~~`frontend/src/services/api-sessions.ts` still calls retired v1 session list/get paths.~~ Resolved in `docs/API.md` and verified against `frontend/src/services/api-sessions.ts`; recorded here only as corrected provenance.

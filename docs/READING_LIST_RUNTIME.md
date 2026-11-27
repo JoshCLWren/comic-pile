@@ -114,10 +114,11 @@ is not reachable in the canonical reader projection.
 
 ## Reading boundaries and plans
 
-`POST /api/v2/reading-boundaries` is the canonical bounded batch operation. With
-the rollout setting effective it projects the current evaluator result, including
-next Issue, live blockers, and editor targets. With the setting off it returns the
-legacy-compatible unavailable projection described above.
+`POST /api/v2/reading-boundaries` is the canonical bounded batch operation. It
+projects the current evaluator result for every requested Thread, including next
+Issue, live blockers, and editor targets. The legacy-compatible unavailable
+projection survives only in the residual `legacy` reader branch that deletion
+owners retire (#3677/#3678); it is not a selectable engine mode.
 
 `GET /api/v2/reading-boundaries/{thread_id}` and the v1 reading-boundary operations
 are retired. Their historical associations remain in storage but are not exposed
@@ -161,7 +162,7 @@ Database-backed Rust tests cover the runtime and fail with setup instructions wh
 - `native/roll-service/tests/thread_ordering_v1_http.rs` covers ordering, reader
   entries, and blocker explanations.
 - `native/roll-service/tests/reading_boundary_concurrency.rs` covers boundary
-  capability and the setting-off path.
+  capability under the canonical engine and the stored-flag negative control.
 - `native/roll-service/tests/continuity_plans_v1_http.rs` and
   `native/roll-service/tests/thread_issues_v1_http.rs` cover plan and manual-pick
   behavior.

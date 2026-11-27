@@ -116,9 +116,9 @@ issue read state, event count, full undo snapshot content, and live thread state
    provider artwork URLs, reader stats, group routes, and session-scoped last-read.
    Die fields are not in the current Bootstrap response; clients read them from
    `GET /api/v2/roll/die-state`.
-5. Canonical eligibility is loaded even when the rollout setting is off. The pool
-   takes the top-`die` eligible window first, then removes this browser's temporary
-   snoozes, with no backfill from deeper ranks.
+5. Canonical eligibility is loaded on every request. The pool takes the top-`die`
+   eligible window first, then removes this browser's temporary snoozes, with no
+   backfill from deeper ranks.
 6. The response projects `rollable`, nullable `last_read`, a single `pool_reason`,
    recovery blockers, tag rows, and the current session/pending state. Stored
    blocked/frontier flags are not the Roll authority.
