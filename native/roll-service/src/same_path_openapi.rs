@@ -38,7 +38,6 @@ use utoipa::OpenApi;
     crate::creators::list_creators_documentation,
     crate::creators::get_summaries_documentation,
     crate::catalog_series_mapping_preview::documentation,
-    crate::continuity_plans_project_preview::documentation,
     crate::issue_identity_adoption_preview::documentation,
     crate::issue_identity_cbl_reading_graph_preview::documentation,
     crate::issue_duplicate_reconciliation::documentation,
@@ -308,10 +307,6 @@ mod tests {
             (
                 "/api/v1/catalog/series-mappings/preview",
                 "preview_series_mapping_api_v1_catalog_series_mappings_preview_post",
-            ),
-            (
-                "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
-                "preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post",
             ),
             (
                 "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",

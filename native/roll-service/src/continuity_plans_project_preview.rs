@@ -1,9 +1,8 @@
-//! Same-path Rust cutover of
-//! `POST /api/v1/continuity-plans/{plan_id}/reading-orders/project-preview`.
+//! Canonical v2 preview for continuity-plan reading-order projection.
 //!
-//! Port of `app/services/reading_order_projection.py::build_projection_plan`
-//! plus `preview_to_response`. The preview is recomputed from persisted plan
-//! JSON on every call and never mutates the plan or reading order.
+//! `POST /api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection`
+//! (AIP-136 stateless custom method). The preview is recomputed from persisted
+//! plan JSON on every call and never mutates the plan or reading order.
 
 use crate::{
     auth::AuthenticatedUser,
@@ -244,8 +243,9 @@ fn flatten(
 
 #[utoipa::path(
     post,
-    path = "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
-    operation_id = "preview_plan_projection_api_v1_continuity_plans__plan_id__reading_orders_project_preview_post",
+    path = "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection",
+    operation_id = "continuity_plans_preview_reading_order_projection",
+    tag = "continuity-plans",
     request_body = ReadingOrderProjectPreviewRequest,
     params(("plan_id" = i64, Path, description = "Continuity plan id")),
     responses(
@@ -259,7 +259,7 @@ fn flatten(
 )]
 pub fn documentation() {}
 
-/// Mounted handler for `POST .../reading-orders/project-preview`.
+/// Mounted handler for `POST ...:previewReadingOrderProjection`.
 pub async fn preview_plan_projection_handler(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -449,9 +449,9 @@ mod tests {
     #[test]
     fn published_preview_schema_uses_distinct_names_and_wire_types() {
         let document =
-            serde_json::to_value(crate::same_path_openapi::same_path_openapi()).expect("OpenAPI");
+            serde_json::to_value(crate::openapi::canonical_openapi()).expect("OpenAPI");
         let operation = &document["paths"]
-            ["/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview"]["post"];
+            ["/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection"]["post"];
         assert_eq!(
             operation["requestBody"]["content"]["application/json"]["schema"]["$ref"],
             "#/components/schemas/ReadingOrderProjectPreviewRequest"
