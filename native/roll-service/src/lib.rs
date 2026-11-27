@@ -1197,14 +1197,6 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(issue_read::get_issue_dependencies),
         )
         .route(
-            "/api/v1/threads/{thread_id}/issue-dependencies",
-            get(issue_read::get_thread_issue_dependencies),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}/dependencies",
-            get(dependencies::get_thread_dependencies),
-        )
-        .route(
             "/api/v2/roll/dismiss-pending",
             post(dismiss_pending::dismiss_pending),
         )
@@ -1608,6 +1600,68 @@ mod tests {
                 String::from_utf8_lossy(&bytes),
                 r#"{"detail":"Not Found"}"#,
                 "{method} {uri}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn retired_v1_dependency_diagnosis_routes_return_404_in_inner_router() {
+        // #5709: dependency/blocking/connection diagnosis is v2-only. The
+        // retired aliases must not fall through to a live handler or to the
+        // generic `{thread_id}` POST action dispatcher.
+        let config = Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
+            _ => None,
+        })
+        .unwrap();
+        let state = Arc::new(AppState::new(config).unwrap());
+        for (method, uri) in [
+            ("GET", "/api/v1/threads/42/dependencies"),
+            ("GET", "/api/v1/threads/42/issue-dependencies"),
+            ("GET", "/api/v1/threads/42/connected"),
+            ("POST", "/api/v1/threads:getBlockingInfo"),
+            ("POST", "/api/v1/threads/42:getBlockingInfo"),
+        ] {
+            let response = router(Arc::clone(&state))
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{method} {uri}");
+            let bytes = to_bytes(response.into_body(), 1024).await.unwrap();
+            assert_eq!(
+                String::from_utf8_lossy(&bytes),
+                r#"{"detail":"Not Found"}"#,
+                "{method} {uri}"
+            );
+        }
+        for (method, uri) in [
+            ("GET", "/api/v2/threads/42/dependencies"),
+            ("GET", "/api/v2/threads/42/issueDependencies"),
+            ("GET", "/api/v2/threads/42/eligibility"),
+            ("POST", "/api/v2/threads:explainEligibility"),
+            ("GET", "/api/v2/threads/42/connections"),
+        ] {
+            let response = router(Arc::clone(&state))
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_ne!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "{method} {uri} must reach its handler, not the 404 fallback"
             );
         }
     }

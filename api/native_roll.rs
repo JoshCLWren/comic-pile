@@ -328,11 +328,29 @@ fn app() -> Router {
         .route("/api/v2/threads", get(native_dispatch))
         .route("/api/v1/threads/{thread_id}", get(native_dispatch))
         .route("/api/v1/threads/{thread_id}", post(native_dispatch))
-        .route("/api/v1/threads:getBlockingInfo", post(native_dispatch))
+        // #5709: canonical dependency/blocking diagnosis is v2-only. Register
+        // the new resources in this Vercel entry table or the fallback returns
+        // a Rust JSON 404 before the dispatched handler runs. The retired v1
+        // aliases terminate at that same fallback (or an explicit 404 for the
+        // batch alias, which would otherwise be captured by `{thread_id}`).
         .route(
-            "/api/v1/threads/{thread_id}/connected",
+            "/api/v2/threads/{thread_id}/dependencies",
             get(native_dispatch),
         )
+        .route(
+            "/api/v2/threads/{thread_id}/issueDependencies",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/threads/{thread_id}/eligibility",
+            get(native_dispatch),
+        )
+        .route("/api/v2/threads:explainEligibility", post(native_dispatch))
+        .route(
+            "/api/v2/threads/{thread_id}/connections",
+            get(native_dispatch),
+        )
+        .route("/api/v1/threads:getBlockingInfo", post(native_not_found))
         .route(
             "/api/v1/threads/{thread_id}/dependency-order-check",
             get(native_dispatch),
@@ -584,10 +602,6 @@ fn app() -> Router {
             "/api/v2/issues/{issue_id}/dependencies",
             get(native_dispatch),
         )
-        .route(
-            "/api/v1/threads/{thread_id}/dependencies",
-            get(native_dispatch),
-        )
         .route("/api/v1/continuity-rules/", get(native_dispatch))
         .route("/api/v1/continuity-rules/", post(native_dispatch))
         .route("/api/v1/continuity-rules/{rule_id}", get(native_dispatch))
@@ -645,10 +659,6 @@ fn app() -> Router {
         .route(
             "/api/v1/releases/{release_id}/retract",
             post(native_dispatch),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}/issue-dependencies",
-            get(native_dispatch),
         )
         .route("/api/v2/tags", get(native_dispatch))
         .route("/api/v2/tags", post(native_dispatch))
