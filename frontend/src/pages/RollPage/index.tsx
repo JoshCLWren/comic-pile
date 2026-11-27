@@ -43,7 +43,7 @@ import { LastReadStrip } from './components/LastReadStrip'
 import { useRollLastRead } from '../../hooks/useRollLastRead'
 import { useSnapshots, useUndo } from '../../hooks/useUndo'
 import { useToast } from '../../contexts/useToast'
-import { invalidateAfterUndo, invalidateDirectReadIssueSelection } from '../../query/cacheEffects'
+import { invalidateAfterUndo, invalidateDirectReadIssueSelection, invalidateRollBootstrapOnNavigation } from '../../query/cacheEffects'
 import { resolveRollSelectedDie } from './selectedDie'
 import { ThreadPool } from './components/ThreadPool'
 import { resolveSnoozedSeriesCovers } from './resolveSnoozedSeriesCovers'
@@ -122,10 +122,11 @@ export default function RollPage() {
 
   const handleBackToQueue = useCallback(() => {
     // Leaving for the queue is navigation, not resolution: the browser-owned
-    // selection is restored on return without a server round trip or an eager
-    // refresh of the scoped resources (#4350).
+    // selection is restored on return. Marking the local view stale forces the
+    // scoped inputs to refresh on re-entry without an eager request now.
+    void invalidateRollBootstrapOnNavigation(queryClient)
     navigate('/queue')
-  }, [navigate])
+  }, [navigate, queryClient])
 
   const setDieMutation = useSetDie()
   const resetDiceMutation = useResetDice()

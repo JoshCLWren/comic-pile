@@ -82,6 +82,7 @@ export function useRollActions({
   rollPool,
   navigate,
   mutations,
+  refetchBootstrap,
   enterRatingView,
   onSnoozeRefreshFailed,
   pendingThreadId,
@@ -226,15 +227,21 @@ export function useRollActions({
   }
 
   async function recoverPendingRollConflict() {
-    // The exact browser selection is authoritative after a 409; there is no
-    // aggregate refresh to issue. Scoped queries are already invalidated by the
-    // failed offer's mutation lifecycle.
-    const pendingId = Number(pendingThreadId ?? bootstrap?.pending_thread_id ?? 0)
+    // Refresh scoped inputs only; the browser-owned selection stays the source
+    // of truth. The retained refetch seam returns the already-composed view.
+    const latest = await refetchBootstrap?.()
+    const pendingId = Number(
+      pendingThreadId ?? latest?.pending_thread_id ?? bootstrap?.pending_thread_id ?? 0,
+    )
     if (!pendingId) return false
-    const pendingMetadata = rollPool.find((thread) => thread.id === pendingId)
+    const pendingMetadata =
+      (latest?.active_thread && latest.active_thread.id === pendingId
+        ? latest.active_thread
+        : latest?.roll_pool?.find((thread) => thread.id === pendingId))
+      ?? rollPool.find((thread) => thread.id === pendingId)
     enterRatingView(
       pendingId,
-      bootstrap?.last_rolled_result ?? null,
+      latest?.last_rolled_result ?? bootstrap?.last_rolled_result ?? null,
       pendingMetadata,
     )
     return true

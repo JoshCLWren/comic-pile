@@ -31,7 +31,11 @@ const bootstrapApi = vi.hoisted(() => ({ get: vi.fn() }))
 vi.mock('../services/api-migration', () => ({ migrationApi: api.migrationApi }))
 vi.mock('../services/api-bug-reports', () => ({ bugReportsApi: api.bugReportsApi }))
 vi.mock('../services/api-threads', () => ({ threadsApi: api.threadsApi }))
-vi.mock('../services/api-roll', () => ({ rollApi: api.rollApi }))
+vi.mock('../services/api-roll', () => ({
+  rollApi: api.rollApi,
+  readRollSnoozes: () => [],
+  writeRollSnoozes: () => undefined,
+}))
 vi.mock('../services/api-queue', () => ({ queueApi: api.queueApi }))
 vi.mock('../services/api-undo', () => ({ undoApi: api.undoApi }))
 vi.mock('../services/api-sessions', () => ({ sessionApi: api.sessionApi }))
