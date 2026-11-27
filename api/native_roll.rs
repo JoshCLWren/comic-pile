@@ -1688,7 +1688,7 @@ mod tests {
                         .method(method)
                         .uri("/api/v2/threads/42")
                         .header("content-type", "application/json")
-                        .body(Body::from("{"))
+                        .body(Body::from("{}"))
                         .unwrap(),
                 )
                 .await
