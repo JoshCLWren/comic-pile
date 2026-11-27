@@ -44,7 +44,7 @@ vi.mock('../services/api-dependencies', async (importOriginal) => {
   return {
     ...actual,
     dependenciesApi: {
-      explainEligibility: vi.fn().mockResolvedValue({ threads: { 1: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] } } }),
+      explainEligibility: vi.fn().mockResolvedValue({ threads: { 1: { thread_id: 1, eligible: true, next_issue_id: 1, is_blocked: false, blocking_reasons: [], blocking_dependencies: [] } } }),
       getIssueDependencies: vi.fn().mockResolvedValue({ incoming: [], outgoing: [] }),
       getConnectedThreads: vi.fn().mockResolvedValue({ connected_threads: [] }),
     },
@@ -109,7 +109,7 @@ beforeEach(() => {
   // SAFETY: the bulk response matches the endpoint contract; issues without stored credits are omitted
   mockedIssuesApiListCreators.mockResolvedValue({ thread_id: 1, issues: [] })
   vi.mocked(dependenciesApi.explainEligibility).mockReset()
-  vi.mocked(dependenciesApi.explainEligibility).mockResolvedValue({ threads: { 1: { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] } } })
+  vi.mocked(dependenciesApi.explainEligibility).mockResolvedValue({ threads: { 1: { thread_id: 1, eligible: true, next_issue_id: 1, is_blocked: false, blocking_reasons: [], blocking_dependencies: [] } } })
   mockedConnectedThreads.mockReset()
   mockedConnectedThreads.mockResolvedValue({ thread_id: 1, connected_threads: [] })
   mockedThreadIssuesTags.mockReset()
@@ -935,6 +935,9 @@ it('falls back to the legacy availability explanation when canonical boundaries 
   vi.mocked(dependenciesApi.explainEligibility).mockResolvedValue({
     threads: {
       1: {
+        thread_id: 1,
+        eligible: false,
+        next_issue_id: null,
         is_blocked: true,
         blocking_reasons: ['Hold in Ultimate: waiting on One Year In #1'],
         blocking_dependencies: [
