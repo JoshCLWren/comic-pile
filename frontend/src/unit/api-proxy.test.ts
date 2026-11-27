@@ -38,7 +38,7 @@ describe('development API routing', () => {
       const base = await listen(gateway)
       const operations = [
         { path: '/api/v2/auth/login', method: 'POST' },
-        { path: '/api/v1/catalog/series-mappings/preview', method: 'POST' },
+        { path: '/api/v2/seriesMappings:preview', method: 'POST' },
         { path: '/api/v1/traffic-metrics', method: 'GET' },
         { path: '/api/not-a-route', method: 'GET' },
       ]
