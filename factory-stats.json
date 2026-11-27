@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-27T07:00:50+00:00",
+  "generated_at": "2026-11-27T07:02:55.679800+00:00",
   "models": [
     {
       "health": {
@@ -2558,17 +2558,16 @@
         "7d": {
           "completed": 1,
           "delivered": 1,
-          "failed": 49,
+          "failed": 47,
           "failures": {
             "agent_timeout": 9,
             "control_plane_failure": 4,
-            "provider_failure": 1,
             "provider_throttle": 2,
             "unknown_failure": 12,
-            "work_failure": 21
+            "work_failure": 20
           },
           "idle": 24,
-          "runs": 74
+          "runs": 72
         }
       }
     },
@@ -2649,14 +2648,14 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 9,
+          "failed": 8,
           "failures": {
-            "agent_timeout": 5,
+            "agent_timeout": 4,
             "control_plane_failure": 2,
             "provider_throttle": 2
           },
           "idle": 0,
-          "runs": 9
+          "runs": 8
         }
       }
     },
@@ -2941,10 +2940,10 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 11,
+          "failed": 10,
           "failures": {
             "control_plane_failure": 2,
-            "unknown_failure": 3,
+            "unknown_failure": 2,
             "work_failure": 6
           },
           "idle": 44,
@@ -2958,7 +2957,7 @@
               "runs": 1
             }
           },
-          "runs": 55
+          "runs": 54
         }
       }
     },
@@ -3043,8 +3042,8 @@
             "unknown_failure": 4,
             "work_failure": 14
           },
-          "idle": 19,
-          "runs": 40
+          "idle": 17,
+          "runs": 38
         }
       }
     },
@@ -3105,8 +3104,8 @@
             "provider_throttle": 1,
             "work_failure": 11
           },
-          "idle": 43,
-          "runs": 59
+          "idle": 40,
+          "runs": 56
         }
       }
     },
@@ -3140,11 +3139,11 @@
         "7d": {
           "completed": 7,
           "delivered": 7,
-          "failed": 61,
+          "failed": 60,
           "failures": {
             "control_plane_failure": 14,
             "provider_throttle": 2,
-            "work_failure": 45
+            "work_failure": 44
           },
           "idle": 17,
           "kinds": {
@@ -3177,7 +3176,7 @@
               "runs": 1
             }
           },
-          "runs": 85
+          "runs": 84
         }
       }
     },
@@ -3355,14 +3354,14 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 15,
+          "failed": 14,
           "failures": {
             "agent_timeout": 1,
             "control_plane_failure": 1,
-            "work_failure": 13
+            "work_failure": 12
           },
           "idle": 9,
-          "runs": 24
+          "runs": 23
         }
       }
     },
@@ -3413,14 +3412,14 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 13,
+          "failed": 10,
           "failures": {
-            "agent_timeout": 9,
+            "agent_timeout": 7,
             "control_plane_failure": 1,
-            "work_failure": 3
+            "work_failure": 2
           },
           "idle": 2,
-          "runs": 15
+          "runs": 12
         }
       }
     },
@@ -4253,7 +4252,7 @@
     },
     {
       "health": {
-        "cooldown_until": "2026-11-27T06:06:19+00:00",
+        "cooldown_until": "2026-11-27T06:42:24+00:00",
         "last_outcome": "provider_throttle",
         "status": "cooling"
       },
@@ -4593,16 +4592,16 @@
           "runs": 0
         },
         "7d": {
-          "completed": 8,
+          "completed": 5,
           "delivered": 4,
-          "failed": 19,
+          "failed": 18,
           "failures": {
             "control_plane_failure": 5,
             "provider_quota": 7,
-            "work_failure": 7
+            "work_failure": 6
           },
           "idle": 1,
-          "runs": 28
+          "runs": 24
         }
       }
     },
@@ -5267,8 +5266,8 @@
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 2,
-          "delivered": 1,
+          "completed": 0,
+          "delivered": 0,
           "failed": 1,
           "failures": {
             "control_plane_failure": 1
@@ -5276,25 +5275,17 @@
           "idle": 0,
           "kinds": {
             "review": {
-              "completed": 1,
+              "completed": 0,
               "delivered": 0,
               "failed": 1,
               "failures": {
                 "control_plane_failure": 1
               },
               "idle": 0,
-              "runs": 2
-            },
-            "review-findings": {
-              "completed": 1,
-              "delivered": 1,
-              "failed": 0,
-              "failures": {},
-              "idle": 0,
               "runs": 1
             }
           },
-          "runs": 3
+          "runs": 1
         },
         "7d": {
           "completed": 19,
@@ -5355,38 +5346,38 @@
     {
       "health": {
         "cooldown_until": null,
-        "last_outcome": "success",
+        "last_outcome": "no_work",
         "status": "healthy"
       },
       "kept_hot": {
-        "successes": 356,
-        "trials": 476
+        "successes": 366,
+        "trials": 489
       },
       "model": "hy4-flash-free",
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 226,
-          "delivered": 117,
-          "failed": 108,
+          "completed": 229,
+          "delivered": 118,
+          "failed": 110,
           "failures": {
             "control_plane_failure": 53,
             "model_policy_violation": 2,
             "provider_throttle": 1,
-            "work_failure": 52
+            "work_failure": 54
           },
-          "idle": 21,
+          "idle": 24,
           "kinds": {
             "implement": {
-              "completed": 45,
-              "delivered": 45,
+              "completed": 47,
+              "delivered": 47,
               "failed": 4,
               "failures": {
                 "control_plane_failure": 1,
                 "work_failure": 3
               },
               "idle": 0,
-              "runs": 49
+              "runs": 51
             },
             "merge-conflict": {
               "completed": 12,
@@ -5395,32 +5386,32 @@
               "failures": {
                 "work_failure": 6
               },
-              "idle": 10,
-              "runs": 28
+              "idle": 13,
+              "runs": 31
             },
             "review": {
-              "completed": 117,
+              "completed": 119,
               "delivered": 11,
-              "failed": 90,
+              "failed": 93,
               "failures": {
                 "control_plane_failure": 51,
                 "model_policy_violation": 2,
-                "work_failure": 37
+                "work_failure": 40
               },
               "idle": 1,
-              "runs": 208
+              "runs": 213
             },
             "review-findings": {
-              "completed": 51,
-              "delivered": 49,
-              "failed": 7,
+              "completed": 50,
+              "delivered": 48,
+              "failed": 6,
               "failures": {
                 "control_plane_failure": 1,
                 "provider_throttle": 1,
-                "work_failure": 5
+                "work_failure": 4
               },
               "idle": 10,
-              "runs": 68
+              "runs": 66
             },
             "split": {
               "completed": 1,
@@ -5433,60 +5424,60 @@
               "runs": 2
             }
           },
-          "runs": 355
+          "runs": 363
         },
         "7d": {
-          "completed": 356,
-          "delivered": 181,
-          "failed": 185,
+          "completed": 366,
+          "delivered": 188,
+          "failed": 188,
           "failures": {
             "control_plane_failure": 65,
             "model_policy_violation": 2,
             "provider_failure": 3,
             "provider_throttle": 1,
             "unknown_failure": 2,
-            "work_failure": 112
+            "work_failure": 115
           },
-          "idle": 39,
+          "idle": 43,
           "kinds": {
             "implement": {
-              "completed": 51,
-              "delivered": 51,
+              "completed": 53,
+              "delivered": 53,
               "failed": 4,
               "failures": {
                 "control_plane_failure": 1,
                 "work_failure": 3
               },
               "idle": 0,
-              "runs": 55
+              "runs": 57
             },
             "merge-conflict": {
-              "completed": 18,
-              "delivered": 18,
+              "completed": 21,
+              "delivered": 21,
               "failed": 7,
               "failures": {
                 "work_failure": 7
               },
-              "idle": 20,
-              "runs": 45
+              "idle": 24,
+              "runs": 52
             },
             "review": {
-              "completed": 203,
-              "delivered": 31,
-              "failed": 122,
+              "completed": 207,
+              "delivered": 32,
+              "failed": 125,
               "failures": {
                 "control_plane_failure": 55,
                 "model_policy_violation": 2,
                 "provider_failure": 2,
                 "unknown_failure": 1,
-                "work_failure": 62
+                "work_failure": 65
               },
               "idle": 1,
-              "runs": 326
+              "runs": 333
             },
             "review-findings": {
-              "completed": 80,
-              "delivered": 78,
+              "completed": 81,
+              "delivered": 79,
               "failed": 9,
               "failures": {
                 "control_plane_failure": 1,
@@ -5494,7 +5485,7 @@
                 "work_failure": 7
               },
               "idle": 15,
-              "runs": 104
+              "runs": 105
             },
             "split": {
               "completed": 1,
@@ -5507,14 +5498,14 @@
               "runs": 2
             }
           },
-          "runs": 580
+          "runs": 597
         }
       }
     },
     {
       "health": {
         "cooldown_until": null,
-        "last_outcome": "success",
+        "last_outcome": "work_failure",
         "status": "healthy"
       },
       "model": "iceman-contributor-free",
@@ -5523,12 +5514,12 @@
         "24h": {
           "completed": 18,
           "delivered": 16,
-          "failed": 24,
+          "failed": 25,
           "failures": {
             "control_plane_failure": 3,
             "model_policy_violation": 1,
             "provider_failure": 1,
-            "work_failure": 19
+            "work_failure": 20
           },
           "idle": 0,
           "kinds": {
@@ -5545,12 +5536,12 @@
             "merge-conflict": {
               "completed": 5,
               "delivered": 5,
-              "failed": 4,
+              "failed": 5,
               "failures": {
-                "work_failure": 4
+                "work_failure": 5
               },
               "idle": 0,
-              "runs": 9
+              "runs": 10
             },
             "review": {
               "completed": 4,
@@ -5577,19 +5568,19 @@
               "runs": 7
             }
           },
-          "runs": 42
+          "runs": 43
         },
         "7d": {
           "completed": 75,
           "delivered": 72,
-          "failed": 172,
+          "failed": 173,
           "failures": {
             "control_plane_failure": 31,
             "model_policy_violation": 2,
             "provider_failure": 7,
             "provider_quota": 1,
             "unknown_failure": 2,
-            "work_failure": 129
+            "work_failure": 130
           },
           "idle": 64,
           "kinds": {
@@ -5606,12 +5597,12 @@
             "merge-conflict": {
               "completed": 7,
               "delivered": 7,
-              "failed": 10,
+              "failed": 11,
               "failures": {
-                "work_failure": 10
+                "work_failure": 11
               },
               "idle": 2,
-              "runs": 19
+              "runs": 20
             },
             "review": {
               "completed": 9,
@@ -5640,7 +5631,7 @@
               "runs": 15
             }
           },
-          "runs": 311
+          "runs": 312
         }
       }
     },
@@ -5664,14 +5655,13 @@
         "7d": {
           "completed": 0,
           "delivered": 0,
-          "failed": 11,
+          "failed": 8,
           "failures": {
             "control_plane_failure": 1,
-            "provider_failure": 1,
-            "work_failure": 9
+            "work_failure": 7
           },
           "idle": 3,
-          "runs": 14
+          "runs": 11
         }
       }
     },
@@ -6003,13 +5993,13 @@
         "7d": {
           "completed": 3,
           "delivered": 3,
-          "failed": 17,
+          "failed": 16,
           "failures": {
-            "control_plane_failure": 4,
+            "control_plane_failure": 3,
             "work_failure": 13
           },
           "idle": 6,
-          "runs": 26
+          "runs": 25
         }
       }
     },
@@ -23681,9 +23671,9 @@
         "7d": {
           "completed": 70,
           "delivered": 68,
-          "failed": 510,
-          "idle": 229,
-          "runs": 809
+          "failed": 501,
+          "idle": 224,
+          "runs": 795
         }
       }
     },
@@ -23710,18 +23700,18 @@
       "source": "opencode-free",
       "windows": {
         "24h": {
-          "completed": 251,
+          "completed": 252,
           "delivered": 139,
-          "failed": 154,
-          "idle": 21,
-          "runs": 426
+          "failed": 157,
+          "idle": 24,
+          "runs": 433
         },
         "7d": {
-          "completed": 512,
-          "delivered": 313,
-          "failed": 579,
-          "idle": 138,
-          "runs": 1229
+          "completed": 519,
+          "delivered": 320,
+          "failed": 578,
+          "idle": 142,
+          "runs": 1239
         }
       }
     },
@@ -23845,9 +23835,9 @@
     "24h": "24 hours",
     "7d": "7 days"
   },
-  "counts_generated_at": "2026-11-27T06:06:56.998808+00:00",
+  "counts_generated_at": "2026-11-27T07:02:55.679800+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-27T07:00:51Z",
+    "generated_at": "2026-11-27T07:02:56Z",
     "sources": {
       "nvidia": [
         "google/diffusiongemma-26b-a4b-it",
@@ -23869,8 +23859,8 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-27T07:00:52.038931+00:00",
-    "days_elapsed": 26.292,
+    "checked_at": "2026-11-27T07:02:56.844689+00:00",
+    "days_elapsed": 26.294,
     "days_in_month": 30.0,
     "days_left": 3.71,
     "in_use": true,
@@ -23888,21 +23878,21 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 53792948,
-        "organization": 53792948,
+        "database": 53823287,
+        "organization": 53823287,
         "owner_target": 50000000,
-        "projected_database": 61379448,
-        "projected_organization": 61379448,
+        "projected_database": 61409394,
+        "projected_organization": 61409394,
         "projected_share": 0.1228,
         "share_used": 0.1076
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 205152,
-        "organization": 205152,
+        "database": 205215,
+        "organization": 205215,
         "owner_target": 1000000,
-        "projected_database": 234085,
-        "projected_organization": 234085,
+        "projected_database": 234139,
+        "projected_organization": 234139,
         "projected_share": 0.0234,
         "share_used": 0.0205
       },
@@ -23928,7 +23918,7 @@
     "status": "warn"
   },
   "schema": {
-    "checked_at": "2026-11-27T07:00:55+00:00",
+    "checked_at": "2026-11-27T07:02:59+00:00",
     "code_version": 6,
     "last_upgrade": {
       "at": "2026-11-25T18:11:07+00:00",
@@ -24106,7 +24096,7 @@
     "stored_version": 6
   },
   "crashes": {
-    "generated_at": "2026-11-27T07:00:55Z",
+    "generated_at": "2026-11-27T07:02:59Z",
     "groups": [
       {
         "count": 2,
@@ -24231,7 +24221,7 @@
   },
   "ready": {
     "cycles": [],
-    "generated_at": "2026-11-27T06:59:28+00:00",
+    "generated_at": "2026-11-27T07:01:42+00:00",
     "items": [
       {
         "action": "review",
@@ -24250,61 +24240,13 @@
         "stage": "factory:review",
         "target": "pr:5913",
         "title": "read now on roll screen"
-      },
-      {
-        "action": "merge-conflict",
-        "lane": 3,
-        "priority": 0,
-        "rank": 3,
-        "stage": "factory:review",
-        "target": "pr:5887",
-        "title": "V2 API 05: Thread duplicate check, make it a scoped custom method"
       }
     ]
   },
   "gh_usage": {
-    "generated_at": "2026-11-27T07:00:57Z",
+    "generated_at": "2026-11-27T07:03:01Z",
     "jobs": {
       "dispatch": [
-        {
-          "at": 1795761208,
-          "buckets": {
-            "reader": 30,
-            "workflow": 10
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 4362,
-            "reset": 1795763686
-          },
-          "cache_hits": 3,
-          "github": 40,
-          "label": "dispatch pr:5908",
-          "paginated": 5,
-          "top": [
-            [
-              "api GET repos/R/issues/N",
-              16
-            ],
-            [
-              "api GET repos/R/issues",
-              4
-            ],
-            [
-              "gh pr checks",
-              4
-            ],
-            [
-              "api GET repos/R/pulls/N",
-              3
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ]
-          ],
-          "writes": 2
-        },
         {
           "at": 1795761340,
           "buckets": {
@@ -24733,48 +24675,48 @@
             ]
           ],
           "writes": 12
-        }
-      ],
-      "merge": [
+        },
         {
-          "at": 1795760488,
+          "at": 1795762904,
           "buckets": {
-            "reader": 38,
-            "workflow": 10
+            "reader": 76,
+            "workflow": 27
           },
           "budget": {
             "limit": 5000,
-            "remaining": 4780,
+            "remaining": 3464,
             "reset": 1795763686
           },
           "cache_hits": 0,
-          "github": 48,
-          "label": "merge drain",
-          "paginated": 20,
+          "github": 103,
+          "label": "dispatch roster",
+          "paginated": 15,
           "top": [
             [
-              "api GET repos/R/issues/N/comments paginate",
-              14
-            ],
-            [
-              "gh pr list",
-              3
-            ],
-            [
-              "api GET repos/R/pulls paginate",
-              3
+              "api GET repos/R/issues/N",
+              20
             ],
             [
               "api GET repos/R/issues",
-              2
+              15
             ],
             [
-              "gh pr view",
-              2
+              "api GET repos/R/pulls/N",
+              12
+            ],
+            [
+              "api GET rate_limit",
+              7
+            ],
+            [
+              "gh pr checks",
+              7
             ]
           ],
-          "writes": 4
-        },
+          "writes": 10
+        }
+      ],
+      "merge": [
         {
           "at": 1795760623,
           "buckets": {
@@ -25203,6 +25145,45 @@
             ]
           ],
           "writes": 4
+        },
+        {
+          "at": 1795762921,
+          "buckets": {
+            "reader": 37,
+            "workflow": 20
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 4567,
+            "reset": 1795764267
+          },
+          "cache_hits": 0,
+          "github": 57,
+          "label": "merge drain",
+          "paginated": 19,
+          "top": [
+            [
+              "api GET repos/R/issues/N/comments paginate",
+              14
+            ],
+            [
+              "api POST repos/R/actions/runs/N/approve",
+              10
+            ],
+            [
+              "gh pr list",
+              3
+            ],
+            [
+              "api GET repos/R/issues",
+              2
+            ],
+            [
+              "gh pr view",
+              2
+            ]
+          ],
+          "writes": 14
         }
       ]
     }
