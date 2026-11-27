@@ -1,15 +1,17 @@
-//! Same-path Rust cutover for the browser-called dependency-group routes
-//! (#4841, parent #4335).
+//! Reading-order group lifecycle (#4841 same-path cutover; #5710 v2 CRUD).
 //!
-//! Preserves the Python `app/api/dependency_group.py` wire contract at the same
-//! HTTP methods and exact paths:
+//! The collection is served only by the canonical v2 resource, whose Get folds
+//! the enriched detail view into the single group read:
 //!
-//! * `GET /api/v1/reading-order-groups/` (group CRUD stays on v1, #5710)
-//! * `POST /api/v1/reading-order-groups/`
-//! * `GET /api/v1/reading-order-groups/{group_id}`
-//! * `GET /api/v1/reading-order-groups/{group_id}/detail`
-//! * `PATCH /api/v1/reading-order-groups/{group_id}`
-//! * `DELETE /api/v1/reading-order-groups/{group_id}`
+//! * `GET /api/v2/readingOrderGroups`
+//! * `POST /api/v2/readingOrderGroups`
+//! * `GET /api/v2/readingOrderGroups/{group_id}`
+//! * `PATCH /api/v2/readingOrderGroups/{group_id}`
+//! * `DELETE /api/v2/readingOrderGroups/{group_id}`
+//!
+//! The retained same-path order operation and the six membership operations
+//! remain on their established paths:
+//!
 //! * `PUT /api/v1/reading-order-groups/{group_id}/order`
 //!
 //! The six membership operations moved to their v2-only resources in #5711:
@@ -1639,15 +1641,72 @@ pub async fn list_crossover_plans(
 }
 
 // ---------------------------------------------------------------------------
+// v2 collection CRUD (#5710).
+//
+// Thin delegates over the same owner-scoped domain functions the browser has
+// always exercised: only the public wire path changes. Validation, conflict
+// handling, stable ids, history and error semantics stay identical. Canonical
+// Get folds the enriched detail view into the single resource read so v2 has
+// no `/detail` action path.
+// ---------------------------------------------------------------------------
+
+/// `GET /api/v2/readingOrderGroups`
+pub async fn list_groups_v2(
+    state: State<Arc<AppState>>,
+    user: AuthenticatedUser,
+) -> Result<Json<Vec<DependencyGroupResponse>>, ApiError> {
+    list_groups(state, user).await
+}
+
+/// `POST /api/v2/readingOrderGroups`
+pub async fn create_group_v2(
+    state: State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    request: Result<Json<DependencyGroupCreateRequest>, JsonRejection>,
+) -> Result<(StatusCode, Json<DependencyGroupResponse>), ApiError> {
+    create_group(state, user, request).await
+}
+
+/// `GET /api/v2/readingOrderGroups/{group_id}`
+///
+/// The enriched detail view is the canonical Get representation.
+pub async fn get_group_v2(
+    state: State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    group_id: Result<Path<String>, PathRejection>,
+) -> Result<Json<DependencyGroupDetailResponse>, ApiError> {
+    get_group_detail(state, user, group_id).await
+}
+
+/// `PATCH /api/v2/readingOrderGroups/{group_id}`
+pub async fn update_group_v2(
+    state: State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    group_id: Result<Path<String>, PathRejection>,
+    request: Result<Json<DependencyGroupUpdateRequest>, JsonRejection>,
+) -> Result<(StatusCode, Json<DependencyGroupResponse>), ApiError> {
+    update_group(state, user, group_id, request).await
+}
+
+/// `DELETE /api/v2/readingOrderGroups/{group_id}`
+pub async fn delete_group_v2(
+    state: State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    group_id: Result<Path<String>, PathRejection>,
+) -> Result<StatusCode, ApiError> {
+    delete_group(state, user, group_id).await
+}
+
+// ---------------------------------------------------------------------------
 // OpenAPI documentation
 // ---------------------------------------------------------------------------
 
-/// Documentation-only operation for listing reading-order groups.
+/// Documentation-only operation for listing v2 reading-order groups.
 #[utoipa::path(
     get,
-    path = "/api/v1/reading-order-groups/",
+    path = "/api/v2/readingOrderGroups",
     tag = "reading-order-groups",
-    operation_id = "dependency_groups_list",
+    operation_id = "reading_order_groups_list",
     responses(
         (status = 200, description = "Owned groups with memberships", body = Vec<DependencyGroupResponse>),
         (status = 401, description = "Not authenticated"),
@@ -1656,14 +1715,14 @@ pub async fn list_crossover_plans(
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn list_groups_documentation() {}
+pub fn list_groups_v2_documentation() {}
 
-/// Documentation-only operation for creating a reading-order group.
+/// Documentation-only operation for creating a v2 reading-order group.
 #[utoipa::path(
     post,
-    path = "/api/v1/reading-order-groups/",
+    path = "/api/v2/readingOrderGroups",
     tag = "reading-order-groups",
-    operation_id = "dependency_groups_create",
+    operation_id = "reading_order_groups_create",
     request_body = DependencyGroupCreateRequest,
     responses(
         (status = 201, description = "Created group", body = DependencyGroupResponse),
@@ -1675,7 +1734,7 @@ pub fn list_groups_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn create_group_documentation() {}
+pub fn create_group_v2_documentation() {}
 
 /// Documentation-only operation for listing a thread's group memberships (v2).
 #[utoipa::path(
