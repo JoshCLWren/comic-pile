@@ -74,6 +74,7 @@ response schemas, bounds, and status codes come from the generated contracts.
 | Continuity plans | Canonical plan CRUD, reader/recovery, release sources, and projection under `/api/v2/continuity-plans...`; retained project-preview and continuity-rule paths in the same-path contract |
 | ComicVine and CBL | Search, resolve, series import/status/roster, issue import, identity, and metadata correction resources under `/api/v2/comicvine...`; retained CBL source/adoption previews under `/api/v1/issue-identity/...`; commits use `/api/v2/reading-lists/{list_id}/adoption-commits` |
 | Creators, tags, releases | Creator reads under `/api/v2/creators...`; tag CRUD/usage/effective tags/assignments under `/api/v2/tags...`; `GET /api/v2/releases` plus retained release operations in the same-path contract |
+| Feedback | Canonical AIP-133 Create `POST /api/v2/bugReports` (201 with AIP-122 `name`, stable `id`, `issue_url` and `Location`); the retained `/api/v1/bug-reports/` and `/api/bug-reports/` aliases are not v2 spellings and are retired only after authenticated production proof (#5718) |
 | Demo | `GET /api/v2/demo-roll` (public fabricated fixture, no database reads or writes) |
 
 ### Retired or absent surfaces
