@@ -113,7 +113,7 @@ strict/loose list mode, list-local gates, and explicitly reader-authored
 prerequisites determine availability. Historical/converted dependency rows are
 audit evidence, not execution authority. See
 [READING_LIST_RUNTIME.md](READING_LIST_RUNTIME.md) for modes, overlap decisions,
-exclusions, and the recorded setting-off discrepancy.
+exclusions, and the current per-surface contract.
 
 The product target is sessionless Roll with browser-owned pending state
 ([#4405](https://github.com/JoshCLWren/comic-pile/issues/4405)). Current native
@@ -181,10 +181,9 @@ These are known discrepancies, not supported API guidance:
   `detail`, while the frontend builder still expects a structured HTTP `422`
   `reading_list_cycle` payload. This requires a focused runtime/frontend contract
   repair; documentation must not legitimize either side silently.
-- Roll offer and bootstrap always load the canonical eligibility snapshot even
-  when the rollout setting is off. The setting changes some projections but does
-  not restore the documented stored-`is_blocked` Roll fallback. This contradicts
-  the intended setting-off behavior and remains a runtime handoff.
+- Roll offer and bootstrap load the canonical eligibility snapshot on every
+  request. There is no stored-`is_blocked` Roll fallback and no activation
+  setting; the former setting-off discrepancy was retired with the switch.
 - The retired v1 session list/get callers were removed under #4343. #5708 adds
   the event-derived canonical collection (`GET /api/v2/readingSessions`,
   `GET /api/v2/readingSessions/{session_id}`) without server session lifetime or
