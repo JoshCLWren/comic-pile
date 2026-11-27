@@ -2401,6 +2401,9 @@ struct StaleCursor {
     /// ISO-8601 activity timestamp of the last row; empty means NULL activity.
     activity: String,
     id: i32,
+    /// Age threshold the cursor was minted for, so it cannot be replayed with
+    /// a different `days` filter value.
+    days: i64,
 }
 
 fn encode_stale_cursor(cursor: &StaleCursor) -> String {
@@ -2408,12 +2411,13 @@ fn encode_stale_cursor(cursor: &StaleCursor) -> String {
         "kind": "stale",
         "activity": cursor.activity,
         "id": cursor.id,
+        "days": cursor.days,
     });
     #[allow(clippy::expect_used)]
     URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).expect("serializable stale cursor"))
 }
 
-fn decode_stale_cursor(token: &str) -> Result<StaleCursor, ApiError> {
+fn decode_stale_cursor(token: &str, days: i64) -> Result<StaleCursor, ApiError> {
     let invalid = || ApiError::BadRequest("Invalid stale page token".to_string());
     let raw = URL_SAFE_NO_PAD
         .decode(token.trim_end_matches('='))
@@ -2432,7 +2436,9 @@ fn decode_stale_cursor(token: &str) -> Result<StaleCursor, ApiError> {
         invalid()
     })?;
     let object = payload.as_object().ok_or_else(invalid)?;
-    if object.get("kind").and_then(Value::as_str) != Some("stale") {
+    if object.get("kind").and_then(Value::as_str) != Some("stale")
+        || object.get("days").and_then(Value::as_i64) != Some(days)
+    {
         return Err(invalid());
     }
     let activity = object
@@ -2450,7 +2456,7 @@ fn decode_stale_cursor(token: &str) -> Result<StaleCursor, ApiError> {
         .and_then(Value::as_i64)
         .filter(|id| *id > 0 && *id <= i32::MAX as i64)
         .ok_or_else(invalid)? as i32;
-    Ok(StaleCursor { activity, id })
+    Ok(StaleCursor { activity, id, days })
 }
 
 /// Build one owner-scoped stale page for the canonical v2 filter and the v1 alias.
@@ -2468,7 +2474,7 @@ pub(crate) async fn list_stale_page(
 ) -> Result<threads::StaleThreadListResponse, ApiError> {
     let cursor = page_token
         .filter(|token| !token.is_empty())
-        .map(decode_stale_cursor)
+        .map(|token| decode_stale_cursor(token, days))
         .transpose()?;
     let user_id = user.id();
     // The evaluated snapshot is always authoritative (#5525 A16/A17): stored
@@ -2550,6 +2556,7 @@ pub(crate) async fn list_stale_page(
             encode_stale_cursor(&StaleCursor {
                 activity: last.last_activity_at.clone().unwrap_or_default(),
                 id: last.id,
+                days: i64::from(days),
             })
         })
     } else {
@@ -3351,18 +3358,33 @@ mod tests {
         let cursor = StaleCursor {
             activity: "2026-01-02T03:04:05Z".to_string(),
             id: 17,
+            days: 60,
         };
         assert_eq!(
-            decode_stale_cursor(&encode_stale_cursor(&cursor)).expect("valid cursor"),
+            decode_stale_cursor(&encode_stale_cursor(&cursor), 60).expect("valid cursor"),
             cursor
         );
         let null_anchor = StaleCursor {
             activity: String::new(),
             id: 3,
+            days: 30,
         };
         assert_eq!(
-            decode_stale_cursor(&encode_stale_cursor(&null_anchor)).expect("valid cursor"),
+            decode_stale_cursor(&encode_stale_cursor(&null_anchor), 30).expect("valid cursor"),
             null_anchor
+        );
+    }
+
+    #[test]
+    fn stale_cursor_rejects_a_different_days_filter() {
+        let token = encode_stale_cursor(&StaleCursor {
+            activity: "2026-01-02T03:04:05Z".to_string(),
+            id: 17,
+            days: 60,
+        });
+        assert_eq!(
+            decode_stale_cursor(&token, 30).unwrap_err().detail(),
+            "Invalid stale page token"
         );
     }
 

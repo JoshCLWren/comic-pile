@@ -2115,10 +2115,8 @@ mod tests {
                 values: vec!["2026-01-02T03:04:05+00:00".to_string(), "7".to_string()],
                 execution: mint.to_string(),
             });
-            assert_eq!(
-                decode_cursor(&token, "created", "", mint).expect("matching filter"),
-                decode_cursor(&token, "created", "", mint).expect("matching filter again")
-            );
+            let decoded = decode_cursor(&token, "created", "", mint).expect("matching filter");
+            assert_eq!(decoded.execution, mint);
             assert_eq!(
                 decode_cursor(&token, "created", "", other)
                     .unwrap_err()
