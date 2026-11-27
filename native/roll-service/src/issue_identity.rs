@@ -2502,6 +2502,17 @@ pub struct CblAdoptionCommitRequest {
     pub idempotency_key: Option<String>,
     pub content_hash: String,
     pub revision_sha: String,
+    /// Expected version of the owner-scoped canonical Reading List. When the
+    /// source has already been adopted, a mismatch fails the whole commit with
+    /// 409 before any row is written, so a stale preview cannot overwrite a
+    /// list the reader edited after the preview was produced.
+    #[serde(default)]
+    pub list_version: Option<i32>,
+    /// Overlap decisions the reader approved for this commit. Persisted with
+    /// the selections so a reopened list restores them instead of silently
+    /// dropping the reader's choices.
+    #[serde(default)]
+    pub overlap_decisions: Option<JsonValue>,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -2534,6 +2545,21 @@ pub struct CblAdoptionCommitResponseWire {
     pub created_positions: Vec<i32>,
     pub excluded_positions: Vec<i32>,
     pub unresolved_positions: Vec<i32>,
+    /// Stable ID of the canonical owner-scoped `custom_cbl_lists` row. This is
+    /// the identity a caller must use to reopen or update the adopted list;
+    /// the legacy Plan `id` above is kept only for the compatibility projection.
+    #[serde(default)]
+    pub custom_cbl_list_id: i32,
+    /// Version of the canonical list after this commit. Pass it back as
+    /// `list_version` to guard a later commit against a stale list.
+    #[serde(default)]
+    pub list_version: i32,
+    /// Committed checkbox decisions, restored on reopen.
+    #[serde(default)]
+    pub selections: Option<JsonValue>,
+    /// Committed overlap decisions, restored on reopen.
+    #[serde(default)]
+    pub overlap_decisions: Option<JsonValue>,
 }
 
 fn adoption_conflict(code: &str, message: &str) -> (StatusCode, Json<JsonValue>) {
@@ -2819,6 +2845,33 @@ async fn replay_cbl_adoption_receipt(
             }
         })?;
     let Some(prow) = prow else { return Ok(None) };
+    // Legacy receipts predate the canonical-list fields. Recover them from the
+    // owner-scoped source link so an exact retry still reports the stable list
+    // identity instead of zero.
+    let link = tx
+        .run_query_opt(
+            "SELECT custom_cbl_list_id, list_version, selections_json, overlap_decisions_json
+             FROM custom_cbl_source_links
+             WHERE user_id = $1 AND cbl_source_list_id = $2",
+            &[&user_id, &list_id],
+        )
+        .await
+        .map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("lookup replay source link: {e}"))
+            }
+        })?;
+    let (canonical_list_id, list_version, selections, overlap_decisions) = match link {
+        Some(row) => (
+            row.get::<_, i32>(0),
+            row.get::<_, i32>(1),
+            row.get::<_, Option<JsonValue>>(2),
+            row.get::<_, Option<JsonValue>>(3),
+        ),
+        None => (0, 0, None, None),
+    };
     Ok(Some(CblAdoptionCommitResponseWire {
         id: prow.get(0),
         user_id: prow.get(1),
@@ -2834,6 +2887,10 @@ async fn replay_cbl_adoption_receipt(
         created_positions: Vec::new(),
         excluded_positions: Vec::new(),
         unresolved_positions: Vec::new(),
+        custom_cbl_list_id,
+        list_version,
+        selections,
+        overlap_decisions,
     }))
 }
 

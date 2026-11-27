@@ -634,6 +634,9 @@ CREATE TABLE public.custom_cbl_source_links (
     custom_cbl_list_id integer NOT NULL,
     source_revision_sha character varying(64) NOT NULL,
     source_content_hash character varying(64) NOT NULL,
+    list_version integer DEFAULT 0 NOT NULL,
+    selections_json jsonb,
+    overlap_decisions_json jsonb,
     created_at timestamp with time zone NOT NULL,
     updated_at timestamp with time zone NOT NULL
 );
