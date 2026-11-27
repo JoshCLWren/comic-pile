@@ -336,7 +336,7 @@ fn app() -> Router {
             "/api/v2/queue-exclusion-groups/{group_id}/restore",
             post(native_dispatch),
         )
-        .route("/api/v2/threads", get(native_dispatch))
+        .route("/api/v2/threads", get(native_dispatch).post(native_dispatch))
         // #5705: the advisory duplicate check is an AIP-136 collection custom
         // method. The inner service registers it too, but this Vercel entry owns
         // a separate route table: without a matching route here a deployed
@@ -352,6 +352,22 @@ fn app() -> Router {
         .route(
             "/api/v2/threads/{thread_id}",
             patch(native_dispatch).delete(native_dispatch),
+        )
+        .route(
+            "/api/v2/issue-duplicate-reconciliation/detect",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/issue-duplicate-reconciliation/preview",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/issue-duplicate-reconciliation/apply",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/issue-duplicate-reconciliation/undo",
+            post(native_dispatch),
         )
         .route("/api/v1/threads/{thread_id}", get(native_dispatch))
         .route("/api/v1/threads/{thread_id}", post(native_dispatch))
@@ -1675,18 +1691,26 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn v2_thread_item_patch_and_delete_ingress_reaches_rust() {
+    async fn v2_thread_writes_and_duplicate_reconciliation_reach_rust() {
         // #5950: the item route is the only authority for Edit Series rename
         // (`PATCH`) and delete (`DELETE`). If this Vercel entry table omits it,
         // the request terminates at native_not_found and the UI reports the
         // bare detail "Not Found" instead of reaching the Rust handler.
-        for method in ["PATCH", "DELETE"] {
+        for (method, uri) in [
+            ("PATCH", "/api/v2/threads/42"),
+            ("DELETE", "/api/v2/threads/42"),
+            ("POST", "/api/v2/threads"),
+            ("GET", "/api/v2/issue-duplicate-reconciliation/detect"),
+            ("POST", "/api/v2/issue-duplicate-reconciliation/preview"),
+            ("POST", "/api/v2/issue-duplicate-reconciliation/apply"),
+            ("POST", "/api/v2/issue-duplicate-reconciliation/undo"),
+        ] {
             let mut router = app();
             let response = router
                 .call(
                     Request::builder()
                         .method(method)
-                        .uri("/api/v2/threads/42")
+                        .uri(uri)
                         .header("content-type", "application/json")
                         .body(Body::from("{}"))
                         .unwrap(),
@@ -1696,14 +1720,76 @@ mod tests {
             assert_eq!(
                 response.headers().get("x-comicpile-api-runtime").unwrap(),
                 "rust",
-                "{method} /api/v2/threads/42 runtime header"
+                "{method} {uri} runtime header"
             );
-            assert_ne!(
-                response.status(),
-                StatusCode::NOT_FOUND,
-                "{method} /api/v2/threads/42 must reach Rust dispatch, not native_not_found"
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{method} {uri} must reach Rust dispatch, got {}",
+                response.status()
             );
         }
+    }
+
+    // Compare explicit method/path registrations, not just paths: a GET-only
+    // ingress also returns 405 for a missing POST on the same resource.
+    #[test]
+    fn every_inner_v2_route_has_an_ingress_method() {
+        use std::collections::BTreeSet;
+
+        fn routes(source: &str) -> BTreeSet<(&str, &str)> {
+            let mut result = BTreeSet::new();
+            for route in source.split(".route(").skip(1) {
+                let Some(rest) = route.trim_start().strip_prefix('"') else {
+                    continue;
+                };
+                let (path, tail) = rest.split_once('"').expect("literal route path");
+                if !path.starts_with("/api/v2/") {
+                    continue;
+                }
+                let mut depth = 1;
+                let mut methods = 0;
+                for (offset, character) in tail.char_indices() {
+                    match character {
+                        '(' => {
+                            if depth == 1 {
+                                let method = tail[..offset]
+                                    .trim_end()
+                                    .rsplit(|c: char| !c.is_ascii_alphabetic())
+                                    .next()
+                                    .unwrap();
+                                assert!(
+                                    matches!(
+                                        method,
+                                        "get" | "post" | "patch" | "put" | "delete" | "options"
+                                            | "head" | "trace" | "connect"
+                                    ),
+                                    "unsupported route method expression for {path}: {method}"
+                                );
+                                result.insert((path, method));
+                                methods += 1;
+                            }
+                            depth += 1;
+                        }
+                        ')' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                assert!(methods > 0, "no method found for {path}");
+            }
+            result
+        }
+
+        let inner = routes(include_str!("../native/roll-service/src/lib.rs"));
+        let ingress = routes(include_str!("native_roll.rs"));
+        assert!(!inner.is_empty() && !ingress.is_empty());
+        let missing: Vec<_> = inner.difference(&ingress).collect();
+        assert!(missing.is_empty(), "missing v2 ingress methods: {missing:?}");
     }
 
     #[tokio::test]
