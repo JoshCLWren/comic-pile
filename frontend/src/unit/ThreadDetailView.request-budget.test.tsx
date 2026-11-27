@@ -234,7 +234,6 @@ describe('Thread detail request budget', () => {
     const handler = makeHandler('available')
     const { calls, client } = createRequestRecorder((call) => {
       if (call.url === '/v2/threads/42') return { ...THREADS[42], total_issues: 2 }
-      if (call.url === '/v1/threads/42') return { ...THREADS[42], total_issues: 2 }
       if (call.url === '/v2/threads/42/issues') {
         const secondPage = call.params?.page_token === 'next'
         return {
