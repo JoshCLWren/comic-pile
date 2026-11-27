@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../../query/queryKeys'
@@ -52,6 +53,15 @@ import { TasteDiscoveryCard } from './components/TasteDiscoveryCard'
 import { CoverFlight, type CoverFlightState } from './components/CoverFlight'
 import ReadingModeLauncher from '../../components/ReadingModeLauncher'
 import { ReadingGraphProblemCard } from '../../components/ReadingGraphProblemCard'
+
+/** Decorative motion is skipped for reduced-motion readers; the outcome is not. */
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+}
 
 /**
  * Route entry for the Roll page. The component composes the focused retained
@@ -210,6 +220,42 @@ export default function RollPage() {
     isRatingView: state.isRatingView,
   })
 
+  // Presentation-only transition state. The roll mutation and its authoritative
+  // winner are untouched by this capture; a missing cover or reduced motion
+  // simply skips the decorative expansion.
+  const [coverFlight, setCoverFlight] = useState<CoverFlightState | null>(null)
+
+  const captureCoverFlight = useCallback((threadId: number): CoverFlightState | null => {
+    if (prefersReducedMotion()) return null
+    const cover = document.querySelector<HTMLElement>(
+      `[data-roll-face][data-roll-thread-id="${threadId}"]`,
+    )
+    const rect = cover?.getBoundingClientRect()
+    const image = cover?.querySelector<HTMLImageElement>('.roll-cover-art')
+    const url = image?.currentSrc || image?.getAttribute('src')
+    if (!rect || rect.width === 0 || !url) return null
+    return {
+      url,
+      rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!state.isRatingView) setCoverFlight(null)
+  }, [state.isRatingView])
+
+  const enterRatingViewFromRoll = useCallback(
+    async (
+      threadId: number | null,
+      result?: number | null,
+      metadata?: ThreadMetadata | null,
+    ) => {
+      setCoverFlight(threadId != null ? captureCoverFlight(threadId) : null)
+      await rating.enterRatingView(threadId, result, metadata)
+    },
+    [captureCoverFlight, rating],
+  )
+
   // Entering the rating view unmounts the Roll CTA that held keyboard focus,
   // which drops focus to document.body and forces a keyboard user to re-tab
   // through the whole shell to reach the result. The rating region owns the
@@ -246,7 +292,7 @@ export default function RollPage() {
       shuffleQueueMutation,
     },
     refetchBootstrap,
-    enterRatingView: rating.enterRatingView,
+    enterRatingView: enterRatingViewFromRoll,
     onSnoozeRefreshFailed: reportSnoozeRefreshFailed,
   })
 
@@ -361,7 +407,18 @@ export default function RollPage() {
   )
   const pool = filteredThreads.slice(0, dieSize)
   const displayDie = isDiceSide(effectiveDie) ? effectiveDie : 6
-  const hasRollableContent = pool.length > 0 || snoozedThreads.length > 0
+  // Rate artwork comes from the same bounded card projection as the board, so
+  // the scrim never triggers another per-cover metadata request (#5981).
+  const ratingIssueId =
+    state.activeRatingThread?.issue_id ?? state.activeRatingThread?.next_issue_id ?? null
+  const ratingArtUrl = useMemo(
+    () =>
+      ratingIssueId == null
+        ? null
+        : scopedIssueCards?.items.find((card) => card.issue_id === ratingIssueId)
+            ?.cover_image_url ?? null,
+    [ratingIssueId, scopedIssueCards],
+  )
   // Rolled state is derived from the pending roll itself, not tracked
   // separately. Clearing the pending roll (rate/snooze/cancel/reset-dice)
   // nulls `rolledResult`, so the die and CTA fall back to idle/"Begin".
@@ -463,42 +520,25 @@ export default function RollPage() {
           className={`flex-1 flex flex-col relative ${state.isRatingView ? '' : 'md:surface-panel md:rounded-xl'}`}
         >
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 md:w-80 md:h-80 bg-amber-900/15 rounded-full blur-[100px] md:blur-[120px] pointer-events-none"></div>
+          {state.isRatingView && ratingArtUrl ? (
+            <div className="roll-rate-backdrop" aria-hidden="true">
+              <div className="roll-rate-art">
+                <img src={ratingArtUrl} alt="" />
+              </div>
+              <div className="roll-rate-scrim" />
+            </div>
+          ) : null}
+          {state.isRatingView && coverFlight ? (
+            <CoverFlight flight={coverFlight} onDone={() => setCoverFlight(null)} />
+          ) : null}
           <div className="flex-1 flex flex-col">
-            {!state.isRatingView && hasRollableContent ? (
-              <>
-                <div
-                  id="main-die-3d"
-                  ref={mainDieRef}
-                  onClick={actions.handleRoll}
-                  onKeyDown={actions.handleKeyDown}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={displayDie === 2 ? "Flip the coin" : "Roll the dice"}
-                  className={`${hasRolled ? 'dice-state-rolled' : 'dice-state-idle'} relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all mt-4 md:mt-8 mx-auto active:scale-95`}
-                  style={{ width: '200px', height: '200px' }}
-                  data-testid="main-die-3d"
-                >
-                  <div className="w-full h-full main-die-optical-center">
-                    <LazyDice3D
-                      sides={displayDie}
-                      value={Math.max(1, Math.min(state.rolledResult ?? 1, displayDie))}
-                      isRolling={state.isRolling}
-                      showValue={false}
-                      color={0xffffff}
-                    />
-                  </div>
-                </div>
-                <RollCta
-                  isRolling={state.isRolling}
-                  hasRolled={hasRolled}
-                  onRoll={actions.handleRoll}
-                />
-              </>
-            ) : !state.isRatingView ? (
-              <div aria-hidden="true" className="h-[200px] w-[200px] mx-auto mt-4 md:mt-8" />
-            ) : (
-              <RatingView data={ratingViewData} />
-            )}
+            {state.isRatingView ? (
+              <div
+                className={`roll-rate-stage ${coverFlight ? 'roll-rate-stage-entering' : ''}`}
+              >
+                <RatingView data={ratingViewData} />
+              </div>
+            ) : null}
 
             {!state.isRatingView &&
               (lastRead ? (

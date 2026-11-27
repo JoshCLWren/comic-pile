@@ -79,6 +79,7 @@ export function RollCover({
       className={classes}
       style={style}
       data-roll-face={face}
+      data-roll-thread-id={thread.id}
       data-testid="roll-pool-cover"
       role="button"
       tabIndex={far ? -1 : 0}
