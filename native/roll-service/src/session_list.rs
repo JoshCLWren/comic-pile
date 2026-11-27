@@ -359,7 +359,7 @@ mod tests {
 
     #[test]
     fn page_size_is_clamped_to_the_bounded_range() {
-        assert!(DEFAULT_PAGE_SIZE >= 1 && DEFAULT_PAGE_SIZE <= MAX_PAGE_SIZE);
+        const { assert!(DEFAULT_PAGE_SIZE >= 1 && DEFAULT_PAGE_SIZE <= MAX_PAGE_SIZE) };
         for invalid in [0, -1, MAX_PAGE_SIZE + 1, i32::MAX] {
             let query = ListReadingSessionsQuery {
                 page_size: Some(invalid),
