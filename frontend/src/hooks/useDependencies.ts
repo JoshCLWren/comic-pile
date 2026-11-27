@@ -175,7 +175,7 @@ export function useMigrateThread(api?: DependencyMigrationApi) {
 export function useThreadBlockingInfo(threadId: number | null) {
   return useQuery({
     queryKey: queryKeys.dependencies.blockingBatch(threadId == null ? [] : [threadId]),
-    queryFn: () => dependenciesApi.getBatchBlockingInfo([threadId!]),
+    queryFn: () => dependenciesApi.explainEligibility([threadId!]),
     enabled: threadId != null,
     // Open thread pages must not keep a stale Next-issue line after a change
     // made in another tab (#5486).

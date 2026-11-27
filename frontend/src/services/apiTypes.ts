@@ -51,5 +51,5 @@ export interface RollMutationDeps {
 
 /** The subset of `dependenciesApi` used by the Roll page's batch blocker load. */
 export interface RollDependenciesApi {
-  getBatchBlockingInfo: (threadIds: number[]) => Promise<import('../types').BatchBlockingInfoResponse>
+  explainEligibility: (threadIds: number[]) => Promise<import('../types').BatchEligibilityResponse>
 }

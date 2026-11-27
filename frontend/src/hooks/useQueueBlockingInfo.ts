@@ -1,16 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
 import { queryKeys } from '../query/queryKeys'
 import { dependenciesApi } from '../services/api-dependencies'
-import type { BatchBlockingInfoResponse, BlockingDependency } from '../types'
+import type { BatchEligibilityResponse, BlockingDependency } from '../types'
 
 const EMPTY_BLOCKING_MAP: Record<number, BlockingDependency[]> = {}
 
-/** Batch blocking-info client seam. Production defaults to `dependenciesApi`. */
+/** Batch eligibility client seam. Production defaults to `dependenciesApi`. */
 export interface QueueBlockingInfoApi {
-  getBatchBlockingInfo: (threadIds: number[]) => Promise<BatchBlockingInfoResponse>
+  explainEligibility: (threadIds: number[]) => Promise<BatchEligibilityResponse>
 }
 
-function toBlockingMap(response: BatchBlockingInfoResponse) {
+function toBlockingMap(response: BatchEligibilityResponse) {
   const map: Record<number, BlockingDependency[]> = {}
   for (const [threadId, info] of Object.entries(response.threads)) {
     map[Number(threadId)] = info.blocking_dependencies ?? []
@@ -38,7 +38,7 @@ export function useQueueBlockingInfo(
 
   const query = useQuery({
     queryKey: queryKeys.dependencies.blockingBatch(sortedIds),
-    queryFn: () => api.getBatchBlockingInfo(sortedIds),
+    queryFn: () => api.explainEligibility(sortedIds),
     select: toBlockingMap,
     enabled: sortedIds.length > 0,
     staleTime: 30_000,
