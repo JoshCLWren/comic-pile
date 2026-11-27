@@ -3363,7 +3363,10 @@ async fn adoption_commit_source_link_is_the_canonical_identity_issue_4022() {
     .await;
     assert_eq!(status, StatusCode::CREATED, "{first}");
     let list_id = first["custom_cbl_list_id"].as_i64().unwrap() as i32;
-    assert!(list_id > 0, "commit must return the canonical list ID: {first}");
+    assert!(
+        list_id > 0,
+        "commit must return the canonical list ID: {first}"
+    );
     assert_eq!(first["list_version"], 1, "{first}");
 
     let conn = state.pool.get().await.unwrap();
@@ -3389,7 +3392,10 @@ async fn adoption_commit_source_link_is_the_canonical_identity_issue_4022() {
         body,
     )
     .await;
-    assert!(status2 == StatusCode::CREATED || status2 == StatusCode::OK, "{retry}");
+    assert!(
+        status2 == StatusCode::CREATED || status2 == StatusCode::OK,
+        "{retry}"
+    );
     assert_eq!(retry["custom_cbl_list_id"], list_id, "{retry}");
     assert_eq!(retry["list_version"], 1, "{retry}");
     let entry_count: i64 = conn
@@ -3472,7 +3478,10 @@ async fn adoption_commit_revision_and_list_version_guards_are_atomic_issue_4022(
     )
     .await;
     assert_eq!(version_status, StatusCode::CONFLICT, "{version_body}");
-    assert_eq!(version_body["detail"]["code"], "stale_preview", "{version_body}");
+    assert_eq!(
+        version_body["detail"]["code"], "stale_preview",
+        "{version_body}"
+    );
     let entry_count: i64 = conn
         .query_one(
             "SELECT COUNT(*)::bigint FROM custom_cbl_entries WHERE list_id = $1",
@@ -3510,7 +3519,10 @@ async fn adoption_commit_isolates_readers_and_same_name_sources_issue_4022() {
     .await;
     assert_eq!(status_b, StatusCode::CREATED, "{second}");
     let list_b = second["custom_cbl_list_id"].as_i64().unwrap() as i32;
-    assert_ne!(list_a, list_b, "readers must not share a source-linked list");
+    assert_ne!(
+        list_a, list_b,
+        "readers must not share a source-linked list"
+    );
 
     // Same display name, different source identity: still distinct lists.
     let conn = state.pool.get().await.unwrap();
@@ -3556,7 +3568,9 @@ async fn adoption_commit_isolates_readers_and_same_name_sources_issue_4022() {
         .map(|row| (row.get(0), row.get(1)))
         .collect();
     assert_eq!(owners.len(), 3, "one link per reader+source: {owners:?}");
-    assert!(owners.iter().any(|(uid, lid)| *uid == user_b && *lid == list_b));
+    assert!(owners
+        .iter()
+        .any(|(uid, lid)| *uid == user_b && *lid == list_b));
 }
 
 #[tokio::test]
@@ -3597,7 +3611,10 @@ async fn adoption_commit_rejects_cross_owner_plan_and_leaves_no_rows_issue_4022(
         .await
         .unwrap()
         .get(0);
-    assert_eq!(links, 0, "cross-owner adoption must not create a source link");
+    assert_eq!(
+        links, 0,
+        "cross-owner adoption must not create a source link"
+    );
 }
 
 #[tokio::test]
@@ -3627,22 +3644,20 @@ async fn adoption_commit_restores_committed_choices_on_reopen_issue_4022() {
     );
     let list_id = committed["custom_cbl_list_id"].as_i64().unwrap() as i32;
 
-    let (open_status, reopened) = get(
-        &state,
-        &token,
-        &format!("/api/v2/reading-lists/{list_id}"),
-    )
-    .await;
+    let (open_status, reopened) =
+        get(&state, &token, &format!("/api/v2/reading-lists/{list_id}")).await;
     assert_eq!(open_status, StatusCode::OK, "{reopened}");
     assert_eq!(reopened["list_version"], 1, "{reopened}");
     assert_eq!(reopened["source_revision_sha"], "rev-1", "{reopened}");
     assert_eq!(reopened["source_content_hash"], "h-mm", "{reopened}");
     let selections = &reopened["selections"];
-    assert_eq!(selections["series_decisions"][0]["decision"], "exclude", "{reopened}");
-    assert_eq!(selections["series_overrides"][0]["cbl_position"], 0, "{reopened}");
     assert_eq!(
-        reopened["overlap_decisions"][0]["waiting_volume_id"],
-        "4050-10",
+        selections["series_decisions"]["provider-series:comicvine:4050-9"], "exclude",
+        "{reopened}"
+    );
+    assert_eq!(selections["series_overrides"]["0"], "include", "{reopened}");
+    assert_eq!(
+        reopened["overlap_decisions"][0]["waiting_volume_id"], "4050-10",
         "{reopened}"
     );
 }
