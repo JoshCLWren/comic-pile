@@ -3312,8 +3312,6 @@ async fn v2_reading_order_projection_preview_is_read_only_and_commit_is_idempote
         assert_eq!(rows, vec![(941, 1), (940, 2)]);
     }
 }
-<<<<<<< HEAD
-=======
 
 // ---------------------------------------------------------------------------
 // #4022: source-linked, owner-scoped canonical Reading List adoption.
@@ -3843,4 +3841,3 @@ async fn adoption_commit_does_not_truncate_large_source_issue_4022() {
         .get(0);
     assert_eq!(count, 1001, "all 1001 adopted issues must be persisted");
 }
->>>>>>> origin/main
