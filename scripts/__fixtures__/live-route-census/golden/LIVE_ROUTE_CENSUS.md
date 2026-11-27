@@ -31,6 +31,15 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | GET | `/api/v2/threads` | `threads_v2::list_threads` | v2 | frontend/src/services/api-threads.ts | /api/native_roll.rs | #5701 | canonical-v2 | live-target |
 | POST | `/api/v2/threads:preview` | `threads_v2::preview_threads` | v2 | none | /api/native_roll.rs | #5705 | canonical-v2 | live-target |
 
+## Owner issue cross-reference
+
+Existing owner/disposition issues resolved for this census: #4344, #4832, #5701, #5705.
+No new backlog issue is created by this tooling task: every current live v1 method resolves to an existing owner issue and an AIP destination or an explicit retire-without-replacement decision.
+
+Non-browser / helper / infrastructure surface included in the census:
+
+- `GET /api/threads/{thread_id}` — compatibility-alias-debt (owner #5701).
+
 ## Baseline debt requiring an owner issue
 
 None. Every live v1 method has an owner or an explicit disposition.

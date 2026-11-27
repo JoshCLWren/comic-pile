@@ -277,6 +277,20 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | GET | `/api/v2/users/me/preferences` | `preferences::get_user_preferences` | v2 | frontend/src/services/api-preferences.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/unit/Navigation.sidebar-polish.test.tsx, frontend/src/unit/Navigation.theme-picker.test.tsx, frontend/src/unit/api.test.ts, frontend/src/unit/auth-provider-query-outage.test.tsx, frontend/src/unit/auth-provider-recovery.test.tsx, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/theme-runtime.test.tsx | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
 | PATCH | `/api/v2/users/me/preferences` | `preferences::patch_user_preferences` | v2 | frontend/src/services/api-preferences.ts, frontend/src/unit/Navigation.sidebar-polish.test.tsx, frontend/src/unit/Navigation.theme-picker.test.tsx, frontend/src/unit/api.test.ts, frontend/src/unit/auth-provider-query-outage.test.tsx, frontend/src/unit/auth-provider-recovery.test.tsx, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/theme-runtime.test.tsx | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
 
+## Owner issue cross-reference
+
+Existing owner/disposition issues resolved for this census: #4335, #4342, #4344, #4443, #4459, #4549, #4595, #4623, #4653, #4684, #4822, #4832, #4835, #4836, #4838, #4839, #4841, #4844, #4849, #4850, #4851, #4855, #5276, #5435, #5701, #5702, #5703, #5704, #5705, #5706, #5709, #5711, #5712, #5714, #5715, #5716, #5717, #5718.
+No new backlog issue is created by this tooling task: every current live v1 method resolves to an existing owner issue and an AIP destination or an explicit retire-without-replacement decision.
+
+Non-browser / helper / infrastructure surface included in the census:
+
+- `POST /api/bug-reports/` — compatibility-alias-debt (owner #5718).
+- `GET /api/metrics` — active-infrastructure (owner #4335).
+- `GET /api/threads/{thread_id}` — compatibility-alias-debt (owner #5701).
+- `GET /api/v1/cron/release-sync` — background-caller-migration (owner #5276).
+- `POST /api/v1/threads/groups:batch` — pinned-404 (owner #5711).
+- `PUT /api/v1/threads/{thread_id}/test-backdate` — test-helper-debt (owner #4335).
+
 ## Baseline debt requiring an owner issue
 
 None. Every live v1 method has an owner or an explicit disposition.
