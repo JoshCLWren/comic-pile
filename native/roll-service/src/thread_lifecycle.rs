@@ -2956,7 +2956,7 @@ mod tests {
     #[test]
     fn stale_cursor_round_trips_activity_and_null_anchor() {
         let cursor = StaleCursor {
-            activity: "2026-01-02 03:04:05+00:00".to_string(),
+            activity: "2026-01-02T03:04:05Z".to_string(),
             id: 17,
         };
         assert_eq!(
