@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../../query/queryKeys'
@@ -600,6 +599,14 @@ export default function RollPage() {
               onResetDice={handleResetDice}
               resetDicePending={resetDiceMutation.isPending}
               resetDiceError={resetDiceError}
+              presentation={{
+                dieSides: displayDie,
+                isRolling: state.isRolling,
+                rolledValue: Math.max(1, Math.min(state.rolledResult ?? 1, displayDie)),
+                hasRolled,
+                mainDieRef,
+                onRoll: actions.handleRoll,
+              }}
             />
           </div>
         </div>
