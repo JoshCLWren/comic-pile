@@ -87,6 +87,17 @@ export function RollCover({
       onClick={onOpen}
       onKeyDown={handleKeyDown}
     >
+      <ComicIssueCover
+        coverImageUrl={card?.cover_image_url ?? null}
+        threadTitle={displayTitle}
+        issueNumber={issueNumber ?? ''}
+        variant="compact"
+        frameClassName="roll-cover-frame"
+        imageClassName="roll-cover-art"
+        altText=""
+        testId="roll-cover-art"
+        placeholderTestId="roll-cover-missing"
+      />
       {thread.issue_id != null ? (
         <div
           className="roll-cover-actions"
@@ -100,21 +111,10 @@ export function RollCover({
             status={card?.status === 'read' ? 'read' : 'unread'}
             card={card ?? null}
             hideTitle
+            showCover={false}
           />
         </div>
-      ) : (
-        <ComicIssueCover
-          coverImageUrl={card?.cover_image_url ?? null}
-          threadTitle={displayTitle}
-          issueNumber={issueNumber ?? ''}
-          variant="compact"
-          frameClassName="roll-cover-frame"
-          imageClassName="roll-cover-art"
-          altText=""
-          testId="roll-cover-art"
-          placeholderTestId="roll-cover-missing"
-        />
-      )}
+      ) : null}
       <span className="roll-cover-face" aria-hidden="true">
         {face}
       </span>
