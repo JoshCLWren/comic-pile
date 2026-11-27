@@ -10,6 +10,19 @@ import { createHttpClientStub } from './httpClientStub'
 const client = createHttpClientStub()
 const cblSourcesApi = createCblSourcesApi(client)
 
+/** The canonical catalog List query emitted by `browse`. */
+interface BrowseParams {
+  filter: string
+  order_by: string
+  page_size: number
+  page_token?: string
+}
+
+/** One GET call recorded by the transport stub for a catalog browse. */
+interface BrowseRequestConfig {
+  params: BrowseParams
+}
+
 function entry(overrides: Partial<CBLAdoptionPreviewEntry>): CBLAdoptionPreviewEntry {
   return {
     cbl_position: 1,
@@ -107,7 +120,8 @@ describe('cblSourcesApi canonical v2 catalog reads (#5712)', () => {
     client.get.mockResolvedValue({ items: [], folders: [], total: 0 })
 
     await cblSourcesApi.browse({ folder: 'DC/Marvel', page: 3, pageSize: 25 })
-    const [path, config] = client.get.mock.calls[0] as [string, { params: Record<string, unknown> }]
+    // SAFETY: `browse` makes exactly one GET whose config is a BrowseRequestConfig.
+    const [path, config] = client.get.mock.calls[0] as [string, BrowseRequestConfig]
     expect(path).toBe('/v2/cblSources')
     expect(config.params.filter).toBe('folder:DC/Marvel')
     expect(config.params.order_by).toBe('name')
@@ -122,9 +136,24 @@ describe('cblSourcesApi canonical v2 catalog reads (#5712)', () => {
     client.get.mockResolvedValue({ items: [], folders: [], total: 0 })
 
     await cblSourcesApi.browse({ folder: 'DC', query: '  Secret Wars ', page: 1 })
-    const [, config] = client.get.mock.calls[0] as [string, { params: Record<string, unknown> }]
+    // SAFETY: `browse` makes exactly one GET whose config is a BrowseRequestConfig.
+    const [, config] = client.get.mock.calls[0] as [string, BrowseRequestConfig]
     expect(config.params.filter).toBe('q:Secret Wars')
     expect(config.params.page_token).toBeUndefined()
+  })
+
+  it('encodes non-ASCII search filters as UTF-8 bytes in the opaque token', async () => {
+    client.get.mockResolvedValue({ items: [], folders: [], total: 0 })
+
+    await cblSourcesApi.browse({ query: 'Café', page: 2, pageSize: 25 })
+    // SAFETY: `browse` makes exactly one GET whose config is a BrowseRequestConfig.
+    const [, config] = client.get.mock.calls[0] as [string, BrowseRequestConfig]
+    expect(config.params.filter).toBe('q:Café')
+    const token = String(config.params.page_token)
+    const bytes = Uint8Array.from(atob(token), (char) => char.charCodeAt(0))
+    expect(new TextDecoder().decode(bytes)).toBe(
+      JSON.stringify({ p: 2, f: 'q:Café', o: 'name', s: 25 }),
+    )
   })
 
   it('reads detail and exact occurrences from the canonical v2 resources', async () => {
