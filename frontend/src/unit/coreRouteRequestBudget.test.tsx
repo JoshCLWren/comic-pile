@@ -762,9 +762,11 @@ describe('core route request budgets', () => {
     expect(countRequests(calls, 'GET', '/v1/sessions/current/')).toBe(0)
     expect(countRequests(calls, 'POST', '/v2/reading-sessions')).toBe(0)
     expect(countRequests(calls, 'GET', '/v2/roll/bootstrap')).toBe(0)
-    // One bounded queue-page refresh after the reset (cold + reconciled first page).
-    expect(countRequests(calls, 'GET', '/v2/threads')).toBe(2)
-    expect(countRequests(calls, 'GET', '/v1/threads/excluded/threads')).toBe(2)
+    // One bounded refresh of each canonical collection filter: the active
+    // queue page (cold + reconciled) and the excluded library page.
+    expect(countThreadFilter(calls, 'active')).toBe(2)
+    expect(countThreadFilter(calls, 'excluded')).toBe(2)
+    expect(calls.some((call) => call.url.startsWith('/v1/threads/excluded'))).toBe(false)
     // No other request classes entered the budget beyond the probed surface.
     expect(calls.length).toBeGreaterThan(coldLoads)
   })
