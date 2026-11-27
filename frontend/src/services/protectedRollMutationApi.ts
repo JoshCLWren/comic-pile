@@ -1,12 +1,9 @@
 import type { RollResponse, SnoozeSessionResponse } from '../types'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
-import type { RollV2BootstrapResponse } from '../types/rollV2'
-import { adaptRollV2Bootstrap } from './adaptRollV2Bootstrap'
+import { createRollBootstrapApi } from './rollBootstrapApi'
 import { createNativeRollMutationApi } from './nativeRollMutationApi'
 import { defaultHttpClient, type HttpClient } from './httpClient'
 import { createRollApi } from './api-roll'
-
-const RECOVERY_CONFIG = { skipAuthRedirect: true }
 
 /**
  * Build the protected roll-mutation service bound to an HTTP client.
@@ -21,6 +18,9 @@ const RECOVERY_CONFIG = { skipAuthRedirect: true }
 export function createProtectedRollMutationApi(client: HttpClient) {
   const rollOffers = createRollApi(client)
   const { rate } = createNativeRollMutationApi(client)
+  // Recovery reads only scoped resources; no aggregate/session endpoint is
+  // touched even when the ordinary auth redirect is suppressed.
+  const scopedView = createRollBootstrapApi(client)
   return {
     rate,
     snooze: async (): Promise<SnoozeSessionResponse> => {
@@ -35,10 +35,7 @@ export function createProtectedRollMutationApi(client: HttpClient) {
         correction: null,
       }
     },
-    bootstrap: async (): Promise<RollBootstrapResponse> =>
-      adaptRollV2Bootstrap(
-        await client.get<RollV2BootstrapResponse>('/v2/roll/bootstrap', RECOVERY_CONFIG),
-      ),
+    bootstrap: async (): Promise<RollBootstrapResponse> => scopedView.get(),
   }
 }
 
