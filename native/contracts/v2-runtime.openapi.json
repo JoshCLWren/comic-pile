@@ -7171,6 +7171,48 @@
         ]
       }
     },
+    "/api/v2/seriesMappings:preview": {
+      "post": {
+        "tags": [
+          "catalog"
+        ],
+        "description": "Stateless AIP-136 collection custom method: build a read-only series-mapping preview and a signed idempotency token for the durable commit. No mappings, receipts, history or provider state are written.",
+        "operationId": "preview_series_mappings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeriesMappingPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Read-only series mapping preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesMappingPreviewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/tags": {
       "get": {
         "tags": [
@@ -20109,6 +20151,276 @@
               "null"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "SeriesMappingPreviewCounts": {
+        "type": "object",
+        "required": [
+          "already_confirmed",
+          "safe_exact_match",
+          "needs_review_ambiguous",
+          "needs_review_conflict",
+          "unresolved",
+          "excluded_special"
+        ],
+        "properties": {
+          "already_confirmed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "excluded_special": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "needs_review_ambiguous": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "needs_review_conflict": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "safe_exact_match": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "unresolved": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SeriesMappingPreviewProviderSeries": {
+        "type": "object",
+        "description": "Wire-exact mirror of\n`app/schemas/catalog.py::SeriesMappingPreviewProviderSeries`.\n\nPydantic coerces `start_year` and `count_of_issues` from strings to integers;\nthe conversion helper below does the same so the generated contract types\nthese as integers rather than `unknown`.",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "count_of_issues": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "id": {
+            "type": "string"
+          },
+          "image": {},
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_detail_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start_year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "SeriesMappingPreviewRequest": {
+        "type": "object",
+        "description": "Request contract for `app/schemas/catalog.py::SeriesMappingPreviewRequest`.",
+        "required": [
+          "origin_issue_id",
+          "provider",
+          "provider_series_external_id"
+        ],
+        "properties": {
+          "origin_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "provider_series_external_id": {
+            "type": "string"
+          },
+          "scope_mode": {
+            "type": "string"
+          }
+        }
+      },
+      "SeriesMappingPreviewResponse": {
+        "type": "object",
+        "required": [
+          "scope",
+          "counts",
+          "rows",
+          "issued_at"
+        ],
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/SeriesMappingPreviewCounts"
+          },
+          "expires_at": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "issued_at": {
+            "type": "number",
+            "format": "double"
+          },
+          "preview_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_series": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SeriesMappingPreviewProviderSeries"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeriesMappingPreviewRow"
+            }
+          },
+          "scope": {
+            "$ref": "#/components/schemas/SeriesMappingPreviewScope"
+          }
+        }
+      },
+      "SeriesMappingPreviewRow": {
+        "type": "object",
+        "description": "Wire-exact mirror of `app/schemas/catalog.py::SeriesMappingPreviewRow`.\n\nEvery field is always emitted, including the nullable ones and the two\ndefaults (`metadata_refresh_required: false`, `reason: null`). Internal plan\nfields (`_identity_metadata`, `_provider_metadata`, `confidence`, `_roster_*`,\n`_sibling_roster`, `_is_origin`, `_roster_only`) are deliberately absent: the\nPython Pydantic model drops them, so a raw `Value` would leak them and omit\nthe defaults.",
+        "required": [
+          "row_id",
+          "issue_id",
+          "issue_number",
+          "classification",
+          "proposed_mapping",
+          "default_selected",
+          "metadata_refresh_required"
+        ],
+        "properties": {
+          "classification": {
+            "type": "string"
+          },
+          "current_mapping_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "default_selected": {
+            "type": "boolean"
+          },
+          "external_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "metadata_refresh_required": {
+            "type": "boolean"
+          },
+          "proposed_mapping": {
+            "type": "boolean"
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "row_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "SeriesMappingPreviewScope": {
+        "type": "object",
+        "required": [
+          "status",
+          "origin_issue_id"
+        ],
+        "properties": {
+          "basis": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "scope_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "series_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
           }
         }
       },
