@@ -34,6 +34,7 @@ use axum::{
 };
 use serde_json::Value;
 use std::sync::Arc;
+use utoipa::OpenApi;
 
 /// Body of `POST /api/v2/threads/{thread_id}:reactivate`.
 #[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
