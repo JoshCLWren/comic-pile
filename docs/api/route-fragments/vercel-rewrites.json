@@ -33,5 +33,21 @@
     "threads",
     "undo"
   ],
-  "routes": []
+  "routes": [
+    {
+      "src": "^/api/v2/continuity-plans/[0-9]+/reader$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v2/continuity-plans/[0-9]+/recovery$",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    }
+  ]
 }
