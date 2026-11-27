@@ -197,7 +197,7 @@ describe('Thread detail request budget', () => {
       'GET /v1/threads/42/connected': 1,
       'GET /v2/reading-graph': 1,
       'GET /v2/tags/effective/threads/42': 1,
-      'POST /v1/threads/groups:batch': 1,
+      'POST /v2/reading-order-groups:resolveMemberships': 1,
       'POST /v1/threads:getBlockingInfo': 1,
     })
     expect(calls.some((call) => call.url === '/v2/tags')).toBe(false)
@@ -225,7 +225,7 @@ describe('Thread detail request budget', () => {
       'GET /v1/threads/42/connected': 1,
       'GET /v2/reading-graph': 1,
       'GET /v2/tags/effective/threads/42': 1,
-      'POST /v1/threads/groups:batch': 1,
+      'POST /v2/reading-order-groups:resolveMemberships': 1,
     })
     expect(calls.some((call) => call.url === '/v2/tags')).toBe(false)
   })
