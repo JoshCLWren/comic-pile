@@ -5,9 +5,14 @@
  * Node ESM implementation (the Python original was removed in #5431); the
  * golden fixtures under scripts/__fixtures__/route-burndown pin its output.
  */
-import {readFileSync, writeFileSync, readdirSync} from 'node:fs';
+import {existsSync, readFileSync, writeFileSync, readdirSync} from 'node:fs';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
+import {
+  buildCensus,
+  scanCallers,
+  sourceRouteOwners,
+} from './generate_live_route_census.mjs';
 import {canonicalNativeDest, RUST_DEST, withCanonicalBuilds} from './vercel_builds.mjs';
 import {slimNativeRollRoutes} from './vercel_slim_routes.mjs';
 
