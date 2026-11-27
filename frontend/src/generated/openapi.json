@@ -10673,112 +10673,6 @@
         ],
         "type": "object"
       },
-      "NativeThreadResponse2": {
-        "description": "Python `ThreadResponse`.",
-        "properties": {
-          "blocking_reasons": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "created_at": {
-            "type": "string"
-          },
-          "format": {
-            "type": "string"
-          },
-          "id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "is_blocked": {
-            "type": "boolean"
-          },
-          "is_test": {
-            "type": "boolean"
-          },
-          "issues_remaining": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "last_activity_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "last_rating": {
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
-          },
-          "manual_creator_credits": {
-            "items": {
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "next_unread_issue_id": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "next_unread_issue_number": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "notes": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "queue_position": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "reading_progress": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "status": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "total_issues": {
-            "format": "int32",
-            "type": [
-              "integer",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "format",
-          "issues_remaining",
-          "queue_position",
-          "status",
-          "is_test",
-          "is_blocked",
-          "blocking_reasons",
-          "created_at",
-          "manual_creator_credits"
-        ],
-        "type": "object"
-      },
       "NearMatch": {
         "properties": {
           "color": {
@@ -22870,7 +22764,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeThreadResponse2"
+                  "$ref": "#/components/schemas/NativeThreadResponse"
                 }
               }
             },
@@ -22933,7 +22827,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeThreadResponse2"
+                  "$ref": "#/components/schemas/NativeThreadResponse"
                 }
               }
             },

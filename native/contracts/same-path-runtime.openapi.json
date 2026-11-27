@@ -10677,6 +10677,57 @@
         ]
       }
     },
+    "/api/v2/threads/{thread_id}:reactivate": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "operationId": "reactivate_thread_v2",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Identifier of the completed thread to reactivate",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReactivateThreadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Completed thread reactivated with the requested unread issues",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Thread is not completed"
+          },
+          "404": {
+            "description": "Thread not found for this reader"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        }
+      }
+    },
     "/api/v2/undo/{session_id}/snapshots": {
       "get": {
         "tags": [
@@ -20743,6 +20794,22 @@
           }
         }
       },
+      "ReactivateThreadRequest": {
+        "type": "object",
+        "description": "Body of `POST /api/v2/threads/{thread_id}:reactivate`.",
+        "required": [
+          "issues_to_add"
+        ],
+        "properties": {
+          "issues_to_add": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of new unread issues to create for the completed series.",
+            "maximum": 10000,
+            "minimum": 1
+          }
+        }
+      },
       "ReaderContextCrossover": {
         "type": "object",
         "description": "Python `ReaderContextCrossover`.",
@@ -26270,7 +26337,7 @@
       },
       "ThreadResponse": {
         "type": "object",
-        "description": "Python `ThreadResponse`.",
+        "description": "The Python `ThreadResponse` projection every lifecycle writer returns.",
         "required": [
           "id",
           "title",
@@ -26324,12 +26391,7 @@
             ],
             "format": "double"
           },
-          "manual_creator_credits": {
-            "type": "array",
-            "items": {
-              "type": "object"
-            }
-          },
+          "manual_creator_credits": {},
           "next_unread_issue_id": {
             "type": [
               "integer",
