@@ -37,6 +37,24 @@ export interface TasteSignalResponse {
   last_prompted_at: string | null
 }
 
+/** AIP-134 partial update of one canonical v2 taste signal resource. */
+export interface TasteSignalPatchRequest {
+  user_verdict: TasteVerdict
+  update_mask: ['user_verdict']
+}
+
+/**
+ * Build the stable single-segment resource name for a Taste Bank signal.
+ *
+ * The composite `(signal_type, external_key)` identity is encoded as
+ * `<signal_type>:<external_key>`; the server splits on the first colon so
+ * colon-shaped external keys such as `creator:writer:dk` stay intact. Callers
+ * must URL-encode the whole name before placing it in a path (#5717).
+ */
+export function tasteSignalName(signalType: string, externalKey: string): string {
+  return `${signalType}:${externalKey}`
+}
+
 /**
  * Build the taste service bound to an HTTP client.
  *
@@ -45,14 +63,23 @@ export interface TasteSignalResponse {
  */
 export function createTasteApi(client: HttpClient) {
   return {
-    getDiscoveries: () => client.get<TasteDiscoveryListResponse>('/v1/taste/discoveries'),
+    getDiscoveries: () =>
+      client.get<TasteDiscoveryListResponse>('/v2/users/me/tasteDiscoveries'),
     dismiss: (signalId: number) =>
-      client.post<{ dismissed: boolean }>(`/v1/taste/discoveries/${signalId}/dismiss`),
-    submitVerdict: (signalType: string, externalKey: string, verdict: TasteVerdict) =>
-      client.put<TasteSignalResponse>(
-        `/v1/users/me/taste-signals/${encodeURIComponent(signalType)}/${encodeURIComponent(externalKey)}/verdict`,
-        { verdict },
+      client.post<{ dismissed: boolean }>(
+        `/v2/users/me/tasteDiscoveries/${signalId}:dismiss`,
       ),
+    submitVerdict: (signalType: string, externalKey: string, verdict: TasteVerdict) => {
+      const name = tasteSignalName(signalType, externalKey)
+      const body: TasteSignalPatchRequest = {
+        user_verdict: verdict,
+        update_mask: ['user_verdict'],
+      }
+      return client.patch<TasteSignalResponse, TasteSignalPatchRequest>(
+        `/v2/users/me/tasteSignals/${encodeURIComponent(name)}`,
+        body,
+      )
+    },
   }
 }
 

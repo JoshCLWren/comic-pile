@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { createTasteApi } from '../services/api-taste'
+import { createTasteApi, tasteSignalName } from '../services/api-taste'
 import { createHttpClientStub } from './httpClientStub'
 
 const client = createHttpClientStub()
 const tasteApi = createTasteApi(client)
 
 describe('tasteApi', () => {
-  it('reads discoveries from the Rust-served taste discoveries endpoint', async () => {
+  it('reads discoveries from the canonical v2 collection (#5717)', async () => {
     const payload = {
       discoveries: [
         {
@@ -25,17 +25,19 @@ describe('tasteApi', () => {
     client.get.mockResolvedValue(payload)
 
     await expect(tasteApi.getDiscoveries()).resolves.toEqual(payload)
-    expect(client.get).toHaveBeenCalledWith('/v1/taste/discoveries')
+    expect(client.get).toHaveBeenCalledWith('/v2/users/me/tasteDiscoveries')
   })
 
-  it('dismisses discoveries through the Rust-served dismiss endpoint', async () => {
+  it('dismisses through the canonical v2 custom method (#5717)', async () => {
     client.post.mockResolvedValue({ dismissed: true })
 
     await expect(tasteApi.dismiss(7)).resolves.toEqual({ dismissed: true })
-    expect(client.post).toHaveBeenCalledWith('/v1/taste/discoveries/7/dismiss')
+    expect(client.post).toHaveBeenCalledWith(
+      '/v2/users/me/tasteDiscoveries/7:dismiss',
+    )
   })
 
-  it('submits verdicts through the taste-signals verdict endpoint', async () => {
+  it('patches the canonical v2 signal with an encoded composite name (#5717)', async () => {
     const payload = {
       user_id: 1,
       signal_type: 'creator',
@@ -51,14 +53,31 @@ describe('tasteApi', () => {
       last_observed_at: null,
       last_prompted_at: null,
     }
-    client.put.mockResolvedValue(payload)
+    client.patch.mockResolvedValue(payload)
 
     await expect(
       tasteApi.submitVerdict('creator', 'creator:writer:dk', 'confirmed'),
     ).resolves.toEqual(payload)
-    expect(client.put).toHaveBeenCalledWith(
-      '/v1/users/me/taste-signals/creator/creator%3Awriter%3Adk/verdict',
-      { verdict: 'confirmed' },
+    expect(client.patch).toHaveBeenCalledWith(
+      '/v2/users/me/tasteSignals/creator%3Acreator%3Awriter%3Adk',
+      { user_verdict: 'confirmed', update_mask: ['user_verdict'] },
+    )
+  })
+
+  it('builds a stable colon-shaped signal name without losing the key (#5717)', () => {
+    expect(tasteSignalName('creator', 'creator:writer:dk')).toBe(
+      'creator:creator:writer:dk',
+    )
+    expect(encodeURIComponent(tasteSignalName('era', '1990s:what-if'))).toBe(
+      'era%3A1990s%3Awhat-if',
+    )
+  })
+
+  it('never calls the retired v1 taste paths (#5717)', () => {
+    expect(client.put).not.toHaveBeenCalled()
+    expect(client.get).not.toHaveBeenCalledWith('/v1/taste/discoveries')
+    expect(client.post).not.toHaveBeenCalledWith(
+      '/v1/taste/discoveries/7/dismiss',
     )
   })
 })
