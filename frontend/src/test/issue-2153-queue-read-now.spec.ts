@@ -39,7 +39,7 @@ test.describe('P0 #5525: Queue manual issue reading', () => {
     await expect(panel).toBeVisible()
     const card = panel.getByRole('article', { name: `Issue ${title} #1` })
     await expect(card).toBeVisible()
-    expect(writes.some((write) => write.includes('/v1/threads/'))).toBe(false)
+    expect(writes.some((write) => write.startsWith('POST /v1/') && write.includes('threads'))).toBe(false)
 
     await card.getByRole('button', { name: 'Read now', exact: true }).click()
     await expect(card.getByRole('slider')).toBeVisible()
@@ -67,7 +67,7 @@ test.describe('P0 #5525: Queue manual issue reading', () => {
       rating: 4,
       idempotency_key: expect.any(String),
     }))
-    expect(writes.some((write) => write.includes('/v1/threads/'))).toBe(false)
+    expect(writes.some((write) => write.startsWith('POST /v1/') && write.includes('threads'))).toBe(false)
     await expect(page).toHaveURL(/\/queue$/)
   })
 

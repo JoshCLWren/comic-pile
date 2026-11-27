@@ -603,7 +603,6 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/test/core-views-request-budget.spec.ts",
-        "frontend/src/test/issue-2153-queue-read-now.spec.ts",
         "frontend/src/unit/api-auth-recovery.test.ts",
         "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
         "frontend/src/unit/httpClient.test.ts"

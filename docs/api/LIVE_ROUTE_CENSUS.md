@@ -17,7 +17,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 - v1 routes with a named retirement owner: 64.
 - v1 routes needing an owner issue: 0 (visible baseline debt, not a pass).
 - Routes with unresolved production ingress: 0.
-- Scanned first-party call sites: 923.
+- Scanned first-party call sites: 921.
 - Stale AIP baseline entries (no live route): 4.
 - Allowlist entries: 174 (owner 174, baseline debt 0, nonconforming v2 98).
 
@@ -74,7 +74,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | GET | `/api/v1/roll/events/{event_id}/recommendation-explanation` | `recommendation_explanation::get_recommendation_explanation` | v1 | none | /api/native_roll.rs | #4595 | retire-without-replacement | legacy-family-debt |
 | GET | `/api/v1/taste/discoveries` | `taste_discoveries::list_taste_discoveries` | v1 | frontend/src/services/api-taste.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/unit/api-taste.test.ts | /api/native_roll.rs | #5717 | GET /api/v2/users/me/tasteDiscoveries \| POST /api/v2/users/me/tasteDiscoveries/{id}:dismiss | slice-open |
 | POST | `/api/v1/taste/discoveries/{signal_id}/dismiss` | `taste_discoveries::dismiss_taste_discovery` | v1 | frontend/src/services/api-taste.ts, frontend/src/unit/api-taste.test.ts | /api/native_roll.rs | #5717 | GET /api/v2/users/me/tasteDiscoveries \| POST /api/v2/users/me/tasteDiscoveries/{id}:dismiss | slice-open |
-| POST | `/api/v1/threads/` | `thread_lifecycle::create_thread` | v1 | frontend/src/test/core-views-request-budget.spec.ts, frontend/src/test/issue-2153-queue-read-now.spec.ts, frontend/src/unit/api-auth-recovery.test.ts, frontend/src/unit/continuityIdentityRequestBudget.test.tsx, frontend/src/unit/httpClient.test.ts | /api/native_roll.rs | #5702 | POST /api/v2/threads | slice-merged |
+| POST | `/api/v1/threads/` | `thread_lifecycle::create_thread` | v1 | frontend/src/test/core-views-request-budget.spec.ts, frontend/src/unit/api-auth-recovery.test.ts, frontend/src/unit/continuityIdentityRequestBudget.test.tsx, frontend/src/unit/httpClient.test.ts | /api/native_roll.rs | #5702 | POST /api/v2/threads | slice-merged |
 | POST | `/api/v1/threads/check-duplicates` | `thread_lifecycle::check_potential_duplicates` | v1 | frontend/src/services/api-threads.ts | /api/native_roll.rs | #5705 | POST /api/v2/threads:checkDuplicates | slice-merged |
 | GET | `/api/v1/threads/completed/threads` | `threads::list_completed_threads` | v1 | frontend/src/services/api-threads.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/unit/api.test.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx | /api/native_roll.rs | #5701 | GET /api/v2/threads?filter=status eq 'completed' | slice-open |
 | GET | `/api/v1/threads/excluded/threads` | `thread_lifecycle::list_excluded_threads` | v1 | frontend/src/services/api-threads.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/test/p0-snooze-unsnooze.spec.ts, frontend/src/unit/api.test.ts, frontend/src/unit/continuityIdentityRequestBudget.test.tsx, frontend/src/unit/coreRouteRequestBudget.test.tsx | /api/native_roll.rs | #5704 | GET /api/v2/threads?filter=excluded | slice-open |

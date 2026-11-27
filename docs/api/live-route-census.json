@@ -24,7 +24,7 @@
     "v1_with_owner": 64,
     "v1_needing_owner": 0,
     "unknown_ingress": 0,
-    "first_party_call_sites": 923,
+    "first_party_call_sites": 921,
     "stale_aip_baseline_entries": 4
   },
   "routes": [
@@ -1009,12 +1009,11 @@
       "runtime_source": "native-router",
       "consumers": [
         "frontend/src/test/core-views-request-budget.spec.ts",
-        "frontend/src/test/issue-2153-queue-read-now.spec.ts",
         "frontend/src/unit/api-auth-recovery.test.ts",
         "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
         "frontend/src/unit/httpClient.test.ts"
       ],
-      "caller_count": 7,
+      "caller_count": 5,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5702,
