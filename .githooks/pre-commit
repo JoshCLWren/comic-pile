@@ -56,6 +56,29 @@ if [ -n "$BACKUP_STAGED" ]; then
     exit 1
 fi
 
+RUST_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.rs$' || true)
+if [ -n "$RUST_FILES" ]; then
+    if ! command -v rustfmt >/dev/null 2>&1; then
+        echo "${RED}ERROR: rustfmt is required to commit Rust files (rustup component add rustfmt).${NC}"
+        exit 1
+    fi
+    echo ""
+    echo "Formatting staged Rust files with rustfmt..."
+    for file in $RUST_FILES; do
+        # Re-staging a file that also has unstaged edits would commit those edits.
+        if ! git diff --quiet -- "$file"; then
+            if ! rustfmt --edition 2021 --check "$file" >/dev/null; then
+                echo "${RED}ERROR: $file is not formatted and has unstaged changes.${NC}"
+                echo "${RED}Run cargo fmt --all, review the result, and stage it.${NC}"
+                exit 1
+            fi
+            continue
+        fi
+        rustfmt --edition 2021 "$file"
+        git add -- "$file"
+    done
+fi
+
 # Shared staged lint. The Python push gate remains the separate whole-repo
 # `ruff check .` and `ty check --error-on-warning` pair; lint.sh does not run them.
 bash scripts/lint.sh --staged

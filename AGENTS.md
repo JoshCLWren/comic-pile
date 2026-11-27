@@ -157,6 +157,7 @@ ty check --error-on-warning
 **Required:**
 1. Before the first Python commit of a session, run `bash scripts/install-git-hooks.sh` so Cursor's remapped `core.hooksPath` can still chain to `.git/hooks/pre-commit`.
 2. After the last Python edit, run `ruff check .` and `ty check --error-on-warning` against the whole repo, plus `bash scripts/lint.sh` for the other repository checks.
+   After the last Rust edit, run `cargo fmt --all`, then `bash scripts/check-rust-factory-prepush.sh` (format check, Clippy with `-D warnings`, and `cargo check`). The pre-commit hook formats staged Rust files and the pre-push hook checks Rust, but a remapped `core.hooksPath` can skip both.
 3. Re-run after every later edit. A green run is invalid the moment sources change.
 4. Fix every Ruff, ty, lint, test, and build finding locally. Do not use CI to discover them.
 
@@ -179,7 +180,7 @@ Run only targeted tests locally: select the test files or cases covering the cha
 including focused regression tests for bugs and focused Chromium tests for browser behavior.
 Leave full backend/frontend suites to CI. There is no Python application code to test;
 repository tooling tests under `tests/` are run per affected file. The pre-push hook runs lint,
-frontend unit tests, and the UI audit only. Python coverage thresholds are retired; frontend and
+Rust format and Clippy, frontend unit tests, and the UI audit only. Python coverage thresholds are retired; frontend and
 Rust gates remain authoritative. Do not run bare `pytest`, `pnpm test`, `cargo test --workspace`,
 or `pnpm run test:coverage` locally unless Josh explicitly requests a full local run. A CI failure calls for targeted local reproduction and repair, not a
 full local suite rerun.
