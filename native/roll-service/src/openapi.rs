@@ -433,17 +433,30 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
             };
             if needs_fix {
                 use utoipa::openapi::schema::{ArrayBuilder, ObjectBuilder, SchemaType, Type};
+                let credit_item = ObjectBuilder::new()
+                    .schema_type(SchemaType::Type(Type::Object))
+                    .property(
+                        "name",
+                        ObjectBuilder::new().schema_type(SchemaType::Type(Type::String)),
+                    )
+                    .required("name")
+                    .property(
+                        "roles",
+                        ArrayBuilder::new().items(
+                            ObjectBuilder::new().schema_type(SchemaType::Type(Type::String)),
+                        ),
+                    )
+                    .required("roles");
                 obj.properties.insert(
                     "manual_creator_credits".to_string(),
                     utoipa::openapi::RefOr::T(utoipa::openapi::Schema::Array(
                         ArrayBuilder::new()
                             .items(utoipa::openapi::RefOr::T(utoipa::openapi::Schema::Object(
-                                ObjectBuilder::new().build(),
+                                credit_item.build(),
                             )))
                             .build(),
                     )),
                 );
-                let _ = (SchemaType::Type(Type::Array),);
             }
         }
     }
