@@ -122,8 +122,8 @@ describe('RatingView action panel (issue #1406)', () => {
     expect(cancel.className).toContain('bg-[var(--theme-bg-panel)]')
     // Demotion comes from the flat surface, not from an accent fill and not from
     // the primary's uppercase treatment. The old contract also demanded
-    // `bg-transparent` plus muted text, which is what introduced the pale-cyan
-    // command-center accent the visual grammar forbids for a non-accent meaning.
+    // `bg-transparent` plus muted text, which made a neutral control borrow an
+    // accent meaning the Night Shift visual grammar reserves for status/domain.
     expect(cancel.className).not.toMatch(/uppercase/)
     expect(cancel.className).not.toContain('theme-primary-action')
     expect(cancel.className).not.toContain('theme-continuity-accent')
