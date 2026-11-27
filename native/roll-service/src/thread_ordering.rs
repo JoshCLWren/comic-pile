@@ -909,7 +909,8 @@ fn dependency_rows(rows: &[tokio_postgres::Row]) -> Vec<DependencyRow> {
         .collect()
 }
 
-/// Serve `GET /api/v1/threads/{thread_id}/connected`.
+/// Owner-scoped connected-threads reader behind
+/// `GET /api/v2/threads/{thread_id}/connections`.
 pub async fn get_thread_connected_threads(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
