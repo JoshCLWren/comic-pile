@@ -19,9 +19,6 @@
 //!   and uses that result for grouping, availability, frontier and blocking
 //!   reasons. It needs the bounded Option E input snapshot in addition to the
 //!   page statement, so the default path is the only one-statement path.
-//!
-//! `POST /api/v2/threads` is the paired AIP-133 standard Create (#5702); its
-//! handler lives in `thread_lifecycle` and shares the legacy write path.
 
 use axum::http::StatusCode;
 
@@ -1526,19 +1523,13 @@ fn cursor_clause(sort: &str, cursor: Option<&QueueCursor>) -> (String, Vec<Param
 /// OpenAPI document for the v2 reader threads collection.
 #[derive(utoipa::OpenApi)]
 #[openapi(
-    paths(
-        list_threads_documentation,
-        create_thread_v2_documentation,
-        list_completed_threads_documentation
-    ),
+    paths(list_threads_documentation, list_completed_threads_documentation),
     components(schemas(
         ThreadListItem,
         ThreadListResponse,
         ThreadTag,
         ComicVineMappingHealth,
-        QueueSeriesMetadata,
-        crate::thread_lifecycle::ThreadCreateRequest,
-        crate::thread_lifecycle::ThreadResponse
+        QueueSeriesMetadata
     )),
     modifiers(&ThreadsSecurityAddon)
 )]
@@ -1581,30 +1572,6 @@ impl utoipa::Modify for ThreadsSecurityAddon {
 )]
 #[allow(dead_code)]
 pub(crate) fn list_threads_documentation() {}
-
-/// Documentation-only operation for the AIP-133 standard Create on the v2
-/// threads collection (#5702). The handler lives in `thread_lifecycle` and
-/// shares the legacy write path; only the URL and the `Location` response
-/// header differ.
-#[utoipa::path(
-    post,
-    path = "/api/v2/threads",
-    tag = "threads",
-    description = "Create a thread at the end of the authenticated reader's queue. \
-                   The created resource (including its stable `id`) is returned at 201 \
-                   with a `Location` header naming the v2 collection member. The write \
-                   preserves owner assignment, the five-second duplicate-merge guard and \
-                   the Python validation envelope; it creates no Plan, dependency or issue rows.",
-    request_body = crate::thread_lifecycle::ThreadCreateRequest,
-    responses(
-        (status = 201, description = "Created (or the duplicate created seconds earlier)", body = crate::thread_lifecycle::ThreadResponse),
-        (status = 401, description = "Not authenticated"),
-        (status = 422, description = "Validation failed")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub(crate) fn create_thread_v2_documentation() {}
 
 #[utoipa::path(
     get,
@@ -1787,30 +1754,6 @@ mod tests {
         assert_eq!(operation["operationId"], "list_threads_documentation");
         let response = &operation["responses"]["200"]["content"]["application/json"]["schema"];
         assert_eq!(response["$ref"], "#/components/schemas/ThreadListResponse");
-    }
-
-    #[test]
-    fn threads_openapi_documents_the_v2_standard_create() {
-        use utoipa::OpenApi;
-        let document = serde_json::to_value(ThreadsApi::openapi()).expect("threads OpenAPI");
-        let operation = &document["paths"]["/api/v2/threads"]["post"];
-        assert_eq!(operation["operationId"], "create_thread_v2_documentation");
-        assert_eq!(
-            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"],
-            "#/components/schemas/ThreadCreateRequest"
-        );
-        assert_eq!(
-            operation["responses"]["201"]["content"]["application/json"]["schema"]["$ref"],
-            "#/components/schemas/ThreadResponse"
-        );
-        assert!(
-            operation["description"]
-                .as_str()
-                .is_some_and(|description| description.contains("Location")),
-            "the 201 Location/name contract must be documented"
-        );
-        assert!(document["components"]["schemas"]["ThreadCreateRequest"].is_object());
-        assert!(document["components"]["schemas"]["ThreadResponse"].is_object());
     }
 
     #[test]

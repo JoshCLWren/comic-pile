@@ -32,6 +32,7 @@ use utoipa::OpenApi;
         crate::thread_lifecycle::list_stale_threads_documentation,
         crate::thread_lifecycle::list_excluded_threads_documentation,
         crate::thread_lifecycle::check_potential_duplicates_documentation,
+        crate::thread_lifecycle::list_thread_groups_batch_documentation,
     ),
     components(schemas(
         crate::thread_lifecycle::ThreadResponse,

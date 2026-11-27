@@ -286,12 +286,6 @@ export interface CreateTagRequest {
 
 export type CreateTagResponse = components['schemas']['CreateTagResponse']
 
-export interface CreateThreadV2Request {
-  body: components['schemas']['ThreadCreateRequest']
-}
-
-export type CreateThreadV2Response = components['schemas']['NativeThreadResponse']
-
 export interface CreatorsListRequest {
   query?: {
     search?: string
@@ -357,55 +351,6 @@ export interface DeleteTagRequest {
 }
 
 export type DeleteTagResponse = components['schemas']['TagDeleteResponse']
-
-export interface DependencyGroupsV2AddIssueRangeRequest {
-  path: {
-    group_id: number
-  }
-  body: components['schemas']['DependencyGroupIssueRangeCreateRequest']
-}
-
-export type DependencyGroupsV2AddIssueRangeResponse = components['schemas']['NativeDependencyGroupIssueRangeResponse']
-
-export interface DependencyGroupsV2AddMemberRequest {
-  path: {
-    group_id: number
-  }
-  body: components['schemas']['DependencyGroupMemberCreateRequest']
-}
-
-export type DependencyGroupsV2AddMemberResponse = components['schemas']['NativeDependencyGroupMemberResponse']
-
-export interface DependencyGroupsV2ListReadingPlansRequest {
-  path: {
-    group_id: number
-  }
-}
-
-export type DependencyGroupsV2ListReadingPlansResponse = Array<components['schemas']['NativeDependencyGroupSummary']>
-
-export interface DependencyGroupsV2ListThreadGroupMembershipsRequest {
-  path: {
-    thread_id: number
-  }
-}
-
-export type DependencyGroupsV2ListThreadGroupMembershipsResponse = Array<components['schemas']['NativeDependencyGroupSummary']>
-
-export interface DependencyGroupsV2RemoveMemberRequest {
-  path: {
-    group_id: number
-    member_id: number
-  }
-}
-
-export type DependencyGroupsV2RemoveMemberResponse = void
-
-export interface DependencyGroupsV2ResolveMembershipsRequest {
-  body: components['schemas']['GroupsBatchRequest']
-}
-
-export type DependencyGroupsV2ResolveMembershipsResponse = Record<string, Array<components['schemas']['NativeDependencyGroupSummary']>>
 
 export interface DetailRequest {
   path: {
@@ -1308,7 +1253,6 @@ export interface NativeV2Client {
   createQueueOrder(args: CreateQueueOrderRequest): Promise<CreateQueueOrderResponse>
   createReadingList(args: CreateReadingListRequest): Promise<CreateReadingListResponse>
   createTag(args: CreateTagRequest): Promise<CreateTagResponse>
-  createThreadV2(args: CreateThreadV2Request): Promise<CreateThreadV2Response>
   creatorsList(args?: CreatorsListRequest): Promise<CreatorsListResponse>
   csrf(): Promise<CsrfResponse>
   defer(args: DeferRequest): Promise<DeferResponse>
@@ -1317,12 +1261,6 @@ export interface NativeV2Client {
   deleteOverlapDecision(args: DeleteOverlapDecisionRequest): Promise<DeleteOverlapDecisionResponse>
   deleteReadingList(args: DeleteReadingListRequest): Promise<DeleteReadingListResponse>
   deleteTag(args: DeleteTagRequest): Promise<DeleteTagResponse>
-  dependencyGroupsV2AddIssueRange(args: DependencyGroupsV2AddIssueRangeRequest): Promise<DependencyGroupsV2AddIssueRangeResponse>
-  dependencyGroupsV2AddMember(args: DependencyGroupsV2AddMemberRequest): Promise<DependencyGroupsV2AddMemberResponse>
-  dependencyGroupsV2ListReadingPlans(args: DependencyGroupsV2ListReadingPlansRequest): Promise<DependencyGroupsV2ListReadingPlansResponse>
-  dependencyGroupsV2ListThreadGroupMemberships(args: DependencyGroupsV2ListThreadGroupMembershipsRequest): Promise<DependencyGroupsV2ListThreadGroupMembershipsResponse>
-  dependencyGroupsV2RemoveMember(args: DependencyGroupsV2RemoveMemberRequest): Promise<DependencyGroupsV2RemoveMemberResponse>
-  dependencyGroupsV2ResolveMemberships(args: DependencyGroupsV2ResolveMembershipsRequest): Promise<DependencyGroupsV2ResolveMembershipsResponse>
   detail(args: DetailRequest): Promise<DetailResponse>
   dieState(): Promise<DieStateResponse>
   discoveries(): Promise<DiscoveriesResponse>
@@ -1637,12 +1575,6 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
-    createThreadV2(args: CreateThreadV2Request) {
-      return client.post<CreateThreadV2Response, CreateThreadV2Request['body']>(
-        "/v2/threads",
-        args.body,
-      )
-    },
     creatorsList(args: CreatorsListRequest = {}) {
       return client.get<CreatorsListResponse>(
         "/v2/creators",
@@ -1679,39 +1611,6 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     deleteTag(args: DeleteTagRequest) {
       return client.delete<DeleteTagResponse>(
         `/v2/tags/${encodeURIComponent(String(args.path.tag_id))}`,
-      )
-    },
-    dependencyGroupsV2AddIssueRange(args: DependencyGroupsV2AddIssueRangeRequest) {
-      return client.post<DependencyGroupsV2AddIssueRangeResponse, DependencyGroupsV2AddIssueRangeRequest['body']>(
-        `/v2/reading-order-groups/${encodeURIComponent(String(args.path.group_id))}/issue-ranges`,
-        args.body,
-      )
-    },
-    dependencyGroupsV2AddMember(args: DependencyGroupsV2AddMemberRequest) {
-      return client.post<DependencyGroupsV2AddMemberResponse, DependencyGroupsV2AddMemberRequest['body']>(
-        `/v2/reading-order-groups/${encodeURIComponent(String(args.path.group_id))}/members`,
-        args.body,
-      )
-    },
-    dependencyGroupsV2ListReadingPlans(args: DependencyGroupsV2ListReadingPlansRequest) {
-      return client.get<DependencyGroupsV2ListReadingPlansResponse>(
-        `/v2/reading-order-groups/${encodeURIComponent(String(args.path.group_id))}/reading-plans`,
-      )
-    },
-    dependencyGroupsV2ListThreadGroupMemberships(args: DependencyGroupsV2ListThreadGroupMembershipsRequest) {
-      return client.get<DependencyGroupsV2ListThreadGroupMembershipsResponse>(
-        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/reading-order-group-memberships`,
-      )
-    },
-    dependencyGroupsV2RemoveMember(args: DependencyGroupsV2RemoveMemberRequest) {
-      return client.delete<DependencyGroupsV2RemoveMemberResponse>(
-        `/v2/reading-order-groups/${encodeURIComponent(String(args.path.group_id))}/members/${encodeURIComponent(String(args.path.member_id))}`,
-      )
-    },
-    dependencyGroupsV2ResolveMemberships(args: DependencyGroupsV2ResolveMembershipsRequest) {
-      return client.post<DependencyGroupsV2ResolveMembershipsResponse, DependencyGroupsV2ResolveMembershipsRequest['body']>(
-        "/v2/reading-order-groups:resolveMemberships",
-        args.body,
       )
     },
     detail(args: DetailRequest) {

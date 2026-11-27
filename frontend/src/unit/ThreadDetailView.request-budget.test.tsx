@@ -106,7 +106,7 @@ function makeHandler(state: BoundaryState): Responder {
       const id = call.url.includes('/43/') ? 43 : 42
       return { thread_id: id, connected_threads: [] }
     }
-    if (call.url === '/v2/reading-order-groups:resolveMemberships') {
+    if (call.url === '/v1/threads/groups:batch') {
       const groups: Record<string, { id: number; name: string }[]> = {}
       for (const id of requestedThreadIds(call)) groups[id] = id === 42 ? CROSSOVERS[42] : id === 43 ? CROSSOVERS[43] : []
       return groups
@@ -175,7 +175,7 @@ function renderThreadWithNavigation(): ReactNode {
 }
 
 function groupsCalls(calls: RecordedCall[]): RecordedCall[] {
-  return calls.filter((call) => call.url === '/v2/reading-order-groups:resolveMemberships')
+  return calls.filter((call) => call.url === '/v1/threads/groups:batch')
 }
 
 describe('Thread detail request budget', () => {
@@ -197,7 +197,7 @@ describe('Thread detail request budget', () => {
       'GET /v1/threads/42/connected': 1,
       'GET /v2/reading-graph': 1,
       'GET /v2/tags/effective/threads/42': 1,
-      'POST /v2/reading-order-groups:resolveMemberships': 1,
+      'POST /v1/threads/groups:batch': 1,
       'POST /v1/threads:getBlockingInfo': 1,
     })
     expect(calls.some((call) => call.url === '/v2/tags')).toBe(false)
@@ -225,7 +225,7 @@ describe('Thread detail request budget', () => {
       'GET /v1/threads/42/connected': 1,
       'GET /v2/reading-graph': 1,
       'GET /v2/tags/effective/threads/42': 1,
-      'POST /v2/reading-order-groups:resolveMemberships': 1,
+      'POST /v1/threads/groups:batch': 1,
     })
     expect(calls.some((call) => call.url === '/v2/tags')).toBe(false)
   })
@@ -336,7 +336,7 @@ describe('Thread detail request budget', () => {
     const handler = makeHandler('unavailable')
     const { calls, client } = createRequestRecorder((call) => {
       if (call.url === '/v1/threads/999') return Promise.reject(new Error('404'))
-      if (call.url === '/v2/reading-order-groups:resolveMemberships') return Promise.reject(new Error('404'))
+      if (call.url === '/v1/threads/groups:batch') return Promise.reject(new Error('404'))
       return handler(call)
     })
     setDefaultHttpClient(client)

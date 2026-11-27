@@ -92,28 +92,33 @@ export function createDependencyGroupsApi(client: HttpClient) {
 
     listForThread: async (threadId: number): Promise<DependencyGroupSummary[]> => {
       return client.get<DependencyGroupSummary[]>(
-        `/v2/threads/${threadId}/reading-order-group-memberships`,
+        `/v1/reading-order-groups/threads/${threadId}/groups`,
       )
     },
 
     plansForGroup: async (groupId: number): Promise<DependencyGroupSummary[]> => {
       return client.get<DependencyGroupSummary[]>(
-        `/v2/reading-order-groups/${groupId}/reading-plans`,
+        `/v1/reading-order-groups/${groupId}/plans`,
       )
     },
 
     /**
-     * Load crossover memberships for several threads in one bounded request.
+     * Load crossover memberships for several threads in one request.
      *
-     * Uses the backend batch action `POST /v2/reading-order-groups:resolveMemberships`
-     * (AIP-136), which resolves ownership once and returns all requested thread
-     * memberships in a single response.
+     * Uses the backend batch route `POST /v1/threads/groups:batch`, which the
+     * server resolves with a single ownership check plus a single membership
+     * query. Fan-out over the per-thread GET route is deliberately avoided:
+     * every extra request is a billable function invocation and re-derives the
+     * same membership rows once per thread.
+     *
+     * @param threadIds - Owned thread identifiers to resolve, at most 200.
+     * @returns A mapping from thread id to zero or more crossover summaries.
      */
     listForThreads: async (
       threadIds: number[],
     ): Promise<Record<number, DependencyGroupSummary[]>> => {
       return client.post<Record<number, DependencyGroupSummary[]>>(
-        '/v2/reading-order-groups:resolveMemberships',
+        '/v1/threads/groups:batch',
         { thread_ids: threadIds },
       )
     },
@@ -123,7 +128,7 @@ export function createDependencyGroupsApi(client: HttpClient) {
       target: DependencyGroupMemberTarget,
     ): Promise<DependencyGroupMember> => {
       return client.post<DependencyGroupMember>(
-        `/v2/reading-order-groups/${groupId}/members`,
+        `/v1/reading-order-groups/${groupId}/members`,
         target,
       )
     },
@@ -135,7 +140,7 @@ export function createDependencyGroupsApi(client: HttpClient) {
       endPosition: number,
     ): Promise<DependencyGroupIssueRangeResult> => {
       return client.post<DependencyGroupIssueRangeResult>(
-        `/v2/reading-order-groups/${groupId}/issue-ranges`,
+        `/v1/reading-order-groups/${groupId}/issue-ranges`,
         {
           thread_id: threadId,
           start_position: startPosition,
@@ -146,7 +151,7 @@ export function createDependencyGroupsApi(client: HttpClient) {
 
     removeMember: async (groupId: number, memberId: number): Promise<void> => {
       await client.delete(
-        `/v2/reading-order-groups/${groupId}/members/${memberId}`,
+        `/v1/reading-order-groups/${groupId}/members/${memberId}`,
       )
     },
     }

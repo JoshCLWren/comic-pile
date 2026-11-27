@@ -79,7 +79,7 @@ test.describe('Issue #2104 zero readiness network requests', () => {
     const group = (await groupResponse.json()) as { id: number }
 
     const memberResponse = await page.request.post(
-      `/api/v2/reading-order-groups/${group.id}/members`,
+      `/api/v1/reading-order-groups/${group.id}/members`,
       { headers, data: { issue_id: issueIds[0] } },
     )
     expect(memberResponse.ok(), await memberResponse.text()).toBeTruthy()
