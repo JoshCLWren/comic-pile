@@ -1,7 +1,6 @@
 {
   "family": "continuity-plans",
   "owned_path_patterns": [
-    "^/api/v2/continuity-plans(?:/.*)?$",
     "^/api/v2/continuityPlans(?:/.*)?$"
   ],
   "defaults": {
@@ -13,9 +12,9 @@
     {
       "bucket": "operations",
       "method": "GET",
-      "path": "/api/v2/continuity-plans/",
+      "path": "/api/v2/continuityPlans/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/continuity\\-plans/$",
+      "src": "^/api/v2/continuityPlans/$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
@@ -24,9 +23,9 @@
     {
       "bucket": "operations",
       "method": "POST",
-      "path": "/api/v2/continuity-plans/",
+      "path": "/api/v2/continuityPlans/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/continuity\\-plans/$",
+      "src": "^/api/v2/continuityPlans/$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
@@ -35,9 +34,9 @@
     {
       "bucket": "operations",
       "method": "POST",
-      "path": "/api/v2/continuity-plans/from-reading-order",
+      "path": "/api/v2/continuityPlans/from-reading-order",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/continuity\\-plans/from\\-reading\\-order$",
+      "src": "^/api/v2/continuityPlans/from\\-reading\\-order$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
@@ -46,9 +45,9 @@
     {
       "bucket": "operations",
       "method": "POST",
-      "path": "/api/v2/continuity-plans/release-sources/",
+      "path": "/api/v2/continuityPlans/release-sources/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/continuity\\-plans/release\\-sources/$",
+      "src": "^/api/v2/continuityPlans/release\\-sources/$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
@@ -57,9 +56,9 @@
     {
       "bucket": "operations",
       "method": "DELETE",
-      "path": "/api/v2/continuity-plans/release-sources/{source_id}",
+      "path": "/api/v2/continuityPlans/release-sources/{source_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/continuity\\-plans/release\\-sources/[^/]+$",
+      "src": "^/api/v2/continuityPlans/release\\-sources/[^/]+$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
@@ -68,9 +67,9 @@
     {
       "bucket": "operations",
       "method": "PATCH",
-      "path": "/api/v2/continuity-plans/release-sources/{source_id}",
+      "path": "/api/v2/continuityPlans/release-sources/{source_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/continuity\\-plans/release\\-sources/[^/]+$",
+      "src": "^/api/v2/continuityPlans/release\\-sources/[^/]+$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
@@ -79,9 +78,9 @@
     {
       "bucket": "operations",
       "method": "DELETE",
-      "path": "/api/v2/continuity-plans/{plan_id}",
+      "path": "/api/v2/continuityPlans/{plan_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/continuity\\-plans/[^/]+$",
+      "src": "^/api/v2/continuityPlans/[^/]+$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
@@ -90,9 +89,9 @@
     {
       "bucket": "operations",
       "method": "GET",
-      "path": "/api/v2/continuity-plans/{plan_id}",
+      "path": "/api/v2/continuityPlans/{plan_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/continuity\\-plans/[^/]+$",
+      "src": "^/api/v2/continuityPlans/[^/]+$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
@@ -101,9 +100,9 @@
     {
       "bucket": "operations",
       "method": "PUT",
-      "path": "/api/v2/continuity-plans/{plan_id}",
+      "path": "/api/v2/continuityPlans/{plan_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/continuity\\-plans/[^/]+$",
+      "src": "^/api/v2/continuityPlans/[^/]+$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
@@ -112,9 +111,9 @@
     {
       "bucket": "operations",
       "method": "GET",
-      "path": "/api/v2/continuity-plans/{plan_id}/membership",
+      "path": "/api/v2/continuityPlans/{plan_id}/membership",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/continuity\\-plans/[^/]+/membership$",
+      "src": "^/api/v2/continuityPlans/[^/]+/membership$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
@@ -134,9 +133,9 @@
     {
       "bucket": "operations",
       "method": "POST",
-      "path": "/api/v2/continuity-plans/{plan_id}/reading-orders/project",
+      "path": "/api/v2/continuityPlans/{plan_id}/reading-orders/project",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/continuity\\-plans/[^/]+/reading\\-orders/project$",
+      "src": "^/api/v2/continuityPlans/[^/]+/reading\\-orders/project$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
@@ -145,9 +144,9 @@
     {
       "bucket": "operations",
       "method": "GET",
-      "path": "/api/v2/continuity-plans/{plan_id}/release-sources/",
+      "path": "/api/v2/continuityPlans/{plan_id}/release-sources/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/continuity\\-plans/[^/]+/release\\-sources/$",
+      "src": "^/api/v2/continuityPlans/[^/]+/release\\-sources/$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
@@ -156,9 +155,9 @@
     {
       "bucket": "operations",
       "method": "GET",
-      "path": "/api/v2/continuity-plans/{plan_id}/release-sources/reader",
+      "path": "/api/v2/continuityPlans/{plan_id}/release-sources/reader",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/continuity\\-plans/[^/]+/release\\-sources/reader$",
+      "src": "^/api/v2/continuityPlans/[^/]+/release\\-sources/reader$",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
@@ -167,9 +166,9 @@
     {
       "bucket": "operations",
       "method": "GET",
-      "path": "/api/v2/continuity-plans/{plan_id}/reader",
+      "path": "/api/v2/continuityPlans/{plan_id}/reader",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/continuity\\-plans/[^/]+/reader$",
+      "src": "^/api/v2/continuityPlans/[^/]+/reader$",
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts"
@@ -178,9 +177,9 @@
     {
       "bucket": "operations",
       "method": "GET",
-      "path": "/api/v2/continuity-plans/{plan_id}/recovery",
+      "path": "/api/v2/continuityPlans/{plan_id}/recovery",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/continuity\\-plans/[^/]+/recovery$",
+      "src": "^/api/v2/continuityPlans/[^/]+/recovery$",
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts"
@@ -189,9 +188,9 @@
     {
       "bucket": "operations",
       "method": "POST",
-      "path": "/api/v2/continuity-plans/{plan_id}/recovery",
+      "path": "/api/v2/continuityPlans/{plan_id}/recovery",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/continuity\\-plans/[^/]+/recovery$",
+      "src": "^/api/v2/continuityPlans/[^/]+/recovery$",
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts"
