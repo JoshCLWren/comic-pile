@@ -246,8 +246,8 @@ function EventRecord({
           an owned issue identity. Mount the shared card only when the owner
           projection supplies a canonical issue id; otherwise keep the text
           record without fabricating a cover or a mapping target. */}
-      {event.issue_id != null && (
-        <div className="mt-2">
+      {event.issue_id != null && Number.isInteger(event.issue_id) && event.issue_id > 0 && (
+        <div className="mt-2" data-testid="session-event-issue-actions">
           <CompactIssueCardTrigger
             issueId={event.issue_id}
             threadTitle={event.thread_title ?? 'Deleted series'}
@@ -274,13 +274,14 @@ export default function SessionPage() {
   // One bounded batch for the only events that actually carry a canonical
   // owned issue id. Hooks run before the early returns so hook order stays
   // stable across loading/error states.
-  // SAFETY: the session details endpoint returns enriched events carrying the
-  // display-only `issue_id` field beyond SessionEvent; the filter below keeps
-  // only canonical numeric ids from the owner projection.
+  // SAFETY: a card mounts only when an event supplies a canonical owned
+  // `issue_id`. The native session-details `SessionEventDetail` schema has no
+  // such field today, so legacy events stay text-only until a canonical owner
+  // projection exists; no id is ever inferred from a title or issue number.
   const sessionIssueIds = useMemo(
     () => (details?.events ?? [])
       .map((event) => (event as DisplayEvent).issue_id)
-      .filter((id): id is number => id != null),
+      .filter((id): id is number => id != null && Number.isInteger(id) && id > 0),
     [details],
   )
   const cardsQuery = useIssueCards(sessionIssueIds, {
@@ -434,7 +435,8 @@ export default function SessionPage() {
         ) : (
           <div className="space-y-3 min-w-0">
             {details.events.map((event) => (
-              // SAFETY: the session details endpoint returns enriched events with the display-only fields beyond SessionEvent.
+              // Legacy events are rendered as text; the shared card appears only
+              // when the owner projection supplies a canonical numeric issue id.
               <EventRecord
                 key={event.id}
                 event={event as DisplayEvent}

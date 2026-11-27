@@ -54,6 +54,18 @@ function activityLabel(type: string): string {
   }
 }
 
+/**
+ * Resolve a canonical owned issue id from the owner-scoped activity projection.
+ *
+ * Sessionless history can contain legacy events that only carry a thread title
+ * and issue number. Those hints are never an owned issue identity, so they must
+ * not be promoted into a card, cover, or mapping target. A non-positive or
+ * non-integer placeholder is rejected for the same reason.
+ */
+function canonicalActivityIssueId(id: number | null | undefined): number | null {
+  return id != null && Number.isInteger(id) && id > 0 ? id : null
+}
+
 function formatDie(value: number | null | undefined): string | null {
   return value == null ? null : `d${value}`
 }
@@ -125,7 +137,9 @@ export default function HistoryPage() {
   // One bounded batch projection for the visible page of exact owned issues;
   // never one request per rendered row.
   const visibleIssueIds = useMemo(
-    () => (activity ?? []).map((item) => item.issue_id).filter((id): id is number => id != null),
+    () => (activity ?? [])
+      .map((item) => canonicalActivityIssueId(item.issue_id))
+      .filter((id): id is number => id != null),
     [activity],
   )
   const cardsQuery = useIssueCards(visibleIssueIds)
