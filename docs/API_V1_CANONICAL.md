@@ -21,7 +21,7 @@ operation is served by the native Rust ingress `api/native_roll.rs`
 (`vercel.json` routes `/api(?:/.*)?` to it). There is no Python-runtime
 exception, parity oracle, or "Python stays mounted" hold on this surface.
 
-There are 27 retained `/api/v1` operations, all served by native Rust, in three
+There are 22 retained `/api/v1` operations, all served by native Rust, in three
 groups:
 
 | Group | Retained v1 operations | Target v2 resource |
