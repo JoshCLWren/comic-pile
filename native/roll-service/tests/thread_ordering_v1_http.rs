@@ -282,45 +282,27 @@ async fn blocking_info_reports_canonical_unread_blockers_with_isolation() {
     dependency(&conn, inert_source, blocked_issue, Some("cbl-order:legacy")).await;
     let foreign = thread(&conn, user2, "Foreign Series").await;
 
-    let (status, body) = send(
-        &state,
-        post(
-            &format!("/api/v1/threads/{blocked}:getBlockingInfo"),
-            &token,
-            &csrf,
-            None,
-        ),
-    )
-    .await;
+    let (status, body) = send(&state, explain_one(blocked, &token, &csrf)).await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(
-        body,
+        explanation(&body, blocked),
         json!({
             "is_blocked": true,
-            "blocking_reasons": ["Blocked by Blocker Series: #12"],
+            "blocking_reasons": ["Reader prerequisite: waiting on Blocker Series #12"],
             "blocking_dependencies": [{
                 "thread_id": blocker,
                 "thread_title": "Blocker Series",
                 "issue_number": "12",
-                "label": "Blocked by Blocker Series: #12",
-                "issue_id": null
+                "label": "Reader prerequisite: waiting on Blocker Series #12",
+                "issue_id": blocker_issue
             }]
         })
     );
 
-    let (status, body) = send(
-        &state,
-        post(
-            &format!("/api/v1/threads/{free}:getBlockingInfo"),
-            &token,
-            &csrf,
-            None,
-        ),
-    )
-    .await;
+    let (status, body) = send(&state, explain_one(free, &token, &csrf)).await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(
-        body,
+        explanation(&body, free),
         json!({"is_blocked": false, "blocking_reasons": [], "blocking_dependencies": []})
     );
 
@@ -330,50 +312,29 @@ async fn blocking_info_reports_canonical_unread_blockers_with_isolation() {
     )
     .await
     .unwrap();
-    let (_, body) = send(
+    let (_, body) = send(&state, explain_one(blocked, &token, &csrf)).await;
+    assert_eq!(explanation(&body, blocked)["is_blocked"], false, "{body:?}");
+
+    // Missing and foreign threads are indistinguishable 404s; authorization
+    // is checked for the whole batch in one set-based query.
+    for id in [999_999, foreign] {
+        let (status, body) = send(&state, explain_one(id, &token, &csrf)).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
+        assert_eq!(body["detail"], "One or more threads not found");
+    }
+    let (status, _) = send(&state, explain_one(blocked, &token2, &csrf2)).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, body) = send(
         &state,
         post(
-            &format!("/api/v1/threads/{blocked}:getBlockingInfo"),
+            "/api/v1/threads/abc:getBlockingInfo",
             &token,
             &csrf,
             None,
         ),
     )
     .await;
-    assert_eq!(body["is_blocked"], false, "{body:?}");
-
-    // Missing and foreign threads are indistinguishable 404s.
-    for id in [999_999, foreign] {
-        let (status, body) = send(
-            &state,
-            post(
-                &format!("/api/v1/threads/{id}:getBlockingInfo"),
-                &token,
-                &csrf,
-                None,
-            ),
-        )
-        .await;
-        assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
-        assert_eq!(body["detail"], format!("Thread {id} not found"));
-    }
-    let (status, _) = send(
-        &state,
-        post(
-            &format!("/api/v1/threads/{blocked}:getBlockingInfo"),
-            &token2,
-            &csrf2,
-            None,
-        ),
-    )
-    .await;
-    assert_eq!(status, StatusCode::NOT_FOUND);
-    let (status, body) = send(
-        &state,
-        post("/api/v1/threads/abc:getBlockingInfo", &token, &csrf, None),
-    )
-    .await;
-    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body:?}");
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
 }
 
 #[tokio::test]
@@ -394,20 +355,12 @@ async fn blocking_info_contains_option_e_cycles_and_preserves_healthy_threads() 
     dependency(&conn, a2, b1, None).await;
     dependency(&conn, b1, a1, None).await;
 
-    let (status, body) = send(
-        &state,
-        post(
-            &format!("/api/v1/threads/{a}:getBlockingInfo"),
-            &token,
-            &csrf,
-            None,
-        ),
-    )
-    .await;
+    let (status, body) = send(&state, explain_one(a, &token, &csrf)).await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
-    assert_eq!(body["is_blocked"], true, "{body:?}");
+    let a_explanation = explanation(&body, a);
+    assert_eq!(a_explanation["is_blocked"], true, "{body:?}");
     assert_eq!(
-        body["blocking_reasons"],
+        a_explanation["blocking_reasons"],
         json!([
             "Reading constraint cycle: waiting on Series A #1",
             "Reading constraint cycle: waiting on Series A #2"
@@ -415,20 +368,12 @@ async fn blocking_info_contains_option_e_cycles_and_preserves_healthy_threads() 
         "{body:?}"
     );
 
-    let (status, body) = send(
-        &state,
-        post(
-            &format!("/api/v1/threads/{healthy}:getBlockingInfo"),
-            &token,
-            &csrf,
-            None,
-        ),
-    )
-    .await;
+    let (status, body) = send(&state, explain_one(healthy, &token, &csrf)).await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(
-        body,
-        json!({"is_blocked": false, "blocking_reasons": [], "blocking_dependencies": []})
+        explanation(&body, healthy),
+        json!({"is_blocked": false, "blocking_reasons": [], "blocking_dependencies": []}),
+        "a persisted cycle must stay isolated from healthy threads"
     );
 }
 
@@ -446,7 +391,7 @@ async fn batch_blocking_info_preserves_request_order_and_validates() {
     dependency(&conn, ai, bi, None).await;
     let foreign = thread(&conn, user2, "Foreign").await;
 
-    let path = "/api/v1/threads:getBlockingInfo";
+    let path = "/api/v2/threads:explainEligibility";
     let request = json!({"thread_ids": [b, a, b]});
     let response = router(state.clone())
         .oneshot(post(path, &token, &csrf, Some(request.clone())))
