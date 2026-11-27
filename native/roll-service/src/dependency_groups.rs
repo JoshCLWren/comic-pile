@@ -4,18 +4,22 @@
 //! Preserves the Python `app/api/dependency_group.py` wire contract at the same
 //! HTTP methods and exact paths:
 //!
-//! * `GET /api/v1/reading-order-groups/`
+//! * `GET /api/v1/reading-order-groups/` (group CRUD stays on v1, #5710)
 //! * `POST /api/v1/reading-order-groups/`
-//! * `GET /api/v1/reading-order-groups/threads/{thread_id}/groups`
 //! * `GET /api/v1/reading-order-groups/{group_id}`
 //! * `GET /api/v1/reading-order-groups/{group_id}/detail`
 //! * `PATCH /api/v1/reading-order-groups/{group_id}`
 //! * `DELETE /api/v1/reading-order-groups/{group_id}`
-//! * `POST /api/v1/reading-order-groups/{group_id}/issue-ranges`
-//! * `POST /api/v1/reading-order-groups/{group_id}/members`
-//! * `DELETE /api/v1/reading-order-groups/{group_id}/members/{member_id}`
 //! * `PUT /api/v1/reading-order-groups/{group_id}/order`
-//! * `GET /api/v1/reading-order-groups/{group_id}/plans`
+//!
+//! The six membership operations moved to their v2-only resources in #5711:
+//!
+//! * `GET /api/v2/threads/{thread_id}/reading-order-group-memberships`
+//! * `GET /api/v2/reading-order-groups/{group_id}/reading-plans`
+//! * `POST /api/v2/reading-order-groups:resolveMemberships`
+//! * `POST /api/v2/reading-order-groups/{group_id}/members`
+//! * `POST /api/v2/reading-order-groups/{group_id}/issue-ranges`
+//! * `DELETE /api/v2/reading-order-groups/{group_id}/members/{member_id}`
 //!
 //! Wire parity with Python (`app/api/dependency_group.py` +
 //! `app/services/dependency_group_service.py` + `app/repositories/dependency_group_repository.py`):
