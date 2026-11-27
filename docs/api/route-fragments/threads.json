@@ -131,7 +131,6 @@
     },
     {
       "bucket": "operations",
-<<<<<<< HEAD
       "method": "GET",
       "path": "/api/v2/threads/{thread_id}/dependencies",
       "dest": "/api/native_roll.rs",
@@ -197,8 +196,6 @@
     },
     {
       "bucket": "operations",
-=======
->>>>>>> origin/main
       "method": "POST",
       "path": "/api/v2/threads:checkDuplicates",
       "dest": "/api/native_roll.rs",
