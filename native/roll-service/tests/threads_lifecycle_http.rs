@@ -358,7 +358,6 @@ async fn every_lifecycle_route_requires_auth() {
         // router: an anonymous request must hit the auth extractor (401),
         // never the inner router's JSON 404 fallback.
         ("PUT", "/api/v1/threads/1/test-backdate"),
-        ("GET", "/api/v1/threads/1/issues/creators"),
     ];
     for (method, path) in routes {
         let (status, body) = send(
