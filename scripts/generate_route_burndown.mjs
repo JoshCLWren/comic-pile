@@ -984,13 +984,15 @@ export function main(argv = process.argv) {
       const vercelCurrent = readFileSync(args.vercel, 'utf8');
       const agentsCurrent = readFileSync(args.agents, 'utf8');
       const rewriteCurrent = readFileSync(args['rewrite-fragment'], 'utf8');
-      const diffs = [];
-      if (inventoryCurrent !== inventoryText) diffs.push('inventory');
-      if (vercelCurrent !== vercelText) diffs.push('vercel');
-      if (agentsCurrent !== agentsText) diffs.push('agents');
-      if (rewriteCurrent !== rewriteText) diffs.push('rewrite');
-      if (diffs.length) {
-        console.log('STALE:'+diffs.join(','));
+      if (
+        inventoryCurrent !== inventoryText ||
+        vercelCurrent !== vercelText ||
+        agentsCurrent !== agentsText ||
+        rewriteCurrent !== rewriteText
+      ) {
+        console.log(
+          'Route burndown is stale; run `node scripts/generate_route_burndown.mjs` and commit the result.',
+        );
         return 1;
       }
       console.log(
