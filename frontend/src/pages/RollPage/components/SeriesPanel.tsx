@@ -1,5 +1,5 @@
 import type { ReaderContextRecentRating, ReaderContextSeries } from '../../../services/api-reader-context'
-import { ComicIssueCover } from '../../../components/ComicIssueCard'
+import CompactIssueCardTrigger from '../../../components/CompactIssueCardTrigger'
 import { indexIssueCards, useIssueCards } from '../../../hooks/useIssueCards'
 
 interface SeriesPanelProps {
@@ -85,23 +85,25 @@ export function SeriesPanel({ series }: SeriesPanelProps) {
       )}
 
       {series.previous_issue ? (
-        <div className="flex items-center gap-2 text-[11px] text-stone-400">
-          <ComicIssueCover
-            coverImageUrl={cardsByIssue.get(series.previous_issue.issue_id)?.cover_image_url ?? null}
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-stone-400">
+          <span className="font-bold">Previous:</span>{' '}
+          <span>#{series.previous_issue.issue_number}</span>
+          {series.previous_issue.rating !== null ? (
+            <>
+              <span aria-hidden="true"> &middot; </span>
+              <StarRow rating={series.previous_issue.rating} />
+            </>
+          ) : null}
+          {/* Exact owned issue: the shared covered entrance keeps direct
+              read/rate/map available even when the batch has no cover. */}
+          <CompactIssueCardTrigger
+            issueId={series.previous_issue.issue_id}
             threadTitle={seriesTitle}
             issueNumber={series.previous_issue.issue_number}
-            variant="compact"
+            card={cardsByIssue.get(series.previous_issue.issue_id) ?? null}
+            hideTitle
+            actionLabel={`Read or rate issue ${series.previous_issue.issue_number}`}
           />
-          <div className="min-w-0">
-            <span className="font-bold">Previous:</span>{' '}
-            <span>#{series.previous_issue.issue_number}</span>
-            {series.previous_issue.rating !== null ? (
-              <>
-                <span aria-hidden="true"> &middot; </span>
-                <StarRow rating={series.previous_issue.rating} />
-              </>
-            ) : null}
-          </div>
         </div>
       ) : null}
 
@@ -114,18 +116,20 @@ export function SeriesPanel({ series }: SeriesPanelProps) {
             {series.recent_ratings.map((r: ReaderContextRecentRating) => (
               <div
                 key={r.issue_id}
-                className="flex items-center gap-1.5 text-[11px] text-stone-300"
+                className="flex flex-wrap items-center gap-1.5 text-[11px] text-stone-300"
               >
-                <ComicIssueCover
-                  coverImageUrl={cardsByIssue.get(r.issue_id)?.cover_image_url ?? null}
-                  threadTitle={seriesTitle}
-                  issueNumber={r.issue_number}
-                  variant="compact"
-                />
                 <div className="min-w-0">
                   <span className="text-stone-500">#{r.issue_number}</span>{' '}
                   <StarRow rating={r.rating} />
                 </div>
+                <CompactIssueCardTrigger
+                  issueId={r.issue_id}
+                  threadTitle={seriesTitle}
+                  issueNumber={r.issue_number}
+                  card={cardsByIssue.get(r.issue_id) ?? null}
+                  hideTitle
+                  actionLabel={`Read or rate issue ${r.issue_number}`}
+                />
               </div>
             ))}
           </div>
