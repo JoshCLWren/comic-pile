@@ -17,8 +17,8 @@
       "dest": "/api/native_roll.rs",
       "src": "^/api/v2/continuityPlans/[^/]+:previewReadingOrderProjection$",
       "runtime": "native-rust",
-      "status": "native Rust",
-      "owning_issue": 5898,
+      "status": "target",
+      "owning_issue": 5715,
       "consumers": [
         "frontend/src/services/api-reading-orders.ts"
       ]
