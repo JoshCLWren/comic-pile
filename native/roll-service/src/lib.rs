@@ -1157,12 +1157,12 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(issue_read::get_issue_dependencies),
         )
         .route(
-            "/api/v1/threads/{thread_id}/issue-dependencies",
-            get(issue_read::get_thread_issue_dependencies),
+            "/api/v2/threads/{thread_id}/issueDependencies",
+            get(issue_read::get_thread_issue_dependencies_v2),
         )
         .route(
-            "/api/v1/threads/{thread_id}/dependencies",
-            get(dependencies::get_thread_dependencies),
+            "/api/v2/threads/{thread_id}/dependencies",
+            get(dependencies::get_thread_dependencies_v2),
         )
         .route(
             "/api/v2/roll/dismiss-pending",

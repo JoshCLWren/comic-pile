@@ -326,9 +326,16 @@ fn app() -> Router {
         .route("/api/v2/threads", get(native_dispatch))
         .route("/api/v1/threads/{thread_id}", get(native_dispatch))
         .route("/api/v1/threads/{thread_id}", post(native_dispatch))
-        .route("/api/v1/threads:getBlockingInfo", post(native_dispatch))
         .route(
-            "/api/v1/threads/{thread_id}/connected",
+            "/api/v2/threads:explainEligibility",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/threads/{thread_id}/eligibility",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/threads/{thread_id}/connections",
             get(native_dispatch),
         )
         .route(
@@ -580,7 +587,7 @@ fn app() -> Router {
             get(native_dispatch),
         )
         .route(
-            "/api/v1/threads/{thread_id}/dependencies",
+            "/api/v2/threads/{thread_id}/dependencies",
             get(native_dispatch),
         )
         .route("/api/v1/continuity-rules/", get(native_dispatch))
@@ -642,7 +649,7 @@ fn app() -> Router {
             post(native_dispatch),
         )
         .route(
-            "/api/v1/threads/{thread_id}/issue-dependencies",
+            "/api/v2/threads/{thread_id}/issueDependencies",
             get(native_dispatch),
         )
         .route("/api/v2/tags", get(native_dispatch))
