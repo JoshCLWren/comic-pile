@@ -3480,6 +3480,44 @@ async fn v2_thread_list_filters_completed_and_excluded_without_cross_owner_rows(
 }
 
 #[tokio::test]
+async fn v2_completed_filter_title_cursor_pages_in_title_order() {
+    let ctx = setup("lcv2comptitle").await;
+    let alpha = seed_thread(&ctx, ctx.user_id, "Alpha", "completed", 0, 0).await;
+    let bravo = seed_thread(&ctx, ctx.user_id, "Bravo", "completed", 0, 0).await;
+    let charlie = seed_thread(&ctx, ctx.user_id, "Charlie", "completed", 0, 0).await;
+
+    let ids = |page: &Value| -> Vec<i32> {
+        page["threads"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|thread| thread["id"].as_i64().unwrap() as i32)
+            .collect()
+    };
+    let (status, first) = call(
+        &ctx,
+        "GET",
+        "/api/v2/threads?filter=completed&order_by=title&page_size=2",
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{first:?}");
+    assert_eq!(ids(&first), vec![alpha, bravo]);
+    let token = first["next_page_token"].as_str().unwrap().to_string();
+
+    let (status, second) = call(
+        &ctx,
+        "GET",
+        &format!("/api/v2/threads?filter=completed&order_by=title&page_size=2&page_token={token}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{second:?}");
+    assert_eq!(ids(&second), vec![charlie]);
+    assert_eq!(second["next_page_token"], Value::Null);
+}
+
+#[tokio::test]
 async fn v2_thread_list_stale_filter_is_canonical_and_cursor_paginated() {
     let ctx = setup("lcv2stale").await;
     let (_, _, other_id) = second_user(&ctx).await;
