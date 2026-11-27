@@ -2471,11 +2471,9 @@ mod tests {
         let document = serde_json::to_value(dependency_groups_openapi()).unwrap();
         // Only the retained same-path order operation stays on v1; CRUD moved
         // to the canonical v2 collection in #5710.
-        assert!(
-            document["paths"]
-                .get("/api/v1/reading-order-groups/{group_id}/order")
-                .is_some()
-        );
+        assert!(document["paths"]
+            .get("/api/v1/reading-order-groups/{group_id}/order")
+            .is_some());
         // The membership and CRUD operations are v2-only: their retired v1
         // URLs must not remain documented as live operations.
         for path in [
