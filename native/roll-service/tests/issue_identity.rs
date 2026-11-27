@@ -3102,7 +3102,10 @@ async fn v2_cbl_source_previews_are_repeatable_and_write_nothing() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{plan}");
-    assert_eq!(plan, preview, "empty decisions equal the singleton projection");
+    assert_eq!(
+        plan, preview,
+        "empty decisions equal the singleton projection"
+    );
     let (status, plan_again) = post_json(
         &state,
         &token,
@@ -3112,7 +3115,10 @@ async fn v2_cbl_source_previews_are_repeatable_and_write_nothing() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{plan_again}");
-    assert_eq!(plan_again, plan, "a stateless calculation must be repeatable");
+    assert_eq!(
+        plan_again, plan,
+        "a stateless calculation must be repeatable"
+    );
 
     // The fingerprint is authoritative from the database on every call. The
     // commit path, not these previews, rejects a stale client fingerprint.
@@ -3154,7 +3160,12 @@ async fn v2_plan_adoption_applies_decisions_and_scopes_to_owner() {
     // Another reader can preview the shared source, but the owner's issue
     // identities are never resolved for them.
     let (other_token, _) = create_test_user(&state, "other-v2-reader").await;
-    let (status, other) = get(&state, &other_token, "/api/v2/cblSources/40/adoptionPreview").await;
+    let (status, other) = get(
+        &state,
+        &other_token,
+        "/api/v2/cblSources/40/adoptionPreview",
+    )
+    .await;
     assert_eq!(status, StatusCode::OK, "{other}");
     assert!(
         other["entries"][0]["resolved_issue_id"].is_null(),
@@ -3175,7 +3186,11 @@ async fn v2_plan_adoption_applies_decisions_and_scopes_to_owner() {
         json!({}),
     )
     .await;
-    assert_eq!(status, StatusCode::OK, "decision maps default to empty: {body}");
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "decision maps default to empty: {body}"
+    );
 }
 
 #[tokio::test]

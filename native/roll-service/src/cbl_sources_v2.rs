@@ -48,7 +48,9 @@ use std::{collections::HashMap, sync::Arc};
 fn parse_source_id(raw: Result<Path<String>, PathRejection>) -> Result<i32, ApiError> {
     let source_id = parse_path_int(raw)?;
     i32::try_from(source_id).map_err(|_| {
-        ApiError::NotFound(format!("CBL source list {source_id} not found or not active"))
+        ApiError::NotFound(format!(
+            "CBL source list {source_id} not found or not active"
+        ))
     })
 }
 
