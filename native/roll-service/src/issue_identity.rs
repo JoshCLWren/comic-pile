@@ -3180,7 +3180,7 @@ async fn do_cbl_adoption_commit(
     // them must drop its canonical Reading List entry (#5523). Deriving the set
     // from source provenance keeps entries added manually or from other sources
     // untouched.
-    let previous_source_issue_ids: Vec<i32> = nodes_json
+    let mut previous_source_issue_ids: Vec<i32> = nodes_json
         .as_array()
         .map(|nodes| {
             nodes
@@ -3227,90 +3227,87 @@ async fn do_cbl_adoption_commit(
         }
     })?;
 
-    // Persist to canonical, source-linked Option E Reading List (custom_cbl_list).
-    // This keeps the Reading List as the source of truth for adopted CBL entries.
-    let adopted_issue_ids: Vec<i32> = merge.4.clone();
-    let existing_list_id: Option<i32> = {
-        let plan_list = tx
+    // #4022: the canonical Reading List is keyed by reader + stable source
+    // identity. `custom_cbl_source_links` owns that identity, so neither a
+    // display name nor the legacy continuity Plan decides which list is
+    // updated: same-name sources and other readers can never collide, and the
+    // compatibility Plan write below can never redirect this upsert.
+    let (canonical_list_id, current_version, previous_selections) = {
+        let link = tx
             .run_query_opt(
-                "SELECT s.custom_cbl_list_id
-                 FROM reading_plan_sources s
-                 JOIN custom_cbl_lists l ON l.id = s.custom_cbl_list_id AND l.user_id = $2
-                 WHERE s.plan_id = $1 AND s.custom_cbl_list_id IS NOT NULL
-                 ORDER BY s.id DESC LIMIT 1",
-                &[&plan_id, &user_id],
+                "SELECT sl.custom_cbl_list_id, sl.list_version, sl.selections_json
+                 FROM custom_cbl_source_links sl
+                 JOIN custom_cbl_lists l ON l.id = sl.custom_cbl_list_id AND l.user_id = sl.user_id
+                 WHERE sl.user_id = $1 AND sl.cbl_source_list_id = $2
+                 FOR UPDATE OF sl",
+                &[&user_id, &list_id],
             )
             .await
             .map_err(|e| {
                 if crate::db::is_transport_failure(&e) {
                     CommitErr::Db(ApiError::database_unavailable())
                 } else {
-                    CommitErr::Unexpected(format!("lookup plan reading list: {e}"))
+                    CommitErr::Unexpected(format!("lookup adoption source link: {e}"))
                 }
             })?;
-        if let Some(row) = plan_list {
-            row.get::<_, Option<i32>>(0)
+        if let Some(row) = link {
+            let linked_list_id: i32 = row.get(0);
+            let version: i32 = row.get(1);
+            let selections: Option<JsonValue> = row.get(2);
+            if let Some(expected) = request.list_version {
+                if expected != version {
+                    // Return before any write: dropping the transaction rolls
+                    // back the reader lock and leaves no partial rows.
+                    return Err(CommitErr::Stale(format!(
+                        "Reading List version mismatch: expected {expected}, current {version}"
+                    )));
+                }
+            }
+            (linked_list_id, version, selections)
         } else {
-            let source_list = tx
-                .run_query_opt(
-                    "SELECT s.custom_cbl_list_id
-                     FROM reading_plan_sources s
-                     JOIN custom_cbl_lists l ON l.id = s.custom_cbl_list_id AND l.user_id = $1
-                     WHERE s.cbl_source_list_id = $2 AND s.custom_cbl_list_id IS NOT NULL
-                     ORDER BY s.id DESC LIMIT 1",
-                    &[&user_id, &list_id],
+            // Display name is not identity. A collision with another list (or
+            // another reader's list of the same name) is harmless here.
+            let display_name = if list_name.is_empty() {
+                format!("CBL adoption for {source_path}")
+            } else {
+                list_name.clone()
+            };
+            let row = tx
+                .run_query_one(
+                    "INSERT INTO custom_cbl_lists (user_id, name, description, mode, created_at, updated_at)
+                     VALUES ($1, $2, NULL, 'loose', NOW(), NOW())
+                     RETURNING id",
+                    &[&user_id, &display_name],
                 )
                 .await
                 .map_err(|e| {
                     if crate::db::is_transport_failure(&e) {
                         CommitErr::Db(ApiError::database_unavailable())
                     } else {
-                        CommitErr::Unexpected(format!("lookup source reading list: {e}"))
+                        CommitErr::Unexpected(format!("create reading list: {e}"))
                     }
                 })?;
-            source_list.and_then(|row| row.get::<_, Option<i32>>(0))
+            (row.get::<_, i32>(0), 0, None)
         }
     };
-
-    let canonical_list_id: i32 = if let Some(existing_id) = existing_list_id {
-        tx.run_execute(
-            "UPDATE custom_cbl_lists SET updated_at = NOW() WHERE id = $1 AND user_id = $2",
-            &[&existing_id, &user_id],
-        )
-        .await
-        .map_err(|e| {
-            if crate::db::is_transport_failure(&e) {
-                CommitErr::Db(ApiError::database_unavailable())
-            } else {
-                CommitErr::Unexpected(format!("update reading list: {e}"))
-            }
-        })?;
-        existing_id
-    } else {
-        let list_name = if list_name.is_empty() {
-            format!("CBL adoption for {source_path}")
+    let list_version = current_version.checked_add(1).ok_or_else(|| {
+        CommitErr::Unexpected("canonical Reading List version overflow".to_string())
+    })?;
+    tx.run_execute(
+        "UPDATE custom_cbl_lists SET updated_at = NOW() WHERE id = $1 AND user_id = $2",
+        &[&canonical_list_id, &user_id],
+    )
+    .await
+    .map_err(|e| {
+        if crate::db::is_transport_failure(&e) {
+            CommitErr::Db(ApiError::database_unavailable())
         } else {
-            list_name.clone()
-        };
-        let row = tx
-            .run_query_one(
-                "INSERT INTO custom_cbl_lists (user_id, name, description, mode, created_at, updated_at)
-                 VALUES ($1, $2, NULL, 'loose', NOW(), NOW())
-                 RETURNING id",
-                &[&user_id, &list_name],
-            )
-            .await
-            .map_err(|e| {
-                if crate::db::is_transport_failure(&e) {
-                    CommitErr::Db(ApiError::database_unavailable())
-                } else {
-                    CommitErr::Unexpected(format!("create reading list: {e}"))
-                }
-            })?;
-        row.get::<_, i32>(0)
-    };
+            CommitErr::Unexpected(format!("update reading list: {e}"))
+        }
+    })?;
 
     let canonical_source_path = format!("custom-cbl:{canonical_list_id}");
+    let adopted_issue_ids: Vec<i32> = merge.4.clone();
 
     // A single source can resolve several positions to the same canonical
     // issue. Deduplicate while keeping source order so the set-based insert
