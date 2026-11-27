@@ -167,60 +167,6 @@
         ]
       }
     },
-    "/api/v1/threads/groups:batch": {
-      "post": {
-        "tags": [
-          "threads"
-        ],
-        "description": "List crossover groups for several owned threads in one request.",
-        "operationId": "list_thread_groups_batch_documentation",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GroupsBatchRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Map of thread id to crossover groups",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/DependencyGroupSummary"
-                    }
-                  },
-                  "propertyNames": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "A requested thread is not owned by the reader"
-          },
-          "422": {
-            "description": "Validation failed"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/v1/threads/reactivate": {
       "post": {
         "tags": [
