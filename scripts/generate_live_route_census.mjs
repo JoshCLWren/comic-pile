@@ -85,6 +85,23 @@ function isObject(value) {
   return value !== null && Object.prototype.toString.call(value) === '[object Object]';
 }
 
+/** Return whether a JSON-decoded value is a string, without runtime narrowing. */
+function isString(value) {
+  return Object.prototype.toString.call(value) === '[object String]';
+}
+
+/** Read a validated string field from a decoded JSON record, with a fallback. */
+function stringField(record, key, fallback) {
+  const value = isObject(record) ? record[key] : undefined;
+  return isString(value) ? value : fallback;
+}
+
+/** Read a validated array-of-strings field from decoded JSON (empty when absent/malformed). */
+function stringList(value) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap(item => isString(item) ? [item] : []);
+}
+
 function readJson(file) {
   const value = JSON.parse(readFileSync(file, 'utf8'));
   if (!isObject(value)) throw new CensusError(`${file} must contain a JSON object`);
@@ -213,7 +230,11 @@ function splitArgs(content) {
     }
   }
   args.push(content.slice(start));
-  return args.map(arg => arg.trim()).filter(Boolean);
+  // One transformation pass: trim, then drop empties while preserving order.
+  return args.flatMap(arg => {
+    const trimmed = arg.trim();
+    return trimmed ? [trimmed] : [];
+  });
 }
 
 /**
