@@ -48,7 +48,13 @@ const EXPECTED_PALETTE: Palette = {
 async function readPalette(page: import('@playwright/test').Page): Promise<Palette> {
   const values = await page.evaluate((names) => {
     const styles = getComputedStyle(document.documentElement)
-    return names.map((name) => styles.getPropertyValue(name).trim().toLowerCase())
+    return names.map((name) => {
+      const value = styles.getPropertyValue(name).trim().toLowerCase()
+      // CSSOM serializes #111111 as #111; normalize for the contract comparison.
+      return /^#[0-9a-f]{3}$/.test(value)
+        ? `#${value[1]}${value[1]}${value[2]}${value[2]}${value[3]}${value[3]}`
+        : value
+    })
   }, PALETTE_TOKENS)
   // SAFETY: PALETTE_TOKENS and values are parallel arrays.
   return Object.fromEntries(PALETTE_TOKENS.map((name, index) => [name, values[index]])) as Palette
@@ -128,11 +134,11 @@ test.describe('Night Shift single visual identity (#5980)', () => {
     const page = authenticatedWithThreadsPage
     await page.addInitScript(() => {
       localStorage.setItem('comic-pile-theme', 'ink-gold')
-      document.documentElement.setAttribute('data-theme', 'command-center')
     })
     await page.setViewportSize(DESKTOP_VIEWPORT)
     await page.goto('/', { waitUntil: 'domcontentloaded' })
     await page.locator('main').waitFor({ state: 'visible' })
+    await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'command-center'))
     await settle(page)
 
     expect(await readPalette(page)).toEqual(EXPECTED_PALETTE)
