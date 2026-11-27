@@ -1,11 +1,10 @@
 //! Generated contract for the same-path native Thread lifecycle operations.
 //!
 //! These browser-called operations keep their original `/api/v1/threads` URLs
-//! while they are served by the native Rust ingress (#4832 part A). The Python
-//! runtime is retired, so this contract is the native contract: it is emitted
-//! separately only because these routes retain v1 URLs until their v2 resources
-//! replace them (#5701-#5706). Do not add new callers to these paths; see
-//! `docs/API_V1_CANONICAL.md`.
+//! while the implementation moves behind the native Rust ingress (#4832 part A).
+//! They are emitted as their own contract because the Python handlers stay
+//! mounted until authenticated production proof, so the merged frontend client
+//! schema remains the Python contract for now.
 //!
 //! Regenerate `native/contracts/threads-v1.openapi.json` with:
 //!

@@ -5,7 +5,6 @@ on:
     paths:
       - "**/*.md"
       - "scripts/check_markdown_docs.py"
-      - "scripts/check_v1_canonical_guidance.mjs"
       - "scripts/generate_markdown_inventory.py"
       - "tests/test_markdown_docs.py"
       - "tests/test_generate_markdown_inventory.py"
@@ -18,7 +17,6 @@ on:
     paths:
       - "**/*.md"
       - "scripts/check_markdown_docs.py"
-      - "scripts/check_v1_canonical_guidance.mjs"
       - "scripts/generate_markdown_inventory.py"
       - "tests/test_markdown_docs.py"
       - "tests/test_generate_markdown_inventory.py"
@@ -49,12 +47,7 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --frozen
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24'
       - run: uv run python scripts/check_markdown_docs.py
-      - name: v1 canonical guidance guard
-        run: node scripts/check_v1_canonical_guidance.mjs
       - name: Markdown pytest checks (PRs only)
         if: github.event_name == 'pull_request'
         run: uv run python -m pytest -q --no-cov tests/test_markdown_docs.py tests/test_generate_markdown_inventory.py tests/test_social_preview_asset.py
