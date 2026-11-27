@@ -762,6 +762,7 @@ mod tests {
         let (state, _db) = seeded_state(
             r#"
             INSERT INTO users (id, username) VALUES (1, 'reader-1'), (2, 'reader-2');
+            INSERT INTO sessions (id, user_id, start_die) VALUES (1, 1, 6), (2, 2, 6);
             INSERT INTO threads
                 (id, user_id, title, format, issues_remaining, status,
                  queue_position, total_issues, reading_progress)
