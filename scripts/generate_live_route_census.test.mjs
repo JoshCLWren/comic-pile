@@ -1,21 +1,24 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
-import {cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
 
 import {
+  buildCensus,
   callerMatchesRoute,
   CBL_ROUTE_DISPOSITIONS,
   CBL_ROUTE_OWNER,
+  FRAGMENTS_DIR,
   generate,
   normalizeCallerPath,
   parseRouterRoutes,
   pathsMatch,
   scanCallers,
   SET_PENDING_OWNER,
+  sourceRouteOwners,
 } from './generate_live_route_census.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -219,6 +222,51 @@ test('CI gate rejects unresolved ingress and stale baseline debt', t => {
   const failures = generate(tmp).failures;
   assert.ok(failures.some(failure => failure.includes('no production ingress')), JSON.stringify(failures));
   assert.ok(failures.some(failure => failure.includes('known baseline debt')), JSON.stringify(failures));
+});
+
+test('source fragment owners survive a stale generated inventory', t => {
+  const tmp = mkdtempSync(path.join(os.tmpdir(), 'live-census-fragments-'));
+  t.after(() => rmSync(tmp, {recursive: true, force: true}));
+  stage(tmp);
+  const fragments = path.join(tmp, FRAGMENTS_DIR);
+  mkdirSync(fragments, {recursive: true});
+  writeFileSync(path.join(fragments, 'threads.json'), `${JSON.stringify({
+    family: 'threads',
+    defaults: {owning_issue: null},
+    operations: [
+      {method: 'GET', path: '/api/v2/threads', owning_issue: 4342},
+      {method: 'POST', path: '/api/v2/threads', owning_issue: null},
+    ],
+  }, null, 2)}\n`);
+  writeFileSync(path.join(fragments, 'vercel-rewrites.json'), `${JSON.stringify({
+    operations: [{method: 'GET', path: '/api/v2/threads', owning_issue: 99999}],
+  }, null, 2)}\n`);
+
+  const owners = sourceRouteOwners(tmp);
+  assert.equal(owners.get('GET /api/v2/threads'), 4342);
+  assert.equal(owners.has('POST /api/v2/threads'), false);
+  assert.equal(owners.has('GET /api/v2/threads:preview'), false, 'generated rewrite artifact is not source');
+
+  const {census} = generate(tmp);
+  const threads = census.routes.find(route => `${route.method} ${route.path}` === 'GET /api/v2/threads');
+  assert.equal(threads.owner_issue, 4342, 'owner comes from the editable fragment, not the generated inventory');
+});
+
+test('buildCensus uses source owners when inventory and dispositions have none', () => {
+  const routerText = readFileSync(
+    path.join(inputsRoot, 'native/roll-service/src/lib.rs'), 'utf8',
+  );
+  const result = buildCensus({
+    routerText,
+    inventory: {operations: [], full_surface: {v1_operations: [], unversioned_operations: []}},
+    dispositions: {overrides: {}, families: [], known_unowned_baseline: []},
+    aipBaseline: {entries: []},
+    vercel: {routes: []},
+    callers: [],
+    sourceOwners: new Map([['GET /api/v2/threads', 4342]]),
+  });
+  const threads = result.routes.find(route => `${route.method} ${route.path}` === 'GET /api/v2/threads');
+  assert.equal(threads.owner_issue, 4342);
 });
 
 test('fixture artifacts are complete and checked-in outputs are current', () => {

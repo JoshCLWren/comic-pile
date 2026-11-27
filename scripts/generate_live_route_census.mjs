@@ -10,9 +10,9 @@
  *   - the real axum router in `native/roll-service/src/lib.rs` (every live
  *     METHOD/path/handler registration, including v1 and bare /api aliases);
  *   - `vercel.json` for the production ingress destination;
- *   - `docs/api/route-fragments/*.json` for source-owned retirement issues and
- *     curated first-party consumers (the generated burndown inventory is a
- *     bot-owned artifact and must not be a PR-editable census input);
+ *   - `docs/api/route-fragments/*.json` for source-owned retirement issues
+ *     (the generated burndown inventory is a bot-owned artifact and must not
+ *     be a PR-editable census input);
  *   - a source scan of first-party browser, CLI and test code for live calls;
  *   - `docs/api/v1-route-dispositions.json` for the curated owner/disposition
  *     matrix (the published ownership decision for each legacy route); and
@@ -883,9 +883,9 @@ export function generate(root = DEFAULT_ROOT) {
   const aipBaseline = readJson(path.join(root, AIP_BASELINE_PATH));
   const vercel = readJson(path.join(root, VERCEL_PATH));
   const callers = scanCallers(root);
-  const sourceMetadata = sourceRouteMetadata(root);
+  const sourceOwners = sourceRouteOwners(root);
   const census = buildCensus({
-    routerText, inventory, dispositions, aipBaseline, vercel, callers, sourceMetadata,
+    routerText, inventory, dispositions, aipBaseline, vercel, callers, sourceOwners,
   });
   const allowlist = buildAllowlist(census, dispositions, aipBaseline);
   const report = renderReport(census, allowlist, dispositions);

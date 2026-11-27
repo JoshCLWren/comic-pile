@@ -189,9 +189,7 @@
       "version": "unversioned",
       "runtime": "native-rust",
       "runtime_source": "native-router",
-      "consumers": [
-        "frontend/src/services/api-bug-reports.ts"
-      ],
+      "consumers": [],
       "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
@@ -229,10 +227,7 @@
       "version": "unversioned",
       "runtime": "native-rust",
       "runtime_source": "native-router",
-      "consumers": [
-        "frontend/src/services/api-roll.ts",
-        "frontend/src/services/rollBootstrapApi.ts"
-      ],
+      "consumers": [],
       "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
@@ -251,14 +246,7 @@
       "version": "unversioned",
       "runtime": "native-rust",
       "runtime_source": "native-router",
-      "consumers": [
-        "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-dependency-groups.ts",
-        "frontend/src/services/api-issues.ts",
-        "frontend/src/services/api-migration.ts",
-        "frontend/src/services/api-reading-orders.ts",
-        "frontend/src/services/api-threads.ts"
-      ],
+      "consumers": [],
       "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
@@ -472,9 +460,7 @@
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
-      "consumers": [
-        "frontend/src/services/api-comicvine.ts"
-      ],
+      "consumers": [],
       "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
@@ -553,14 +539,7 @@
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
-      "consumers": [
-        "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
-        "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts"
-      ],
+      "consumers": [],
       "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
@@ -598,14 +577,7 @@
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
-      "consumers": [
-        "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
-        "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts"
-      ],
+      "consumers": [],
       "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
@@ -624,9 +596,7 @@
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
-      "consumers": [
-        "frontend/src/services/api-continuity-plans.ts"
-      ],
+      "consumers": [],
       "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
@@ -855,11 +825,7 @@
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
-      "consumers": [
-        "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-issues.ts",
-        "frontend/src/services/api-reader-context.ts"
-      ],
+      "consumers": [],
       "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
@@ -975,10 +941,7 @@
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
-      "consumers": [
-        "frontend/src/services/api-roll.ts",
-        "frontend/src/services/rollBootstrapApi.ts"
-      ],
+      "consumers": [],
       "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
@@ -1363,14 +1326,7 @@
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
-      "consumers": [
-        "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-dependency-groups.ts",
-        "frontend/src/services/api-issues.ts",
-        "frontend/src/services/api-migration.ts",
-        "frontend/src/services/api-reading-orders.ts",
-        "frontend/src/services/api-threads.ts"
-      ],
+      "consumers": [],
       "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
@@ -1667,10 +1623,7 @@
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
-      "consumers": [
-        "frontend/src/services/api-preferences.ts",
-        "frontend/src/services/api-taste.ts"
-      ],
+      "consumers": [],
       "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
