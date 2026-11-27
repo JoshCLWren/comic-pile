@@ -788,6 +788,24 @@ mod tests {
     }
 
     #[test]
+    fn source_token_decodes_utf8_filter_from_the_browser_cursor() {
+        // Emitted by encodeSourcePageToken in frontend/src/services/api-cbl-sources.ts
+        // with a non-ASCII search filter; the payload must be decoded as UTF-8 JSON.
+        let token = "eyJwIjoyLCJmIjoicTpDYWbDqSIsIm8iOiJuYW1lIiwicyI6MjV9";
+        let filter = SourceFilter::Search("Café".to_string());
+        let decoded = source_cursor(Some(token), &filter, "name", 25).expect("valid cursor");
+        assert_eq!(
+            decoded,
+            Some(SourcePageCursor {
+                p: 2,
+                f: "q:Café".to_string(),
+                o: "name".to_string(),
+                s: 25,
+            })
+        );
+    }
+
+    #[test]
     fn occurrence_filter_requires_an_exact_issue_id() {
         assert_eq!(
             parse_occurrence_filter(Some("4000-123")).expect("bare id"),
