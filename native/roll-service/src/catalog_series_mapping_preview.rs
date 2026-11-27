@@ -983,7 +983,11 @@ mod tests {
         })
     }
 
-    fn v2_preview_roster(external_id: &str, numbers: &[&str], first_provider_id: i64) -> Vec<Value> {
+    fn v2_preview_roster(
+        external_id: &str,
+        numbers: &[&str],
+        first_provider_id: i64,
+    ) -> Vec<Value> {
         numbers
             .iter()
             .enumerate()
@@ -1057,7 +1061,8 @@ mod tests {
         preview_token: String,
         idempotency_key: &str,
         approved_row_ids: Vec<String>,
-    ) -> impl std::future::Future<Output = Result<Json<catalog_commit::CommitResponse>, ApiError>> + Send {
+    ) -> impl std::future::Future<Output = Result<Json<catalog_commit::CommitResponse>, ApiError>> + Send
+    {
         catalog_commit::commit_series_mapping_handler(
             State(state),
             crate::auth::AuthenticatedUser::for_test(user_id),
@@ -1094,18 +1099,19 @@ mod tests {
         assert_eq!(preview.scope.status, "available");
         assert_eq!(preview.counts.safe_exact_match, 6);
         assert_eq!(preview.rows.len(), 6);
-        assert!(
-            preview
-                .rows
-                .iter()
-                .all(|row| row.classification == "safe_exact_match"
-                    && row.default_selected
-                    && row.thread_id.is_some())
-        );
+        assert!(preview
+            .rows
+            .iter()
+            .all(|row| row.classification == "safe_exact_match"
+                && row.default_selected
+                && row.thread_id.is_some()));
         let token = preview.preview_token.expect("available preview token");
         let token_data: Value = serde_json::from_str(&token).expect("signed token JSON");
         assert_eq!(token_data["payload"]["user_id"], 9101);
-        assert_eq!(token_data["payload"]["scope_mode"], "queue_thread_bootstrap");
+        assert_eq!(
+            token_data["payload"]["scope_mode"],
+            "queue_thread_bootstrap"
+        );
         assert_eq!(token_data["payload"]["provider_series_external_id"], volume);
         assert!(token_data["signature"].as_str().is_some());
         assert_no_preview_writes(&state).await;
@@ -1126,15 +1132,9 @@ mod tests {
         .await
         .expect("v2 preview token must commit");
         assert_eq!(committed.confirmed_issue_ids.len(), 6);
-        let Json(replay) = v2_commit(
-            state.clone(),
-            9101,
-            token,
-            "v2-preview-read-only",
-            approved,
-        )
-        .await
-        .expect("identical idempotency key must replay");
+        let Json(replay) = v2_commit(state.clone(), 9101, token, "v2-preview-read-only", approved)
+            .await
+            .expect("identical idempotency key must replay");
         assert_eq!(
             serde_json::to_value(&committed).expect("original response"),
             serde_json::to_value(&replay).expect("replay response")
@@ -1231,15 +1231,10 @@ mod tests {
             .filter(|row| row.default_selected)
             .map(|row| row.row_id.clone())
             .collect();
-        let Json(committed) = v2_commit(
-            state.clone(),
-            9103,
-            token,
-            "v2-owned-only-committed",
-            owned,
-        )
-        .await
-        .expect("owned exact matches remain committable after the rejection");
+        let Json(committed) =
+            v2_commit(state.clone(), 9103, token, "v2-owned-only-committed", owned)
+                .await
+                .expect("owned exact matches remain committable after the rejection");
         assert_eq!(committed.confirmed_issue_ids, vec![5711300, 5711301]);
         crate::test_support::clear_test_volume_roster(volume);
     }
@@ -1256,15 +1251,7 @@ mod tests {
         let volume = "571604";
         {
             let connection = state.pool.get().await.expect("connection");
-            seed_v2_preview_thread(
-                &connection,
-                9104,
-                571104,
-                "New Teen Titans",
-                5711400,
-                33,
-            )
-            .await;
+            seed_v2_preview_thread(&connection, 9104, 571104, "New Teen Titans", 5711400, 33).await;
         }
         let mut numbers: Vec<String> = (1..=33_i32).map(|n| n.to_string()).collect();
         numbers.push("34".to_string());
