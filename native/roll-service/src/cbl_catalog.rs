@@ -162,6 +162,31 @@ pub(crate) enum CatalogError {
     Database(ApiError),
 }
 
+impl std::fmt::Display for CatalogError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidFolder(message) | Self::Validation(message) => {
+                write!(formatter, "{message}")
+            }
+            Self::FolderNotFound(folder) => {
+                write!(formatter, "CBL folder not found: {folder}")
+            }
+            Self::ValidationItems(items) => write!(
+                formatter,
+                "{}",
+                items
+                    .first()
+                    .map_or_else(|| "invalid query".to_string(), |item| item.msg.clone())
+            ),
+            Self::Unavailable => write!(
+                formatter,
+                "The shared CBL catalog is temporarily unavailable."
+            ),
+            Self::Database(error) => write!(formatter, "{error}"),
+        }
+    }
+}
+
 impl From<ApiError> for CatalogError {
     fn from(error: ApiError) -> Self {
         CatalogError::Database(error)
@@ -470,7 +495,7 @@ pub(crate) async fn read_folder(
     })
 }
 
-fn map_item(row: &Row) -> CBLCatalogListItem {
+pub(crate) fn map_item(row: &Row) -> CBLCatalogListItem {
     let repository: String = row.get(3);
     CBLCatalogListItem {
         id: row.get(0),

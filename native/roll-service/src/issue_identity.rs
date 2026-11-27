@@ -35,7 +35,7 @@ const MAX_SEARCH_LENGTH: usize = 200;
 /// Python `Query(ge=1, le=100)` for the discovery list limit.
 const MAX_DISCOVERY_LIMIT: i64 = 100;
 /// Python `Query(ge=1, le=2000)` for the source-list entry limit.
-const MAX_ENTRIES_LIMIT: i64 = 2000;
+pub(crate) const MAX_ENTRIES_LIMIT: i64 = 2000;
 /// Python `Query(ge=1, le=200)` for Comic Vine occurrence limits.
 const MAX_OCCURRENCE_LIMIT: i64 = 200;
 /// Python `Path(max_length=100)` for the Comic Vine issue ID.
