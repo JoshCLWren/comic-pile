@@ -1538,6 +1538,43 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn retired_v1_membership_routes_return_404_in_inner_router() {
+        let config = Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
+            _ => None,
+        })
+        .unwrap();
+        let state = Arc::new(AppState::new(config).unwrap());
+        for (method, uri) in [
+            ("POST", "/api/v1/threads/groups:batch"),
+            ("GET", "/api/v1/reading-order-groups/threads/42/groups"),
+            ("GET", "/api/v1/reading-order-groups/7/plans"),
+            ("POST", "/api/v1/reading-order-groups/7/members"),
+            ("POST", "/api/v1/reading-order-groups/7/issue-ranges"),
+            ("DELETE", "/api/v1/reading-order-groups/7/members/10"),
+        ] {
+            let response = router(Arc::clone(&state))
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{method} {uri}");
+            let bytes = to_bytes(response.into_body(), 1024).await.unwrap();
+            assert_eq!(
+                String::from_utf8_lossy(&bytes),
+                r#"{"detail":"Not Found"}"#,
+                "{method} {uri}"
+            );
+        }
+    }
+
     #[test]
     fn api_error_variants_carry_typed_status_and_detail() {
         let cases = [
