@@ -277,6 +277,19 @@
       "status": "target",
       "owning_issue": 4832,
       "exclude_from_inventory": true
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/threads:checkDuplicates",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/threads:checkDuplicates$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5705,
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
+      ]
     }
   ]
 }
