@@ -364,7 +364,16 @@ fn build_canonical_explanation(
     thread_titles: &HashMap<i32, &str>,
     issues: &HashMap<i32, (i32, &str)>,
     list_names: &HashMap<i32, String>,
-) -> Result<(bool, bool, Option<i32>, Vec<String>, Vec<BlockingDependency>), ApiError> {
+) -> Result<
+    (
+        bool,
+        bool,
+        Option<i32>,
+        Vec<String>,
+        Vec<BlockingDependency>,
+    ),
+    ApiError,
+> {
     let mut reasons = Vec::new();
     let mut dependencies = Vec::new();
     let Some(thread_state) = thread_state else {
