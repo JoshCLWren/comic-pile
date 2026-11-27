@@ -12,7 +12,7 @@
 //! * `GET  /api/v1/threads/{thread_id}/connected`
 //! * `GET  /api/v1/threads/{thread_id}/dependency-order-check`
 //! * `GET  /api/v1/threads/{thread_id}/issues:validateOrder`
-//! * `GET  /api/v1/threads/{thread_id}/reading-orders`
+//! * `GET  /api/v2/threads/{thread_id}/readingOrders`
 //!
 //! All six are reads (the two `getBlockingInfo` POSTs are idempotent
 //! queries), so there are no transactions or side effects to preserve; each
@@ -973,7 +973,7 @@ pub async fn get_thread_connected_threads(
 // Reading orders containing a thread
 // ---------------------------------------------------------------------------
 
-/// Serve `GET /api/v1/threads/{thread_id}/reading-orders`.
+/// Serve `GET /api/v2/threads/{thread_id}/readingOrders`.
 ///
 /// Like Python this performs no thread-ownership check: only the caller's own
 /// reading orders are searched, so an unknown or foreign thread yields an

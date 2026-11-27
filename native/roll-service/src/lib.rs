@@ -759,6 +759,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(reading_orders::insert_reading_order_item),
         )
         .route(
+            "/api/v2/threads/{thread_id}/readingOrders",
+            get(thread_ordering::get_thread_reading_orders),
+        )
+        .route(
             "/api/v1/cron/release-sync",
             get(reading_plan_sync::scheduled_release_sync_cron),
         )
@@ -867,10 +871,6 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/threads/{thread_id}/issues:validateOrder",
             get(thread_ordering::validate_issue_order),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}/reading-orders",
-            get(thread_ordering::get_thread_reading_orders),
         )
         .route(
             "/api/v1/threads/completed/threads",
