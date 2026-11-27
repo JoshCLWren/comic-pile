@@ -254,8 +254,7 @@ test('real taste and bug-report fragments cannot regress to Python ingress', () 
   assert.ok(!taste.operations.some(op => op.method === 'OPTIONS'));
   assert.equal(taste.defaults.runtime, 'native-rust');
   for (const op of taste.operations) assert.equal(op.dest, '/api/native_api.rs', op.path);
-<<<<<<< HEAD
-  for (const [method, route] of [
+for (const [method, route] of [
     ['GET', '/api/v2/users/me/tasteDiscoveries'],
     ['POST', '/api/v2/users/me/tasteDiscoveries/{signal_id}:dismiss'],
   ]) {
@@ -264,8 +263,6 @@ test('real taste and bug-report fragments cannot regress to Python ingress', () 
     assert.equal(op.status, 'target', route);
     assert.equal(op.owning_issue, 5717, route);
   }
-=======
->>>>>>> origin/main
 
   const bugs = liveFragment('bug-reports');
   assert.deepEqual(
