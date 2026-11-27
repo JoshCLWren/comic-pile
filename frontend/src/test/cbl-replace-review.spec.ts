@@ -264,7 +264,7 @@ test.describe('CBL replacement review', () => {
         ],
       }),
     )
-    await page.route('**/api/v1/issue-identity/cbl/9001/adoption-preview', (route) =>
+    await page.route('**/api/v2/cblSources/9001/adoptionPreview', (route) =>
       route.fulfill({
         json: {
           source: {
@@ -381,7 +381,7 @@ test.describe('CBL replacement review', () => {
         ],
       }),
     )
-    await page.route('**/api/v1/issue-identity/cbl/9101/adoption-preview', (route) =>
+    await page.route('**/api/v2/cblSources/9101/adoptionPreview', (route) =>
       route.fulfill({
         json: previewBody(9101, [
           {
@@ -483,7 +483,7 @@ test.describe('CBL replacement review', () => {
         ],
       }),
     )
-    await page.route('**/api/v1/issue-identity/cbl/9201/adoption-preview', (route) =>
+    await page.route('**/api/v2/cblSources/9201/adoptionPreview', (route) =>
       route.fulfill({
         json: previewBody(9201, [
           {
@@ -617,7 +617,7 @@ test.describe('CBL replacement review', () => {
         ],
       }),
     )
-    await page.route('**/api/v1/issue-identity/cbl/9301/adoption-preview', (route) =>
+    await page.route('**/api/v2/cblSources/9301/adoptionPreview', (route) =>
       route.fulfill({
         json: previewBody(9301, [
           {
@@ -710,7 +710,7 @@ test.describe('CBL replacement review', () => {
         ],
       }),
     )
-    await page.route('**/api/v1/issue-identity/cbl/9401/adoption-preview', (route) =>
+    await page.route('**/api/v2/cblSources/9401/adoptionPreview', (route) =>
       route.fulfill({
         json: previewBody(9401, [
           {

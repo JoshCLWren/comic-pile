@@ -3,6 +3,7 @@
   "owned_path_patterns": [
     "^/api/v1/issue\\-identity/cbl/\\{list_id\\}/adoption\\-preview$",
     "^/api/v1/issue\\-identity/cbl/\\{list_id\\}/adoption\\-plan$",
+    "^/api/v2/cblSources(?::.*|/.*)?$",
     "^/api/v1/issue\\-identity/cbl\\-sources$",
     "^/api/v1/issue\\-identity/cbl\\-sources/\\{list_id\\}$",
     "^/api/v1/issue\\-identity/cbl\\-sources/by\\-comicvine\\-issue/\\{comicvine_issue_id\\}$",
@@ -15,6 +16,45 @@
     "owning_issue": 4843
   },
   "operations": [
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/cblSources/{source_id}/adoptionPreview",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/cblSources/[^/]+/adoptionPreview$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5714,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/cblSources/{source_id}:planAdoption",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/cblSources/[^/]+:planAdoption$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5714,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/cblSources/{source_id}:previewReadingGraph",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/cblSources/[^/]+:previewReadingGraph$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5714,
+      "consumers": [
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
     {
       "bucket": "v1_operations",
       "method": "GET",
