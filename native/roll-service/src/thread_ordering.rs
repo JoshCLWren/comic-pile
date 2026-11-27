@@ -137,6 +137,9 @@ pub struct BatchEligibilityRequest {
     pub thread_ids: Vec<i32>,
 }
 
+/// `(eligible, is_blocked, next_issue_id, reasons, dependencies)` from the canonical evaluator.
+type CanonicalExplanationParts = (bool, bool, Option<i32>, Vec<String>, Vec<BlockingDependency>);
+
 /// Python `ConnectedThreadInfo`.
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct ConnectedThreadInfo {
