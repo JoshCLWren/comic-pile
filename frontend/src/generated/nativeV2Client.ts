@@ -435,6 +435,14 @@ export type DismissPendingResponse = void
 
 export type DismissReadingModeSuggestionResponse = components['schemas']['ReadingModeResponse']
 
+export interface DismissTasteDiscoveryV2Request {
+  path: {
+    signal_id: number
+  }
+}
+
+export type DismissTasteDiscoveryV2Response = components['schemas']['TasteDismissResponse']
+
 export interface EffectiveIssueRequest {
   path: {
     issue_id: number
@@ -759,6 +767,14 @@ export type ListSessionSnapshotsResponse = components['schemas']['SessionSnapsho
 
 export type ListTagsResponse = components['schemas']['TagListResponse']
 
+export interface ListTasteDiscoveriesV2Request {
+  query?: {
+    limit?: number
+  }
+}
+
+export type ListTasteDiscoveriesV2Response = components['schemas']['TasteDiscoveryListResponse']
+
 export interface ListThreadIssuesRequest {
   path: {
     thread_id: number
@@ -855,6 +871,15 @@ export interface OverrideRollRequest {
 }
 
 export type OverrideRollResponse = components['schemas']['NativeRollResponse']
+
+export interface PatchTasteSignalV2Request {
+  path: {
+    signal_name: string
+  }
+  body: components['schemas']['TasteSignalPatchRequest']
+}
+
+export type PatchTasteSignalV2Response = components['schemas']['TasteSignalResponse']
 
 export interface PatchThreadRequest {
   path: {
@@ -1444,6 +1469,7 @@ export interface NativeV2Client {
   discoveries(): Promise<DiscoveriesResponse>
   dismissPending(): Promise<DismissPendingResponse>
   dismissReadingModeSuggestion(): Promise<DismissReadingModeSuggestionResponse>
+  dismissTasteDiscoveryV2(args: DismissTasteDiscoveryV2Request): Promise<DismissTasteDiscoveryV2Response>
   effectiveIssue(args: EffectiveIssueRequest): Promise<EffectiveIssueResponse>
   effectivePlan(args: EffectivePlanRequest): Promise<EffectivePlanResponse>
   effectiveThread(args: EffectiveThreadRequest): Promise<EffectiveThreadResponse>
@@ -1490,6 +1516,7 @@ export interface NativeV2Client {
   listReadingSessions(args?: ListReadingSessionsRequest): Promise<ListReadingSessionsResponse>
   listSessionSnapshots(args: ListSessionSnapshotsRequest): Promise<ListSessionSnapshotsResponse>
   listTags(): Promise<ListTagsResponse>
+  listTasteDiscoveriesV2(args?: ListTasteDiscoveriesV2Request): Promise<ListTasteDiscoveriesV2Response>
   listThreadIssues(args: ListThreadIssuesRequest): Promise<ListThreadIssuesResponse>
   listThreadIssuesV2(args: ListThreadIssuesV2Request): Promise<ListThreadIssuesV2Response>
   listThreadReadingOrders(args: ListThreadReadingOrdersRequest): Promise<ListThreadReadingOrdersResponse>
@@ -1502,6 +1529,7 @@ export interface NativeV2Client {
   metric(args: MetricRequest): Promise<MetricResponse>
   offer(args: OfferRequest): Promise<OfferResponse>
   overrideRoll(args: OverrideRollRequest): Promise<OverrideRollResponse>
+  patchTasteSignalV2(args: PatchTasteSignalV2Request): Promise<PatchTasteSignalV2Response>
   patchThread(args: PatchThreadRequest): Promise<PatchThreadResponse>
   patchUserPreferences(args: PatchUserPreferencesRequest): Promise<PatchUserPreferencesResponse>
   preview(args: PreviewRequest): Promise<PreviewResponse>
@@ -1866,6 +1894,9 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     dismissReadingModeSuggestion() {
       return client.post<DismissReadingModeSuggestionResponse>("/v2/reading-mode/suggestion-dismissals")
     },
+    dismissTasteDiscoveryV2(args: DismissTasteDiscoveryV2Request) {
+      return client.post<DismissTasteDiscoveryV2Response>(`/v2/users/me/tasteDiscoveries/${encodeURIComponent(String(args.path.signal_id))}:dismiss`)
+    },
     effectiveIssue(args: EffectiveIssueRequest) {
       return client.get<EffectiveIssueResponse>(
         `/v2/tags/effective/issues/${encodeURIComponent(String(args.path.issue_id))}`,
@@ -2094,6 +2125,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     listTags() {
       return client.get<ListTagsResponse>("/v2/tags")
     },
+    listTasteDiscoveriesV2(args: ListTasteDiscoveriesV2Request = {}) {
+      return client.get<ListTasteDiscoveriesV2Response>(
+        "/v2/users/me/tasteDiscoveries",
+        { params: compactQuery(args.query) },
+      )
+    },
     listThreadIssues(args: ListThreadIssuesRequest) {
       return client.get<ListThreadIssuesResponse>(
         `/v1/threads/${encodeURIComponent(String(args.path.thread_id))}/issues`,
@@ -2155,6 +2192,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     overrideRoll(args: OverrideRollRequest) {
       return client.post<OverrideRollResponse, OverrideRollRequest['body']>(
         "/v2/roll/override",
+        args.body,
+      )
+    },
+    patchTasteSignalV2(args: PatchTasteSignalV2Request) {
+      return client.patch<PatchTasteSignalV2Response, PatchTasteSignalV2Request['body']>(
+        `/v2/users/me/tasteSignals/${encodeURIComponent(String(args.path.signal_name))}`,
         args.body,
       )
     },
