@@ -113,7 +113,7 @@ export function useRollBootstrap(_api?: unknown) {
   }, [die, eligible, cards, data])
 
   return {
-    data,
+    data: data as RollBootstrapResponse | null,
     isPending,
     isError: die.isError || eligible.isError || cards.isError,
     error: die.error ?? eligible.error ?? cards.error ?? null,
