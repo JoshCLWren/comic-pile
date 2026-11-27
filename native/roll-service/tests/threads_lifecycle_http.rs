@@ -2609,6 +2609,115 @@ async fn check_duplicates_v2_caps_matches_at_five() {
     assert_eq!(body["matches"].as_array().unwrap().len(), 5, "{body:?}");
 }
 
+/// The v2 contract promises at most five matches even for exact ComicVine
+/// matches: one confirmed series mapping can exist on several owned historical
+/// threads. The cap must keep the lowest thread IDs, exclude a named thread,
+/// and never displace an exact match with a similar-title match (#5705).
+#[tokio::test]
+async fn check_duplicates_v2_caps_exact_volume_matches_at_five() {
+    let ctx = setup("lcdupv2exact").await;
+    let pool = ctx.state.pool.get().await.unwrap();
+    let identity: i32 = pool
+        .query_one(
+            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json,
+                                              created_at, updated_at)
+             VALUES ('comicvine', 'series', '4050', $1, NOW(), NOW()) RETURNING id",
+            &[&json!({"start_year": "1963"})],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let mut mapped = Vec::new();
+    for position in 1..=7 {
+        let thread_id = seed_thread(
+            &ctx,
+            ctx.user_id,
+            &format!("Unrelated historical volume {position}"),
+            "active",
+            position,
+            1,
+        )
+        .await;
+        pool.execute(
+            "INSERT INTO thread_external_series_mappings (thread_id, external_identity_id, status,
+                                                          created_at, updated_at)
+             VALUES ($1, $2, 'confirmed', NOW(), NOW())",
+            &[&thread_id, &identity],
+        )
+        .await
+        .unwrap();
+        mapped.push(thread_id);
+    }
+    drop(pool);
+    // An unmapped title match would otherwise be reported; exact matches must
+    // take precedence over it even when more than five of them exist.
+    seed_thread(&ctx, ctx.user_id, "Amazing Spider-Man", "active", 8, 2).await;
+
+    let (status, body) = call(
+        &ctx,
+        "POST",
+        "/api/v2/threads:checkDuplicates",
+        Some(json!({
+            "title": "Amazing Spider-Man",
+            "format": "Comic",
+            "comicvine_volume_id": 4050,
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let matches = body["matches"].as_array().unwrap();
+    assert_eq!(matches.len(), 5, "{body:?}");
+    let summary: Vec<(i64, &str)> = matches
+        .iter()
+        .map(|m| {
+            (
+                m["thread_id"].as_i64().unwrap(),
+                m["match_type"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        summary,
+        mapped[..5]
+            .iter()
+            .map(|id| (*id as i64, "same_comicvine_volume"))
+            .collect::<Vec<_>>(),
+        "lowest five exact matches must win, ordered by thread id: {body:?}"
+    );
+
+    // Excluding the lowest exact match promotes the next one, still capped at
+    // five; the similar-title candidate remains outside the bounded result.
+    let (_, excluded) = call(
+        &ctx,
+        "POST",
+        "/api/v2/threads:checkDuplicates",
+        Some(json!({
+            "title": "Amazing Spider-Man",
+            "format": "Comic",
+            "comicvine_volume_id": 4050,
+            "exclude_thread_id": mapped[0],
+        })),
+    )
+    .await;
+    let excluded_matches = excluded["matches"].as_array().unwrap();
+    assert_eq!(excluded_matches.len(), 5, "{excluded:?}");
+    let ids: Vec<i64> = excluded_matches
+        .iter()
+        .map(|m| m["thread_id"].as_i64().unwrap())
+        .collect();
+    assert_eq!(
+        ids,
+        mapped[1..6].iter().map(|id| *id as i64).collect::<Vec<_>>(),
+        "exclude-self must apply before the exact-match cap: {excluded:?}"
+    );
+    assert!(
+        excluded_matches
+            .iter()
+            .all(|m| m["match_type"] == "same_comicvine_volume"),
+        "an exact match must never be displaced by a similar-title match: {excluded:?}"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // groups:batch
 // ---------------------------------------------------------------------------
