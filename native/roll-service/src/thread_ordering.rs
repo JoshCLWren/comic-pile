@@ -1,21 +1,19 @@
-//! Same-path Rust cutover for the browser-called thread ordering and
-//! dependency-inspection reads (#4832, part B).
+//! Rust cutover for the browser-called thread ordering and
+//! dependency-inspection reads (#4832 part B; v2 diagnostics #5709).
 //!
-//! Preserves the frozen Python wire contract (the oracle is
-//! `app/api/dependency.py`, `app/api/issue.py`, `app/api/reading_orders.py`,
-//! `app/services/dependency_service.py`, `comic_pile/dependencies.py` and
-//! `app/services/reading_order_service.py`) at the identical HTTP methods and
-//! paths:
+//! The diagnostic reads are v2-only: eligibility, batch explanations and
+//! connections replaced the retired v1 `getBlockingInfo`/`connected` URLs.
+//! The remaining same-path reads keep their frozen Python wire contract:
 //!
-//! * `POST /api/v1/threads/{thread_id}:getBlockingInfo`
-//! * `POST /api/v1/threads:getBlockingInfo`
-//! * `GET  /api/v1/threads/{thread_id}/connected`
-//! * `GET  /api/v1/threads/{thread_id}/dependency-order-check`
-//! * `GET  /api/v1/threads/{thread_id}/issues:validateOrder`
-//! * `GET  /api/v1/threads/{thread_id}/reading-orders`
+//! * `GET /api/v2/threads/{thread_id}/eligibility`
+//! * `POST /api/v2/threads:explainEligibility`
+//! * `GET /api/v2/threads/{thread_id}/connections`
+//! * `GET /api/v1/threads/{thread_id}/dependency-order-check`
+//! * `GET /api/v1/threads/{thread_id}/issues:validateOrder`
+//! * `GET /api/v1/threads/{thread_id}/reading-orders`
 //!
-//! All six are reads (the two `getBlockingInfo` POSTs are idempotent
-//! queries), so there are no transactions or side effects to preserve; each
+//! All six are reads (the batch explanation POST is an idempotent
+//! query), so there are no transactions or side effects to preserve; each
 //! handler is owner-scoped on every statement.
 //!
 //! Parity notes:
