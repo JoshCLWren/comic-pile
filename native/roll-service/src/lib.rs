@@ -889,6 +889,13 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/threads/excluded/threads",
             get(thread_lifecycle::list_excluded_threads),
         )
+        // The retired batch URL would otherwise be captured as a
+        // `/api/v1/threads/{thread_id}` action. Pin it to an explicit 404 so
+        // v2 is the only membership batch authority (#5711).
+        .route(
+            "/api/v1/threads/groups:batch",
+            post(|| async { ApiError::NotFound("Not Found".to_string()) }),
+        )
         .route(
             "/api/v2/threads/{thread_id}/reading-order-group-memberships",
             get(dependency_groups::list_thread_groups),

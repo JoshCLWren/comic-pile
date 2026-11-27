@@ -358,6 +358,10 @@ fn app() -> Router {
         .route("/api/v1/threads/", post(native_dispatch))
         .route("/api/v1/threads/check-duplicates", post(native_dispatch))
         .route("/api/v1/threads/excluded/threads", get(native_dispatch))
+        // #5711: the retired membership batch alias must not be swallowed by
+        // the generic `/api/v1/threads/{thread_id}` POST action route. A static
+        // segment wins in axum and terminates at the Rust JSON 404 fallback.
+        .route("/api/v1/threads/groups:batch", post(native_not_found))
         .route("/api/v1/threads/reactivate", post(native_dispatch))
         .route("/api/v1/threads/stale", get(native_dispatch))
         .route("/api/v1/threads/{thread_id}", put(native_dispatch))
