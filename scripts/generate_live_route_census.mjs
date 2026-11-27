@@ -430,9 +430,9 @@ function loadVercelRoutes(document) {
   for (const raw of Array.isArray(document.routes) ? document.routes : []) {
     if (!isObject(raw)) continue;
     routes.push({
-      src: typeof raw.src === 'string' ? raw.src : null,
-      dest: typeof raw.dest === 'string' ? raw.dest : null,
-      methods: Array.isArray(raw.methods) ? raw.methods.filter(m => typeof m === 'string') : [],
+      src: stringField(raw, 'src', null),
+      dest: stringField(raw, 'dest', null),
+      methods: stringList(raw.methods),
     });
   }
   return routes;
@@ -447,8 +447,10 @@ function inventoryOperations(inventory) {
   ];
   for (const [operations, bucket] of buckets) {
     for (const op of Array.isArray(operations) ? operations : []) {
-      if (!isObject(op) || typeof op.method !== 'string' || typeof op.path !== 'string') continue;
-      result.set(`${op.method} ${op.path}`, {bucket, ...op});
+      const method = stringField(op, 'method', null);
+      const opPath = stringField(op, 'path', null);
+      if (method === null || opPath === null) continue;
+      result.set(`${method} ${opPath}`, {bucket, ...op});
     }
   }
   return result;
@@ -459,8 +461,9 @@ function dispositionFor(dispositions, route) {
   const direct = overrides[`${route.method} ${route.path}`];
   if (isObject(direct)) return direct;
   for (const family of Array.isArray(dispositions.families) ? dispositions.families : []) {
-    if (!isObject(family) || typeof family.prefix !== 'string') continue;
-    if (!route.path.startsWith(family.prefix)) continue;
+    const prefix = stringField(family, 'prefix', null);
+    if (prefix === null) continue;
+    if (!route.path.startsWith(prefix)) continue;
     return family;
   }
   return {};
@@ -504,17 +507,11 @@ export function buildCensus(inputs) {
         : Number.isInteger(aipEntry?.owning_issue)
           ? aipEntry.owning_issue
           : null;
-    const replacement = typeof disposition.replacement === 'string'
-      ? disposition.replacement
-      : version === 'v2'
-        ? 'canonical-v2'
-        : 'needs-owner-disposition';
-    const rolloutStatus = typeof disposition.rollout_status === 'string'
-      ? disposition.rollout_status
-      : version === 'v2' ? 'live-target' : 'baseline-debt';
-    const curatedConsumers = Array.isArray(curatedOp?.consumers)
-      ? curatedOp.consumers.filter(value => typeof value === 'string')
-      : [];
+    const replacement = stringField(disposition, 'replacement', null)
+      ?? (version === 'v2' ? 'canonical-v2' : 'needs-owner-disposition');
+    const rolloutStatus = stringField(disposition, 'rollout_status', null)
+      ?? (version === 'v2' ? 'live-target' : 'baseline-debt');
+    const curatedConsumers = stringList(curatedOp?.consumers);
     const matchedCallers = callers.filter(caller => callerMatchesRoute(caller, route));
     // Precise per-operation source call sites win over the inventory's
     // family-level consumer lists; curated consumers are the fallback for
@@ -541,7 +538,7 @@ export function buildCensus(inputs) {
         && ownerIssue === null && !knownDebt.has(key),
       disposition: replacement,
       rollout_status: rolloutStatus,
-      notes: typeof disposition.notes === 'string' ? disposition.notes : '',
+      notes: stringField(disposition, 'notes', ''),
     });
   }
 
