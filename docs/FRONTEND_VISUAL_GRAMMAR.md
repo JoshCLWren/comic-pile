@@ -37,12 +37,30 @@ The approved [Night Shift prototype](../docs/design/comicpile-night-shift.html) 
 | Success | `--theme-success` | Positive end of the graded scale: a resolved or still-rollable outcome |
 | Error | `--theme-error` | Failed-operation feedback that is not a destructive action |
 | Focus ring | `--theme-focus-ring` | Keyboard/focus visibility |
+| Dice highlight | `--die-light` | Lit faces and primary-action glow on the die |
+| Dice shadow | `--die-dark` | Shaded faces of the die |
 
-The older `--bg-*`, `--text-*`, `--accent-*`, and `--glass-*` variables are compatibility aliases. The `--glass-*` variables are deprecated and new work should prefer the `--theme-*` semantic vocabulary. The short `--theme-text` alias resolves to `--theme-text-primary`. New surface styling should use semantic classes like `.surface-panel`, `.surface-glass`, and `.surface-modal` instead of effect-based approaches.
+The Night Shift values for these roles are fixed by the owner-approved prototype:
+
+| Role | Value |
+| --- | --- |
+| Page background | `#20242D` |
+| Panel / surface | `#303644` |
+| Primary text | `#EEF1F4` |
+| Muted text | `#B2BDCB` |
+| Primary action / comic emphasis | `#9CDBE9` |
+| Reading List / continuity emphasis | `#C1A7F5` |
+| Border | `#4D5767` |
+| Primary action foreground | `#111111` |
+| Dice highlight / shadow | `#C2E9F1` / `#658E97` |
+
+Hover, dim, focus, personal, warning, error, danger and success roles are derived from this palette. Text roles must retain WCAG AA contrast (4.5:1 for normal text) on page and panel surfaces, and status must never be carried by color alone.
+
+The older `--bg-*`, `--text-*`, `--accent-*`, and `--glass-*` variables are compatibility aliases that resolve to the same Night Shift roles. The `--glass-*` variables are deprecated and new work should prefer the `--theme-*` semantic vocabulary. The short `--theme-text` alias resolves to `--theme-text-primary`. New surface styling should use semantic classes like `.surface-panel`, `.surface-glass`, and `.surface-modal` instead of effect-based approaches.
 
 The state roles form a graded scale. `--theme-danger` carries destructive or cancel semantics, `--theme-warning` carries caution and the middle of the scale, and `--theme-success` carries the positive end: an outcome that resolved cleanly or may keep progressing. `--theme-error` reports a failed operation that is not itself a destructive action, so a failed load does not have to borrow cancel styling. Use the role for the product meaning, and pair it with text so color is never the only carrier of status.
 
-`frontend/src/index.css` contains older root-level theme values such as `--theme-primary` and `--theme-bg-card`. Do not treat those as a second design system or add parallel tokens there. A new semantic role belongs with the `data-theme` token sets in `styles.css` and must be defined for every theme.
+`frontend/src/index.css` imports Tailwind and `styles.css`; it must not define another palette. A new semantic role belongs in the single `:root` token set in `styles.css`, documented in this file, and covered by the semantic contract tests.
 
 ### Raw colors
 
@@ -128,7 +146,7 @@ Use semantic surface classes to ensure consistent styling across the application
 - `.surface-glass`: Surfaces with backdrop blur for overlays and modals where transparency improves readability
 - `.surface-modal`: Elevated dialog surfaces with stronger shadows and opaque backgrounds
 
-These classes use the semantic theme tokens (`--theme-bg-panel`, `--theme-border`) and ensure proper layering and readability across all themes.
+These classes use the semantic Night Shift tokens (`--theme-bg-panel`, `--theme-border`) and ensure proper layering and readability.
 
 ## Icons
 
@@ -257,7 +275,7 @@ A genuinely new visual role is allowed when all of the following are true:
 
 1. the existing vocabulary cannot express a distinct product meaning or interaction requirement;
 2. the variation is expected to recur or is important enough to name explicitly;
-3. it works across themes and supported viewport classes;
+3. it works across authenticated and unauthenticated shells and supported viewport classes;
 4. accessibility and interaction behavior are defined with it;
 5. the new role is documented here, or a focused architecture issue explicitly owns that update.
 
@@ -282,7 +300,7 @@ When changing frontend visuals, ask in review:
 - Does optional content disappear cleanly without leaving geometry behind?
 - Does the layout reflow rather than overlap or horizontally escape?
 - Are important actions reachable at the supported viewport sizes?
-- Does the change work in all themes and with keyboard/focus behavior?
+- Does the change use Night Shift semantic roles (not a new palette or a theme switch) and preserve keyboard/focus behavior?
 
 ## Migration policy
 
