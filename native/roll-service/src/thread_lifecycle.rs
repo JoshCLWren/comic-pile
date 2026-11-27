@@ -50,6 +50,7 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde::{ser::SerializeMap, Serialize, Serializer};
 use serde_json::{json, Value};
 use std::{

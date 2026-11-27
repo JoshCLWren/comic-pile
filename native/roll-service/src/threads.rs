@@ -892,6 +892,37 @@ pub(crate) async fn list_excluded_page(
     }))
 }
 
+/// Build the excluded-threads page for `GET /api/v2/threads?filter=excluded`.
+///
+/// This collection filter is the read counterpart of the authoritative
+/// `/api/v2/queue-exclusions` resource. The resource endpoints mutate or check
+/// membership for a supplied id set; this filter enumerates the same
+/// `status = 'excluded'` rows with stable pagination, search and bulk-exclusion
+/// provenance. No duplicate exclusion contract is introduced.
+async fn excluded_page(
+    state: &AppState,
+    claims: &VerifiedAccessClaims,
+    resolved: &ResolvedListQuery,
+) -> Result<ThreadListResponse, ApiError> {
+    let raw_search = if resolved.search.is_empty() {
+        None
+    } else {
+        // Search was case-folded by `resolve_list_query`; `list_excluded_page`
+        // folds once more, which is idempotent for Unicode case folding.
+        Some(resolved.search.as_str())
+    };
+    Ok(list_excluded_page(
+        state,
+        claims,
+        raw_search,
+        &resolved.order_by,
+        resolved.page_size,
+        resolved.page_token.as_deref(),
+    )
+    .await?
+    .into_inner())
+}
+
 /// Attach bulk exclusion provenance to excluded thread list items in one query.
 async fn attach_queue_exclusion_groups(
     state: &AppState,
@@ -1718,10 +1749,17 @@ fn cursor_clause(sort: &str, cursor: Option<&QueueCursor>) -> (String, Vec<Param
 /// OpenAPI document for the v2 reader threads collection.
 #[derive(utoipa::OpenApi)]
 #[openapi(
-    paths(list_threads_documentation, list_completed_threads_documentation),
+    paths(
+        list_threads_documentation,
+        get_thread_v2_documentation,
+        list_completed_threads_documentation
+    ),
     components(schemas(
         ThreadListItem,
         ThreadListResponse,
+        ThreadDetailResponse,
+        StaleThreadListResponse,
+        ThreadListResult,
         ThreadTag,
         ComicVineMappingHealth,
         QueueSeriesMetadata
@@ -1752,21 +1790,40 @@ impl utoipa::Modify for ThreadsSecurityAddon {
     path = "/api/v2/threads",
     tag = "threads",
     params(
-        ("search" = Option<String>, Query, description = "Case-insensitive title search"),
-        ("sort" = Option<String>, Query, description = "position, title, or created"),
-        ("page_size" = Option<i64>, Query, description = "1-200 rows per page (default 50)"),
-        ("page_token" = Option<String>, Query, description = "Opaque continuation cursor")
+        ("filter" = Option<String>, Query, description = "Resource filter: active (default), completed, stale, excluded"),
+        ("order_by" = Option<String>, Query, description = "Canonical ordering: position, title, created; last_activity for stale"),
+        ("sort" = Option<String>, Query, description = "Legacy alias of order_by; supplying both with different values is rejected"),
+        ("search" = Option<String>, Query, description = "Case-insensitive title search; unsupported for filter=stale"),
+        ("days" = Option<i64>, Query, description = "Stale age threshold in days (0-3650, default 30); only with filter=stale"),
+        ("page_size" = Option<i64>, Query, description = "1-200 rows per page (default 50, 200 for stale)"),
+        ("page_token" = Option<String>, Query, description = "Opaque continuation cursor bound to filter, search and order_by")
     ),
     responses(
-        (status = 200, description = "Owner-scoped active threads page", body = ThreadListResponse),
-        (status = 400, description = "Invalid sort or page token"),
+        (status = 200, description = "Owner-scoped threads page; stale rows keep the detail-shaped projection", body = ThreadListResult),
+        (status = 400, description = "Invalid filter, order_by, sort or page token"),
         (status = 401, description = "Not authenticated"),
-        (status = 422, description = "Invalid bounds or retired collection_id")
+        (status = 422, description = "Invalid bounds, unsupported parameter or retired collection_id")
     ),
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
 pub(crate) fn list_threads_documentation() {}
+
+/// Standard resource Get for one owned Thread.
+#[utoipa::path(
+    get,
+    path = "/api/v2/threads/{thread_id}",
+    tag = "threads",
+    params(("thread_id" = i32, Path, description = "Owned Thread identifier")),
+    responses(
+        (status = 200, description = "Owner-scoped thread detail", body = ThreadDetailResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Thread not found or not owned by the reader")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub(crate) fn get_thread_v2_documentation() {}
 
 #[utoipa::path(
     get,
