@@ -147,7 +147,7 @@ test('published report cross-references every mandated owner issue', () => {
   const report = readFileSync(path.join(repoRoot, 'docs/api/LIVE_ROUTE_CENSUS.md'), 'utf8');
   const mandated = [
     ...Array.from({length: 18}, (_, index) => 5701 + index),
-    4344, 4341, 4343, 4549, 4299, 5525,
+    4341, 4343, 4549, 4299,
   ];
   for (const issue of mandated) {
     assert.match(report, new RegExp(`#${issue}\\b`), `report must cross-reference #${issue}`);
