@@ -1,5 +1,8 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
 import type { ContinuityPlan } from './api-continuity-plans'
+import type { components } from '../generated/openapi'
+
+type ProjectionConfirmationPayload = components['schemas']['NativeReadingOrderProjectionRequest']
 
 export interface ReadingOrderItem {
   thread_id: number
@@ -112,7 +115,7 @@ export function createReadingOrdersApi(client: HttpClient) {
       readingOrderId: number,
       planUpdatedAt?: string,
     ): Promise<ReadingOrderProjectionResult> => {
-      const payload: { reading_order_id: number; plan_updated_at?: string } = {
+      const payload: ProjectionConfirmationPayload = {
         reading_order_id: readingOrderId,
       }
       if (planUpdatedAt) {
