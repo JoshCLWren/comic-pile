@@ -15,7 +15,7 @@
       "bucket": "unversioned_operations",
       "method": "GET",
       "path": "/api/metrics",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "src": "^/api/metrics$",
       "db_free": true,
       "sql_budget": {
@@ -32,7 +32,7 @@
       "bucket": "operations",
       "method": "GET",
       "path": "/api/v2/analytics/metrics",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "exclude_from_inventory": true,
       "comment": "Retired by #5437 after #5446 removed the Analytics page. The Rust handler is gone and the operation is excluded from the inventory. The ingress rewrite is kept (as for other excluded native operations) so requests reach the native catch-all and get a 404 rather than a Python fallback."
     }
