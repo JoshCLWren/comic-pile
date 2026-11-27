@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-27T05:15:59+00:00",
+  "generated_at": "2026-11-27T05:17:14+00:00",
   "models": [
     {
       "health": {
@@ -23821,7 +23821,7 @@
   },
   "counts_generated_at": "2026-11-27T05:00:33.300966+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-27T05:15:59Z",
+    "generated_at": "2026-11-27T05:17:16Z",
     "sources": {
       "nvidia": [
         "google/diffusiongemma-26b-a4b-it",
@@ -23843,8 +23843,8 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-27T05:15:59.964320+00:00",
-    "days_elapsed": 26.219,
+    "checked_at": "2026-11-27T05:17:16.132645+00:00",
+    "days_elapsed": 26.22,
     "days_in_month": 30.0,
     "days_left": 3.78,
     "in_use": true,
@@ -23862,12 +23862,12 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 52281860,
-        "organization": 52281860,
+        "database": 52291045,
+        "organization": 52291045,
         "owner_target": 50000000,
-        "projected_database": 59821343,
-        "projected_organization": 59821343,
-        "projected_share": 0.1196,
+        "projected_database": 59829571,
+        "projected_organization": 59829571,
+        "projected_share": 0.1197,
         "share_used": 0.1046
       },
       "rows_written": {
@@ -23875,8 +23875,8 @@
         "database": 201929,
         "organization": 201929,
         "owner_target": 1000000,
-        "projected_database": 231049,
-        "projected_organization": 231049,
+        "projected_database": 231040,
+        "projected_organization": 231040,
         "projected_share": 0.0231,
         "share_used": 0.0202
       },
@@ -23902,7 +23902,7 @@
     "status": "warn"
   },
   "schema": {
-    "checked_at": "2026-11-27T05:16:02+00:00",
+    "checked_at": "2026-11-27T05:17:19+00:00",
     "code_version": 6,
     "last_upgrade": {
       "at": "2026-11-25T18:11:07+00:00",
@@ -24080,7 +24080,7 @@
     "stored_version": 6
   },
   "crashes": {
-    "generated_at": "2026-11-27T05:16:02Z",
+    "generated_at": "2026-11-27T05:17:19Z",
     "groups": [
       {
         "count": 12,
@@ -24197,48 +24197,9 @@
     ]
   },
   "gh_usage": {
-    "generated_at": "2026-11-27T05:16:03Z",
+    "generated_at": "2026-11-27T05:17:21Z",
     "jobs": {
       "dispatch": [
-        {
-          "at": 1795755452,
-          "buckets": {
-            "reader": 121,
-            "workflow": 40
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 2722,
-            "reset": 1795756476
-          },
-          "cache_hits": 4,
-          "github": 161,
-          "label": "dispatch roster",
-          "paginated": 26,
-          "top": [
-            [
-              "api GET repos/R/issues/N",
-              44
-            ],
-            [
-              "api GET repos/R/issues",
-              19
-            ],
-            [
-              "api GET repos/R/pulls/N",
-              16
-            ],
-            [
-              "gh pr checks",
-              13
-            ],
-            [
-              "api GET repos/R/issues/N/comments paginate",
-              12
-            ]
-          ],
-          "writes": 15
-        },
         {
           "at": 1795755565,
           "buckets": {
@@ -24667,6 +24628,45 @@
             ]
           ],
           "writes": 0
+        },
+        {
+          "at": 1795756579,
+          "buckets": {
+            "reader": 50,
+            "workflow": 10
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 4823,
+            "reset": 1795760079
+          },
+          "cache_hits": 0,
+          "github": 60,
+          "label": "dispatch pr:5895",
+          "paginated": 7,
+          "top": [
+            [
+              "api GET repos/R/issues/N",
+              19
+            ],
+            [
+              "api GET repos/R/pulls/N",
+              8
+            ],
+            [
+              "api GET repos/R/issues",
+              5
+            ],
+            [
+              "gh pr checks",
+              5
+            ],
+            [
+              "api GET repos/R/commits/SHA/check-runs",
+              5
+            ]
+          ],
+          "writes": 2
         }
       ],
       "merge": [
