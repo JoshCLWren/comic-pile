@@ -3385,7 +3385,14 @@ export interface paths {
         /** Documentation-only operation used to emit the generated OpenAPI contract. */
         get: operations["list_threads_documentation"];
         put?: never;
-        post?: never;
+        /**
+         * Documentation-only operation for the AIP-133 standard Create on the v2
+         *     threads collection (#5702). The handler lives in `thread_lifecycle` and
+         *     shares the legacy write path; only the URL and the `Location` response
+         *     header differ.
+         * @description Create a thread at the end of the authenticated reader's queue. The created resource (including its stable `id`) is returned at 201 with a `Location` header naming the v2 collection member. The write preserves owner assignment, the five-second duplicate-merge guard and the Python validation envelope; it creates no Plan, dependency or issue rows.
+         */
+        post: operations["create_thread_v2_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6899,8 +6906,35 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
-        /** @description Python `ThreadResponse`. */
+        /** @description The Python `ThreadResponse` projection every lifecycle writer returns. */
         NativeThreadResponse: {
+            blocking_reasons: string[];
+            created_at: string;
+            format: string;
+            /** Format: int32 */
+            id: number;
+            is_blocked: boolean;
+            is_test: boolean;
+            /** Format: int32 */
+            issues_remaining: number;
+            last_activity_at?: string | null;
+            /** Format: double */
+            last_rating?: number | null;
+            manual_creator_credits: unknown;
+            /** Format: int32 */
+            next_unread_issue_id?: number | null;
+            next_unread_issue_number?: string | null;
+            notes?: string | null;
+            /** Format: int32 */
+            queue_position: number;
+            reading_progress?: string | null;
+            status: string;
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
+        };
+        /** @description Python `ThreadResponse`. */
+        NativeThreadResponse2: {
             blocking_reasons: string[];
             created_at: string;
             format: string;
@@ -9230,6 +9264,18 @@ export interface components {
             /** Title */
             title: string;
             /** Total Issues */
+            total_issues?: number | null;
+        };
+        /** @description Body of `POST /api/v1/threads/`. */
+        ThreadCreateRequest: {
+            format: string;
+            is_test?: boolean;
+            /** Format: int32 */
+            issues_remaining: number;
+            manual_creator_credits?: unknown[];
+            notes?: string | null;
+            title: string;
+            /** Format: int32 */
             total_issues?: number | null;
         };
         /**
@@ -12864,7 +12910,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeThreadResponse"];
+                    "application/json": components["schemas"]["NativeThreadResponse2"];
                 };
             };
             /** @description Already migrated or inconsistent range */
@@ -12926,7 +12972,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeThreadResponse"];
+                    "application/json": components["schemas"]["NativeThreadResponse2"];
                 };
             };
             /** @description Already migrated or issue cannot be created */
@@ -18830,6 +18876,44 @@ export interface operations {
                 content?: never;
             };
             /** @description Invalid bounds or retired collection_id */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_thread_v2_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThreadCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created (or the duplicate created seconds earlier) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeThreadResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
