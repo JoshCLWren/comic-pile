@@ -15,6 +15,14 @@
 //! query per row. The keyset cursor is `(started_at, id)`; every page is owner-scoped by
 //! `sessions.user_id`. A missing or foreign session is indistinguishable and
 //! returns 404 with the established `"Session not found"` detail.
+//!
+//! Dice/read writes are persisted without a `session_id` (dice_mutation and
+//! issue_service), so an event aggregate that only matches `e.session_id` would
+//! silently drop modern history. Like the `/details` projection, each page row
+//! claims that reader's session-less `rate`/`snooze`/`unsnooze` events inside
+//! its own window: `[started_at, ended_at]` for an ended session, or up to the
+//! next session start for an open one. The window is derived set-based in the
+//! page CTE, never with a per-row query.
 
 use crate::{
     auth::AuthenticatedUser,
@@ -130,7 +138,14 @@ fn timestamp(value: DateTime<Utc>) -> String {
 /// statement. `$2` narrows to one id for Get and is NULL for List.
 const SESSION_PAGE_SQL: &str = r#"
 WITH page AS (
-    SELECT s.id, s.started_at, s.ended_at, s.start_die, s.manual_die, s.timezone
+    SELECT s.id, s.started_at, s.ended_at, s.start_die, s.manual_die, s.timezone,
+           -- Same boundary as session_details.rs: an ended session owns events
+           -- up to its ended_at, an open one up to the next owned session start.
+           (SELECT MIN(s2.started_at)
+              FROM sessions s2
+             WHERE s2.user_id = s.user_id
+               AND s2.id <> s.id
+               AND s2.started_at > s.started_at) AS next_started_at
       FROM sessions s
      WHERE s.user_id = $1
        AND ($2::int IS NULL OR s.id = $2::int)
