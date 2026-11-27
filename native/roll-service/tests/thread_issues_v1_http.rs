@@ -739,7 +739,11 @@ async fn v2_thread_issue_list_is_owner_scoped_and_paginated() {
 
     let (status, _) = send(
         &state,
-        get(&format!("/api/v2/threads/{thread}/issues"), &other_token, &other_csrf),
+        get(
+            &format!("/api/v2/threads/{thread}/issues"),
+            &other_token,
+            &other_csrf,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);

@@ -1316,7 +1316,9 @@ fn parse_credit_query(raw: Option<&str>) -> Result<(i64, Option<String>), ApiErr
                         return Err(credit_validation_failed());
                     }
                     seen_page_size = true;
-                    let parsed = value.parse::<i64>().map_err(|_| credit_validation_failed())?;
+                    let parsed = value
+                        .parse::<i64>()
+                        .map_err(|_| credit_validation_failed())?;
                     if !(1..=MAX_CREDIT_PAGE_SIZE).contains(&parsed) {
                         return Err(credit_validation_failed());
                     }
