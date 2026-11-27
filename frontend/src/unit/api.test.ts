@@ -132,7 +132,7 @@ it('calls dependency endpoints with expected paths', async () => {
 
   expect(get).toHaveBeenCalledWith('/v2/dependencies/blocked')
   expect(get).toHaveBeenCalledWith('/v1/threads/11/dependencies')
-  expect(post).toHaveBeenCalledWith('/v1/threads/12:getThreadEligibility')
+  expect(post).toHaveBeenCalledWith('/v1/threads/12/eligibility')
   expect(post).toHaveBeenCalledWith('/v2/dependencies/', {
     source_type: 'thread',
     source_id: 1,

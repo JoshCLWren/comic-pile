@@ -1501,10 +1501,8 @@ mod tests {
         ] {
             assert!(document["paths"].get(path).is_some(), "{path}");
         }
-        let generated = thread_ordering_openapi().to_pretty_json().unwrap();
-        std::fs::write(concat!(env!("CARGO_MANIFEST_DIR"), "/../../native/contracts/thread-ordering-v1.openapi.json"), generated + "\n").unwrap();
         let expected = include_str!("../../contracts/thread-ordering-v1.openapi.json");
-        let generated2 = thread_ordering_openapi().to_pretty_json().unwrap();
-        assert_eq!(expected.trim_end(), generated2.trim_end());
+        let generated = thread_ordering_openapi().to_pretty_json().unwrap();
+        assert_eq!(expected.trim_end(), generated.trim_end());
     }
 }
