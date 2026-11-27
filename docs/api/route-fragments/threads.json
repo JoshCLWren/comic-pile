@@ -131,6 +131,20 @@
     },
     {
       "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/threads/{thread_id}/readingOrders",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/threads/[^/]+/readingOrders$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5715,
+      "consumers": [
+        "frontend/src/services/api-reading-orders.ts",
+        "frontend/src/hooks/useReaderContext.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
       "method": "POST",
       "path": "/api/v2/threads:checkDuplicates",
       "dest": "/api/native_api.rs",

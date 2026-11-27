@@ -1,7 +1,8 @@
 {
   "family": "continuity-plans",
   "owned_path_patterns": [
-    "^/api/v2/continuity-plans(?:/.*)?$"
+    "^/api/v2/continuity-plans(?:/.*)?$",
+    "^/api/v2/continuityPlans(?::.*|/.*)?$"
   ],
   "defaults": {
     "runtime": "native-rust",
@@ -9,6 +10,19 @@
     "owning_issue": 4838
   },
   "operations": [
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/continuityPlans/[^/]+:previewReadingOrderProjection$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5715,
+      "consumers": [
+        "frontend/src/services/api-reading-orders.ts"
+      ]
+    },
     {
       "bucket": "operations",
       "method": "GET",
