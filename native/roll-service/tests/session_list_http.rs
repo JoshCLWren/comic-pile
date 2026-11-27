@@ -230,3 +230,98 @@ async fn canonical_session_list_and_get_are_owner_scoped_and_paginated() {
     let bytes = to_bytes(unauthenticated.into_body(), 8192).await.unwrap();
     assert!(String::from_utf8_lossy(&bytes).contains("detail"));
 }
+
+#[tokio::test]
+async fn canonical_session_resources_claim_sessionless_rate_events_in_window() {
+    let (state, _guard) = database().await;
+    let (owner_token, owner_csrf, owner_id) =
+        register(&state, "sessions_list_sessionless_owner").await;
+    let (_other_token, _other_csrf, other_id) =
+        register(&state, "sessions_list_sessionless_other").await;
+    let owner = (owner_token.as_str(), owner_csrf.as_str());
+
+    let older = insert_session(&state, owner_id, "2026-11-25T01:00:00Z", 6).await;
+    let current = insert_session(&state, owner_id, "2026-11-26T01:00:00Z", 10).await;
+
+    let conn = state.pool.get().await.unwrap();
+    let sql = "INSERT INTO events (user_id, session_id, type, timestamp, die_after, context)
+               VALUES ($1, NULL, 'rate', $2, $3, '{}'::json)";
+    // Dice/read writes carry user_id but no session_id; each belongs only to
+    // the window that contains it.
+    for (at, user, die) in [
+        ("2026-11-26T01:05:00Z", owner_id, 14), // inside the current window
+        ("2026-11-25T01:05:00Z", owner_id, 9),  // inside the older window
+        ("2026-11-24T01:00:00Z", owner_id, 3),  // before both windows
+        ("2026-11-26T01:06:00Z", other_id, 99), // other reader's action
+    ] {
+        let timestamp: DateTime<Utc> = at.parse().unwrap();
+        conn.execute(sql, &[&user, &timestamp, &die]).await.unwrap();
+    }
+    drop(conn);
+
+    let (status, active) = send(&state, owner, &format!("/api/v2/readingSessions/{current}")).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(active["event_count"].as_i64(), Some(1));
+    assert_eq!(active["current_die"].as_i64(), Some(14));
+    assert_eq!(active["ladder_path"].as_str(), Some("10 → 14"));
+
+    let (status, previous) = send(&state, owner, &format!("/api/v2/readingSessions/{older}")).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(previous["event_count"].as_i64(), Some(1));
+    assert_eq!(previous["ladder_path"].as_str(), Some("6 → 9"));
+
+    let (status, list) = send(&state, owner, "/api/v2/readingSessions?page_size=10").await;
+    assert_eq!(status, StatusCode::OK);
+    let items = list["reading_sessions"].as_array().unwrap();
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0]["event_count"].as_i64(), Some(1));
+    assert_eq!(items[0]["current_die"].as_i64(), Some(14));
+
+    // The canonical List/Get projection must agree with the /details endpoint
+    // for the same session instead of losing the modern dice/read history.
+    let (status, details) = send(
+        &state,
+        owner,
+        &format!("/api/v2/readingSessions/{current}/details"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(details["current_die"].as_i64(), Some(14));
+    assert_eq!(details["ladder_path"].as_str(), Some("10 → 14"));
+    assert_eq!(details["events"].as_array().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn canonical_session_resources_ignore_roll_rating_companion_events() {
+    let (state, _guard) = database().await;
+    let (owner_token, owner_csrf, owner_id) =
+        register(&state, "sessions_list_companion_owner").await;
+    let owner = (owner_token.as_str(), owner_csrf.as_str());
+    let session = insert_session(&state, owner_id, "2026-11-26T01:00:00Z", 6).await;
+
+    let conn = state.pool.get().await.unwrap();
+    let companion_at: DateTime<Utc> = "2026-11-26T01:05:00Z".parse().unwrap();
+    conn.execute(
+        "INSERT INTO events (user_id, session_id, type, timestamp, die_after, context)
+         VALUES ($1, NULL, 'rate', $2, 8, '{\"dice_command\":{\"kind\":\"roll_rating\"}}'::json)",
+        &[&owner_id, &companion_at],
+    )
+    .await
+    .unwrap();
+    let reader_at: DateTime<Utc> = "2026-11-26T01:05:01Z".parse().unwrap();
+    conn.execute(
+        "INSERT INTO events (user_id, session_id, type, timestamp, die_after, context)
+         VALUES ($1, NULL, 'rate', $2, 8, '{\"source\":\"roll_offer\"}'::json)",
+        &[&owner_id, &reader_at],
+    )
+    .await
+    .unwrap();
+    drop(conn);
+
+    let (status, resource) =
+        send(&state, owner, &format!("/api/v2/readingSessions/{session}")).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(resource["event_count"].as_i64(), Some(1));
+    assert_eq!(resource["ladder_path"].as_str(), Some("6 → 8"));
+    assert_eq!(resource["current_die"].as_i64(), Some(8));
+}

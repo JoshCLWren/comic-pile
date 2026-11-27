@@ -153,17 +153,28 @@ WITH page AS (
      ORDER BY s.started_at DESC, s.id DESC
      LIMIT $5
 ), event_stats AS (
-    SELECT e.session_id,
-           COUNT(*)::int AS event_count,
+    SELECT p.id AS session_id,
+           COUNT(e.id)::int AS event_count,
            (array_agg(e.die_after ORDER BY e.timestamp DESC, e.id DESC)
-              FILTER (WHERE e.die_after IS NOT NULL))[1] AS latest_die_after,
+              FILTER (WHERE e.die_after IS NOT NULL AND e.type IN ('rate','snooze','undo')))[1] AS latest_die_after,
            (array_agg(e.context::text ORDER BY e.timestamp DESC, e.id DESC)
-              FILTER (WHERE e.die_after IS NOT NULL))[1] AS latest_context,
+              FILTER (WHERE e.die_after IS NOT NULL AND e.type IN ('rate','snooze','undo')))[1] AS latest_context,
            array_agg(e.die_after ORDER BY e.timestamp ASC, e.id ASC)
-              FILTER (WHERE e.die_after IS NOT NULL) AS ladder
-      FROM events e
-     WHERE e.session_id IN (SELECT id FROM page)
-     GROUP BY e.session_id
+              FILTER (WHERE e.die_after IS NOT NULL AND e.type IN ('rate','snooze','undo')) AS ladder
+      FROM page p
+      LEFT JOIN events e
+        ON e.session_id = p.id
+        OR (e.session_id IS NULL
+            AND e.user_id = $1
+            AND e.type IN ('rate','snooze','unsnooze')
+            AND e.timestamp >= p.started_at
+            AND ((p.ended_at IS NOT NULL AND e.timestamp <= p.ended_at)
+              OR (p.ended_at IS NULL
+                  AND (p.next_started_at IS NULL OR e.timestamp < p.next_started_at)))
+            -- dice_mutation's roll_rating companion is suppressed by /details
+            -- in favour of the richer issue-service rate event.
+            AND (e.context -> 'dice_command' ->> 'kind') IS DISTINCT FROM 'roll_rating')
+     GROUP BY p.id
 ), snapshot_stats AS (
     SELECT sn.session_id, COUNT(*)::int AS snapshot_count
       FROM snapshots sn
