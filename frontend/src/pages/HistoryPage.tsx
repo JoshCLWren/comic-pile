@@ -265,6 +265,7 @@ export default function HistoryPage() {
       >
         {activity.map((item) => {
           const progression = dieProgression(item)
+          const canonicalIssueId = canonicalActivityIssueId(item.issue_id)
           return (
             <div key={item.event_id} role="listitem" className="flex gap-3 md:gap-4 py-4 px-2 md:px-3">
               <div className="w-16 md:w-20 shrink-0">
@@ -296,14 +297,14 @@ export default function HistoryPage() {
                   </p>
                 )}
 
-                {item.issue_id != null && (
-                  <div className="pt-1">
+                {canonicalIssueId != null && (
+                  <div className="pt-1" data-testid="history-issue-actions">
                     <CompactIssueCardTrigger
-                      issueId={item.issue_id}
+                      issueId={canonicalIssueId}
                       threadTitle={item.thread_title ?? 'Deleted series'}
-                      issueNumber={item.issue_number ?? cardsByIssue.get(item.issue_id)?.issue_number ?? '?'}
-                      status={cardsByIssue.get(item.issue_id)?.status === 'read' ? 'read' : 'unread'}
-                      card={cardsByIssue.get(item.issue_id) ?? null}
+                      issueNumber={item.issue_number ?? cardsByIssue.get(canonicalIssueId)?.issue_number ?? '?'}
+                      status={cardsByIssue.get(canonicalIssueId)?.status === 'read' ? 'read' : 'unread'}
+                      card={cardsByIssue.get(canonicalIssueId) ?? null}
                       hideTitle
                     />
                   </div>
