@@ -247,12 +247,17 @@ pub fn evaluate(
                 .copied()
                 .collect();
             cyclic_here.sort_unstable();
+            // Cycle containment changes eligibility, not the reader's frontier.
+            // Never resurrect a read or collection-excluded Issue merely because
+            // it participates in the persisted cycle.
             let next_issue_id = inputs
                 .core
                 .issues
                 .iter()
                 .filter(|issue| {
-                    issue.thread_id == thread.id && problem.cyclic_issue_ids.contains(&issue.id)
+                    issue.thread_id == thread.id
+                        && issue.status != "read"
+                        && !inputs.excluded_issue_ids.contains(&issue.id)
                 })
                 .min_by_key(|issue| (issue.position, issue.id))
                 .map(|issue| issue.id);
