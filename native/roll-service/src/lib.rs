@@ -1638,7 +1638,6 @@ mod tests {
     }
 
     #[tokio::test]
-<<<<<<< HEAD
     async fn retired_v1_dependency_diagnosis_routes_return_404_in_inner_router() {
         // #5709: dependency/blocking/connection diagnosis is v2-only. The
         // retired aliases must not fall through to a live handler or to the
@@ -1705,8 +1704,6 @@ mod tests {
     }
 
     #[tokio::test]
-=======
->>>>>>> origin/main
     async fn v2_group_crud_is_mounted_and_retired_v1_crud_returns_404_in_inner_router() {
         let config = Config::from_lookup(|name| match name {
             "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
