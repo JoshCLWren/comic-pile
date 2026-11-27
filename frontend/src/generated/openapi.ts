@@ -2082,7 +2082,7 @@ export interface paths {
         put?: never;
         /**
          * Documentation-only operation for the mounted dependency create.
-         * @description Create one owner-scoped issue-level reader dependency after combined reading-graph preflight. The complete projected Option E graph is validated inside the write transaction before commit; a cyclic edge is rejected with the named series/issues and nothing is changed.
+         * @description Create one owner-scoped issue-level reader dependency after combined reading-graph preflight. The complete projected Reading List engine graph is validated inside the write transaction before commit; a cyclic edge is rejected with the named series/issues and nothing is changed.
          */
         post: operations["create_dependency_documentation"];
         delete?: never;
@@ -2562,7 +2562,7 @@ export interface paths {
         };
         /**
          * Documentation-only operation for the mounted reading-graph read.
-         * @description Owner-scoped projection of the complete Option E graph. A persisted cycle is isolated to its affected Threads and Reading Lists; every cycle edge names its series, issue and stored origin. The read-only frontier audit names current unread frontiers that Option E would offer while inert legacy or converted dependency evidence still records possible reader intent; the report is manual-review evidence only (#4198).
+         * @description Owner-scoped projection of the complete Reading List engine graph. A persisted cycle is isolated to its affected Threads and Reading Lists; every cycle edge names its series, issue and stored origin. The read-only frontier audit names current unread frontiers that Reading List engine would offer while inert legacy or converted dependency evidence still records possible reader intent; the report is manual-review evidence only (#4198).
          */
         get: operations["reading_graph_documentation"];
         put?: never;
@@ -3562,7 +3562,7 @@ export interface paths {
         get?: never;
         /**
          * Documentation-only operation for the mounted issue-order resource.
-         * @description Replace the complete issue order atomically. The projected Option E graph is validated before commit, so a manual reorder cannot introduce a strict-list/series-order cycle.
+         * @description Replace the complete issue order atomically. The projected Reading List engine graph is validated before commit, so a manual reorder cannot introduce a strict-list/series-order cycle.
          */
         put: operations["issue_order_documentation"];
         post?: never;
@@ -4229,7 +4229,7 @@ export interface components {
         /**
          * @description Deployment-level capability for the canonical evaluator behind this batch.
          *
-         *     It mirrors the same `AppState::option_e` switch every handler resolves, so
+         *     It mirrors the same `AppState::reading_lists` switch every handler resolves, so
          *     a client that has already observed one batch can skip the canonical read
          *     entirely on later loads when the evaluator cannot answer (`unavailable`)
          *     and consult the legacy blocking authority directly.
@@ -6085,7 +6085,7 @@ export interface components {
             /** @description Live frontiers examined (active queued Threads, one next unread each). */
             frontiers_examined: number;
             /**
-             * @description Examined frontiers an actionable Option E constraint currently blocks
+             * @description Examined frontiers an actionable Reading List engine constraint currently blocks
              *     (reader prerequisite or list order).
              */
             frontiers_protected: number;
@@ -6098,7 +6098,7 @@ export interface components {
             /** @description Report-only disclaimer; the audit is never an execution input. */
             note: string;
             /**
-             * @description Examined frontiers with no actionable Option E constraint while inert
+             * @description Examined frontiers with no actionable Reading List engine constraint while inert
              *     legacy evidence records possible reader intent: the reported gaps.
              */
             unprotected_frontiers: number;
@@ -7355,7 +7355,7 @@ export interface components {
         /**
          * @description Why the Roll pool has no in-play faces.
          *
-         *     Derived from the already-loaded Option E inputs and the eligible frontier
+         *     Derived from the already-loaded Reading List engine inputs and the eligible frontier
          *     set. This is a single reason, never a list or a whole-library report, and it
          *     adds no database work: it exists so a genuinely non-empty library does not
          *     render the false "reading queue is empty" state (#4441).
@@ -8696,7 +8696,7 @@ export interface components {
             issue_ids: number[];
             /**
              * @description Why an empty in-play pool has no faces, when it does.
-             *     Derived from the already-loaded Option E inputs and the eligible
+             *     Derived from the already-loaded Reading List engine inputs and the eligible
              *     frontiers before the die bound and browser snoozes, exactly as
              *     `GET /api/v2/roll/bootstrap` reports it. `ready` means at least one
              *     frontier is eligible; the other variants name why an empty pool has
@@ -14525,7 +14525,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Option E plan projected from its authoritative Reading List */
+            /** @description Reading List engine plan projected from its authoritative Reading List */
             200: {
                 headers: {
                     [name: string]: unknown;
