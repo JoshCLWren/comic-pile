@@ -601,6 +601,7 @@ export default function RollPage() {
               resetDicePending={resetDiceMutation.isPending}
               resetDiceError={resetDiceError}
               presentation={{
+                isRolling: state.isRolling,
                 dieSlot: (
                   <RollDiceButton
                     sides={displayDie}

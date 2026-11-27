@@ -12,6 +12,8 @@ import { MobileGallery } from './MobileGallery'
 export interface RollPresentationProps {
   /** The real die renderer, placed between the middle-row covers or above the gallery. */
   dieSlot: ReactNode
+  /** Decorative carousel rotation while a committed roll is in flight. */
+  isRolling?: boolean
 }
 
 interface ThreadPoolProps {
@@ -71,7 +73,7 @@ export function ThreadPool({
   const navigate = useNavigate()
   const { isMobile } = useResponsive()
   const wasRatingView = useRef(isRatingView)
-  const view: RollPresentationProps = presentation ?? { dieSlot: null }
+  const view: RollPresentationProps = presentation ?? { dieSlot: null, isRolling: false }
   const snoozedTotal = snoozedCount ?? snoozedThreads.length
   // The scoped eligible query applies the browser-owned snooze cookie that
   // bootstrap cannot see. Treat either source as snooze-backed emptiness so the
@@ -258,6 +260,7 @@ export function ThreadPool({
             pool={displayPool}
             cardByIssueId={cardByIssueId}
             dieSlot={view.dieSlot}
+            isRolling={view.isRolling ?? false}
             winningThreadId={selectedThreadId != null ? Number(selectedThreadId) : null}
             onThreadClick={onThreadClick}
           />
