@@ -521,7 +521,7 @@ describe('comparison and CBL discovery request budgets', () => {
     expect(await screen.findByRole('heading', { name: 'CBL Sources' })).toBeInTheDocument()
     await waitFor(() => expect(ledger.requests).toHaveLength(1))
     expect(ledger.requests[0]?.url).toBe(
-      'GET /api/v2/cblSources?filter=&order_by=name&page_size=50',
+      'GET /api/v2/cblSources?filter=folder%3A&order_by=name&page_size=50',
     )
   })
 
