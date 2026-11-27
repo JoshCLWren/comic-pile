@@ -7380,6 +7380,107 @@
         ]
       }
     },
+    "/api/v2/threads/{thread_id}": {
+      "delete": {
+        "tags": [
+          "threads"
+        ],
+        "description": "Delete an owned Thread (AIP-135). A second delete, or a delete of a foreign or already deleted Thread, returns 404. Never 403.",
+        "operationId": "delete_thread_v2_documentation",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "400": {
+            "description": "The database refused the deletion"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "threads"
+        ],
+        "description": "Partially update an owned Thread (AIP-134). Omitted fields are preserved. When `update_mask` is supplied only its fields are applied; a masked field missing from the body is cleared. An `expected` precondition that no longer matches the committed row returns 409 with `detail.code = thread_edit_conflict` and the current values. Foreign or deleted Threads return 404, never 403.",
+        "operationId": "patch_thread_documentation",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThreadPatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated thread",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found (including another reader's thread)"
+          },
+          "409": {
+            "description": "Stale `expected` precondition; reload before retrying"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/threads/{thread_id}/issue-order": {
       "put": {
         "tags": [
@@ -19821,6 +19922,112 @@
             "items": {
               "$ref": "#/components/schemas/ThreadListItem"
             }
+          }
+        }
+      },
+      "ThreadPatchPrecondition": {
+        "type": "object",
+        "description": "Committed values a stale client read before issuing a Thread patch.",
+        "properties": {
+          "format": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Format observed by the client."
+          },
+          "manual_creator_credits": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {},
+            "description": "Manual creator credits observed by the client."
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Notes observed by the client; `null` means it observed no notes."
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Title observed by the client."
+          }
+        }
+      },
+      "ThreadPatchRequest": {
+        "type": "object",
+        "description": "Body of `PATCH /api/v2/threads/{thread_id}`.\n\n`update_mask` follows AIP-134: when supplied, only the named fields are\napplied; a named field missing from the body is explicitly cleared. When it\nis omitted or empty, every field present in the body is applied and every\nomitted field is preserved (the legacy partial-update behavior).",
+        "properties": {
+          "expected": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ThreadPatchPrecondition",
+                "description": "Optional stale-client precondition. Every supplied value must still\nmatch the committed row; otherwise the patch returns HTTP 409."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "format": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "New format; normalized to the reader's canonical vocabulary."
+          },
+          "is_test": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Test-series flag. Omit to preserve it."
+          },
+          "issues_remaining": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Manual issue counter for untracked series (legacy queue transition)."
+          },
+          "manual_creator_credits": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {},
+            "description": "Manual creator credits. `null` clears them; names and roles are bounded."
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Notes. `null` or a blank string clears the stored value; omit to keep it."
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "New series title. Omitted fields are preserved."
+          },
+          "update_mask": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "Explicit field mask (AIP-134). Either an array of field names or one\ncomma-separated string. Omit for presence-based partial update."
           }
         }
       },

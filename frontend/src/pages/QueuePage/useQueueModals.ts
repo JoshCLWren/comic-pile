@@ -446,6 +446,14 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
           // unchanged (issue #3629).
           notes: editForm.notes,
           manual_creator_credits: editForm.manualCreatorCredits,
+          // Reject a save when another tab changed the series after this form
+          // was opened; the server compares under the row lock and returns 409.
+          expected: {
+            title: editingThread.title,
+            format: editingThread.format,
+            notes: editingThread.notes ?? null,
+            manual_creator_credits: getManualCreatorCreditList(editingThread),
+          },
         }
         if (editingThread.total_issues == null) {
           data.issues_remaining = Number(editForm.issuesRemaining)

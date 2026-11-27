@@ -352,6 +352,14 @@ export interface DeleteTagRequest {
 
 export type DeleteTagResponse = components['schemas']['TagDeleteResponse']
 
+export interface DeleteThreadV2Request {
+  path: {
+    thread_id: number
+  }
+}
+
+export type DeleteThreadV2Response = void
+
 export interface DependencyGroupsV2AddIssueRangeRequest {
   path: {
     group_id: number
@@ -820,6 +828,15 @@ export interface OverrideRollRequest {
 }
 
 export type OverrideRollResponse = components['schemas']['NativeRollResponse']
+
+export interface PatchThreadRequest {
+  path: {
+    thread_id: number
+  }
+  body: components['schemas']['ThreadPatchRequest']
+}
+
+export type PatchThreadResponse = components['schemas']['NativeThreadResponse']
 
 export interface PatchUserPreferencesRequest {
   body: components['schemas']['UserPreferencesPatchRequest']
@@ -1327,6 +1344,7 @@ export interface NativeV2Client {
   deleteOverlapDecision(args: DeleteOverlapDecisionRequest): Promise<DeleteOverlapDecisionResponse>
   deleteReadingList(args: DeleteReadingListRequest): Promise<DeleteReadingListResponse>
   deleteTag(args: DeleteTagRequest): Promise<DeleteTagResponse>
+  deleteThreadV2(args: DeleteThreadV2Request): Promise<DeleteThreadV2Response>
   dependencyGroupsV2AddIssueRange(args: DependencyGroupsV2AddIssueRangeRequest): Promise<DependencyGroupsV2AddIssueRangeResponse>
   dependencyGroupsV2AddMember(args: DependencyGroupsV2AddMemberRequest): Promise<DependencyGroupsV2AddMemberResponse>
   dependencyGroupsV2ListReadingPlans(args: DependencyGroupsV2ListReadingPlansRequest): Promise<DependencyGroupsV2ListReadingPlansResponse>
@@ -1394,6 +1412,7 @@ export interface NativeV2Client {
   metric(args: MetricRequest): Promise<MetricResponse>
   offer(args: OfferRequest): Promise<OfferResponse>
   overrideRoll(args: OverrideRollRequest): Promise<OverrideRollResponse>
+  patchThread(args: PatchThreadRequest): Promise<PatchThreadResponse>
   patchUserPreferences(args: PatchUserPreferencesRequest): Promise<PatchUserPreferencesResponse>
   preview(args: PreviewRequest): Promise<PreviewResponse>
   previewIssueCreate(args: PreviewIssueCreateRequest): Promise<PreviewIssueCreateResponse>
@@ -1685,6 +1704,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     deleteTag(args: DeleteTagRequest) {
       return client.delete<DeleteTagResponse>(
         `/v2/tags/${encodeURIComponent(String(args.path.tag_id))}`,
+      )
+    },
+    deleteThreadV2(args: DeleteThreadV2Request) {
+      return client.delete<DeleteThreadV2Response>(
+        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}`,
       )
     },
     dependencyGroupsV2AddIssueRange(args: DependencyGroupsV2AddIssueRangeRequest) {
@@ -2016,6 +2040,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     overrideRoll(args: OverrideRollRequest) {
       return client.post<OverrideRollResponse, OverrideRollRequest['body']>(
         "/v2/roll/override",
+        args.body,
+      )
+    },
+    patchThread(args: PatchThreadRequest) {
+      return client.patch<PatchThreadResponse, PatchThreadRequest['body']>(
+        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}`,
         args.body,
       )
     },

@@ -1,0 +1,302 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+//! Handler-level HTTP regressions for the canonical Thread write resources
+//! (#5703): `PATCH /api/v2/threads/{thread_id}` and
+//! `DELETE /api/v2/threads/{thread_id}`.
+
+use axum::{
+    body::{to_bytes, Body},
+    http::{header, Request, StatusCode},
+};
+use comicpile_roll_service::{config::Config, router, test_support, AppState};
+use serde_json::{json, Value};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
+use tower::ServiceExt;
+
+static NEXT_TEST_CLIENT: AtomicUsize = AtomicUsize::new(1);
+
+fn unique_suffix() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos()
+}
+
+struct Ctx {
+    state: Arc<AppState>,
+    token: String,
+    csrf: String,
+    user_id: i32,
+    _guard: tokio::sync::MutexGuard<'static, ()>,
+}
+
+async fn setup(prefix: &str) -> Ctx {
+    let url = test_support::database_url().await;
+    let state = Arc::new(test_support::test_app_state(
+        Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-thread-v2-secret".into()),
+            _ => None,
+        })
+        .unwrap(),
+    ));
+    let guard = test_support::reset_for_test(&state).await;
+    let username = format!("{prefix}-{}-{}", std::process::id(), unique_suffix());
+    let (token, csrf, user_id) = register_user(&state, &username).await;
+    Ctx {
+        state,
+        token,
+        csrf,
+        user_id,
+        _guard: guard,
+    }
+}
+
+async fn register_user(state: &Arc<AppState>, username: &str) -> (String, String, i32) {
+    let response = router(state.clone())
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/auth/register")
+                .header(
+                    "x-forwarded-for",
+                    format!(
+                        "2001:db8::{:x}",
+                        NEXT_TEST_CLIENT.fetch_add(1, Ordering::Relaxed)
+                    ),
+                )
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    json!({
+                        "username": username,
+                        "email": format!("{username}@example.com"),
+                        "password": "correct-horse-battery"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let csrf = response
+        .headers()
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .filter_map(|cookie| cookie.to_str().ok())
+        .find_map(|cookie| cookie.strip_prefix("csrf_token="))
+        .and_then(|cookie| cookie.split(';').next())
+        .unwrap_or_else(|| panic!("csrf cookie missing (status {status})"))
+        .to_owned();
+    let bytes = to_bytes(response.into_body(), 64 * 1024).await.unwrap();
+    let body: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let token = body["access_token"].as_str().unwrap().to_owned();
+    let user_id: i32 = state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one("SELECT id FROM users WHERE username = $1", &[&username])
+        .await
+        .unwrap()
+        .get(0);
+    (token, csrf, user_id)
+}
+
+async fn send(state: &Arc<AppState>, request: Request<Body>) -> (StatusCode, Value) {
+    let response = router(state.clone()).oneshot(request).await.unwrap();
+    let status = response.status();
+    let bytes = to_bytes(response.into_body(), 256 * 1024).await.unwrap();
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+    )
+}
+
+fn authed(method: &str, uri: &str, token: &str, csrf: &str, body: Option<Value>) -> Request<Body> {
+    let builder = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .header("x-csrf-token", csrf)
+        .header(header::COOKIE, format!("csrf_token={csrf}"));
+    match body {
+        Some(body) => builder
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(body.to_string()))
+            .unwrap(),
+        None => builder.body(Body::empty()).unwrap(),
+    }
+}
+
+async fn call(ctx: &Ctx, method: &str, uri: &str, body: Option<Value>) -> (StatusCode, Value) {
+    send(&ctx.state, authed(method, uri, &ctx.token, &ctx.csrf, body)).await
+}
+
+async fn seed_thread(ctx: &Ctx, user_id: i32, title: &str) -> i32 {
+    ctx.state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one(
+            "INSERT INTO threads (user_id, title, format, issues_remaining, queue_position,
+                                  status, notes, manual_creator_credits, is_test, is_blocked,
+                                  queue_position_is_manual, created_at)
+             VALUES ($1, $2, 'Comic', 3, $3, 'active', 'saved notes',
+                     '[{\"name\":\"Jane Doe\",\"roles\":[\"Writer\"]}]'::json,
+                     false, false, false, NOW())
+             RETURNING id",
+            &[&user_id, &title, &user_id],
+        )
+        .await
+        .unwrap()
+        .get(0)
+}
+
+async fn stored(ctx: &Ctx, thread_id: i32) -> Option<(String, String, Option<String>, Value)> {
+    ctx.state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_opt(
+            "SELECT title, format, notes, manual_creator_credits FROM threads WHERE id = $1",
+            &[&thread_id],
+        )
+        .await
+        .unwrap()
+        .map(|row| (row.get(0), row.get(1), row.get(2), row.get(3)))
+}
+
+#[tokio::test]
+async fn patch_preserves_omitted_fields_and_clears_explicit_null_notes() {
+    let ctx = setup("v2patch").await;
+    let thread = seed_thread(&ctx, ctx.user_id, "Original").await;
+    let uri = format!("/api/v2/threads/{thread}");
+
+    let (status, body) = call(&ctx, "PATCH", &uri, Some(json!({"title": "Renamed"}))).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["title"], "Renamed");
+    let (title, format, notes, credits) = stored(&ctx, thread).await.unwrap();
+    assert_eq!(title, "Renamed");
+    assert_eq!(format, "Comic");
+    assert_eq!(notes.as_deref(), Some("saved notes"));
+    assert_eq!(credits, json!([{"name": "Jane Doe", "roles": ["Writer"]}]));
+
+    let (status, body) = call(&ctx, "PATCH", &uri, Some(json!({"notes": null}))).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let (title, _format, notes, credits) = stored(&ctx, thread).await.unwrap();
+    assert_eq!(title, "Renamed");
+    assert_eq!(notes, None);
+    assert_eq!(credits, json!([{"name": "Jane Doe", "roles": ["Writer"]}]));
+}
+
+#[tokio::test]
+async fn patch_owner_can_edit_creator_credits_and_mask_clears_them() {
+    let ctx = setup("v2credits").await;
+    let thread = seed_thread(&ctx, ctx.user_id, "Credits").await;
+    let uri = format!("/api/v2/threads/{thread}");
+
+    let (status, body) = call(
+        &ctx,
+        "PATCH",
+        &uri,
+        Some(json!({
+            "manual_creator_credits": [
+                {"name": "  Alan   Moore ", "roles": ["Writer", "Writer"]}
+            ]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        body["manual_creator_credits"],
+        json!([{"name": "Alan Moore", "roles": ["Writer"]}])
+    );
+
+    let (status, _body) = call(
+        &ctx,
+        "PATCH",
+        &uri,
+        Some(json!({"update_mask": ["manual_creator_credits"]})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(stored(&ctx, thread).await.unwrap().3, json!([]));
+}
+
+#[tokio::test]
+async fn patch_stale_expected_precondition_returns_409_and_writes_nothing() {
+    let ctx = setup("v2stale").await;
+    let thread = seed_thread(&ctx, ctx.user_id, "Committed").await;
+    let uri = format!("/api/v2/threads/{thread}");
+
+    let (status, body) = call(
+        &ctx,
+        "PATCH",
+        &uri,
+        Some(json!({
+            "title": "Should not land",
+            "expected": {"title": "Stale title", "notes": "saved notes"}
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body:?}");
+    assert_eq!(body["detail"]["code"], "thread_edit_conflict");
+    assert_eq!(body["detail"]["current"]["title"], "Committed");
+    let (title, _, notes, _) = stored(&ctx, thread).await.unwrap();
+    assert_eq!(title, "Committed");
+    assert_eq!(notes.as_deref(), Some("saved notes"));
+}
+
+#[tokio::test]
+async fn patch_and_delete_reject_cross_account_writes_with_404() {
+    let ctx = setup("v2owner").await;
+    let thread = seed_thread(&ctx, ctx.user_id, "Owned").await;
+    let (other_token, other_csrf, _other_user) = register_user(
+        &ctx.state,
+        &format!("v2other-{}-{}", std::process::id(), unique_suffix()),
+    )
+    .await;
+    let uri = format!("/api/v2/threads/{thread}");
+
+    let (status, body) = send(
+        &ctx.state,
+        authed(
+            "PATCH",
+            &uri,
+            &other_token,
+            &other_csrf,
+            Some(json!({"title": "Nope"})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
+    let (status, body) = send(
+        &ctx.state,
+        authed("DELETE", &uri, &other_token, &other_csrf, None),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
+    assert!(stored(&ctx, thread).await.is_some());
+}
+
+#[tokio::test]
+async fn delete_v2_removes_thread_and_subsequent_operations_return_404() {
+    let ctx = setup("v2delete").await;
+    let thread = seed_thread(&ctx, ctx.user_id, "Delete me").await;
+    let uri = format!("/api/v2/threads/{thread}");
+
+    let (status, body) = call(&ctx, "DELETE", &uri, None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body:?}");
+    assert!(stored(&ctx, thread).await.is_none());
+
+    let (status, body) = call(&ctx, "DELETE", &uri, None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
+    let (status, body) = call(&ctx, "PATCH", &uri, Some(json!({"title": "No"}))).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
+}

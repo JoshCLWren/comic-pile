@@ -405,6 +405,14 @@ export default function ThreadDetailView() {
         // unchanged (issue #3629).
         notes: editForm.notes,
         manual_creator_credits: editForm.manualCreatorCredits,
+        // A stale snapshot must not overwrite a concurrent edit. The v2 PATCH
+        // compares these values under the row lock and returns 409 on mismatch.
+        expected: {
+          title: currentThread.title,
+          format: currentThread.format,
+          notes: currentThread.notes ?? null,
+          manual_creator_credits: getManualCreatorCreditList(currentThread),
+        },
       }
 
       if (currentThread.total_issues === null) {

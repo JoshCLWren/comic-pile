@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { threadsApi } from '../services/api-threads';
-import type { ReactivateThreadPayload, Thread, ThreadCreatePayload, ThreadUpdatePayload } from '../types';
+import type { ReactivateThreadPayload, Thread, ThreadCreatePayload, ThreadPatchPayload } from '../types';
 import {
   applyEditedThreadToQueuePages,
   invalidateAfterCreatorCreditChange,
@@ -67,7 +67,7 @@ export function useCreateThread() {
 
 export function useUpdateThread() {
   const mutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: ThreadUpdatePayload }) =>
+    mutationFn: ({ id, data }: { id: number; data: ThreadPatchPayload }) =>
       threadsApi.update(id, data),
     onSuccess: async (result, variables) => {
       applyEditedThreadToQueuePages(queryClient, result);
