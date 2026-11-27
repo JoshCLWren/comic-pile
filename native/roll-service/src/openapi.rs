@@ -662,7 +662,10 @@ mod tests {
             ),
         ] {
             let operation = &document["paths"][path][method];
-            assert!(operation.is_object(), "missing {method} {path} in v2 contract");
+            assert!(
+                operation.is_object(),
+                "missing {method} {path} in v2 contract"
+            );
             assert_eq!(operation["operationId"], operation_id, "{method} {path}");
             assert!(
                 operation["responses"][success].is_object(),

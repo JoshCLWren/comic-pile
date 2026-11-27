@@ -227,10 +227,7 @@ async fn reading_order_group_routes_round_trip_over_http() {
     assert_eq!(body["name"], json!("Crossover"));
     assert!(body["memberships"].is_array(), "{body:?}");
     assert!(body["linked_plans"].is_array(), "{body:?}");
-    assert_eq!(
-        body["memberships"][0]["membership"]["id"],
-        json!(member_id)
-    );
+    assert_eq!(body["memberships"][0]["membership"]["id"], json!(member_id));
 
     let path = format!("/api/v1/reading-order-groups/{group_id}/order");
     let (status, body) = send(
@@ -992,7 +989,10 @@ async fn reading_order_groups_v2_crud_validates_and_retires_v1_collection() {
     )
     .await;
     assert_eq!(status, StatusCode::CONFLICT, "{body:?}");
-    assert_eq!(body["detail"], json!("A group with this name already exists"));
+    assert_eq!(
+        body["detail"],
+        json!("A group with this name already exists")
+    );
 
     let (status, body) = send(
         &state,
