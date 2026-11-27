@@ -2319,6 +2319,11 @@ pub async fn check_potential_duplicates(
     let connection = db::checkout(&state).await?;
     let mut strong: Vec<Candidate> = Vec::new();
     if let Some(volume_id) = volume {
+        // The whole response is bounded at MAX_POTENTIAL_DUPLICATE_MATCHES, so
+        // the exact matches must be capped too: several owned historical
+        // threads can be confirmed against one ComicVine series. ORDER BY id
+        // makes the retained subset deterministic, and taking exact matches
+        // first preserves their precedence over similar-title matches.
         let rows = connection
             .query(
                 &format!(
@@ -2330,9 +2335,14 @@ pub async fn check_potential_duplicates(
                        AND e.provider = 'comicvine' AND e.entity_type = 'series'
                        AND e.external_id = $2
                        AND ($3::int IS NULL OR t.id <> $3)
-                     ORDER BY t.id"
+                     ORDER BY t.id LIMIT $4"
                 ),
-                &[&user_id, &volume_id.to_string(), &exclude],
+                &[
+                    &user_id,
+                    &volume_id.to_string(),
+                    &exclude,
+                    &(MAX_POTENTIAL_DUPLICATE_MATCHES as i64),
+                ],
             )
             .await
             .map_err(db::query_error)?;
