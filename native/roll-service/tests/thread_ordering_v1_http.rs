@@ -2371,7 +2371,7 @@ async fn bootstrap_active_thread_exposes_authored_alias_and_confirmed_provider_n
 #[tokio::test]
 async fn v2_eligibility_uses_canonical_logic_and_batch_authorization() {
     let (state, token, csrf, user_id, _guard) = setup_user("tord-v2elig").await;
-    let (token2, csrf2, user2) = register_extra_user(&state, "tord-v2elig2").await;
+    let (_token2, _csrf2, user2) = register_extra_user(&state, "tord-v2elig2").await;
     let conn = state.pool.get().await.unwrap();
     let a = thread(&conn, user_id, "Alpha").await;
     let b = thread(&conn, user_id, "Beta").await;
