@@ -214,6 +214,46 @@
       }
     },
     {
+      "method": "GET",
+      "path": "/api/v2/cblSources/{source_id}/adoptionPreview",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5714,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/cblSources/{source_id}:planAdoption",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5714,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/cblSources/{source_id}:previewReadingGraph",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5714,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts",
+        "frontend/src/services/api-reading-graph.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4835,
