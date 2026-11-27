@@ -8,7 +8,7 @@
 //!
 //! * Ownership: `get_owned_session_or_404` — a foreign or missing session returns 404 with detail `"Session not found"`.
 //! * Returns all session events formatted for the history timeline, plus narrative summary.
-//! * `ladder_path`: `build_ladder_path` — `start_die` followed by every `die_after` from `rate`/`snooze`/`undo` events.
+//! * `ladder_path`: `build_ladder_path` — `start_die` followed by every `die_after` from `rate`/`snooze`/`undo`/`manual_die`/`reset_dice` events.
 //! * `current_die`: event-derived die wins (#4352).
 //! * Timestamps emitted as UTC `...Z` strings.
 //!

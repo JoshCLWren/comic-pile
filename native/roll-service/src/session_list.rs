@@ -156,20 +156,27 @@ WITH page AS (
      ORDER BY s.started_at DESC, s.id DESC
      LIMIT $5
 ), event_stats AS (
+    -- Die-bearing types mirror session_details::CURRENT_DIE_SQL: a manual
+    -- selection or Reset is a recorded die outcome even when it is the first
+    -- or last die event in the window. The die_after guard and the explicit
+    -- type set keep non-die window actions (e.g. unsnooze) out of the ladder.
     SELECT p.id AS session_id,
            COUNT(e.id)::int AS event_count,
            (array_agg(e.die_after ORDER BY e.timestamp DESC, e.id DESC)
-              FILTER (WHERE e.die_after IS NOT NULL AND e.type IN ('rate','snooze','unsnooze','undo','manual_die','reset_dice')))[1] AS latest_die_after,
+              FILTER (WHERE e.die_after IS NOT NULL AND e.type IN ('rate','snooze','undo','manual_die','reset_dice')))[1] AS latest_die_after,
            (array_agg(e.context::text ORDER BY e.timestamp DESC, e.id DESC)
-              FILTER (WHERE e.die_after IS NOT NULL AND e.type IN ('rate','snooze','unsnooze','undo','manual_die','reset_dice')))[1] AS latest_context,
+              FILTER (WHERE e.die_after IS NOT NULL AND e.type IN ('rate','snooze','undo','manual_die','reset_dice')))[1] AS latest_context,
            array_agg(e.die_after ORDER BY e.timestamp ASC, e.id ASC)
-              FILTER (WHERE e.die_after IS NOT NULL AND e.type IN ('rate','snooze','unsnooze','undo','manual_die','reset_dice')) AS ladder
+              FILTER (WHERE e.die_after IS NOT NULL AND e.type IN ('rate','snooze','undo','manual_die','reset_dice')) AS ladder
       FROM page p
       LEFT JOIN events e
         ON e.session_id = p.id
         OR (e.session_id IS NULL
             AND e.user_id = $1
-            AND e.type IN ('rate','snooze','unsnooze')
+            -- Dice commands (manual selection, Reset) and the unsnooze command
+            -- are also session-less owner-scoped writes; they belong in the
+            -- window like rate/snooze, not in a separate die-only projection.
+            AND e.type IN ('rate','snooze','unsnooze','manual_die','reset_dice')
             AND e.timestamp >= p.started_at
             AND ((p.ended_at IS NOT NULL AND e.timestamp <= p.ended_at)
               OR (p.ended_at IS NULL
