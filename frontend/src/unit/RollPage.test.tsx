@@ -174,8 +174,8 @@ it('renders the bounded bootstrap pool without Collections state', () => {
 
   expect(screen.getByText('Roll')).toBeInTheDocument()
   expect(screen.getByLabelText(/2 in play, 2 mapped results/i)).toBeInTheDocument()
-  expect(screen.getByText('Saga')).toBeInTheDocument()
-  expect(screen.getByText('X-Men')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /Die face \d+: Saga/i })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /Die face \d+: X-Men/i })).toBeInTheDocument()
   expect(screen.queryByText(/collection/i)).not.toBeInTheDocument()
 })
 
@@ -191,8 +191,8 @@ it('renders the scoped eligible order and passes browser snoozes to the resource
   // order. Bootstrap still supplies each face's title/metadata.
   expect(mockedUseRollEligibleIssueIds).toHaveBeenCalledWith([99])
   expect(screen.getByLabelText(/1 in play, 1 mapped result/i)).toBeInTheDocument()
-  expect(screen.getByText('X-Men')).toBeInTheDocument()
-  expect(screen.queryByText('Saga')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /Die face \d+: X-Men/i })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /Die face \d+: Saga/i })).not.toBeInTheDocument()
 })
 
 it('drives the pool cutoff and 3D die from scoped die-state when present (#4719)', () => {
@@ -221,9 +221,9 @@ it('drives the pool cutoff and 3D die from scoped die-state when present (#4719)
   // Scoped die 2 bounds the visible pool even though bootstrap reports d20,
   // and both rendered dice use the scoped sides.
   expect(screen.getByLabelText(/2 in play, 2 mapped results/i)).toBeInTheDocument()
-  expect(screen.getByText('Saga')).toBeInTheDocument()
-  expect(screen.getByText('X-Men')).toBeInTheDocument()
-  expect(screen.queryByText('Runaways')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /Die face \d+: Saga/i })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /Die face \d+: X-Men/i })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /Die face \d+: Runaways/i })).not.toBeInTheDocument()
   const dice = screen.getAllByTestId('lazy-dice')
   expect(dice.length).toBeGreaterThan(0)
   for (const die of dice) {
@@ -268,9 +268,12 @@ it('requests one scoped card batch and prefers its title and issue number (#4719
   renderRollPage()
 
   expect(mockedUseRollIssueCards).toHaveBeenCalledWith([11])
-  expect(screen.getByText('Canonical card title')).toBeInTheDocument()
-  expect(screen.getByText('#9')).toBeInTheDocument()
-  expect(screen.queryByText('Bootstrap title')).not.toBeInTheDocument()
+  expect(
+    screen.getByRole('button', { name: /Die face \d+: Canonical card title, issue 9/i }),
+  ).toBeInTheDocument()
+  expect(
+    screen.queryByRole('button', { name: /Die face \d+: Bootstrap title/i }),
+  ).not.toBeInTheDocument()
 })
 
 it('prefers the scoped pool reason over bootstrap for the empty-pool copy (#4719)', () => {
@@ -323,7 +326,7 @@ it('opens the retained thread action sheet from a bootstrap pool item', async ()
   const user = userEvent.setup()
   renderRollPage()
 
-  await user.click(screen.getByText('Saga'))
+  await user.click(screen.getByRole('button', { name: /Die face \d+: Saga/i }))
 
   expect(screen.getByText('Read Now')).toBeInTheDocument()
   expect(screen.getByText('Move to Front')).toBeInTheDocument()
@@ -539,7 +542,7 @@ it('recovers the real reset flow from browser-only snoozes at zero choice withou
 
   fireEvent.click(resetButton)
 
-  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+  await waitFor(() => expect(screen.getByRole('button', { name: /Die face \d+: Saga/i })).toBeInTheDocument())
   expect(screen.getByRole('button', { name: /current die d6/i })).toBeInTheDocument()
   expectRealResetEffects(harness)
 })
@@ -548,7 +551,7 @@ it('recovers the idle Roll reset action from the die modal with the real reset m
   const harness = await setupRealResetHarness(false)
 
   renderRollPage()
-  expect(screen.getByText('Saga')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /Die face \d+: Saga/i })).toBeInTheDocument()
   expect(screen.queryByText('Every series is snoozed')).not.toBeInTheDocument()
 
   fireEvent.click(screen.getByRole('button', { name: /^current die d20$/i }))
