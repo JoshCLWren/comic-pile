@@ -2349,4 +2349,46 @@ mod tests {
         let generated = thread_issues_openapi().to_pretty_json().unwrap();
         assert_eq!(expected.trim_end(), generated.trim_end());
     }
+
+    #[test]
+    fn credit_query_is_form_decoded_bounded_and_rejects_duplicates() {
+        // RawQuery is not form-decoded: %35 is a 5 and %37 is a 7.
+        assert_eq!(
+            parse_credit_query(Some("page_size=2%35&page_token=%37")).unwrap(),
+            (25, Some("7".into()))
+        );
+        assert_eq!(
+            parse_credit_query(None).unwrap(),
+            (DEFAULT_CREDIT_PAGE_SIZE, None)
+        );
+        for bad in [
+            "page_size=0",
+            "page_size=101",
+            "page_size=x",
+            "page_size=1&page_size=2",
+            "page_token=1&page_token=2",
+        ] {
+            assert!(parse_credit_query(Some(bad)).is_err(), "{bad}");
+        }
+        assert_eq!(decode_credit_cursor("12").unwrap(), 12);
+        assert!(decode_credit_cursor("1,2").is_err());
+    }
+
+    #[test]
+    fn credit_projection_is_one_bounded_owner_scoped_statement() {
+        assert_eq!(MAX_CREDIT_PAGE_SIZE, 100);
+        for fragment in [
+            "WITH matched AS",
+            "count(*)::bigint",
+            "i.thread_id = $1",
+            "m.issue_id > $2",
+            "LIMIT $3",
+            "ORDER BY m.issue_id",
+        ] {
+            assert!(
+                THREAD_CREATOR_CREDITS_SQL.contains(fragment),
+                "missing {fragment}"
+            );
+        }
+    }
 }
