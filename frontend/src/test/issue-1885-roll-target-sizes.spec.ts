@@ -22,7 +22,7 @@
  */
 import { expect, type Page } from '@playwright/test'
 import { test } from './fixtures'
-import { authHeaders, createThread, getAuthToken } from './helpers'
+import { createThread, getAuthToken } from './helpers'
 
 const WCAG_MIN_TARGET = 24
 const PRIMARY_TARGET_MIN_HEIGHT = 42
