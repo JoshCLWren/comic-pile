@@ -23586,7 +23586,7 @@
         "operationId": "list_cbl_sources_documentation",
         "parameters": [
           {
-            "description": "folder=<path> browse or q=<term>/bare term search",
+            "description": "folder=<path> browse, q=<term>/bare term search, or all for the whole catalog",
             "in": "query",
             "name": "filter",
             "required": false,

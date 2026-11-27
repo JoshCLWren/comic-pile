@@ -4102,7 +4102,7 @@
           {
             "name": "filter",
             "in": "query",
-            "description": "folder=<path> browse or q=<term>/bare term search",
+            "description": "folder=<path> browse, q=<term>/bare term search, or all for the whole catalog",
             "required": false,
             "schema": {
               "type": "string"

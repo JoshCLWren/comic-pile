@@ -13575,7 +13575,7 @@ export interface operations {
     list_cbl_sources_documentation: {
         parameters: {
             query?: {
-                /** @description folder=<path> browse or q=<term>/bare term search */
+                /** @description folder=<path> browse, q=<term>/bare term search, or all for the whole catalog */
                 filter?: string;
                 /** @description Stable ordering: name (default) or path */
                 order_by?: string;
