@@ -7,7 +7,8 @@ import QueueBulkReadOperations from './QueueBulkReadOperations'
 import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hooks/useThread'
 import { useExcludedThreads, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../../hooks/useQueue'
 import { useCompletedThreads } from '../../hooks/useCompletedThreads'
-import { useRollBootstrap } from '../../hooks/useRollBootstrap'
+import { useRollPendingSelection } from '../../hooks/useRollPendingSelection'
+import { readRollSnoozes } from '../../services/api-roll'
 import { useRollPendingSync } from './useRollPendingSync'
 import { useToast } from '../../contexts/useToast'
 import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../../query/cacheEffects'
@@ -62,7 +63,14 @@ export default function QueuePage() {
   // fully mapped or non-issue-tracked rows) are the bulk action's scope, and an
   // open run keeps reading the cursor so the batch covers the whole queue.
   const bulkMapping = useQueueBulkMapping(queueLoader)
-  const { data: rollBootstrap } = useRollBootstrap()
+  // Pending is browser-owned; the Queue needs only the exact selection and the
+  // bounded snooze cookie, with no aggregate Roll read on this route.
+  const { pending } = useRollPendingSelection()
+  const rollBootstrap = {
+    pending_thread_id: pending?.thread_id ?? null,
+    snoozed_thread_ids: readRollSnoozes(),
+    snoozed_threads: [],
+  }
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
   const reactivateMutation = useReactivateThread()

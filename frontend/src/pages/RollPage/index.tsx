@@ -202,7 +202,6 @@ export default function RollPage() {
     dismissPendingMutation,
     refetchBootstrap,
     clearPending: pendingSelection.clear,
-    selectedIssueId: pendingSelection.pending?.issue_id ?? null,
   })
 
   // Undoing a rating restores the snapshot the rating itself wrote, which is the
