@@ -435,17 +435,18 @@ fn build_discovery_prompt(signal: &RankedSignal) -> String {
     )
 }
 
-/// `GET /api/v1/taste/discoveries` — ranked prompt-eligible discoveries.
-pub async fn list_taste_discoveries(
-    State(state): State<Arc<AppState>>,
-    raw_query: RawQuery,
-    claims: VerifiedAccessClaims,
-) -> Result<Json<TasteDiscoveryListResponse>, ApiError> {
-    let limit = parse_limit(extract_last_limit(raw_query.0.as_deref()))?;
-    let user = auth::authenticate_claims(&state, &claims).await?;
+/// Shared discovery read: identical gates, cooldown and prompting write for the
+/// retained v1 path and the canonical v2 resource (#5717).
+async fn list_discoveries_for(
+    state: &Arc<AppState>,
+    raw_query: Option<String>,
+    claims: &VerifiedAccessClaims,
+) -> Result<TasteDiscoveryListResponse, ApiError> {
+    let limit = parse_limit(extract_last_limit(raw_query.as_deref()))?;
+    let user = auth::authenticate_claims(state, claims).await?;
 
     let now = Utc::now();
-    let connection = db::checkout(&state).await?;
+    let connection = db::checkout(state).await?;
     let rows = connection
         .query(DISCOVERY_LIST_SQL, &[&user.id()])
         .await
@@ -494,19 +495,20 @@ pub async fn list_taste_discoveries(
         })
         .collect();
 
-    Ok(Json(TasteDiscoveryListResponse {
+    Ok(TasteDiscoveryListResponse {
         discoveries,
         generated_at: iso_timestamp(now),
-    }))
+    })
 }
 
-/// `POST /api/v1/taste/discoveries/{signal_id}/dismiss` — suppress without a verdict.
-pub async fn dismiss_taste_discovery(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
-    Path(signal_id): Path<i32>,
-) -> Result<Json<TasteDismissResponse>, ApiError> {
-    let mut connection = db::checkout(&state).await?;
+/// Shared dismissal write: owner-scoped, verdict-safe and idempotent for both
+/// the retained v1 path and the canonical v2 custom method (#5717).
+async fn dismiss_discovery_for(
+    state: &Arc<AppState>,
+    user: &AuthenticatedUser,
+    signal_id: i32,
+) -> Result<TasteDismissResponse, ApiError> {
+    let mut connection = db::checkout(state).await?;
     let tx = connection
         .build_transaction()
         .isolation_level(IsolationLevel::ReadCommitted)
@@ -522,7 +524,45 @@ pub async fn dismiss_taste_discovery(
         return Err(not_found(signal_id));
     }
     tx.commit().await.map_err(db::query_error)?;
-    Ok(Json(TasteDismissResponse { dismissed: true }))
+    Ok(TasteDismissResponse { dismissed: true })
+}
+
+/// `GET /api/v1/taste/discoveries` — ranked prompt-eligible discoveries.
+pub async fn list_taste_discoveries(
+    State(state): State<Arc<AppState>>,
+    RawQuery(raw_query): RawQuery,
+    claims: VerifiedAccessClaims,
+) -> Result<Json<TasteDiscoveryListResponse>, ApiError> {
+    Ok(Json(list_discoveries_for(&state, raw_query, &claims).await?))
+}
+
+/// `GET /api/v2/users/me/tasteDiscoveries` — canonical resource spelling of the
+/// same ranked, owner-scoped discovery read (#5717).
+pub async fn list_taste_discoveries_v2(
+    State(state): State<Arc<AppState>>,
+    RawQuery(raw_query): RawQuery,
+    claims: VerifiedAccessClaims,
+) -> Result<Json<TasteDiscoveryListResponse>, ApiError> {
+    Ok(Json(list_discoveries_for(&state, raw_query, &claims).await?))
+}
+
+/// `POST /api/v1/taste/discoveries/{signal_id}/dismiss` — suppress without a verdict.
+pub async fn dismiss_taste_discovery(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(signal_id): Path<i32>,
+) -> Result<Json<TasteDismissResponse>, ApiError> {
+    Ok(Json(dismiss_discovery_for(&state, &user, signal_id).await?))
+}
+
+/// `POST /api/v2/users/me/tasteDiscoveries/{signal_id}:dismiss` — AIP-136 custom
+/// method for the event-style snooze; never records a verdict (#5717).
+pub async fn dismiss_taste_discovery_v2(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(signal_id): Path<i32>,
+) -> Result<Json<TasteDismissResponse>, ApiError> {
+    Ok(Json(dismiss_discovery_for(&state, &user, signal_id).await?))
 }
 
 /// Documentation-only operation for the mounted discovery listing.
