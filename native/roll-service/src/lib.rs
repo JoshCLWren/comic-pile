@@ -894,7 +894,6 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/threads/check-duplicates",
             post(thread_lifecycle::check_potential_duplicates),
         )
-
         // The retired batch URL would otherwise be captured as a
         // `/api/v1/threads/{thread_id}` action. Pin it to an explicit 404 so
         // v2 is the only membership batch authority (#5711).
