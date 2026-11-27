@@ -597,14 +597,6 @@ export interface GetThreadIssueDependenciesRequest {
 
 export type GetThreadIssueDependenciesResponse = components['schemas']['ThreadIssueDependenciesResponse']
 
-export interface GetThreadV2Request {
-  path: {
-    thread_id: number
-  }
-}
-
-export type GetThreadV2Response = components['schemas']['ThreadDetailResponse']
-
 export type GetUserPreferencesResponse = components['schemas']['UserPreferencesResponse']
 
 export interface ImportIssueRequest {
@@ -784,19 +776,6 @@ export interface ListThreadIssuesV2Request {
   path: {
     thread_id: number
   }
-<<<<<<< HEAD
-=======
-  query?: {
-    status?: string
-    page_size?: number
-    page_token?: string
-  }
-}
-
-export type ListThreadIssuesV2Response = components['schemas']['ThreadIssueListResponse']
-
-export interface ListThreadsRequest {
->>>>>>> origin/main
   query?: {
     status?: string
     page_size?: number
@@ -808,17 +787,14 @@ export type ListThreadIssuesV2Response = components['schemas']['ThreadIssueListR
 
 export interface ListThreadsRequest {
   query?: {
-    filter?: string
-    order_by?: string
-    sort?: string
     search?: string
-    days?: number
+    sort?: string
     page_size?: number
     page_token?: string
   }
 }
 
-export type ListThreadsResponse = components['schemas']['ThreadListResult']
+export type ListThreadsResponse = components['schemas']['ThreadListResponse']
 
 export interface ListUndoSnapshotsRequest {
   path: {
@@ -1473,7 +1449,6 @@ export interface NativeV2Client {
   getTag(args: GetTagRequest): Promise<GetTagResponse>
   getThreadDependencies(args: GetThreadDependenciesRequest): Promise<GetThreadDependenciesResponse>
   getThreadIssueDependencies(args: GetThreadIssueDependenciesRequest): Promise<GetThreadIssueDependenciesResponse>
-  getThreadV2(args: GetThreadV2Request): Promise<GetThreadV2Response>
   getUserPreferences(): Promise<GetUserPreferencesResponse>
   importIssue(args: ImportIssueRequest): Promise<ImportIssueResponse>
   importSeries(args: ImportSeriesRequest): Promise<ImportSeriesResponse>
@@ -1978,11 +1953,6 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     getThreadIssueDependencies(args: GetThreadIssueDependenciesRequest) {
       return client.get<GetThreadIssueDependenciesResponse>(
         `/v1/threads/${encodeURIComponent(String(args.path.thread_id))}/issue-dependencies`,
-      )
-    },
-    getThreadV2(args: GetThreadV2Request) {
-      return client.get<GetThreadV2Response>(
-        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}`,
       )
     },
     getUserPreferences() {

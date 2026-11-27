@@ -233,11 +233,7 @@ describe('Thread detail request budget', () => {
   it('loads each expanded issue cursor once and reuses both pages on warm reopen', async () => {
     const handler = makeHandler('available')
     const { calls, client } = createRequestRecorder((call) => {
-<<<<<<< HEAD
       if (call.url === '/v2/threads/42') return { ...THREADS[42], total_issues: 2 }
-=======
-      if (call.url === '/v1/threads/42') return { ...THREADS[42], total_issues: 2 }
->>>>>>> origin/main
       if (call.url === '/v2/threads/42/issues') {
         const secondPage = call.params?.page_token === 'next'
         return {
