@@ -13,11 +13,11 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 
 ## Coverage summary
 
-- Live API routes: 252 (v1 65, v2 175, unversioned 12).
+- Live API routes: 251 (v1 65, v2 174, unversioned 12).
 - v1 routes with a named retirement owner: 65.
 - v1 routes needing an owner issue: 0 (visible baseline debt, not a pass).
 - Routes with unresolved production ingress: 0.
-- Scanned first-party call sites: 924.
+- Scanned first-party call sites: 921.
 - Stale AIP baseline entries (no live route): 4.
 - Allowlist entries: 175 (owner 175, baseline debt 0, nonconforming v2 98).
 
@@ -46,7 +46,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | POST | `/api/v1/auth/register` | `auth::handlers::register` | v1 | none | /api/native_roll.rs | #4549 | POST\|GET /api/v2/auth/* | caller-migration-open |
 | POST | `/api/v1/auth/reset-password` | `auth::handlers::reset_password` | v1 | none | /api/native_roll.rs | #4549 | POST\|GET /api/v2/auth/* | caller-migration-open |
 | POST | `/api/v1/bug-reports/` | `bug_reports::create` | v1 | frontend/src/services/api-bug-reports.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #5718 | POST /api/v2/bugReports | slice-open |
-| POST | `/api/v1/catalog/series-mappings/preview` | `catalog_series_mapping_preview::preview_series_mapping_handler` | v1 | frontend/src/services/api-series-mapping.ts | /api/native_roll.rs | #5716 | POST /api/v2/seriesMappings:preview | slice-open |
+| POST | `/api/v1/catalog/series-mappings/preview` | `catalog_series_mapping_preview::preview_series_mapping_handler` | v1 | frontend/src/services/api-series-mapping.ts, frontend/src/unit/api-proxy.test.ts | /api/native_roll.rs | #5716 | POST /api/v2/seriesMappings:preview | slice-open |
 | GET | `/api/v1/comicvine/series/{comicvine_volume_id}/import-status` | `comicvine_resolution::series_import_status` | v1 | none | /api/native_roll.rs | #4835 | GET /api/v2/comicvine/series/{comicvine_volume_id}/import-status | slice-open |
 | POST | `/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview` | `continuity_plans_project_preview::preview_plan_projection_handler` | v1 | frontend/src/services/api-reading-orders.ts, frontend/src/unit/api-reading-orders.test.ts | /api/native_roll.rs | #5715 | POST /api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection | slice-open |
 | GET | `/api/v1/continuity-rules/` | `continuity_rules::list` | v1 | none | /api/native_roll.rs | #4335 | retire-without-replacement | legacy-family-debt |
@@ -248,8 +248,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | POST | `/api/v2/roll/reset` | `roll_reset::reset` | v2 | frontend/src/services/api-roll.ts, frontend/src/unit/RollPage.test.tsx, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
 | POST | `/api/v2/roll/switch-prerequisite` | `roll_switch_prerequisite::switch_prerequisite` | v2 | frontend/src/services/rollBootstrapApi.ts | /api/native_roll.rs | #4850 | canonical-v2 | live-target |
 | POST | `/api/v2/roll/unsnooze` | `roll_offer::unsnooze` | v2 | frontend/src/services/api-roll.ts, frontend/src/unit/rollApi.queueSnooze.test.ts | /api/native_roll.rs | #4850 | canonical-v2 | live-target |
-| POST | `/api/v2/series-mapping-commits` | `catalog_commit::commit_series_mapping_handler` | v2 | frontend/src/services/api-series-mapping.ts, frontend/src/unit/api-series-mapping.test.ts | /api/native_roll.rs | #4844 | canonical-v2 | live-target |
-| POST | `/api/v2/seriesMappings:preview` | `catalog_series_mapping_preview::preview_series_mappings_v2` | v2 | frontend/src/services/api-series-mapping.ts, frontend/src/unit/api-proxy.test.ts, frontend/src/unit/api-series-mapping.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
+| POST | `/api/v2/series-mapping-commits` | `catalog_commit::commit_series_mapping_handler` | v2 | frontend/src/services/api-series-mapping.ts | /api/native_roll.rs | #4844 | canonical-v2 | live-target |
 | GET | `/api/v2/tags` | `tags::list_tags` | v2 | frontend/src/services/api-tags.ts, frontend/src/test/core-views-request-budget.spec.ts, frontend/src/unit/TagEditor.request-scope.test.tsx, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-tags.test.ts, frontend/src/unit/continuityIdentityRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
 | POST | `/api/v2/tags` | `tags::create_tag` | v2 | frontend/src/services/api-tags.ts, frontend/src/test/core-views-request-budget.spec.ts, frontend/src/unit/TagEditor.request-scope.test.tsx, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-tags.test.ts, frontend/src/unit/continuityIdentityRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
 | GET | `/api/v2/tags/effective/issues/{issue_id}` | `tags::effective_for_issue` | v2 | frontend/src/services/api-tags.ts, frontend/src/unit/api-tags.test.ts, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
