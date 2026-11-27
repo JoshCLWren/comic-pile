@@ -386,7 +386,19 @@ fn app() -> Router {
                 .patch(native_dispatch)
                 .delete(native_dispatch),
         )
-        .route("/api/v2/threads/{thread_id}/issues", post(native_dispatch))
+        // #5706: the v2 issue collection GET and the thread-scoped creator
+        // projection need explicit Vercel-entry registrations; the inner
+        // service router alone is not enough because this entry owns a
+        // separate route table with a JSON 404 fallback. Keep the retired v1
+        // read paths below from becoming a second source of truth.
+        .route(
+            "/api/v2/threads/{thread_id}/issues",
+            get(native_dispatch).post(native_dispatch),
+        )
+        .route(
+            "/api/v2/threads/{thread_id}/creatorCredits",
+            get(native_dispatch),
+        )
         // Edit Series previews (#5863). The inner router registers these
         // handlers, but the Vercel entry owns a separate route table: without
         // matching routes here the fallback returns the Rust JSON 404
@@ -2029,7 +2041,7 @@ mod tests {
                         .expect("thread issues request")
                 };
                 let (status, first, _, text) = call_app(request(
-                    "/api/v1/threads/21/issues?page_size=2".into(),
+                    "/api/v2/threads/21/issues?page_size=2".into(),
                     &access,
                 ))
                 .await;
@@ -2045,7 +2057,7 @@ mod tests {
                 assert_eq!(cursor, "2,102");
 
                 let (status, next, _, text) = call_app(request(
-                    format!("/api/v1/threads/21/issues?page_size=2&page_token={cursor}"),
+                    format!("/api/v2/threads/21/issues?page_size=2&page_token={cursor}"),
                     &access,
                 ))
                 .await;
@@ -2056,7 +2068,7 @@ mod tests {
                 assert!(next["next_page_token"].is_null());
 
                 let (status, unread, _, text) = call_app(request(
-                    "/api/v1/threads/21/issues?status=unread&page_size=100".into(),
+                    "/api/v2/threads/21/issues?status=unread&page_size=100".into(),
                     &access,
                 ))
                 .await;
@@ -2065,14 +2077,14 @@ mod tests {
                 assert_eq!(unread["issues"].as_array().expect("filtered").len(), 2);
 
                 let (status, missing, _, _) =
-                    call_app(request("/api/v1/threads/999/issues".into(), &access)).await;
+                    call_app(request("/api/v2/threads/999/issues".into(), &access)).await;
                 assert_eq!(status, StatusCode::NOT_FOUND);
                 assert_eq!(missing["detail"], "Thread 999 not found");
 
                 let other_name = format!("thread-issues-foreign-{}", std::process::id());
                 let (other_access, _, _) = register_session(&other_name).await;
                 let (status, _, _, _) =
-                    call_app(request("/api/v1/threads/21/issues".into(), &other_access)).await;
+                    call_app(request("/api/v2/threads/21/issues".into(), &other_access)).await;
                 assert_eq!(status, StatusCode::NOT_FOUND);
             })
             .await;
@@ -2107,14 +2119,14 @@ mod tests {
 
                 let mut router = app();
                 for uri in [
-                    "/api/v1/threads/not-an-int/issues",
-                    "/api/v1/threads/21/issues?page_size=abc",
-                    "/api/v1/threads/21/issues?page_size=99999999999999999999",
-                    "/api/v1/threads/21/issues?page_size=0",
-                    "/api/v1/threads/21/issues?page_size=101",
-                    "/api/v1/threads/21/issues?status=invalid",
+                    "/api/v2/threads/not-an-int/issues",
+                    "/api/v2/threads/21/issues?page_size=abc",
+                    "/api/v2/threads/21/issues?page_size=99999999999999999999",
+                    "/api/v2/threads/21/issues?page_size=0",
+                    "/api/v2/threads/21/issues?page_size=101",
+                    "/api/v2/threads/21/issues?status=invalid",
                     // Invalid-UTF-8 path extraction must also use the 422 envelope.
-                    "/api/v1/threads/%FF/issues",
+                    "/api/v2/threads/%FF/issues",
                 ] {
                     let request = Request::builder()
                         .method("GET")
@@ -2135,7 +2147,7 @@ mod tests {
                 let (status, body, _, text) = call_app(
                     Request::builder()
                         .method("GET")
-                        .uri("/api/v1/threads/21/issues?page_token=bad")
+                        .uri("/api/v2/threads/21/issues?page_token=bad")
                         .header(header::AUTHORIZATION, format!("Bearer {access}"))
                         .body(Body::empty())
                         .expect("bad token request"),
@@ -2148,8 +2160,8 @@ mod tests {
                 // validation: `2%2C102` is the cursor `2,102` and `%72ead`
                 // is `read`. Neither may fall into the 400/422 paths (#5318).
                 for uri in [
-                    "/api/v1/threads/21/issues?page_token=2%2C102",
-                    "/api/v1/threads/21/issues?status=%72ead",
+                    "/api/v2/threads/21/issues?page_token=2%2C102",
+                    "/api/v2/threads/21/issues?status=%72ead",
                 ] {
                     let (status, body, _, text) = call_app(
                         Request::builder()
