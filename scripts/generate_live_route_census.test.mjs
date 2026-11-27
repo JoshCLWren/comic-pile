@@ -122,6 +122,25 @@ test('set-pending stays in the census because Rust implementation is not v1 reti
   }
 });
 
+test('every current live v1 method has an owner and a disposition', () => {
+  const census = JSON.parse(readFileSync(path.join(repoRoot, 'docs/api/live-route-census.json'), 'utf8'));
+  const allowlist = JSON.parse(
+    readFileSync(path.join(repoRoot, 'docs/api/v1-retirement-allowlist.json'), 'utf8'),
+  );
+  const v1 = census.routes.filter(route => route.version === 'v1');
+  assert.ok(v1.length > 0);
+  for (const route of v1) {
+    assert.ok(Number.isInteger(route.owner_issue) && route.owner_issue > 0, `${route.path} has no owner`);
+    assert.ok(route.disposition && route.disposition !== 'needs-owner-disposition', `${route.path} has no disposition`);
+    assert.equal(route.needs_owner_issue, false, `${route.path} is unowned baseline drift`);
+    assert.ok(
+      allowlist.entries.some(entry => entry.method === route.method && entry.path === route.path),
+      `${route.method} ${route.path} is missing from the retirement allowlist`,
+    );
+  }
+  assert.equal(census.summary.v1_needing_owner, 0);
+});
+
 test('CI gate rejects a new first-party v1 call', t => {
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'live-census-new-call-'));
   t.after(() => rmSync(tmp, {recursive: true, force: true}));
