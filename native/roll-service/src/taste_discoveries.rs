@@ -36,7 +36,7 @@ use crate::{
     db, ApiError, AppState,
 };
 use axum::{
-    extract::{Path, PathRejection, RawQuery, State},
+    extract::{rejection::PathRejection, Path, RawQuery, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     Json,
@@ -580,9 +580,8 @@ pub async fn post_taste_discovery_action(
 ) -> Result<Response, ApiError> {
     let Path(segment) = segment.map_err(|_| ApiError::NotFound("Not Found".to_string()))?;
     let signal_id = parse_dismiss_action(&segment)?;
-    dismiss_discovery_for(&state, &user, signal_id)
-        .await
-        .map(IntoResponse::into_response)
+    let response = dismiss_discovery_for(&state, &user, signal_id).await?;
+    Ok(Json(response).into_response())
 }
 
 /// Resolve the `:dismiss` custom-method suffix captured in one route segment.
