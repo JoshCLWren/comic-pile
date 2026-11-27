@@ -1519,10 +1519,21 @@ pub async fn list_thread_creator_credits_v2(
         .ok_or_else(|| thread_not_found(thread_id))?;
     let page_payload: String = row.get(1);
     let credit_payload: String = row.get(2);
-    let page: Vec<CreditCursorRow> = serde_json::from_str(&page_payload)
+    let mut page: Vec<CreditCursorRow> = serde_json::from_str(&page_payload)
         .map_err(|_| ApiError::Internal("Internal Server Error".into()))?;
     let credit_rows: Vec<CreditRow> = serde_json::from_str(&credit_payload)
         .map_err(|_| ApiError::Internal("Internal Server Error".into()))?;
+    // The extra row only signals continuation. It must not leak into the
+    // projected page, otherwise client pagination would skip an issue.
+    let next_page_token = if page.len() as i64 > page_size {
+        let token = page
+            .get(page_size as usize - 1)
+            .map(|row| format!("{},{}", row.position, row.id));
+        page.truncate(page_size as usize);
+        token
+    } else {
+        None
+    };
     let mut by_issue: std::collections::HashMap<i32, CreditRow> = credit_rows
         .into_iter()
         .map(|credit| (credit.id, credit))
@@ -1544,17 +1555,6 @@ pub async fn list_thread_creator_credits_v2(
             });
         }
     }
-    let next_page_token = if page.len() as i64 > page_size {
-        page.iter()
-            .nth(page_size as usize - 1)
-            .map(|row| format!("{},{}", row.position, row.id))
-    } else {
-        None
-    };
-    // The page query fetches one extra row to detect continuation. The extra
-    // row may also carry credits, so the public projection is cut back to the
-    // requested size before it is returned.
-    issues.truncate(page_size as usize);
     Ok(Json(ThreadCreatorCreditsPage {
         thread_id,
         issues,
