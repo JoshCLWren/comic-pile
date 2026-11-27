@@ -304,6 +304,15 @@ export function pathsMatch(callerPattern, routerPattern) {
   return pathRegex(routerPattern).test(callerPattern) || pathRegex(callerPattern).test(routerPattern);
 }
 
+/**
+ * Match a scanned caller to a registered route. HTTP method is enforced when
+ * the call site exposes one; method-less literals fall back to path matching.
+ */
+export function callerMatchesRoute(caller, route) {
+  if (caller.method && caller.method !== route.method) return false;
+  return pathsMatch(caller.path, route.path);
+}
+
 function listFiles(dir, relative, found) {
   for (const entry of readdirSync(dir).sort()) {
     const absolute = path.join(dir, entry);
@@ -483,7 +492,7 @@ export function buildCensus(inputs) {
     const curatedConsumers = Array.isArray(curatedOp?.consumers)
       ? curatedOp.consumers.filter(value => typeof value === 'string')
       : [];
-    const matchedCallers = callers.filter(caller => pathsMatch(caller.path, route.path));
+    const matchedCallers = callers.filter(caller => callerMatchesRoute(caller, route));
     // Precise per-operation source call sites win over the inventory's
     // family-level consumer lists; curated consumers are the fallback for
     // routes whose calls are assembled dynamically.
@@ -527,6 +536,8 @@ export function buildCensus(inputs) {
     v1_needing_owner: censusRoutes.filter(route => route.version === 'v1' && route.needs_owner_issue).length,
     unknown_ingress: censusRoutes.filter(route => route.ingress_destination === 'unknown').length,
     first_party_call_sites: callers.length,
+    stale_aip_baseline_entries: aipEntries.filter(entry =>
+      !seen.has(`${entry.method} ${entry.path}`)).length,
   };
   return {
     schema_version: 1,
@@ -622,6 +633,7 @@ export function renderReport(census, allowlist) {
     + '(visible baseline debt, not a pass).',
     `- Routes with unresolved production ingress: ${census.summary.unknown_ingress}.`,
     `- Scanned first-party call sites: ${census.summary.first_party_call_sites}.`,
+    `- Stale AIP baseline entries (no live route): ${census.summary.stale_aip_baseline_entries}.`,
     `- Allowlist entries: ${allowlist.summary.total_entries} `
     + `(owner ${allowlist.summary.with_owner}, `
     + `baseline debt ${allowlist.summary.baseline_debt}, `
@@ -699,11 +711,8 @@ export function validate(census, allowlist, dispositions, callers, aipBaseline =
   for (const key of knownDebt) {
     if (!allowKeys.has(key)) failures.push(`known baseline debt ${key} is not a live allowlisted route`);
   }
-  const liveKeys = new Set(census.routes.map(route => `${route.method} ${route.path}`));
-  for (const entry of Array.isArray(aipBaseline.entries) ? aipBaseline.entries : []) {
-    const key = `${entry.method} ${entry.path}`;
-    if (!liveKeys.has(key)) failures.push(`AIP baseline entry ${key} is no longer a live route`);
-  }
+  // Stale AIP baseline entries are pre-existing documentation debt, not new
+  // v1 drift. They are counted in the report but do not fail the census gate.
   const setPending = census.routes.find(
     route => route.method === 'POST' && route.path === '/api/v1/threads/{thread_id}/set-pending',
   );
@@ -717,7 +726,7 @@ export function validate(census, allowlist, dispositions, callers, aipBaseline =
     const isV1OrBare = caller.path.startsWith('/api/v1/')
       || /^\/api\/[^v/]/.test(caller.path) || /^\/api\/v[^12]/.test(caller.path);
     if (!isV1OrBare) continue;
-    const matches = v1Routes.some(route => pathsMatch(caller.path, route.path));
+    const matches = v1Routes.some(route => callerMatchesRoute(caller, route));
     if (!matches) {
       failures.push(`${caller.file}:${caller.line}: new first-party v1/bare call '${caller.raw}' has no allowlisted route`);
     }

@@ -285,9 +285,6 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-cbl-sources.ts",
-        "frontend/src/services/api-continuity-plans.ts",
-        "frontend/src/services/api-reading-graph.ts",
         "frontend/src/services/api-reading-orders.ts",
         "frontend/src/unit/api-reading-orders.test.ts"
       ]
@@ -472,10 +469,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-cbl-sources.ts",
-        "frontend/src/services/api-continuity-plans.ts",
-        "frontend/src/services/api-reading-graph.ts",
-        "frontend/src/services/api-reading-orders.ts"
+        "frontend/src/services/api-reading-graph.ts"
       ]
     },
     {
@@ -609,12 +603,6 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-dependency-groups.ts",
-        "frontend/src/services/api-issues.ts",
-        "frontend/src/services/api-migration.ts",
-        "frontend/src/services/api-reading-orders.ts",
-        "frontend/src/services/api-threads.ts",
         "frontend/src/test/core-views-request-budget.spec.ts",
         "frontend/src/unit/api-auth-recovery.test.ts",
         "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
@@ -631,13 +619,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-dependency-groups.ts",
-        "frontend/src/services/api-issues.ts",
-        "frontend/src/services/api-migration.ts",
-        "frontend/src/services/api-reading-orders.ts",
-        "frontend/src/services/api-threads.ts",
-        "frontend/src/test/cbl-replace-review.spec.ts"
+        "frontend/src/services/api-threads.ts"
       ]
     },
     {
@@ -666,11 +648,6 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-dependency-groups.ts",
-        "frontend/src/services/api-issues.ts",
-        "frontend/src/services/api-migration.ts",
-        "frontend/src/services/api-reading-orders.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/p0-auth-outage-recovery.spec.ts",
         "frontend/src/test/p0-snooze-unsnooze.spec.ts",
@@ -689,8 +666,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-threads.ts",
-        "frontend/src/test/cbl-replace-review.spec.ts"
+        "frontend/src/services/api-threads.ts"
       ]
     },
     {
@@ -703,13 +679,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-dependency-groups.ts",
-        "frontend/src/services/api-issues.ts",
-        "frontend/src/services/api-migration.ts",
-        "frontend/src/services/api-reading-orders.ts",
-        "frontend/src/services/api-threads.ts",
-        "frontend/src/test/cbl-replace-review.spec.ts"
+        "frontend/src/services/api-threads.ts"
       ]
     },
     {
@@ -722,11 +692,6 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-dependency-groups.ts",
-        "frontend/src/services/api-issues.ts",
-        "frontend/src/services/api-migration.ts",
-        "frontend/src/services/api-reading-orders.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts"
       ]
@@ -742,7 +707,6 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-issues.ts",
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
@@ -786,10 +750,7 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-dependency-groups.ts",
-        "frontend/src/services/api-issues.ts",
         "frontend/src/services/api-migration.ts",
-        "frontend/src/services/api-reading-orders.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
         "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
@@ -810,10 +771,7 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-dependency-groups.ts",
-        "frontend/src/services/api-issues.ts",
         "frontend/src/services/api-migration.ts",
-        "frontend/src/services/api-reading-orders.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
         "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
@@ -873,11 +831,6 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-dependency-groups.ts",
-        "frontend/src/services/api-issues.ts",
-        "frontend/src/services/api-migration.ts",
-        "frontend/src/services/api-reading-orders.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/unit/api.test.ts"
       ]
@@ -909,7 +862,6 @@
         "frontend/src/test/continuity-checkpoint-convergence.spec.ts",
         "frontend/src/test/continuity-parallel-lanes.spec.ts",
         "frontend/src/test/custom-cbl-create-cycle.spec.ts",
-        "frontend/src/test/fixtures.ts",
         "frontend/src/test/helpers.ts",
         "frontend/src/test/issue-1883-roll-a11y-duplicates.spec.ts",
         "frontend/src/test/issue-1885-roll-target-sizes.spec.ts",
@@ -932,20 +884,9 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/test/cbl-replace-review.spec.ts",
-        "frontend/src/test/continuity-checkpoint-convergence.spec.ts",
-        "frontend/src/test/continuity-parallel-lanes.spec.ts",
-        "frontend/src/test/custom-cbl-create-cycle.spec.ts",
         "frontend/src/test/fixtures.ts",
         "frontend/src/test/helpers.ts",
-        "frontend/src/test/issue-1883-roll-a11y-duplicates.spec.ts",
-        "frontend/src/test/issue-1885-roll-target-sizes.spec.ts",
-        "frontend/src/test/issue-2104-zero-readiness.spec.ts",
         "frontend/src/test/issue-3626-creator-issue-deep-link.spec.ts",
-        "frontend/src/test/issue-5435-bulk-queue-exclusions.spec.ts",
-        "frontend/src/test/p0-dependencies-reading-order.spec.ts",
-        "frontend/src/test/reading-list-gate-authoring.spec.ts",
-        "frontend/src/test/reading-plan-reader.spec.ts",
         "frontend/src/unit/api-issues-coverage.test.ts"
       ]
     },
@@ -959,12 +900,6 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-dependency-groups.ts",
-        "frontend/src/services/api-issues.ts",
-        "frontend/src/services/api-migration.ts",
-        "frontend/src/services/api-reading-orders.ts",
-        "frontend/src/services/api-threads.ts",
         "frontend/src/unit/api-issues-coverage.test.ts"
       ]
     },
@@ -1015,11 +950,6 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-dependency-groups.ts",
-        "frontend/src/services/api-issues.ts",
-        "frontend/src/services/api-migration.ts",
-        "frontend/src/services/api-reading-orders.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/unit/api.test.ts"
       ]
@@ -1034,11 +964,6 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-dependency-groups.ts",
-        "frontend/src/services/api-issues.ts",
-        "frontend/src/services/api-migration.ts",
-        "frontend/src/services/api-reading-orders.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
         "frontend/src/test/helpers.ts",
@@ -1218,14 +1143,7 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
-        "frontend/src/services/api-reading-orders.ts",
-        "frontend/src/test/continuity-checkpoint-convergence.spec.ts",
-        "frontend/src/test/continuity-parallel-lanes.spec.ts",
-        "frontend/src/test/custom-cbl-create-cycle.spec.ts",
-        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
-        "frontend/src/test/issue-2104-zero-readiness.spec.ts",
         "frontend/src/test/issue-4503-request-budget.spec.ts",
-        "frontend/src/test/reading-plan-reader.spec.ts",
         "frontend/src/unit/api-continuity-plans.test.ts",
         "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ]
@@ -1241,7 +1159,6 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
-        "frontend/src/services/api-reading-orders.ts",
         "frontend/src/test/continuity-checkpoint-convergence.spec.ts",
         "frontend/src/test/continuity-parallel-lanes.spec.ts",
         "frontend/src/test/custom-cbl-create-cycle.spec.ts",
@@ -1279,7 +1196,6 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
-        "frontend/src/services/api-reading-orders.ts",
         "frontend/src/unit/api-continuity-plans.test.ts"
       ]
     },
@@ -1293,8 +1209,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-continuity-plans.ts",
-        "frontend/src/services/api-reading-orders.ts"
+        "frontend/src/services/api-continuity-plans.ts"
       ]
     },
     {
@@ -1307,8 +1222,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-continuity-plans.ts",
-        "frontend/src/services/api-reading-orders.ts"
+        "frontend/src/services/api-continuity-plans.ts"
       ]
     },
     {
@@ -1322,7 +1236,6 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
-        "frontend/src/services/api-reading-orders.ts",
         "frontend/src/unit/api-continuity-plans.test.ts",
         "frontend/src/unit/api-reading-orders.test.ts",
         "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
@@ -1339,7 +1252,6 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
-        "frontend/src/services/api-reading-orders.ts",
         "frontend/src/unit/api-continuity-plans.test.ts",
         "frontend/src/unit/api-reading-orders.test.ts",
         "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
@@ -1356,7 +1268,6 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
-        "frontend/src/services/api-reading-orders.ts",
         "frontend/src/unit/api-continuity-plans.test.ts",
         "frontend/src/unit/api-reading-orders.test.ts",
         "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
@@ -1431,7 +1342,6 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts",
         "frontend/src/unit/api-reading-orders.test.ts"
       ]
@@ -1446,7 +1356,6 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-plan-recovery.ts"
       ]
     },
@@ -1460,7 +1369,6 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-plan-recovery.ts"
       ]
     },
@@ -1488,8 +1396,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-continuity-plans.ts",
-        "frontend/src/services/api-reading-orders.ts"
+        "frontend/src/services/api-continuity-plans.ts"
       ]
     },
     {
@@ -1504,10 +1411,6 @@
       "consumers": [
         "frontend/src/services/api-creators.ts",
         "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
-        "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts",
         "frontend/src/test/issue-3091-creator-comparison.spec.ts",
         "frontend/src/unit/api-creator-comparison.test.ts"
       ]
@@ -1523,11 +1426,7 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
-        "frontend/src/services/creatorMetricDrilldownApi.ts",
         "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts",
         "frontend/src/unit/creatorTeamChemistryApi.test.ts"
       ]
     },
@@ -1541,12 +1440,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
         "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts",
         "frontend/src/unit/creatorMetricDrilldownApi.test.ts"
       ]
     },
@@ -1560,12 +1454,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
         "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts",
         "frontend/src/unit/creatorMetricDrilldownApi.test.ts"
       ]
     },
@@ -1579,12 +1468,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-creators.ts",
-        "frontend/src/services/creatorComparisonApi.ts",
-        "frontend/src/services/creatorDiscoveryApi.ts",
         "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/services/creatorTeamChemistryApi.ts",
-        "frontend/src/services/creatorsApi.ts",
         "frontend/src/unit/creatorMetricDrilldownApi.test.ts"
       ]
     },
@@ -1598,7 +1482,6 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-demo.ts",
         "frontend/src/unit/api-demo.test.ts"
       ]
     },
@@ -1875,7 +1758,6 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-queue.ts",
         "frontend/src/test/p0-roll-selection.spec.ts",
         "frontend/src/unit/api.test.ts",
         "frontend/src/unit/coreRouteRequestBudget.test.tsx",
@@ -1945,7 +1827,6 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-queue.ts",
         "frontend/src/test/p0-roll-selection.spec.ts",
         "frontend/src/unit/api.test.ts",
         "frontend/src/unit/nativeV2Client.test.ts"
@@ -2009,12 +1890,8 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts",
-        "frontend/src/test/cbl-replace-review.spec.ts",
         "frontend/src/test/custom-cbl-create-cycle.spec.ts",
         "frontend/src/test/custom-cbl-delete-confirm.spec.ts",
-        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
-        "frontend/src/test/issue-5435-bulk-queue-exclusions.spec.ts",
-        "frontend/src/test/reading-plan-reader.spec.ts",
         "frontend/src/unit/api-custom-cbl.test.ts",
         "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ]
@@ -2031,7 +1908,6 @@
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
-        "frontend/src/test/custom-cbl-create-cycle.spec.ts",
         "frontend/src/test/custom-cbl-delete-confirm.spec.ts",
         "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
         "frontend/src/test/issue-5435-bulk-queue-exclusions.spec.ts",
@@ -2069,10 +1945,7 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts",
-        "frontend/src/test/cbl-replace-review.spec.ts",
-        "frontend/src/test/custom-cbl-delete-confirm.spec.ts",
-        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
-        "frontend/src/test/reading-list-discovery.spec.ts"
+        "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts"
       ]
     },
     {
@@ -2106,9 +1979,7 @@
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
-        "frontend/src/test/custom-cbl-delete-confirm.spec.ts",
         "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
-        "frontend/src/test/reading-list-discovery.spec.ts",
         "frontend/src/unit/api-custom-cbl.test.ts",
         "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ]
@@ -2124,10 +1995,7 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts",
-        "frontend/src/test/cbl-replace-review.spec.ts",
-        "frontend/src/test/custom-cbl-delete-confirm.spec.ts",
         "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
-        "frontend/src/test/reading-list-discovery.spec.ts",
         "frontend/src/unit/api-custom-cbl.test.ts",
         "frontend/src/unit/continuityIdentityRequestBudget.test.tsx"
       ]
@@ -2460,7 +2328,6 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/rollResourcesApi.ts",
         "frontend/src/test/p0-auth-outage-recovery.spec.ts",
         "frontend/src/unit/coreRouteRequestBudget.test.tsx",
         "frontend/src/unit/rollResourcesApi.test.ts"
@@ -2490,7 +2357,6 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/rollResourcesApi.ts",
         "frontend/src/test/p0-auth-outage-recovery.spec.ts",
         "frontend/src/unit/coreRouteRequestBudget.test.tsx",
         "frontend/src/unit/rollResourcesApi.test.ts"
