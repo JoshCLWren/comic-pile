@@ -5,12 +5,14 @@ import type {
   Dependency,
   ReactivateThreadPayload,
   ThreadDependenciesResponse,
+  ThreadPatchPayload,
   ThreadUpdatePayload,
 } from '../types'
 
 describe('generated core API contracts', () => {
   it('exports shape-compatible mutation request types from OpenAPI', () => {
     expectTypeOf<ThreadUpdatePayload>().toEqualTypeOf<components['schemas']['ThreadUpdate']>()
+    expectTypeOf<ThreadPatchPayload>().toEqualTypeOf<components['schemas']['ThreadPatchRequest']>()
     expectTypeOf<ReactivateThreadPayload>().toEqualTypeOf<components['schemas']['ReactivateRequest']>()
   })
 

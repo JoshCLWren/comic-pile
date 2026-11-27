@@ -1765,6 +1765,28 @@ mod tests {
     }
 
     #[test]
+    fn threads_openapi_documents_v2_patch_and_delete() {
+        use utoipa::OpenApi;
+        let document = serde_json::to_value(ThreadsApi::openapi()).expect("threads OpenAPI");
+        let resource = &document["paths"]["/api/v2/threads/{thread_id}"];
+        let patch = &resource["patch"];
+        let delete = &resource["delete"];
+        assert_eq!(patch["operationId"], "patch_thread_documentation");
+        assert_eq!(
+            patch["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ThreadPatchRequest"
+        );
+        assert_eq!(
+            patch["responses"]["409"]["description"]
+                .as_str()
+                .expect("409 documented"),
+            "Stale `expected` precondition; reload before retrying"
+        );
+        assert_eq!(delete["operationId"], "delete_thread_v2_documentation");
+        assert!(delete["responses"]["204"].as_object().is_some());
+    }
+
+    #[test]
     fn threads_openapi_documents_the_completed_collection_read() {
         use utoipa::OpenApi;
         let document = serde_json::to_value(ThreadsApi::openapi()).expect("threads OpenAPI");

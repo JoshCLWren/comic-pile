@@ -174,6 +174,12 @@ it('calls every remaining API resource endpoint', async () => {
   expect(patch).toHaveBeenCalledWith('/v2/users/me/preferences', { theme: 'ink-gold' })
   expect(post).toHaveBeenCalledWith('/v2/auth/forgot-password', { email: 'reader@example.com' })
   expect(post).toHaveBeenCalledWith('/v2/auth/reset-password', { token: 'single-use', new_password: 'hunter2-hunter2' })
+  // Thread edit/remove are canonical v2 resource methods (#5703).
+  expect(patch).toHaveBeenCalledWith('/v2/threads/1', {
+    title: 'Updated',
+    update_mask: ['title'],
+  })
+  expect(del).toHaveBeenCalledWith('/v2/threads/1')
 })
 
 
