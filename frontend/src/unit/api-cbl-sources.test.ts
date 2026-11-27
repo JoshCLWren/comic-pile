@@ -126,7 +126,7 @@ describe('cblSourcesApi canonical v2 catalog reads (#5712)', () => {
     expect(config.params.filter).toBe('folder:DC/Marvel')
     expect(config.params.order_by).toBe('name')
     expect(config.params.page_size).toBe(25)
-    expect(config.params.page).toBeUndefined()
+    expect('page' in config.params).toBe(false)
     const token = String(config.params.page_token)
     expect(token).not.toContain('=')
     expect(atob(token)).toBe(JSON.stringify({ p: 3, f: 'folder:DC/Marvel', o: 'name', s: 25 }))
