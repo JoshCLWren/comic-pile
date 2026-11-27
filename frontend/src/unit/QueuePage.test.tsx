@@ -425,6 +425,7 @@ describe('Visible action Snooze/Unsnooze', () => {
   })
 
   it('does not run a second session fetch after the snooze action', async () => {
+    const mockRefetchSession = vi.fn()
     const mockRefetch = vi.fn()
     writePendingSelection(null, { thread_id: 1, issue_id: 1, selected_at: Date.now() })
     mockedUseQueueThreads.mockReturnValue({
@@ -459,14 +460,7 @@ describe('Visible action Snooze/Unsnooze', () => {
   it('does not run a second session fetch after the unsnooze action', async () => {
     const mockRefetchSession = vi.fn()
     const mockRefetch = vi.fn()
-    mockedUseRollBootstrap.mockReturnValue({
-      data: {
-        snoozed_threads: [{ id: 1, title: 'Saga', format: 'Comic' }],
-        skipped_thread_ids: [],
-        skipped_threads: [],
-      },
-      refetch: mockRefetchSession,
-    })
+    writeRollSnoozes([1])
     mockedUseQueueThreads.mockReturnValue({
       data: [
         { id: 1, title: 'Saga', format: 'Comic', status: 'active', queue_position: 1, issues_remaining: 5, total_issues: null, is_blocked: false, blocking_reasons: [] },
