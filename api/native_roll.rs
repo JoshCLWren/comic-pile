@@ -1460,6 +1460,9 @@ mod tests {
             ("POST", "/api/v2/roll/dismiss-pending"),
             ("POST", "/api/v2/roll/switch-prerequisite"),
             ("GET", "/api/v2/releases"),
+            ("GET", "/api/v2/users/me/tasteDiscoveries"),
+            ("POST", "/api/v2/users/me/tasteDiscoveries/123:dismiss"),
+            ("PATCH", "/api/v2/users/me/tasteSignals/creator%3Atest"),
         ] {
             let mut router = app();
             let response = router
