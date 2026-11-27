@@ -323,6 +323,18 @@
       "rollout_status": "owner-issue-open",
       "notes": "Census regression: Rust implementation does not make this v1 surface complete or retired. Direct v2 issue actions supersede it (#5525)."
     },
+    "POST /api/v1/issue-identity/cbl-sources/compare": {
+      "owner_issue": 5713,
+      "replacement": "POST /api/v2/cblSources:compare",
+      "rollout_status": "slice-open",
+      "notes": "AIP-136 stateless bulk ranking is owned by #5713, not the #5712 catalog-list family; do not fold this live POST into GET /api/v2/cblSources."
+    },
+    "GET /api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates": {
+      "owner_issue": 5713,
+      "replacement": "GET /api/v2/readingLists/{list_id}/cblCandidates",
+      "rollout_status": "slice-open",
+      "notes": "AIP-132 bounded owned collection is owned by #5713, not the #4844 adoption-commit/overlap-decision family; do not fold candidate discovery into the export route."
+    },
     "GET /api/v2/roll/bootstrap": {
       "owner_issue": 4299,
       "replacement": "retire-without-replacement",

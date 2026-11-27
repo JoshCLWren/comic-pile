@@ -48,6 +48,19 @@ export const VERCEL_PATH = 'vercel.json';
 export const SET_PENDING_KEY = 'POST /api/v1/threads/{thread_id}/set-pending';
 export const SET_PENDING_OWNER = 4344;
 
+/**
+ * Regression pinned by #5937: #5713 owns comparison and candidate discovery.
+ * These two exact methods must not inherit the #5712 catalog-list or #4844
+ * adoption-commit family dispositions. The keys are absent from the hermetic
+ * fixture census, so the pins are enforced only when a route is present.
+ */
+export const CBL_ROUTE_OWNER = 5713;
+export const CBL_ROUTE_DISPOSITIONS = new Map([
+  ['POST /api/v1/issue-identity/cbl-sources/compare', 'POST /api/v2/cblSources:compare'],
+  ['GET /api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates',
+    'GET /api/v2/readingLists/{list_id}/cblCandidates'],
+]);
+
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 const CALLER_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py']);
 const SKIP_DIRS = new Set([
@@ -785,6 +798,16 @@ export function validate(census, allowlist, dispositions, callers, aipBaseline =
     failures.push(`${SET_PENDING_KEY}: missing from census (Rust implementation does not exempt v1)`);
   } else if (setPending.owner_issue !== SET_PENDING_OWNER) {
     failures.push(`${SET_PENDING_KEY}: owner should be #${SET_PENDING_OWNER}, got ${setPending.owner_issue}`);
+  }
+  for (const [key, expectedDisposition] of CBL_ROUTE_DISPOSITIONS) {
+    const route = census.routes.find(item => `${item.method} ${item.path}` === key);
+    if (!route) continue;
+    if (route.owner_issue !== CBL_ROUTE_OWNER) {
+      failures.push(`${key}: owner should be #${CBL_ROUTE_OWNER}, got ${route.owner_issue}`);
+    }
+    if (route.disposition !== expectedDisposition) {
+      failures.push(`${key}: disposition should be '${expectedDisposition}', got '${route.disposition}'`);
+    }
   }
   for (const caller of callers) {
     if (!caller.drift_checked) continue;

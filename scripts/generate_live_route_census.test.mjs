@@ -8,6 +8,8 @@ import {fileURLToPath} from 'node:url';
 
 import {
   callerMatchesRoute,
+  CBL_ROUTE_DISPOSITIONS,
+  CBL_ROUTE_OWNER,
   generate,
   normalizeCallerPath,
   parseRouterRoutes,
@@ -120,6 +122,32 @@ test('set-pending stays in the census because Rust implementation is not v1 reti
     assert.equal(route.disposition, 'retire-without-replacement');
     assert.match(route.handler, /set_pending_thread/);
   }
+});
+
+test('CBL comparison and candidate discovery stay pinned to #5713', () => {
+  const census = JSON.parse(readFileSync(path.join(repoRoot, 'docs/api/live-route-census.json'), 'utf8'));
+  const report = readFileSync(path.join(repoRoot, 'docs/api/LIVE_ROUTE_CENSUS.md'), 'utf8');
+  const dispositions = JSON.parse(
+    readFileSync(path.join(repoRoot, 'docs/api/v1-route-dispositions.json'), 'utf8'),
+  );
+  assert.match(report, /#5713/, 'the owner cross-reference must include #5713');
+  for (const [key, expectedDisposition] of CBL_ROUTE_DISPOSITIONS) {
+    const override = dispositions.overrides[key];
+    assert.ok(override, `${key} must have an explicit disposition override`);
+    assert.equal(override.owner_issue, CBL_ROUTE_OWNER);
+    assert.equal(override.replacement, expectedDisposition);
+    const route = census.routes.find(item => `${item.method} ${item.path}` === key);
+    assert.ok(route, `${key} must be a live census row`);
+    assert.equal(route.owner_issue, CBL_ROUTE_OWNER);
+    assert.equal(route.disposition, expectedDisposition);
+    assert.equal(route.needs_owner_issue, false);
+  }
+  const compare = census.routes.find(route => route.path === '/api/v1/issue-identity/cbl-sources/compare');
+  assert.equal(compare.method, 'POST', 'HTTP method must be part of the cross-reference pin');
+  assert.notEqual(compare.owner_issue, 5712, 'the #5712 catalog-list family must not own the compare POST');
+  const candidates = census.routes.find(route =>
+    route.path === '/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates');
+  assert.notEqual(candidates.owner_issue, 4844, 'the #4844 adoption family must not own candidate discovery');
 });
 
 test('every current live v1 method has an owner and a disposition', () => {

@@ -58,13 +58,13 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | GET | `/api/v1/issue-identity/cbl-sources` | `issue_identity::discover_cbl_source_lists` | v1 | frontend/src/services/api-cbl-sources.ts | /api/native_roll.rs | #5712 | GET /api/v2/cblSources | slice-open |
 | GET | `/api/v1/issue-identity/cbl-sources/browse` | `cbl_catalog::browse_cbl_source_catalog` | v1 | frontend/src/services/api-cbl-sources.ts | /api/native_roll.rs | #5712 | GET /api/v2/cblSources | slice-open |
 | GET | `/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}` | `issue_identity::find_cbl_sources_by_comicvine_issue` | v1 | frontend/src/services/api-cbl-sources.ts | /api/native_roll.rs | #5712 | GET /api/v2/cblSources | slice-open |
-| POST | `/api/v1/issue-identity/cbl-sources/compare` | `issue_identity::compare_cbl_sources` | v1 | frontend/src/services/api-cbl-sources.ts | /api/native_roll.rs | #5712 | GET /api/v2/cblSources | slice-open |
+| POST | `/api/v1/issue-identity/cbl-sources/compare` | `issue_identity::compare_cbl_sources` | v1 | frontend/src/services/api-cbl-sources.ts | /api/native_roll.rs | #5713 | POST /api/v2/cblSources:compare | slice-open |
 | GET | `/api/v1/issue-identity/cbl-sources/folders` | `cbl_catalog::list_cbl_source_folders` | v1 | frontend/src/services/api-cbl-sources.ts | /api/native_roll.rs | #5712 | GET /api/v2/cblSources | slice-open |
 | GET | `/api/v1/issue-identity/cbl-sources/{list_id}` | `issue_identity::get_cbl_source_list` | v1 | frontend/src/services/api-cbl-sources.ts | /api/native_roll.rs | #5712 | GET /api/v2/cblSources | slice-open |
 | POST | `/api/v1/issue-identity/cbl/{list_id}/adoption-plan` | `issue_identity::cbl_adoption_plan` | v1 | frontend/src/services/api-cbl-sources.ts | /api/native_roll.rs | #5714 | GET /api/v2/cblSources/{source_id}/adoptionPreview \| :planAdoption \| :previewReadingGraph | slice-open |
 | GET | `/api/v1/issue-identity/cbl/{list_id}/adoption-preview` | `issue_identity_adoption_preview::api_cbl_adoption_preview_handler` | v1 | frontend/src/services/api-cbl-sources.ts | /api/native_roll.rs | #5714 | GET /api/v2/cblSources/{source_id}/adoptionPreview \| :planAdoption \| :previewReadingGraph | slice-open |
 | POST | `/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview` | `issue_identity_cbl_reading_graph_preview::preview_cbl_reading_graph_handler` | v1 | frontend/src/services/api-reading-graph.ts | /api/native_roll.rs | #5714 | GET /api/v2/cblSources/{source_id}/adoptionPreview \| :planAdoption \| :previewReadingGraph | slice-open |
-| GET | `/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates` | `issue_identity::find_cbl_candidates_for_reading_list` | v1 | frontend/src/services/api-cbl-sources.ts | /api/native_roll.rs | #4844 | GET /api/v2/reading-lists/{list_id}/export | slice-open |
+| GET | `/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates` | `issue_identity::find_cbl_candidates_for_reading_list` | v1 | frontend/src/services/api-cbl-sources.ts | /api/native_roll.rs | #5713 | GET /api/v2/readingLists/{list_id}/cblCandidates | slice-open |
 | GET | `/api/v1/issues/{issue_id}/comicvine` | `comicvine_issue::issue_intelligence` | v1 | none | /api/native_roll.rs | #4623 | GET /api/v2/issues/{issue_id}/comicvine | migrated-awaiting-retirement |
 | PUT | `/api/v1/reading-order-groups/{group_id}/order` | `dependency_groups::set_group_order` | v1 | frontend/src/services/api-dependency-groups.ts | /api/native_roll.rs | #5711 | POST /api/v2/reading-order-groups/{group_id}/members \| /issue-ranges | slice-open |
 | PUT | `/api/v1/releases/` | `releases::publish` | v1 | none | /api/native_roll.rs | #4849 | GET /api/v2/releases | migrated-awaiting-retirement |
@@ -279,7 +279,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 
 ## Owner issue cross-reference
 
-Existing owner/disposition issues resolved for this census: #4299, #4335, #4342, #4344, #4443, #4459, #4549, #4595, #4623, #4653, #4684, #4822, #4832, #4835, #4836, #4838, #4839, #4841, #4844, #4849, #4850, #4851, #4855, #5276, #5435, #5701, #5702, #5703, #5704, #5705, #5706, #5709, #5711, #5712, #5714, #5715, #5716, #5717, #5718.
+Existing owner/disposition issues resolved for this census: #4299, #4335, #4342, #4344, #4443, #4459, #4549, #4595, #4623, #4653, #4684, #4822, #4832, #4835, #4836, #4838, #4839, #4841, #4844, #4849, #4850, #4851, #4855, #5276, #5435, #5701, #5702, #5703, #5704, #5705, #5706, #5709, #5711, #5712, #5713, #5714, #5715, #5716, #5717, #5718.
 No new backlog issue is created by this tooling task: every current live v1 method resolves to an existing owner issue and an AIP destination or an explicit retire-without-replacement decision.
 
 Non-browser / helper / infrastructure surface included in the census:

@@ -685,11 +685,11 @@
       "caller_count": 2,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
-      "owner_issue": 5712,
+      "owner_issue": 5713,
       "needs_owner_issue": false,
-      "disposition": "GET /api/v2/cblSources",
+      "disposition": "POST /api/v2/cblSources:compare",
       "rollout_status": "slice-open",
-      "notes": ""
+      "notes": "AIP-136 stateless bulk ranking is owned by #5713, not the #5712 catalog-list family; do not fold this live POST into GET /api/v2/cblSources."
     },
     {
       "method": "GET",
@@ -811,11 +811,11 @@
       "caller_count": 1,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
-      "owner_issue": 4844,
+      "owner_issue": 5713,
       "needs_owner_issue": false,
-      "disposition": "GET /api/v2/reading-lists/{list_id}/export",
+      "disposition": "GET /api/v2/readingLists/{list_id}/cblCandidates",
       "rollout_status": "slice-open",
-      "notes": ""
+      "notes": "AIP-132 bounded owned collection is owned by #5713, not the #4844 adoption-commit/overlap-decision family; do not fold candidate discovery into the export route."
     },
     {
       "method": "GET",
