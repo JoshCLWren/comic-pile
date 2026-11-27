@@ -2307,20 +2307,6 @@ async fn load_collection_guard_state<E: DbExec>(
                 .or_default()
                 .insert(normalize_volume(&p, &e));
         }
-        let rows = tx.run_query(
-            "SELECT t.id, ei.provider, ei.external_id FROM threads t JOIN catalog_series cs ON cs.id = t.catalog_series_id JOIN external_identities ei ON ei.id = cs.canonical_external_identity_id WHERE t.id = ANY($1) AND t.user_id=$2",
-            &[&thread_ids, &user_id]
-        ).await.map_err(|e| tx_db_error(e, ""))?;
-        for row in rows {
-            let tid: i32 = row.get(0);
-            let p: String = row.get(1);
-            let e: String = row.get(2);
-            state
-                .thread_identities
-                .entry(tid)
-                .or_default()
-                .insert(normalize_volume(&p, &e));
-        }
     }
     Ok(state)
 }
