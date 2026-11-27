@@ -442,7 +442,7 @@ async fn strict_list_reports_partial_coverage_warnings() {
 }
 
 #[tokio::test]
-async fn apply_rebuilds_membership_and_compiled_rules() {
+async fn apply_rebuilds_membership_without_compiling_edges() {
     let fixture = setup().await;
     let conn = fixture.state.pool.get().await.unwrap();
     conn.execute(
