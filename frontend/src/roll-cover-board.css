@@ -1,0 +1,351 @@
+/*
+ * Night Shift Roll presentation (issue #5981).
+ *
+ * Product colors come from the canonical semantic tokens in styles.css. Raw
+ * values here are limited to geometry (cover aspect ratio, transform steps and
+ * the local scrim gradient) that no semantic role can express.
+ */
+
+.roll-cover-board {
+  --roll-cover-w: 105px;
+  --roll-gap: 12px;
+  --roll-die-w: 110px;
+  display: flex;
+  flex: 1;
+  min-height: 320px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--roll-gap);
+  min-width: 0;
+}
+
+.roll-cover-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--roll-gap);
+  min-width: 0;
+}
+
+.roll-cover {
+  position: relative;
+  display: block;
+  flex: none;
+  width: var(--roll-cover-w);
+  aspect-ratio: 2 / 3;
+  border-radius: 5px;
+  outline: none;
+  cursor: pointer;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    opacity 180ms ease;
+}
+
+.roll-cover:hover,
+.roll-cover:focus-visible {
+  transform: scale(1.035);
+  box-shadow: 0 0 0 2px var(--theme-comic-accent);
+  z-index: 2;
+}
+
+.roll-cover:focus-visible {
+  outline: 2px solid var(--theme-focus-ring);
+  outline-offset: 2px;
+}
+
+.roll-cover-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 5px;
+  background: var(--theme-bg-panel);
+}
+
+.roll-cover-art {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
+.roll-cover-face {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  min-width: 23px;
+  padding: 3px 5px;
+  border: 1px solid var(--theme-border);
+  border-radius: 5px;
+  background: var(--theme-bg-page);
+  color: var(--theme-text-primary);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.roll-cover-read {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--theme-bg-page);
+  color: var(--theme-personal-accent);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.roll-cover-winner {
+  box-shadow: 0 0 0 3px var(--theme-comic-accent);
+  z-index: 3;
+}
+
+/* The shared exact-issue trigger remains reachable, but its chrome stays out
+   of the artwork until the cover is hovered or focused. */
+.roll-cover-actions {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  opacity: 0;
+  background: var(--theme-bg-page);
+  border-radius: 0 0 5px 5px;
+  transition: opacity 150ms ease;
+}
+
+.roll-cover:hover .roll-cover-actions,
+.roll-cover:focus-within .roll-cover-actions {
+  opacity: 1;
+}
+
+.roll-cover-actions button {
+  width: 100%;
+  min-height: 24px;
+  padding: 2px 4px;
+  font-size: 10px;
+}
+
+.roll-cover-actions button span {
+  font-size: 10px;
+}
+
+.roll-cover-far {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.roll-dice-zone {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: var(--roll-die-w, 110px);
+}
+
+.roll-dice-button {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 3px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+  filter: drop-shadow(0 7px 8px rgb(0 0 0 / 45%));
+  transition: transform 150ms ease;
+}
+
+.roll-dice-button:hover:not(:disabled) {
+  transform: scale(1.05);
+}
+
+.roll-dice-button:focus-visible {
+  outline: 2px solid var(--theme-focus-ring);
+  outline-offset: 3px;
+}
+
+.roll-dice-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.roll-dice-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.roll-dice-hint {
+  color: var(--theme-text-muted);
+  font-size: 10px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+/* Mobile gallery: one dominant cover, wraparound neighbors, no page overflow. */
+.roll-mobile-gallery-wrap {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+}
+
+.roll-mobile-gallery-wrap .roll-dice-zone {
+  width: 88px;
+  margin-bottom: 12px;
+}
+
+.roll-gallery {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  touch-action: pan-y;
+  cursor: grab;
+}
+
+.roll-gallery:active {
+  cursor: grabbing;
+}
+
+.roll-gallery:focus-visible {
+  outline: 2px solid var(--theme-focus-ring);
+  outline-offset: 2px;
+}
+
+.roll-gallery-track {
+  position: absolute;
+  top: 9px;
+  right: 0;
+  left: 0;
+}
+
+.roll-gallery-cover {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: var(--gallery-cover-w, 210px);
+  transition:
+    transform 300ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    opacity 300ms ease;
+}
+
+.roll-gallery-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.roll-gallery-arrow {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid var(--theme-border);
+  border-radius: 50%;
+  background: var(--theme-bg-panel);
+  color: var(--theme-text-primary);
+  font-size: 19px;
+}
+
+.roll-gallery-arrow:focus-visible {
+  outline: 2px solid var(--theme-focus-ring);
+  outline-offset: 2px;
+}
+
+.roll-gallery-count {
+  min-width: 70px;
+  color: var(--theme-text-primary);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.roll-gallery-caption {
+  margin: 8px 0 0;
+  color: var(--theme-text-muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+/* Rate workspace: artwork behind a separate scrim so every control stays
+   fully opaque and readable while the cover expands into the workspace. */
+.roll-rate-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.roll-rate-art {
+  position: absolute;
+  inset: 0;
+  background-position: center 38%;
+  background-size: cover;
+}
+
+.roll-rate-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      90deg,
+      var(--theme-bg-page) 0%,
+      color-mix(in srgb, var(--theme-bg-page) 87%, transparent) 45%,
+      color-mix(in srgb, var(--theme-bg-page) 54%, transparent) 100%
+    ),
+    linear-gradient(0deg, var(--theme-bg-page), transparent 35%);
+}
+
+.roll-rate-stage {
+  position: relative;
+  z-index: 1;
+  transition: opacity 220ms ease-out;
+}
+
+.roll-rate-stage-entering {
+  opacity: 0;
+}
+
+.roll-cover-flight {
+  position: absolute;
+  z-index: 9;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.roll-cover-flight img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (max-width: 767px) {
+  .roll-rate-scrim {
+    background: linear-gradient(
+      0deg,
+      var(--theme-bg-page) 0%,
+      color-mix(in srgb, var(--theme-bg-page) 87%, transparent) 64%,
+      color-mix(in srgb, var(--theme-bg-page) 62%, transparent) 100%
+    );
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .roll-cover,
+  .roll-gallery-cover,
+  .roll-dice-button,
+  .roll-rate-stage,
+  .roll-cover-actions {
+    transition-duration: 0.001ms;
+  }
+}

@@ -1,11 +1,22 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type RefObject } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { scrollToTopSemantic } from '../../../scroll/scrollCoordinator'
-import { ThreadTagChips } from '../../../components/Tags/ThreadTagChips'
 import { ComicIssueCover } from '../../../components/ComicIssueCard'
-import CompactIssueCardTrigger from '../../../components/CompactIssueCardTrigger'
 import type { RollBootstrapThread, RollPoolReason } from '../../../types/rollBootstrap'
 import type { IssueCardsResponse } from '../../../generated/nativeV2Client'
+import { useResponsive } from '../../../utils/responsive'
+import { CoverBoard } from './CoverBoard'
+import { MobileGallery } from './MobileGallery'
+
+/** Presentation-only state for the Night Shift Roll surfaces (#5981). */
+export interface RollPresentationProps {
+  dieSides: number
+  isRolling: boolean
+  rolledValue: number
+  hasRolled: boolean
+  mainDieRef: RefObject<HTMLButtonElement | null>
+  onRoll: () => void
+}
 
 interface ThreadPoolProps {
   pool: RollBootstrapThread[]
