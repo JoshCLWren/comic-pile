@@ -590,7 +590,6 @@ Response:
   "blockers": [
     {"kind": "prerequisite", "origin": "reader",
      "waiting_on_issue_ids": [790], "list_id": null}
-    "Blocked by issue #362 in Uncanny X-Men (thread #5)"
   ]
 }
 ```
