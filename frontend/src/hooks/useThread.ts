@@ -35,7 +35,9 @@ export function useThread(id?: number | null) {
 export function useStaleThreads(days?: number) {
   const { data, isPending, isError, refetch } = useQuery({
     queryKey: queryKeys.thread.summaries(),
-    queryFn: () => threadsApi.listStale(days),
+    // The v2 collection filter returns a page envelope; the hook preserves its
+    // historical `Thread[]` data contract for callers.
+    queryFn: async () => (await threadsApi.listStale(days)).threads,
     // Note: if 'days' needs to be part of the key, update queryKeys.thread.summaries
   });
 

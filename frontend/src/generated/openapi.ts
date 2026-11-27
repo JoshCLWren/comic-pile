@@ -3392,6 +3392,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/threads/{thread_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Standard resource Get for one owned Thread. */
+        get: operations["get_thread_v2_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/threads/{thread_id}/issue-order": {
         parameters: {
             query?: never;
@@ -6899,7 +6916,7 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
-        /** @description Python `ThreadResponse`. */
+        /** @description The Python `ThreadResponse` projection every lifecycle writer returns. */
         NativeThreadResponse: {
             blocking_reasons: string[];
             created_at: string;
@@ -6913,7 +6930,7 @@ export interface components {
             last_activity_at?: string | null;
             /** Format: double */
             last_rating?: number | null;
-            manual_creator_credits: Record<string, never>[];
+            manual_creator_credits: unknown;
             /** Format: int32 */
             next_unread_issue_id?: number | null;
             next_unread_issue_number?: string | null;
@@ -8996,6 +9013,29 @@ export interface components {
             /** Format: int32 */
             volume_id: number;
         };
+        /**
+         * @description Stale threads page returned by `filter=stale` on the v2 collection.
+         *
+         *     Stale rows are still active queue rows, but the legacy stale read projects
+         *     the full detail-shaped `ThreadResponse` instead of the queue-list item. The
+         *     distinction is kept on the wire so callers of the retired v1 stale read can
+         *     migrate without losing fields; counts stay zero/absent because the stale
+         *     read never published a whole-queue total.
+         */
+        StaleThreadListResponse: {
+            /**
+             * Format: int32
+             * @description Always zero: a stale page is not a whole-active-queue read.
+             */
+            active_count: number;
+            /**
+             * Format: int32
+             * @description Always absent: the stale read never measured a filtered whole-queue total.
+             */
+            filtered_count?: number | null;
+            next_page_token?: string | null;
+            threads: components["schemas"]["NativeThreadResponse"][];
+        };
         StartupMetricsResponse: {
             /** Format: double */
             startup_duration?: number | null;
@@ -9360,6 +9400,12 @@ export interface components {
             next_page_token?: string | null;
             threads: components["schemas"]["ThreadListItem"][];
         };
+        /**
+         * @description One v2 threads list response. The active/completed/excluded filters keep the
+         *     queue-list projection; the stale filter keeps the legacy detail-shaped
+         *     projection. Both are emitted inline (no envelope variant key).
+         */
+        ThreadListResult: components["schemas"]["ThreadListResponse"] | components["schemas"]["StaleThreadListResponse"];
         ThreadProgress: {
             /** Format: int32 */
             issues_remaining: number;
@@ -18791,13 +18837,19 @@ export interface operations {
     list_threads_documentation: {
         parameters: {
             query?: {
-                /** @description Case-insensitive title search */
-                search?: string;
-                /** @description position, title, or created */
+                /** @description Resource filter: active (default), completed, stale, excluded */
+                filter?: string;
+                /** @description Canonical ordering: position, title, created; last_activity for stale */
+                order_by?: string;
+                /** @description Legacy alias of order_by; supplying both with different values is rejected */
                 sort?: string;
-                /** @description 1-200 rows per page (default 50) */
+                /** @description Case-insensitive title search; unsupported for filter=stale */
+                search?: string;
+                /** @description Stale age threshold in days (0-3650, default 30); only with filter=stale */
+                days?: number;
+                /** @description 1-200 rows per page (default 50, 200 for stale) */
                 page_size?: number;
-                /** @description Opaque continuation cursor */
+                /** @description Opaque continuation cursor bound to filter, search and order_by */
                 page_token?: string;
             };
             header?: never;
@@ -18806,16 +18858,16 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Owner-scoped active threads page */
+            /** @description Owner-scoped threads page; stale rows keep the detail-shaped projection */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ThreadListResponse"];
+                    "application/json": components["schemas"]["ThreadListResult"];
                 };
             };
-            /** @description Invalid sort or page token */
+            /** @description Invalid filter, order_by, sort or page token */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -18829,8 +18881,45 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid bounds or retired collection_id */
+            /** @description Invalid bounds, unsupported parameter or retired collection_id */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_thread_v2_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped thread detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadDetailResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found or not owned by the reader */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

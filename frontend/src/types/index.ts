@@ -133,12 +133,26 @@ export interface AuthTokens {
   refresh_token: string;
 }
 
+/** Canonical resource filters for the v2 threads List method. */
+export type ThreadListFilter = 'active' | 'completed' | 'stale' | 'excluded'
+
+/** Canonical AIP-132 ordering values across the thread collection filters. */
+export type ThreadOrderBy = 'position' | 'title' | 'created' | 'last_activity'
+
 export interface ThreadQueryParams {
+  filter?: ThreadListFilter;
+  order_by?: ThreadOrderBy;
+  /** Legacy spelling of `order_by`; reject a conflicting pair server-side. */
+  sort?: ThreadOrderBy;
   search?: string;
-  sort?: 'position' | 'title' | 'created';
+  /** Bounded age threshold in days; valid only with `filter: 'stale'`. */
+  days?: number;
   page_size?: number;
   page_token?: string;
 }
+
+/** Stale rows keep the detail-shaped projection on the v2 collection read. */
+export type StaleThreadListResponse = components['schemas']['StaleThreadListResponse']
 
 export interface ManualCreatorCredit {
   name: string;
