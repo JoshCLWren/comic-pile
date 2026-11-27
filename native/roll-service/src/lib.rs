@@ -817,7 +817,9 @@ pub fn router(state: Arc<AppState>) -> Router {
         // untouched, and the Vercel entry has a matching outer route.
         .route(
             "/api/v2/threads:checkDuplicates",
-            post(thread_lifecycle::check_potential_dupli        .route(
+            post(thread_lifecycle::check_potential_duplicates_v2),
+        )
+        .route(
             "/api/v2/threads/{thread_id}",
             patch(thread_lifecycle::patch_thread).delete(thread_lifecycle::delete_thread_v2),
         )
