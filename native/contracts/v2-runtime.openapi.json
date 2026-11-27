@@ -9956,7 +9956,6 @@
           }
         }
       },
-<<<<<<< HEAD
       "CblComicvineOccurrence": {
         "type": "object",
         "description": "One Comic Vine occurrence in the shared CBL catalog.",
@@ -9997,31 +9996,12 @@
             "format": "int32"
           },
           "publication_year": {
-=======
-      "CheckDuplicatesRequest": {
-        "type": "object",
-        "description": "Body of `POST /api/v1/threads/check-duplicates`.",
-        "required": [
-          "title",
-          "format"
-        ],
-        "properties": {
-          "comicvine_volume_id": {
             "type": [
               "integer",
               "null"
             ],
             "format": "int32"
           },
-          "exclude_thread_id": {
->>>>>>> origin/main
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-<<<<<<< HEAD
           "revision_sha": {
             "type": "string"
           },
@@ -10156,7 +10136,31 @@
           },
           "source_repository": {
             "type": "string"
-=======
+          }
+        }
+      },
+      "CheckDuplicatesRequest": {
+        "type": "object",
+        "description": "Body of `POST /api/v1/threads/check-duplicates`.",
+        "required": [
+          "title",
+          "format"
+        ],
+        "properties": {
+          "comicvine_volume_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "exclude_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
           "format": {
             "type": "string"
           },
@@ -10177,7 +10181,6 @@
             "items": {
               "$ref": "#/components/schemas/PotentialDuplicateMatch"
             }
->>>>>>> origin/main
           }
         }
       },
