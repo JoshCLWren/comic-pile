@@ -2502,28 +2502,15 @@ pub async fn check_potential_duplicates(
 }
 
 // ---------------------------------------------------------------------------
-// POST /api/v1/threads/groups:batch
+// POST /api/v2/reading-order-groups:resolveMemberships
 // ---------------------------------------------------------------------------
 
-/// `POST /api/v1/threads/groups:batch`
-pub async fn list_thread_groups_batch(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
-    body: Bytes,
-) -> HandlerResult {
-    resolve_memberships_inner(State(state), user, body).await
-}
-
 /// `POST /api/v2/reading-order-groups:resolveMemberships`
-pub async fn resolve_memberships_v2(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
-    body: Bytes,
-) -> HandlerResult {
-    resolve_memberships_inner(State(state), user, body).await
-}
-
-async fn resolve_memberships_inner(
+///
+/// Single bounded request that resolves group memberships for every owned
+/// thread named in the body. This is the only mounted membership batch route;
+/// the retired `/api/v1/threads/groups:batch` alias is gone.
+pub async fn resolve_memberships(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     body: Bytes,
@@ -2827,23 +2814,6 @@ pub fn list_excluded_threads_documentation() {}
 )]
 #[allow(dead_code)]
 pub fn check_potential_duplicates_documentation() {}
-
-#[utoipa::path(
-    post,
-    path = "/api/v1/threads/groups:batch",
-    tag = "threads",
-    description = "List crossover groups for several owned threads in one request.",
-    request_body = GroupsBatchRequest,
-    responses(
-        (status = 200, description = "Map of thread id to crossover groups", body = HashMap<String, Vec<DependencyGroupSummary>>),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "A requested thread is not owned by the reader"),
-        (status = 422, description = "Validation failed")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn list_thread_groups_batch_documentation() {}
 
 #[cfg(test)]
 mod tests {

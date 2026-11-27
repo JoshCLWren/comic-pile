@@ -2305,19 +2305,40 @@ mod tests {
         let document = serde_json::to_value(dependency_groups_openapi()).unwrap();
         for path in [
             "/api/v1/reading-order-groups/",
-            "/api/v1/reading-order-groups/threads/{thread_id}/groups",
             "/api/v1/reading-order-groups/{group_id}",
             "/api/v1/reading-order-groups/{group_id}/detail",
+            "/api/v1/reading-order-groups/{group_id}/order",
+        ] {
+            assert!(document["paths"].get(path).is_some(), "{path}");
+        }
+        // The membership operations are v2-only: their retired v1 URLs must not
+        // remain documented as live operations.
+        for path in [
+            "/api/v1/reading-order-groups/threads/{thread_id}/groups",
             "/api/v1/reading-order-groups/{group_id}/issue-ranges",
             "/api/v1/reading-order-groups/{group_id}/members",
             "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
-            "/api/v1/reading-order-groups/{group_id}/order",
             "/api/v1/reading-order-groups/{group_id}/plans",
         ] {
-            assert!(document["paths"].get(path).is_some(), "{path}");
+            assert!(document["paths"].get(path).is_none(), "{path}");
         }
         let expected = include_str!("../../contracts/reading-order-groups-v1.openapi.json");
         let generated = dependency_groups_openapi().to_pretty_json().unwrap();
         assert_eq!(expected.trim_end(), generated.trim_end());
+    }
+
+    #[test]
+    fn v2_contract_documents_all_six_membership_operations() {
+        let document = serde_json::to_value(dependency_groups_v2_openapi()).unwrap();
+        for path in [
+            "/api/v2/reading-order-groups:resolveMemberships",
+            "/api/v2/threads/{thread_id}/reading-order-group-memberships",
+            "/api/v2/reading-order-groups/{group_id}/reading-plans",
+            "/api/v2/reading-order-groups/{group_id}/members",
+            "/api/v2/reading-order-groups/{group_id}/issue-ranges",
+            "/api/v2/reading-order-groups/{group_id}/members/{member_id}",
+        ] {
+            assert!(document["paths"].get(path).is_some(), "{path}");
+        }
     }
 }
