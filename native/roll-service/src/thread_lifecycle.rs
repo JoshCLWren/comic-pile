@@ -11,6 +11,11 @@
 //! * `POST /api/v1/threads/reactivate`
 //! * `GET /api/v1/threads/stale`
 //! * `POST /api/v1/threads/check-duplicates`
+<<<<<<< HEAD
+=======
+//! * `POST /api/v2/threads:checkDuplicates` (AIP-136 advisory collection
+//!   custom method, #5705; same bounded, owner-scoped wire contract)
+>>>>>>> origin/main
 //! * `GET /api/v1/threads/excluded/threads`
 //!
 //! The membership batch was retired from `/api/v1/threads/groups:batch` and is
@@ -2682,6 +2687,12 @@ pub async fn check_potential_duplicates(
     let connection = db::checkout(&state).await?;
     let mut strong: Vec<Candidate> = Vec::new();
     if let Some(volume_id) = volume {
+        // The whole response is bounded at MAX_POTENTIAL_DUPLICATE_MATCHES, so
+        // the exact matches must be capped too: confirmed mappings are not
+        // unique per reader/volume, and several owned historical threads can
+        // resolve to the same ComicVine series. `ORDER BY t.id` makes the
+        // retained subset deterministic, and taking exact matches first
+        // preserves their precedence over similar-title matches (#5705).
         let rows = connection
             .query(
                 &format!(
@@ -2693,9 +2704,14 @@ pub async fn check_potential_duplicates(
                        AND e.provider = 'comicvine' AND e.entity_type = 'series'
                        AND e.external_id = $2
                        AND ($3::int IS NULL OR t.id <> $3)
-                     ORDER BY t.id"
+                     ORDER BY t.id LIMIT $4"
                 ),
-                &[&user_id, &volume_id.to_string(), &exclude],
+                &[
+                    &user_id,
+                    &volume_id.to_string(),
+                    &exclude,
+                    &(MAX_POTENTIAL_DUPLICATE_MATCHES as i64),
+                ],
             )
             .await
             .map_err(db::query_error)?;
@@ -2865,9 +2881,35 @@ pub async fn check_potential_duplicates(
 }
 
 // ---------------------------------------------------------------------------
+<<<<<<< HEAD
 // POST /api/v2/reading-order-groups:resolveMemberships
 // ---------------------------------------------------------------------------
 
+=======
+// POST /api/v2/threads:checkDuplicates
+// ---------------------------------------------------------------------------
+
+/// `POST /api/v2/threads:checkDuplicates` (AIP-136 collection custom method).
+///
+/// The canonical v2 surface for the advisory existing-volume check. It is
+/// deliberately advisory and never creates a Thread: request and response wire
+/// shapes are shared with the retained v1 path, so both routes use one bounded,
+/// owner-scoped implementation. Placing the custom method on the collection
+/// (`:camelCase` suffix) keeps `GET /api/v2/threads`'s AIP-132 filter/search
+/// contract untouched.
+pub async fn check_potential_duplicates_v2(
+    state: State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    body: Bytes,
+) -> HandlerResult {
+    check_potential_duplicates(state, user, body).await
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/v2/reading-order-groups:resolveMemberships
+// ---------------------------------------------------------------------------
+
+>>>>>>> origin/main
 /// `POST /api/v2/reading-order-groups:resolveMemberships`
 ///
 /// Single bounded request that resolves group memberships for every owned
@@ -3221,6 +3263,28 @@ pub fn list_excluded_threads_documentation() {}
 #[allow(dead_code)]
 pub fn check_potential_duplicates_documentation() {}
 
+<<<<<<< HEAD
+=======
+// The v2 DTOs are shared with the retained v1 path (#5705): only the path and
+// operation identity are new, so no second set of types is declared here.
+#[utoipa::path(
+    post,
+    path = "/api/v2/threads:checkDuplicates",
+    tag = "threads",
+    description = "Advisory AIP-136 collection custom method: report existing volumes that may be the proposed series. Does not create a Thread. Results are owner-scoped, exclude a named thread, and are capped at five matches.",
+    operation_id = "check_duplicates",
+    request_body = CheckDuplicatesRequest,
+    responses(
+        (status = 200, description = "Possible existing volumes", body = CheckDuplicatesResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 422, description = "Validation failed")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn check_potential_duplicates_v2_documentation() {}
+
+>>>>>>> origin/main
 #[cfg(test)]
 mod tests {
     use super::*;

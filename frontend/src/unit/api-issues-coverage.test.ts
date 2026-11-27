@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createIssuesApi } from '../services/api-issues'
 import { createHttpClientStub } from './httpClientStub'
@@ -21,11 +23,32 @@ describe('issuesApi', () => {
     await issuesApi.create(1, '1-5')
     await issuesApi.create(1, '6-8', { insert_after_issue_id: 4 })
     await issuesApi.create(1, '9', { insert_after_issue_id: null })
-    expect(client.get).toHaveBeenNthCalledWith(1, '/v1/threads/1/issues', { params: undefined })
-    expect(client.get).toHaveBeenNthCalledWith(2, '/v1/threads/1/issues', { params: { status: 'read', page_size: 10, page_token: 'next' } })
+    expect(client.get).toHaveBeenNthCalledWith(1, '/v2/threads/1/issues', { params: undefined })
+    expect(client.get).toHaveBeenNthCalledWith(2, '/v2/threads/1/issues', { params: { status: 'read', page_size: 10, page_token: 'next' } })
     expect(client.post).toHaveBeenNthCalledWith(1, '/v2/threads/1/issues', { issue_range: '1-5' })
     expect(client.post).toHaveBeenNthCalledWith(2, '/v2/threads/1/issues', { issue_range: '6-8', insert_after_issue_id: 4 })
     expect(client.post).toHaveBeenNthCalledWith(3, '/v2/threads/1/issues', { issue_range: '9', append_to_end: true })
+  })
+
+  it('reads the paginated v2 creator-credit projection without v1 fanout', async () => {
+    await issuesApi.listCreators(1)
+    await issuesApi.listCreators(1, { page_size: 5, page_token: '7' })
+    expect(client.get).toHaveBeenNthCalledWith(1, '/v2/threads/1/creatorCredits', {
+      params: undefined,
+    })
+    expect(client.get).toHaveBeenNthCalledWith(2, '/v2/threads/1/creatorCredits', {
+      params: { page_size: 5, page_token: '7' },
+    })
+  })
+
+  it('no longer ships the retired v1 issue collection or creator reads', () => {
+    const serviceSource = readFileSync(
+      resolve(__dirname, '../services/api-issues.ts'),
+      'utf-8',
+    )
+
+    expect(serviceSource).not.toContain('/v1/threads/${threadId}/issues')
+    expect(serviceSource).not.toContain('/v1/threads/${threadId}/issues/creators')
   })
 
   it('previews creates with every positioning and strategy option', async () => {

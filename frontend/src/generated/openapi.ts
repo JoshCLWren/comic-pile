@@ -3456,6 +3456,48 @@ export interface paths {
          * @description Create a thread at the end of the authenticated reader's queue. The created resource (including its stable `id`) is returned at 201 with a `Location` header naming the v2 collection member. The write preserves owner assignment, the five-second duplicate-merge guard and the Python validation envelope; it creates no Plan, dependency or issue rows.
          */
         post: operations["create_thread_v2_documentation"];
+<<<<<<< HEAD
+=======
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/threads/{thread_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Delete an owned Thread (AIP-135). A second delete, or a delete of a foreign or already deleted Thread, returns 404. Never 403. */
+        delete: operations["delete_thread_v2_documentation"];
+        options?: never;
+        head?: never;
+        /** @description Partially update an owned Thread (AIP-134). Omitted fields are preserved. When `update_mask` is supplied only its fields are applied; a masked field missing from the body is cleared. An `expected` precondition that no longer matches the committed row returns 409 with `detail.code = thread_edit_conflict` and the current values. Foreign or deleted Threads return 404, never 403. */
+        patch: operations["patch_thread_documentation"];
+        trace?: never;
+    };
+    "/api/v2/threads/{thread_id}/creatorCredits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documentation-only operation for the canonical v2 thread-scoped credit
+         *     projection (#5706). The v1 bulk creator URL stays on the legacy response;
+         *     this v2 operation adds bounded pagination around the same stored credits.
+         */
+        get: operations["thread_creator_credits"];
+        put?: never;
+        post?: never;
+>>>>>>> origin/main
         delete?: never;
         options?: never;
         head?: never;
@@ -3507,7 +3549,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Documentation-only operation for the canonical v2 thread issue collection
+         *     (#5706). The v2 path is mounted to the same owner-scoped, paginated handler
+         *     as the retained v1 same-path read, so both URLs share one wire contract.
+         */
+        get: operations["list_thread_issues_v2"];
         put?: never;
         /**
          * Documentation-only operation for the mounted issue-create resource.
@@ -3577,17 +3624,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/readingOrders": {
+=======
+    "/api/v2/threads:checkDuplicates": {
+>>>>>>> origin/main
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
+<<<<<<< HEAD
         /** Documentation-only operation for reading orders containing a thread. */
         get: operations["thread_ordering_reading_orders"];
         put?: never;
         post?: never;
+=======
+        get?: never;
+        put?: never;
+        /** @description Advisory AIP-136 collection custom method: report existing volumes that may be the proposed series. Does not create a Thread. Results are owner-scoped, exclude a named thread, and are capped at five matches. */
+        post: operations["check_duplicates"];
+>>>>>>> origin/main
         delete?: never;
         options?: never;
         head?: never;
@@ -4546,6 +4604,19 @@ export interface components {
              */
             source_path: string;
             source_repository: string;
+        };
+        /** @description Body of `POST /api/v1/threads/check-duplicates`. */
+        CheckDuplicatesRequest: {
+            /** Format: int32 */
+            comicvine_volume_id?: number | null;
+            /** Format: int32 */
+            exclude_thread_id?: number | null;
+            format: string;
+            title: string;
+        };
+        /** @description Response of `POST /api/v1/threads/check-duplicates`. */
+        CheckDuplicatesResponse: {
+            matches: components["schemas"]["NativePotentialDuplicateMatch"][];
         };
         /**
          * CheckPotentialDuplicatesRequest
@@ -6760,6 +6831,23 @@ export interface components {
         /** @description Request body of `POST /api/v1/threads/{thread_id}:migrateToIssuesSimple`. */
         NativeMigrateToIssuesSimpleRequest: {
             issue_number: string;
+        };
+        /** @description One possible existing volume. */
+        NativePotentialDuplicateMatch: {
+            /** Format: int64 */
+            comicvine_volume_id?: number | null;
+            format: string;
+            /** Format: int32 */
+            issues_remaining: number;
+            match_type: string;
+            /** Format: int32 */
+            start_year?: number | null;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
         };
         /** @description Confirmed provider series metadata for one queue row. */
         NativeQueueSeriesMetadata: {
@@ -9401,6 +9489,27 @@ export interface components {
             /** Format: int32 */
             total_issues?: number | null;
         };
+<<<<<<< HEAD
+=======
+        /**
+         * @description Bounded, paginated thread-scoped issue-credit projection for #5706.
+         *
+         *     Keeps the frozen per-issue `issue_id`/`creators` wire shape of the legacy
+         *     bulk creator read and adds standard page fields. The `issues` array omits
+         *     unmapped issues and issues without stored credits, exactly like the legacy
+         *     response, while `total_count` counts matching confirmed-mapping issue rows.
+         */
+        ThreadCreatorCreditsResponse: {
+            issues: components["schemas"]["NativeIssueCreatorsEntry"][];
+            next_page_token?: string | null;
+            /** Format: int64 */
+            page_size: number;
+            /** Format: int32 */
+            thread_id: number;
+            /** Format: int64 */
+            total_count: number;
+        };
+>>>>>>> origin/main
         /**
          * @description Wire parity with Python `ThreadDependenciesResponse`
          *     (`app/schemas/dependency.py`): the `blocking` list holds edges where this
@@ -19361,6 +19470,72 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
+=======
+    thread_creator_credits: {
+        parameters: {
+            query?: {
+                /** @description 1-100 credited issues (default 100) */
+                page_size?: number;
+                /** @description issue_id continuation cursor */
+                page_token?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated stored creator credits per mapped issue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadCreatorCreditsResponse"];
+                };
+            };
+            /** @description Invalid page token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+>>>>>>> origin/main
     issue_order_documentation: {
         parameters: {
             query?: never;
@@ -19407,6 +19582,71 @@ export interface operations {
             };
             /** @description Projected reading graph would cycle; nothing was changed */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_thread_issues_v2: {
+        parameters: {
+            query?: {
+                /** @description Optional read or unread filter */
+                status?: string;
+                /** @description 1-100 issues (default 50) */
+                page_size?: number;
+                /** @description position,id continuation cursor */
+                page_token?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Owned thread ID */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped, paginated issues */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadIssueListResponse"];
+                };
+            };
+            /** @description Invalid page token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19651,6 +19891,7 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
     thread_ordering_reading_orders: {
         parameters: {
             query?: never;
@@ -19664,12 +19905,32 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Owned reading orders containing the thread */
+=======
+    check_duplicates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CheckDuplicatesRequest"];
+            };
+        };
+        responses: {
+            /** @description Possible existing volumes */
+>>>>>>> origin/main
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
+<<<<<<< HEAD
                     "application/json": components["schemas"]["ThreadReadingOrdersResponse"];
+=======
+                    "application/json": components["schemas"]["CheckDuplicatesResponse"];
+>>>>>>> origin/main
                 };
             };
             /** @description Not authenticated */
@@ -19679,13 +19940,18 @@ export interface operations {
                 };
                 content?: never;
             };
+<<<<<<< HEAD
             /** @description Request validation failed */
+=======
+            /** @description Validation failed */
+>>>>>>> origin/main
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
+<<<<<<< HEAD
             /** @description Database temporarily unavailable */
             503: {
                 headers: {
@@ -19693,6 +19959,8 @@ export interface operations {
                 };
                 content?: never;
             };
+=======
+>>>>>>> origin/main
         };
     };
     list_undo_snapshots_documentation: {

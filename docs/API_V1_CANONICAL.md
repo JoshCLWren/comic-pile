@@ -21,13 +21,22 @@ operation is served by the native Rust ingress `api/native_roll.rs`
 (`vercel.json` routes `/api(?:/.*)?` to it). There is no Python-runtime
 exception, parity oracle, or "Python stays mounted" hold on this surface.
 
+<<<<<<< HEAD
 There are 15 retained `/api/v1` operations, all served by native Rust, in three
+=======
+There are 27 retained `/api/v1` operations, all served by native Rust, in three
+>>>>>>> origin/main
 groups:
 
 | Group | Retained v1 operations | Target v2 resource |
 |-------|------------------------|--------------------|
+<<<<<<< HEAD
 | Stateless previews | 2 (`POST /api/v1/catalog/series-mappings/preview`, `POST /api/v1/issue-identity/cbl/{list_id}/reading-graph-preview`) | stateless v2 preview operations (#5714, #5716); the continuity-plan projection preview is the native `POST /api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection` (#5715) |
 | Reading-order groups | 1 (`PUT /api/v1/reading-order-groups/{group_id}/order`) | `/api/v2/readingOrderGroups…` and memberships/ranges (#5710, #5711) |
+=======
+| Stateless previews | 3 (`POST /api/v1/catalog/series-mappings/preview`, `POST /api/v1/continuity-plans/{plan_id}/reading-orders/project-preview`, `POST /api/v1/issue-identity/cbl/{list_id}/reading-graph-preview`) | stateless v2 preview operations (#5714, #5715, #5716) |
+| Reading-order groups | 12 (`/api/v1/reading-order-groups…` collection, item, detail, issue-ranges, members, order, plans, and thread-group lookups) | `/api/v2/readingOrderGroups…` and memberships/ranges (#5710, #5711) |
+>>>>>>> origin/main
 | Threads | 12 (`/api/v1/threads…` create, check-duplicates, excluded, reactivate, stale, item PATCH/DELETE, exclude, restore, set-pending, test-backdate, issues/creators) | `GET/POST/PATCH/DELETE /api/v2/threads…` (#5701, #5703, #5704, #5705, #5706) |
 
 `docs/api/v2-route-inventory.json` is authoritative for the exact
@@ -47,10 +56,15 @@ New frontend, background and recovery callers use the canonical v2 resources
 (AIP-121/122/131–136/185): `GET /api/v2/threads` and
 `GET /api/v2/threads/{thread_id}` for Thread reads, the
 `/api/v2/readingOrderGroups…` family for reading-order groups, the stateless v2
+<<<<<<< HEAD
 preview operations for the two retained preview paths above (plus the
 continuity-plan projection preview at
 `POST /api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection`), and the
 per-family v2 resources listed in [API.md](API.md). Do not add a caller to a retained
+=======
+preview operations for the three preview paths above, and the per-family v2
+resources listed in [API.md](API.md). Do not add a caller to a retained
+>>>>>>> origin/main
 `/api/v1` path, do not re-add a retired v1 path as an alias, and do not mirror a
 v2 resource back onto v1 "for symmetry".
 
