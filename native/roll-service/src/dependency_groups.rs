@@ -1723,8 +1723,6 @@ pub async fn delete_group_v2(
 #[allow(dead_code)]
 pub fn list_thread_group_memberships_documentation() {}
 
-
-
 /// Documentation-only operation for adding an issue-position range (v2).
 #[utoipa::path(
     post,
@@ -2496,7 +2494,6 @@ mod tests {
         // The CRUD and membership operations are v2-only: their retired v1 URLs
         // must not remain documented as live operations.
         for path in [
-
             "/api/v1/reading-order-groups/threads/{thread_id}/groups",
             "/api/v1/reading-order-groups/{group_id}/issue-ranges",
             "/api/v1/reading-order-groups/{group_id}/members",

@@ -535,7 +535,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-
     "/api/v1/reading-order-groups/{group_id}/order": {
         parameters: {
             query?: never;
@@ -10948,7 +10947,6 @@ export interface operations {
             };
         };
     };
-
     dependency_groups_set_order: {
         parameters: {
             query?: never;
