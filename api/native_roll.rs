@@ -1582,8 +1582,11 @@ mod tests {
             ("GET", "/api/v1/threads/42/issue-dependencies"),
             ("GET", "/api/v1/threads/42/connected"),
             ("POST", "/api/v1/threads:getBlockingInfo"),
-            ("POST", "/api/v1/threads/42:getBlockingInfo"),
         ] {
+            // `/api/v1/threads/{thread_id}:getBlockingInfo` is captured by the
+            // generic POST action route and, without a credential, returns the
+            // auth-first 401/503 rather than the fallback 404. Its handler was
+            // removed; the DB-backed HTTP test proves the authenticated 404.
             let mut router = app();
             let response = router
                 .call(

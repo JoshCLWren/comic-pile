@@ -1621,8 +1621,12 @@ mod tests {
             ("GET", "/api/v1/threads/42/issue-dependencies"),
             ("GET", "/api/v1/threads/42/connected"),
             ("POST", "/api/v1/threads:getBlockingInfo"),
-            ("POST", "/api/v1/threads/42:getBlockingInfo"),
         ] {
+            // The single-thread alias is captured by the generic
+            // `/api/v1/threads/{thread_id}` POST action route, so an
+            // unauthenticated probe is 401 before dispatch. With a valid
+            // credential the action dispatcher returns 404 (covered by the
+            // DB-backed HTTP test). It has no live handler either way.
             let response = router(Arc::clone(&state))
                 .oneshot(
                     Request::builder()
