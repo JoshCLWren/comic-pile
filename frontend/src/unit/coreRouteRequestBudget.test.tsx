@@ -477,10 +477,8 @@ describe('core route request budgets', () => {
     })
   })
 
-  it('Roll initializes once, reads bootstrap once, and mounts the scoped header and pool', async () => {
+  it('Roll cold-loads scoped resources once and never calls the retired bootstrap/session operations', async () => {
     const { calls, client } = createRequestRecorder((call) => {
-      if (call.url === '/v2/readingSessions') return { session_id: 1, created: false }
-      if (call.url === '/v2/roll/bootstrap') return bootstrap
       if (call.url === '/v2/roll/die-state') {
         return { die: 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 20, last_roll: null }
       }
@@ -496,26 +494,17 @@ describe('core route request budgets', () => {
 
     render(renderAt('/', <RollPage />, true))
 
-    await waitFor(() => expect(calls.some((call) => call.url === '/v2/roll/bootstrap')).toBe(true))
+    await waitFor(() => expect(calls.some((call) => call.url === '/v2/roll/die-state')).toBe(true))
     await drainSettledWork()
 
-    // #4719 scoped surfaces: the die header, eligible pool and visible card
-    // batch are real production reads, so the cold Roll load is one session
-    // POST, one bootstrap GET, one die-state GET, one eligible-ids GET, and
-    // one bounded cards POST. Surface rendering is covered by component tests;
-    // this budget proves the page mounts each query exactly once.
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
-    expect(requestCounts(calls)).toEqual({
-      'POST /v2/readingSessions': 1,
-      [`GET /v2/roll/bootstrap${timezone ? `?timezone=${timezone}` : ''}`]: 1,
-      'GET /v2/roll/die-state': 1,
-      'GET /v2/roll/eligible-issue-ids': 1,
-      'POST /v2/issues/cards': 1,
-    })
-    const bootstrapCall = calls.find((call) => call.url === '/v2/roll/bootstrap')
-    expect(bootstrapCall?.params?.timezone).toBe(
-      Intl.DateTimeFormat().resolvedOptions().timeZone || undefined,
-    )
+    // Cold Roll reads the die, ordered eligible ids and one bounded card batch.
+    // The aggregate bootstrap GET and the session-initialization POST are gone
+    // from the production request set (#4350).
+    expect(countRequests(calls, 'GET', '/v2/roll/die-state')).toBe(1)
+    expect(countRequests(calls, 'GET', '/v2/roll/eligible-issue-ids')).toBe(1)
+    expect(countRequests(calls, 'POST', '/v2/issues/cards')).toBe(1)
+    expect(countRequests(calls, 'GET', '/v2/roll/bootstrap')).toBe(0)
+    expect(countRequests(calls, 'POST', '/v2/readingSessions')).toBe(0)
   })
 
   it('Queue cold-loads each bounded batch once and reuses the cache on warm remount', async () => {
@@ -608,7 +597,7 @@ describe('core route request budgets', () => {
     expect(requestCounts(calls)).toEqual({ 'GET /v2/activity?limit=50': 1 })
   })
 
-  it('Queue page reads pending-roll state from the Roll bootstrap and never calls sessions/current (#4343)', async () => {
+  it('Queue page reads browser-owned pending state without bootstrap or session requests (#4343)', async () => {
     const { calls, client } = createRequestRecorder((call) => {
       if (call.url === '/v2/threads') {
         return { threads: queueThreads, next_page_token: null, active_count: 2 }
@@ -620,19 +609,18 @@ describe('core route request budgets', () => {
         return { threads: [], next_page_token: null, active_count: 0 }
       }
       if (call.url === '/v2/reading-graph') return { status: 'ok' }
-      if (call.url === '/v2/readingSessions') return { session_id: 1, created: false }
-      if (call.url === '/v2/roll/bootstrap') return rollV2BootstrapIdle
       return {}
     })
     setDefaultHttpClient(client)
 
     render(renderAt('/queue', <QueuePage />))
 
-    await waitFor(() => expect(calls.some((call) => call.url === '/v2/roll/bootstrap')).toBe(true))
+    await waitFor(() => expect(calls.some((call) => call.url === '/v2/threads')).toBe(true))
     await drainSettledWork()
 
     expect(calls.filter((call) => call.url.includes('/sessions/current'))).toEqual([])
-    expect(countRequests(calls, 'GET', '/v2/roll/bootstrap')).toBe(1)
+    expect(countRequests(calls, 'GET', '/v2/roll/bootstrap')).toBe(0)
+    expect(countRequests(calls, 'POST', '/v2/readingSessions')).toBe(0)
   })
 
   it('Session detail cold-loads details and snapshots exactly once', async () => {
@@ -676,12 +664,17 @@ describe('core route request budgets', () => {
     expect(calls.filter((call) => call.url.includes('restore-session-start'))).toEqual([])
   })
 
-  it('Roll move-front refreshes the bootstrap exactly once (#4276)', async () => {
+  it('Roll move-front refreshes scoped state without a bootstrap or session request (#4276)', async () => {
     // SAFETY: the move mutation only observes the PATCH status; the empty body
     // satisfies the v2 queue-entry patch contract for this probe.
     const { calls, client } = createRequestRecorder((call) => {
-      if (call.url === '/v2/roll/bootstrap') return rollV2Bootstrap
-      if (call.url === '/v2/readingSessions') return { session_id: 1, created: false }
+      if (call.url === '/v2/roll/die-state') {
+        return { die: 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 20, last_roll: null }
+      }
+      if (call.url === '/v2/roll/eligible-issue-ids') {
+        return { die: 20, issue_ids: [401], thread_ids: [44], pool_reason: 'ready' }
+      }
+      if (call.url === '/v2/issues/cards') return { items: [] }
       return {}
     })
     setDefaultHttpClient(client)
