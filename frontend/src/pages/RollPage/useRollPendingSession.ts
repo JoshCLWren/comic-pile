@@ -37,7 +37,9 @@ export function useRollPendingSession({ state, bootstrap, rollPool, pending }: U
 
   useEffect(() => {
     if (suppressPendingAutoOpenRef.current) return
-    const pendingThreadId = pending?.thread_id
+    // Browser storage is authoritative; the bootstrap-shaped view model is a
+    // fallback for callers that still inject it in focused tests.
+    const pendingThreadId = pending?.thread_id ?? bootstrap?.pending_thread_id
     if (!pendingThreadId) return
 
     const pendingId = Number(pendingThreadId)
@@ -76,7 +78,7 @@ export function useRollPendingSession({ state, bootstrap, rollPool, pending }: U
         : null
 
     const pendingResult =
-      pendingFromSession?.last_rolled_result ?? pending?.result ?? bootstrap?.last_rolled_result ?? null
+      pending?.result ?? pendingFromSession?.last_rolled_result ?? bootstrap?.last_rolled_result ?? null
     // SAFETY: both pendingFromSession and pendingFromPool carry ThreadMetadata when present; the union falls back to null.
     const pendingMetadata = (pendingFromSession ?? pendingFromPool) as ThreadMetadata | null
     const shouldInitializeRatingView = !isRatingView || !isCurrentPendingSelection
