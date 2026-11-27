@@ -18275,6 +18275,7 @@
         ],
         "type": "object"
       },
+<<<<<<< HEAD
       "ThreadListResult": {
         "description": "One v2 threads list response. The active/completed/excluded filters keep the\nqueue-list projection; the stale filter keeps the legacy detail-shaped\nprojection. Both are emitted inline (no envelope variant key).",
         "oneOf": [
@@ -18286,6 +18287,8 @@
           }
         ]
       },
+=======
+>>>>>>> origin/main
       "ThreadPatchPrecondition": {
         "description": "Committed values a stale client read before issuing a Thread patch.",
         "properties": {
@@ -30453,6 +30456,7 @@
           "threads"
         ]
       },
+<<<<<<< HEAD
       "get": {
         "operationId": "get_thread_v2_documentation",
         "parameters": [
@@ -30495,6 +30499,8 @@
           "threads"
         ]
       },
+=======
+>>>>>>> origin/main
       "patch": {
         "description": "Partially update an owned Thread (AIP-134). Omitted fields are preserved. When `update_mask` is supplied only its fields are applied; a masked field missing from the body is cleared. An `expected` precondition that no longer matches the committed row returns 409 with `detail.code = thread_edit_conflict` and the current values. Foreign or deleted Threads return 404, never 403.",
         "operationId": "patch_thread_documentation",
