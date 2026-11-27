@@ -2266,14 +2266,19 @@ async fn load_collection_guard_state<E: DbExec>(
             thread_ids.push(tid);
         }
         let rows = tx.run_query(
-            "SELECT i.id, ei.provider, ei.metadata_json::text FROM issue_external_identity_mappings ieim JOIN issues i ON i.id = ieim.issue_id JOIN threads t ON t.id = i.thread_id JOIN external_identities ei ON ei.id = ieim.external_identity_id WHERE i.id = ANY($1) AND t.user_id=$2 AND ieim.status='confirmed'",
+            "SELECT i.id, ei.provider, ei.entity_type, ei.external_id, ei.metadata_json::text FROM issue_external_identity_mappings ieim JOIN issues i ON i.id = ieim.issue_id JOIN threads t ON t.id = i.thread_id JOIN external_identities ei ON ei.id = ieim.external_identity_id WHERE i.id = ANY($1) AND t.user_id=$2 AND ieim.status='confirmed'",
             &[&all_issue_ids, &user_id]
         ).await.map_err(|e| tx_db_error(e, ""))?;
         for row in rows {
             let issue_id: i32 = row.get(0);
             let provider: String = row.get(1);
-            let metadata_text: Option<String> = row.get(2);
+            let entity_type: String = row.get(2);
+            let external_id: String = row.get(3);
+            let metadata_text: Option<String> = row.get(4);
             let mut vals = std::collections::HashSet::new();
+            if entity_type == "series" {
+                vals.insert(normalize_volume(&provider, &external_id));
+            }
             add_metadata_volumes(&provider, metadata_text.as_deref(), &mut vals);
             if !vals.is_empty() {
                 state
@@ -2282,20 +2287,6 @@ async fn load_collection_guard_state<E: DbExec>(
                     .or_default()
                     .extend(vals);
             }
-        }
-        let rows = tx.run_query(
-            "SELECT i.id, ei.provider, ei.external_id FROM issues i JOIN threads t ON t.id = i.thread_id JOIN catalog_issues ci ON ci.id = i.catalog_issue_id JOIN catalog_series cs ON cs.id = ci.catalog_series_id JOIN external_identities ei ON ei.id = cs.canonical_external_identity_id WHERE i.id = ANY($1) AND t.user_id=$2",
-            &[&all_issue_ids, &user_id]
-        ).await.map_err(|e| tx_db_error(e, ""))?;
-        for row in rows {
-            let issue_id: i32 = row.get(0);
-            let provider: String = row.get(1);
-            let external_id: String = row.get(2);
-            state
-                .issue_volumes
-                .entry(issue_id)
-                .or_default()
-                .insert(normalize_volume(&provider, &external_id));
         }
     }
 
