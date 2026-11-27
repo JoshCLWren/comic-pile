@@ -351,10 +351,21 @@ export function createCblSourcesApi(client: HttpClient) {
         `/v1/issue-identity/reading-lists/${listId}/cbl-candidates`,
         { params: { limit } },
       ),
+    /**
+     * Read-only adoption projection for one CBL source (#5714). The server
+     * computes it from the canonical Option E evaluator; this client never
+     * re-derives eligibility or mutates owned state.
+     */
     preview: (listId: number) =>
-      client.get<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-preview`),
+      client.get<CBLAdoptionPreview>(`/v2/cblSources/${listId}/adoptionPreview`),
+    /**
+     * Repeatable, stateless adoption calculation (#5714). It echoes the same
+     * preview shape as `preview` but accepts the reader's series/entry
+     * decisions; the durable write is the separate Reading List
+     * adoption-commit resource used by `commit` / `commitNew`.
+     */
     plan: (listId: number, choices: CBLAdoptionPlanChoices) =>
-      client.post<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-plan`, choices),
+      client.post<CBLAdoptionPreview>(`/v2/cblSources/${listId}:planAdoption`, choices),
     commit: (
       listId: number,
       planId: number,

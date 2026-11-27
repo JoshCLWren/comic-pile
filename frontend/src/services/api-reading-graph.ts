@@ -7,10 +7,11 @@
  * nodes, conflict questions, and the prospective effects of each choice. The
  * browser must never invent a second interpretation of the overlap rule.
  *
- * The endpoint contract belongs to #4019 (`Reading graph preview API`). Until it
- * ships, a missing preview endpoint is a soft failure in the adoption flow: the
- * page keeps the existing one-decision commit path and warns that overlap
- * guidance is unavailable.
+ * The canonical endpoint is the stateless AIP-136 custom method
+ * `POST /api/v2/cblSources/{source_id}:previewReadingGraph` (#5714). A missing
+ * preview endpoint remains a soft failure in the adoption flow: the page keeps
+ * the existing one-decision commit path and warns that overlap guidance is
+ * unavailable.
  */
 
 import type { components } from '../generated/openapi'
@@ -135,7 +136,7 @@ export function createReadingGraphApi(client: HttpClient) {
      */
     preview: (sourceListId: number, request: ReadingGraphPreviewRequest) =>
       client.post<ReadingGraphPreview>(
-        `/v1/issue-identity/cbl/${sourceListId}/reading-graph-preview`,
+        `/v2/cblSources/${sourceListId}:previewReadingGraph`,
         request,
       ),
   }

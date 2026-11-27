@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { createCblSourcesApi } from '../services/api-cbl-sources'
 import type {
+  CBLAdoptionPlanChoices,
   CBLAdoptionPreview,
   CBLAdoptionPreviewEntry,
 } from '../services/api-cbl-sources'
@@ -211,6 +212,44 @@ describe('cblSourcesApi.commitNew', () => {
         revision_sha: 'abcdef1234567890',
       },
       { timeout: 60_000 },
+    )
+  })
+})
+
+describe('cblSourcesApi v2 adoption calculations (#5714)', () => {
+  beforeEach(() => {
+    client.get.mockReset()
+    client.post.mockReset()
+  })
+
+  it('reads the adoption projection from the v2 singleton resource', async () => {
+    client.get.mockResolvedValueOnce(reviewedPreview)
+
+    const result = await cblSourcesApi.preview(42)
+
+    expect(client.get).toHaveBeenCalledTimes(1)
+    expect(client.get).toHaveBeenCalledWith('/v2/cblSources/42/adoptionPreview')
+    expect(result).toBe(reviewedPreview)
+  })
+
+  it('posts decisions to the v2 AIP-136 custom method without writing owned state', async () => {
+    const choices: CBLAdoptionPlanChoices = {
+      series_decisions: { bprd: false },
+      entry_decisions: { '102': true },
+      overlap_decisions: [{ overlap_id: 'bprd|other', choice: 'protect_order' }],
+    }
+    client.post.mockResolvedValueOnce(reviewedPreview)
+
+    const result = await cblSourcesApi.plan(42, choices)
+
+    expect(client.post).toHaveBeenCalledTimes(1)
+    expect(client.post).toHaveBeenCalledWith('/v2/cblSources/42:planAdoption', choices)
+    expect(result).toBe(reviewedPreview)
+    // The stateless calculation must not be confused with the durable commit.
+    expect(client.post).not.toHaveBeenCalledWith(
+      expect.stringContaining('/adoption-commits'),
+      expect.anything(),
+      expect.anything(),
     )
   })
 })
