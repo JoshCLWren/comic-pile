@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CompactIssueCardTrigger from '../components/CompactIssueCardTrigger'
 import { issueCardsApi, type IssueCard } from '../services/issueCardsApi'
+import { comicVineApi, type ComicVineIssueIntelligence } from '../services/api-comicvine'
+import { tagsApi, type EffectiveTagsResponse } from '../services/api-tags'
 
 vi.mock('../components/ComicIssueMappingAction', () => ({
   default: ({ issueId }: { issueId: number | null }) => <span data-testid="shared-map-action">{issueId}</span>,
@@ -18,6 +20,19 @@ const card: IssueCard = {
 }
 const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards')
 const patchIssue = vi.spyOn(issueCardsApi, 'patchIssue')
+const getIntelligence = vi.spyOn(comicVineApi, 'getIssueIntelligence')
+const effectiveTags = vi.spyOn(tagsApi, 'effectiveForIssue')
+
+const metadata: ComicVineIssueIntelligence = {
+  comicvine_issue_id: '4000-9', comicvine_url: null, series_name: 'Hellboy', series_id: 12,
+  issue_number: '9', name: 'The Corpse', description: null, image_url: null,
+  cover_date: null, store_date: null,
+  creators: [{ creator_id: null, name: 'Mike Mignola', roles: ['writer'] }],
+  story_arcs: [], metadata_status: 'deep_fetched',
+}
+const tags: EffectiveTagsResponse = {
+  target_type: 'Issue', target_id: 37, direct_tags: [], effective_tags: [],
+}
 
 function setup(node: React.ReactNode) {
   const queryClient = new QueryClient({
@@ -29,7 +44,11 @@ function setup(node: React.ReactNode) {
 beforeEach(() => {
   fetchCards.mockReset()
   patchIssue.mockReset()
+  getIntelligence.mockReset()
+  effectiveTags.mockReset()
   fetchCards.mockResolvedValue([card])
+  getIntelligence.mockResolvedValue(metadata)
+  effectiveTags.mockResolvedValue(tags)
 })
 
 describe('compact shared issue entry across dense lists', () => {
@@ -219,6 +238,41 @@ describe('compact shared issue entry across dense lists', () => {
     await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith([37]))
     expect(screen.getByRole('button', { name: 'Mark unread' })).toBeEnabled()
     expect(screen.queryByRole('button', { name: 'Read now' })).not.toBeInTheDocument()
+  })
+
+  it('opens roll-parity details only after the exact row editor is used (#5751)', async () => {
+    const getIntelligence = vi.spyOn(comicVineApi, 'getIssueIntelligence')
+    const effectiveTags = vi.spyOn(tagsApi, 'effectiveForIssue')
+    const metadata: ComicVineIssueIntelligence = {
+      comicvine_issue_id: '4000-9', comicvine_url: null, series_name: 'Hellboy', series_id: 12,
+      issue_number: '9', name: 'The Corpse', description: null, image_url: null,
+      cover_date: null, store_date: null,
+      creators: [{ creator_id: null, name: 'Mike Mignola', roles: ['writer'] }],
+      story_arcs: [], metadata_status: 'deep_fetched',
+    }
+    const tags: EffectiveTagsResponse = {
+      target_type: 'Issue', target_id: 37, direct_tags: [], effective_tags: [],
+    }
+    getIntelligence.mockReset()
+    effectiveTags.mockReset()
+    getIntelligence.mockResolvedValue(metadata)
+    effectiveTags.mockResolvedValue(tags)
+
+    setup(<CompactIssueCardTrigger issueId={37} card={card} threadTitle="Hellboy" issueNumber="9" />)
+    expect(getIntelligence).not.toHaveBeenCalled()
+    expect(effectiveTags).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Reading and mapping actions for Hellboy #9' }))
+    expect(screen.queryByTestId('comic-issue-reading-details')).not.toBeInTheDocument()
+    expect(getIntelligence).not.toHaveBeenCalled()
+    expect(effectiveTags).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Read now' }))
+    expect(await screen.findByText('Mike Mignola')).toBeVisible()
+    expect(getIntelligence).toHaveBeenCalledExactlyOnceWith(37)
+    expect(effectiveTags).toHaveBeenCalledExactlyOnceWith(37)
+    getIntelligence.mockRestore()
+    effectiveTags.mockRestore()
   })
 
 })
