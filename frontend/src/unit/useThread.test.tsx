@@ -47,7 +47,11 @@ beforeEach(() => {
   // SAFETY: mock payload supplies only the fields this test asserts
   mockedThreadsApi.get.mockResolvedValue({ id: 2 } as never)
   // SAFETY: mock payload supplies only the fields this test asserts
-  mockedThreadsApi.listStale.mockResolvedValue([{ id: 3 }] as never)
+  mockedThreadsApi.listStale.mockResolvedValue({
+    threads: [{ id: 3 }],
+    next_page_token: null,
+    active_count: 0,
+  } as never)
   // SAFETY: mock payload supplies only the fields this test asserts
   mockedThreadsApi.create.mockResolvedValue({} as never)
   // SAFETY: mock payload supplies only the fields this test asserts
@@ -150,7 +154,11 @@ it('handles empty ids, detail failures, and stale failures', async () => {
   const stale = renderHook(() => useStaleThreads(), { wrapper })
   await waitFor(() => expect(stale.result.current.isError).toBe(true))
   // SAFETY: mock payload supplies only the fields this test asserts
-  mockedThreadsApi.listStale.mockResolvedValueOnce([] as never)
+  mockedThreadsApi.listStale.mockResolvedValueOnce({
+    threads: [],
+    next_page_token: null,
+    active_count: 0,
+  } as never)
   await act(async () => stale.result.current.refetch())
 })
 
@@ -200,7 +208,7 @@ it('handles non-Error mutation failures and stale refetch failures', async () =>
 it('ignores late detail and stale responses after unmount', async () => {
   const wrapper = createWrapper()
   let resolveDetail!: (value: Thread) => void
-  let resolveStale!: (value: never[]) => void
+  let resolveStale!: (value: never) => void
   mockedThreadsApi.get.mockReturnValueOnce(new Promise((resolve) => { resolveDetail = resolve }))
   mockedThreadsApi.listStale.mockReturnValueOnce(new Promise((resolve) => { resolveStale = resolve }))
   const detail = renderHook(() => useThread(10), { wrapper })
@@ -210,7 +218,7 @@ it('ignores late detail and stale responses after unmount', async () => {
   await act(async () => {
     // SAFETY: the detail resolves after unmount, so the component already holds the id
     resolveDetail({ id: 10 } as Thread)
-    resolveStale([])
+    resolveStale({ threads: [], next_page_token: null, active_count: 0 } as never)
     await Promise.resolve()
   })
 })
@@ -278,5 +286,9 @@ it('ignores late stale-thread results after unmount', async () => {
   const pending = renderHook(() => useStaleThreads(14), { wrapper })
   pending.unmount()
   // SAFETY: the late resolution only needs the id the component already read
-  await act(async () => resolveStale([{ id: 14 }] as never))
+  await act(async () => resolveStale({
+    threads: [{ id: 14 }],
+    next_page_token: null,
+    active_count: 0,
+  } as never))
 })

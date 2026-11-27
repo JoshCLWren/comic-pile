@@ -76,18 +76,24 @@ it('calls thread endpoints with expected paths', async () => {
 
   expect(get).toHaveBeenCalledWith('/v2/threads', { params: undefined })
   expect(get).toHaveBeenCalledWith('/v2/threads', { params: { search: 'bat' } })
-  expect(get).toHaveBeenCalledWith('/v1/threads/9')
+  expect(get).toHaveBeenCalledWith('/v2/threads/9')
 })
 
 it('calls the finished-series endpoint with expected paths', async () => {
   await threadsApi.listCompleted()
   await threadsApi.listCompleted('saga', 'created', 'page-2', 25)
 
-  expect(get).toHaveBeenCalledWith('/v1/threads/completed/threads', {
-    params: undefined,
+  expect(get).toHaveBeenCalledWith('/v2/threads', {
+    params: { filter: 'completed' },
   })
-  expect(get).toHaveBeenCalledWith('/v1/threads/completed/threads', {
-    params: { search: 'saga', sort: 'created', page_size: 25, page_token: 'page-2' },
+  expect(get).toHaveBeenCalledWith('/v2/threads', {
+    params: {
+      filter: 'completed',
+      search: 'saga',
+      order_by: 'created',
+      page_size: 25,
+      page_token: 'page-2',
+    },
   })
 })
 
@@ -95,11 +101,29 @@ it('calls the excluded-library endpoint with expected paths', async () => {
   await threadsApi.listExcluded()
   await threadsApi.listExcluded('saga', 'created', 'page-2', 25)
 
-  expect(get).toHaveBeenCalledWith('/v1/threads/excluded/threads', {
-    params: undefined,
+  expect(get).toHaveBeenCalledWith('/v2/threads', {
+    params: { filter: 'excluded' },
   })
-  expect(get).toHaveBeenCalledWith('/v1/threads/excluded/threads', {
-    params: { search: 'saga', sort: 'created', page_size: 25, page_token: 'page-2' },
+  expect(get).toHaveBeenCalledWith('/v2/threads', {
+    params: {
+      filter: 'excluded',
+      search: 'saga',
+      order_by: 'created',
+      page_size: 25,
+      page_token: 'page-2',
+    },
+  })
+})
+
+it('reads stale threads through the v2 collection filter', async () => {
+  await threadsApi.listStale()
+  await threadsApi.listStale(7)
+
+  expect(get).toHaveBeenCalledWith('/v2/threads', {
+    params: { filter: 'stale', days: 30 },
+  })
+  expect(get).toHaveBeenCalledWith('/v2/threads', {
+    params: { filter: 'stale', days: 7 },
   })
 })
 
