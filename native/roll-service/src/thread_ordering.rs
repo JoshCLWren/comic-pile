@@ -42,7 +42,7 @@ use crate::{
 };
 use axum::{
     extract::{rejection::PathRejection, Path, State},
-    response::{IntoResponse, Response},
+    response::Response,
     Json,
 };
 use serde::{ser::SerializeMap, Serialize, Serializer};
@@ -510,24 +510,6 @@ pub async fn post_thread_action(
         }
         _ => Err(ApiError::NotFound("Not Found".to_string())),
     }
-}
-
-async fn get_thread_blocking_info(
-    state: &Arc<AppState>,
-    user: AuthenticatedUser,
-    raw_id: &str,
-) -> Result<Json<BlockingExplanation>, ApiError> {
-    let thread_id = parse_int_text(raw_id).ok_or_else(validation_failed)?;
-    let state = state.as_ref();
-    {
-        let connection = db::checkout(state).await?;
-        require_owned_thread(&**connection, user, thread_id).await?;
-    }
-    let mut details = blocking_details(state, user, &[thread_id]).await?;
-    let (_, explanation) = details
-        .pop()
-        .ok_or_else(|| ApiError::Internal("Internal Server Error".into()))?;
-    Ok(Json(explanation))
 }
 
 /// Coerce one JSON element the way pydantic's lax `int` does for plain values.
