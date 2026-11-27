@@ -965,15 +965,6 @@ pub async fn list_thread_groups(
     Ok(Json(groups))
 }
 
-/// `GET /api/v2/threads/{thread_id}/reading-order-group-memberships`
-pub async fn list_thread_groups_v2(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
-    thread_id: Result<Path<String>, PathRejection>,
-) -> Result<Json<Vec<DependencyGroupSummary>>, ApiError> {
-    list_thread_groups(State(state), user, thread_id).await
-}
-
 /// `GET /api/v1/reading-order-groups/{group_id}`
 pub async fn get_group(
     State(state): State<Arc<AppState>>,
@@ -1643,15 +1634,6 @@ pub async fn list_crossover_plans(
     Ok(Json(plans))
 }
 
-/// `GET /api/v2/reading-order-groups/{group_id}/reading-plans`
-pub async fn list_crossover_plans_v2(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
-    group_id: Result<Path<String>, PathRejection>,
-) -> Result<Json<Vec<DependencyGroupSummary>>, ApiError> {
-    list_crossover_plans(State(state), user, group_id).await
-}
-
 // ---------------------------------------------------------------------------
 // OpenAPI documentation
 // ---------------------------------------------------------------------------
@@ -1691,12 +1673,12 @@ pub fn list_groups_documentation() {}
 #[allow(dead_code)]
 pub fn create_group_documentation() {}
 
-/// Documentation-only operation for listing groups for a thread.
+/// Documentation-only operation for listing a thread's group memberships (v2).
 #[utoipa::path(
     get,
-    path = "/api/v1/reading-order-groups/threads/{thread_id}/groups",
+    path = "/api/v2/threads/{thread_id}/reading-order-group-memberships",
     tag = "reading-order-groups",
-    operation_id = "dependency_groups_list_thread_groups",
+    operation_id = "dependency_groups_v2_list_thread_group_memberships",
     params(("thread_id" = i32, Path, description = "Owned thread identifier")),
     responses(
         (status = 200, description = "Groups containing the thread or its issues", body = Vec<DependencyGroupSummary>),
@@ -1708,7 +1690,7 @@ pub fn create_group_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn list_thread_groups_documentation() {}
+pub fn list_thread_group_memberships_documentation() {}
 
 /// Documentation-only operation for fetching one group.
 #[utoipa::path(
@@ -1788,12 +1770,12 @@ pub fn delete_group_documentation() {}
 #[allow(dead_code)]
 pub fn get_group_detail_documentation() {}
 
-/// Documentation-only operation for adding an issue-position range.
+/// Documentation-only operation for adding an issue-position range (v2).
 #[utoipa::path(
     post,
-    path = "/api/v1/reading-order-groups/{group_id}/issue-ranges",
+    path = "/api/v2/reading-order-groups/{group_id}/issue-ranges",
     tag = "reading-order-groups",
-    operation_id = "dependency_groups_add_issue_range",
+    operation_id = "dependency_groups_v2_add_issue_range",
     params(("group_id" = i32, Path, description = "Owned group identifier")),
     request_body = DependencyGroupIssueRangeCreateRequest,
     responses(
@@ -1806,14 +1788,14 @@ pub fn get_group_detail_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn add_issue_range_documentation() {}
+pub fn add_issue_range_v2_documentation() {}
 
-/// Documentation-only operation for adding a group member.
+/// Documentation-only operation for adding a group member (v2).
 #[utoipa::path(
     post,
-    path = "/api/v1/reading-order-groups/{group_id}/members",
+    path = "/api/v2/reading-order-groups/{group_id}/members",
     tag = "reading-order-groups",
-    operation_id = "dependency_groups_add_member",
+    operation_id = "dependency_groups_v2_add_member",
     params(("group_id" = i32, Path, description = "Owned group identifier")),
     request_body = DependencyGroupMemberCreateRequest,
     responses(
