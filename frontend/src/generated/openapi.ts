@@ -6933,33 +6933,6 @@ export interface components {
             /** Format: int32 */
             total_issues?: number | null;
         };
-        /** @description Python `ThreadResponse`. */
-        NativeThreadResponse2: {
-            blocking_reasons: string[];
-            created_at: string;
-            format: string;
-            /** Format: int32 */
-            id: number;
-            is_blocked: boolean;
-            is_test: boolean;
-            /** Format: int32 */
-            issues_remaining: number;
-            last_activity_at?: string | null;
-            /** Format: double */
-            last_rating?: number | null;
-            manual_creator_credits: Record<string, never>[];
-            /** Format: int32 */
-            next_unread_issue_id?: number | null;
-            next_unread_issue_number?: string | null;
-            notes?: string | null;
-            /** Format: int32 */
-            queue_position: number;
-            reading_progress?: string | null;
-            status: string;
-            title: string;
-            /** Format: int32 */
-            total_issues?: number | null;
-        };
         NearMatch: {
             color: string;
             /** Format: int32 */
@@ -12910,7 +12883,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeThreadResponse2"];
+                    "application/json": components["schemas"]["NativeThreadResponse"];
                 };
             };
             /** @description Already migrated or inconsistent range */
@@ -12972,7 +12945,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeThreadResponse2"];
+                    "application/json": components["schemas"]["NativeThreadResponse"];
                 };
             };
             /** @description Already migrated or issue cannot be created */
