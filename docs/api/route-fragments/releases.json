@@ -15,7 +15,7 @@
       "bucket": "operations",
       "method": "GET",
       "path": "/api/v2/releases",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "src": "^/api/v2/releases$",
       "sql_budget": {
         "application_statements": 2,
@@ -31,7 +31,7 @@
       "bucket": "v1_operations",
       "method": "PUT",
       "path": "/api/v1/releases/",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "src": "^/api/v1/releases/$",
       "sql_budget": {
         "application_statements": 3,
@@ -45,7 +45,7 @@
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/releases/source",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "src": "^/api/v1/releases/source$",
       "sql_budget": {
         "application_statements": 1,
@@ -59,7 +59,7 @@
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/releases/{release_id}",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "src": "^/api/v1/releases/[0-9]+$",
       "sql_budget": {
         "application_statements": 1,
@@ -73,7 +73,7 @@
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/releases/{release_id}/retract",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "src": "^/api/v1/releases/[0-9]+/retract$",
       "sql_budget": {
         "application_statements": 3,

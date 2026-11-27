@@ -21,7 +21,7 @@
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/threads/completed/threads",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "src": "^/api/v1/threads/completed/threads$",
       "exclude_from_inventory": true
     }

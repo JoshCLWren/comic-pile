@@ -17,28 +17,28 @@
       "bucket": "operations",
       "method": "POST",
       "path": "/api/v2/queue-exclusions",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "src": "/api/v2/queue-exclusions"
     },
     {
       "bucket": "operations",
       "method": "POST",
       "path": "/api/v2/queue-exclusions/status:check",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "src": "/api/v2/queue-exclusions/status:check"
     },
     {
       "bucket": "operations",
       "method": "POST",
       "path": "/api/v2/queue-exclusions/restore",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "src": "/api/v2/queue-exclusions/restore"
     },
     {
       "bucket": "operations",
       "method": "POST",
       "path": "/api/v2/queue-exclusion-groups/{group_id}/restore",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "src": "^/api/v2/queue-exclusion-groups/[0-9]+/restore$"
     }
   ]
