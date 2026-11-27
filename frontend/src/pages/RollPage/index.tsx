@@ -245,6 +245,8 @@ export default function RollPage() {
     if (!state.isRatingView) setCoverFlight(null)
   }, [state.isRatingView])
 
+  const finishCoverFlight = useCallback(() => setCoverFlight(null), [])
+
   const enterRatingViewFromRoll = useCallback(
     async (
       threadId: number | null,
@@ -535,7 +537,7 @@ export default function RollPage() {
             </div>
           ) : null}
           {state.isRatingView && coverFlight ? (
-            <CoverFlight flight={coverFlight} onDone={() => setCoverFlight(null)} />
+            <CoverFlight flight={coverFlight} onDone={finishCoverFlight} />
           ) : null}
           <div className="flex-1 flex flex-col">
             {state.isRatingView ? (
