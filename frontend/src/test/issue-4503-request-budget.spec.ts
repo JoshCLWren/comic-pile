@@ -87,17 +87,20 @@ test.describe('Issue #4503 route request budgets', () => {
     expect(countCalls(calls, 'GET', '/api/v2/readingOrderGroups')).toBe(1)
   })
 
-  test('crossover events route requests groups and threads once', async ({ authenticatedPage }) => {
+  test('crossover events cold load requests groups once without enumerating threads', async ({
+    authenticatedPage,
+  }) => {
     const page = authenticatedPage
     const calls = collectApiCalls(page)
 
     await page.goto('/continuity-plans/events')
     await expect(page.getByRole('heading', { name: 'Crossover events' })).toBeVisible()
     await settleCalls(page, () => countCalls(calls, 'GET', '/api/v2/readingOrderGroups'), 1)
-    await settleCalls(page, () => countCalls(calls, 'GET', '/api/v2/threads'), 1)
 
     expect(countCalls(calls, 'GET', '/api/v2/readingOrderGroups')).toBe(1)
-    expect(countCalls(calls, 'GET', '/api/v2/threads')).toBe(1)
+    // #5711 gates the all-series read behind an expanded member selector, so a
+    // cold events load must not fan out into a threads enumeration.
+    expect(countCalls(calls, 'GET', '/api/v2/threads')).toBe(0)
   })
 
   test('reading plan detail requests the reader and plan tags once', async ({ authenticatedPage }) => {
