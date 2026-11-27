@@ -56,7 +56,7 @@ const bootstrapHook = vi.hoisted((): HoistedHookValue => ({ value: null }))
 const relatedApi = vi.hoisted(() => ({
   readingOrders: vi.fn(),
   connectedThreads: vi.fn(),
-  blockingInfo: vi.fn(),
+  eligibility: vi.fn(),
   batchBlockingInfo: vi.fn(),
 }))
 

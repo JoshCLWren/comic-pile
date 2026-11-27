@@ -44,7 +44,7 @@ interface BootstrapData {
 const sessionHook = vi.hoisted((): HoistedMockValue => ({ value: null }))
 const bootstrapHook = vi.hoisted((): HoistedMockValue => ({ value: null }))
 const dieStateHook = vi.hoisted((): HoistedMockValue => ({ value: null }))
-const relatedApi = vi.hoisted(() => ({ readingOrders: vi.fn(), connectedThreads: vi.fn(), blockingInfo: vi.fn(), batchBlockingInfo: vi.fn() }))
+const relatedApi = vi.hoisted(() => ({ readingOrders: vi.fn(), connectedThreads: vi.fn(), eligibility: vi.fn(), batchBlockingInfo: vi.fn() }))
 const sessionData: SessionData = { current_die: 6, snoozed_threads: [] }
 const bootstrapData: BootstrapData = { current_die: 6, snoozed_threads: [], roll_pool: [{ id: 1, title: 'Saga', format: 'Comic' }], manual_die: null, last_rolled_result: null, pending_thread_id: null, active_thread: null, snoozed_count: 0 }
 const threadData: Array<{ id: number; title: string; format: string; status: string; is_blocked?: boolean }> = [{ id: 1, title: 'Saga', format: 'Comic', status: 'active' }]
