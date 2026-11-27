@@ -42,7 +42,7 @@ use crate::{
 };
 use axum::{
     extract::{rejection::PathRejection, Path, State},
-    response::{IntoResponse, Response},
+    response::Response,
     Json,
 };
 use serde::{ser::SerializeMap, Serialize, Serializer};
