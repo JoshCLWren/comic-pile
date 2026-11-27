@@ -2502,6 +2502,17 @@ pub struct CblAdoptionCommitRequest {
     pub idempotency_key: Option<String>,
     pub content_hash: String,
     pub revision_sha: String,
+    /// Expected version of the owner-scoped canonical Reading List. When the
+    /// source has already been adopted, a mismatch fails the whole commit with
+    /// 409 before any row is written, so a stale preview cannot overwrite a
+    /// list the reader edited after the preview was produced.
+    #[serde(default)]
+    pub list_version: Option<i32>,
+    /// Overlap decisions the reader approved for this commit. Persisted with
+    /// the selections so a reopened list restores them instead of silently
+    /// dropping the reader's choices.
+    #[serde(default)]
+    pub overlap_decisions: Option<JsonValue>,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -2534,6 +2545,21 @@ pub struct CblAdoptionCommitResponseWire {
     pub created_positions: Vec<i32>,
     pub excluded_positions: Vec<i32>,
     pub unresolved_positions: Vec<i32>,
+    /// Stable ID of the canonical owner-scoped `custom_cbl_lists` row. This is
+    /// the identity a caller must use to reopen or update the adopted list;
+    /// the legacy Plan `id` above is kept only for the compatibility projection.
+    #[serde(default)]
+    pub custom_cbl_list_id: i32,
+    /// Version of the canonical list after this commit. Pass it back as
+    /// `list_version` to guard a later commit against a stale list.
+    #[serde(default)]
+    pub list_version: i32,
+    /// Committed checkbox decisions, restored on reopen.
+    #[serde(default)]
+    pub selections: Option<JsonValue>,
+    /// Committed overlap decisions, restored on reopen.
+    #[serde(default)]
+    pub overlap_decisions: Option<JsonValue>,
 }
 
 fn adoption_conflict(code: &str, message: &str) -> (StatusCode, Json<JsonValue>) {
@@ -2769,6 +2795,10 @@ fn cbl_adoption_request_fingerprint(
         "series_decisions": series_decisions,
         "series_overrides": series_overrides,
         "idempotency_key": request.idempotency_key.as_deref(),
+        // A version guard or a newly approved overlap decision is part of the
+        // committed intent: replaying an older receipt would skip both.
+        "list_version": request.list_version,
+        "overlap_decisions": request.overlap_decisions,
     });
     let serialized = serde_json::to_vec(&payload).unwrap_or_default();
     sha256_hex(&serialized)
@@ -2819,6 +2849,33 @@ async fn replay_cbl_adoption_receipt(
             }
         })?;
     let Some(prow) = prow else { return Ok(None) };
+    // Legacy receipts predate the canonical-list fields. Recover them from the
+    // owner-scoped source link so an exact retry still reports the stable list
+    // identity instead of zero.
+    let link = tx
+        .run_query_opt(
+            "SELECT custom_cbl_list_id, list_version, selections_json, overlap_decisions_json
+             FROM custom_cbl_source_links
+             WHERE user_id = $1 AND cbl_source_list_id = $2",
+            &[&user_id, &list_id],
+        )
+        .await
+        .map_err(|e| {
+            if crate::db::is_transport_failure(&e) {
+                CommitErr::Db(ApiError::database_unavailable())
+            } else {
+                CommitErr::Unexpected(format!("lookup replay source link: {e}"))
+            }
+        })?;
+    let (canonical_list_id, list_version, selections, overlap_decisions) = match link {
+        Some(row) => (
+            row.get::<_, i32>(0),
+            row.get::<_, i32>(1),
+            row.get::<_, Option<JsonValue>>(2),
+            row.get::<_, Option<JsonValue>>(3),
+        ),
+        None => (0, 0, None, None),
+    };
     Ok(Some(CblAdoptionCommitResponseWire {
         id: prow.get(0),
         user_id: prow.get(1),
@@ -2834,6 +2891,10 @@ async fn replay_cbl_adoption_receipt(
         created_positions: Vec::new(),
         excluded_positions: Vec::new(),
         unresolved_positions: Vec::new(),
+        custom_cbl_list_id: canonical_list_id,
+        list_version,
+        selections,
+        overlap_decisions,
     }))
 }
 
@@ -3123,7 +3184,7 @@ async fn do_cbl_adoption_commit(
     // them must drop its canonical Reading List entry (#5523). Deriving the set
     // from source provenance keeps entries added manually or from other sources
     // untouched.
-    let previous_source_issue_ids: Vec<i32> = nodes_json
+    let mut previous_source_issue_ids: Vec<i32> = nodes_json
         .as_array()
         .map(|nodes| {
             nodes
@@ -3170,90 +3231,87 @@ async fn do_cbl_adoption_commit(
         }
     })?;
 
-    // Persist to canonical, source-linked Option E Reading List (custom_cbl_list).
-    // This keeps the Reading List as the source of truth for adopted CBL entries.
-    let adopted_issue_ids: Vec<i32> = merge.4.clone();
-    let existing_list_id: Option<i32> = {
-        let plan_list = tx
+    // #4022: the canonical Reading List is keyed by reader + stable source
+    // identity. `custom_cbl_source_links` owns that identity, so neither a
+    // display name nor the legacy continuity Plan decides which list is
+    // updated: same-name sources and other readers can never collide, and the
+    // compatibility Plan write below can never redirect this upsert.
+    let (canonical_list_id, current_version, previous_selections) = {
+        let link = tx
             .run_query_opt(
-                "SELECT s.custom_cbl_list_id
-                 FROM reading_plan_sources s
-                 JOIN custom_cbl_lists l ON l.id = s.custom_cbl_list_id AND l.user_id = $2
-                 WHERE s.plan_id = $1 AND s.custom_cbl_list_id IS NOT NULL
-                 ORDER BY s.id DESC LIMIT 1",
-                &[&plan_id, &user_id],
+                "SELECT sl.custom_cbl_list_id, sl.list_version, sl.selections_json
+                 FROM custom_cbl_source_links sl
+                 JOIN custom_cbl_lists l ON l.id = sl.custom_cbl_list_id AND l.user_id = sl.user_id
+                 WHERE sl.user_id = $1 AND sl.cbl_source_list_id = $2
+                 FOR UPDATE OF sl",
+                &[&user_id, &list_id],
             )
             .await
             .map_err(|e| {
                 if crate::db::is_transport_failure(&e) {
                     CommitErr::Db(ApiError::database_unavailable())
                 } else {
-                    CommitErr::Unexpected(format!("lookup plan reading list: {e}"))
+                    CommitErr::Unexpected(format!("lookup adoption source link: {e}"))
                 }
             })?;
-        if let Some(row) = plan_list {
-            row.get::<_, Option<i32>>(0)
+        if let Some(row) = link {
+            let linked_list_id: i32 = row.get(0);
+            let version: i32 = row.get(1);
+            let selections: Option<JsonValue> = row.get(2);
+            if let Some(expected) = request.list_version {
+                if expected != version {
+                    // Return before any write: dropping the transaction rolls
+                    // back the reader lock and leaves no partial rows.
+                    return Err(CommitErr::Stale(format!(
+                        "Reading List version mismatch: expected {expected}, current {version}"
+                    )));
+                }
+            }
+            (linked_list_id, version, selections)
         } else {
-            let source_list = tx
-                .run_query_opt(
-                    "SELECT s.custom_cbl_list_id
-                     FROM reading_plan_sources s
-                     JOIN custom_cbl_lists l ON l.id = s.custom_cbl_list_id AND l.user_id = $1
-                     WHERE s.cbl_source_list_id = $2 AND s.custom_cbl_list_id IS NOT NULL
-                     ORDER BY s.id DESC LIMIT 1",
-                    &[&user_id, &list_id],
+            // Display name is not identity. A collision with another list (or
+            // another reader's list of the same name) is harmless here.
+            let display_name = if list_name.is_empty() {
+                format!("CBL adoption for {source_path}")
+            } else {
+                list_name.clone()
+            };
+            let row = tx
+                .run_query_one(
+                    "INSERT INTO custom_cbl_lists (user_id, name, description, mode, created_at, updated_at)
+                     VALUES ($1, $2, NULL, 'loose', NOW(), NOW())
+                     RETURNING id",
+                    &[&user_id, &display_name],
                 )
                 .await
                 .map_err(|e| {
                     if crate::db::is_transport_failure(&e) {
                         CommitErr::Db(ApiError::database_unavailable())
                     } else {
-                        CommitErr::Unexpected(format!("lookup source reading list: {e}"))
+                        CommitErr::Unexpected(format!("create reading list: {e}"))
                     }
                 })?;
-            source_list.and_then(|row| row.get::<_, Option<i32>>(0))
+            (row.get::<_, i32>(0), 0, None)
         }
     };
-
-    let canonical_list_id: i32 = if let Some(existing_id) = existing_list_id {
-        tx.run_execute(
-            "UPDATE custom_cbl_lists SET updated_at = NOW() WHERE id = $1 AND user_id = $2",
-            &[&existing_id, &user_id],
-        )
-        .await
-        .map_err(|e| {
-            if crate::db::is_transport_failure(&e) {
-                CommitErr::Db(ApiError::database_unavailable())
-            } else {
-                CommitErr::Unexpected(format!("update reading list: {e}"))
-            }
-        })?;
-        existing_id
-    } else {
-        let list_name = if list_name.is_empty() {
-            format!("CBL adoption for {source_path}")
+    let list_version = current_version.checked_add(1).ok_or_else(|| {
+        CommitErr::Unexpected("canonical Reading List version overflow".to_string())
+    })?;
+    tx.run_execute(
+        "UPDATE custom_cbl_lists SET updated_at = NOW() WHERE id = $1 AND user_id = $2",
+        &[&canonical_list_id, &user_id],
+    )
+    .await
+    .map_err(|e| {
+        if crate::db::is_transport_failure(&e) {
+            CommitErr::Db(ApiError::database_unavailable())
         } else {
-            list_name.clone()
-        };
-        let row = tx
-            .run_query_one(
-                "INSERT INTO custom_cbl_lists (user_id, name, description, mode, created_at, updated_at)
-                 VALUES ($1, $2, NULL, 'loose', NOW(), NOW())
-                 RETURNING id",
-                &[&user_id, &list_name],
-            )
-            .await
-            .map_err(|e| {
-                if crate::db::is_transport_failure(&e) {
-                    CommitErr::Db(ApiError::database_unavailable())
-                } else {
-                    CommitErr::Unexpected(format!("create reading list: {e}"))
-                }
-            })?;
-        row.get::<_, i32>(0)
-    };
+            CommitErr::Unexpected(format!("update reading list: {e}"))
+        }
+    })?;
 
     let canonical_source_path = format!("custom-cbl:{canonical_list_id}");
+    let adopted_issue_ids: Vec<i32> = merge.4.clone();
 
     // A single source can resolve several positions to the same canonical
     // issue. Deduplicate while keeping source order so the set-based insert
@@ -3263,6 +3321,24 @@ async fn do_cbl_adoption_commit(
         .into_iter()
         .filter(|issue_id| seen_adopted.insert(*issue_id))
         .collect();
+
+    // The source link is the durable identity, so it also carries the last
+    // adopted issue set. A compatibility Plan can be retired or recreated
+    // without losing the ability to reconcile exclusions on the canonical list.
+    if let Some(previous) = previous_selections
+        .as_ref()
+        .and_then(|value| value.get("adopted_issue_ids"))
+        .and_then(|value| value.as_array())
+    {
+        for value in previous {
+            if let Some(id) = value.as_i64() {
+                let id = id as i32;
+                if !previous_source_issue_ids.contains(&id) {
+                    previous_source_issue_ids.push(id);
+                }
+            }
+        }
+    }
 
     // Reconcile this source's list entries to the newly committed adopted set
     // inside the same transaction. An issue included by an earlier commit but
@@ -3374,6 +3450,55 @@ async fn do_cbl_adoption_commit(
         })?;
     }
 
+    // Persist the committed source identity, checkbox decisions and approved
+    // overlap decisions in the same transaction as the list entries. This is
+    // the state a reopened list restores; uncommitted UI selections never
+    // reach the database.
+    let selections = serde_json::json!({
+        "entry_decisions": entry_decisions_raw,
+        "series_decisions": series_decisions_raw,
+        "series_overrides": series_overrides_raw,
+        "adopted_issue_ids": adopted_issue_ids,
+    });
+    let overlap_decisions = request
+        .overlap_decisions
+        .clone()
+        .unwrap_or_else(|| serde_json::json!([]));
+    tx.run_execute(
+        "INSERT INTO custom_cbl_source_links
+           (user_id, cbl_source_list_id, custom_cbl_list_id, source_revision_sha,
+            source_content_hash, list_version, selections_json, overlap_decisions_json,
+            created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())
+         ON CONFLICT (user_id, cbl_source_list_id)
+         DO UPDATE SET
+            custom_cbl_list_id = EXCLUDED.custom_cbl_list_id,
+            source_revision_sha = EXCLUDED.source_revision_sha,
+            source_content_hash = EXCLUDED.source_content_hash,
+            list_version = EXCLUDED.list_version,
+            selections_json = EXCLUDED.selections_json,
+            overlap_decisions_json = EXCLUDED.overlap_decisions_json,
+            updated_at = NOW()",
+        &[
+            &user_id,
+            &list_id,
+            &canonical_list_id,
+            &revision_sha,
+            &content_hash,
+            &list_version,
+            &selections,
+            &overlap_decisions,
+        ],
+    )
+    .await
+    .map_err(|e| {
+        if crate::db::is_transport_failure(&e) {
+            CommitErr::Db(ApiError::database_unavailable())
+        } else {
+            CommitErr::Unexpected(format!("upsert adoption source link: {e}"))
+        }
+    })?;
+
     let prow = tx.run_query_one("SELECT id,user_id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1", &[&plan_id]).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(format!("reload plan: {e}")) })?;
     let status = if requested_target_plan_id.is_some() {
         StatusCode::OK
@@ -3395,6 +3520,10 @@ async fn do_cbl_adoption_commit(
         created_positions: merge.1,
         excluded_positions: merge.2,
         unresolved_positions: merge.3,
+        custom_cbl_list_id: canonical_list_id,
+        list_version,
+        selections: Some(selections),
+        overlap_decisions: Some(overlap_decisions),
     };
     store_cbl_adoption_receipt(&tx, user_id, list_id, plan_id, &request_fingerprint, &resp).await?;
     tx.commit().await.map_err(|e| {

@@ -4447,6 +4447,15 @@ export interface components {
                 [key: string]: string;
             };
             idempotency_key?: string | null;
+            /**
+             * Format: int32
+             * @description Expected version of the owner-scoped canonical Reading List. When the
+             *     source has already been adopted, a mismatch fails the whole commit with
+             *     409 before any row is written, so a stale preview cannot overwrite a
+             *     list the reader edited after the preview was produced.
+             */
+            list_version?: number | null;
+            overlap_decisions?: components["schemas"]["Value"] | null;
             revision_sha: string;
             series_decisions?: components["schemas"]["CommitSeriesDecision"][];
             series_overrides?: components["schemas"]["CommitEntryOverride"][];
@@ -4454,14 +4463,29 @@ export interface components {
         CblAdoptionCommitResponseWire: {
             created_at: string;
             created_positions: number[];
+            /**
+             * Format: int32
+             * @description Stable ID of the canonical owner-scoped `custom_cbl_lists` row. This is
+             *     the identity a caller must use to reopen or update the adopted list;
+             *     the legacy Plan `id` above is kept only for the compatibility projection.
+             */
+            custom_cbl_list_id?: number;
             excluded_positions: number[];
             /** Format: int32 */
             id: number;
             lanes: Record<string, never>;
+            /**
+             * Format: int32
+             * @description Version of the canonical list after this commit. Pass it back as
+             *     `list_version` to guard a later commit against a stale list.
+             */
+            list_version?: number;
             name: string;
             nodes: Record<string, never>;
             ordering_mode: string;
+            overlap_decisions?: components["schemas"]["Value"] | null;
             reused_positions: number[];
+            selections?: components["schemas"]["Value"] | null;
             unresolved_positions: number[];
             updated_at: string;
             /** Format: int32 */
@@ -8138,8 +8162,20 @@ export interface components {
             id: number;
             /** Format: int32 */
             issue_count: number;
+            /**
+             * Format: int32
+             * @description Monotonic version of this owner-scoped list. A later CBL adoption must
+             *     echo it as `list_version` or be rejected as stale (#4022).
+             */
+            list_version?: number;
             mode: string;
             name: string;
+            /** @description Overlap decisions approved with the last commit. */
+            overlap_decisions?: unknown;
+            /** @description Committed checkbox decisions restored when the CBL editor reopens. */
+            selections?: unknown;
+            source_content_hash?: string | null;
+            source_revision_sha?: string | null;
             updated_at: string;
             /** Format: int32 */
             user_id: number;
@@ -10044,6 +10080,7 @@ export interface components {
         ValidationErrorResponse: {
             detail: components["schemas"]["ValidationErrorItem"][];
         };
+        Value: unknown;
     };
     responses: never;
     parameters: never;
