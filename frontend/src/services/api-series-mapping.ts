@@ -160,8 +160,13 @@ export function seriesMappingScopeMessage(basis: string | null): string {
  */
 export function createSeriesMappingApi(client: HttpClient) {
   return {
+    /**
+     * Stateless AIP-136 collection custom method (#5716). The retired v1
+     * preview URL is not used by any caller; this operation only builds a plan
+     * and signs an idempotency token for the durable v2 commit below.
+     */
     preview: (request: SeriesMappingPreviewRequest) =>
-      client.post<SeriesMappingPreviewResponse>('/v1/catalog/series-mappings/preview', request),
+      client.post<SeriesMappingPreviewResponse>('/v2/seriesMappings:preview', request),
     commit: (request: SeriesMappingCommitRequest) =>
       client.post<SeriesMappingCommitResponse>('/v2/series-mapping-commits', request),
   }
