@@ -394,7 +394,10 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::dependency_groups::dependency_groups_v2_openapi())
         // #5709: canonical eligibility, batch explanations and reader-authored
         // connections are v2-only; the v1 diagnostics were retired outright.
-        .merge_from(crate::thread_ordering::thread_ordering_v2_openapi());
+        .merge_from(crate::thread_ordering::thread_ordering_v2_openapi())
+        // #5710: canonical v2 reading-order-group collection CRUD; the retired
+        // v1 paths are no longer part of the deployed contract.
+        .merge_from(crate::dependency_groups::reading_order_groups_v2_openapi());
     // The aggregate artifact is the deployed v2 runtime contract. The
     // completed-threads v1 operation has its own same-path contract and must
     // not expand the v2 inventory.
@@ -628,6 +631,67 @@ mod tests {
                 "provider_volume_id",
                 "enabled",
             ],
+        );
+    }
+
+    /// The v2 collection CRUD (#5710) must be published with stable operation
+    /// ids and no `/detail` action path.
+    #[test]
+    fn reading_order_groups_v2_operations_are_in_runtime_contract() {
+        let document = document();
+        for (path, method, operation_id, success) in [
+            (
+                "/api/v2/readingOrderGroups",
+                "get",
+                "reading_order_groups_list",
+                "200",
+            ),
+            (
+                "/api/v2/readingOrderGroups",
+                "post",
+                "reading_order_groups_create",
+                "201",
+            ),
+            (
+                "/api/v2/readingOrderGroups/{group_id}",
+                "get",
+                "reading_order_groups_get",
+                "200",
+            ),
+            (
+                "/api/v2/readingOrderGroups/{group_id}",
+                "patch",
+                "reading_order_groups_update",
+                "200",
+            ),
+            (
+                "/api/v2/readingOrderGroups/{group_id}",
+                "delete",
+                "reading_order_groups_delete",
+                "204",
+            ),
+        ] {
+            let operation = &document["paths"][path][method];
+            assert!(
+                operation.is_object(),
+                "missing {method} {path} in v2 contract"
+            );
+            assert_eq!(operation["operationId"], operation_id, "{method} {path}");
+            assert!(
+                operation["responses"][success].is_object(),
+                "{method} {path} missing {success}"
+            );
+        }
+        assert!(
+            document["paths"]
+                .get("/api/v2/readingOrderGroups/{group_id}/detail")
+                .is_none(),
+            "v2 must not publish a /detail action path"
+        );
+        assert_fields(
+            &document,
+            "DependencyGroupDetailResponse",
+            &["id", "name", "created_at", "memberships", "linked_plans"],
         );
     }
 
