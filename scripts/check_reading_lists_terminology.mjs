@@ -27,13 +27,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import process from 'node:process';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath, pathToFileURL} from 'node:url';
 
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Word-boundary-aware retired-terminology pattern (case and separator variants). */
 export const RETIRED_TERMINOLOGY =
-  /(?<![A-Za-z])[Oo]ption[\s_-]?[Ee](?![A-Za-z])/;
+  /(?<![A-Za-z])[Oo]ption[\s_-]?[Ee](?![a-z])/;
 
 const EXCLUDED_PREFIXES = [
   '.rotisserie/',
@@ -47,11 +47,18 @@ const EXCLUDED_FILES = new Set([
   'vercel.json',
 ]);
 
-/** Return the tracked files that the terminology guard scans. */
+/** Return the source files that the terminology guard scans. */
 export function trackedSourceFiles(root = REPO_ROOT) {
-  const result = spawnSync('git', ['ls-files', '-z'], {cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024});
-  if (result.status !== 0) throw new Error(`git ls-files failed: ${result.stderr}`);
-  return result.stdout
+  const tracked = spawnSync('git', ['ls-files', '-z'], {
+    cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
+  });
+  const untracked = spawnSync('git', ['ls-files', '--others', '--exclude-standard', '-z'], {
+    cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
+  });
+  for (const result of [tracked, untracked]) {
+    if (result.status !== 0) throw new Error(`git ls-files failed: ${result.stderr}`);
+  }
+  return `${tracked.stdout}\0${untracked.stdout}`
     .split('\0')
     .filter(Boolean)
     .filter((file) => !EXCLUDED_PREFIXES.some((prefix) => file.startsWith(prefix)))

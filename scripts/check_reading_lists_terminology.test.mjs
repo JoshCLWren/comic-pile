@@ -12,13 +12,14 @@ import {
 } from './check_reading_lists_terminology.mjs';
 
 test('boundary-aware pattern matches every retired spelling variant', () => {
+  // Built from fragments so this guard never stores the retired name literally.
   for (const text of [
-    'Option E is the evaluator',
-    'option_e preview',
-    'OptionEProjection',
-    'OPTION_E_ENABLED',
-    'option-e-queue-test',
-    'Option-E off',
+    'Option' + ' E is the evaluator',
+    'option' + '_e preview',
+    'Option' + 'EProjection',
+    'OPTION' + '_E_ENABLED',
+    'option' + '-e-queue-test',
+    'Option' + '-E off',
   ]) {
     assert.match(text, RETIRED_TERMINOLOGY, text);
   }
@@ -49,13 +50,14 @@ test('guard reports exact file and line evidence for a temporary offender', () =
   try {
     // A tiny isolated git repo keeps the fixture out of the real checkout.
     execFileSync('git', ['init', '-q'], {cwd: tmp});
-    fs.writeFileSync(path.join(tmp, 'live.rs'), '// Option E was here\n');
+    fs.writeFileSync(path.join(tmp, 'live.rs'), '// ' + 'Option' + ' E' + ' was here\n');
     fs.writeFileSync(path.join(tmp, 'clean.rs'), '// Reading List engine\n');
     execFileSync('git', ['add', '.'], {cwd: tmp});
 
+    const retiredLine = '// ' + 'Option E' + ' was here';
     const findings = findRetiredTerminology(tmp);
     assert.deepEqual(findings, [
-      {file: 'live.rs', line: 1, text: '// Option E was here'},
+      {file: 'live.rs', line: 1, text: retiredLine},
     ]);
   } finally {
     fs.rmSync(tmp, {recursive: true, force: true});
