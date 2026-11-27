@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "description": "Fixture AIP baseline.",
+  "entries": [
+    {
+      "method": "POST",
+      "path": "/api/v2/threads:preview",
+      "owning_issue": 5705,
+      "reason": "action-shaped-subpath"
+    }
+  ]
+}
