@@ -10425,6 +10425,7 @@
         ]
       }
     },
+<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/connections": {
       "get": {
         "tags": [
@@ -10476,6 +10477,8 @@
         ]
       }
     },
+=======
+>>>>>>> origin/main
     "/api/v2/threads/{thread_id}/creatorCredits": {
       "get": {
         "tags": [
@@ -10548,6 +10551,7 @@
         ]
       }
     },
+<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/dependencies": {
       "get": {
         "tags": [
@@ -10647,6 +10651,8 @@
         ]
       }
     },
+=======
+>>>>>>> origin/main
     "/api/v2/threads/{thread_id}/issue-order": {
       "put": {
         "tags": [
@@ -11115,6 +11121,7 @@
         ]
       }
     },
+<<<<<<< HEAD
     "/api/v2/threads:explainEligibility": {
       "post": {
         "tags": [
@@ -11164,6 +11171,8 @@
         ]
       }
     },
+=======
+>>>>>>> origin/main
     "/api/v2/undo/{session_id}/snapshots": {
       "get": {
         "tags": [

@@ -3423,6 +3423,7 @@ export interface paths {
         patch: operations["patch_thread_documentation"];
         trace?: never;
     };
+<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/connections": {
         parameters: {
             query?: never;
@@ -3443,6 +3444,8 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+=======
+>>>>>>> origin/main
     "/api/v2/threads/{thread_id}/creatorCredits": {
         parameters: {
             query?: never;
@@ -3464,6 +3467,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/dependencies": {
         parameters: {
             query?: never;
@@ -3504,6 +3508,8 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+=======
+>>>>>>> origin/main
     "/api/v2/threads/{thread_id}/issue-order": {
         parameters: {
             query?: never;
@@ -3643,6 +3649,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+<<<<<<< HEAD
     "/api/v2/threads:explainEligibility": {
         parameters: {
             query?: never;
@@ -3663,6 +3670,8 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+=======
+>>>>>>> origin/main
     "/api/v2/undo/{session_id}/snapshots": {
         parameters: {
             query?: never;
@@ -19344,6 +19353,7 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
     thread_ordering_thread_connections: {
         parameters: {
             query?: never;
@@ -19395,6 +19405,8 @@ export interface operations {
             };
         };
     };
+=======
+>>>>>>> origin/main
     thread_creator_credits: {
         parameters: {
             query?: {
@@ -19458,6 +19470,7 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
     dependencies_list_thread_dependencies: {
         parameters: {
             query?: never;
@@ -19553,6 +19566,8 @@ export interface operations {
             };
         };
     };
+=======
+>>>>>>> origin/main
     issue_order_documentation: {
         parameters: {
             query?: never;
@@ -19613,6 +19628,7 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
     dependencies_list_thread_issue_dependencies: {
         parameters: {
             query?: never;
@@ -19657,6 +19673,8 @@ export interface operations {
             };
         };
     };
+=======
+>>>>>>> origin/main
     list_thread_issues_v2: {
         parameters: {
             query?: {
@@ -19990,6 +20008,7 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
     thread_ordering_explain_eligibility: {
         parameters: {
             query?: never;
@@ -20042,6 +20061,8 @@ export interface operations {
             };
         };
     };
+=======
+>>>>>>> origin/main
     list_undo_snapshots_documentation: {
         parameters: {
             query?: never;
