@@ -604,7 +604,7 @@ mod tests {
     }
 
     #[test]
-    fn thread_dependencies_sql_preserves_python_parity() {
+    fn thread_dependencies_sql_is_owner_scoped_and_reader_authored() {
         assert!(THREAD_OWNED_SQL.contains("t.user_id = $2"));
         for sql in [THREAD_BLOCKING_SQL, THREAD_BLOCKED_BY_SQL] {
             assert!(sql.contains("ORDER BY d.id"), "bounded ordering");
@@ -612,11 +612,60 @@ mod tests {
             assert!(sql.contains("tt.user_id = $2"), "target owner scope");
             assert!(sql.contains("JOIN issues si"), "source joins");
             assert!(sql.contains("JOIN threads st"), "source thread join");
+            assert!(sql.contains("d.origin = 'reader'"), "reader-authored edges only");
+            assert!(
+                sql.contains("d.note NOT LIKE 'cbl-order:%'"),
+                "inert history is not an authoring edge"
+            );
         }
         assert!(THREAD_BLOCKING_SQL.contains("si.thread_id = $1"));
         assert!(THREAD_BLOCKED_BY_SQL.contains("ti.thread_id = $1"));
         assert!(!THREAD_BLOCKING_SQL.contains(';'));
         assert!(!THREAD_BLOCKED_BY_SQL.contains(';'));
+    }
+
+    #[tokio::test]
+    async fn thread_dependencies_v2_excludes_converted_edges_and_foreign_threads() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _db_guard = crate::test_support::reset_for_test(&state).await;
+        let conn = state
+            .pool
+            .get()
+            .await
+            .expect("disposable Postgres connection");
+        conn.batch_execute(
+            "INSERT INTO users (id, username) VALUES (1,'v2-deps-owner'),(2,'v2-deps-foreign');
+             INSERT INTO threads (id,title,format,issues_remaining,queue_position,status,user_id,created_at)
+             VALUES (31,'Alpha','comic',0,1,'active',1,NOW()),
+                    (32,'Beta','comic',0,2,'active',1,NOW()),
+                    (33,'Foreign','comic',0,3,'active',2,NOW());
+             INSERT INTO issues (id,thread_id,issue_number,status,created_at,position)
+             VALUES (311,31,'1','unread',NOW(),1),(321,32,'1','unread',NOW(),1),
+                    (331,33,'1','unread',NOW(),1);
+             INSERT INTO dependencies (source_issue_id,target_issue_id,origin,classification,note,created_at)
+             VALUES (311,321,'reader','A',NULL,NOW()),
+                    (311,321,'converted','A','converted from CBL',NOW()),
+                    (311,321,'generated','A','cbl-order: series order',NOW());",
+        )
+        .await
+        .expect("reader-authored dependency fixtures");
+        drop(conn);
+        let user = crate::auth::AuthenticatedUser::for_test(1);
+        let alpha = get_thread_dependencies(State(state.clone()), user, axum::extract::Path(31))
+            .await
+            .expect("alpha dependencies");
+        assert_eq!(alpha.0.blocking.len(), 1, "only the reader-authored edge is listed");
+        assert!(alpha.0.blocking[0].target_label.as_deref() == Some("Beta #1"));
+        let beta = get_thread_dependencies(State(state.clone()), user, axum::extract::Path(32))
+            .await
+            .expect("beta dependencies");
+        assert_eq!(beta.0.blocked_by.len(), 1);
+        let foreign = get_thread_dependencies(State(state.clone()), user, axum::extract::Path(33))
+            .await
+            .expect_err("foreign thread is indistinguishable from missing");
+        assert_eq!(foreign.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]

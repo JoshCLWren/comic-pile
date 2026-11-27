@@ -223,76 +223,6 @@ where
 // Blocking explanations
 // ---------------------------------------------------------------------------
 
-fn build_blocking_explanation(issue_number: &str, thread_title: &str) -> String {
-    format!("Blocked by {thread_title}: #{issue_number}")
-}
-
-const CANONICAL_BLOCKERS_SQL: &str = "SELECT tt.id, st.id, st.title, si.issue_number \
-     FROM threads tt \
-     JOIN issues ni ON ni.id = tt.next_unread_issue_id \
-     JOIN dependencies d ON d.target_issue_id = ni.id \
-     JOIN issues si ON si.id = d.source_issue_id \
-     JOIN threads st ON st.id = si.thread_id \
-     WHERE tt.id = ANY($1) AND tt.user_id = $2 AND st.user_id = $2 \
-       AND si.status <> 'read' AND ni.status <> 'read' \
-       AND tt.next_unread_issue_id IS NOT NULL \
-       AND (d.note IS NULL OR d.note NOT LIKE 'cbl-order:%') \
-     ORDER BY tt.id, d.id";
-
-/// Legacy authority: canonical unread `Dependency` blockers on the frontier.
-async fn legacy_explanations<C>(
-    client: &C,
-    user: AuthenticatedUser,
-    thread_ids: &[i32],
-) -> Result<Vec<(i32, BlockingExplanation)>, ApiError>
-where
-    C: tokio_postgres::GenericClient + Sync,
-{
-    let rows = client
-        .query(CANONICAL_BLOCKERS_SQL, &[&thread_ids, &user.id()])
-        .await
-        .map_err(db::query_error)?;
-    let mut by_thread: HashMap<i32, Vec<BlockingDependency>> = HashMap::new();
-    let mut seen: HashSet<(i32, i32, String)> = HashSet::new();
-    for row in &rows {
-        let target: i32 = row.get(0);
-        let source_thread: i32 = row.get(1);
-        let title: String = row.get(2);
-        let number: String = row.get(3);
-        if !seen.insert((target, source_thread, number.clone())) {
-            continue;
-        }
-        let label = build_blocking_explanation(&number, &title);
-        by_thread
-            .entry(target)
-            .or_default()
-            .push(BlockingDependency {
-                thread_id: source_thread,
-                thread_title: title,
-                issue_number: number,
-                label,
-                issue_id: None,
-            });
-    }
-    Ok(thread_ids
-        .iter()
-        .map(|thread_id| {
-            let dependencies = by_thread.remove(thread_id).unwrap_or_default();
-            (
-                *thread_id,
-                BlockingExplanation {
-                    is_blocked: !dependencies.is_empty(),
-                    blocking_reasons: dependencies
-                        .iter()
-                        .map(|dependency| dependency.label.clone())
-                        .collect(),
-                    blocking_dependencies: dependencies,
-                },
-            )
-        })
-        .collect())
-}
-
 fn describe_origin(
     blocker: &crate::reading_constraints::Blocker,
     list_names: &HashMap<i32, String>,
@@ -320,8 +250,14 @@ fn describe_origin(
     format!("{kind} in {list}")
 }
 
-/// Option E authority: live blockers from the evaluated reading graph.
-async fn option_e_explanations(
+/// Canonical authority: live blockers from the evaluated Reading List graph.
+///
+/// `load_option_inputs_contained` builds `ValidatedReadingInputs::contained`,
+/// so only reader-authored prerequisites have execution authority, persisted
+/// cycles are isolated to their own threads, and the denormalized
+/// `threads.is_blocked` flag is never consulted. All requested threads are
+/// evaluated in one pass, with no per-thread database round trip.
+async fn canonical_explanations(
     state: &AppState,
     user: AuthenticatedUser,
     thread_ids: &[i32],
@@ -391,18 +327,6 @@ async fn option_e_explanations(
     Ok(result)
 }
 
-async fn blocking_details(
-    state: &AppState,
-    user: AuthenticatedUser,
-    thread_ids: &[i32],
-) -> Result<Vec<(i32, BlockingExplanation)>, ApiError> {
-    if state.option_e {
-        return option_e_explanations(state, user, thread_ids).await;
-    }
-    let connection = db::checkout(state).await?;
-    legacy_explanations(&**connection, user, thread_ids).await
-}
-
 /// Dispatch `POST /api/v1/threads/{thread_id}:{action}` operations.
 ///
 /// The router cannot express a parameter followed by `:action`, so the whole
@@ -416,9 +340,9 @@ pub async fn post_thread_action(
 ) -> Result<Response, ApiError> {
     let Path(segment) = segment.map_err(|_| validation_failed())?;
     match segment.split_once(':') {
-        Some((raw_id, "getBlockingInfo")) => get_thread_blocking_info(&state, user, raw_id)
-            .await
-            .map(IntoResponse::into_response),
+        // #5709: the retired `getBlockingInfo` aliases are handled by explicit
+        // 404 routes in the inner and Vercel routers. They must never reach
+        // this legacy action dispatcher again.
         Some((raw_id, "migrateToIssues")) => {
             thread_issues::migrate_to_issues(&state, user, raw_id, &body).await
         }
@@ -430,24 +354,6 @@ pub async fn post_thread_action(
         }
         _ => Err(ApiError::NotFound("Not Found".to_string())),
     }
-}
-
-async fn get_thread_blocking_info(
-    state: &Arc<AppState>,
-    user: AuthenticatedUser,
-    raw_id: &str,
-) -> Result<Json<BlockingExplanation>, ApiError> {
-    let thread_id = parse_int_text(raw_id).ok_or_else(validation_failed)?;
-    let state = state.as_ref();
-    {
-        let connection = db::checkout(state).await?;
-        require_owned_thread(&**connection, user, thread_id).await?;
-    }
-    let mut details = blocking_details(state, user, &[thread_id]).await?;
-    let (_, explanation) = details
-        .pop()
-        .ok_or_else(|| ApiError::Internal("Internal Server Error".into()))?;
-    Ok(Json(explanation))
 }
 
 /// Coerce one JSON element the way pydantic's lax `int` does for plain values.

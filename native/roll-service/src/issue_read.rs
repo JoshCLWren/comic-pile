@@ -488,12 +488,13 @@ pub fn get_issue_documentation() {}
 #[allow(dead_code)]
 pub fn get_issue_dependencies_documentation() {}
 
-/// Documentation-only operation for the mounted thread issue-dependencies batch read.
+/// Documentation-only operation for the mounted v2 thread issue-dependencies batch read.
 #[utoipa::path(
     get,
-    path = "/api/v1/threads/{thread_id}/issue-dependencies",
+    path = "/api/v2/threads/{thread_id}/issueDependencies",
     tag = "dependencies",
-    description = "Return dependency edges for every issue in one owner-scoped thread. Wire parity with Python: issues are ordered by position and id, incoming/outgoing edges are ordered by dependency id, and foreign endpoints are omitted.",
+    operation_id = "dependencies_list_thread_issue_dependencies",
+    description = "Return dependency edges for every issue in one owner-scoped thread. Issues are ordered by position and id, incoming/outgoing edges are ordered by dependency id, and foreign endpoints are omitted.",
     params(("thread_id" = i32, Path, description = "Owned thread identifier")),
     responses(
         (status = 200, description = "Thread issue dependencies", body = ThreadIssueDependenciesResponse),
