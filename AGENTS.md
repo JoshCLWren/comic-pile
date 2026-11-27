@@ -93,12 +93,9 @@ Deployed runtime by cutover owner (`METHOD path -> runtime`):
 - #4855 (1): `GET /api/v2/demo-roll -> native-rust`
 - #5435 (5): `POST /api/v2/queue-exclusion-groups/{group_id}/restore -> native-rust`; `POST /api/v2/queue-exclusions -> native-rust`; `POST /api/v2/queue-exclusions/restore -> native-rust`; `POST /api/v2/queue-exclusions/status:check -> native-rust`; `POST /api/v2/reading-lists/memberships:check -> native-rust`
 - #5702 (1): `POST /api/v2/threads -> native-rust`
-<<<<<<< HEAD
 - #5703 (2): `DELETE /api/v2/threads/{thread_id} -> native-rust`; `PATCH /api/v2/threads/{thread_id} -> native-rust`
 - #5708 (5): `GET /api/v2/readingSessions -> native-rust`; `POST /api/v2/readingSessions -> native-rust`; `GET /api/v2/readingSessions/{session_id} -> native-rust`; `GET /api/v2/readingSessions/{session_id}/details -> native-rust`; `GET /api/v2/readingSessions/{session_id}/snapshots -> native-rust`
 - #5715 (2): `POST /api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection -> native-rust`; `GET /api/v2/threads/{thread_id}/readingOrders -> native-rust`
-=======
->>>>>>> origin/main
 <!-- route-burndown:end -->
 
 ### Route generation ownership (bot-owned)
