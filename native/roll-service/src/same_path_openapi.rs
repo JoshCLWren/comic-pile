@@ -194,14 +194,28 @@ mod tests {
         }
         let paths = document["paths"].as_object().expect("paths");
         for (path, method) in [
-            ("/api/v1/threads/{thread_id}:getBlockingInfo", "post"),
-            ("/api/v1/threads:getBlockingInfo", "post"),
+            ("/api/v2/threads/{thread_id}/eligibility", "get"),
+            ("/api/v2/threads:explainEligibility", "post"),
             ("/api/v1/threads/{thread_id}/dependency-order-check", "get"),
-            ("/api/v1/threads/{thread_id}/connected", "get"),
+            ("/api/v2/threads/{thread_id}/connections", "get"),
+            ("/api/v2/threads/{thread_id}/dependencies", "get"),
+            ("/api/v2/threads/{thread_id}/issueDependencies", "get"),
         ] {
             assert!(
                 paths[path][method]["responses"]["200"].is_object(),
                 "missing native 200 response for {method} {path}"
+            );
+        }
+        for (path, method) in [
+            ("/api/v1/threads/{thread_id}:getBlockingInfo", "post"),
+            ("/api/v1/threads:getBlockingInfo", "post"),
+            ("/api/v1/threads/{thread_id}/connected", "get"),
+            ("/api/v1/threads/{thread_id}/dependencies", "get"),
+            ("/api/v1/threads/{thread_id}/issue-dependencies", "get"),
+        ] {
+            assert!(
+                paths.get(path).and_then(|item| item.get(method)).is_none(),
+                "retired {method} {path} must not be published"
             );
         }
     }

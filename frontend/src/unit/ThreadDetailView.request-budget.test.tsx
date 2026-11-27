@@ -102,7 +102,7 @@ function makeHandler(state: BoundaryState): Responder {
     }
     if (call.url === '/v1/threads/42') return THREADS[42]
     if (call.url === '/v1/threads/43') return THREADS[43]
-    if (call.url === '/v1/threads/42/connected' || call.url === '/v1/threads/43/connected') {
+    if (call.url === '/v2/threads/42/connections' || call.url === '/v2/threads/43/connections') {
       const id = call.url.includes('/43/') ? 43 : 42
       return { thread_id: id, connected_threads: [] }
     }
@@ -118,7 +118,7 @@ function makeHandler(state: BoundaryState): Responder {
       return { target_type: 'Thread', target_id: 43, direct_tags: [], effective_tags: [] }
     }
     if (call.url === '/v2/tags') return { tags: [] }
-    if (call.url === '/v1/threads:getBlockingInfo') {
+    if (call.url === '/v2/threads:explainEligibility') {
       const threads: Record<string, BlockingSummary> = {}
       for (const id of requestedThreadIds(call)) {
         threads[id] = { is_blocked: false, blocking_reasons: [], blocking_dependencies: [] }
@@ -187,18 +187,18 @@ describe('Thread detail request budget', () => {
 
     await waitFor(() => expect(groupsCalls(calls)).toHaveLength(1))
     await waitFor(() =>
-      expect(calls.some((call) => call.url === '/v1/threads:getBlockingInfo')).toBe(true),
+      expect(calls.some((call) => call.url === '/v2/threads:explainEligibility')).toBe(true),
     )
     await new Promise((resolve) => setTimeout(resolve, 100))
 
     expect(requestCounts(calls)).toEqual({
       'POST /v2/reading-boundaries': 1,
       'GET /v1/threads/42': 1,
-      'GET /v1/threads/42/connected': 1,
+      'GET /v2/threads/42/connections': 1,
       'GET /v2/reading-graph': 1,
       'GET /v2/tags/effective/threads/42': 1,
       'POST /v2/reading-order-groups:resolveMemberships': 1,
-      'POST /v1/threads:getBlockingInfo': 1,
+      'POST /v2/threads:explainEligibility': 1,
     })
     expect(calls.some((call) => call.url === '/v2/tags')).toBe(false)
 
@@ -222,7 +222,7 @@ describe('Thread detail request budget', () => {
     expect(requestCounts(calls)).toEqual({
       'POST /v2/reading-boundaries': 1,
       'GET /v1/threads/42': 1,
-      'GET /v1/threads/42/connected': 1,
+      'GET /v2/threads/42/connections': 1,
       'GET /v2/reading-graph': 1,
       'GET /v2/tags/effective/threads/42': 1,
       'POST /v2/reading-order-groups:resolveMemberships': 1,
@@ -301,7 +301,7 @@ describe('Thread detail request budget', () => {
 
     threadResponse.resolve(THREADS[42])
     await waitFor(() =>
-      expect(calls.some((call) => call.url === '/v1/threads/42/connected')).toBe(true),
+      expect(calls.some((call) => call.url === '/v2/threads/42/connections')).toBe(true),
     )
     expect(groupsCalls(calls)).toHaveLength(1)
   })

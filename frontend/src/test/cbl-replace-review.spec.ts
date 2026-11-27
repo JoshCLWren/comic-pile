@@ -106,14 +106,14 @@ async function applyReadingList(
 
 async function isThreadBlocked(page: Page, threadId: number): Promise<boolean> {
   const headers = await authHeaders(page)
-  const response = await page.request.post(
-    `/api/v1/threads/${threadId}:getBlockingInfo`,
+  const response = await page.request.get(
+    `/api/v2/threads/${threadId}/eligibility`,
     { headers },
   )
   expect(response.ok(), await response.text()).toBeTruthy()
-  // SAFETY: the test reads only is_blocked from the response body
-  const payload = (await response.json()) as { is_blocked: boolean }
-  return payload.is_blocked
+  // SAFETY: the test reads only the derived eligibility decision
+  const payload = (await response.json()) as { eligible: boolean }
+  return !payload.eligible
 }
 
 type PreviewBodyEntry = {
