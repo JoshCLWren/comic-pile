@@ -2954,19 +2954,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-<<<<<<< /tmp/ours_openapi.ts
-    "/api/v2/readingSessions": {
-=======
     "/api/v2/readingOrderGroups": {
->>>>>>> /tmp/theirs_openapi.ts
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-<<<<<<< /tmp/ours_openapi.ts
-=======
         /** Documentation-only operation for listing v2 reading-order groups. */
         get: operations["reading_order_groups_list"];
         put?: never;
@@ -3008,7 +3002,6 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
->>>>>>> /tmp/theirs_openapi.ts
         /** Documentation-only List operation for the canonical collection. */
         get: operations["list_reading_sessions_documentation"];
         put?: never;
@@ -3493,12 +3486,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-<<<<<<< /tmp/ours_openapi.ts
         /** Standard resource Get for one owned Thread. */
         get: operations["get_thread_v2_documentation"];
-=======
-        get?: never;
->>>>>>> /tmp/theirs_openapi.ts
         put?: never;
         post?: never;
         /** @description Delete an owned Thread (AIP-135). A second delete, or a delete of a foreign or already deleted Thread, returns 404. Never 403. */
@@ -9561,15 +9550,12 @@ export interface components {
             next_page_token?: string | null;
             threads: components["schemas"]["ThreadListItem"][];
         };
-<<<<<<< /tmp/ours_openapi.ts
         /**
          * @description One v2 threads list response. The active/completed/excluded filters keep the
          *     queue-list projection; the stale filter keeps the legacy detail-shaped
          *     projection. Both are emitted inline (no envelope variant key).
          */
         ThreadListResult: components["schemas"]["ThreadListResponse"] | components["schemas"]["StaleThreadListResponse"];
-=======
->>>>>>> /tmp/theirs_openapi.ts
         /** @description Committed values a stale client read before issuing a Thread patch. */
         ThreadPatchPrecondition: {
             /** @description Format observed by the client. */
@@ -17901,57 +17887,7 @@ export interface operations {
             };
         };
     };
-<<<<<<< /tmp/ours_openapi.ts
-    list_reading_sessions_documentation: {
-        parameters: {
-            query?: {
-                /** @description Bounded page size (1-100, default 50) */
-                page_size?: number;
-                /** @description Opaque continuation token */
-                page_token?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description One page of event-derived reading sessions */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ListReadingSessionsResponse"];
-                };
-            };
-            /** @description Invalid page size or token */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    initialize_session_documentation: {
-=======
     reading_order_groups_list: {
->>>>>>> /tmp/theirs_openapi.ts
         parameters: {
             query?: never;
             header?: never;
@@ -17985,55 +17921,7 @@ export interface operations {
             };
         };
     };
-<<<<<<< /tmp/ours_openapi.ts
-    get_reading_session_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Owned reading session */
-                session_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Event-derived reading session */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReadingSessionResource"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Session not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    get_session_details_documentation: {
-=======
     reading_order_groups_create: {
->>>>>>> /tmp/theirs_openapi.ts
         parameters: {
             query?: never;
             header?: never;
@@ -19446,7 +19334,6 @@ export interface operations {
             };
         };
     };
-<<<<<<< /tmp/ours_openapi.ts
     get_thread_v2_documentation: {
         parameters: {
             query?: never;
@@ -19484,8 +19371,6 @@ export interface operations {
             };
         };
     };
-=======
->>>>>>> /tmp/theirs_openapi.ts
     delete_thread_v2_documentation: {
         parameters: {
             query?: never;
