@@ -11300,6 +11300,165 @@
           }
         ]
       }
+    },
+    "/api/v2/users/me/tasteDiscoveries": {
+      "get": {
+        "tags": [
+          "taste"
+        ],
+        "summary": "Documentation-only operation for the canonical v2 discoveries resource.",
+        "description": "List prompt-eligible taste discoveries for the authenticated reader. Applies the same evidence/confidence/affinity/diversity gates, 14-day cooldown, dismissal suppression and creator-role dedup as the retained v1 path, and records last_prompted_at for exactly the returned signals.",
+        "operationId": "list_taste_discoveries_v2",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "title": "Limit",
+              "description": "Maximum discoveries to return.",
+              "default": 3,
+              "maximum": 3,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ranked discoveries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TasteDiscoveryListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "limit is outside the allowed range"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/users/me/tasteDiscoveries/{signal_id}:dismiss": {
+      "post": {
+        "tags": [
+          "taste"
+        ],
+        "summary": "Documentation-only operation for the canonical v2 dismiss custom method.",
+        "description": "Dismiss one owner-scoped taste discovery without recording a verdict. Event-style custom method (AIP-136): writes prompt_suppressed_until = NOW() + interval '14 days' and returns {dismissed: true}. Repeated dismissals are idempotent; missing or foreign signals return 404.",
+        "operationId": "dismiss_taste_discovery_v2",
+        "parameters": [
+          {
+            "name": "signal_id",
+            "in": "path",
+            "description": "Owned taste signal identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dismissed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TasteDismissResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Taste discovery not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/users/me/tasteSignals/{signal_name}": {
+      "patch": {
+        "tags": [
+          "taste"
+        ],
+        "summary": "Documentation-only operation for the canonical v2 Taste Bank signal PATCH.",
+        "description": "Partially update one owned Taste Bank signal (AIP-134). The resource name is the stable composite <signal_type>:<external_key> encoded as one path segment. Only user_verdict is patchable; an update_mask restricts the write, and a masked-but-absent verdict clears it. Repeated identical verdicts are idempotent and inferred evidence is never mutated.",
+        "operationId": "patch_taste_signal_v2",
+        "parameters": [
+          {
+            "name": "signal_name",
+            "in": "path",
+            "description": "Stable composite signal name, URL-encoded",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TasteSignalPatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Canonical signal after the patch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TasteSignalResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Taste signal not found"
+          },
+          "422": {
+            "description": "Validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -26318,6 +26477,27 @@
             "items": {
               "$ref": "#/components/schemas/TasteSignalResponse"
             }
+          }
+        }
+      },
+      "TasteSignalPatchRequest": {
+        "type": "object",
+        "description": "AIP-134 partial update of the canonical v2 Taste Bank signal resource.\n\nOnly `user_verdict` is patchable. An explicit `update_mask` restricts the\nwrite to the named field; a masked field missing from the body clears the\nverdict. Without a mask, an omitted verdict leaves the signal untouched.",
+        "properties": {
+          "update_mask": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
+          "user_verdict": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
