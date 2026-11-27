@@ -20709,6 +20709,12 @@
             "description": "Successful Response"
           },
           "422": {
+<<<<<<< HEAD
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+=======
             "content": {
               "application/json": {
                 "schema": {
@@ -20717,6 +20723,7 @@
               }
             },
             "description": "Validation Error"
+>>>>>>> origin/main
           }
         },
         "security": [
@@ -20724,10 +20731,15 @@
             "HTTPBearer": []
           }
         ],
+<<<<<<< HEAD
+        "summary": "Documentation-only operation for creating a reading-order group.",
+        "tags": [
+=======
         "summary": "Create Group",
         "tags": [
           "dependencies",
           "dependencies",
+>>>>>>> origin/main
           "reading-order-groups"
         ]
       }
@@ -20908,6 +20920,12 @@
             "description": "Successful Response"
           },
           "422": {
+<<<<<<< HEAD
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+=======
             "content": {
               "application/json": {
                 "schema": {
@@ -20916,6 +20934,7 @@
               }
             },
             "description": "Validation Error"
+>>>>>>> origin/main
           }
         },
         "security": [
@@ -20923,10 +20942,15 @@
             "HTTPBearer": []
           }
         ],
+<<<<<<< HEAD
+        "summary": "Documentation-only operation for fetching enriched group detail.",
+        "tags": [
+=======
         "summary": "Get Group Detail",
         "tags": [
           "dependencies",
           "dependencies",
+>>>>>>> origin/main
           "reading-order-groups"
         ]
       }
@@ -28451,6 +28475,8 @@
         ]
       }
     },
+<<<<<<< HEAD
+=======
     "/api/v2/readingOrderGroups": {
       "get": {
         "operationId": "reading_order_groups_list",
@@ -28685,6 +28711,7 @@
         ]
       }
     },
+>>>>>>> origin/main
     "/api/v2/readingSessions": {
       "get": {
         "operationId": "list_reading_sessions_documentation",
@@ -30526,6 +30553,7 @@
         ]
       }
     },
+<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/readingOrders": {
       "get": {
         "operationId": "thread_ordering_reading_orders",
@@ -30573,6 +30601,8 @@
         ]
       }
     },
+=======
+>>>>>>> origin/main
     "/api/v2/undo/{session_id}/snapshots": {
       "get": {
         "operationId": "list_undo_snapshots_documentation",

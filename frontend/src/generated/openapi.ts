@@ -532,11 +532,16 @@ export interface paths {
          */
         get: operations["list_groups_api_v1_reading_order_groups__get"];
         put?: never;
+<<<<<<< HEAD
+        /** Documentation-only operation for creating a reading-order group. */
+        post: operations["dependency_groups_create"];
+=======
         /**
          * Create Group
          * @description Create a user-owned named group.
          */
         post: operations["create_group_api_v1_reading_order_groups__post"];
+>>>>>>> origin/main
         delete?: never;
         options?: never;
         head?: never;
@@ -2937,13 +2942,19 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+<<<<<<< HEAD
+    "/api/v2/readingSessions": {
+=======
     "/api/v2/readingOrderGroups": {
+>>>>>>> origin/main
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
+<<<<<<< HEAD
+=======
         /** Documentation-only operation for listing v2 reading-order groups. */
         get: operations["reading_order_groups_list"];
         put?: never;
@@ -2985,6 +2996,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+>>>>>>> origin/main
         /** Documentation-only List operation for the canonical collection. */
         get: operations["list_reading_sessions_documentation"];
         put?: never;
@@ -3577,6 +3589,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/readingOrders": {
         parameters: {
             query?: never;
@@ -3594,6 +3607,8 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+=======
+>>>>>>> origin/main
     "/api/v2/undo/{session_id}/snapshots": {
         parameters: {
             query?: never;
@@ -11121,6 +11136,20 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
+<<<<<<< HEAD
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dependency_groups_get: {
+=======
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
@@ -11128,6 +11157,7 @@ export interface operations {
         };
     };
     get_group_api_v1_reading_order_groups__group_id__get: {
+>>>>>>> origin/main
         parameters: {
             query?: never;
             header?: never;
@@ -11247,9 +11277,20 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
+<<<<<<< HEAD
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+=======
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+>>>>>>> origin/main
             };
         };
     };
@@ -17816,6 +17857,8 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
+=======
     reading_order_groups_list: {
         parameters: {
             query?: never;
@@ -18064,6 +18107,7 @@ export interface operations {
             };
         };
     };
+>>>>>>> origin/main
     list_reading_sessions_documentation: {
         parameters: {
             query?: {
@@ -19651,6 +19695,7 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
     thread_ordering_reading_orders: {
         parameters: {
             query?: never;
@@ -19695,6 +19740,8 @@ export interface operations {
             };
         };
     };
+=======
+>>>>>>> origin/main
     list_undo_snapshots_documentation: {
         parameters: {
             query?: never;

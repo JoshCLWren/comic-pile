@@ -5998,6 +5998,43 @@
         ]
       }
     },
+<<<<<<< HEAD
+    "/api/v2/readingSessions": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Documentation-only List operation for the canonical collection.",
+        "operationId": "list_reading_sessions_documentation",
+        "parameters": [
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "Bounded page size (1-100, default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "page_token",
+            "in": "query",
+            "description": "Opaque continuation token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of event-derived reading sessions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListReadingSessionsResponse"
+=======
     "/api/v2/readingOrderGroups": {
       "get": {
         "tags": [
@@ -6015,10 +6052,17 @@
                   "items": {
                     "$ref": "#/components/schemas/DependencyGroupResponse"
                   }
+>>>>>>> origin/main
                 }
               }
             }
           },
+<<<<<<< HEAD
+          "400": {
+            "description": "Invalid page size or token"
+          },
+=======
+>>>>>>> origin/main
           "401": {
             "description": "Not authenticated"
           },
@@ -6034,6 +6078,8 @@
       },
       "post": {
         "tags": [
+<<<<<<< HEAD
+=======
           "reading-order-groups"
         ],
         "summary": "Documentation-only operation for creating a v2 reading-order group.",
@@ -6289,6 +6335,7 @@
       },
       "post": {
         "tags": [
+>>>>>>> origin/main
           "readingSessions"
         ],
         "summary": "Documentation-only operation for the mounted v2 reading-session initializer.",
@@ -8073,6 +8120,7 @@
         ]
       }
     },
+<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/readingOrders": {
       "get": {
         "tags": [
@@ -8120,6 +8168,8 @@
         ]
       }
     },
+=======
+>>>>>>> origin/main
     "/api/v2/undo/{session_id}/snapshots": {
       "get": {
         "tags": [
@@ -12966,6 +13016,8 @@
         },
         "additionalProperties": false
       },
+<<<<<<< HEAD
+=======
       "DependencyGroupCreateRequest": {
         "type": "object",
         "description": "Wire request mirroring the Python `DependencyGroupCreate` payload.",
@@ -13052,6 +13104,7 @@
           }
         }
       },
+>>>>>>> origin/main
       "DependencyGroupIssueRangeCreateRequest": {
         "type": "object",
         "description": "Wire request mirroring the Python `DependencyGroupIssueRangeCreate` payload.",
@@ -13187,6 +13240,8 @@
           }
         }
       },
+<<<<<<< HEAD
+=======
       "DependencyGroupResponse": {
         "type": "object",
         "description": "Wire response mirroring the Python `DependencyGroupResponse`.",
@@ -13229,6 +13284,7 @@
           }
         }
       },
+>>>>>>> origin/main
       "DependencyGroupSummary": {
         "type": "object",
         "description": "Wire response mirroring the Python `DependencyGroupSummary`.",
@@ -13246,6 +13302,8 @@
           }
         }
       },
+<<<<<<< HEAD
+=======
       "DependencyGroupUpdateRequest": {
         "type": "object",
         "description": "Wire request mirroring the Python `DependencyGroupUpdate` payload.",
@@ -13258,6 +13316,7 @@
           }
         }
       },
+>>>>>>> origin/main
       "DependencyNoteUpdate": {
         "type": "object",
         "properties": {
@@ -20873,6 +20932,7 @@
           }
         }
       },
+<<<<<<< HEAD
       "ThreadReadingOrdersResponse": {
         "type": "object",
         "description": "Python `ThreadReadingOrdersResponse`.",
@@ -20888,6 +20948,8 @@
           }
         }
       },
+=======
+>>>>>>> origin/main
       "ThreadResponse": {
         "type": "object",
         "description": "The Python `ThreadResponse` projection every lifecycle writer returns.",
