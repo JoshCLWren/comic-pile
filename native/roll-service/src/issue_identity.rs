@@ -2795,6 +2795,10 @@ fn cbl_adoption_request_fingerprint(
         "series_decisions": series_decisions,
         "series_overrides": series_overrides,
         "idempotency_key": request.idempotency_key.as_deref(),
+        // A version guard or a newly approved overlap decision is part of the
+        // committed intent: replaying an older receipt would skip both.
+        "list_version": request.list_version,
+        "overlap_decisions": request.overlap_decisions,
     });
     let serialized = serde_json::to_vec(&payload).unwrap_or_default();
     sha256_hex(&serialized)
@@ -3318,6 +3322,24 @@ async fn do_cbl_adoption_commit(
         .filter(|issue_id| seen_adopted.insert(*issue_id))
         .collect();
 
+    // The source link is the durable identity, so it also carries the last
+    // adopted issue set. A compatibility Plan can be retired or recreated
+    // without losing the ability to reconcile exclusions on the canonical list.
+    if let Some(previous) = previous_selections
+        .as_ref()
+        .and_then(|value| value.get("adopted_issue_ids"))
+        .and_then(|value| value.as_array())
+    {
+        for value in previous {
+            if let Some(id) = value.as_i64() {
+                let id = id as i32;
+                if !previous_source_issue_ids.contains(&id) {
+                    previous_source_issue_ids.push(id);
+                }
+            }
+        }
+    }
+
     // Reconcile this source's list entries to the newly committed adopted set
     // inside the same transaction. An issue included by an earlier commit but
     // excluded now must not survive in the list or its reader/Queue projections.
@@ -3428,6 +3450,55 @@ async fn do_cbl_adoption_commit(
         })?;
     }
 
+    // Persist the committed source identity, checkbox decisions and approved
+    // overlap decisions in the same transaction as the list entries. This is
+    // the state a reopened list restores; uncommitted UI selections never
+    // reach the database.
+    let selections = serde_json::json!({
+        "entry_decisions": entry_decisions_raw,
+        "series_decisions": series_decisions_raw,
+        "series_overrides": series_overrides_raw,
+        "adopted_issue_ids": adopted_issue_ids,
+    });
+    let overlap_decisions = request
+        .overlap_decisions
+        .clone()
+        .unwrap_or_else(|| serde_json::json!([]));
+    tx.run_execute(
+        "INSERT INTO custom_cbl_source_links
+           (user_id, cbl_source_list_id, custom_cbl_list_id, source_revision_sha,
+            source_content_hash, list_version, selections_json, overlap_decisions_json,
+            created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())
+         ON CONFLICT (user_id, cbl_source_list_id)
+         DO UPDATE SET
+            custom_cbl_list_id = EXCLUDED.custom_cbl_list_id,
+            source_revision_sha = EXCLUDED.source_revision_sha,
+            source_content_hash = EXCLUDED.source_content_hash,
+            list_version = EXCLUDED.list_version,
+            selections_json = EXCLUDED.selections_json,
+            overlap_decisions_json = EXCLUDED.overlap_decisions_json,
+            updated_at = NOW()",
+        &[
+            &user_id,
+            &list_id,
+            &canonical_list_id,
+            &revision_sha,
+            &content_hash,
+            &list_version,
+            &selections,
+            &overlap_decisions,
+        ],
+    )
+    .await
+    .map_err(|e| {
+        if crate::db::is_transport_failure(&e) {
+            CommitErr::Db(ApiError::database_unavailable())
+        } else {
+            CommitErr::Unexpected(format!("upsert adoption source link: {e}"))
+        }
+    })?;
+
     let prow = tx.run_query_one("SELECT id,user_id,name,ordering_mode,lanes_json::text,nodes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1", &[&plan_id]).await.map_err(|e| if crate::db::is_transport_failure(&e) { CommitErr::Db(ApiError::database_unavailable()) } else { CommitErr::Unexpected(format!("reload plan: {e}")) })?;
     let status = if requested_target_plan_id.is_some() {
         StatusCode::OK
@@ -3449,6 +3520,10 @@ async fn do_cbl_adoption_commit(
         created_positions: merge.1,
         excluded_positions: merge.2,
         unresolved_positions: merge.3,
+        custom_cbl_list_id: canonical_list_id,
+        list_version,
+        selections: Some(selections),
+        overlap_decisions: Some(overlap_decisions),
     };
     store_cbl_adoption_receipt(&tx, user_id, list_id, plan_id, &request_fingerprint, &resp).await?;
     tx.commit().await.map_err(|e| {

@@ -67,6 +67,20 @@ pub struct ReadingList {
     pub entries: Vec<ReadingListEntry>,
     #[serde(default)]
     pub warnings: Vec<String>,
+    /// Monotonic version of this owner-scoped list. A later CBL adoption must
+    /// echo it as `list_version` or be rejected as stale (#4022).
+    #[serde(default)]
+    pub list_version: i32,
+    #[serde(default)]
+    pub source_revision_sha: Option<String>,
+    #[serde(default)]
+    pub source_content_hash: Option<String>,
+    /// Committed checkbox decisions restored when the CBL editor reopens.
+    #[serde(default)]
+    pub selections: Option<serde_json::Value>,
+    /// Overlap decisions approved with the last commit.
+    #[serde(default)]
+    pub overlap_decisions: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
