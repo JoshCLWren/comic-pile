@@ -1,165 +1,113 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import type { RollBootstrapResponse } from '../types/rollBootstrap'
-import type { RollBootstrapApi } from '../services/apiTypes'
-import { rollBootstrapApi } from '../services/rollBootstrapApi'
+import { useCallback, useMemo } from 'react'
+import type { RollBootstrapResponse, RollBootstrapThread } from '../types/rollBootstrap'
 import { useToast } from '../contexts/useToast'
-import { trackSessionGreeting } from '../utils/sessionGreeting'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
+import { readRollSnoozes } from '../services/api-roll'
+import { useRollDieState, useRollEligibleIssueIds, useRollIssueCards } from './useRollResources'
+import { useRollPendingSelection } from './useRollPendingSelection'
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from './rollMutationReconciliation'
 
-/** Best-effort browser IANA timezone used to timestamp the reading session. */
-export function resolveBrowserTimezone(): string | undefined {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined
-  } catch {
-    return undefined
+/**
+ * Read-only Roll view model assembled entirely from scoped native resources.
+ *
+ * There is no aggregate server request and no session initialization here: the
+ * die, ordered eligible pool, visible cards and browser-owned pending selection
+ * are the same inputs the Roll surface already consumes. The returned shape is
+ * retained as the page's local view model so feature modules share one snapshot;
+ * it is never sent to, or fetched from, a bootstrap/session endpoint.
+ */
+export function useRollBootstrap() {
+  const { pending } = useRollPendingSelection()
+  const die = useRollDieState()
+  const snoozedIds = useMemo(() => readRollSnoozes(), [])
+  const eligible = useRollEligibleIssueIds(snoozedIds)
+  const cards = useRollIssueCards(eligible.data?.issue_ids ?? [])
+
+  const data = useMemo<RollBootstrapResponse>(() => {
+    const issueIds = eligible.data?.issue_ids ?? []
+    const threadIds = eligible.data?.thread_ids ?? []
+    const cardByIssue = new Map((cards.data?.items ?? []).map((card) => [card.issue_id, card]))
+    const rollPool: RollBootstrapThread[] = issueIds.flatMap((issueId, index) => {
+      const card = cardByIssue.get(issueId)
+      if (!card) return []
+      return [{
+        id: card.thread_id ?? threadIds[index] ?? 0,
+        title: card.thread_title,
+        format: '',
+        issue_id: card.issue_id,
+        issue_number: card.display_issue_number ?? card.issue_number,
+        tags: [],
+        route_labels: [],
+        overflow_routes_count: 0,
+      }]
+    })
+
+    const activeThread: RollBootstrapThread | null = pending
+      ? rollPool.find((thread) => thread.issue_id === pending.issue_id) ?? {
+          id: pending.thread_id,
+          title: '',
+          format: '',
+          issue_id: pending.issue_id,
+          issue_number: pending.issue_number ?? null,
+        }
+      : null
+
+    return {
+      session_id: 0,
+      user_id: 0,
+      pending_thread_id: pending?.thread_id ?? null,
+      last_rolled_result: pending?.result ?? null,
+      session_mode: null as unknown as RollBootstrapResponse['session_mode'],
+      active_thread: activeThread,
+      roll_recovery: null,
+      roll_pool: rollPool,
+      snoozed_threads: [],
+      snoozed_count: snoozedIds.length,
+      snoozed_thread_ids: snoozedIds,
+      skipped_thread_ids: [],
+      skipped_threads: [],
+      pool_reason: eligible.data?.pool_reason ?? 'ready',
+    }
+  }, [eligible.data, cards.data, pending, snoozedIds])
+
+  const isPending = die.isPending || eligible.isPending || (data.roll_pool.length > 0 && cards.isPending)
+
+  const refetch = useCallback(async (): Promise<RollBootstrapResponse> => {
+    // A reconciled mutation publishes its already-fetched scoped snapshot on
+    // this event; consume it instead of issuing another request.
+    const reconciled = queryClient.getQueryData<RollBootstrapResponse>(queryKeys.roll.bootstrap())
+    if (reconciled) return reconciled
+    await Promise.all([
+      die.refetch(),
+      eligible.refetch(),
+      cards.refetch(),
+    ])
+    return queryClient.getQueryData<RollBootstrapResponse>(queryKeys.roll.bootstrap()) ?? data
+  }, [die, eligible, cards, data])
+
+  return {
+    data,
+    isPending,
+    isError: die.isError || eligible.isError || cards.isError,
+    error: die.error ?? eligible.error ?? cards.error ?? null,
+    failureCount: 0,
+    isRetrying: false,
+    refetch,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    showToast: useToast().showToast,
   }
 }
 
-export function useRollBootstrap(api?: RollBootstrapApi) {
-  const bootstrapApi = api ?? rollBootstrapApi
-  const { showToast } = useToast()
-  const justReconciledRef = useRef<RollBootstrapResponse | null>(null)
-  const reconciliationExpiryRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // Bumped on every fetch and on every reconciliation so a stale in-flight
-  // request can be identified and ignored once a newer fetch or a reconciliation
-  // has superseded it (mirrors the pre-React-Query generation guard).
-  const requestGenerationRef = useRef(0)
-
-  const { data, isPending, isError, error, failureCount, isSuccess, refetch } = useQuery({
-    queryKey: queryKeys.roll.bootstrap(),
-    queryFn: async (): Promise<RollBootstrapResponse | null> => {
-      const generation = ++requestGenerationRef.current
-      try {
-        const result = await bootstrapApi.get(resolveBrowserTimezone())
-        // A reconciliation (or newer fetch) superseded this request before it
-        // settled. Keep the authoritative cache instead of applying stale data.
-        if (generation !== requestGenerationRef.current) {
-          return queryClient.getQueryData<RollBootstrapResponse | null>(
-            queryKeys.roll.bootstrap(),
-          ) ?? null
-        }
-        return result
-      } catch (err) {
-        const normalized =
-          err instanceof Error ? err : new Error('Failed to fetch roll bootstrap')
-        if (generation !== requestGenerationRef.current) {
-          // Stale failure: leave the authoritative cache untouched.
-          return (
-            queryClient.getQueryData<RollBootstrapResponse | null>(
-              queryKeys.roll.bootstrap(),
-            ) ?? null
-          )
-        }
-        throw normalized
-      }
-    },
-  })
-
-  // React Query resets `failureCount` to 0 on every fetch, including the retry
-  // a user starts from the Retry affordance. Keying the bounded loading state
-  // on `failureCount` alone therefore drops RollPage back to the bare loading
-  // splash the instant someone presses Retry, which is the frozen-splash symptom
-  // issue #3429 exists to remove. Latch the first failure instead so the
-  // affordance survives user-initiated retries until the load actually succeeds.
-  const [hasFailedLoad, setHasFailedLoad] = useState(false)
-  useEffect(() => {
-    if (failureCount > 0) {
-      setHasFailedLoad(true)
-    } else if (isSuccess) {
-      setHasFailedLoad(false)
-    }
-  }, [failureCount, isSuccess])
-
-  // Persist the active reading session and greet on a genuinely new session.
-  // Previously lived inside the manual fetch; now runs whenever authoritative
-  // bootstrap data changes (initial load or reconciliation). Greeting
-  // persistence and the session-started toast are owned by the shared
-  // `sessionGreeting` helper so the current-session query and this bootstrap
-  // can never race on the same storage key or double-toast.
-  useEffect(() => {
-    if (data == null) return
-
-    trackSessionGreeting({ sessionId: data.session_id, userId: data.user_id, showToast })
-  }, [data, showToast])
-
-  const refetchBootstrap = useCallback(async (): Promise<RollBootstrapResponse> => {
-    const reconciled = justReconciledRef.current
-    if (reconciled) {
-      justReconciledRef.current = null
-      if (reconciliationExpiryRef.current) {
-        clearTimeout(reconciliationExpiryRef.current)
-        reconciliationExpiryRef.current = null
-      }
-      return reconciled
-    }
-
-    const result = await refetch()
-    if (result.isError) throw result.error ?? new Error('Failed to fetch roll bootstrap')
-    // The refetch result carries the settled data even though the query observer
-    // re-renders asynchronously, so return it directly instead of re-reading the
-    // cache (which can still hold the pre-refetch value at this microtask boundary).
-    const fresh = result.data
-    if (fresh == null) throw new Error('Failed to fetch roll bootstrap')
-    return fresh
-  }, [refetch])
-
-  useEffect(() => {
-    const handleReconciledBootstrap = (event: Event) => {
-      // SAFETY: the helper only dispatches this event name with a RollBootstrapResponse detail payload.
-      const reconciled = (event as CustomEvent<RollBootstrapResponse>).detail
-      if (!reconciled) return
-
-      requestGenerationRef.current += 1
-      justReconciledRef.current = reconciled
-      if (reconciliationExpiryRef.current) clearTimeout(reconciliationExpiryRef.current)
-      reconciliationExpiryRef.current = setTimeout(() => {
-        if (justReconciledRef.current === reconciled) justReconciledRef.current = null
-        reconciliationExpiryRef.current = null
-      }, 0)
-
-      queryClient.setQueryData(queryKeys.roll.bootstrap(), reconciled)
-      // A reconciled bootstrap is authoritative. The eligible pool is derived
-      // from the same state, so a rating that changes the current issue must
-      // not leave it serving the pre-rating view. Refreshing the pool also
-      // changes the card batch key, so cards follow without a second stale
-      // batch fetch against the pre-rating ids.
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.roll.eligibleIssueIdsAll(),
-      })
-      // A rating (or other reconciled mutation) can change the logical die.
-      // The Roll header/die sync prefer the scoped dieState resource, so it
-      // must refresh alongside the eligible pool or the page keeps the
-      // pre-rating die for the stale window (30s default) after Read/Rate.
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.roll.dieState(),
-        exact: true,
-      })
-    }
-
-    window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, handleReconciledBootstrap)
-    return () => {
-      window.removeEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, handleReconciledBootstrap)
-      if (reconciliationExpiryRef.current) clearTimeout(reconciliationExpiryRef.current)
-    }
-  }, [])
-
-  return {
-    data: data ?? null,
-    isPending,
-    isError,
-    // SAFETY: the bootstrap queryFn normalizes failures to Error, so the query error value is Error | null.
-    error: (error as Error | null) ?? null,
-    // Number of failed attempts so far. The shared retry policy keeps a
-    // timed-out bootstrap in pending through several retries (issue #3429).
-    failureCount,
-    // True while the initial load is still trying after at least one failure,
-    // including the retries a user starts from the Retry affordance. Keyed on
-    // isPending (already observed) rather than isFetching so the retry
-    // affordance never adds a new render subscription of its own.
-    isRetrying: isPending && hasFailedLoad,
-    refetch: refetchBootstrap,
-  }
+/**
+ * Publish a reconciled scoped snapshot. Kept as a named export so the mutation
+ * reconciliation event has one owner and never performs a network fetch.
+ */
+export function publishScopedRollSnapshot(snapshot: RollBootstrapResponse): void {
+  queryClient.setQueryData(queryKeys.roll.bootstrap(), snapshot)
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent<RollBootstrapResponse>(
+    ROLL_BOOTSTRAP_RECONCILED_EVENT,
+    { detail: snapshot },
+  ))
 }
