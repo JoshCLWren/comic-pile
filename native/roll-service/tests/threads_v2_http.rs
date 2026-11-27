@@ -282,6 +282,7 @@ async fn patch_and_delete_reject_cross_account_writes_with_404() {
     )
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
+    assert_eq!(body["detail"], format!("Thread {thread} not found"));
     assert!(stored(&ctx, thread).await.is_some());
 }
 
@@ -290,13 +291,72 @@ async fn delete_v2_removes_thread_and_subsequent_operations_return_404() {
     let ctx = setup("v2delete").await;
     let thread = seed_thread(&ctx, ctx.user_id, "Delete me").await;
     let uri = format!("/api/v2/threads/{thread}");
+    let conn = ctx.state.pool.get().await.unwrap();
+    let event_id: i32 = conn
+        .query_one(
+            "INSERT INTO events (type, timestamp, user_id, thread_id)
+             VALUES ('rate', NOW(), $1, $2) RETURNING id",
+            &[&ctx.user_id, &thread],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let session_id: i32 = conn
+        .query_one(
+            "INSERT INTO sessions (start_die, user_id) VALUES (6, $1) RETURNING id",
+            &[&ctx.user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let snapshot_id: i32 = conn
+        .query_one(
+            "INSERT INTO snapshots (session_id, event_id, thread_states, created_at)
+             VALUES ($1, $2, '{}'::json, NOW()) RETURNING id",
+            &[&session_id, &event_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let order_id: i32 = conn
+        .query_one(
+            "INSERT INTO reading_orders (name, user_id) VALUES ('Delete fixture', $1) RETURNING id",
+            &[&ctx.user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    conn.execute(
+        "INSERT INTO reading_order_items (reading_order_id, thread_id, position)
+         VALUES ($1, $2, 1)",
+        &[&order_id, &thread],
+    )
+    .await
+    .unwrap();
+    drop(conn);
 
     let (status, body) = call(&ctx, "DELETE", &uri, None).await;
     assert_eq!(status, StatusCode::NO_CONTENT, "{body:?}");
     assert!(stored(&ctx, thread).await.is_none());
 
+    let conn = ctx.state.pool.get().await.unwrap();
+    let remaining = conn
+        .query_one(
+            "SELECT (SELECT count(*) FROM events WHERE id = $1),
+                    (SELECT count(*) FROM snapshots WHERE id = $2),
+                    (SELECT count(*) FROM reading_order_items WHERE thread_id = $3)",
+            &[&event_id, &snapshot_id, &thread],
+        )
+        .await
+        .unwrap();
+    assert_eq!(remaining.get::<_, i64>(0), 0, "thread event removed");
+    assert_eq!(remaining.get::<_, i64>(1), 0, "dependent snapshot removed");
+    assert_eq!(remaining.get::<_, i64>(2), 0, "reading-order item removed");
+    drop(conn);
+
     let (status, body) = call(&ctx, "DELETE", &uri, None).await;
     assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
+    assert_eq!(body["detail"], format!("Thread {thread} not found"));
     let (status, body) = call(&ctx, "PATCH", &uri, Some(json!({"title": "No"}))).await;
     assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
 }
