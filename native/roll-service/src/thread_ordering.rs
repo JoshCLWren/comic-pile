@@ -1208,8 +1208,7 @@ pub fn thread_reading_orders_documentation() {}
         get_threads_blocking_info_documentation,
         connected_documentation,
         dependency_order_check_documentation,
-        validate_order_documentation,
-        thread_reading_orders_documentation
+        validate_order_documentation
     ),
     components(schemas(
         BlockingDependency,
@@ -1222,10 +1221,7 @@ pub fn thread_reading_orders_documentation() {}
         DependencyOrderRequirement,
         DependencyOrderConflict,
         ThreadDependencyOrderCheckResponse,
-        IssueOrderValidationResponse,
-        ReadingOrderItemResponse,
-        ReadingOrderResponse,
-        ThreadReadingOrdersResponse
+        IssueOrderValidationResponse
     )),
     modifiers(&ThreadOrderingSecurityAddon)
 )]
