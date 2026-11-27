@@ -654,20 +654,9 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/auth/reset-password",
             post(auth::handlers::reset_password),
         )
-        .route("/api/v1/auth/register", post(auth::handlers::register))
-        .route("/api/v1/auth/login", post(auth::handlers::login))
-        .route("/api/v1/auth/refresh", post(auth::handlers::refresh))
-        .route("/api/v1/auth/logout", post(auth::handlers::logout))
-        .route("/api/v1/auth/csrf", get(auth::handlers::csrf))
-        .route("/api/v1/auth/me", get(auth::handlers::me))
-        .route(
-            "/api/v1/auth/forgot-password",
-            post(auth::handlers::forgot_password),
-        )
-        .route(
-            "/api/v1/auth/reset-password",
-            post(auth::handlers::reset_password),
-        )
+        // #4549: the former /api/v1/auth/* and /api/auth/* aliases are retired.
+        // Canonical /api/v2/auth/* is the only live auth surface; both routers
+        // and the CSRF exemption list must stay in sync with this decision.
         .route(
             "/api/v2/series-mapping-commits",
             post(catalog_commit::commit_series_mapping_handler),
@@ -704,20 +693,6 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview",
             post(issue_identity_cbl_reading_graph_preview::preview_cbl_reading_graph_handler),
-        )
-        .route("/api/auth/register", post(auth::handlers::register))
-        .route("/api/auth/login", post(auth::handlers::login))
-        .route("/api/auth/refresh", post(auth::handlers::refresh))
-        .route("/api/auth/logout", post(auth::handlers::logout))
-        .route("/api/auth/csrf", get(auth::handlers::csrf))
-        .route("/api/auth/me", get(auth::handlers::me))
-        .route(
-            "/api/auth/forgot-password",
-            post(auth::handlers::forgot_password),
-        )
-        .route(
-            "/api/auth/reset-password",
-            post(auth::handlers::reset_password),
         )
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
         .route("/api/v2/demo-roll", get(demo::read_demo_roll))
