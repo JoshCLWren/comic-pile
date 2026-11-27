@@ -132,7 +132,6 @@
     {
       "bucket": "operations",
       "method": "GET",
-<<<<<<< HEAD
       "path": "/api/v2/threads/{thread_id}/dependencies",
       "dest": "/api/native_api.rs",
       "src": "^/api/v2/threads/[^/]+/dependencies$",
@@ -194,7 +193,10 @@
         "frontend/src/services/api-dependencies.ts"
       ],
       "owning_issue": 5709
-=======
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
       "path": "/api/v2/threads/{thread_id}/readingOrders",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v2/threads/[^/]+/readingOrders$",
@@ -205,7 +207,6 @@
         "frontend/src/services/api-reading-orders.ts",
         "frontend/src/hooks/useReaderContext.ts"
       ]
->>>>>>> origin/main
     },
     {
       "bucket": "operations",
