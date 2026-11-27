@@ -225,6 +225,28 @@ async fn confirmed_issue_identity(conn: &Conn, issue_id: i32, metadata: Value, c
     .unwrap();
 }
 
+async fn candidate_issue_identity(conn: &Conn, issue_id: i32, metadata: Value) {
+    let identity: i32 = conn
+        .query_one(
+            "INSERT INTO external_identities \
+                 (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
+             VALUES ('comicvine', 'issue', $1, $2::text::json, NOW(), NOW()) RETURNING id",
+            &[&format!("candidate-{issue_id}"), &metadata.to_string()],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    conn.execute(
+        "INSERT INTO issue_external_identity_mappings \
+             (issue_id, external_identity_id, status, evidence_source, confidence, \
+              created_at, updated_at, evidence_json) \
+         VALUES ($1, $2, 'candidate', 'test', 0.4, NOW(), NOW(), '{}'::json)",
+        &[&issue_id, &identity],
+    )
+    .await
+    .unwrap();
+}
+
 #[tokio::test]
 async fn v2_issues_are_ordered_enriched_filtered_and_paginated() {
     let (state, token, csrf, user_id, _guard) = setup_user("tiss-v2-issues").await;
