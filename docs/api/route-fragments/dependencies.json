@@ -118,43 +118,6 @@
         "frontend/src/services/api-reader-context.ts"
       ],
       "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/threads/{thread_id}/dependencies",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/threads/[0-9]+/dependencies$",
-      "runtime": "native-rust",
-      "status": "target",
-      "consumers": [
-        "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-dependency-groups.ts",
-        "frontend/src/services/api-issues.ts",
-        "frontend/src/services/api-migration.ts",
-        "frontend/src/services/api-reading-orders.ts",
-        "frontend/src/services/api-threads.ts"
-      ],
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/threads/{thread_id}/issue-dependencies",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/threads/[^/]+/issue\\-dependencies$",
-      "runtime": "native-rust",
-      "status": "target",
-      "consumers": [
-        "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-dependency-groups.ts",
-        "frontend/src/services/api-issues.ts",
-        "frontend/src/services/api-migration.ts",
-        "frontend/src/services/api-reading-orders.ts",
-        "frontend/src/services/api-threads.ts"
-      ],
-      "exclude_from_inventory": true
->>>>>>> origin/main
     }
   ]
 }
