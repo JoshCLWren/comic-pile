@@ -289,7 +289,7 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
             "CBL source path must be non-empty and at most 1000 characters",
         ));
     }
-    let mut reader = Reader::from_bytes(raw);
+    let mut reader = Reader::from_ref(raw);
     reader.config_mut().trim_text(true);
     let mut buffer = Vec::new();
     let mut root_seen = false;
@@ -307,7 +307,7 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
         match event {
             Event::Start(ref element) => {
                 root_seen = true;
-                match tag(element.name().as_ref()) {
+                match element.name().as_ref() {
                     "Name" if current_book.is_none() => {
                         capture = Some(CapturedField::Name);
                         captured_text.clear();
@@ -332,7 +332,7 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
             }
             Event::Empty(ref element) => {
                 root_seen = true;
-                if tag(element.name().as_ref()) == "Book" {
+                if element.name().as_ref() == "Book" {
                     let mut book = parse_book(element)?;
                     book.position = i32::try_from(books.len() + 1)
                         .map_err(|_| IngestError::new("too many ordered book entries"))?;
@@ -356,7 +356,7 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
                     captured_text.push_str(&decode_reference(reference.as_ref()));
                 }
             }
-            Event::End(ref element) => match tag(element.name().as_ref()) {
+            Event::End(ref element) => match element.name().as_ref() {
                 "Name" if capture == Some(CapturedField::Name) => {
                     capture = None;
                     name = Some(captured_text.trim().to_string());
@@ -399,7 +399,11 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
     }
     let mut hasher = Sha256::new();
     hasher.update(raw);
-    let content_hash = format!("{:x}", hasher.finalize());
+    let content_hash = hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
     Ok(CBLList {
         source_path: source_path.to_string(),
         content_hash,
@@ -413,10 +417,6 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
 enum CapturedField {
     Name,
     NumIssues,
-}
-
-fn tag(name: &[u8]) -> &str {
-    std::str::from_utf8(name).unwrap_or("")
 }
 
 fn decode_reference(raw: &str) -> String {
@@ -436,11 +436,11 @@ fn attribute(element: &quick_xml::events::BytesStart<'_>, key: &[u8]) -> Result<
     for candidate in element.attributes() {
         let attribute =
             candidate.map_err(|error| IngestError::new(format!("invalid CBL attribute: {error}")))?;
-        if attribute.key().as_ref() != key {
+        if attribute.key.as_ref() != key {
             continue;
         }
         let value = attribute
-            .unescape_value()
+            .normalized_value()
             .map_err(|error| IngestError::new(format!("invalid CBL attribute: {error}")))?;
         let value = value.trim();
         return Ok(if value.is_empty() {
@@ -694,7 +694,7 @@ pub async fn connect(database_url: &str) -> Result<Client, IngestError> {
     let (client, connection) = config
         .connect(MakeTlsConnector::new(tls))
         .await
-        .map_err(|error| IngestError::new("database connection failed"))?;
+        .map_err(|_error| IngestError::new("database connection failed"))?;
     tokio::spawn(connection);
     Ok(client)
 }
@@ -754,7 +754,7 @@ pub async fn sync_cbl_lists<C: GenericClient>(
         }
     }
 
-    let (mut source_id, existing_revision) = lookup_source(client, &repository, &aliases, dry_run).await?;
+    let (mut source_id, existing_revision) = lookup_source(client, &repository, dry_run).await?;
     let source_created = source_id.is_none();
     let mut repository_reconciled = false;
     if source_id.is_none() && !aliases.is_empty() {
@@ -915,7 +915,6 @@ async fn source_query<C: GenericClient>(
 async fn lookup_source<C: GenericClient>(
     client: &C,
     repository: &str,
-    aliases: &[String],
     dry_run: bool,
 ) -> Result<(Option<i32>, Option<String>), IngestError> {
     let rows = source_query(
@@ -1200,14 +1199,14 @@ async fn insert_entries<C: GenericClient>(
                       AS input(list_id, position, series_name, issue_number, volume_year,
                                publication_year, series_identity_id, issue_identity_id)",
                 &[
-                    &list_ids_column[start..end],
-                    &positions[start..end],
-                    &series_names[start..end],
-                    &issue_numbers[start..end],
-                    &volume_years[start..end],
-                    &publication_years[start..end],
-                    &series_identity_ids[start..end],
-                    &issue_identity_ids[start..end],
+                    &&list_ids_column[start..end],
+                    &&positions[start..end],
+                    &&series_names[start..end],
+                    &&issue_numbers[start..end],
+                    &&volume_years[start..end],
+                    &&publication_years[start..end],
+                    &&series_identity_ids[start..end],
+                    &&issue_identity_ids[start..end],
                     &synced_at,
                 ],
             )
