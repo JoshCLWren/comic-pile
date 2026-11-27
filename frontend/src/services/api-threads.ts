@@ -58,7 +58,7 @@ export function createThreadsApi(client: HttpClient) {
       return response
     },
     get: (id: number) => client.get<Thread>(`/v1/threads/${id}`),
-    create: (data: ThreadCreatePayload) => client.post<Thread, ThreadCreatePayload>('/v1/threads/', data),
+    create: (data: ThreadCreatePayload) => client.post<Thread, ThreadCreatePayload>('/v2/threads', data),
     update: (id: number, data: ThreadUpdatePayload) =>
       client.put<Thread, ThreadUpdatePayload>(`/v1/threads/${id}`, data),
     delete: (id: number) => client.delete<void>(`/v1/threads/${id}`),
