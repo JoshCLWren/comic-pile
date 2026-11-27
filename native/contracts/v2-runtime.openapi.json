@@ -6954,6 +6954,88 @@
         ]
       }
     },
+    "/api/v2/threads/{thread_id}/creatorCredits": {
+      "get": {
+        "tags": [
+          "creators"
+        ],
+        "summary": "Documentation-only v2 thread-scoped credit projection.",
+        "description": "Bounded, owner-scoped, paginated per-issue creator credits for one thread. Issues without a confirmed ComicVine mapping are omitted; no per-issue HTTP fanout.",
+        "operationId": "list_thread_creator_credits_v2_documentation",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned thread ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Optional unread or read filter",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "1-100 issues (default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "page_token",
+            "in": "query",
+            "description": "position,id continuation cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated thread creator credits",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadCreatorCreditsPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid page token"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "422": {
+            "description": "Validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/threads/{thread_id}/issue-order": {
       "put": {
         "tags": [
@@ -7012,6 +7094,86 @@
       }
     },
     "/api/v2/threads/{thread_id}/issues": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only v2 collection operation; the mounted handlers above\ndelegate to the same DTOs and query parser.",
+        "description": "Owner-scoped, paginated thread issue collection with read state, rating, mapping and cover projection. Never applies a reading-eligibility veto to a read.",
+        "operationId": "list_thread_issues_v2_documentation",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned thread ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Optional unread or read filter",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "1-100 issues (default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "page_token",
+            "in": "query",
+            "description": "position,id continuation cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated owner-scoped issues",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadIssuesV2Page"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid page token"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "422": {
+            "description": "Validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
       "post": {
         "tags": [
           "issues"
@@ -10042,6 +10204,32 @@
           },
           "thread_title": {
             "type": "string"
+          }
+        }
+      },
+      "CreatorCredit": {
+        "type": "object",
+        "description": "One credited creator (Python `ComicVineCreator`).",
+        "required": [
+          "name",
+          "roles"
+        ],
+        "properties": {
+          "creator_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -13227,6 +13415,26 @@
               "$ref": "#/components/schemas/IssueCard"
             },
             "description": "Owned cards in first-request order; foreign or missing IDs are omitted."
+          }
+        }
+      },
+      "IssueCreatorsEntry": {
+        "type": "object",
+        "description": "Stored creator credits for one issue (Python `IssueCreatorsEntry`).",
+        "required": [
+          "issue_id",
+          "creators"
+        ],
+        "properties": {
+          "creators": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatorCredit"
+            }
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -18808,6 +19016,42 @@
           }
         }
       },
+      "ThreadCreatorCreditsPage": {
+        "type": "object",
+        "description": "Paginated thread-scoped creator-credit projection.\n\n`issues` contains only rows with stored credits, matching the legacy bulk\nread; callers fall back to the series' manual credits for absent issues.",
+        "required": [
+          "thread_id",
+          "issues",
+          "total_count",
+          "page_size"
+        ],
+        "properties": {
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueCreatorsEntry"
+            }
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "ThreadDependenciesResponse": {
         "type": "object",
         "description": "Wire parity with Python `ThreadDependenciesResponse`\n(`app/schemas/dependency.py`): the `blocking` list holds edges where this\nthread's issues block others, `blocked_by` holds edges where this thread's\nissues are blocked. Each entry is the enriched `DependencyResponse`.",
@@ -18880,6 +19124,85 @@
           }
         }
       },
+      "ThreadIssueV2Item": {
+        "type": "object",
+        "description": "One owner-scoped issue row in the v2 thread collection.\n\nThe base fields are the frozen Python `IssueResponse` shape. The projection\nadds the reader-visible card data (rating, mapping state, provider issue id\nand exact stored cover URL) so listing a thread never needs a second\nper-issue request. Unmapped issues are kept with `mapping_state = \"unmapped\"`\nand null identity fields; no reading-eligibility veto applies to a read.",
+        "required": [
+          "id",
+          "thread_id",
+          "issue_number",
+          "position",
+          "status",
+          "created_at",
+          "mapping_state",
+          "has_confirmed_identity"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Confirmed provider identifier; candidates never expose provider identity."
+          },
+          "cover_image_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Exact provider-supplied cover URL; null for missing or unconfirmed mapping."
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "has_confirmed_identity": {
+            "type": "boolean",
+            "description": "Whether a confirmed ComicVine issue identity exists."
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "issue_number_alias": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mapping_state": {
+            "type": "string",
+            "description": "`unmapped`, `candidate`, `confirmed`, or another stored mapping state."
+          },
+          "position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Effective saved rating, ignoring ratings reversed by an Undo snapshot."
+          },
+          "read_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "ThreadIssuesEffectiveTagsResponse": {
         "type": "object",
         "required": [
@@ -18896,6 +19219,37 @@
           "thread_id": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "ThreadIssuesV2Page": {
+        "type": "object",
+        "description": "Paginated owner-scoped issue collection for one thread.",
+        "required": [
+          "issues",
+          "total_count",
+          "page_size"
+        ],
+        "properties": {
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ThreadIssueV2Item"
+            }
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_count": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
