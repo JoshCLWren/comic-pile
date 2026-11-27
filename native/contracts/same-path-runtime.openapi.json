@@ -3014,56 +3014,6 @@
         ]
       }
     },
-    "/api/v1/threads/{thread_id}/connected": {
-      "get": {
-        "tags": [
-          "dependencies"
-        ],
-        "summary": "Documentation-only operation for connected threads.",
-        "operationId": "thread_ordering_connected_threads",
-        "parameters": [
-          {
-            "name": "thread_id",
-            "in": "path",
-            "description": "Owned Thread identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Threads connected through dependencies",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ThreadConnectedResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Thread not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/v1/threads/{thread_id}/dependencies": {
       "get": {
         "tags": [
@@ -3558,56 +3508,6 @@
         ]
       }
     },
-    "/api/v1/threads/{thread_id}:getBlockingInfo": {
-      "post": {
-        "tags": [
-          "dependencies"
-        ],
-        "summary": "Documentation-only operation for the single-thread blocking explanation.",
-        "operationId": "thread_ordering_get_blocking_info",
-        "parameters": [
-          {
-            "name": "thread_id",
-            "in": "path",
-            "description": "Owned Thread identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Blocked status and reasons",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BlockingExplanation"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Thread not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/v1/threads/{thread_id}:migrateToIssues": {
       "post": {
         "tags": [
@@ -3782,54 +3682,6 @@
           },
           "404": {
             "description": "Thread or issue not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/threads:getBlockingInfo": {
-      "post": {
-        "tags": [
-          "dependencies"
-        ],
-        "summary": "Documentation-only operation for the batch blocking explanation.",
-        "operationId": "thread_ordering_get_threads_blocking_info",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BatchBlockingExplanationRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Blocking explanations keyed by thread id",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BatchBlockingExplanationResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "One or more threads not found"
           },
           "422": {
             "description": "Request validation failed"
@@ -10431,6 +10283,106 @@
         ]
       }
     },
+    "/api/v2/threads/{thread_id}/connections": {
+      "get": {
+        "tags": [
+          "dependencies"
+        ],
+        "summary": "Documentation-only operation for v2 connected threads.",
+        "operationId": "thread_connections_get",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Threads connected through dependencies",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadConnectedResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/threads/{thread_id}/eligibility": {
+      "get": {
+        "tags": [
+          "dependencies"
+        ],
+        "summary": "Documentation-only operation for v2 thread eligibility.",
+        "operationId": "thread_eligibility_get",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Canonical thread eligibility",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadEligibilityResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/threads/{thread_id}/issue-order": {
       "put": {
         "tags": [
@@ -10665,6 +10617,54 @@
           },
           "404": {
             "description": "Thread or issue not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/threads:explainEligibility": {
+      "post": {
+        "tags": [
+          "dependencies"
+        ],
+        "summary": "Documentation-only operation for v2 batch eligibility explanation.",
+        "operationId": "threads_explain_eligibility",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchEligibilityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Canonical eligibility explanations keyed by thread id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchEligibilityResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "One or more threads not found"
+          },
+          "422": {
+            "description": "Request validation failed"
           },
           "503": {
             "description": "Database temporarily unavailable"
@@ -11121,6 +11121,36 @@
         "properties": {
           "threads": {
             "$ref": "#/components/schemas/OrderedExplanations"
+          }
+        }
+      },
+      "BatchEligibilityRequest": {
+        "type": "object",
+        "description": "v2 `POST /api/v2/threads:explainEligibility` request.",
+        "required": [
+          "thread_ids"
+        ],
+        "properties": {
+          "thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "maxItems": 500,
+            "minItems": 1
+          }
+        }
+      },
+      "BatchEligibilityResponse": {
+        "type": "object",
+        "description": "v2 `POST /api/v2/threads:explainEligibility` response.",
+        "required": [
+          "threads"
+        ],
+        "properties": {
+          "threads": {
+            "$ref": "#/components/schemas/OrderedEligibilityExplanations"
           }
         }
       },
@@ -19782,6 +19812,16 @@
           }
         }
       },
+      "OrderedEligibilityExplanations": {
+        "type": "object",
+        "description": "Ordered `thread_id -> eligibility` object, preserving request order.",
+        "additionalProperties": {
+          "$ref": "#/components/schemas/ThreadEligibilityResponse"
+        },
+        "propertyNames": {
+          "type": "string"
+        }
+      },
       "OrderedExplanations": {
         "type": "object",
         "description": "Ordered `thread_id -> explanation` object (Python `dict[int, ...]`).",
@@ -25932,6 +25972,48 @@
               "integer",
               "null"
             ],
+            "format": "int32"
+          }
+        }
+      },
+      "ThreadEligibilityResponse": {
+        "type": "object",
+        "description": "v2 derived singleton: canonical eligibility for one thread.",
+        "required": [
+          "thread_id",
+          "eligible",
+          "is_blocked",
+          "blocking_reasons",
+          "blocking_dependencies"
+        ],
+        "properties": {
+          "blocking_dependencies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BlockingDependency"
+            }
+          },
+          "blocking_reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "eligible": {
+            "type": "boolean"
+          },
+          "is_blocked": {
+            "type": "boolean"
+          },
+          "next_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
             "format": "int32"
           }
         }
