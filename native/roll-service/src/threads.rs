@@ -756,7 +756,7 @@ async fn completed_page(
         .page_token
         .as_deref()
         .filter(|token| !token.is_empty())
-        .map(|token| decode_cursor(token, sort, &search, "legacy"))
+        .map(|token| decode_cursor(token, sort, &search, "completed"))
         .transpose()?;
     let (auth, _active_count, _filtered_count, _list_names, rows) = query_page(
         state,
@@ -786,7 +786,7 @@ async fn completed_page(
                         .unwrap_or_else(|| last.created_at.clone()),
                     last.id.to_string(),
                 ],
-                execution: "legacy".to_string(),
+                execution: "completed".to_string(),
             })
         })
     } else {
@@ -827,7 +827,7 @@ pub(crate) async fn list_excluded_page(
     let search = normalize_search(raw_search);
     let cursor = page_token
         .filter(|token| !token.is_empty())
-        .map(|token| decode_cursor(token, sort, &search, "legacy"))
+        .map(|token| decode_cursor(token, sort, &search, "excluded"))
         .transpose()?;
     let (auth, _active_count, _filtered_count, _list_names, rows) = query_page(
         state,
@@ -860,7 +860,7 @@ pub(crate) async fn list_excluded_page(
                         last.id.to_string(),
                     ],
                 },
-                execution: "legacy".to_string(),
+                execution: "excluded".to_string(),
             })
         })
     } else {
@@ -2104,6 +2104,28 @@ mod tests {
                 .detail(),
             "Queue ordering changed; reload the Queue"
         );
+    }
+
+    #[test]
+    fn filtered_page_tokens_are_bound_to_their_collection() {
+        for (mint, other) in [("completed", "excluded"), ("excluded", "completed")] {
+            let token = encode_cursor(&QueueCursor {
+                sort: "created".to_string(),
+                search: String::new(),
+                values: vec!["2026-01-02T03:04:05+00:00".to_string(), "7".to_string()],
+                execution: mint.to_string(),
+            });
+            assert_eq!(
+                decode_cursor(&token, "created", "", mint).expect("matching filter"),
+                decode_cursor(&token, "created", "", mint).expect("matching filter again")
+            );
+            assert_eq!(
+                decode_cursor(&token, "created", "", other)
+                    .unwrap_err()
+                    .detail(),
+                "Queue ordering changed; reload the Queue"
+            );
+        }
     }
 
     #[test]
