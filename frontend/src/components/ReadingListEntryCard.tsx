@@ -1,6 +1,6 @@
 import type { Ref } from 'react'
 import type { CustomCBLEntry, ReadingListGate, ReadingListMode } from '../services/api-custom-cbl'
-import { ComicIssueCard } from './ComicIssueCard'
+import { ComicIssueReadingCard } from './ComicIssueReadingCard'
 import type { IssueCard, IssueReadRateResponse } from '../services/issueCardsApi'
 
 const GATE_ORDER: ReadingListGate[] = ['none', 'after_previous', 'hold']
@@ -193,8 +193,11 @@ export default function ReadingListEntryCard({
                       </div>
                       {waitText && <p className={`mt-2 break-words text-xs text-[var(--theme-text-muted)] sm:pl-10 ${expanded ? 'block' : 'hidden sm:block'}`}>{waitText}</p>}
                       {/* Direct reading is separate from staged list edits:
-                          reading never commits or discards unsaved edits. */}
-                      <ComicIssueCard
+                          reading never commits or discards unsaved edits. The
+                          reading card opens the same provider/tag detail as a
+                          completed roll, only once this row's editor is used
+                          (#5751); collapsed/unchanged rows make no extra reads. */}
+                      <ComicIssueReadingCard
                         issueId={entry.issue_id}
                         card={resolvedCard}
                         threadTitle={entry.series_name}
