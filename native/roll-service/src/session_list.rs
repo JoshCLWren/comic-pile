@@ -19,10 +19,13 @@
 //! Dice/read writes are persisted without a `session_id` (dice_mutation and
 //! issue_service), so an event aggregate that only matches `e.session_id` would
 //! silently drop modern history. Like the `/details` projection, each page row
-//! claims that reader's session-less `rate`/`snooze`/`unsnooze` events inside
-//! its own window: `[started_at, ended_at]` for an ended session, or up to the
-//! next session start for an open one. The window is derived set-based in the
-//! page CTE, never with a per-row query.
+//! claims that reader's session-less `rate`/`snooze`/`unsnooze`/`manual_die`/
+//! `reset_dice` events inside its own window: `[started_at, ended_at]` for an
+//! ended session, or up to the next session start for an open one. The window is
+//! derived set-based in the page CTE, never with a per-row query. Manual
+//! selection and Reset carry a die outcome with no earlier die event, so they
+//! must take part in both the current-die resolution and the ladder, never be
+//! mistaken for a non-die action.
 
 use crate::{
     auth::AuthenticatedUser,
@@ -156,11 +159,11 @@ WITH page AS (
     SELECT p.id AS session_id,
            COUNT(e.id)::int AS event_count,
            (array_agg(e.die_after ORDER BY e.timestamp DESC, e.id DESC)
-              FILTER (WHERE e.die_after IS NOT NULL AND e.type IN ('rate','snooze','undo')))[1] AS latest_die_after,
+              FILTER (WHERE e.die_after IS NOT NULL AND e.type IN ('rate','snooze','unsnooze','undo','manual_die','reset_dice')))[1] AS latest_die_after,
            (array_agg(e.context::text ORDER BY e.timestamp DESC, e.id DESC)
-              FILTER (WHERE e.die_after IS NOT NULL AND e.type IN ('rate','snooze','undo')))[1] AS latest_context,
+              FILTER (WHERE e.die_after IS NOT NULL AND e.type IN ('rate','snooze','unsnooze','undo','manual_die','reset_dice')))[1] AS latest_context,
            array_agg(e.die_after ORDER BY e.timestamp ASC, e.id ASC)
-              FILTER (WHERE e.die_after IS NOT NULL AND e.type IN ('rate','snooze','undo')) AS ladder
+              FILTER (WHERE e.die_after IS NOT NULL AND e.type IN ('rate','snooze','unsnooze','undo','manual_die','reset_dice')) AS ladder
       FROM page p
       LEFT JOIN events e
         ON e.session_id = p.id
