@@ -82,7 +82,11 @@ export default function PlanProjectionDialog({
     setIsConfirming(true)
     setError(null)
     try {
-      const nextResult = await readingOrdersApi.confirmProjection(planId, selectedOrder.id)
+      const nextResult = await readingOrdersApi.confirmProjection(
+        planId,
+        selectedOrder.id,
+        preview?.plan_updated_at,
+      )
       setResult(nextResult)
       setPreview(null)
     } catch (confirmError: unknown) {

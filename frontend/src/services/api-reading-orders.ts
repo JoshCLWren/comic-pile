@@ -110,10 +110,14 @@ export function createReadingOrdersApi(client: HttpClient) {
     confirmProjection: async (
       planId: number,
       readingOrderId: number,
+      planUpdatedAt?: string,
     ): Promise<ReadingOrderProjectionResult> => {
       return client.post<ReadingOrderProjectionResult>(
         `/v2/continuity-plans/${planId}/reading-orders/project`,
-        { reading_order_id: readingOrderId },
+        {
+          reading_order_id: readingOrderId,
+          ...(planUpdatedAt ? { plan_updated_at: planUpdatedAt } : {}),
+        },
       )
     },
     getForThread: async (threadId: number): Promise<ThreadReadingOrdersResponse> => {
