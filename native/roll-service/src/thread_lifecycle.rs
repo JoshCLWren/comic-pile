@@ -3038,7 +3038,6 @@ mod tests {
             format: "Comic".to_owned(),
             issues_remaining: 3,
             total_issues: None,
-            reading_progress: None,
             status: "active".to_owned(),
             queue_position: 1,
             notes: Some("committed notes".to_owned()),
