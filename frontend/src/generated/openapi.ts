@@ -3689,6 +3689,66 @@ export interface paths {
         patch: operations["patch_user_preferences_documentation"];
         trace?: never;
     };
+    "/api/v2/users/me/tasteDiscoveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documentation-only operation for the canonical v2 discoveries resource.
+         * @description List prompt-eligible taste discoveries for the authenticated reader. Applies the same evidence/confidence/affinity/diversity gates, 14-day cooldown, dismissal suppression and creator-role dedup as the retained v1 path, and records last_prompted_at for exactly the returned signals.
+         */
+        get: operations["list_taste_discoveries_v2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/users/me/tasteDiscoveries/{signal_id}:dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Documentation-only operation for the canonical v2 dismiss custom method.
+         * @description Dismiss one owner-scoped taste discovery without recording a verdict. Event-style custom method (AIP-136): writes prompt_suppressed_until = NOW() + interval '14 days' and returns {dismissed: true}. Repeated dismissals are idempotent; missing or foreign signals return 404.
+         */
+        post: operations["dismiss_taste_discovery_v2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/users/me/tasteSignals/{signal_name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Documentation-only operation for the canonical v2 Taste Bank signal PATCH.
+         * @description Partially update one owned Taste Bank signal (AIP-134). The resource name is the stable composite <signal_type>:<external_key> encoded as one path segment. Only user_verdict is patchable; an update_mask restricts the write, and a masked-but-absent verdict clears it. Repeated identical verdicts are idempotent and inferred evidence is never mutated.
+         */
+        patch: operations["patch_taste_signal_v2"];
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -9401,6 +9461,17 @@ export interface components {
         /** @description All Taste Bank signals owned by the authenticated user. */
         TasteSignalListResponse: {
             signals: components["schemas"]["TasteSignalResponse"][];
+        };
+        /**
+         * @description AIP-134 partial update of the canonical v2 Taste Bank signal resource.
+         *
+         *     Only `user_verdict` is patchable. An explicit `update_mask` restricts the
+         *     write to the named field; a masked field missing from the body clears the
+         *     verdict. Without a mask, an omitted verdict leaves the signal untouched.
+         */
+        TasteSignalPatchRequest: {
+            update_mask?: string[] | null;
+            user_verdict?: string | null;
         };
         /** @description Canonical representation of one persisted Taste Bank signal. */
         TasteSignalResponse: {
@@ -20110,6 +20181,148 @@ export interface operations {
                 content?: never;
             };
             /** @description Unknown theme id */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_taste_discoveries_v2: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ranked discoveries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TasteDiscoveryListResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description limit is outside the allowed range */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    dismiss_taste_discovery_v2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned taste signal identifier */
+                signal_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Dismissed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TasteDismissResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Taste discovery not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    patch_taste_signal_v2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Stable composite signal name, URL-encoded */
+                signal_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TasteSignalPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Canonical signal after the patch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TasteSignalResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Taste signal not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
