@@ -1755,15 +1755,18 @@ pub fn create_group_v2_documentation() {}
 #[allow(dead_code)]
 pub fn list_thread_group_memberships_documentation() {}
 
-/// Documentation-only operation for fetching one group.
+/// Documentation-only operation for the canonical v2 group Get.
+///
+/// The enriched detail view is folded into this resource read; v2 publishes no
+/// separate `/detail` action path (#5710).
 #[utoipa::path(
     get,
-    path = "/api/v1/reading-order-groups/{group_id}",
+    path = "/api/v2/readingOrderGroups/{group_id}",
     tag = "reading-order-groups",
-    operation_id = "dependency_groups_get",
-    params(("group_id" = i32, Path, description = "Owned group identifier")),
+    operation_id = "reading_order_groups_get",
+    params(("group_id" = i32, Path, description = "Owned reading-order group identifier")),
     responses(
-        (status = 200, description = "Owned group", body = DependencyGroupResponse),
+        (status = 200, description = "Owned group detail", body = DependencyGroupDetailResponse),
         (status = 401, description = "Not authenticated"),
         (status = 404, description = "Group not found"),
         (status = 422, description = "Request validation failed"),
@@ -1772,15 +1775,15 @@ pub fn list_thread_group_memberships_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn get_group_documentation() {}
+pub fn get_group_v2_documentation() {}
 
-/// Documentation-only operation for renaming one group.
+/// Documentation-only operation for renaming a v2 reading-order group.
 #[utoipa::path(
     patch,
-    path = "/api/v1/reading-order-groups/{group_id}",
+    path = "/api/v2/readingOrderGroups/{group_id}",
     tag = "reading-order-groups",
-    operation_id = "dependency_groups_update",
-    params(("group_id" = i32, Path, description = "Owned group identifier")),
+    operation_id = "reading_order_groups_update",
+    params(("group_id" = i32, Path, description = "Owned reading-order group identifier")),
     request_body = DependencyGroupUpdateRequest,
     responses(
         (status = 200, description = "Renamed group", body = DependencyGroupResponse),
@@ -1793,15 +1796,15 @@ pub fn get_group_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn update_group_documentation() {}
+pub fn update_group_v2_documentation() {}
 
-/// Documentation-only operation for deleting one group.
+/// Documentation-only operation for deleting a v2 reading-order group.
 #[utoipa::path(
     delete,
-    path = "/api/v1/reading-order-groups/{group_id}",
+    path = "/api/v2/readingOrderGroups/{group_id}",
     tag = "reading-order-groups",
-    operation_id = "dependency_groups_delete",
-    params(("group_id" = i32, Path, description = "Owned group identifier")),
+    operation_id = "reading_order_groups_delete",
+    params(("group_id" = i32, Path, description = "Owned reading-order group identifier")),
     responses(
         (status = 204, description = "Group deleted"),
         (status = 401, description = "Not authenticated"),
@@ -1812,26 +1815,7 @@ pub fn update_group_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn delete_group_documentation() {}
-
-/// Documentation-only operation for fetching enriched group detail.
-#[utoipa::path(
-    get,
-    path = "/api/v1/reading-order-groups/{group_id}/detail",
-    tag = "reading-order-groups",
-    operation_id = "dependency_groups_get_detail",
-    params(("group_id" = i32, Path, description = "Owned group identifier")),
-    responses(
-        (status = 200, description = "Owned group detail", body = DependencyGroupDetailResponse),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Group not found"),
-        (status = 422, description = "Request validation failed"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn get_group_detail_documentation() {}
+pub fn delete_group_v2_documentation() {}
 
 /// Documentation-only operation for adding an issue-position range (v2).
 #[utoipa::path(
@@ -1962,15 +1946,7 @@ pub fn resolve_memberships_documentation() {}
         version = "1.0.0",
         description = "Generated contract for the native reading-order-group handlers that retain their original method and path."
     ),
-    paths(
-        list_groups_documentation,
-        create_group_documentation,
-        get_group_documentation,
-        update_group_documentation,
-        delete_group_documentation,
-        get_group_detail_documentation,
-        set_group_order_documentation
-    ),
+    paths(set_group_order_documentation),
     components(schemas(
         DependencyGroupCreateRequest,
         DependencyGroupUpdateRequest,
@@ -2009,6 +1985,42 @@ impl utoipa::Modify for DependencyGroupsSecurityAddon {
 pub fn dependency_groups_openapi() -> utoipa::openapi::OpenApi {
     use utoipa::OpenApi;
     DependencyGroupsApi::openapi()
+}
+
+/// v2 collection CRUD contract (#5710). Kept as a separate domain document so
+/// the canonical `/api/v2` surface can publish it without re-declaring the
+/// retained v1 same-path order operation.
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    info(
+        title = "ComicPile native reading-order groups v2 API",
+        version = "2.0.0",
+        description = "Generated contract for the v2 reading-order group collection CRUD."
+    ),
+    paths(
+        list_groups_v2_documentation,
+        create_group_v2_documentation,
+        get_group_v2_documentation,
+        update_group_v2_documentation,
+        delete_group_v2_documentation
+    ),
+    components(schemas(
+        DependencyGroupCreateRequest,
+        DependencyGroupUpdateRequest,
+        DependencyGroupResponse,
+        DependencyGroupDetailResponse,
+        DependencyGroupDetailMemberResponse,
+        DependencyGroupMemberResponse,
+        DependencyGroupSummary
+    )),
+    modifiers(&DependencyGroupsSecurityAddon)
+)]
+pub struct ReadingOrderGroupsV2Api;
+
+/// Emit the v2 reading-order-groups collection CRUD contract.
+pub fn reading_order_groups_v2_openapi() -> utoipa::openapi::OpenApi {
+    use utoipa::OpenApi;
+    ReadingOrderGroupsV2Api::openapi()
 }
 
 /// OpenAPI document for the v2 reading-order-group membership surface.
@@ -2225,6 +2237,112 @@ mod tests {
         .await
         .expect_err("foreign group must be hidden");
         assert_eq!(ApiError::status(&error), StatusCode::NOT_FOUND);
+    }
+
+    /// The v2 CRUD surface keeps the owner scope and folds the enriched detail
+    /// view into canonical Get (#5710).
+    #[tokio::test]
+    async fn v2_group_crud_is_owner_scoped_and_folds_detail() {
+        let _guard = DB_LOCK.lock().await;
+        let state = test_state().await;
+        crate::test_support::reset(&state).await;
+
+        let connection = crate::db::checkout(&state).await.expect("seed connection");
+        for user_id in [7_i32, 8_i32] {
+            connection
+                .execute(
+                    "INSERT INTO users (id, username) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                    &[&user_id, &format!("reader-{user_id}")],
+                )
+                .await
+                .expect("seed user");
+        }
+        connection
+            .execute(
+                "INSERT INTO dependency_groups (id, user_id, name, created_at) \
+                 VALUES (101, 7, 'Crossover', now())",
+                &[],
+            )
+            .await
+            .expect("seed group");
+        connection
+            .execute(
+                "INSERT INTO threads (id, user_id, title, format, issues_remaining, status, queue_position) \
+                 VALUES (11, 7, 'Series', 'Comic', 1, 'active', 1)",
+                &[],
+            )
+            .await
+            .expect("seed thread");
+        connection
+            .execute(
+                "INSERT INTO dependency_group_memberships (id, group_id, thread_id) \
+                 VALUES (201, 101, 11)",
+                &[],
+            )
+            .await
+            .expect("seed membership");
+        drop(connection);
+
+        let detail = get_group_v2(
+            State(state.clone()),
+            AuthenticatedUser::for_test(7),
+            Ok(Path("101".to_string())),
+        )
+        .await
+        .expect("owned v2 Get");
+        assert_eq!(detail.0.name, "Crossover");
+        assert_eq!(detail.0.memberships.len(), 1);
+        assert!(detail.0.linked_plans.is_empty());
+
+        for user_id in [8_i32] {
+            let foreign_get = get_group_v2(
+                State(state.clone()),
+                AuthenticatedUser::for_test(user_id),
+                Ok(Path("101".to_string())),
+            )
+            .await
+            .expect_err("foreign Get must be hidden");
+            assert_eq!(ApiError::status(&foreign_get), StatusCode::NOT_FOUND);
+
+            let foreign_patch = update_group_v2(
+                State(state.clone()),
+                AuthenticatedUser::for_test(user_id),
+                Ok(Path("101".to_string())),
+                Ok(Json(DependencyGroupUpdateRequest {
+                    name: "Stolen".to_string(),
+                })),
+            )
+            .await
+            .expect_err("foreign PATCH must be hidden");
+            assert_eq!(ApiError::status(&foreign_patch), StatusCode::NOT_FOUND);
+
+            let foreign_delete = delete_group_v2(
+                State(state.clone()),
+                AuthenticatedUser::for_test(user_id),
+                Ok(Path("101".to_string())),
+            )
+            .await
+            .expect_err("foreign DELETE must be hidden");
+            assert_eq!(ApiError::status(&foreign_delete), StatusCode::NOT_FOUND);
+        }
+
+        let deleted = delete_group_v2(
+            State(state.clone()),
+            AuthenticatedUser::for_test(7),
+            Ok(Path("101".to_string())),
+        )
+        .await
+        .expect("owned DELETE");
+        assert_eq!(deleted, StatusCode::NO_CONTENT);
+
+        let missing = get_group_v2(
+            State(state),
+            AuthenticatedUser::for_test(7),
+            Ok(Path("101".to_string())),
+        )
+        .await
+        .expect_err("deleted group must be gone");
+        assert_eq!(ApiError::status(&missing), StatusCode::NOT_FOUND);
     }
 
     #[test]
