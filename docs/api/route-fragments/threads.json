@@ -400,23 +400,7 @@
       "status": "target",
       "owning_issue": 4832,
       "exclude_from_inventory": true
-<<<<<<< HEAD
-=======
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "POST",
-      "path": "/api/v1/threads:getBlockingInfo",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/threads:getBlockingInfo$",
-      "consumers": [
-        "frontend/src/services/api-dependencies.ts"
-      ],
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "exclude_from_inventory": true
->>>>>>> origin/main
+
     }
   ]
 }
