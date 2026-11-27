@@ -337,12 +337,15 @@ fn app() -> Router {
             post(native_dispatch),
         )
         .route("/api/v2/threads", get(native_dispatch))
+<<<<<<< HEAD
         .route(
             "/api/v2/threads/{thread_id}",
             get(native_dispatch)
                 .patch(native_dispatch)
                 .delete(native_dispatch),
         )
+=======
+>>>>>>> origin/main
         // #5705: the advisory duplicate check is an AIP-136 collection custom
         // method. The inner service registers it too, but this Vercel entry owns
         // a separate route table: without a matching route here a deployed
@@ -1428,6 +1431,44 @@ mod tests {
     }
 
     #[tokio::test]
+<<<<<<< HEAD
+=======
+    async fn undo_ingress_reaches_authenticated_native_dispatch() {
+        // The Vercel entry owns a route table separate from the inner service.
+        // Both browser-called undo paths must reach native dispatch rather than
+        // falling through to the Rust JSON 404 catch-all (#5885).
+        for (method, uri) in [
+            ("GET", "/api/v2/undo/7/snapshots"),
+            ("POST", "/api/v2/undo/7/snapshots/9/restore"),
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(method)
+                        .uri(uri)
+                        .header("content-type", "application/json")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{method} {uri} must require auth and reach Rust, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust",
+                "{method} {uri} must be served by the native ingress"
+            );
+        }
+    }
+
+    #[tokio::test]
+>>>>>>> origin/main
     async fn retired_session_paths_are_not_registered_at_the_ingress() {
         // #4343 retired the v1 session index/current/single reads and #5708
         // moved the live v2 family to the canonical lowerCamelCase collection.

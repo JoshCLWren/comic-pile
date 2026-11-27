@@ -54,6 +54,18 @@ function activityLabel(type: string): string {
   }
 }
 
+/**
+ * Resolve a canonical owned issue id from the owner-scoped activity projection.
+ *
+ * Sessionless history can contain legacy events that only carry a thread title
+ * and issue number. Those hints are never an owned issue identity, so they must
+ * not be promoted into a card, cover, or mapping target. A non-positive or
+ * non-integer placeholder is rejected for the same reason.
+ */
+function canonicalActivityIssueId(id: number | null | undefined): number | null {
+  return id != null && Number.isInteger(id) && id > 0 ? id : null
+}
+
 function formatDie(value: number | null | undefined): string | null {
   return value == null ? null : `d${value}`
 }
@@ -125,7 +137,9 @@ export default function HistoryPage() {
   // One bounded batch projection for the visible page of exact owned issues;
   // never one request per rendered row.
   const visibleIssueIds = useMemo(
-    () => (activity ?? []).map((item) => item.issue_id).filter((id): id is number => id != null),
+    () => (activity ?? [])
+      .map((item) => canonicalActivityIssueId(item.issue_id))
+      .filter((id): id is number => id != null),
     [activity],
   )
   const cardsQuery = useIssueCards(visibleIssueIds)
@@ -251,6 +265,7 @@ export default function HistoryPage() {
       >
         {activity.map((item) => {
           const progression = dieProgression(item)
+          const canonicalIssueId = canonicalActivityIssueId(item.issue_id)
           return (
             <div key={item.event_id} role="listitem" className="flex gap-3 md:gap-4 py-4 px-2 md:px-3">
               <div className="w-16 md:w-20 shrink-0">
@@ -282,14 +297,14 @@ export default function HistoryPage() {
                   </p>
                 )}
 
-                {item.issue_id != null && (
-                  <div className="pt-1">
+                {canonicalIssueId != null && (
+                  <div className="pt-1" data-testid="history-issue-actions">
                     <CompactIssueCardTrigger
-                      issueId={item.issue_id}
+                      issueId={canonicalIssueId}
                       threadTitle={item.thread_title ?? 'Deleted series'}
-                      issueNumber={item.issue_number ?? cardsByIssue.get(item.issue_id)?.issue_number ?? '?'}
-                      status={cardsByIssue.get(item.issue_id)?.status === 'read' ? 'read' : 'unread'}
-                      card={cardsByIssue.get(item.issue_id) ?? null}
+                      issueNumber={item.issue_number ?? cardsByIssue.get(canonicalIssueId)?.issue_number ?? '?'}
+                      status={cardsByIssue.get(canonicalIssueId)?.status === 'read' ? 'read' : 'unread'}
+                      card={cardsByIssue.get(canonicalIssueId) ?? null}
                       hideTitle
                     />
                   </div>

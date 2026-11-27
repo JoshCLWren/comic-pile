@@ -282,3 +282,24 @@ describe('LastReadStrip', () => {
     expect(onUndo).toHaveBeenCalledOnce()
   })
 })
+
+describe('last read exact issue actions (#5904)', () => {
+  it('exposes the shared covered entrance for the canonical owned issue', () => {
+    render(<LastReadStrip view={view} onDismiss={vi.fn()} onRollAgain={vi.fn()} />)
+    expect(screen.getByTestId('issue-card-trigger-31')).toBeInTheDocument()
+    expect(screen.queryByTestId('comic-issue-card')).not.toBeInTheDocument()
+    // The strip's own cover stays the only cover until the card is opened.
+    expect(screen.queryAllByTestId('comic-issue-cover')).toHaveLength(0)
+  })
+
+  it('mounts no issue card when the record has no canonical owned id', () => {
+    render(
+      <LastReadStrip
+        view={{ ...view, lastRead: { ...view.lastRead, issue_id: null } }}
+        onDismiss={vi.fn()}
+        onRollAgain={vi.fn()}
+      />,
+    )
+    expect(document.querySelector('[data-testid^="issue-card-trigger-"]')).toBeNull()
+  })
+})
