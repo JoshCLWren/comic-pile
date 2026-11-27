@@ -20699,22 +20699,26 @@
     },
     "/api/v1/reading-order-groups/": {
       "get": {
-        "description": "List the current user's groups and memberships.",
-        "operationId": "list_groups_api_v1_reading_order_groups__get",
+        "operationId": "dependency_groups_list",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/DependencyGroupResponse"
+                    "$ref": "#/components/schemas/NativeDependencyGroupResponse"
                   },
-                  "title": "Response List Groups Api V1 Reading Order Groups  Get",
                   "type": "array"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Owned groups with memberships"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -20722,21 +20726,18 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Groups",
+        "summary": "Documentation-only operation for listing reading-order groups.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       },
       "post": {
-        "description": "Create a user-owned named group.",
-        "operationId": "create_group_api_v1_reading_order_groups__post",
+        "operationId": "dependency_groups_create",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DependencyGroupCreate"
+                "$ref": "#/components/schemas/DependencyGroupCreateRequest"
               }
             }
           },
@@ -20747,21 +20748,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupResponse"
+                  "$ref": "#/components/schemas/NativeDependencyGroupResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Created group"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "409": {
+            "description": "A group with this name already exists"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -20769,42 +20772,42 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Create Group",
+        "summary": "Documentation-only operation for creating a reading-order group.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       }
     },
     "/api/v1/reading-order-groups/{group_id}": {
       "delete": {
-        "description": "Delete one owned group and its memberships.",
-        "operationId": "delete_group_api_v1_reading_order_groups__group_id__delete",
+        "operationId": "dependency_groups_delete",
         "parameters": [
           {
+            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "title": "Group Id",
+              "format": "int32",
               "type": "integer"
             }
           }
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Group deleted"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -20812,23 +20815,21 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Delete Group",
+        "summary": "Documentation-only operation for deleting one group.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       },
       "get": {
-        "description": "Return one owned group.",
-        "operationId": "get_group_api_v1_reading_order_groups__group_id__get",
+        "operationId": "dependency_groups_get",
         "parameters": [
           {
+            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "title": "Group Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -20838,21 +20839,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupResponse"
+                  "$ref": "#/components/schemas/NativeDependencyGroupResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Owned group"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -20860,23 +20863,21 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Group",
+        "summary": "Documentation-only operation for fetching one group.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       },
       "patch": {
-        "description": "Rename one owned group.",
-        "operationId": "update_group_api_v1_reading_order_groups__group_id__patch",
+        "operationId": "dependency_groups_update",
         "parameters": [
           {
+            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "title": "Group Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -20885,7 +20886,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DependencyGroupUpdate"
+                "$ref": "#/components/schemas/DependencyGroupUpdateRequest"
               }
             }
           },
@@ -20896,21 +20897,26 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupResponse"
+                  "$ref": "#/components/schemas/NativeDependencyGroupResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Renamed group"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
+          },
+          "409": {
+            "description": "A group with this name already exists"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -20918,25 +20924,23 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Update Group",
+        "summary": "Documentation-only operation for renaming one group.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       }
     },
     "/api/v1/reading-order-groups/{group_id}/detail": {
       "get": {
-        "description": "Return one owned group with enriched member, plan, and project data.",
-        "operationId": "get_group_detail_api_v1_reading_order_groups__group_id__detail_get",
+        "operationId": "dependency_groups_get_detail",
         "parameters": [
           {
+            "description": "Owned group identifier",
             "in": "path",
             "name": "group_id",
             "required": true,
             "schema": {
-              "title": "Group Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -20946,21 +20950,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupDetailResponse"
+                  "$ref": "#/components/schemas/NativeDependencyGroupDetailResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Owned group detail"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -20968,10 +20974,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Group Detail",
+        "summary": "Documentation-only operation for fetching enriched group detail.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "reading-order-groups"
         ]
       }
@@ -28481,240 +28485,6 @@
         ],
         "tags": [
           "reading-plan-sync"
-        ]
-      }
-    },
-    "/api/v2/readingOrderGroups": {
-      "get": {
-        "operationId": "reading_order_groups_list",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/NativeDependencyGroupResponse"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Owned groups with memberships"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for listing v2 reading-order groups.",
-        "tags": [
-          "reading-order-groups"
-        ]
-      },
-      "post": {
-        "operationId": "reading_order_groups_create",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DependencyGroupCreateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NativeDependencyGroupResponse"
-                }
-              }
-            },
-            "description": "Created group"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "409": {
-            "description": "A group with this name already exists"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for creating a v2 reading-order group.",
-        "tags": [
-          "reading-order-groups"
-        ]
-      }
-    },
-    "/api/v2/readingOrderGroups/{group_id}": {
-      "delete": {
-        "operationId": "reading_order_groups_delete",
-        "parameters": [
-          {
-            "description": "Owned reading-order group identifier",
-            "in": "path",
-            "name": "group_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Group deleted"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Group not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for deleting a v2 reading-order group.",
-        "tags": [
-          "reading-order-groups"
-        ]
-      },
-      "get": {
-        "description": "The enriched detail view is folded into this resource read; v2 publishes no\nseparate `/detail` action path (#5710).",
-        "operationId": "reading_order_groups_get",
-        "parameters": [
-          {
-            "description": "Owned reading-order group identifier",
-            "in": "path",
-            "name": "group_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NativeDependencyGroupDetailResponse"
-                }
-              }
-            },
-            "description": "Owned group detail"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Group not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for the canonical v2 group Get.",
-        "tags": [
-          "reading-order-groups"
-        ]
-      },
-      "patch": {
-        "operationId": "reading_order_groups_update",
-        "parameters": [
-          {
-            "description": "Owned reading-order group identifier",
-            "in": "path",
-            "name": "group_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DependencyGroupUpdateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NativeDependencyGroupResponse"
-                }
-              }
-            },
-            "description": "Renamed group"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Group not found"
-          },
-          "409": {
-            "description": "A group with this name already exists"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for renaming a v2 reading-order group.",
-        "tags": [
-          "reading-order-groups"
         ]
       }
     },
