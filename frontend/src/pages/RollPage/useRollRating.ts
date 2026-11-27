@@ -17,6 +17,10 @@ interface UseRollRatingParams {
   rateMutation: { mutate: (payload: RatePayload) => Promise<RateMutationOutcome>; isPending: boolean }
   dismissPendingMutation: { mutate: () => Promise<void>; isPending: boolean }
   refetchBootstrap: () => Promise<RollBootstrapResponse | undefined>
+  /** Clear the browser-owned selection after a committed rate of that issue. */
+  clearPending?: (issueId?: number) => void
+  /** Exact issue currently selected in browser storage, when any. */
+  selectedIssueId?: number | null
 }
 
 /**

@@ -47,6 +47,15 @@ interface UseRollActionsParams {
    * visible recovery surface (a toast with a refresh-only retry).
    */
   onSnoozeRefreshFailed?: (refreshError: unknown) => void
+  /** Browser-owned pending selection, never server-owned pending state. */
+  pendingThreadId?: number | null
+  /** Seed the exact browser selection from a successful offer response. */
+  seedPending?: (offer: {
+    thread_id: number | null
+    issue_id: number | null
+    issue_number?: string | null
+    result?: number | null
+  }) => void
 }
 
 /**
@@ -77,9 +86,10 @@ export function useRollActions({
   rollPool,
   navigate,
   mutations,
-  refetchBootstrap,
   enterRatingView,
   onSnoozeRefreshFailed,
+  pendingThreadId,
+  seedPending,
 }: UseRollActionsParams) {
   const {
     isRolling,
@@ -173,7 +183,7 @@ export function useRollActions({
           if (!canSnoozeSeries({
             threadId: selectedThread!.id,
             isSnoozed,
-            pendingThreadId: bootstrap?.pending_thread_id,
+            pendingThreadId: pendingThreadId ?? bootstrap?.pending_thread_id ?? null,
           })) {
             setErrorMessage(SNOOZE_REQUIRES_PENDING_SERIES_REASON)
             break
@@ -220,16 +230,15 @@ export function useRollActions({
   }
 
   async function recoverPendingRollConflict() {
-    const latest = await refetchBootstrap()
-    const pendingId = Number(latest?.pending_thread_id ?? bootstrap?.pending_thread_id ?? 0)
+    // The exact browser selection is authoritative after a 409; there is no
+    // aggregate refresh to issue. Scoped queries are already invalidated by the
+    // failed offer's mutation lifecycle.
+    const pendingId = Number(pendingThreadId ?? bootstrap?.pending_thread_id ?? 0)
     if (!pendingId) return false
-    const pendingMetadata =
-      latest?.active_thread && latest.active_thread.id === pendingId
-        ? latest.active_thread
-        : latest?.roll_pool?.find((thread) => thread.id === pendingId)
+    const pendingMetadata = rollPool.find((thread) => thread.id === pendingId)
     enterRatingView(
       pendingId,
-      latest?.last_rolled_result ?? bootstrap?.last_rolled_result ?? null,
+      bootstrap?.last_rolled_result ?? null,
       pendingMetadata,
     )
     return true
@@ -265,8 +274,9 @@ export function useRollActions({
   function handleRoll() {
     if (isRolling) return
     navigator.vibrate?.(15)
-    if (bootstrap?.pending_thread_id && !suppressPendingAutoOpenRef.current) {
-      const pendingId = Number(bootstrap.pending_thread_id)
+    const selectedPendingId = pendingThreadId ?? bootstrap?.pending_thread_id ?? null
+    if (selectedPendingId && !suppressPendingAutoOpenRef.current) {
+      const pendingId = Number(selectedPendingId)
       const pendingMetadata =
         bootstrap?.active_thread && bootstrap.active_thread.id === pendingId
           ? bootstrap.active_thread
@@ -275,7 +285,7 @@ export function useRollActions({
       return
     }
 
-    if (suppressPendingAutoOpenRef.current && bootstrap?.pending_thread_id) {
+    if (suppressPendingAutoOpenRef.current && selectedPendingId) {
       suppressPendingAutoOpenRef.current = false
     }
 
@@ -294,6 +304,7 @@ export function useRollActions({
           rollTimeoutRef.current = null
           try {
             const response = await rollMutation.mutate()
+            seedPending?.(response)
             enterRatingView(response.thread_id, response.result, response)
             setIsRolling(false)
           } catch (error: unknown) {

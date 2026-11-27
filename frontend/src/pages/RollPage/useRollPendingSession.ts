@@ -68,7 +68,11 @@ export function useRollPendingSession({ state, bootstrap, rollPool, pending }: U
 
     const pendingFromPool =
       !pendingFromSession && rollPool.length > 0
-        ? rollPool.find((thread) => thread.id === pendingId)
+        ? rollPool.find((thread) =>
+            pending?.issue_id != null
+              ? thread.issue_id === pending.issue_id
+              : thread.id === pendingId,
+          )
         : null
 
     const pendingResult =
@@ -106,7 +110,9 @@ export function useRollPendingSession({ state, bootstrap, rollPool, pending }: U
     setIsOverrideOpen(false)
     setIsDieModalOpen(false)
   }, [
-    bootstrap?.pending_thread_id,
+    pending?.thread_id,
+    pending?.result,
+    pending?.issue_id,
     bootstrap?.active_thread,
     bootstrap?.last_rolled_result,
     rollPool,
