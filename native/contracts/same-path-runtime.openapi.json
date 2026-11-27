@@ -4926,66 +4926,6 @@
         ]
       }
     },
-    "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection": {
-      "post": {
-        "tags": [
-          "reading-orders"
-        ],
-        "description": "Stateless AIP-136 custom method: deterministically preview how a continuity plan would project into a reading order. No plan, reading order or item is written; confirmation is a separate durable v2 operation that revalidates the plan.",
-        "operationId": "preview_reading_order_projection",
-        "parameters": [
-          {
-            "name": "plan_id",
-            "in": "path",
-            "description": "Continuity plan id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReadingOrderProjectPreviewRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Deterministic projection preview",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadingOrderProjectPreviewResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Plan or reading order not found"
-          },
-          "409": {
-            "description": "Malformed plan"
-          },
-          "422": {
-            "description": "Validation failed"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/v2/creators": {
       "get": {
         "tags": [
@@ -10485,7 +10425,6 @@
         ]
       }
     },
-<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/connections": {
       "get": {
         "tags": [
@@ -10537,8 +10476,6 @@
         ]
       }
     },
-=======
->>>>>>> origin/main
     "/api/v2/threads/{thread_id}/creatorCredits": {
       "get": {
         "tags": [
@@ -10611,7 +10548,6 @@
         ]
       }
     },
-<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/dependencies": {
       "get": {
         "tags": [
@@ -10711,8 +10647,6 @@
         ]
       }
     },
-=======
->>>>>>> origin/main
     "/api/v2/threads/{thread_id}/issue-order": {
       "put": {
         "tags": [
@@ -11139,56 +11073,6 @@
         ]
       }
     },
-<<<<<<< HEAD
-=======
-    "/api/v2/threads/{thread_id}/readingOrders": {
-      "get": {
-        "tags": [
-          "reading-orders"
-        ],
-        "description": "List the authenticated reader's reading orders that contain the given thread. A foreign or unknown thread is an empty collection.",
-        "operationId": "list_thread_reading_orders",
-        "parameters": [
-          {
-            "name": "thread_id",
-            "in": "path",
-            "description": "Thread identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Owned reading orders containing the thread",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ThreadReadingOrdersResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
->>>>>>> origin/main
     "/api/v2/threads:checkDuplicates": {
       "post": {
         "tags": [
@@ -11231,7 +11115,6 @@
         ]
       }
     },
-<<<<<<< HEAD
     "/api/v2/threads:explainEligibility": {
       "post": {
         "tags": [
@@ -11281,8 +11164,6 @@
         ]
       }
     },
-=======
->>>>>>> origin/main
     "/api/v2/undo/{session_id}/snapshots": {
       "get": {
         "tags": [

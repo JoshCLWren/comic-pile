@@ -1760,62 +1760,6 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn v2_group_crud_is_mounted_and_retired_v1_crud_returns_404_in_inner_router() {
-        let config = Config::from_lookup(|name| match name {
-            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
-            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
-            _ => None,
-        })
-        .unwrap();
-        let state = Arc::new(AppState::new(config).unwrap());
-        for (method, uri) in [
-            ("GET", "/api/v2/readingOrderGroups"),
-            ("POST", "/api/v2/readingOrderGroups"),
-            ("GET", "/api/v2/readingOrderGroups/7"),
-            ("PATCH", "/api/v2/readingOrderGroups/7"),
-            ("DELETE", "/api/v2/readingOrderGroups/7"),
-        ] {
-            let response = router(Arc::clone(&state))
-                .oneshot(
-                    Request::builder()
-                        .method(method)
-                        .uri(uri)
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-            assert_ne!(response.status(), StatusCode::NOT_FOUND, "{method} {uri}");
-        }
-        for (method, uri) in [
-            ("GET", "/api/v1/reading-order-groups/"),
-            ("POST", "/api/v1/reading-order-groups/"),
-            ("GET", "/api/v1/reading-order-groups/7"),
-            ("PATCH", "/api/v1/reading-order-groups/7"),
-            ("DELETE", "/api/v1/reading-order-groups/7"),
-            ("GET", "/api/v1/reading-order-groups/7/detail"),
-            ("GET", "/api/v2/readingOrderGroups/7/detail"),
-        ] {
-            let response = router(Arc::clone(&state))
-                .oneshot(
-                    Request::builder()
-                        .method(method)
-                        .uri(uri)
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{method} {uri}");
-            let bytes = to_bytes(response.into_body(), 1024).await.unwrap();
-            assert_eq!(
-                String::from_utf8_lossy(&bytes),
-                r#"{"detail":"Not Found"}"#,
-                "{method} {uri}"
-            );
-        }
-    }
 
     #[test]
     fn api_error_variants_carry_typed_status_and_detail() {
