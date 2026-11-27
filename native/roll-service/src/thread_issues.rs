@@ -1362,7 +1362,7 @@ WITH owned AS (
               AND e.context->>'undone_by_snapshot_id' IS NULL
             ORDER BY e.timestamp DESC, e.id DESC LIMIT 1) AS rating,
            COALESCE(id_map.status, 'unmapped') AS mapping_state,
-           (id_map.status = 'confirmed') AS has_confirmed_identity,
+           COALESCE(id_map.status = 'confirmed', false) AS has_confirmed_identity,
            CASE WHEN id_map.status = 'confirmed' THEN id_map.external_id END AS comicvine_issue_id,
            id_map.cover_url AS cover_image_url
     FROM paged p
@@ -1474,7 +1474,7 @@ pub async fn list_thread_issues_v2(
         .ok_or_else(|| thread_not_found(thread_id))?;
     let payload: String = row.get(1);
     let mut issues: Vec<ThreadIssueV2Item> = serde_json::from_str(&payload)
-        .map_err(|error| ApiError::Internal(format!("DIAG {error} payload={payload}")))?;
+        .map_err(|_| ApiError::Internal("Internal Server Error".into()))?;
     let next_page_token = if issues.len() as i64 > page_size {
         issues.truncate(page_size as usize);
         issues.last().map(|issue| format!("{},{}", issue.position, issue.id))
