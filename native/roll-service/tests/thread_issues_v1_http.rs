@@ -686,6 +686,185 @@ async fn creators_are_bulk_read_merged_and_owner_scoped() {
 }
 
 #[tokio::test]
+async fn v2_thread_issue_list_is_owner_scoped_and_paginated() {
+    let (state, token, csrf, user_id, _guard) = setup_user("tiss-v2-list").await;
+    let (other_token, other_csrf, _) = register_extra_user(&state, "tiss-v2-list-other").await;
+    let conn = state.pool.get().await.unwrap();
+    let thread = plain_thread(&conn, user_id, "V2 List", 3, 1).await;
+    let ids = seed_issues(&conn, thread, &["1", "2", "3"], "unread").await;
+
+    let (status, body) = send(
+        &state,
+        get(
+            &format!("/api/v2/threads/{thread}/issues?page_size=2"),
+            &token,
+            &csrf,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["total_count"], 3);
+    assert_eq!(body["page_size"], 2);
+    assert_eq!(body["issues"].as_array().unwrap().len(), 2);
+    assert_eq!(body["issues"][0]["id"], ids[0]);
+    assert_eq!(body["issues"][1]["id"], ids[1]);
+    let cursor = body["next_page_token"].as_str().unwrap().to_owned();
+
+    let (status, body) = send(
+        &state,
+        get(
+            &format!("/api/v2/threads/{thread}/issues?page_size=2&page_token={cursor}"),
+            &token,
+            &csrf,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["issues"].as_array().unwrap().len(), 1);
+    assert_eq!(body["issues"][0]["id"], ids[2]);
+    assert!(body["next_page_token"].is_null());
+
+    let (status, body) = send(
+        &state,
+        get(
+            &format!("/api/v2/threads/{thread}/issues?status=read"),
+            &token,
+            &csrf,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["total_count"], 0);
+    assert_eq!(body["issues"].as_array().unwrap().len(), 0);
+
+    let (status, _) = send(
+        &state,
+        get(
+            &format!("/api/v2/threads/{thread}/issues"),
+            &other_token,
+            &other_csrf,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, body) = send(
+        &state,
+        get(
+            &format!("/api/v2/threads/{thread}/issues?page_size=0"),
+            &token,
+            &csrf,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body["detail"], "Validation failed");
+}
+
+#[tokio::test]
+async fn v2_creator_credits_are_bounded_paginated_and_owner_scoped() {
+    let (state, token, csrf, user_id, _guard) = setup_user("tiss-v2-credits").await;
+    let (other_token, other_csrf, _) = register_extra_user(&state, "tiss-v2-credits-other").await;
+    let conn = state.pool.get().await.unwrap();
+    let thread = plain_thread(&conn, user_id, "V2 Credits", 0, 1).await;
+    let ids = seed_issues(&conn, thread, &["1", "2"], "unread").await;
+    let _unmapped = issue(&conn, thread, "3", 3, "unread").await;
+    let identity: i32 = conn
+        .query_one(
+            "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
+             VALUES ('comicvine', 'issue', 'cv-v2-credits', $1::text::json, NOW(), NOW()) RETURNING id",
+            &[&json!({"person_credits": [
+                {"id": 7, "name": "Writer", "role": "writer"},
+                {"name": "Anon", "role": "colorist"}
+            ]}).to_string()],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    conn.execute(
+        "INSERT INTO issue_external_identity_mappings \
+         (issue_id, external_identity_id, status, evidence_source, confidence, created_at, updated_at, evidence_json) \
+         SELECT unnest($1::int[]), $2, 'confirmed', 'test', 1.0, NOW(), NOW(), '{}'::json",
+        &[&ids, &identity],
+    )
+    .await
+    .unwrap();
+
+    let (status, body) = send(
+        &state,
+        get(
+            &format!("/api/v2/threads/{thread}/creatorCredits?page_size=1"),
+            &token,
+            &csrf,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["thread_id"], thread);
+    assert_eq!(body["total_count"], 2);
+    assert_eq!(body["page_size"], 1);
+    assert_eq!(body["issues"].as_array().unwrap().len(), 1);
+    assert_eq!(body["issues"][0]["issue_id"], ids[0]);
+    assert_eq!(
+        body["issues"][0]["creators"],
+        json!([
+            {"creator_id": 7, "name": "Writer", "roles": ["writer"]},
+            {"creator_id": null, "name": "Anon", "roles": ["colorist"]}
+        ])
+    );
+    let cursor = body["next_page_token"].as_str().unwrap().to_owned();
+
+    let (status, body) = send(
+        &state,
+        get(
+            &format!("/api/v2/threads/{thread}/creatorCredits?page_size=1&page_token={cursor}"),
+            &token,
+            &csrf,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["issues"].as_array().unwrap().len(), 1);
+    assert_eq!(body["issues"][0]["issue_id"], ids[1]);
+    assert!(body["next_page_token"].is_null());
+    for entry in body["issues"].as_array().unwrap() {
+        assert_ne!(entry["issue_id"], _unmapped);
+    }
+
+    let (status, _) = send(
+        &state,
+        get(
+            &format!("/api/v2/threads/{thread}/creatorCredits"),
+            &other_token,
+            &other_csrf,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, body) = send(
+        &state,
+        get(
+            &format!("/api/v2/threads/{thread}/creatorCredits?page_size=101"),
+            &token,
+            &csrf,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body["detail"], "Validation failed");
+    let (status, body) = send(
+        &state,
+        get(
+            &format!("/api/v2/threads/{thread}/creatorCredits?page_token=bad"),
+            &token,
+            &csrf,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["detail"], "Invalid page_token format");
+}
+
+#[tokio::test]
 async fn migrate_to_issues_creates_issues_and_reports_thread() {
     let (state, token, csrf, user_id, _guard) = setup_user("tiss-migrate").await;
     let (other_token, other_csrf, _other_user) =
