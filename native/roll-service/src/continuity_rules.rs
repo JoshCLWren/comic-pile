@@ -687,10 +687,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn create_writes_continuity_rule_and_dependency_to_disposable_postgres() {
+    async fn create_writes_rule_without_compiling_a_dependency() {
         let (state, user, _guard) = database_fixture().await;
         let (status, Json(response)) = create(
-            State(state),
+            State(state.clone()),
             user,
             Json(ContinuityRuleRequest {
                 source_id: 3001,
@@ -705,6 +705,21 @@ mod tests {
         assert_eq!(response.user_id, user.id());
         assert_eq!(response.source_id, 3001);
         assert_eq!(response.target_id, 3002);
+
+        // The Reading List engine is the sole evaluator: writing a rule must
+        // not create a second, rule-derived eligibility edge.
+        let conn = db::checkout(&state).await.expect("verify connection");
+        let compiled: i64 = conn
+            .query_one(
+                "SELECT count(*) FROM dependencies
+                 WHERE source_issue_id = 3001 AND target_issue_id = 3002
+                   AND note LIKE 'canonical:rule:%'",
+                &[],
+            )
+            .await
+            .expect("dependency count")
+            .get(0);
+        assert_eq!(compiled, 0, "rule writes must not compile dependency edges");
     }
 
     #[tokio::test]
@@ -743,7 +758,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn delete_removes_continuity_rule_and_dependency_from_disposable_postgres() {
+    async fn delete_removes_rule_without_touching_dependencies() {
         let (state, user, _guard) = database_fixture().await;
         let (_, Json(created)) = create(
             State(state.clone()),
@@ -775,7 +790,7 @@ mod tests {
     }
 
     #[test]
-    fn canonical_edge_pairs_match_python_compiler_shapes() {
+    fn edge_pairs_shape_the_rule_validation_boundary() {
         let mut checkpoint = request("checkpoint");
         checkpoint.checkpoint_issue_id = Some(30);
         assert_eq!(edge_pairs(&checkpoint), vec![(30, 20)]);
