@@ -6,10 +6,10 @@
     "generated_by": "scripts/generate_route_burndown.mjs",
     "issue": 4739,
     "ingress_source": "vercel.json",
-    "total_live_operations": 166,
-    "native_rust": 166,
+    "total_live_operations": 167,
+    "native_rust": 167,
     "python_fastapi": 0,
-    "native_rust_status": 166,
+    "native_rust_status": 167,
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 0
@@ -2001,6 +2001,19 @@
       ],
       "method": "GET",
       "path": "/api/v2/reading-sessions/{session_id}/snapshots",
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5713,
+      "consumers": [
+        "frontend/src/services/api-cbl-sources.ts"
+      ],
+      "method": "GET",
+      "path": "/api/v2/readingLists/{list_id}/cblCandidates",
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
       "verified_against": "vercel.json"
