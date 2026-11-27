@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../../query/queryKeys'
+import ImageWithLoading from '../../components/ImageWithLoading'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
 import {
   useRollDieState,
@@ -523,7 +524,12 @@ export default function RollPage() {
           {state.isRatingView && ratingArtUrl ? (
             <div className="roll-rate-backdrop" aria-hidden="true">
               <div className="roll-rate-art">
-                <img src={ratingArtUrl} alt="" />
+                <ImageWithLoading
+                  src={ratingArtUrl}
+                  alt=""
+                  loading="eager"
+                  className="roll-rate-art-image"
+                />
               </div>
               <div className="roll-rate-scrim" />
             </div>

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import ImageWithLoading from '../../../components/ImageWithLoading'
 
 export interface CoverFlightState {
   /** Exact ComicVine CDN URL from the card projection; never proxied. */
@@ -32,12 +33,10 @@ export function CoverFlight({ flight, onDone }: CoverFlightProps) {
       return
     }
 
-    const workspace = node.parentElement?.getBoundingClientRect()
-    const target = workspace ?? {
-      left: 0,
-      top: 0,
-      width: typeof window === 'undefined' ? 0 : window.innerWidth,
-      height: typeof window === 'undefined' ? 0 : window.innerHeight,
+    const target = node.parentElement?.getBoundingClientRect()
+    if (target == null || target.width === 0) {
+      onDone()
+      return
     }
 
     const animation = node.animate(
@@ -83,7 +82,7 @@ export function CoverFlight({ flight, onDone }: CoverFlightProps) {
       data-testid="roll-cover-flight"
       aria-hidden="true"
     >
-      <img src={flight.url} alt="" />
+      <ImageWithLoading src={flight.url} alt="" loading="eager" className="roll-cover-flight-art" />
     </div>
   )
 }
