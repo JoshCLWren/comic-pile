@@ -169,7 +169,7 @@ it('calls every remaining API resource endpoint', async () => {
   await preferencesApi.patch({ theme: 'ink-gold' })
   await authApi.forgotPassword({ email: 'reader@example.com' })
   await authApi.resetPassword({ token: 'single-use', new_password: 'hunter2-hunter2' })
-  expect(post).toHaveBeenCalledWith('/v1/bug-reports/', { title: 'Bug', description: 'Description', diagnostics: {} })
+  expect(post).toHaveBeenCalledWith('/v2/bugReports', { title: 'Bug', description: 'Description', diagnostics: {} })
   expect(get).toHaveBeenCalledWith('/v2/users/me/preferences', undefined)
   expect(patch).toHaveBeenCalledWith('/v2/users/me/preferences', { theme: 'ink-gold' })
   expect(post).toHaveBeenCalledWith('/v2/auth/forgot-password', { email: 'reader@example.com' })
