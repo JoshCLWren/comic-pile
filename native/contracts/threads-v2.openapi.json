@@ -91,9 +91,18 @@
         "operationId": "list_threads_documentation",
         "parameters": [
           {
-            "name": "search",
+            "name": "filter",
             "in": "query",
-            "description": "Case-insensitive title search",
+            "description": "Resource filter: active (default), completed, stale, excluded",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "order_by",
+            "in": "query",
+            "description": "Canonical ordering: position, title, created; last_activity for stale",
             "required": false,
             "schema": {
               "type": "string"
@@ -102,16 +111,35 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "position, title, or created",
+            "description": "Legacy alias of order_by; supplying both with different values is rejected",
             "required": false,
             "schema": {
               "type": "string"
             }
           },
           {
+            "name": "search",
+            "in": "query",
+            "description": "Case-insensitive title search; unsupported for filter=stale",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "description": "Stale age threshold in days (0-3650, default 30); only with filter=stale",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
             "name": "page_size",
             "in": "query",
-            "description": "1-200 rows per page (default 50)",
+            "description": "1-200 rows per page (default 50, 200 for stale)",
             "required": false,
             "schema": {
               "type": "integer",
@@ -121,7 +149,7 @@
           {
             "name": "page_token",
             "in": "query",
-            "description": "Opaque continuation cursor",
+            "description": "Opaque continuation cursor bound to filter, search and order_by",
             "required": false,
             "schema": {
               "type": "string"
@@ -130,23 +158,23 @@
         ],
         "responses": {
           "200": {
-            "description": "Owner-scoped active threads page",
+            "description": "Owner-scoped threads page; stale rows keep the detail-shaped projection",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ThreadListResponse"
+                  "$ref": "#/components/schemas/ThreadListResult"
                 }
               }
             }
           },
           "400": {
-            "description": "Invalid sort or page token"
+            "description": "Invalid filter, order_by, sort or page token"
           },
           "401": {
             "description": "Not authenticated"
           },
           "422": {
-            "description": "Invalid bounds or retired collection_id"
+            "description": "Invalid bounds, unsupported parameter or retired collection_id"
           }
         },
         "security": [
@@ -198,6 +226,48 @@
       }
     },
     "/api/v2/threads/{thread_id}": {
+      "get": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Standard resource Get for one owned Thread.",
+        "operationId": "get_thread_v2_documentation",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner-scoped thread detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found or not owned by the reader"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
       "delete": {
         "tags": [
           "threads"
@@ -389,6 +459,41 @@
           }
         }
       },
+      "StaleThreadListResponse": {
+        "type": "object",
+        "description": "Stale threads page returned by `filter=stale` on the v2 collection.\n\nStale rows are still active queue rows, but the legacy stale read projects\nthe full detail-shaped `ThreadResponse` instead of the queue-list item. The\ndistinction is kept on the wire so callers of the retired v1 stale read can\nmigrate without losing fields; counts stay zero/absent because the stale\nread never published a whole-queue total.",
+        "required": [
+          "threads",
+          "active_count"
+        ],
+        "properties": {
+          "active_count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Always zero: a stale page is not a whole-active-queue read."
+          },
+          "filtered_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Always absent: the stale read never measured a filtered whole-queue total."
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ThreadResponse"
+            }
+          }
+        }
+      },
       "ThreadCreateRequest": {
         "type": "object",
         "description": "Body of `POST /api/v1/threads/`.",
@@ -417,6 +522,107 @@
               "string",
               "null"
             ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ThreadDetailResponse": {
+        "type": "object",
+        "description": "The legacy single-thread response retained for the v1 and bare aliases.",
+        "required": [
+          "id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position",
+          "status",
+          "is_test",
+          "is_blocked",
+          "blocking_reasons",
+          "created_at",
+          "manual_creator_credits"
+        ],
+        "properties": {
+          "blocking_reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "is_blocked": {
+            "type": "boolean"
+          },
+          "is_test": {
+            "type": "boolean"
+          },
+          "issues_remaining": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last_activity_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "manual_creator_credits": {},
+          "next_unread_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "next_unread_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "queue_position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reading_progress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
           },
           "title": {
             "type": "string"
@@ -585,6 +791,17 @@
             }
           }
         }
+      },
+      "ThreadListResult": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ThreadListResponse"
+          },
+          {
+            "$ref": "#/components/schemas/StaleThreadListResponse"
+          }
+        ],
+        "description": "One v2 threads list response. The active/completed/excluded filters keep the\nqueue-list projection; the stale filter keeps the legacy detail-shaped\nprojection. Both are emitted inline (no envelope variant key)."
       },
       "ThreadPatchPrecondition": {
         "type": "object",

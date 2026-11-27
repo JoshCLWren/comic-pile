@@ -17021,6 +17021,41 @@
         ],
         "type": "object"
       },
+      "StaleThreadListResponse": {
+        "description": "Stale threads page returned by `filter=stale` on the v2 collection.\n\nStale rows are still active queue rows, but the legacy stale read projects\nthe full detail-shaped `ThreadResponse` instead of the queue-list item. The\ndistinction is kept on the wire so callers of the retired v1 stale read can\nmigrate without losing fields; counts stay zero/absent because the stale\nread never published a whole-queue total.",
+        "properties": {
+          "active_count": {
+            "description": "Always zero: a stale page is not a whole-active-queue read.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "filtered_count": {
+            "description": "Always absent: the stale read never measured a filtered whole-queue total.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "threads": {
+            "items": {
+              "$ref": "#/components/schemas/NativeThreadResponse"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "threads",
+          "active_count"
+        ],
+        "type": "object"
+      },
       "StartupMetricsResponse": {
         "properties": {
           "startup_duration": {
@@ -18246,6 +18281,17 @@
           "active_count"
         ],
         "type": "object"
+      },
+      "ThreadListResult": {
+        "description": "One v2 threads list response. The active/completed/excluded filters keep the\nqueue-list projection; the stale filter keeps the legacy detail-shaped\nprojection. Both are emitted inline (no envelope variant key).",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ThreadListResponse"
+          },
+          {
+            "$ref": "#/components/schemas/StaleThreadListResponse"
+          }
+        ]
       },
       "ThreadPatchPrecondition": {
         "description": "Committed values a stale client read before issuing a Thread patch.",
@@ -24946,66 +24992,6 @@
         ]
       }
     },
-    "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection": {
-      "post": {
-        "description": "Stateless AIP-136 custom method: deterministically preview how a continuity plan would project into a reading order. No plan, reading order or item is written; confirmation is a separate durable v2 operation that revalidates the plan.",
-        "operationId": "preview_reading_order_projection",
-        "parameters": [
-          {
-            "description": "Continuity plan id",
-            "in": "path",
-            "name": "plan_id",
-            "required": true,
-            "schema": {
-              "format": "int64",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReadingOrderProjectPreviewRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadingOrderProjectPreviewResponse"
-                }
-              }
-            },
-            "description": "Deterministic projection preview"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "404": {
-            "description": "Plan or reading order not found"
-          },
-          "409": {
-            "description": "Malformed plan"
-          },
-          "422": {
-            "description": "Validation failed"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "reading-orders"
-        ]
-      }
-    },
     "/api/v2/creators": {
       "get": {
         "operationId": "creators_list",
@@ -30294,16 +30280,25 @@
         "operationId": "list_threads_documentation",
         "parameters": [
           {
-            "description": "Case-insensitive title search",
+            "description": "Resource filter: active (default), completed, stale, excluded",
             "in": "query",
-            "name": "search",
+            "name": "filter",
             "required": false,
             "schema": {
               "type": "string"
             }
           },
           {
-            "description": "position, title, or created",
+            "description": "Canonical ordering: position, title, created; last_activity for stale",
+            "in": "query",
+            "name": "order_by",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Legacy alias of order_by; supplying both with different values is rejected",
             "in": "query",
             "name": "sort",
             "required": false,
@@ -30312,7 +30307,26 @@
             }
           },
           {
-            "description": "1-200 rows per page (default 50)",
+            "description": "Case-insensitive title search; unsupported for filter=stale",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Stale age threshold in days (0-3650, default 30); only with filter=stale",
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "1-200 rows per page (default 50, 200 for stale)",
             "in": "query",
             "name": "page_size",
             "required": false,
@@ -30322,7 +30336,7 @@
             }
           },
           {
-            "description": "Opaque continuation cursor",
+            "description": "Opaque continuation cursor bound to filter, search and order_by",
             "in": "query",
             "name": "page_token",
             "required": false,
@@ -30336,20 +30350,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ThreadListResponse"
+                  "$ref": "#/components/schemas/ThreadListResult"
                 }
               }
             },
-            "description": "Owner-scoped active threads page"
+            "description": "Owner-scoped threads page; stale rows keep the detail-shaped projection"
           },
           "400": {
-            "description": "Invalid sort or page token"
+            "description": "Invalid filter, order_by, sort or page token"
           },
           "401": {
             "description": "Not authenticated"
           },
           "422": {
-            "description": "Invalid bounds or retired collection_id"
+            "description": "Invalid bounds, unsupported parameter or retired collection_id"
           }
         },
         "security": [
@@ -30442,6 +30456,48 @@
             "HTTPBearer": []
           }
         ],
+        "tags": [
+          "threads"
+        ]
+      },
+      "get": {
+        "operationId": "get_thread_v2_documentation",
+        "parameters": [
+          {
+            "description": "Owned Thread identifier",
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadDetailResponse"
+                }
+              }
+            },
+            "description": "Owner-scoped thread detail"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found or not owned by the reader"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Standard resource Get for one owned Thread.",
         "tags": [
           "threads"
         ]
@@ -30952,53 +31008,6 @@
         "summary": "Documentation-only operation for listing a thread's group memberships (v2).",
         "tags": [
           "reading-order-groups"
-        ]
-      }
-    },
-    "/api/v2/threads/{thread_id}/readingOrders": {
-      "get": {
-        "description": "List the authenticated reader's reading orders that contain the given thread. A foreign or unknown thread is an empty collection.",
-        "operationId": "list_thread_reading_orders",
-        "parameters": [
-          {
-            "description": "Thread identifier",
-            "in": "path",
-            "name": "thread_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ThreadReadingOrdersResponse"
-                }
-              }
-            },
-            "description": "Owned reading orders containing the thread"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "tags": [
-          "reading-orders"
         ]
       }
     },

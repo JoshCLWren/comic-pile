@@ -1861,23 +1861,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Stateless AIP-136 custom method: deterministically preview how a continuity plan would project into a reading order. No plan, reading order or item is written; confirmation is a separate durable v2 operation that revalidates the plan. */
-        post: operations["preview_reading_order_projection"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v2/creators": {
         parameters: {
             query?: never;
@@ -3520,7 +3503,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Standard resource Get for one owned Thread. */
+        get: operations["get_thread_v2_documentation"];
         put?: never;
         post?: never;
         /** @description Delete an owned Thread (AIP-135). A second delete, or a delete of a foreign or already deleted Thread, returns 404. Never 403. */
@@ -3646,23 +3630,6 @@ export interface paths {
         };
         /** Documentation-only operation for listing a thread's group memberships (v2). */
         get: operations["dependency_groups_v2_list_thread_group_memberships"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v2/threads/{thread_id}/readingOrders": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description List the authenticated reader's reading orders that contain the given thread. A foreign or unknown thread is an empty collection. */
-        get: operations["list_thread_reading_orders"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9276,6 +9243,29 @@ export interface components {
             /** Format: int32 */
             volume_id: number;
         };
+        /**
+         * @description Stale threads page returned by `filter=stale` on the v2 collection.
+         *
+         *     Stale rows are still active queue rows, but the legacy stale read projects
+         *     the full detail-shaped `ThreadResponse` instead of the queue-list item. The
+         *     distinction is kept on the wire so callers of the retired v1 stale read can
+         *     migrate without losing fields; counts stay zero/absent because the stale
+         *     read never published a whole-queue total.
+         */
+        StaleThreadListResponse: {
+            /**
+             * Format: int32
+             * @description Always zero: a stale page is not a whole-active-queue read.
+             */
+            active_count: number;
+            /**
+             * Format: int32
+             * @description Always absent: the stale read never measured a filtered whole-queue total.
+             */
+            filtered_count?: number | null;
+            next_page_token?: string | null;
+            threads: components["schemas"]["NativeThreadResponse"][];
+        };
         StartupMetricsResponse: {
             /** Format: double */
             startup_duration?: number | null;
@@ -9670,6 +9660,12 @@ export interface components {
             next_page_token?: string | null;
             threads: components["schemas"]["ThreadListItem"][];
         };
+        /**
+         * @description One v2 threads list response. The active/completed/excluded filters keep the
+         *     queue-list projection; the stale filter keeps the legacy detail-shaped
+         *     projection. Both are emitted inline (no envelope variant key).
+         */
+        ThreadListResult: components["schemas"]["ThreadListResponse"] | components["schemas"]["StaleThreadListResponse"];
         /** @description Committed values a stale client read before issuing a Thread patch. */
         ThreadPatchPrecondition: {
             /** @description Format observed by the client. */
@@ -14716,61 +14712,6 @@ export interface operations {
             };
         };
     };
-    preview_reading_order_projection: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Continuity plan id */
-                plan_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReadingOrderProjectPreviewRequest"];
-            };
-        };
-        responses: {
-            /** @description Deterministic projection preview */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReadingOrderProjectPreviewResponse"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Plan or reading order not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Malformed plan */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation failed */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     creators_list: {
         parameters: {
             query?: {
@@ -19450,13 +19391,19 @@ export interface operations {
     list_threads_documentation: {
         parameters: {
             query?: {
-                /** @description Case-insensitive title search */
-                search?: string;
-                /** @description position, title, or created */
+                /** @description Resource filter: active (default), completed, stale, excluded */
+                filter?: string;
+                /** @description Canonical ordering: position, title, created; last_activity for stale */
+                order_by?: string;
+                /** @description Legacy alias of order_by; supplying both with different values is rejected */
                 sort?: string;
-                /** @description 1-200 rows per page (default 50) */
+                /** @description Case-insensitive title search; unsupported for filter=stale */
+                search?: string;
+                /** @description Stale age threshold in days (0-3650, default 30); only with filter=stale */
+                days?: number;
+                /** @description 1-200 rows per page (default 50, 200 for stale) */
                 page_size?: number;
-                /** @description Opaque continuation cursor */
+                /** @description Opaque continuation cursor bound to filter, search and order_by */
                 page_token?: string;
             };
             header?: never;
@@ -19465,16 +19412,16 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Owner-scoped active threads page */
+            /** @description Owner-scoped threads page; stale rows keep the detail-shaped projection */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ThreadListResponse"];
+                    "application/json": components["schemas"]["ThreadListResult"];
                 };
             };
-            /** @description Invalid sort or page token */
+            /** @description Invalid filter, order_by, sort or page token */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -19488,7 +19435,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid bounds or retired collection_id */
+            /** @description Invalid bounds, unsupported parameter or retired collection_id */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19528,6 +19475,43 @@ export interface operations {
             };
             /** @description Validation failed */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_thread_v2_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped thread detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadDetailResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found or not owned by the reader */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20036,50 +20020,6 @@ export interface operations {
             };
             /** @description Thread not found */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request validation failed */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    list_thread_reading_orders: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Thread identifier */
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Owned reading orders containing the thread */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ThreadReadingOrdersResponse"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
                 headers: {
                     [name: string]: unknown;
                 };
