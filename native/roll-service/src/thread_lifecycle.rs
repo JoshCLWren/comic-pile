@@ -1034,6 +1034,212 @@ fn check_errors(check: &Check) -> Vec<Value> {
     check.errors_snapshot()
 }
 
+/// Committed values a stale-client patch must still observe before it can write.
+#[derive(Debug, Default)]
+struct PatchPrecondition {
+    title: Option<String>,
+    format: Option<String>,
+    notes_present: bool,
+    notes: Option<String>,
+    credits: Option<Vec<Value>>,
+}
+
+/// Parse the AIP-134 field mask. Both the array form and the canonical
+/// comma-separated string form are accepted; empty means "use body presence".
+fn parse_update_mask(check: &mut Check, value: Option<&Value>) -> Option<Vec<String>> {
+    let value = value?;
+    let names: Vec<String> = match value {
+        Value::String(text) => text
+            .split(',')
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(str::to_owned)
+            .collect(),
+        Value::Array(items) => items
+            .iter()
+            .filter_map(|item| match item.as_str() {
+                Some(name) => Some(name.to_owned()),
+                None => {
+                    check.push(
+                        &["body", "update_mask"],
+                        "string_type",
+                        "Input should be a valid string",
+                    );
+                    None
+                }
+            })
+            .collect(),
+        _ => {
+            check.push(
+                &["body", "update_mask"],
+                "list_type",
+                "Input should be a valid list",
+            );
+            Vec::new()
+        }
+    };
+    for name in &names {
+        if !THREAD_PATCH_FIELDS.contains(&name.as_str()) {
+            check.push(
+                &["body", "update_mask"],
+                "value_error",
+                format!("Unsupported field mask: {name}"),
+            );
+        }
+    }
+    (!names.is_empty()).then_some(names)
+}
+
+/// Parse the optional stale-client precondition object.
+fn parse_precondition(check: &mut Check, value: &Value) -> PatchPrecondition {
+    let mut precondition = PatchPrecondition::default();
+    let Some(object) = value.as_object() else {
+        check.push(
+            &["body", "expected"],
+            "model_attributes_type",
+            "Input should be a valid dictionary or object to extract fields from",
+        );
+        return precondition;
+    };
+    for key in object.keys() {
+        if !matches!(
+            key.as_str(),
+            "title" | "format" | "notes" | "manual_creator_credits"
+        ) {
+            check.push(
+                &["body", "expected", key],
+                "extra_forbidden",
+                "Extra inputs are not permitted",
+            );
+        }
+    }
+    precondition.title = str_field(
+        check,
+        &["body", "expected", "title"],
+        object.get("title"),
+        StrRules {
+            min: Some(1),
+            max: Some(200),
+        },
+        false,
+        false,
+    );
+    precondition.format = str_field(
+        check,
+        &["body", "expected", "format"],
+        object.get("format"),
+        StrRules {
+            min: Some(1),
+            max: None,
+        },
+        false,
+        false,
+    );
+    if object.contains_key("notes") {
+        precondition.notes_present = true;
+        precondition.notes = str_field(
+            check,
+            &["body", "expected", "notes"],
+            object.get("notes"),
+            StrRules::default(),
+            true,
+            false,
+        );
+    }
+    match object.get("manual_creator_credits") {
+        None => {}
+        Some(Value::Null) => precondition.credits = Some(Vec::new()),
+        Some(Value::Array(items)) => precondition.credits = Some(items.clone()),
+        Some(_) => check.push(
+            &["body", "expected", "manual_creator_credits"],
+            "list_type",
+            "Input should be a valid list",
+        ),
+    }
+    precondition
+}
+
+/// Translate a v2 PATCH body into the shared update input. An explicit mask
+/// restricts writes to its fields; a missing masked field clears that field.
+fn parse_patch(
+    check: &mut Check,
+    body: Option<Value>,
+) -> Result<(UpdateInput, Option<PatchPrecondition>), LifecycleError> {
+    let mut map = require_object(body)?;
+    let mask = parse_update_mask(check, map.get("update_mask"));
+    let expected = map
+        .get("expected")
+        .map(|value| parse_precondition(check, value));
+    map.remove("update_mask");
+    map.remove("expected");
+    if let Some(fields) = mask {
+        let mut masked = serde_json::Map::new();
+        for field in fields {
+            // A masked field absent from the body is explicitly cleared to its
+            // zero value. `null` cannot clear a required title/count, so those
+            // correctly fail validation instead.
+            let value = match map.get(&field) {
+                Some(value) => value.clone(),
+                None if field == "is_test" => Value::Bool(false),
+                None => Value::Null,
+            };
+            masked.insert(field, value);
+        }
+        map = masked;
+    }
+    let (input, _) = parse_update(check, Some(Value::Object(map)))?;
+    Ok((input, expected))
+}
+
+/// Verify a stale-client precondition against the locked, owned row.
+fn check_precondition(
+    thread: &OwnedThread,
+    expected: &PatchPrecondition,
+) -> Result<(), LifecycleError> {
+    let mut current = serde_json::Map::new();
+    if let Some(title) = &expected.title {
+        if *title != thread.title {
+            current.insert("title".to_owned(), json!(thread.title));
+        }
+    }
+    if let Some(format) = &expected.format {
+        let normalized = normalize_format_value(format);
+        if normalized != thread.format {
+            current.insert("format".to_owned(), json!(thread.format));
+        }
+    }
+    if expected.notes_present {
+        let observed = normalize_notes_value(expected.notes.as_deref());
+        if observed != thread.notes {
+            current.insert(
+                "notes".to_owned(),
+                thread.notes.clone().map_or(Value::Null, Value::String),
+            );
+        }
+    }
+    if let Some(credits) = &expected.credits {
+        let normalized = normalize_manual_creator_credits(credits);
+        if normalized != thread.manual_creator_credits {
+            current.insert(
+                "manual_creator_credits".to_owned(),
+                thread.manual_creator_credits.clone(),
+            );
+        }
+    }
+    if current.is_empty() {
+        return Ok(());
+    }
+    Err(ApiError::structured(
+        StatusCode::CONFLICT,
+        json!({
+            "code": "thread_edit_conflict",
+            "message": "Thread changed since it was loaded; reload before retrying",
+            "current": Value::Object(current),
+        }),
+    )
+    .into())
+}
+
 async fn update_once(
     state: &AppState,
     user: AuthenticatedUser,
