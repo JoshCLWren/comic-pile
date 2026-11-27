@@ -154,6 +154,23 @@ exact issue map/remap request or the explicit authenticated `metadata:refresh`
 (Retry) request; an incomplete confirmed identity reports `needs_hydration` and
 remains recoverable without remapping. No polling or automatic retry loop remains.
 
+Each hydrating request reports a truthful, bounded outcome (#5840):
+`POST /api/v2/comicvine/issues/{issue_id}/metadata:refresh` returns
+`refreshed`, `outcome` and `retry_after_seconds`; `identity:confirm`,
+`identity:replace` and `issues:import` return the same `outcome` /
+`retry_after_seconds` pair under `metadata_hydration` (omitted when no attempt
+was made, so the frozen response shape is unchanged). `outcome` is one of
+`complete`, `no_credits` (provider legitimately lists none), `not_confirmed`
+(no confirmed identity, or it changed while the provider call was in flight, so
+nothing was written), `provider_not_configured`, `provider_unavailable`,
+`rate_limited` (with the provider's delay), `timeout`, `invalid_response` and
+`persist_failed`. A failure never changes the confirmed mapping and never
+overwrites valid stored metadata; the provider call runs outside any
+transaction or lock, and the result is persisted only if the issue is still
+confirmed to the identity that was fetched. Series imports never fan out one
+provider request per issue; deep metadata for those issues is fetched when the
+exact issue is opened or Retry is used.
+
 ### Concurrency and retry behavior
 
 Vercel may deliver a scheduled invocation more than once or while a previous

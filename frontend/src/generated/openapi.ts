@@ -6281,6 +6281,7 @@ export interface components {
             external_identity_id: number;
             /** Format: int32 */
             issue_id: number;
+            metadata_hydration?: components["schemas"]["MetadataHydration"] | null;
             /** Format: int32 */
             position?: number | null;
             /** Format: int32 */
@@ -6528,6 +6529,7 @@ export interface components {
             has_unresolved: boolean;
             /** Format: int32 */
             issue_id: number;
+            metadata_hydration?: components["schemas"]["MetadataHydration"] | null;
             /** Format: int32 */
             thread_id: number;
             thread_title: string;
@@ -6726,11 +6728,35 @@ export interface components {
             /** Format: int32 */
             issue_id: number;
         };
+        /** @description Outcome plus the provider-requested delay before another explicit Retry. */
+        MetadataHydration: {
+            outcome: components["schemas"]["MetadataHydrationOutcome"];
+            /** Format: int32 */
+            retry_after_seconds?: number | null;
+        };
+        /**
+         * @description Terminal, user-visible result of one synchronous ComicVine metadata
+         *     hydration attempt (#5840). The vocabulary is the one the frontend Retry
+         *     flow already renders; `persist_failed` is the only addition and falls
+         *     through to its generic failure copy.
+         * @enum {string}
+         */
+        MetadataHydrationOutcome: "complete" | "no_credits" | "not_confirmed" | "provider_not_configured" | "provider_unavailable" | "rate_limited" | "timeout" | "invalid_response" | "persist_failed";
         MetadataRefreshResponse: {
             comicvine_issue_id?: string | null;
             /** Format: int32 */
             issue_id: number;
+            outcome: components["schemas"]["MetadataHydrationOutcome"];
+            /**
+             * @description `true` only when this attempt stored a truthful metadata state
+             *     (`outcome` is `complete` or `no_credits`).
+             */
             refreshed: boolean;
+            /**
+             * Format: int32
+             * @description Provider-requested delay before another explicit Retry, when throttled.
+             */
+            retry_after_seconds?: number | null;
         };
         /**
          * MigrateToIssuesRequest

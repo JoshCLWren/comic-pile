@@ -1510,7 +1510,14 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         body,
-        json!({"issue_id": i, "refreshed": true, "comicvine_issue_id": "2222"})
+        json!({
+            "issue_id": i,
+            "refreshed": false,
+            "comicvine_issue_id": "2222",
+            "outcome": "provider_not_configured",
+            "retry_after_seconds": null,
+        }),
+        "no credential: the mapping is untouched and the outcome is truthful"
     );
     let still_confirmed: String = conn
         .query_one(
@@ -1547,7 +1554,13 @@ async fn identity_confirm_replace_remove_flow_matches_python() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         body,
-        json!({"issue_id": i, "refreshed": false, "comicvine_issue_id": null})
+        json!({
+            "issue_id": i,
+            "refreshed": false,
+            "comicvine_issue_id": null,
+            "outcome": "not_confirmed",
+            "retry_after_seconds": null,
+        })
     );
 
     // Replace with the default reason when none is supplied.
@@ -1678,6 +1691,232 @@ async fn confirm_and_replace_hydrate_creator_credits_inline() {
     .unwrap();
     assert_eq!(metadata["creator_credits"][0]["name"], "Writer");
     assert_eq!(metadata["creator_credits"][0]["role"], "writer");
+}
+
+/// #5840: explicit Retry reports a truthful outcome for each class, never
+/// remaps, and a failed attempt keeps the mapping and valid stored metadata.
+#[tokio::test]
+async fn metadata_refresh_reports_truthful_outcomes_without_remapping() {
+    let (state, token, csrf, user_id, _guard) = setup_user("cvv2-refresh-outcomes").await;
+    set_key(true);
+    let conn = state.pool.get().await.unwrap();
+    let t = thread(&conn, user_id, "Saga").await;
+    let i = issue(&conn, t, "1", 1).await;
+    let base = format!("/api/v2/comicvine/issues/{i}");
+    let refresh = || {
+        call(
+            "POST",
+            &format!("{base}/metadata:refresh"),
+            &token,
+            &csrf,
+            None,
+        )
+    };
+    let deep = |credits: Value| {
+        json!({
+            "results": {
+                "id": 1111,
+                "name": "Going For It",
+                "issue_number": "1",
+                "cover_date": "1988-03-01",
+                "store_date": "1988-03-24",
+                "image": {"medium_url": "https://img.example/medium.jpg"},
+                "volume": {"id": 4001, "name": "Hellblazer"},
+                "person_credits": credits,
+                "character_credits": [],
+                "team_credits": [],
+                "story_arc_credits": [],
+                "date_last_updated": "2026-11-01 17:33:53",
+            }
+        })
+    };
+
+    // No confirmed identity: no provider call, truthful `not_confirmed`.
+    let (status, body) = send(&state, refresh()).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["outcome"], "not_confirmed");
+    assert_eq!(body["refreshed"], false);
+    assert!(fake(&state).calls().is_empty());
+
+    // Confirm with a provider failure: the mapping is saved, the response says
+    // why hydration did not finish.
+    provider_throttled(&state, "120");
+    let (status, body) = send(
+        &state,
+        call(
+            "POST",
+            &format!("{base}/identity:confirm"),
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": 1111})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["has_confirmed_identity"], true);
+    assert_eq!(
+        body["metadata_hydration"],
+        json!({"outcome": "rate_limited", "retry_after_seconds": 120})
+    );
+
+    // Throttled Retry reports the provider's delay and changes nothing.
+    provider_throttled(&state, "90");
+    let (status, body) = send(&state, refresh()).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        body,
+        json!({
+            "issue_id": i,
+            "refreshed": false,
+            "comicvine_issue_id": "1111",
+            "outcome": "rate_limited",
+            "retry_after_seconds": 90,
+        })
+    );
+
+    // Legitimately empty credits are a distinct, successful state.
+    provider_ok(&state, deep(json!([])));
+    let (status, body) = send(&state, refresh()).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["outcome"], "no_credits");
+    assert_eq!(body["refreshed"], true);
+
+    // Immediate Retry succeeds and persists credits without a remap.
+    provider_ok(
+        &state,
+        deep(json!([{"id": 1, "name": "Writer", "role": "writer"}])),
+    );
+    let (status, body) = send(&state, refresh()).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["outcome"], "complete");
+    assert_eq!(body["refreshed"], true);
+    assert_eq!(body["retry_after_seconds"], Value::Null);
+
+    // A later transient failure keeps the stored credits and the mapping.
+    fake(&state).push_ok(
+        StatusCode::FORBIDDEN,
+        header::HeaderMap::new(),
+        Bytes::new(),
+    );
+    let (status, body) = send(&state, refresh()).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["outcome"], "provider_unavailable");
+    assert_eq!(body["refreshed"], false);
+
+    // A sparse provider answer never erases credits already stored.
+    provider_ok(&state, deep(json!([])));
+    let (status, body) = send(&state, refresh()).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["outcome"], "complete");
+    let stored: Value = serde_json::from_str(
+        conn.query_one(
+            "SELECT metadata_json::text FROM external_identities WHERE external_id = '1111'",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0),
+    )
+    .unwrap();
+    assert_eq!(stored["creator_credits"][0]["name"], "Writer");
+
+    let mappings: Vec<(String, String)> = conn
+        .query(
+            "SELECT e.external_id, m.status FROM issue_external_identity_mappings m \
+             JOIN external_identities e ON e.id = m.external_identity_id \
+             WHERE m.issue_id = $1",
+            &[&i],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| (row.get(0), row.get(1)))
+        .collect();
+    assert_eq!(
+        mappings,
+        vec![("1111".to_owned(), "confirmed".to_owned())],
+        "Retry never remaps"
+    );
+    assert!(
+        fake(&state)
+            .calls()
+            .iter()
+            .all(|call| call.path.starts_with("/api/issue/4000-1111/?")),
+        "only the confirmed identity is ever requested"
+    );
+}
+
+/// #5840: importing one exact issue hydrates it inside the request and reports
+/// the truthful outcome; a provider failure never undoes the import.
+#[tokio::test]
+async fn import_issue_hydrates_the_exact_issue_inline_and_reports_the_outcome() {
+    let (state, token, csrf, _user, _guard) = setup_user("cvv2-import-hydrate").await;
+    set_key(true);
+    let conn = state.pool.get().await.unwrap();
+    let import = |id: i32, title: &str| {
+        call(
+            "POST",
+            "/api/v2/comicvine/issues:import",
+            &token,
+            &csrf,
+            Some(json!({"comicvine_issue_id": id, "title": title})),
+        )
+    };
+
+    provider_ok(
+        &state,
+        json!({"results": {
+            "id": 3001, "name": "One", "issue_number": "1", "cover_date": "1988-03-01",
+            "store_date": "1988-03-24",
+            "image": {"medium_url": "https://img.example/medium.jpg"},
+            "volume": {"id": 4001, "name": "Hellblazer"},
+            "person_credits": [{"id": 1, "name": "Writer", "role": "writer"}],
+            "character_credits": [], "team_credits": [], "story_arc_credits": [],
+            "date_last_updated": "2026-11-01 17:33:53",
+        }}),
+    );
+    let (status, body) = send(&state, import(3001, "One")).await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    assert_eq!(
+        body["metadata_hydration"],
+        json!({"outcome": "complete", "retry_after_seconds": null})
+    );
+    let stored: Value = serde_json::from_str(
+        conn.query_one(
+            "SELECT metadata_json::text FROM external_identities WHERE external_id = '3001'",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0),
+    )
+    .unwrap();
+    assert_eq!(stored["creator_credits"][0]["name"], "Writer");
+
+    // Provider failure: the import and mapping stand, the outcome says why.
+    provider_throttled(&state, "60");
+    let (status, body) = send(&state, import(3002, "Two")).await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    assert_eq!(
+        body["metadata_hydration"],
+        json!({"outcome": "rate_limited", "retry_after_seconds": 60})
+    );
+    let mapped: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM issue_external_identity_mappings m \
+             JOIN external_identities e ON e.id = m.external_identity_id \
+             WHERE e.external_id = '3002' AND m.status = 'confirmed'",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(mapped, 1);
+    assert_eq!(
+        fake(&state).calls().len(),
+        2,
+        "one provider call per import"
+    );
 }
 
 #[tokio::test]
@@ -3612,6 +3851,9 @@ fn golden_resolve(body: &Value, seeds: &std::collections::HashMap<&str, i32>) ->
 async fn import_issue_matches_responses_captured_from_python() {
     let golden: Value = serde_json::from_str(IMPORT_ISSUE_GOLDEN).unwrap();
     let (state, token, csrf, user_id, _guard) = setup_user("cvv2-golden-import").await;
+    // The frozen Python capture predates import hydration and has no provider
+    // credential; the process-global key must not leak in from a prior test.
+    set_key(false);
     let (other_token, other_csrf, _) = register_extra_user(&state, "cvv2-golden-other").await;
     let (order, a, b) = {
         let conn = state.pool.get().await.unwrap();

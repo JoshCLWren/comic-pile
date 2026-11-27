@@ -7882,6 +7882,17 @@
             "format": "int32",
             "type": "integer"
           },
+          "metadata_hydration": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MetadataHydration",
+                "description": "Truthful result of the synchronous metadata hydration attempted for the\nexact imported issue after it commits (#5840). Omitted when no attempt was\nmade, which keeps the response contract unchanged for callers without it."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "position": {
             "format": "int32",
             "type": [
@@ -8638,6 +8649,17 @@
             "format": "int32",
             "type": "integer"
           },
+          "metadata_hydration": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MetadataHydration",
+                "description": "Truthful result of the synchronous metadata hydration that `identity:confirm`\nand `identity:replace` attempt after the mapping commits (#5840). Always\nomitted on reads and on operations that never hydrate, so the frozen\nread wire contract is unchanged."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "thread_id": {
             "format": "int32",
             "type": "integer"
@@ -9235,6 +9257,41 @@
         ],
         "type": "object"
       },
+      "MetadataHydration": {
+        "description": "Outcome plus the provider-requested delay before another explicit Retry.",
+        "properties": {
+          "outcome": {
+            "$ref": "#/components/schemas/MetadataHydrationOutcome"
+          },
+          "retry_after_seconds": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "outcome"
+        ],
+        "type": "object"
+      },
+      "MetadataHydrationOutcome": {
+        "description": "Terminal, user-visible result of one synchronous ComicVine metadata\nhydration attempt (#5840). The vocabulary is the one the frontend Retry\nflow already renders; `persist_failed` is the only addition and falls\nthrough to its generic failure copy.",
+        "enum": [
+          "complete",
+          "no_credits",
+          "not_confirmed",
+          "provider_not_configured",
+          "provider_unavailable",
+          "rate_limited",
+          "timeout",
+          "invalid_response",
+          "persist_failed"
+        ],
+        "type": "string"
+      },
       "MetadataRefreshResponse": {
         "properties": {
           "comicvine_issue_id": {
@@ -9247,13 +9304,27 @@
             "format": "int32",
             "type": "integer"
           },
+          "outcome": {
+            "$ref": "#/components/schemas/MetadataHydrationOutcome"
+          },
           "refreshed": {
+            "description": "`true` only when this attempt stored a truthful metadata state\n(`outcome` is `complete` or `no_credits`).",
             "type": "boolean"
+          },
+          "retry_after_seconds": {
+            "description": "Provider-requested delay before another explicit Retry, when throttled.",
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
         "required": [
           "issue_id",
-          "refreshed"
+          "refreshed",
+          "outcome"
         ],
         "type": "object"
       },

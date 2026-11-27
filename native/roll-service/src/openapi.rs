@@ -337,6 +337,8 @@ use utoipa::OpenApi;
         crate::comicvine_v2::ImportIssueRequest,
         crate::comicvine_v2::ImportIssueResponse,
         crate::comicvine_v2::MetadataRefreshResponse,
+        crate::comicvine_provider::MetadataHydration,
+        crate::comicvine_provider::MetadataHydrationOutcome,
         crate::comicvine_v2::ConfirmIdentityRequest,
         crate::comicvine_v2::ReplaceIdentityRequest,
         crate::comicvine_v2::MetadataCorrectionRequest,
