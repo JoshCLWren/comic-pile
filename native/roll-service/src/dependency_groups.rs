@@ -4,18 +4,22 @@
 //! Preserves the Python `app/api/dependency_group.py` wire contract at the same
 //! HTTP methods and exact paths:
 //!
-//! * `GET /api/v1/reading-order-groups/`
+//! * `GET /api/v1/reading-order-groups/` (group CRUD stays on v1, #5710)
 //! * `POST /api/v1/reading-order-groups/`
-//! * `GET /api/v1/reading-order-groups/threads/{thread_id}/groups`
 //! * `GET /api/v1/reading-order-groups/{group_id}`
 //! * `GET /api/v1/reading-order-groups/{group_id}/detail`
 //! * `PATCH /api/v1/reading-order-groups/{group_id}`
 //! * `DELETE /api/v1/reading-order-groups/{group_id}`
-//! * `POST /api/v1/reading-order-groups/{group_id}/issue-ranges`
-//! * `POST /api/v1/reading-order-groups/{group_id}/members`
-//! * `DELETE /api/v1/reading-order-groups/{group_id}/members/{member_id}`
 //! * `PUT /api/v1/reading-order-groups/{group_id}/order`
-//! * `GET /api/v1/reading-order-groups/{group_id}/plans`
+//!
+//! The six membership operations moved to their v2-only resources in #5711:
+//!
+//! * `GET /api/v2/threads/{thread_id}/reading-order-group-memberships`
+//! * `GET /api/v2/reading-order-groups/{group_id}/reading-plans`
+//! * `POST /api/v2/reading-order-groups:resolveMemberships`
+//! * `POST /api/v2/reading-order-groups/{group_id}/members`
+//! * `POST /api/v2/reading-order-groups/{group_id}/issue-ranges`
+//! * `DELETE /api/v2/reading-order-groups/{group_id}/members/{member_id}`
 //!
 //! Wire parity with Python (`app/api/dependency_group.py` +
 //! `app/services/dependency_group_service.py` + `app/repositories/dependency_group_repository.py`):
@@ -936,7 +940,7 @@ async fn create_group_tx(
     })
 }
 
-/// `GET /api/v1/reading-order-groups/threads/{thread_id}/groups`
+/// `GET /api/v2/threads/{thread_id}/reading-order-group-memberships`
 pub async fn list_thread_groups(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1182,7 +1186,7 @@ async fn delete_group_tx(
     Ok(())
 }
 
-/// `POST /api/v1/reading-order-groups/{group_id}/issue-ranges`
+/// `POST /api/v2/reading-order-groups/{group_id}/issue-ranges`
 pub async fn add_issue_range(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1303,7 +1307,7 @@ async fn add_issue_range_tx(
     })
 }
 
-/// `POST /api/v1/reading-order-groups/{group_id}/members`
+/// `POST /api/v2/reading-order-groups/{group_id}/members`
 pub async fn add_member(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1421,7 +1425,7 @@ async fn add_member_tx(
     ))
 }
 
-/// `DELETE /api/v1/reading-order-groups/{group_id}/members/{member_id}`
+/// `DELETE /api/v2/reading-order-groups/{group_id}/members/{member_id}`
 pub async fn remove_member(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1618,7 +1622,7 @@ async fn set_group_order_tx(
     })
 }
 
-/// `GET /api/v1/reading-order-groups/{group_id}/plans`
+/// `GET /api/v2/reading-order-groups/{group_id}/reading-plans`
 pub async fn list_crossover_plans(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -1673,12 +1677,12 @@ pub fn list_groups_documentation() {}
 #[allow(dead_code)]
 pub fn create_group_documentation() {}
 
-/// Documentation-only operation for listing groups for a thread.
+/// Documentation-only operation for listing a thread's group memberships (v2).
 #[utoipa::path(
     get,
-    path = "/api/v1/reading-order-groups/threads/{thread_id}/groups",
+    path = "/api/v2/threads/{thread_id}/reading-order-group-memberships",
     tag = "reading-order-groups",
-    operation_id = "dependency_groups_list_thread_groups",
+    operation_id = "dependency_groups_v2_list_thread_group_memberships",
     params(("thread_id" = i32, Path, description = "Owned thread identifier")),
     responses(
         (status = 200, description = "Groups containing the thread or its issues", body = Vec<DependencyGroupSummary>),
@@ -1690,7 +1694,7 @@ pub fn create_group_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn list_thread_groups_documentation() {}
+pub fn list_thread_group_memberships_documentation() {}
 
 /// Documentation-only operation for fetching one group.
 #[utoipa::path(
@@ -1770,12 +1774,12 @@ pub fn delete_group_documentation() {}
 #[allow(dead_code)]
 pub fn get_group_detail_documentation() {}
 
-/// Documentation-only operation for adding an issue-position range.
+/// Documentation-only operation for adding an issue-position range (v2).
 #[utoipa::path(
     post,
-    path = "/api/v1/reading-order-groups/{group_id}/issue-ranges",
+    path = "/api/v2/reading-order-groups/{group_id}/issue-ranges",
     tag = "reading-order-groups",
-    operation_id = "dependency_groups_add_issue_range",
+    operation_id = "dependency_groups_v2_add_issue_range",
     params(("group_id" = i32, Path, description = "Owned group identifier")),
     request_body = DependencyGroupIssueRangeCreateRequest,
     responses(
@@ -1788,14 +1792,14 @@ pub fn get_group_detail_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn add_issue_range_documentation() {}
+pub fn add_issue_range_v2_documentation() {}
 
-/// Documentation-only operation for adding a group member.
+/// Documentation-only operation for adding a group member (v2).
 #[utoipa::path(
     post,
-    path = "/api/v1/reading-order-groups/{group_id}/members",
+    path = "/api/v2/reading-order-groups/{group_id}/members",
     tag = "reading-order-groups",
-    operation_id = "dependency_groups_add_member",
+    operation_id = "dependency_groups_v2_add_member",
     params(("group_id" = i32, Path, description = "Owned group identifier")),
     request_body = DependencyGroupMemberCreateRequest,
     responses(
@@ -1809,14 +1813,14 @@ pub fn add_issue_range_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn add_member_documentation() {}
+pub fn add_member_v2_documentation() {}
 
-/// Documentation-only operation for removing a group member.
+/// Documentation-only operation for removing a group member (v2).
 #[utoipa::path(
     delete,
-    path = "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
+    path = "/api/v2/reading-order-groups/{group_id}/members/{member_id}",
     tag = "reading-order-groups",
-    operation_id = "dependency_groups_remove_member",
+    operation_id = "dependency_groups_v2_remove_member",
     params(
         ("group_id" = i32, Path, description = "Owned group identifier"),
         ("member_id" = i32, Path, description = "Membership identifier")
@@ -1831,7 +1835,7 @@ pub fn add_member_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn remove_member_documentation() {}
+pub fn remove_member_v2_documentation() {}
 
 /// Documentation-only operation for setting crossover order.
 #[utoipa::path(
@@ -1853,12 +1857,12 @@ pub fn remove_member_documentation() {}
 #[allow(dead_code)]
 pub fn set_group_order_documentation() {}
 
-/// Documentation-only operation for listing linked continuity plans.
+/// Documentation-only operation for listing linked continuity plans (v2).
 #[utoipa::path(
     get,
-    path = "/api/v1/reading-order-groups/{group_id}/plans",
+    path = "/api/v2/reading-order-groups/{group_id}/reading-plans",
     tag = "reading-order-groups",
-    operation_id = "dependency_groups_list_plans",
+    operation_id = "dependency_groups_v2_list_reading_plans",
     params(("group_id" = i32, Path, description = "Owned group identifier")),
     responses(
         (status = 200, description = "Linked continuity plans", body = Vec<DependencyGroupSummary>),
@@ -1870,7 +1874,26 @@ pub fn set_group_order_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub fn list_crossover_plans_documentation() {}
+pub fn list_reading_plans_v2_documentation() {}
+
+/// Documentation-only operation for the bounded v2 membership batch action.
+#[utoipa::path(
+    post,
+    path = "/api/v2/reading-order-groups:resolveMemberships",
+    tag = "reading-order-groups",
+    description = "Resolve group memberships for several owned threads in one bounded response (AIP-136).",
+    operation_id = "dependency_groups_v2_resolve_memberships",
+    request_body = crate::thread_lifecycle::GroupsBatchRequest,
+    responses(
+        (status = 200, description = "Map of thread id to crossover groups", body = HashMap<String, Vec<DependencyGroupSummary>>),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "A requested thread is not owned by the reader"),
+        (status = 422, description = "Validation failed")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn resolve_memberships_documentation() {}
 
 /// OpenAPI document for the native same-path reading-order-group surface.
 #[derive(utoipa::OpenApi)]
@@ -1883,16 +1906,11 @@ pub fn list_crossover_plans_documentation() {}
     paths(
         list_groups_documentation,
         create_group_documentation,
-        list_thread_groups_documentation,
         get_group_documentation,
         update_group_documentation,
         delete_group_documentation,
         get_group_detail_documentation,
-        add_issue_range_documentation,
-        add_member_documentation,
-        remove_member_documentation,
-        set_group_order_documentation,
-        list_crossover_plans_documentation
+        set_group_order_documentation
     ),
     components(schemas(
         DependencyGroupCreateRequest,
@@ -1932,6 +1950,43 @@ impl utoipa::Modify for DependencyGroupsSecurityAddon {
 pub fn dependency_groups_openapi() -> utoipa::openapi::OpenApi {
     use utoipa::OpenApi;
     DependencyGroupsApi::openapi()
+}
+
+/// OpenAPI document for the v2 reading-order-group membership surface.
+///
+/// These six operations are the single authority for group membership reads and
+/// writes; the retired `/api/v1` aliases are no longer mounted or documented.
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    info(
+        title = "ComicPile native v2 reading-order-group memberships API",
+        version = "2.0.0",
+        description = "Generated contract for the native v2 crossover membership and batch lookups."
+    ),
+    paths(
+        resolve_memberships_documentation,
+        list_thread_group_memberships_documentation,
+        list_reading_plans_v2_documentation,
+        add_member_v2_documentation,
+        add_issue_range_v2_documentation,
+        remove_member_v2_documentation
+    ),
+    components(schemas(
+        crate::thread_lifecycle::GroupsBatchRequest,
+        DependencyGroupSummary,
+        DependencyGroupMemberCreateRequest,
+        DependencyGroupIssueRangeCreateRequest,
+        DependencyGroupIssueRangeResponse,
+        DependencyGroupMemberResponse
+    )),
+    modifiers(&DependencyGroupsSecurityAddon)
+)]
+pub struct DependencyGroupsV2Api;
+
+/// Emit the native v2 reading-order-group membership contract.
+pub fn dependency_groups_v2_openapi() -> utoipa::openapi::OpenApi {
+    use utoipa::OpenApi;
+    DependencyGroupsV2Api::openapi()
 }
 
 #[cfg(test)]
@@ -2254,19 +2309,40 @@ mod tests {
         let document = serde_json::to_value(dependency_groups_openapi()).unwrap();
         for path in [
             "/api/v1/reading-order-groups/",
-            "/api/v1/reading-order-groups/threads/{thread_id}/groups",
             "/api/v1/reading-order-groups/{group_id}",
             "/api/v1/reading-order-groups/{group_id}/detail",
+            "/api/v1/reading-order-groups/{group_id}/order",
+        ] {
+            assert!(document["paths"].get(path).is_some(), "{path}");
+        }
+        // The membership operations are v2-only: their retired v1 URLs must not
+        // remain documented as live operations.
+        for path in [
+            "/api/v1/reading-order-groups/threads/{thread_id}/groups",
             "/api/v1/reading-order-groups/{group_id}/issue-ranges",
             "/api/v1/reading-order-groups/{group_id}/members",
             "/api/v1/reading-order-groups/{group_id}/members/{member_id}",
-            "/api/v1/reading-order-groups/{group_id}/order",
             "/api/v1/reading-order-groups/{group_id}/plans",
         ] {
-            assert!(document["paths"].get(path).is_some(), "{path}");
+            assert!(document["paths"].get(path).is_none(), "{path}");
         }
         let expected = include_str!("../../contracts/reading-order-groups-v1.openapi.json");
         let generated = dependency_groups_openapi().to_pretty_json().unwrap();
         assert_eq!(expected.trim_end(), generated.trim_end());
+    }
+
+    #[test]
+    fn v2_contract_documents_all_six_membership_operations() {
+        let document = serde_json::to_value(dependency_groups_v2_openapi()).unwrap();
+        for path in [
+            "/api/v2/reading-order-groups:resolveMemberships",
+            "/api/v2/threads/{thread_id}/reading-order-group-memberships",
+            "/api/v2/reading-order-groups/{group_id}/reading-plans",
+            "/api/v2/reading-order-groups/{group_id}/members",
+            "/api/v2/reading-order-groups/{group_id}/issue-ranges",
+            "/api/v2/reading-order-groups/{group_id}/members/{member_id}",
+        ] {
+            assert!(document["paths"].get(path).is_some(), "{path}");
+        }
     }
 }

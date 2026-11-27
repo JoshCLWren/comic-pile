@@ -71,7 +71,7 @@ test.describe('Issue #4501: core-view request budgets', () => {
     expect(catalogCalls()).toHaveLength(0)
     expect(
       recorder.calls.filter(
-        (call) => call.method === 'POST' && call.path === '/api/v1/threads/groups:batch',
+        (call) => call.method === 'POST' && call.path === '/api/v2/reading-order-groups:resolveMemberships',
       ),
     ).toHaveLength(1)
 

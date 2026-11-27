@@ -7284,6 +7284,22 @@
         ],
         "type": "object"
       },
+      "GroupsBatchRequest": {
+        "description": "Body of `POST /api/v2/reading-order-groups:resolveMemberships`.",
+        "properties": {
+          "thread_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "thread_ids"
+        ],
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -20575,59 +20591,6 @@
         ]
       }
     },
-    "/api/v1/reading-order-groups/threads/{thread_id}/groups": {
-      "get": {
-        "operationId": "dependency_groups_list_thread_groups",
-        "parameters": [
-          {
-            "description": "Owned thread identifier",
-            "in": "path",
-            "name": "thread_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/NativeDependencyGroupSummary"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Groups containing the thread or its issues"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Thread not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for listing groups for a thread.",
-        "tags": [
-          "reading-order-groups"
-        ]
-      }
-    },
     "/api/v1/reading-order-groups/{group_id}": {
       "delete": {
         "operationId": "dependency_groups_delete",
@@ -20830,182 +20793,6 @@
         ]
       }
     },
-    "/api/v1/reading-order-groups/{group_id}/issue-ranges": {
-      "post": {
-        "operationId": "dependency_groups_add_issue_range",
-        "parameters": [
-          {
-            "description": "Owned group identifier",
-            "in": "path",
-            "name": "group_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DependencyGroupIssueRangeCreateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NativeDependencyGroupIssueRangeResponse"
-                }
-              }
-            },
-            "description": "Range membership result"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Group or thread not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for adding an issue-position range.",
-        "tags": [
-          "reading-order-groups"
-        ]
-      }
-    },
-    "/api/v1/reading-order-groups/{group_id}/members": {
-      "post": {
-        "operationId": "dependency_groups_add_member",
-        "parameters": [
-          {
-            "description": "Owned group identifier",
-            "in": "path",
-            "name": "group_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DependencyGroupMemberCreateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NativeDependencyGroupMemberResponse"
-                }
-              }
-            },
-            "description": "Created membership"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Group, thread, or issue not found"
-          },
-          "409": {
-            "description": "This member is already in the group"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for adding a group member.",
-        "tags": [
-          "reading-order-groups"
-        ]
-      }
-    },
-    "/api/v1/reading-order-groups/{group_id}/members/{member_id}": {
-      "delete": {
-        "operationId": "dependency_groups_remove_member",
-        "parameters": [
-          {
-            "description": "Owned group identifier",
-            "in": "path",
-            "name": "group_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Membership identifier",
-            "in": "path",
-            "name": "member_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Membership removed"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Group or member not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for removing a group member.",
-        "tags": [
-          "reading-order-groups"
-        ]
-      }
-    },
     "/api/v1/reading-order-groups/{group_id}/order": {
       "put": {
         "operationId": "dependency_groups_set_order",
@@ -21061,59 +20848,6 @@
           }
         ],
         "summary": "Documentation-only operation for setting crossover order.",
-        "tags": [
-          "reading-order-groups"
-        ]
-      }
-    },
-    "/api/v1/reading-order-groups/{group_id}/plans": {
-      "get": {
-        "operationId": "dependency_groups_list_plans",
-        "parameters": [
-          {
-            "description": "Owned group identifier",
-            "in": "path",
-            "name": "group_id",
-            "required": true,
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/NativeDependencyGroupSummary"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Linked continuity plans"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Group not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for listing linked continuity plans.",
         "tags": [
           "reading-order-groups"
         ]
@@ -28117,6 +27851,290 @@
         ]
       }
     },
+    "/api/v2/reading-order-groups/{group_id}/issue-ranges": {
+      "post": {
+        "operationId": "dependency_groups_v2_add_issue_range",
+        "parameters": [
+          {
+            "description": "Owned group identifier",
+            "in": "path",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DependencyGroupIssueRangeCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeDependencyGroupIssueRangeResponse"
+                }
+              }
+            },
+            "description": "Range membership result"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group or thread not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for adding an issue-position range (v2).",
+        "tags": [
+          "reading-order-groups"
+        ]
+      }
+    },
+    "/api/v2/reading-order-groups/{group_id}/members": {
+      "post": {
+        "operationId": "dependency_groups_v2_add_member",
+        "parameters": [
+          {
+            "description": "Owned group identifier",
+            "in": "path",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DependencyGroupMemberCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeDependencyGroupMemberResponse"
+                }
+              }
+            },
+            "description": "Created membership"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group, thread, or issue not found"
+          },
+          "409": {
+            "description": "This member is already in the group"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for adding a group member (v2).",
+        "tags": [
+          "reading-order-groups"
+        ]
+      }
+    },
+    "/api/v2/reading-order-groups/{group_id}/members/{member_id}": {
+      "delete": {
+        "operationId": "dependency_groups_v2_remove_member",
+        "parameters": [
+          {
+            "description": "Owned group identifier",
+            "in": "path",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Membership identifier",
+            "in": "path",
+            "name": "member_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Membership removed"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group or member not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for removing a group member (v2).",
+        "tags": [
+          "reading-order-groups"
+        ]
+      }
+    },
+    "/api/v2/reading-order-groups/{group_id}/reading-plans": {
+      "get": {
+        "operationId": "dependency_groups_v2_list_reading_plans",
+        "parameters": [
+          {
+            "description": "Owned group identifier",
+            "in": "path",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NativeDependencyGroupSummary"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Linked continuity plans"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Group not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for listing linked continuity plans (v2).",
+        "tags": [
+          "reading-order-groups"
+        ]
+      }
+    },
+    "/api/v2/reading-order-groups:resolveMemberships": {
+      "post": {
+        "description": "Resolve group memberships for several owned threads in one bounded response (AIP-136).",
+        "operationId": "dependency_groups_v2_resolve_memberships",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupsBatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "items": {
+                      "$ref": "#/components/schemas/NativeDependencyGroupSummary"
+                    },
+                    "type": "array"
+                  },
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Map of thread id to crossover groups"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "A requested thread is not owned by the reader"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the bounded v2 membership batch action.",
+        "tags": [
+          "reading-order-groups"
+        ]
+      }
+    },
     "/api/v2/reading-orders/": {
       "get": {
         "operationId": "reading_orders_list",
@@ -29866,6 +29884,59 @@
         "summary": "Documentation-only operation for the delete/reorder structure preview.",
         "tags": [
           "issues"
+        ]
+      }
+    },
+    "/api/v2/threads/{thread_id}/reading-order-group-memberships": {
+      "get": {
+        "operationId": "dependency_groups_v2_list_thread_group_memberships",
+        "parameters": [
+          {
+            "description": "Owned thread identifier",
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NativeDependencyGroupSummary"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Groups containing the thread or its issues"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for listing a thread's group memberships (v2).",
+        "tags": [
+          "reading-order-groups"
         ]
       }
     },
