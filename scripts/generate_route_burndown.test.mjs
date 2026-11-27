@@ -263,16 +263,12 @@ test('real taste and bug-report fragments cannot regress to Python ingress', () 
     ]),
   );
   for (const op of bugs.operations) {
-<<<<<<< HEAD
-    assert.equal(op.dest, '/api/native_roll.rs', op.path);
+    assert.equal(op.dest, '/api/native_api.rs', op.path);
   }
   // Retained same-path aliases stay excluded from the live inventory until
   // production proof allows their retirement (#5718). The canonical v2 Create
   // is an inventoried native-rust target.
   for (const op of bugs.operations.filter(op => op.path !== '/api/v2/bugReports')) {
-=======
-    assert.equal(op.dest, '/api/native_api.rs', op.path);
->>>>>>> origin/main
     assert.equal(op.exclude_from_inventory, true, op.path);
     assert.equal(op.owning_issue, 4852, op.path);
   }

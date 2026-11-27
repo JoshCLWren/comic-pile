@@ -18,7 +18,7 @@
       "bucket": "operations",
       "method": "POST",
       "path": "/api/v2/bugReports",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "src": "^/api/v2/bugReports$",
       "runtime": "native-rust",
       "status": "target",
