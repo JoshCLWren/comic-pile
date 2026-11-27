@@ -433,6 +433,7 @@ pub async fn preview_plan_projection_handler(
         plan_id,
         plan_name,
         plan_ordering_mode: ordering_mode,
+        plan_updated_at,
         reading_order_id: request.reading_order_id,
         reading_order_name,
         entries,

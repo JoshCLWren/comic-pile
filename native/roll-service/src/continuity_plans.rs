@@ -285,6 +285,8 @@ pub struct ReadingOrderProjectionPreview {
     pub plan_name: String,
     #[serde(rename = "plan_ordering_mode")]
     pub plan_ordering_mode: String,
+    #[serde(rename = "plan_updated_at")]
+    pub plan_updated_at: String,
     #[serde(rename = "reading_order_id")]
     pub reading_order_id: i32,
     #[serde(rename = "reading_order_name")]

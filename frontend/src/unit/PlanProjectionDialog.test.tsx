@@ -56,6 +56,7 @@ describe('PlanProjectionDialog', () => {
       plan_id: 9,
       plan_name: 'My reading plan',
       plan_ordering_mode: 'strict_sequential',
+      plan_updated_at: '2026-01-01T00:00:00Z',
       reading_order_id: 3,
       reading_order_name: 'Alpha',
       entries: [
@@ -81,6 +82,7 @@ describe('PlanProjectionDialog', () => {
       plan_id: 9,
       plan_name: 'My reading plan',
       plan_ordering_mode: 'strict_sequential',
+      plan_updated_at: '2026-01-01T00:00:00Z',
       reading_order_id: 3,
       reading_order_name: 'Alpha',
       entries: [],
@@ -111,6 +113,7 @@ describe('PlanProjectionDialog', () => {
       plan_id: 9,
       plan_name: 'My reading plan',
       plan_ordering_mode: 'strict_sequential',
+      plan_updated_at: '2026-01-01T00:00:00Z',
       reading_order_id: 3,
       reading_order_name: 'Alpha',
       entries: [
@@ -145,6 +148,7 @@ describe('PlanProjectionDialog', () => {
       plan_id: 9,
       plan_name: 'My reading plan',
       plan_ordering_mode: 'strict_sequential',
+      plan_updated_at: '2026-01-01T00:00:00Z',
       reading_order_id: 3,
       reading_order_name: 'Alpha',
       entries: [

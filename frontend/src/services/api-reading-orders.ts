@@ -53,6 +53,7 @@ export interface ReadingOrderProjectionPreview {
   plan_id: number
   plan_name: string
   plan_ordering_mode: string
+  plan_updated_at: string
   reading_order_id: number
   reading_order_name: string
   entries: ReadingOrderProjectionEntry[]
