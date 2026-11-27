@@ -31,10 +31,10 @@ it('rejects all queued requests on a temporary refresh outage and allows later r
   const outage = Object.assign(new Error('temporarily unavailable'), { response: { status: 503 } })
   transport.post.mockReturnValueOnce(refresh)
   const first = responseError({
-    config: { url: '/v1/threads/1', skipAuthRedirect: true }, response: { status: 401 },
+    config: { url: '/v2/threads/1', skipAuthRedirect: true }, response: { status: 401 },
   })
   const queued = responseError({
-    config: { url: '/v1/threads/2', skipAuthRedirect: true }, response: { status: 401 },
+    config: { url: '/v2/threads/2', skipAuthRedirect: true }, response: { status: 401 },
   })
   const rejected = Promise.all([
     expect(first).rejects.toBe(outage),
@@ -50,17 +50,17 @@ it('rejects all queued requests on a temporary refresh outage and allows later r
   transport.post.mockResolvedValueOnce({ access_token: 'recovered-session' })
   transport.request.mockResolvedValueOnce({ id: 3 })
   await expect(responseError({
-    config: { url: '/v1/threads/3', skipAuthRedirect: true }, response: { status: 401 },
+    config: { url: '/v2/threads/3', skipAuthRedirect: true }, response: { status: 401 },
   })).resolves.toEqual({ id: 3 })
   expect(transport.post).toHaveBeenCalledTimes(2)
   expect(transport.request).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
-    url: '/v1/threads/3', headers: { Authorization: 'Bearer recovered-session' },
+    url: '/v2/threads/3', headers: { Authorization: 'Bearer recovered-session' },
   }))
 })
 
 it.each([undefined, null, { detail: 'Permission denied' }])(
   'keeps a forbidden response with body %j distinct from expired authentication', async (data) => {
-    const forbidden = { config: { url: '/v1/threads/1' }, response: { status: 403, data } }
+    const forbidden = { config: { url: '/v2/threads/1' }, response: { status: 403, data } }
     await expect(responseError(forbidden)).rejects.toBe(forbidden)
     expect(transport.post).not.toHaveBeenCalled()
     expect(getAccessToken()).toBe('current-session')
