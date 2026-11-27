@@ -328,7 +328,7 @@ async fn every_lifecycle_route_requires_auth() {
         ("POST", "/api/v1/threads/"),
         ("POST", "/api/v1/threads/check-duplicates"),
         ("GET", "/api/v1/threads/excluded/threads"),
-        ("POST", "/api/v1/threads/groups:batch"),
+        ("POST", "/api/v2/reading-order-groups:resolveMemberships"),
         ("POST", "/api/v1/threads/reactivate"),
         ("GET", "/api/v1/threads/stale"),
         ("DELETE", "/api/v1/threads/1"),
@@ -2513,7 +2513,7 @@ async fn groups_batch_maps_threads_to_groups_in_request_order() {
     let (status, body) = call(
         &ctx,
         "POST",
-        "/api/v1/threads/groups:batch",
+        "/api/v2/reading-order-groups:resolveMemberships",
         Some(json!({"thread_ids": [second, first, first, lonely]})),
     )
     .await;
@@ -2536,7 +2536,7 @@ async fn groups_batch_maps_threads_to_groups_in_request_order() {
     let response = router(ctx.state.clone())
         .oneshot(authed(
             "POST",
-            "/api/v1/threads/groups:batch",
+            "/api/v2/reading-order-groups:resolveMemberships",
             &ctx.token,
             &ctx.csrf,
             Some(json!({"thread_ids": [second, first, first, lonely]})),
@@ -2559,7 +2559,7 @@ async fn groups_batch_maps_threads_to_groups_in_request_order() {
     let (status, body) = call(
         &ctx,
         "POST",
-        "/api/v1/threads/groups:batch",
+        "/api/v2/reading-order-groups:resolveMemberships",
         Some(json!({"thread_ids": [first, theirs]})),
     )
     .await;
@@ -2569,7 +2569,7 @@ async fn groups_batch_maps_threads_to_groups_in_request_order() {
     let (status, body) = call(
         &ctx,
         "POST",
-        "/api/v1/threads/groups:batch",
+        "/api/v2/reading-order-groups:resolveMemberships",
         Some(json!({"thread_ids": []})),
     )
     .await;
@@ -2578,7 +2578,7 @@ async fn groups_batch_maps_threads_to_groups_in_request_order() {
     let (status, _) = call(
         &ctx,
         "POST",
-        "/api/v1/threads/groups:batch",
+        "/api/v2/reading-order-groups:resolveMemberships",
         Some(json!({"thread_ids": (1..=201).collect::<Vec<i32>>()})),
     )
     .await;

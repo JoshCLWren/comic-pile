@@ -115,12 +115,12 @@ async function seedInterrelatedThreads(
     .then(async (group) => {
       // SAFETY: the API returns a created group, so its id is always present
       const groupId = group.id as number;
-      await apiPost(page, user, `/api/v1/reading-order-groups/${groupId}/issue-ranges`, {
+      await apiPost(page, user, `/api/v2/reading-order-groups/${groupId}/issue-ranges`, {
         thread_id: threadA.id,
         start_position: 1,
         end_position: issuesA.length,
       });
-      await apiPost(page, user, `/api/v1/reading-order-groups/${groupId}/issue-ranges`, {
+      await apiPost(page, user, `/api/v2/reading-order-groups/${groupId}/issue-ranges`, {
         thread_id: threadB.id,
         start_position: 1,
         end_position: issuesB.length,
