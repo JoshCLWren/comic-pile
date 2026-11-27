@@ -429,6 +429,24 @@ jobs:
       - name: Require a DB-backed HTTP test for every native route module
         run: node scripts/check_native_route_db_tests.mjs
 
+  reading-lists-terminology:
+    name: Reading Lists Terminology Guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Test the terminology checker
+        run: node --test scripts/check_reading_lists_terminology.test.mjs
+      - name: Require zero retired option-letter names in tracked source
+        run: node scripts/check_reading_lists_terminology.mjs
+
   frontend-unit-tests:
     name: Frontend Unit Tests (vitest)
     runs-on: ubuntu-latest

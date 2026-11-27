@@ -33,7 +33,7 @@ export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url
 
 /** Word-boundary-aware retired-terminology pattern (case and separator variants). */
 export const RETIRED_TERMINOLOGY =
-  /(?<![A-Za-z])[Oo]ption[\s_-]?[Ee](?![a-z])/;
+  /(?<![A-Za-z])[Oo][Pp][Tt][Ii][Oo][Nn][\s_-]?[Ee](?![a-z])/;
 
 const EXCLUDED_PREFIXES = [
   '.rotisserie/',

@@ -54,7 +54,7 @@ test('guard reports exact file and line evidence for a temporary offender', () =
     fs.writeFileSync(path.join(tmp, 'clean.rs'), '// Reading List engine\n');
     execFileSync('git', ['add', '.'], {cwd: tmp});
 
-    const retiredLine = '// ' + 'Option E' + ' was here';
+    const retiredLine = '// ' + 'Option' + ' E' + ' was here';
     const findings = findRetiredTerminology(tmp);
     assert.deepEqual(findings, [
       {file: 'live.rs', line: 1, text: retiredLine},
