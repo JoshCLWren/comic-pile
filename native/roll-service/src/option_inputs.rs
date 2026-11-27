@@ -1045,7 +1045,7 @@ mod tests {
             INSERT INTO threads
                 (id, user_id, title, format, issues_remaining, queue_position, status,
                  created_at, catalog_series_id)
-            VALUES (9201, 9101, 'Catalog Only', 'comic', 2, 1, 'active', NOW(), 1001),
+            VALUES (9201, 9101, 'Catalog Only', 'comic', 2, 1, 'active', NOW(), NULL),
                    (9401, 9102, 'Confirmed Series', 'comic', 1, 1, 'active', NOW(), NULL),
                    (9402, 9102, 'Confirmed Metadata', 'comic', 1, 2, 'active', NOW(), NULL);
             INSERT INTO issues
