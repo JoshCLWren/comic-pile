@@ -14,6 +14,8 @@ import {
 } from '../services/api-cbl-sources'
 import { applyCblAdoptionChoices } from '../utils/cblAdoptionPlan'
 import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle } from '../utils/cblSourceDisplay'
+import CompactIssueCardTrigger from './CompactIssueCardTrigger'
+import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 
 interface ReadingPlanAddMaterialProps {
   planId: number

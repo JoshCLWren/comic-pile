@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { RollLastReadView } from '../../../hooks/useRollLastRead'
 import { ComicIssueCover } from '../../../components/ComicIssueCard'
+import CompactIssueCardTrigger from '../../../components/CompactIssueCardTrigger'
 import {
   rollSecondaryActionClass,
   rollUtilityActionClass,
@@ -125,6 +126,23 @@ export function LastReadStrip({
           </div>
         </div>
       </div>
+
+      {/* The strip stays cache-only: the compact entrance issues no request
+          until the reader opens it, and the full shared card then offers the
+          same direct read/rate/map controls as every other owned issue. */}
+      {view.lastRead.issue_id != null && (
+        <div className="mt-3 min-w-0" data-testid="last-read-issue-actions">
+          <CompactIssueCardTrigger
+            issueId={view.lastRead.issue_id}
+            threadTitle={title}
+            issueNumber={issueNumber ?? ''}
+            status="read"
+            rating={view.rating ?? null}
+            hideTitle
+            actionLabel="Read or rate this issue"
+          />
+        </div>
+      )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <button
