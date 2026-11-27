@@ -80,6 +80,10 @@
     {"method":"PUT","path":"/api/v2/reading-mode","owning_issue":4335,"reason":"non-lowercamelcase-segment,put-mutation"},
     {"method":"POST","path":"/api/v2/reading-mode/suggestion-dismissals","owning_issue":4335,"reason":"non-lowercamelcase-segment"},
     {"method":"POST","path":"/api/v2/reading-mode/suggestions","owning_issue":4335,"reason":"non-lowercamelcase-segment"},
+    {"method":"POST","path":"/api/v2/reading-order-groups/{group_id}/issue-ranges","owning_issue":4841,"reason":"non-lowercamelcase-segment"},
+    {"method":"POST","path":"/api/v2/reading-order-groups/{group_id}/members","owning_issue":4841,"reason":"non-lowercamelcase-segment"},
+    {"method":"DELETE","path":"/api/v2/reading-order-groups/{group_id}/members/{member_id}","owning_issue":4841,"reason":"non-lowercamelcase-segment"},
+    {"method":"GET","path":"/api/v2/reading-order-groups/{group_id}/reading-plans","owning_issue":4841,"reason":"non-lowercamelcase-segment"},
     {"method":"GET","path":"/api/v2/reading-orders/","owning_issue":4851,"reason":"non-lowercamelcase-segment,trailing-slash"},
     {"method":"POST","path":"/api/v2/reading-orders/{reading_order_id}/items","owning_issue":4851,"reason":"non-lowercamelcase-segment"},
     {"method":"POST","path":"/api/v2/reading-plan-sync/runs","owning_issue":4851,"reason":"non-lowercamelcase-segment"},
@@ -97,6 +101,7 @@
     {"method":"POST","path":"/api/v2/tags/{tag_id}/assignment-batches","owning_issue":4335,"reason":"non-lowercamelcase-segment"},
     {"method":"POST","path":"/api/v2/tags/{tag_id}/unassignment-batches","owning_issue":4335,"reason":"non-lowercamelcase-segment"},
     {"method":"PUT","path":"/api/v2/threads/{thread_id}/issue-order","owning_issue":4684,"reason":"non-lowercamelcase-segment,put-mutation"},
+    {"method":"GET","path":"/api/v2/threads/{thread_id}/reading-order-group-memberships","owning_issue":4841,"reason":"non-lowercamelcase-segment"},
     {"method":"GET","path":"/api/v2/undo/{session_id}/snapshots","owning_issue":4839,"reason":"action-shaped-subpath"},
     {"method":"POST","path":"/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore","owning_issue":4839,"reason":"action-shaped-subpath"}
   ]
