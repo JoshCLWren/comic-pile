@@ -330,7 +330,8 @@ async fn canonical_session_resources_ignore_roll_rating_companion_events() {
 async fn canonical_session_resources_include_sessionless_manual_die_selection() {
     let (state, _guard) = database().await;
     let (owner_token, owner_csrf, owner_id) = register(&state, "sessions_list_manual_owner").await;
-    let (_other_token, _other_csrf, other_id) = register(&state, "sessions_list_manual_other").await;
+    let (_other_token, _other_csrf, other_id) =
+        register(&state, "sessions_list_manual_other").await;
     let owner = (owner_token.as_str(), owner_csrf.as_str());
     let session = insert_session(&state, owner_id, "2026-11-26T01:00:00Z", 6).await;
 
