@@ -226,11 +226,7 @@ mod tests {
                 "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}",
                 "get",
             ),
-            ("/api/v1/issue-identity/cbl-sources/compare", "post"),
-            (
-                "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
-                "get",
-            ),
+            // compare and reading-list cbl-candidates moved to canonical v2 (#5713)
             (
                 "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
                 "get",

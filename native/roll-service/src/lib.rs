@@ -1074,11 +1074,11 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(issue_identity::find_cbl_sources_by_comicvine_issue),
         )
         .route(
-            "/api/v1/issue-identity/cbl-sources/compare",
-            post(issue_identity::compare_cbl_sources),
+            "/api/v2/cblSources:compare",
+            post(issue_identity::compare_cbl_sources_v2),
         )
         .route(
-            "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
+            "/api/v2/reading-lists/{list_id}/cbl-candidates",
             get(issue_identity::find_cbl_candidates_for_reading_list),
         )
         .route(

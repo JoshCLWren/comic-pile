@@ -998,7 +998,7 @@ async fn compare_cbl_sources_impl(
     }))
 }
 
-/// `POST /api/v2/cbl-sources:compare`
+/// `POST /api/v2/cblSources:compare`
 #[instrument(skip(state, _auth, payload))]
 pub async fn compare_cbl_sources_v2(
     State(state): State<Arc<AppState>>,
@@ -5225,8 +5225,6 @@ pub fn cbl_targeted_adoption_commit_documentation() {}
         discover_cbl_source_lists_documentation,
         get_cbl_source_list_documentation,
         find_cbl_sources_by_comicvine_issue_documentation,
-        compare_cbl_sources_documentation,
-        find_cbl_candidates_for_reading_list_documentation,
         cbl_adoption_preview_documentation,
         cbl_adoption_plan_documentation,
     ),
