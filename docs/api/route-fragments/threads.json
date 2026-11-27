@@ -74,7 +74,8 @@
       "status": "target",
       "consumers": [
         "frontend/src/services/api-dependency-groups.ts"
-      ]
+      ],
+      "owning_issue": 4841
     },
     {
       "bucket": "unversioned_operations",

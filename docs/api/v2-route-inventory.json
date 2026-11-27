@@ -2477,7 +2477,7 @@
     {
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": null,
+      "owning_issue": 4841,
       "consumers": [
         "frontend/src/services/api-dependency-groups.ts"
       ],
