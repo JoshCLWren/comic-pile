@@ -37,7 +37,7 @@ export function useCrossoverDetail(
     queryKey: validId ? queryKeys.crossover.detail(validId) : [],
     queryFn: async () => {
       if (!validId) throw new Error('No group ID')
-      return dependencyGroupsApi.getDetail(validId)
+      return dependencyGroupsApi.get(validId)
     },
     enabled: !!validId,
     retry: false,
