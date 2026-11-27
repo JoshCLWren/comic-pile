@@ -13,19 +13,11 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 
 ## Coverage summary
 
-<<<<<<< HEAD
 - Live API routes: 255 (v1 65, v2 178, unversioned 12).
 - v1 routes with a named retirement owner: 65.
 - v1 routes needing an owner issue: 0 (visible baseline debt, not a pass).
 - Routes with unresolved production ingress: 0.
 - Scanned first-party call sites: 926.
-=======
-- Live API routes: 252 (v1 65, v2 175, unversioned 12).
-- v1 routes with a named retirement owner: 65.
-- v1 routes needing an owner issue: 0 (visible baseline debt, not a pass).
-- Routes with unresolved production ingress: 0.
-- Scanned first-party call sites: 924.
->>>>>>> origin/main
 - Stale AIP baseline entries (no live route): 4.
 - Allowlist entries: 175 (owner 175, baseline debt 0, nonconforming v2 98).
 
@@ -80,13 +72,8 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | GET | `/api/v1/releases/{release_id}` | `releases::get` | v1 | none | /api/native_roll.rs | #4849 | GET /api/v2/releases | migrated-awaiting-retirement |
 | POST | `/api/v1/releases/{release_id}/retract` | `releases::retract` | v1 | none | /api/native_roll.rs | #4849 | GET /api/v2/releases | migrated-awaiting-retirement |
 | GET | `/api/v1/roll/events/{event_id}/recommendation-explanation` | `recommendation_explanation::get_recommendation_explanation` | v1 | none | /api/native_roll.rs | #4595 | retire-without-replacement | legacy-family-debt |
-<<<<<<< HEAD
 | GET | `/api/v1/taste/discoveries` | `taste_discoveries::list_taste_discoveries` | v1 | frontend/src/unit/api-taste.test.ts | /api/native_roll.rs | #5717 | GET /api/v2/users/me/tasteDiscoveries \| POST /api/v2/users/me/tasteDiscoveries/{id}:dismiss | slice-open |
 | POST | `/api/v1/taste/discoveries/{signal_id}/dismiss` | `taste_discoveries::dismiss_taste_discovery` | v1 | frontend/src/unit/api-taste.test.ts | /api/native_roll.rs | #5717 | GET /api/v2/users/me/tasteDiscoveries \| POST /api/v2/users/me/tasteDiscoveries/{id}:dismiss | slice-open |
-=======
-| GET | `/api/v1/taste/discoveries` | `taste_discoveries::list_taste_discoveries` | v1 | frontend/src/services/api-taste.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/unit/api-taste.test.ts | /api/native_roll.rs | #5717 | GET /api/v2/users/me/tasteDiscoveries \| POST /api/v2/users/me/tasteDiscoveries/{id}:dismiss | slice-open |
-| POST | `/api/v1/taste/discoveries/{signal_id}/dismiss` | `taste_discoveries::dismiss_taste_discovery` | v1 | frontend/src/services/api-taste.ts, frontend/src/unit/api-taste.test.ts | /api/native_roll.rs | #5717 | GET /api/v2/users/me/tasteDiscoveries \| POST /api/v2/users/me/tasteDiscoveries/{id}:dismiss | slice-open |
->>>>>>> origin/main
 | POST | `/api/v1/threads/` | `thread_lifecycle::create_thread` | v1 | frontend/src/test/core-views-request-budget.spec.ts, frontend/src/unit/api-auth-recovery.test.ts, frontend/src/unit/continuityIdentityRequestBudget.test.tsx, frontend/src/unit/httpClient.test.ts | /api/native_roll.rs | #5702 | POST /api/v2/threads | slice-merged |
 | POST | `/api/v1/threads/check-duplicates` | `thread_lifecycle::check_potential_duplicates` | v1 | frontend/src/services/api-threads.ts | /api/native_roll.rs | #5705 | POST /api/v2/threads:checkDuplicates | slice-merged |
 | GET | `/api/v1/threads/completed/threads` | `threads::list_completed_threads` | v1 | frontend/src/services/api-threads.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/unit/api.test.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx | /api/native_roll.rs | #5701 | GET /api/v2/threads?filter=status eq 'completed' | slice-open |
@@ -114,11 +101,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | PUT | `/api/v1/threads/{thread_id}/test-backdate` | `thread_lifecycle::backdate_thread_for_testing` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/services/api-dependency-groups.ts, frontend/src/services/api-issues.ts, frontend/src/services/api-migration.ts, frontend/src/services/api-reading-orders.ts, frontend/src/services/api-threads.ts | /api/native_roll.rs | #4335 | retire-without-replacement | test-helper-debt |
 | POST | `/api/v1/threads:getBlockingInfo` | `thread_ordering::get_threads_blocking_info` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/useReadingBoundaries.request-budget.test.tsx | /api/native_roll.rs | #5709 | GET /api/v2/dependencies/blocked | slice-open |
 | GET | `/api/v1/users/me/taste-signals` | `preferences::list_taste_signals` | v1 | none | /api/native_roll.rs | #5717 | PATCH /api/v2/users/me/tasteSignals/{signal_id} | slice-open |
-<<<<<<< HEAD
 | PUT | `/api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict` | `preferences::set_taste_signal_verdict` | v1 | none | /api/native_roll.rs | #5717 | PATCH /api/v2/users/me/tasteSignals/{signal_id} | slice-open |
-=======
-| PUT | `/api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict` | `preferences::set_taste_signal_verdict` | v1 | frontend/src/services/api-taste.ts, frontend/src/unit/api-taste.test.ts | /api/native_roll.rs | #5717 | PATCH /api/v2/users/me/tasteSignals/{signal_id} | slice-open |
->>>>>>> origin/main
 | GET | `/api/v2/activity` | `activity::list_activity` | v2 | frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts, frontend/src/test/issue-3429-bootstrap-recovery.spec.ts, frontend/src/test/ui-audit/stabilize.ts, frontend/src/unit/api-activity.test.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/ui-audit-stabilize.test.ts | /api/native_roll.rs | #4822 | canonical-v2 | live-target |
 | GET | `/api/v2/auth/csrf` | `auth::handlers::csrf` | v2 | frontend/src/services/api.ts, frontend/src/test/auth-account-switching.spec.ts, frontend/src/test/cbl-replace-review.spec.ts, frontend/src/test/continuity-checkpoint-convergence.spec.ts, frontend/src/test/continuity-parallel-lanes.spec.ts, frontend/src/test/custom-cbl-create-cycle.spec.ts, frontend/src/test/custom-cbl-delete-confirm.spec.ts, frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts, frontend/src/test/fixtures.ts, frontend/src/test/helpers.ts, frontend/src/test/issue-1883-roll-a11y-duplicates.spec.ts, frontend/src/test/issue-1885-roll-target-sizes.spec.ts, frontend/src/test/issue-2104-zero-readiness.spec.ts, frontend/src/test/issue-2298-crossover-reading-order.spec.ts, frontend/src/test/issue-3268-threads-route-redirect.spec.ts, frontend/src/test/issue-4527-roll-snoozes.spec.ts, frontend/src/test/issue-5435-bulk-queue-exclusions.spec.ts, frontend/src/test/network-budget/auth-public.spec.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/test/p0-dependencies-reading-order.spec.ts, frontend/src/test/reading-list-gate-authoring.spec.ts, frontend/src/test/reading-plan-reader.spec.ts, frontend/src/test/shared-issue-reader.spec.ts, frontend/src/unit/api-auth-v2.test.ts, frontend/src/unit/api.test.ts, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4459 | canonical-v2 | live-target |
 | POST | `/api/v2/auth/forgot-password` | `auth::handlers::forgot_password` | v2 | frontend/src/services/api-auth.ts, frontend/src/services/api.ts, frontend/src/test/auth-account-switching.spec.ts, frontend/src/test/network-budget/auth-public.spec.ts, frontend/src/unit/api-auth-v2.test.ts, frontend/src/unit/api.test.ts, frontend/src/unit/nativeV2Client.test.ts | /api/native_roll.rs | #4459 | canonical-v2 | live-target |
@@ -294,12 +277,9 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | POST | `/api/v2/undo/{session_id}/snapshots/{snapshot_id}/restore` | `undo_apply::undo_to_snapshot` | v2 | frontend/src/services/api-undo.ts, frontend/src/unit/api.test.ts, frontend/src/unit/retired-session-callers.test.ts | /api/native_roll.rs | #4839 | canonical-v2 | live-target |
 | GET | `/api/v2/users/me/preferences` | `preferences::get_user_preferences` | v2 | frontend/src/services/api-preferences.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/unit/Navigation.sidebar-polish.test.tsx, frontend/src/unit/Navigation.theme-picker.test.tsx, frontend/src/unit/api.test.ts, frontend/src/unit/auth-provider-query-outage.test.tsx, frontend/src/unit/auth-provider-recovery.test.tsx, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/theme-runtime.test.tsx | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
 | PATCH | `/api/v2/users/me/preferences` | `preferences::patch_user_preferences` | v2 | frontend/src/services/api-preferences.ts, frontend/src/unit/Navigation.sidebar-polish.test.tsx, frontend/src/unit/Navigation.theme-picker.test.tsx, frontend/src/unit/api.test.ts, frontend/src/unit/auth-provider-query-outage.test.tsx, frontend/src/unit/auth-provider-recovery.test.tsx, frontend/src/unit/coreRouteRequestBudget.test.tsx, frontend/src/unit/nativeV2Client.test.ts, frontend/src/unit/theme-runtime.test.tsx | /api/native_roll.rs | #4335 | canonical-v2 | live-target |
-<<<<<<< HEAD
 | GET | `/api/v2/users/me/tasteDiscoveries` | `taste_discoveries::list_taste_discoveries_v2` | v2 | frontend/src/services/api-taste.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/unit/api-taste.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | POST | `/api/v2/users/me/tasteDiscoveries/{segment}` | `taste_discoveries::post_taste_discovery_action` | v2 | frontend/src/services/api-taste.ts, frontend/src/unit/api-taste.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | PATCH | `/api/v2/users/me/tasteSignals/{signal_name}` | `preferences::patch_taste_signal_v2` | v2 | frontend/src/services/api-taste.ts, frontend/src/unit/api-taste.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
-=======
->>>>>>> origin/main
 
 ## Owner issue cross-reference
 

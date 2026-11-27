@@ -63,7 +63,7 @@
       "bucket": "operations",
       "method": "PATCH",
       "path": "/api/v2/users/me/tasteSignals/{signal_name}",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/native_api.rs",
       "src": "^/api/v2/users/me/tasteSignals/[^/]+$",
       "runtime": "native-rust",
       "status": "target",
