@@ -270,6 +270,42 @@ describe('History activity timeline (#4822)', () => {
     expect(list).toHaveTextContent('#3')
   })
 
+  it('shows direct ratings without inventing a die change and renders a subsequent reset', async () => {
+    const timestamp = '2026-11-27T15:00:00.000000Z'
+    listMock.mockResolvedValue({
+      items: [
+        item({
+          event_id: 1,
+          type: 'rate',
+          timestamp,
+          rating: 4.0,
+          issue_id: 100,
+          thread_id: 10,
+          thread_title: 'Saga',
+          issue_number: '1',
+        }),
+        item({
+          event_id: 2,
+          type: 'reset_dice',
+          timestamp,
+          die_before: 10,
+          die_after: 6,
+        }),
+      ],
+      next_page_token: null,
+    })
+
+    renderHistory()
+
+    const list = await screen.findByRole('list', { name: 'Activity history' })
+    const rows = within(list).getAllByRole('listitem')
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toHaveTextContent('Rated 4.0 · Saga #1')
+    expect(rows[0]).not.toHaveTextContent(/Die d\d/i)
+    expect(rows[1]).toHaveTextContent('Reset die')
+    expect(rows[1]).toHaveTextContent('Die d10 → d6')
+  })
+
   it('normalizes a non-Error failure from the first page', async () => {
     listMock.mockRejectedValueOnce('offline')
 
