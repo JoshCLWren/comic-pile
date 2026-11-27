@@ -1953,9 +1953,10 @@ pub async fn apply_custom_cbl(
     ValidatedReadingInputs::new(inputs.clone(), &list_names)
         .map_err(|error| custom_cbl_cycle_conflict(error, &inputs))?;
 
-    // Persist the merged plan document, then rebuild the membership overlay
-    // and plan-owned compiled rules in the same transaction, matching the
-    // Python writer's `replace_compiled_rules` path.
+    // Persist the merged plan document and rebuild the authoritative
+    // membership overlay in the same transaction. The Reading List engine is
+    // the sole eligibility evaluator: a list/CBL edit never compiles legacy
+    // continuity rules or canonical dependency edges.
     let new_lanes_json = serde_json::to_value(&lanes)
         .map_err(|_| ApiError::Internal("lanes serialization failed".into()))?;
     let new_nodes_json = serde_json::to_value(&new_nodes)
@@ -1973,18 +1974,7 @@ pub async fn apply_custom_cbl(
         .map_err(db::query_error)?;
     let new_updated_at: chrono::DateTime<chrono::Utc> = updated_row.get(0);
 
-    crate::plan_rule_compiler::replace_compiled_rules(
-        &tx,
-        user.id(),
-        plan_id,
-        &new_nodes,
-        &ordering_mode,
-    )
-    .await?;
-
-    if ordering_mode == "strict_sequential" {
-        crate::issue_service::refresh_blocked_threads(&tx, user.id()).await?;
-    }
+    crate::reading_plan_sync::rebuild_plan_issues_from_nodes_json(&tx, plan_id).await?;
 
     tx.commit().await.map_err(db::query_error)?;
 
