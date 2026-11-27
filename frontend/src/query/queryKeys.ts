@@ -122,6 +122,14 @@ export const queryKeys = {
   },
   session: {
     all: ['session'] as const,
+    /**
+     * Canonical event-derived session collection
+     * (`GET /api/v2/readingSessions`). This replaces the retired v1 index
+     * without reinstating its server session lifetime or pending state; the
+     * cursor stays in `pageParam` and never in the key.
+     */
+    list: ({ pageSize }: { pageSize: number }) =>
+      ['session', 'list', { pageSize }] as const,
     detail: (sessionId: number) => ['session', 'detail', sessionId] as const,
     /**
      * Canonical session snapshot list key. The session detail page and the
