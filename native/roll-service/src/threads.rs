@@ -496,31 +496,56 @@ fn decode_cursor(
     })
 }
 
-/// Read one page of the authenticated reader's active threads.
+/// Read one page of the authenticated reader's v2 threads collection.
+///
+/// `filter` selects the resource state (`active`, `completed`, `stale` or
+/// `excluded`); `order_by` is the AIP-132 ordering parameter and `sort` is
+/// accepted as a legacy alias. Every filter is owner-scoped and uses the same
+/// opaque continuation token contract as the original Queue reads.
 pub async fn list_threads(
     State(state): State<Arc<AppState>>,
     claims: VerifiedAccessClaims,
     Query(query): Query<ThreadListQuery>,
-) -> Result<Json<ThreadListResponse>, ApiError> {
-    if query.collection_id.is_some() {
-        return Err(unprocessable("collection_id is retired"));
+) -> Result<Json<ThreadListResult>, ApiError> {
+    let resolved = resolve_list_query(&query)?;
+    match resolved.filter {
+        ThreadFilter::Active => Ok(Json(ThreadListResult::Page(
+            active_page(&state, &claims, &resolved).await?,
+        ))),
+        ThreadFilter::Completed => Ok(Json(ThreadListResult::Page(
+            completed_page(&state, &claims, &resolved).await?,
+        ))),
+        ThreadFilter::Excluded => Ok(Json(ThreadListResult::Page(
+            excluded_page(&state, &claims, &resolved).await?,
+        ))),
+        ThreadFilter::Stale => {
+            let user = crate::auth::authenticate_claims(&state, &claims).await?;
+            Ok(Json(ThreadListResult::Stale(
+                crate::thread_lifecycle::list_stale_page(
+                    &state,
+                    user,
+                    resolved.days,
+                    resolved.page_size,
+                    resolved.page_token.as_deref(),
+                )
+                .await?,
+            )))
+        }
     }
-    let sort = query.sort.as_deref().unwrap_or("position");
-    if !matches!(sort, "position" | "title" | "created") {
-        return Err(bad_request("sort must be one of: position, title, created"));
-    }
-    let page_size = query.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
-    if !(1..=MAX_PAGE_SIZE).contains(&page_size) {
-        return Err(unprocessable("page_size must be between 1 and 200"));
-    }
-    let raw_search = query.search.as_deref();
-    if raw_search.is_some_and(str::is_empty) {
-        return Err(unprocessable("search must be at least 1 character"));
-    }
-    let search = normalize_search(raw_search);
+}
+
+/// Read one page of the authenticated reader's active threads.
+async fn active_page(
+    state: &AppState,
+    claims: &VerifiedAccessClaims,
+    resolved: &ResolvedListQuery,
+) -> Result<ThreadListResponse, ApiError> {
+    let sort = resolved.order_by.as_str();
+    let page_size = resolved.page_size;
+    let search = resolved.search.clone();
     let option_e = state.option_e;
     let execution = if option_e { "option_e" } else { "legacy" };
-    let cursor = query
+    let cursor = resolved
         .page_token
         .as_deref()
         .filter(|token| !token.is_empty())
@@ -533,19 +558,19 @@ pub async fn list_threads(
     let mut option_e_state = None;
     let mut preauthenticated = None;
     if option_e {
-        let user = crate::auth::authenticate_claims(&state, &claims).await?;
-        let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
+        let user = crate::auth::authenticate_claims(state, claims).await?;
+        let validated = option_inputs::load_option_inputs_contained(state, user).await?;
         option_e_state = Some(OptionEProjection::build(&validated)?);
         preauthenticated = Some(user.id());
     }
 
     let (auth, active_count, filtered_count, list_names, rows) = query_page(
-        &state,
-        &claims,
+        state,
+        claims,
         preauthenticated,
         option_e,
         option_e_state.as_ref(),
-        search.as_str(),
+        &search,
         sort,
         page_size,
         cursor.as_ref(),
@@ -553,7 +578,7 @@ pub async fn list_threads(
     )
     .await?;
     if option_e_state.is_none() {
-        validate_auth(&claims, &auth)?;
+        validate_auth(claims, &auth)?;
     }
     let option_e_reasons = option_e_state
         .as_ref()
@@ -605,12 +630,12 @@ pub async fn list_threads(
         .map(|row| row.into_item(option_e_state.as_ref(), option_e_reasons.as_ref()))
         .collect::<Result<Vec<_>, ApiError>>()?;
 
-    Ok(Json(ThreadListResponse {
+    Ok(ThreadListResponse {
         threads,
         next_page_token,
         active_count,
         filtered_count: Some(filtered_count),
-    }))
+    })
 }
 
 /// Read one owned thread using the exact legacy ThreadDetail wire contract.
@@ -713,38 +738,39 @@ pub async fn get_thread_detail(
 }
 
 /// Read one page of the authenticated reader's completed threads.
+///
+/// Retained v1 alias. First-party callers now use
+/// `GET /api/v2/threads?filter=completed`; this handler keeps the frozen wire
+/// response until the v1 route is retired after migration and production proof.
 pub async fn list_completed_threads(
     State(state): State<Arc<AppState>>,
     claims: VerifiedAccessClaims,
     Query(query): Query<ThreadListQuery>,
 ) -> Result<Json<ThreadListResponse>, ApiError> {
-    let requested_sort = query.sort.as_deref().unwrap_or("created");
-    if !matches!(requested_sort, "position" | "title" | "created") {
-        return Err(bad_request("sort must be one of: position, title, created"));
-    }
-    let sort = if requested_sort == "position" {
-        "created"
-    } else {
-        requested_sort
-    };
-    let page_size = query.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
-    if !(1..=MAX_PAGE_SIZE).contains(&page_size) {
-        return Err(unprocessable("page_size must be between 1 and 200"));
-    }
-    let raw_search = query.search.as_deref();
-    if raw_search.is_some_and(str::is_empty) {
-        return Err(unprocessable("search must be at least 1 character"));
-    }
-    let search = normalize_search(raw_search);
-    let cursor = query
+    let mut resolved = query;
+    resolved.filter = Some("completed".to_string());
+    let resolved = resolve_list_query(&resolved)?;
+    Ok(Json(completed_page(&state, &claims, &resolved).await?))
+}
+
+/// Build the completed-threads page shared by the v1 alias and the v2 filter.
+async fn completed_page(
+    state: &AppState,
+    claims: &VerifiedAccessClaims,
+    resolved: &ResolvedListQuery,
+) -> Result<ThreadListResponse, ApiError> {
+    let sort = resolved.order_by.as_str();
+    let page_size = resolved.page_size;
+    let search = resolved.search.clone();
+    let cursor = resolved
         .page_token
         .as_deref()
         .filter(|token| !token.is_empty())
         .map(|token| decode_cursor(token, sort, &search, "legacy"))
         .transpose()?;
     let (auth, _active_count, _filtered_count, _list_names, rows) = query_page(
-        &state,
-        &claims,
+        state,
+        claims,
         None,
         false,
         None,
@@ -755,7 +781,7 @@ pub async fn list_completed_threads(
         "completed",
     )
     .await?;
-    validate_auth(&claims, &auth)?;
+    validate_auth(claims, &auth)?;
     let mut rows = rows;
     let next_page_token = if rows.len() > page_size as usize {
         rows.truncate(page_size as usize);
@@ -780,12 +806,12 @@ pub async fn list_completed_threads(
         .into_iter()
         .map(|row| row.into_item(None, None))
         .collect::<Result<Vec<_>, ApiError>>()?;
-    Ok(Json(ThreadListResponse {
+    Ok(ThreadListResponse {
         threads,
         next_page_token,
         active_count: 0,
         filtered_count: None,
-    }))
+    })
 }
 
 /// Read one validated page of the authenticated reader's excluded threads.
