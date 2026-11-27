@@ -9,7 +9,6 @@
     "version": "1.0.0"
   },
   "paths": {
-<<<<<<< HEAD
     "/api/v1/reading-order-groups/": {
       "get": {
         "tags": [
@@ -293,8 +292,6 @@
         ]
       }
     },
-=======
->>>>>>> origin/main
     "/api/v1/reading-order-groups/{group_id}/order": {
       "put": {
         "tags": [

@@ -5998,286 +5998,6 @@
         ]
       }
     },
-<<<<<<< HEAD
-    "/api/v2/readingSessions": {
-      "get": {
-        "tags": [
-          "sessions"
-        ],
-        "summary": "Documentation-only List operation for the canonical collection.",
-        "operationId": "list_reading_sessions_documentation",
-        "parameters": [
-          {
-            "name": "page_size",
-            "in": "query",
-            "description": "Bounded page size (1-100, default 50)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "page_token",
-            "in": "query",
-            "description": "Opaque continuation token",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "One page of event-derived reading sessions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ListReadingSessionsResponse"
-=======
-    "/api/v2/readingOrderGroups": {
-      "get": {
-        "tags": [
-          "reading-order-groups"
-        ],
-        "summary": "Documentation-only operation for listing v2 reading-order groups.",
-        "operationId": "reading_order_groups_list",
-        "responses": {
-          "200": {
-            "description": "Owned groups with memberships",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/DependencyGroupResponse"
-                  }
->>>>>>> origin/main
-                }
-              }
-            }
-          },
-<<<<<<< HEAD
-          "400": {
-            "description": "Invalid page size or token"
-          },
-=======
->>>>>>> origin/main
-          "401": {
-            "description": "Not authenticated"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "post": {
-        "tags": [
-<<<<<<< HEAD
-=======
-          "reading-order-groups"
-        ],
-        "summary": "Documentation-only operation for creating a v2 reading-order group.",
-        "operationId": "reading_order_groups_create",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DependencyGroupCreateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Created group",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "409": {
-            "description": "A group with this name already exists"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v2/readingOrderGroups/{group_id}": {
-      "get": {
-        "tags": [
-          "reading-order-groups"
-        ],
-        "summary": "Documentation-only operation for the canonical v2 group Get.",
-        "description": "The enriched detail view is folded into this resource read; v2 publishes no\nseparate `/detail` action path (#5710).",
-        "operationId": "reading_order_groups_get",
-        "parameters": [
-          {
-            "name": "group_id",
-            "in": "path",
-            "description": "Owned reading-order group identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Owned group detail",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupDetailResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Group not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "delete": {
-        "tags": [
-          "reading-order-groups"
-        ],
-        "summary": "Documentation-only operation for deleting a v2 reading-order group.",
-        "operationId": "reading_order_groups_delete",
-        "parameters": [
-          {
-            "name": "group_id",
-            "in": "path",
-            "description": "Owned reading-order group identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Group deleted"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Group not found"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      },
-      "patch": {
-        "tags": [
-          "reading-order-groups"
-        ],
-        "summary": "Documentation-only operation for renaming a v2 reading-order group.",
-        "operationId": "reading_order_groups_update",
-        "parameters": [
-          {
-            "name": "group_id",
-            "in": "path",
-            "description": "Owned reading-order group identifier",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DependencyGroupUpdateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Renamed group",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DependencyGroupResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Group not found"
-          },
-          "409": {
-            "description": "A group with this name already exists"
-          },
-          "422": {
-            "description": "Request validation failed"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/v2/readingSessions": {
       "get": {
         "tags": [
@@ -6335,7 +6055,6 @@
       },
       "post": {
         "tags": [
->>>>>>> origin/main
           "readingSessions"
         ],
         "summary": "Documentation-only operation for the mounted v2 reading-session initializer.",
@@ -8120,7 +7839,6 @@
         ]
       }
     },
-<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/readingOrders": {
       "get": {
         "tags": [
@@ -8168,8 +7886,6 @@
         ]
       }
     },
-=======
->>>>>>> origin/main
     "/api/v2/undo/{session_id}/snapshots": {
       "get": {
         "tags": [
@@ -13016,95 +12732,6 @@
         },
         "additionalProperties": false
       },
-<<<<<<< HEAD
-=======
-      "DependencyGroupCreateRequest": {
-        "type": "object",
-        "description": "Wire request mirroring the Python `DependencyGroupCreate` payload.",
-        "required": [
-          "name"
-        ],
-        "properties": {
-          "name": {
-            "type": "string"
-          }
-        }
-      },
-      "DependencyGroupDetailMemberResponse": {
-        "type": "object",
-        "description": "Wire response member mirroring the Python `DependencyGroupDetailMemberResponse`.",
-        "required": [
-          "membership",
-          "other_crossovers"
-        ],
-        "properties": {
-          "issue": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/IssueDetailResponse"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "membership": {
-            "$ref": "#/components/schemas/DependencyGroupMemberResponse"
-          },
-          "other_crossovers": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "thread": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/ThreadDetailResponse"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        }
-      },
-      "DependencyGroupDetailResponse": {
-        "type": "object",
-        "description": "Wire response mirroring the Python `DependencyGroupDetailResponse`.",
-        "required": [
-          "id",
-          "name",
-          "created_at",
-          "memberships",
-          "linked_plans"
-        ],
-        "properties": {
-          "created_at": {
-            "type": "string"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "linked_plans": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/DependencyGroupSummary"
-            }
-          },
-          "memberships": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/DependencyGroupDetailMemberResponse"
-            }
-          },
-          "name": {
-            "type": "string"
-          }
-        }
-      },
->>>>>>> origin/main
       "DependencyGroupIssueRangeCreateRequest": {
         "type": "object",
         "description": "Wire request mirroring the Python `DependencyGroupIssueRangeCreate` payload.",
@@ -13240,51 +12867,6 @@
           }
         }
       },
-<<<<<<< HEAD
-=======
-      "DependencyGroupResponse": {
-        "type": "object",
-        "description": "Wire response mirroring the Python `DependencyGroupResponse`.",
-        "required": [
-          "id",
-          "name",
-          "created_at",
-          "memberships",
-          "read_issues",
-          "total_issues",
-          "reading_progress"
-        ],
-        "properties": {
-          "created_at": {
-            "type": "string"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "memberships": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/DependencyGroupMemberResponse"
-            }
-          },
-          "name": {
-            "type": "string"
-          },
-          "read_issues": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "reading_progress": {
-            "type": "string"
-          },
-          "total_issues": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      },
->>>>>>> origin/main
       "DependencyGroupSummary": {
         "type": "object",
         "description": "Wire response mirroring the Python `DependencyGroupSummary`.",
@@ -13302,21 +12884,6 @@
           }
         }
       },
-<<<<<<< HEAD
-=======
-      "DependencyGroupUpdateRequest": {
-        "type": "object",
-        "description": "Wire request mirroring the Python `DependencyGroupUpdate` payload.",
-        "required": [
-          "name"
-        ],
-        "properties": {
-          "name": {
-            "type": "string"
-          }
-        }
-      },
->>>>>>> origin/main
       "DependencyNoteUpdate": {
         "type": "object",
         "properties": {
@@ -20459,107 +20026,6 @@
           }
         }
       },
-      "ThreadDetailResponse": {
-        "type": "object",
-        "description": "The legacy single-thread response retained for the v1 and bare aliases.",
-        "required": [
-          "id",
-          "title",
-          "format",
-          "issues_remaining",
-          "queue_position",
-          "status",
-          "is_test",
-          "is_blocked",
-          "blocking_reasons",
-          "created_at",
-          "manual_creator_credits"
-        ],
-        "properties": {
-          "blocking_reasons": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "created_at": {
-            "type": "string"
-          },
-          "format": {
-            "type": "string"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "is_blocked": {
-            "type": "boolean"
-          },
-          "is_test": {
-            "type": "boolean"
-          },
-          "issues_remaining": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "last_activity_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "last_rating": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "manual_creator_credits": {},
-          "next_unread_issue_id": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "next_unread_issue_number": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "notes": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "queue_position": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "reading_progress": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "status": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "total_issues": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          }
-        }
-      },
       "ThreadIssueDependenciesResponse": {
         "type": "object",
         "description": "Wire parity with Python `ThreadIssueDependenciesResponse`.",
@@ -20932,7 +20398,6 @@
           }
         }
       },
-<<<<<<< HEAD
       "ThreadReadingOrdersResponse": {
         "type": "object",
         "description": "Python `ThreadReadingOrdersResponse`.",
@@ -20948,8 +20413,6 @@
           }
         }
       },
-=======
->>>>>>> origin/main
       "ThreadResponse": {
         "type": "object",
         "description": "The Python `ThreadResponse` projection every lifecycle writer returns.",

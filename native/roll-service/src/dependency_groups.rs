@@ -12,15 +12,6 @@
 //! The retained same-path order operation and the six membership operations
 //! remain on their established paths:
 //!
-<<<<<<< HEAD
-//! * `GET /api/v1/reading-order-groups/` (group CRUD stays on v1, #5710)
-//! * `POST /api/v1/reading-order-groups/`
-//! * `GET /api/v1/reading-order-groups/{group_id}`
-//! * `GET /api/v1/reading-order-groups/{group_id}/detail`
-//! * `PATCH /api/v1/reading-order-groups/{group_id}`
-//! * `DELETE /api/v1/reading-order-groups/{group_id}`
-=======
->>>>>>> origin/main
 //! * `PUT /api/v1/reading-order-groups/{group_id}/order`
 //!
 //! The six membership operations moved to their v2-only resources in #5711:
@@ -1811,28 +1802,6 @@ pub fn update_group_v2_documentation() {}
 #[allow(dead_code)]
 pub fn delete_group_v2_documentation() {}
 
-<<<<<<< HEAD
-/// Documentation-only operation for fetching enriched group detail.
-#[utoipa::path(
-    get,
-    path = "/api/v1/reading-order-groups/{group_id}/detail",
-    tag = "reading-order-groups",
-    operation_id = "dependency_groups_get_detail",
-    params(("group_id" = i32, Path, description = "Owned group identifier")),
-    responses(
-        (status = 200, description = "Owned group detail", body = DependencyGroupDetailResponse),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Group not found"),
-        (status = 422, description = "Request validation failed"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn get_group_detail_documentation() {}
-
-=======
->>>>>>> origin/main
 /// Documentation-only operation for adding an issue-position range (v2).
 #[utoipa::path(
     post,
@@ -1962,19 +1931,7 @@ pub fn resolve_memberships_documentation() {}
         version = "1.0.0",
         description = "Generated contract for the native reading-order-group handlers that retain their original method and path."
     ),
-<<<<<<< HEAD
-    paths(
-        list_groups_documentation,
-        create_group_documentation,
-        get_group_documentation,
-        update_group_documentation,
-        delete_group_documentation,
-        get_group_detail_documentation,
-        set_group_order_documentation
-    ),
-=======
     paths(set_group_order_documentation),
->>>>>>> origin/main
     components(schemas(
         DependencyGroupCreateRequest,
         DependencyGroupUpdateRequest,
@@ -2015,8 +1972,6 @@ pub fn dependency_groups_openapi() -> utoipa::openapi::OpenApi {
     DependencyGroupsApi::openapi()
 }
 
-<<<<<<< HEAD
-=======
 /// v2 collection CRUD contract (#5710). Kept as a separate domain document so
 /// the canonical `/api/v2` surface can publish it without re-declaring the
 /// retained v1 same-path order operation.
@@ -2053,7 +2008,6 @@ pub fn reading_order_groups_v2_openapi() -> utoipa::openapi::OpenApi {
     ReadingOrderGroupsV2Api::openapi()
 }
 
->>>>>>> origin/main
 /// OpenAPI document for the v2 reading-order-group membership surface.
 ///
 /// These six operations are the single authority for group membership reads and
@@ -2526,16 +2480,6 @@ mod tests {
             "/api/v1/reading-order-groups/",
             "/api/v1/reading-order-groups/{group_id}",
             "/api/v1/reading-order-groups/{group_id}/detail",
-<<<<<<< HEAD
-            "/api/v1/reading-order-groups/{group_id}/order",
-        ] {
-            assert!(document["paths"].get(path).is_some(), "{path}");
-        }
-        // The membership operations are v2-only: their retired v1 URLs must not
-        // remain documented as live operations.
-        for path in [
-=======
->>>>>>> origin/main
             "/api/v1/reading-order-groups/threads/{thread_id}/groups",
             "/api/v1/reading-order-groups/{group_id}/issue-ranges",
             "/api/v1/reading-order-groups/{group_id}/members",
@@ -2550,8 +2494,6 @@ mod tests {
     }
 
     #[test]
-<<<<<<< HEAD
-=======
     fn v2_contract_documents_collection_crud_without_detail_action() {
         let document = serde_json::to_value(reading_order_groups_v2_openapi()).unwrap();
         for (path, method) in [
@@ -2575,7 +2517,6 @@ mod tests {
     }
 
     #[test]
->>>>>>> origin/main
     fn v2_contract_documents_all_six_membership_operations() {
         let document = serde_json::to_value(dependency_groups_v2_openapi()).unwrap();
         for path in [

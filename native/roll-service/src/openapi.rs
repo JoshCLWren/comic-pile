@@ -400,14 +400,10 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         // #5711: the six crossover-membership operations are v2-only after the
         // retired `/api/v1` aliases were unmounted. Publish them here so the
         // generated frontend client stays aligned with the live ingress.
-<<<<<<< HEAD
-        .merge_from(crate::dependency_groups::dependency_groups_v2_openapi());
-=======
         .merge_from(crate::dependency_groups::dependency_groups_v2_openapi())
         // #5710: canonical v2 reading-order-group collection CRUD; the retired
         // v1 paths are no longer part of the deployed contract.
         .merge_from(crate::dependency_groups::reading_order_groups_v2_openapi());
->>>>>>> origin/main
     // The aggregate artifact is the deployed v2 runtime contract. The
     // completed-threads v1 operation has its own same-path contract and must
     // not expand the v2 inventory.

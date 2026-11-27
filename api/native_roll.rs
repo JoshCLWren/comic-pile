@@ -776,24 +776,6 @@ fn app() -> Router {
         .route("/api/v2/readingOrderGroups", get(native_dispatch))
         .route("/api/v2/readingOrderGroups", post(native_dispatch))
         .route(
-<<<<<<< HEAD
-            "/api/v1/reading-order-groups/{group_id}",
-            get(native_dispatch),
-        )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}",
-            patch(native_dispatch),
-        )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}",
-            delete(native_dispatch),
-        )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}/detail",
-            get(native_dispatch),
-        )
-        .route(
-=======
             "/api/v2/readingOrderGroups/{group_id}",
             get(native_dispatch),
         )
@@ -806,7 +788,6 @@ fn app() -> Router {
             delete(native_dispatch),
         )
         .route(
->>>>>>> origin/main
             "/api/v1/reading-order-groups/{group_id}/order",
             put(native_dispatch),
         )
@@ -1479,8 +1460,6 @@ mod tests {
     }
 
     #[tokio::test]
-<<<<<<< HEAD
-=======
     async fn reading_order_groups_v2_ingress_reaches_rust_and_v1_crud_is_gone() {
         // #5710: the v2 collection is mounted in the Vercel ingress table as
         // well as the library router; the retired v1 CRUD/detail paths and a
@@ -1549,7 +1528,6 @@ mod tests {
     }
 
     #[tokio::test]
->>>>>>> origin/main
     async fn v2_reading_order_group_ingress_reaches_rust_and_old_v1_is_404() {
         // #5711: the membership operations moved to v2 URLs. Register them in
         // this Vercel entry table or the fallback returns the Rust JSON 404
