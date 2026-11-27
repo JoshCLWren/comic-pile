@@ -96,6 +96,12 @@ export interface CblTargetedAdoptionCommitRequest {
 
 export type CblTargetedAdoptionCommitResponse = components['schemas']['CblAdoptionCommitResponseWire']
 
+export interface CheckDuplicatesRequest {
+  body: components['schemas']['CheckDuplicatesRequest']
+}
+
+export type CheckDuplicatesResponse = components['schemas']['CheckDuplicatesResponse']
+
 export interface ComicvineSeriesIssuesRequest {
   path: {
     comicvine_volume_id: number
@@ -1310,6 +1316,7 @@ export interface NativeV2Client {
   bulkUnassignTag(args: BulkUnassignTagRequest): Promise<BulkUnassignTagResponse>
   cblAdoptionCommit(args: CblAdoptionCommitRequest): Promise<CblAdoptionCommitResponse>
   cblTargetedAdoptionCommit(args: CblTargetedAdoptionCommitRequest): Promise<CblTargetedAdoptionCommitResponse>
+  checkDuplicates(args: CheckDuplicatesRequest): Promise<CheckDuplicatesResponse>
   comicvineSeriesIssues(args: ComicvineSeriesIssuesRequest): Promise<ComicvineSeriesIssuesResponse>
   commit(args: CommitRequest): Promise<CommitResponse>
   compare(args?: CompareRequest): Promise<CompareResponse>
@@ -1521,6 +1528,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     cblTargetedAdoptionCommit(args: CblTargetedAdoptionCommitRequest) {
       return client.post<CblTargetedAdoptionCommitResponse, CblTargetedAdoptionCommitRequest['body']>(
         `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/reading-plans/${encodeURIComponent(String(args.path.plan_id))}/adoption-commits`,
+        args.body,
+      )
+    },
+    checkDuplicates(args: CheckDuplicatesRequest) {
+      return client.post<CheckDuplicatesResponse, CheckDuplicatesRequest['body']>(
+        "/v2/threads:checkDuplicates",
         args.body,
       )
     },
