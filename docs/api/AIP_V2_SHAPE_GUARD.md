@@ -45,12 +45,13 @@ The guard merges two sources and de-duplicates by `METHOD path`:
 
 ## Measured state at introduction
 
-Checked against the fragment and inventory sources in the introducing change:
+Checked against the fragment and inventory sources on the introducing branch's
+base commit (main `083133bd`):
 
-- 152 distinct live `/api/v2` method/path pairs (131 declared by route
+- 158 distinct live `/api/v2` method/path pairs (137 declared by route
   fragments, 21 historical ingress-only operations).
-- 96 of them do not satisfy the contract yet and are baselined:
-  - 87 contain a hyphenated or otherwise non-lowerCamelCase segment;
+- 101 of them do not satisfy the contract yet and are baselined:
+  - 92 contain a hyphenated or otherwise non-lowerCamelCase segment;
   - 15 use an action-shaped subpath instead of a `:camelCaseVerb` custom method;
   - 6 use a trailing slash;
   - 6 mutate a resource with PUT.
@@ -60,14 +61,14 @@ This inventory is **not** evidence that the live v2 surface is AIP-compliant.
 The nonconforming patterns are known and owned:
 
 - **Hyphenated resource families**: `continuity-plans`, `reading-lists`,
-  `reading-orders`, `reading-sessions`, `reading-plan-sync`, `queue-entries`,
-  `queue-exclusions`, `identity-inbox`, `issue-read-markers`,
-  `issue-read-marker-removals`, `issue-duplicate-reconciliation`,
-  `series-mapping-commits`, `demo-roll`, `reading-graph`,
-  `reading-boundaries`, plus hyphenated sub-collections such as
+  `reading-orders`, `reading-order-groups`, `reading-sessions`,
+  `reading-plan-sync`, `queue-entries`, `queue-exclusions`, `identity-inbox`,
+  `issue-read-markers`, `issue-read-marker-removals`,
+  `issue-duplicate-reconciliation`, `series-mapping-commits`, `demo-roll`,
+  `reading-graph`, `reading-boundaries`, plus hyphenated sub-collections such as
   `adoption-commits`, `overlap-decisions`, `release-sources`,
-  `assignment-batches`, `issue-candidates`, `reader-context` and
-  `suggestion-dismissals`.
+  `assignment-batches`, `issue-candidates`, `issue-ranges`, `reader-context`,
+  `reading-order-group-memberships` and `suggestion-dismissals`.
 - **Trailing slash**: `GET|POST /api/v2/continuity-plans/`,
   `POST /api/v2/dependencies/`, `GET /api/v2/reading-orders/`,
   `POST /api/v2/continuity-plans/release-sources/` and
@@ -88,7 +89,8 @@ The nonconforming patterns are known and owned:
 Baseline entries name the owning issue from the route fragment where one is
 declared; the rest fall back to the #4456 API audit. Routing families are
 retired by their cutover slices (#4335, #4459, #4595, #4653, #4684, #4835,
-#4836, #4838, #4839, #4844, #4850, #4851, #4855, #5435), not by this guard.
+#4836, #4838, #4839, #4841, #4844, #4850, #4851, #4855, #5435), not by this
+guard.
 
 ## Working with the guard
 
@@ -107,7 +109,9 @@ node --test scripts/check_v2_aip_shapes.test.mjs
   removal is never blocked.
 - **Regenerating the ledger**: `node scripts/check_v2_aip_shapes.mjs
   --print-baseline` prints the baseline that would accept the current state. It
-  writes nothing; committing the result is an explicit, reviewable act.
+  writes nothing; committing the result is an explicit, reviewable act. Refresh
+  it when a concurrently merged slice adds a nonconforming route, which is
+  otherwise reported as a new violation.
 - Anonymous baseline exemptions (no `owning_issue`), duplicate keys and
   malformed entries fail the guard, so the ledger cannot grow into a blanket
   suppression.
