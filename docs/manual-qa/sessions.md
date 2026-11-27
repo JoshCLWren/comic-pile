@@ -2,7 +2,7 @@
 
 **Entry:** `/sessions/:id` from History or other session navigation.
 
-**Owner rulings:** the automatic current-session lifecycle and Restore Session Start are retired ([#4405](https://github.com/JoshCLWren/comic-pile/issues/4405), [#4343](https://github.com/JoshCLWren/comic-pile/issues/4343)); durable reading-history `ReadingSession` identities, details, snapshots, and undo remain. `POST /api/v2/reading-sessions` initializes that durable history explicitly.
+**Owner rulings:** the automatic current-session lifecycle and Restore Session Start are retired ([#4405](https://github.com/JoshCLWren/comic-pile/issues/4405), [#4343](https://github.com/JoshCLWren/comic-pile/issues/4343)); durable reading-history `ReadingSession` identities, details, snapshots, and undo remain. `POST /api/v2/readingSessions` initializes that durable history explicitly.
 
 **Amended 2026-11-18:** Roll is sessionless per [#4405](https://github.com/JoshCLWren/comic-pile/issues/4405) (no six-hour timer, session row lifecycle or automatic session resets). The detail page remains as an event-derived view of recorded activity; `GET /api/v1/sessions/current/` and Restore Session Start were retired by owner directive on #4343 / [#5442](https://github.com/JoshCLWren/comic-pile/pull/5442).
 
