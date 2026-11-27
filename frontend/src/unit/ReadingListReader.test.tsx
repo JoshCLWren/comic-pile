@@ -5,7 +5,8 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { ReadingListReader } from '../components/ReadingListReader'
 import { customCBLApi, type ReadingListReader as ReaderView } from '../services/api-custom-cbl'
-import { tagsApi } from '../services/api-tags'
+import { tagsApi, type EffectiveTagsResponse } from '../services/api-tags'
+import { comicVineApi, type ComicVineIssueIntelligence } from '../services/api-comicvine'
 import { issuesApi } from '../services/api-issues'
 import { queueApi } from '../services/api-queue'
 import { issueCardsApi, type IssueCard, type IssueReadRateResponse } from '../services/issueCardsApi'
@@ -15,7 +16,15 @@ vi.mock('../services/api-custom-cbl', () => ({ customCBLApi: { getReader: vi.fn(
 vi.mock('../services/api-issues', () => ({ issuesApi: { markRead: vi.fn(), markUnread: vi.fn() } }))
 vi.mock('../services/api-tags', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-tags')>()
-  return { ...actual, tagsApi: { threadIssuesEffective: vi.fn().mockResolvedValue({ issues: [] }) } }
+  return {
+    ...actual,
+    tagsApi: {
+      threadIssuesEffective: vi.fn().mockResolvedValue({ issues: [] }),
+      effectiveForIssue: vi.fn().mockResolvedValue({
+        target_type: 'Issue', target_id: 0, direct_tags: [], effective_tags: [],
+      }),
+    },
+  }
 })
 
 const view: ReaderView = {
@@ -51,6 +60,15 @@ function receipt(issueId = 10, status = 'read'): IssueReadRateResponse {
 const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards')
 const patchIssue = vi.spyOn(issueCardsApi, 'patchIssue')
 const moveToFront = vi.spyOn(queueApi, 'moveToFront')
+const getIntelligence = vi.spyOn(comicVineApi, 'getIssueIntelligence')
+
+const creativeCredits: ComicVineIssueIntelligence = {
+  comicvine_issue_id: '10', comicvine_url: null, series_name: 'The Dead Remembered',
+  series_id: 12, issue_number: '2', name: 'Chapter Two', description: null,
+  image_url: null, cover_date: null, store_date: null,
+  creators: [{ creator_id: null, name: 'Fiona Staples', roles: ['artist'] }],
+  story_arcs: [], metadata_status: 'deep_fetched',
+}
 function firstCard() {
   return within(screen.getAllByTestId('comic-issue-card')[0])
 }
@@ -70,6 +88,11 @@ beforeEach(() => {
   fetchCards.mockImplementation(async (ids) => ids.map(cardFor))
   patchIssue.mockImplementation(async (id, input) => receipt(id, input.status ?? 'read'))
   vi.mocked(tagsApi.threadIssuesEffective).mockResolvedValue({ thread_id: 1, issues: [] })
+  getIntelligence.mockReset()
+  getIntelligence.mockResolvedValue(creativeCredits)
+  vi.mocked(tagsApi.effectiveForIssue).mockResolvedValue({
+    target_type: 'Issue', target_id: 10, direct_tags: [], effective_tags: [],
+  })
   vi.mocked(customCBLApi.getReader).mockResolvedValue(structuredClone(view))
   vi.mocked(issuesApi.markRead).mockResolvedValue()
   vi.mocked(issuesApi.markUnread).mockResolvedValue()

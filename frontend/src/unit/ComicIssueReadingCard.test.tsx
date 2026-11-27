@@ -130,6 +130,16 @@ describe('ComicIssueReadingCard roll parity', () => {
     expect(localCover).toBeNull()
   })
 
+  it('retains the owned cover when provider metadata has no image', async () => {
+    intelligence.mockResolvedValue({ ...metadata, image_url: null })
+    mount()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Read now' }))
+
+    expect(await screen.findByText('Mike Mignola')).toBeVisible()
+    expect(screen.getByTestId('comic-issue-card').querySelector('[data-testid="comic-issue-cover"]')).not.toBeNull()
+  })
+
   it('opens details on mount for a reader header that is already showing the issue', async () => {
     mount({ showReadingDetails: true })
 
