@@ -293,6 +293,12 @@ fn app() -> Router {
             "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
             post(native_dispatch),
         )
+        // #5715: the Vercel entry has its own route table. Without this entry
+        // the canonical custom method falls through to native_not_found.
+        .route(
+            "/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection",
+            post(native_dispatch),
+        )
         .route(
             "/api/v1/issue-identity/cbl/{list_id}/adoption-preview",
             get(native_dispatch),
@@ -352,6 +358,11 @@ fn app() -> Router {
         )
         .route(
             "/api/v1/threads/{thread_id}/reading-orders",
+            get(native_dispatch),
+        )
+        // #5715: canonical v2 spelling of the same owner-scoped read.
+        .route(
+            "/api/v2/threads/{thread_id}/readingOrders",
             get(native_dispatch),
         )
         .route("/api/v1/threads/{thread_id}/issues", get(native_dispatch))

@@ -39,6 +39,11 @@ use utoipa::OpenApi;
         // #5716: stateless AIP-136 preview, deliberately separate from the
         // durable commit operation registered above.
         crate::catalog_series_mapping_preview::preview_series_mappings_v2_documentation,
+        // #5715: canonical AIP-136 projection preview and AIP-122 thread
+        // reading-order collection. The retained v1 aliases stay in the
+        // same-path contract only and must not be published here.
+        crate::continuity_plans_project_preview::preview_reading_order_projection_v2_documentation,
+        crate::thread_ordering::thread_reading_orders_v2_documentation,
         crate::issue_identity::cbl_adoption_commit_documentation,
         crate::issue_identity::cbl_targeted_adoption_commit_documentation,
         crate::activity::list_activity_documentation,
@@ -281,6 +286,15 @@ use utoipa::OpenApi;
         crate::continuity_plans::ReadingOrderProjectionPreview,
         crate::continuity_plans::ReadingOrderProjectionResult,
         crate::continuity_plans::ReadingOrderAdoptRequest,
+        // #5715: preview DTOs are shared with the retained v1 alias, while the
+        // thread reading-order collection keeps its frozen wire shape.
+        crate::continuity_plans_project_preview::ReadingOrderProjectPreviewRequest,
+        crate::continuity_plans_project_preview::ReadingOrderProjectPreviewResponse,
+        crate::continuity_plans_project_preview::ReadingOrderProjectPreviewEntry,
+        crate::continuity_plans_project_preview::ReadingOrderProjectPreviewConflict,
+        crate::thread_ordering::ThreadReadingOrdersResponse,
+        crate::thread_ordering::ReadingOrderResponse,
+        crate::thread_ordering::ReadingOrderItemResponse,
         crate::continuity_plans::ReleaseSourceCreate,
         crate::continuity_plans::ReleaseSourceUpdate,
         crate::continuity_plans::ReleaseSourceResponse,
