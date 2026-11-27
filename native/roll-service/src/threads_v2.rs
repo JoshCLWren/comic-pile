@@ -184,8 +184,8 @@ mod tests {
         assert!(document["components"]["schemas"]["ReactivateThreadRequest"].is_object());
         // The canonical component keeps the frozen Python field type: an array
         // of creator-credit objects, never an untyped `{}` schema.
-        let credits =
-            &document["components"]["schemas"]["ThreadResponse"]["properties"]["manual_creator_credits"];
+        let credits = &document["components"]["schemas"]["ThreadResponse"]["properties"]
+            ["manual_creator_credits"];
         assert_eq!(credits["type"], "array");
         assert!(credits["items"].is_object());
     }

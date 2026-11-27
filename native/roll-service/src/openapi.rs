@@ -499,8 +499,8 @@ mod tests {
         // Merging the v2 Thread surface must not overwrite the canonical typed
         // ThreadResponse with a ToSchema emission of a raw JSON `Value`. The
         // frozen Python wire type is an array of creator-credit objects.
-        let credits =
-            &aggregate["components"]["schemas"]["ThreadResponse"]["properties"]["manual_creator_credits"];
+        let credits = &aggregate["components"]["schemas"]["ThreadResponse"]["properties"]
+            ["manual_creator_credits"];
         assert_eq!(credits["type"], "array");
         assert!(credits["items"].is_object());
     }
