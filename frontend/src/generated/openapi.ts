@@ -3465,24 +3465,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-<<<<<<< HEAD
-    "/api/v2/threads/{thread_id}/readingOrders": {
-=======
     "/api/v2/threads/{thread_id}/reading-order-group-memberships": {
->>>>>>> origin/main
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-<<<<<<< HEAD
-        /** Documentation-only operation for reading orders containing a thread. */
-        get: operations["thread_ordering_reading_orders"];
-=======
         /** Documentation-only operation for listing a thread's group memberships (v2). */
         get: operations["dependency_groups_v2_list_thread_group_memberships"];
->>>>>>> origin/main
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/threads/{thread_id}/readingOrders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for reading orders containing a thread. */
+        get: operations["thread_ordering_reading_orders"];
         put?: never;
         post?: never;
         delete?: never;
@@ -19105,41 +19113,25 @@ export interface operations {
             };
         };
     };
-<<<<<<< HEAD
-    thread_ordering_reading_orders: {
-=======
     dependency_groups_v2_list_thread_group_memberships: {
->>>>>>> origin/main
         parameters: {
             query?: never;
             header?: never;
             path: {
-<<<<<<< HEAD
-                /** @description Thread identifier */
-=======
                 /** @description Owned thread identifier */
->>>>>>> origin/main
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-<<<<<<< HEAD
-            /** @description Owned reading orders containing the thread */
-=======
             /** @description Groups containing the thread or its issues */
->>>>>>> origin/main
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-<<<<<<< HEAD
-                    "application/json": components["schemas"]["ThreadReadingOrdersResponse"];
-=======
                     "application/json": components["schemas"]["NativeDependencyGroupSummary"][];
->>>>>>> origin/main
                 };
             };
             /** @description Not authenticated */
@@ -19149,8 +19141,6 @@ export interface operations {
                 };
                 content?: never;
             };
-<<<<<<< HEAD
-=======
             /** @description Thread not found */
             404: {
                 headers: {
@@ -19158,7 +19148,50 @@ export interface operations {
                 };
                 content?: never;
             };
->>>>>>> origin/main
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    thread_ordering_reading_orders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned reading orders containing the thread */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadReadingOrdersResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Request validation failed */
             422: {
                 headers: {
