@@ -106,7 +106,7 @@ function makeHandler(state: BoundaryState): Responder {
       const id = call.url.includes('/43/') ? 43 : 42
       return { thread_id: id, connected_threads: [] }
     }
-    if (call.url === '/v1/threads/groups:batch') {
+    if (call.url === '/v2/reading-order-groups:resolveMemberships') {
       const groups: Record<string, { id: number; name: string }[]> = {}
       for (const id of requestedThreadIds(call)) groups[id] = id === 42 ? CROSSOVERS[42] : id === 43 ? CROSSOVERS[43] : []
       return groups
@@ -175,7 +175,7 @@ function renderThreadWithNavigation(): ReactNode {
 }
 
 function groupsCalls(calls: RecordedCall[]): RecordedCall[] {
-  return calls.filter((call) => call.url === '/v1/threads/groups:batch')
+  return calls.filter((call) => call.url === '/v2/reading-order-groups:resolveMemberships')
 }
 
 describe('Thread detail request budget', () => {
@@ -336,7 +336,7 @@ describe('Thread detail request budget', () => {
     const handler = makeHandler('unavailable')
     const { calls, client } = createRequestRecorder((call) => {
       if (call.url === '/v1/threads/999') return Promise.reject(new Error('404'))
-      if (call.url === '/v1/threads/groups:batch') return Promise.reject(new Error('404'))
+      if (call.url === '/v2/reading-order-groups:resolveMemberships') return Promise.reject(new Error('404'))
       return handler(call)
     })
     setDefaultHttpClient(client)
