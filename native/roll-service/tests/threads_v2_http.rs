@@ -232,6 +232,45 @@ async fn patch_mask_clears_masked_absent_fields_and_rejects_unknown_fields() {
 }
 
 #[tokio::test]
+async fn patch_normalizes_and_clears_creator_credits_for_the_owner() {
+    let ctx = setup("v2credits").await;
+    let thread = seed_thread(&ctx, ctx.user_id, "Credits").await;
+    let uri = format!("/api/v2/threads/{thread}");
+
+    let (status, body) = call(
+        &ctx,
+        "PATCH",
+        &uri,
+        Some(json!({
+            "manual_creator_credits": [
+                {"name": "  Alan   Moore ", "roles": ["Writer", "Writer"]}
+            ]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        body["manual_creator_credits"],
+        json!([{"name": "Alan Moore", "roles": ["Writer"]}])
+    );
+    let (_title, _format, _notes, credits) = stored(&ctx, thread).await.unwrap();
+    assert_eq!(
+        credits,
+        json!([{"name": "Alan Moore", "roles": ["Writer"]}])
+    );
+
+    let (status, body) = call(
+        &ctx,
+        "PATCH",
+        &uri,
+        Some(json!({"update_mask": ["manual_creator_credits"]})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(stored(&ctx, thread).await.unwrap().3, json!([]));
+}
+
+#[tokio::test]
 async fn patch_rejects_a_stale_snapshot_with_409_and_writes_nothing() {
     let ctx = setup("v2stale").await;
     let thread = seed_thread(&ctx, ctx.user_id, "Committed").await;
