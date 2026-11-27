@@ -248,6 +248,7 @@ def default_disposition(path: str) -> tuple[str, str, str, str]:
         "docs/frontend-request-audit-4499.md",
         "docs/images/README.md",
         "docs/WIKI_HANDOFF.md",
+        "docs/api/AIP_V2_SHAPE_GUARD.md",
         "docs/api/PASSWORD_POLICY.md",
         "docs/api/READING_LIST_AUTHORING.md",
         "docs/prod-clone-workflow.md",
