@@ -40,6 +40,19 @@
     },
     {
       "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/threads/{thread_id}:reactivate",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/threads/[0-9]+:reactivate$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5704,
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
       "method": "PUT",
       "path": "/api/v2/threads/{thread_id}/issue-order",
       "dest": "/api/native_roll.rs",
