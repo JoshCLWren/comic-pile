@@ -3406,11 +3406,7 @@ export interface paths {
         patch: operations["patch_thread_documentation"];
         trace?: never;
     };
-<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/connections": {
-=======
-    "/api/v2/threads/{thread_id}/creatorCredits": {
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
         parameters: {
             query?: never;
             header?: never;
@@ -3418,11 +3414,31 @@ export interface paths {
             cookie?: never;
         };
         /**
-<<<<<<< HEAD
          * Documentation-only operation for connected threads.
          * @description List owner-scoped threads connected through reader-authored dependencies, with circularity derived from the effective reading precedence graph.
          */
         get: operations["thread_ordering_thread_connections"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/threads/{thread_id}/creatorCredits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documentation-only operation for the canonical v2 thread-scoped credit
+         *     projection (#5706). The v1 bulk creator URL stays on the legacy response;
+         *     this v2 operation adds bounded pagination around the same stored credits.
+         */
+        get: operations["thread_creator_credits"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3463,13 +3479,6 @@ export interface paths {
          * @description Derive one owner-scoped thread's eligibility from the canonical Reading List evaluator. Converted dependencies and stale is_blocked flags are inert.
          */
         get: operations["thread_ordering_get_thread_eligibility"];
-=======
-         * Documentation-only operation for the canonical v2 thread-scoped credit
-         *     projection (#5706). The v1 bulk creator URL stays on the legacy response;
-         *     this v2 operation adds bounded pagination around the same stored credits.
-         */
-        get: operations["thread_creator_credits"];
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
         put?: never;
         post?: never;
         delete?: never;
@@ -3600,11 +3609,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-<<<<<<< HEAD
-    "/api/v2/threads:explainEligibility": {
-=======
     "/api/v2/threads:checkDuplicates": {
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
         parameters: {
             query?: never;
             header?: never;
@@ -3613,16 +3618,28 @@ export interface paths {
         };
         get?: never;
         put?: never;
-<<<<<<< HEAD
+        /** @description Advisory AIP-136 collection custom method: report existing volumes that may be the proposed series. Does not create a Thread. Results are owner-scoped, exclude a named thread, and are capped at five matches. */
+        post: operations["check_duplicates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/threads:explainEligibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
         /**
          * Documentation-only operation for the bounded batch explanation action.
          * @description Explain eligibility for 1..500 owner-scoped threads in one canonical graph evaluation. Explanations use strict/loose/hold/prerequisite/exclusion logic and isolate cycles.
          */
         post: operations["thread_ordering_explain_eligibility"];
-=======
-        /** @description Advisory AIP-136 collection custom method: report existing volumes that may be the proposed series. Does not create a Thread. Results are owner-scoped, exclude a named thread, and are capped at five matches. */
-        post: operations["check_duplicates"];
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
         delete?: never;
         options?: never;
         head?: never;
@@ -19270,20 +19287,9 @@ export interface operations {
             };
         };
     };
-<<<<<<< HEAD
     thread_ordering_thread_connections: {
         parameters: {
             query?: never;
-=======
-    thread_creator_credits: {
-        parameters: {
-            query?: {
-                /** @description 1-100 credited issues (default 100) */
-                page_size?: number;
-                /** @description issue_id continuation cursor */
-                page_token?: string;
-            };
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
             header?: never;
             path: {
                 /** @description Owned Thread identifier */
@@ -19293,32 +19299,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-<<<<<<< HEAD
             /** @description Threads connected through reader-authored dependencies */
-=======
-            /** @description Paginated stored creator credits per mapped issue */
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-<<<<<<< HEAD
                     "application/json": components["schemas"]["ThreadConnectedResponse"];
                 };
             };
-=======
-                    "application/json": components["schemas"]["ThreadCreatorCreditsResponse"];
-                };
-            };
-            /** @description Invalid page token */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
             /** @description Not authenticated */
             401: {
                 headers: {
@@ -19333,8 +19322,70 @@ export interface operations {
                 };
                 content?: never;
             };
-<<<<<<< HEAD
             /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    thread_creator_credits: {
+        parameters: {
+            query?: {
+                /** @description 1-100 credited issues (default 100) */
+                page_size?: number;
+                /** @description issue_id continuation cursor */
+                page_token?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated stored creator credits per mapped issue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadCreatorCreditsResponse"];
+                };
+            };
+            /** @description Invalid page token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19430,9 +19481,6 @@ export interface operations {
                 content?: never;
             };
             /** @description Request validation failed */
-=======
-            /** @description Validation failed */
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19508,60 +19556,27 @@ export interface operations {
             };
         };
     };
-<<<<<<< HEAD
     dependencies_list_thread_issue_dependencies: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 /** @description Owned thread identifier */
-=======
-    list_thread_issues_v2: {
-        parameters: {
-            query?: {
-                /** @description Optional read or unread filter */
-                status?: string;
-                /** @description 1-100 issues (default 50) */
-                page_size?: number;
-                /** @description position,id continuation cursor */
-                page_token?: string;
-            };
-            header?: never;
-            path: {
-                /** @description Owned thread ID */
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-<<<<<<< HEAD
             /** @description Thread issue dependencies */
-=======
-            /** @description Owner-scoped, paginated issues */
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-<<<<<<< HEAD
                     "application/json": components["schemas"]["ThreadIssueDependenciesResponse"];
                 };
             };
-=======
-                    "application/json": components["schemas"]["ThreadIssueListResponse"];
-                };
-            };
-            /** @description Invalid page token */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
             /** @description Not authenticated */
             401: {
                 headers: {
@@ -19576,8 +19591,64 @@ export interface operations {
                 };
                 content?: never;
             };
-<<<<<<< HEAD
-=======
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_thread_issues_v2: {
+        parameters: {
+            query?: {
+                /** @description Optional read or unread filter */
+                status?: string;
+                /** @description 1-100 issues (default 50) */
+                page_size?: number;
+                /** @description position,id continuation cursor */
+                page_token?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Owned thread ID */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped, paginated issues */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadIssueListResponse"];
+                };
+            };
+            /** @description Invalid page token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation failed */
             422: {
                 headers: {
@@ -19585,7 +19656,6 @@ export interface operations {
                 };
                 content?: never;
             };
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
             /** @description Database temporarily unavailable */
             503: {
                 headers: {
@@ -19825,11 +19895,7 @@ export interface operations {
             };
         };
     };
-<<<<<<< HEAD
-    thread_ordering_explain_eligibility: {
-=======
     check_duplicates: {
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
         parameters: {
             query?: never;
             header?: never;
@@ -19838,29 +19904,17 @@ export interface operations {
         };
         requestBody: {
             content: {
-<<<<<<< HEAD
-                "application/json": components["schemas"]["BatchBlockingExplanationRequest"];
-            };
-        };
-        responses: {
-            /** @description Blocking explanations keyed by thread id */
-=======
                 "application/json": components["schemas"]["CheckDuplicatesRequest"];
             };
         };
         responses: {
             /** @description Possible existing volumes */
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-<<<<<<< HEAD
-                    "application/json": components["schemas"]["BatchBlockingExplanationResponse"];
-=======
                     "application/json": components["schemas"]["CheckDuplicatesResponse"];
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
                 };
             };
             /** @description Not authenticated */
@@ -19870,7 +19924,44 @@ export interface operations {
                 };
                 content?: never;
             };
-<<<<<<< HEAD
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    thread_ordering_explain_eligibility: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchBlockingExplanationRequest"];
+            };
+        };
+        responses: {
+            /** @description Blocking explanations keyed by thread id */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchBlockingExplanationResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description One or more threads not found */
             404: {
                 headers: {
@@ -19879,16 +19970,12 @@ export interface operations {
                 content?: never;
             };
             /** @description Request validation failed */
-=======
-            /** @description Validation failed */
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-<<<<<<< HEAD
             /** @description Database temporarily unavailable */
             503: {
                 headers: {
@@ -19896,8 +19983,6 @@ export interface operations {
                 };
                 content?: never;
             };
-=======
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
         };
     };
     list_undo_snapshots_documentation: {

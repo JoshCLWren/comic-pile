@@ -1284,7 +1284,18 @@ export type SwitchPrerequisiteResponse = components['schemas']['RollPrerequisite
 
 export type TeamChemistryResponse = components['schemas']['CreatorTeamChemistryResponse']
 
-<<<<<<< HEAD
+export interface ThreadCreatorCreditsRequest {
+  path: {
+    thread_id: number
+  }
+  query?: {
+    page_size?: number
+    page_token?: string
+  }
+}
+
+export type ThreadCreatorCreditsResponse = components['schemas']['ThreadCreatorCreditsResponse']
+
 export interface ThreadOrderingExplainEligibilityRequest {
   body: components['schemas']['BatchBlockingExplanationRequest']
 }
@@ -1306,19 +1317,6 @@ export interface ThreadOrderingThreadConnectionsRequest {
 }
 
 export type ThreadOrderingThreadConnectionsResponse = components['schemas']['ThreadConnectedResponse']
-=======
-export interface ThreadCreatorCreditsRequest {
-  path: {
-    thread_id: number
-  }
-  query?: {
-    page_size?: number
-    page_token?: string
-  }
-}
-
-export type ThreadCreatorCreditsResponse = components['schemas']['ThreadCreatorCreditsResponse']
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
 
 export interface UnassignTagRequest {
   path: {
@@ -1559,13 +1557,10 @@ export interface NativeV2Client {
   summaries(args?: SummariesRequest): Promise<SummariesResponse>
   switchPrerequisite(args: SwitchPrerequisiteRequest): Promise<SwitchPrerequisiteResponse>
   teamChemistry(): Promise<TeamChemistryResponse>
-<<<<<<< HEAD
+  threadCreatorCredits(args: ThreadCreatorCreditsRequest): Promise<ThreadCreatorCreditsResponse>
   threadOrderingExplainEligibility(args: ThreadOrderingExplainEligibilityRequest): Promise<ThreadOrderingExplainEligibilityResponse>
   threadOrderingGetThreadEligibility(args: ThreadOrderingGetThreadEligibilityRequest): Promise<ThreadOrderingGetThreadEligibilityResponse>
   threadOrderingThreadConnections(args: ThreadOrderingThreadConnectionsRequest): Promise<ThreadOrderingThreadConnectionsResponse>
-=======
-  threadCreatorCredits(args: ThreadCreatorCreditsRequest): Promise<ThreadCreatorCreditsResponse>
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
   unassignTag(args: UnassignTagRequest): Promise<UnassignTagResponse>
   undoToSnapshot(args: UndoToSnapshotRequest): Promise<UndoToSnapshotResponse>
   unsnooze(args: UnsnoozeRequest): Promise<UnsnoozeResponse>
@@ -2462,7 +2457,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     teamChemistry() {
       return client.get<TeamChemistryResponse>("/v2/creators/team-chemistry")
     },
-<<<<<<< HEAD
+    threadCreatorCredits(args: ThreadCreatorCreditsRequest) {
+      return client.get<ThreadCreatorCreditsResponse>(
+        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/creatorCredits`,
+        { params: compactQuery(args.query) },
+      )
+    },
     threadOrderingExplainEligibility(args: ThreadOrderingExplainEligibilityRequest) {
       return client.post<ThreadOrderingExplainEligibilityResponse, ThreadOrderingExplainEligibilityRequest['body']>(
         "/v2/threads:explainEligibility",
@@ -2477,12 +2477,6 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     threadOrderingThreadConnections(args: ThreadOrderingThreadConnectionsRequest) {
       return client.get<ThreadOrderingThreadConnectionsResponse>(
         `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/connections`,
-=======
-    threadCreatorCredits(args: ThreadCreatorCreditsRequest) {
-      return client.get<ThreadCreatorCreditsResponse>(
-        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/creatorCredits`,
-        { params: compactQuery(args.query) },
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
       )
     },
     unassignTag(args: UnassignTagRequest) {

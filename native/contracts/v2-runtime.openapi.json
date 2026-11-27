@@ -7619,7 +7619,6 @@
         ]
       }
     },
-<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/connections": {
       "get": {
         "tags": [
@@ -7628,15 +7627,6 @@
         "summary": "Documentation-only operation for connected threads.",
         "description": "List owner-scoped threads connected through reader-authored dependencies, with circularity derived from the effective reading precedence graph.",
         "operationId": "thread_ordering_thread_connections",
-=======
-    "/api/v2/threads/{thread_id}/creatorCredits": {
-      "get": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Documentation-only operation for the canonical v2 thread-scoped credit\nprojection (#5706). The v1 bulk creator URL stays on the legacy response;\nthis v2 operation adds bounded pagination around the same stored credits.",
-        "operationId": "thread_creator_credits",
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
         "parameters": [
           {
             "name": "thread_id",
@@ -7647,8 +7637,56 @@
               "type": "integer",
               "format": "int32"
             }
-<<<<<<< HEAD
-=======
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Threads connected through reader-authored dependencies",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadConnectedResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "422": {
+            "description": "Request validation failed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/threads/{thread_id}/creatorCredits": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for the canonical v2 thread-scoped credit\nprojection (#5706). The v1 bulk creator URL stays on the legacy response;\nthis v2 operation adds bounded pagination around the same stored credits.",
+        "operationId": "thread_creator_credits",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
           },
           {
             "name": "page_size",
@@ -7668,34 +7706,22 @@
             "schema": {
               "type": "string"
             }
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
           }
         ],
         "responses": {
           "200": {
-<<<<<<< HEAD
-            "description": "Threads connected through reader-authored dependencies",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ThreadConnectedResponse"
-=======
             "description": "Paginated stored creator credits per mapped issue",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ThreadCreatorCreditsResponse"
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
                 }
               }
             }
           },
-<<<<<<< HEAD
-=======
           "400": {
             "description": "Invalid page token"
           },
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
           "401": {
             "description": "Not authenticated"
           },
@@ -7703,8 +7729,7 @@
             "description": "Thread not found"
           },
           "422": {
-<<<<<<< HEAD
-            "description": "Request validation failed"
+            "description": "Validation failed"
           },
           "503": {
             "description": "Database temporarily unavailable"
@@ -7804,9 +7829,6 @@
           },
           "422": {
             "description": "Request validation failed"
-=======
-            "description": "Validation failed"
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
           },
           "503": {
             "description": "Database temporarily unavailable"
@@ -8245,7 +8267,48 @@
         ]
       }
     },
-<<<<<<< HEAD
+    "/api/v2/threads:checkDuplicates": {
+      "post": {
+        "tags": [
+          "threads"
+        ],
+        "description": "Advisory AIP-136 collection custom method: report existing volumes that may be the proposed series. Does not create a Thread. Results are owner-scoped, exclude a named thread, and are capped at five matches.",
+        "operationId": "check_duplicates",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckDuplicatesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Possible existing volumes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckDuplicatesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/threads:explainEligibility": {
       "post": {
         "tags": [
@@ -8254,24 +8317,11 @@
         "summary": "Documentation-only operation for the bounded batch explanation action.",
         "description": "Explain eligibility for 1..500 owner-scoped threads in one canonical graph evaluation. Explanations use strict/loose/hold/prerequisite/exclusion logic and isolate cycles.",
         "operationId": "thread_ordering_explain_eligibility",
-=======
-    "/api/v2/threads:checkDuplicates": {
-      "post": {
-        "tags": [
-          "threads"
-        ],
-        "description": "Advisory AIP-136 collection custom method: report existing volumes that may be the proposed series. Does not create a Thread. Results are owner-scoped, exclude a named thread, and are capped at five matches.",
-        "operationId": "check_duplicates",
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-<<<<<<< HEAD
                 "$ref": "#/components/schemas/BatchBlockingExplanationRequest"
-=======
-                "$ref": "#/components/schemas/CheckDuplicatesRequest"
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
               }
             }
           },
@@ -8279,19 +8329,11 @@
         },
         "responses": {
           "200": {
-<<<<<<< HEAD
             "description": "Blocking explanations keyed by thread id",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BatchBlockingExplanationResponse"
-=======
-            "description": "Possible existing volumes",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CheckDuplicatesResponse"
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
                 }
               }
             }
@@ -8299,7 +8341,6 @@
           "401": {
             "description": "Not authenticated"
           },
-<<<<<<< HEAD
           "404": {
             "description": "One or more threads not found"
           },
@@ -8308,10 +8349,6 @@
           },
           "503": {
             "description": "Database temporarily unavailable"
-=======
-          "422": {
-            "description": "Validation failed"
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
           }
         },
         "security": [
@@ -20851,7 +20888,6 @@
           }
         }
       },
-<<<<<<< HEAD
       "ThreadEligibilityResponse": {
         "type": "object",
         "description": "`GET /api/v2/threads/{thread_id}/eligibility`: derived singleton resource.\n\n`state` is one of `available`, `blocked`, `complete` or `unavailable`.\n`manual_read_now_allowed` is derived from the unread frontier, never from\nthe denormalized `threads.is_blocked` flag or historical converted edges:\nan explicit Read Now is a reader action and automatic eligibility does not\nauthorize or veto it.",
@@ -20891,8 +20927,6 @@
           }
         }
       },
-=======
->>>>>>> 59a412af1d9744507e07e0c13b1118f3866ba5b7
       "ThreadIssueDependenciesResponse": {
         "type": "object",
         "description": "Wire parity with Python `ThreadIssueDependenciesResponse`.",
