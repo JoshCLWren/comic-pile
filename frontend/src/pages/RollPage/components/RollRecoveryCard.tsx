@@ -26,6 +26,15 @@ function splitPrerequisiteLabel(label: string) {
   }
 }
 
+/**
+ * Only an owned issue node with a canonical id may mount a shared card.
+ * Crossover/group nodes and placeholder ids stay labelled text: the label is a
+ * display hint, never an owned issue identity (issue #5904).
+ */
+function canonicalPrerequisiteIssueId(nodeType: string, nodeId: number): number | null {
+  return nodeType === 'issue' && Number.isInteger(nodeId) && nodeId > 0 ? nodeId : null
+}
+
 /** Explain a blocked pending roll without replacing the original selection. */
 export function RollRecoveryCard({
   recovery,
@@ -37,10 +46,9 @@ export function RollRecoveryCard({
   // Exact owned issue prerequisites share one bounded card batch; crossover
   // group nodes never produce one. Hooks run before the early returns.
   const issuePrerequisiteIds = useMemo(
-    () =>
-      (recovery?.readable_prerequisites ?? [])
-        .filter((prerequisite) => prerequisite.node_type === 'issue')
-        .map((prerequisite) => prerequisite.node_id),
+    () => (recovery?.readable_prerequisites ?? [])
+      .map((prerequisite) => canonicalPrerequisiteIssueId(prerequisite.node_type, prerequisite.node_id))
+      .filter((id): id is number => id != null),
     [recovery],
   )
   const cardsQuery = useIssueCards(issuePrerequisiteIds)
