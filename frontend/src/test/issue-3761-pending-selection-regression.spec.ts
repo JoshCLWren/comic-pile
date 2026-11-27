@@ -29,7 +29,7 @@ test.describe('Issue #3761: Pending selection regression', () => {
 
     // 1. Roll once to enter the rating view
     await gotoRollPage(page)
-    await page.getByTestId('roll-primary-action').click()
+    await page.locator('#main-die-3d').click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 20000 })
     
     // 2. Start rating but don't save

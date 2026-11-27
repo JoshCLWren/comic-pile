@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type RefObject,
-} from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import type { IssueCard } from '../../../services/issueCardsApi'
 import type { RollBootstrapThread } from '../../../types/rollBootstrap'
 import {
@@ -12,19 +6,14 @@ import {
   computeCoverBoardLayout,
 } from '../coverBoardLayout'
 import { RollCover } from './RollCover'
-import { RollDiceButton } from './RollDiceButton'
 
 interface CoverBoardProps {
   pool: RollBootstrapThread[]
   cardByIssueId: Map<number, IssueCard>
   dieSize: number
-  dieSides: number
-  isRolling: boolean
-  rolledValue: number
-  hasRolled: boolean
   selectedThreadId: number | null
-  mainDieRef: RefObject<HTMLButtonElement | null>
-  onRoll: () => void
+  /** The real die renderer, owned by the page so it stays a single instance. */
+  dieSlot: ReactNode
   onThreadClick: (thread: RollBootstrapThread) => void
 }
 
@@ -39,13 +28,8 @@ export function CoverBoard({
   pool,
   cardByIssueId,
   dieSize,
-  dieSides,
-  isRolling,
-  rolledValue,
-  hasRolled,
   selectedThreadId,
-  mainDieRef,
-  onRoll,
+  dieSlot,
   onThreadClick,
 }: CoverBoardProps) {
   const boardRef = useRef<HTMLDivElement>(null)
@@ -98,16 +82,7 @@ export function CoverBoard({
     />
   )
 
-  const die = (
-    <RollDiceButton
-      sides={dieSides}
-      value={rolledValue}
-      isRolling={isRolling}
-      hasRolled={hasRolled}
-      dieRef={mainDieRef}
-      onRoll={onRoll}
-    />
-  )
+  const die = dieSlot
 
   return (
     <div ref={boardRef} className="roll-cover-board" style={boardStyle} data-testid="roll-cover-board">

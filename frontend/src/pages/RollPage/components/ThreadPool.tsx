@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { scrollToTopSemantic } from '../../../scroll/scrollCoordinator'
 import { ComicIssueCover } from '../../../components/ComicIssueCard'
@@ -10,12 +10,8 @@ import { MobileGallery } from './MobileGallery'
 
 /** Presentation-only state for the Night Shift Roll surfaces (#5981). */
 export interface RollPresentationProps {
-  dieSides: number
-  isRolling: boolean
-  rolledValue: number
-  hasRolled: boolean
-  mainDieRef: RefObject<HTMLButtonElement | null>
-  onRoll: () => void
+  /** The real die renderer, placed between the middle-row covers or above the gallery. */
+  dieSlot: ReactNode
 }
 
 interface ThreadPoolProps {
@@ -75,14 +71,7 @@ export function ThreadPool({
   const navigate = useNavigate()
   const { isMobile } = useResponsive()
   const wasRatingView = useRef(isRatingView)
-  const view: RollPresentationProps = presentation ?? {
-    dieSides: dieSize ?? 6,
-    isRolling: false,
-    rolledValue: 1,
-    hasRolled: false,
-    mainDieRef: { current: null },
-    onRoll: () => {},
-  }
+  const view: RollPresentationProps = presentation ?? { dieSlot: null }
   const snoozedTotal = snoozedCount ?? snoozedThreads.length
   // The scoped eligible query applies the browser-owned snooze cookie that
   // bootstrap cannot see. Treat either source as snooze-backed emptiness so the
@@ -268,27 +257,17 @@ export function ThreadPool({
           <MobileGallery
             pool={displayPool}
             cardByIssueId={cardByIssueId}
-            dieSides={view.dieSides}
-            isRolling={view.isRolling}
-            rolledValue={view.rolledValue}
-            hasRolled={view.hasRolled}
+            dieSlot={view.dieSlot}
             winningThreadId={selectedThreadId != null ? Number(selectedThreadId) : null}
-            mainDieRef={view.mainDieRef}
-            onRoll={view.onRoll}
             onThreadClick={onThreadClick}
           />
         ) : (
           <CoverBoard
             pool={displayPool}
             cardByIssueId={cardByIssueId}
+            dieSlot={view.dieSlot}
             dieSize={dieSize ?? displayPool.length}
-            dieSides={view.dieSides}
-            isRolling={view.isRolling}
-            rolledValue={view.rolledValue}
-            hasRolled={view.hasRolled}
             selectedThreadId={selectedThreadId}
-            mainDieRef={view.mainDieRef}
-            onRoll={view.onRoll}
             onThreadClick={onThreadClick}
           />
         )}

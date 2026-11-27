@@ -5,7 +5,7 @@ import {
   type CSSProperties,
   type KeyboardEvent,
   type PointerEvent,
-  type RefObject,
+  type ReactNode,
 } from 'react'
 import type { IssueCard } from '../../../services/issueCardsApi'
 import type { RollBootstrapThread } from '../../../types/rollBootstrap'
@@ -17,18 +17,14 @@ import {
   wrapCarouselIndex,
 } from '../coverBoardLayout'
 import { RollCover } from './RollCover'
-import { RollDiceButton } from './RollDiceButton'
 
 interface MobileGalleryProps {
   pool: RollBootstrapThread[]
   cardByIssueId: Map<number, IssueCard>
-  dieSides: number
   isRolling: boolean
-  rolledValue: number
-  hasRolled: boolean
   winningThreadId: number | null
-  mainDieRef: RefObject<HTMLButtonElement | null>
-  onRoll: () => void
+  /** The real die renderer, owned by the page so it stays a single instance. */
+  dieSlot: ReactNode
   onThreadClick: (thread: RollBootstrapThread) => void
 }
 
@@ -41,13 +37,9 @@ interface MobileGalleryProps {
 export function MobileGallery({
   pool,
   cardByIssueId,
-  dieSides,
   isRolling,
-  rolledValue,
-  hasRolled,
   winningThreadId,
-  mainDieRef,
-  onRoll,
+  dieSlot,
   onThreadClick,
 }: MobileGalleryProps) {
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -117,14 +109,7 @@ export function MobileGallery({
 
   return (
     <div ref={wrapRef} className="roll-mobile-gallery-wrap" data-testid="roll-mobile-gallery">
-      <RollDiceButton
-        sides={dieSides}
-        value={rolledValue}
-        isRolling={isRolling}
-        hasRolled={hasRolled}
-        dieRef={mainDieRef}
-        onRoll={onRoll}
-      />
+      {dieSlot}
       <div
         className="roll-gallery"
         tabIndex={0}

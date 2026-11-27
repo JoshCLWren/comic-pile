@@ -50,6 +50,7 @@ import { RollFooter } from './components/RollFooter'
 import { RollModals } from './components/RollModals'
 import { TasteDiscoveryCard } from './components/TasteDiscoveryCard'
 import { CoverFlight, type CoverFlightState } from './components/CoverFlight'
+import { RollDiceButton } from './components/RollDiceButton'
 import ReadingModeLauncher from '../../components/ReadingModeLauncher'
 import { ReadingGraphProblemCard } from '../../components/ReadingGraphProblemCard'
 
@@ -600,12 +601,16 @@ export default function RollPage() {
               resetDicePending={resetDiceMutation.isPending}
               resetDiceError={resetDiceError}
               presentation={{
-                dieSides: displayDie,
-                isRolling: state.isRolling,
-                rolledValue: Math.max(1, Math.min(state.rolledResult ?? 1, displayDie)),
-                hasRolled,
-                mainDieRef,
-                onRoll: actions.handleRoll,
+                dieSlot: (
+                  <RollDiceButton
+                    sides={displayDie}
+                    value={Math.max(1, Math.min(state.rolledResult ?? 1, displayDie))}
+                    isRolling={state.isRolling}
+                    hasRolled={hasRolled}
+                    dieRef={mainDieRef}
+                    onRoll={actions.handleRoll}
+                  />
+                ),
               }}
             />
           </div>
