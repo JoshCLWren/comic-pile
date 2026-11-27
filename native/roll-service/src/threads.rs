@@ -19,6 +19,9 @@
 //!   and uses that result for grouping, availability, frontier and blocking
 //!   reasons. It needs the bounded Option E input snapshot in addition to the
 //!   page statement, so the default path is the only one-statement path.
+//!
+//! `POST /api/v2/threads` is the paired AIP-133 standard Create (#5702); its
+//! handler lives in `thread_lifecycle` and shares the legacy write path.
 
 use axum::http::StatusCode;
 
@@ -1738,7 +1741,11 @@ fn cursor_clause(sort: &str, cursor: Option<&QueueCursor>) -> (String, Vec<Param
 #[openapi(
     paths(
         list_threads_documentation,
+<<<<<<< HEAD
         get_thread_v2_documentation,
+=======
+        create_thread_v2_documentation,
+>>>>>>> origin/main
         list_completed_threads_documentation
     ),
     components(schemas(
@@ -1749,7 +1756,9 @@ fn cursor_clause(sort: &str, cursor: Option<&QueueCursor>) -> (String, Vec<Param
         ThreadListResult,
         ThreadTag,
         ComicVineMappingHealth,
-        QueueSeriesMetadata
+        QueueSeriesMetadata,
+        crate::thread_lifecycle::ThreadCreateRequest,
+        crate::thread_lifecycle::ThreadResponse
     )),
     modifiers(&ThreadsSecurityAddon)
 )]
@@ -1796,6 +1805,7 @@ impl utoipa::Modify for ThreadsSecurityAddon {
 #[allow(dead_code)]
 pub(crate) fn list_threads_documentation() {}
 
+<<<<<<< HEAD
 /// Standard resource Get for one owned Thread.
 #[utoipa::path(
     get,
@@ -1806,11 +1816,35 @@ pub(crate) fn list_threads_documentation() {}
         (status = 200, description = "Owner-scoped thread detail", body = ThreadDetailResponse),
         (status = 401, description = "Not authenticated"),
         (status = 404, description = "Thread not found or not owned by the reader")
+=======
+/// Documentation-only operation for the AIP-133 standard Create on the v2
+/// threads collection (#5702). The handler lives in `thread_lifecycle` and
+/// shares the legacy write path; only the URL and the `Location` response
+/// header differ.
+#[utoipa::path(
+    post,
+    path = "/api/v2/threads",
+    tag = "threads",
+    description = "Create a thread at the end of the authenticated reader's queue. \
+                   The created resource (including its stable `id`) is returned at 201 \
+                   with a `Location` header naming the v2 collection member. The write \
+                   preserves owner assignment, the five-second duplicate-merge guard and \
+                   the Python validation envelope; it creates no Plan, dependency or issue rows.",
+    request_body = crate::thread_lifecycle::ThreadCreateRequest,
+    responses(
+        (status = 201, description = "Created (or the duplicate created seconds earlier)", body = crate::thread_lifecycle::ThreadResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 422, description = "Validation failed")
+>>>>>>> origin/main
     ),
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
+<<<<<<< HEAD
 pub(crate) fn get_thread_v2_documentation() {}
+=======
+pub(crate) fn create_thread_v2_documentation() {}
+>>>>>>> origin/main
 
 #[utoipa::path(
     get,
@@ -2154,6 +2188,30 @@ mod tests {
             "#/components/schemas/ThreadDetailResponse"
         );
         assert!(operation["responses"]["404"].is_object());
+    }
+
+    #[test]
+    fn threads_openapi_documents_the_v2_standard_create() {
+        use utoipa::OpenApi;
+        let document = serde_json::to_value(ThreadsApi::openapi()).expect("threads OpenAPI");
+        let operation = &document["paths"]["/api/v2/threads"]["post"];
+        assert_eq!(operation["operationId"], "create_thread_v2_documentation");
+        assert_eq!(
+            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ThreadCreateRequest"
+        );
+        assert_eq!(
+            operation["responses"]["201"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ThreadResponse"
+        );
+        assert!(
+            operation["description"]
+                .as_str()
+                .is_some_and(|description| description.contains("Location")),
+            "the 201 Location/name contract must be documented"
+        );
+        assert!(document["components"]["schemas"]["ThreadCreateRequest"].is_object());
+        assert!(document["components"]["schemas"]["ThreadResponse"].is_object());
     }
 
     #[test]

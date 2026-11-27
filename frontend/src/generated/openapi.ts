@@ -3385,7 +3385,14 @@ export interface paths {
         /** Documentation-only operation used to emit the generated OpenAPI contract. */
         get: operations["list_threads_documentation"];
         put?: never;
-        post?: never;
+        /**
+         * Documentation-only operation for the AIP-133 standard Create on the v2
+         *     threads collection (#5702). The handler lives in `thread_lifecycle` and
+         *     shares the legacy write path; only the URL and the `Location` response
+         *     header differ.
+         * @description Create a thread at the end of the authenticated reader's queue. The created resource (including its stable `id`) is returned at 201 with a `Location` header naming the v2 collection member. The write preserves owner assignment, the five-second duplicate-merge guard and the Python validation envelope; it creates no Plan, dependency or issue rows.
+         */
+        post: operations["create_thread_v2_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9270,6 +9277,18 @@ export interface components {
             /** Title */
             title: string;
             /** Total Issues */
+            total_issues?: number | null;
+        };
+        /** @description Body of `POST /api/v1/threads/`. */
+        ThreadCreateRequest: {
+            format: string;
+            is_test?: boolean;
+            /** Format: int32 */
+            issues_remaining: number;
+            manual_creator_credits?: unknown[];
+            notes?: string | null;
+            title: string;
+            /** Format: int32 */
             total_issues?: number | null;
         };
         /**
@@ -18890,6 +18909,7 @@ export interface operations {
             };
         };
     };
+<<<<<<< HEAD
     get_thread_v2_documentation: {
         parameters: {
             query?: never;
@@ -18904,11 +18924,32 @@ export interface operations {
         responses: {
             /** @description Owner-scoped thread detail */
             200: {
+=======
+    create_thread_v2_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ThreadCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created (or the duplicate created seconds earlier) */
+            201: {
+>>>>>>> origin/main
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
+<<<<<<< HEAD
                     "application/json": components["schemas"]["ThreadDetailResponse"];
+=======
+                    "application/json": components["schemas"]["NativeThreadResponse"];
+>>>>>>> origin/main
                 };
             };
             /** @description Not authenticated */
@@ -18918,8 +18959,13 @@ export interface operations {
                 };
                 content?: never;
             };
+<<<<<<< HEAD
             /** @description Thread not found or not owned by the reader */
             404: {
+=======
+            /** @description Validation failed */
+            422: {
+>>>>>>> origin/main
                 headers: {
                     [name: string]: unknown;
                 };

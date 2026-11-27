@@ -799,7 +799,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/queue-exclusion-groups/{group_id}/restore",
             post(queue_exclusions::restore_group),
         )
-        .route("/api/v2/threads", get(threads::list_threads))
+        .route(
+            "/api/v2/threads",
+            get(threads::list_threads).post(thread_lifecycle::create_thread_v2),
+        )
         .route(
             "/api/v2/threads/{thread_id}",
             get(threads::get_thread_detail),
