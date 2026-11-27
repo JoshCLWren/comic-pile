@@ -2113,7 +2113,10 @@ mod tests {
         let operation = &document["paths"]["/api/v2/threads"]["get"];
         assert_eq!(operation["operationId"], "list_threads_documentation");
         let response = &operation["responses"]["200"]["content"]["application/json"]["schema"];
-        let variants = response["anyOf"].as_array().expect("filter-specific response");
+        assert_eq!(response["$ref"], "#/components/schemas/ThreadListResult");
+        let variants = document["components"]["schemas"]["ThreadListResult"]["oneOf"]
+            .as_array()
+            .expect("filter-specific response");
         assert!(variants.iter().any(|variant| {
             variant["$ref"] == "#/components/schemas/ThreadListResponse"
         }));
