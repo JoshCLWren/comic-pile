@@ -3482,7 +3482,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-<<<<<<< HEAD
     "/api/v2/threads/{thread_id}/readingOrders": {
         parameters: {
             query?: never;
@@ -3500,8 +3499,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-=======
->>>>>>> origin/main
     "/api/v2/undo/{session_id}/snapshots": {
         parameters: {
             query?: never;
@@ -19167,7 +19164,6 @@ export interface operations {
             };
         };
     };
-<<<<<<< HEAD
     thread_ordering_reading_orders: {
         parameters: {
             query?: never;
@@ -19212,8 +19208,6 @@ export interface operations {
             };
         };
     };
-=======
->>>>>>> origin/main
     list_undo_snapshots_documentation: {
         parameters: {
             query?: never;
