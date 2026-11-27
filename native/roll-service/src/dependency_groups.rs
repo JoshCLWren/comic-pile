@@ -1,16 +1,18 @@
-//! Same-path Rust cutover for the browser-called dependency-group routes
-//! (#4841, parent #4335).
+//! Reading-order group lifecycle (#4841 same-path cutover; #5710 v2 CRUD).
 //!
-//! Preserves the Python `app/api/dependency_group.py` wire contract at the same
-//! HTTP methods and exact paths:
+//! The collection is served only by the canonical v2 resource, whose Get folds
+//! the enriched detail view into the single group read:
 //!
-//! * `GET /api/v1/reading-order-groups/`
-//! * `POST /api/v1/reading-order-groups/`
+//! * `GET /api/v2/readingOrderGroups`
+//! * `POST /api/v2/readingOrderGroups`
+//! * `GET /api/v2/readingOrderGroups/{group_id}`
+//! * `PATCH /api/v2/readingOrderGroups/{group_id}`
+//! * `DELETE /api/v2/readingOrderGroups/{group_id}`
+//!
+//! Membership/range/order reads still retain their v1 paths (#5710 does not
+//! own them and #5711 migrates them separately):
+//!
 //! * `GET /api/v1/reading-order-groups/threads/{thread_id}/groups`
-//! * `GET /api/v1/reading-order-groups/{group_id}`
-//! * `GET /api/v1/reading-order-groups/{group_id}/detail`
-//! * `PATCH /api/v1/reading-order-groups/{group_id}`
-//! * `DELETE /api/v1/reading-order-groups/{group_id}`
 //! * `POST /api/v1/reading-order-groups/{group_id}/issue-ranges`
 //! * `POST /api/v1/reading-order-groups/{group_id}/members`
 //! * `DELETE /api/v1/reading-order-groups/{group_id}/members/{member_id}`
@@ -1696,41 +1698,6 @@ pub async fn delete_group_v2(
 // OpenAPI documentation
 // ---------------------------------------------------------------------------
 
-/// Documentation-only operation for listing reading-order groups.
-#[utoipa::path(
-    get,
-    path = "/api/v1/reading-order-groups/",
-    tag = "reading-order-groups",
-    operation_id = "dependency_groups_list",
-    responses(
-        (status = 200, description = "Owned groups with memberships", body = Vec<DependencyGroupResponse>),
-        (status = 401, description = "Not authenticated"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn list_groups_documentation() {}
-
-/// Documentation-only operation for creating a reading-order group.
-#[utoipa::path(
-    post,
-    path = "/api/v1/reading-order-groups/",
-    tag = "reading-order-groups",
-    operation_id = "dependency_groups_create",
-    request_body = DependencyGroupCreateRequest,
-    responses(
-        (status = 201, description = "Created group", body = DependencyGroupResponse),
-        (status = 401, description = "Not authenticated"),
-        (status = 409, description = "A group with this name already exists"),
-        (status = 422, description = "Request validation failed"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn create_group_documentation() {}
-
 /// Documentation-only operation for listing groups for a thread.
 #[utoipa::path(
     get,
@@ -1749,84 +1716,6 @@ pub fn create_group_documentation() {}
 )]
 #[allow(dead_code)]
 pub fn list_thread_groups_documentation() {}
-
-/// Documentation-only operation for fetching one group.
-#[utoipa::path(
-    get,
-    path = "/api/v1/reading-order-groups/{group_id}",
-    tag = "reading-order-groups",
-    operation_id = "dependency_groups_get",
-    params(("group_id" = i32, Path, description = "Owned group identifier")),
-    responses(
-        (status = 200, description = "Owned group", body = DependencyGroupResponse),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Group not found"),
-        (status = 422, description = "Request validation failed"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn get_group_documentation() {}
-
-/// Documentation-only operation for renaming one group.
-#[utoipa::path(
-    patch,
-    path = "/api/v1/reading-order-groups/{group_id}",
-    tag = "reading-order-groups",
-    operation_id = "dependency_groups_update",
-    params(("group_id" = i32, Path, description = "Owned group identifier")),
-    request_body = DependencyGroupUpdateRequest,
-    responses(
-        (status = 200, description = "Renamed group", body = DependencyGroupResponse),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Group not found"),
-        (status = 409, description = "A group with this name already exists"),
-        (status = 422, description = "Request validation failed"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn update_group_documentation() {}
-
-/// Documentation-only operation for deleting one group.
-#[utoipa::path(
-    delete,
-    path = "/api/v1/reading-order-groups/{group_id}",
-    tag = "reading-order-groups",
-    operation_id = "dependency_groups_delete",
-    params(("group_id" = i32, Path, description = "Owned group identifier")),
-    responses(
-        (status = 204, description = "Group deleted"),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Group not found"),
-        (status = 422, description = "Request validation failed"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn delete_group_documentation() {}
-
-/// Documentation-only operation for fetching enriched group detail.
-#[utoipa::path(
-    get,
-    path = "/api/v1/reading-order-groups/{group_id}/detail",
-    tag = "reading-order-groups",
-    operation_id = "dependency_groups_get_detail",
-    params(("group_id" = i32, Path, description = "Owned group identifier")),
-    responses(
-        (status = 200, description = "Owned group detail", body = DependencyGroupDetailResponse),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Group not found"),
-        (status = 422, description = "Request validation failed"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn get_group_detail_documentation() {}
 
 /// Documentation-only operation for adding an issue-position range.
 #[utoipa::path(
