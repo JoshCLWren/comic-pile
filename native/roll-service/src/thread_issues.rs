@@ -42,12 +42,12 @@ use crate::{
 };
 use axum::{
     body::Bytes,
-    extract::{rejection::PathRejection, Path, State},
+    extract::{rejection::PathRejection, Path, RawQuery, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     Json,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -1232,6 +1232,383 @@ pub async fn list_thread_issue_creators(
     }
     Ok(Json(ThreadIssueCreatorsResponse { thread_id, issues }))
 }
+
+// ---------------------------------------------------------------------------
+// GET /api/v2/threads/{thread_id}/issues and
+// GET /api/v2/threads/{thread_id}/creatorCredits (issue #5706)
+// ---------------------------------------------------------------------------
+
+/// One owner-scoped issue row in the v2 thread collection.
+///
+/// The base fields are the frozen Python `IssueResponse` shape. The projection
+/// adds the reader-visible card data (rating, mapping state, provider issue id
+/// and exact stored cover URL) so listing a thread never needs a second
+/// per-issue request. Unmapped issues are kept with `mapping_state = "unmapped"`
+/// and null identity fields; no reading-eligibility veto applies to a read.
+#[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
+pub struct ThreadIssueV2Item {
+    pub id: i32,
+    pub thread_id: i32,
+    pub issue_number: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issue_number_alias: Option<String>,
+    pub position: i32,
+    pub status: String,
+    pub read_at: Option<String>,
+    pub created_at: String,
+    /// Effective saved rating, ignoring ratings reversed by an Undo snapshot.
+    pub rating: Option<f64>,
+    /// `unmapped`, `candidate`, `confirmed`, or another stored mapping state.
+    pub mapping_state: String,
+    /// Whether a confirmed ComicVine issue identity exists.
+    pub has_confirmed_identity: bool,
+    /// Confirmed provider identifier; candidates never expose provider identity.
+    pub comicvine_issue_id: Option<String>,
+    /// Exact provider-supplied cover URL; null for missing or unconfirmed mapping.
+    pub cover_image_url: Option<String>,
+}
+
+/// Paginated owner-scoped issue collection for one thread.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct ThreadIssuesV2Page {
+    pub issues: Vec<ThreadIssueV2Item>,
+    pub total_count: i64,
+    pub page_size: i64,
+    pub next_page_token: Option<String>,
+}
+
+/// Paginated thread-scoped creator-credit projection.
+///
+/// `issues` contains only rows with stored credits, matching the legacy bulk
+/// read; callers fall back to the series' manual credits for absent issues.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct ThreadCreatorCreditsPage {
+    pub thread_id: i32,
+    pub issues: Vec<IssueCreatorsEntry>,
+    pub total_count: i64,
+    pub page_size: i64,
+    pub next_page_token: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CreditRow {
+    id: i32,
+    person_credits: Option<String>,
+    creator_credits: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CreditCursorRow {
+    id: i32,
+    position: i32,
+}
+
+/// Best non-empty provider image URL, in the same priority order as the
+/// card projection in `issue_service`. `{x}` is the external-identity alias.
+const COVER_URL_SQL: &str = r#"COALESCE(
+    NULLIF(BTRIM({x}.metadata_json->>'image_url'), ''),
+    NULLIF(BTRIM({x}.metadata_json->>'primary_image'), ''),
+    NULLIF(BTRIM({x}.metadata_json#>>'{image,original_url}'), ''),
+    NULLIF(BTRIM({x}.metadata_json#>>'{image,super_url}'), ''),
+    NULLIF(BTRIM({x}.metadata_json#>>'{image,screen_large_url}'), ''),
+    NULLIF(BTRIM({x}.metadata_json#>>'{image,medium_url}'), ''),
+    NULLIF(BTRIM({x}.metadata_json#>>'{image,screen_url}'), ''),
+    NULLIF(BTRIM({x}.metadata_json#>>'{image,small_url}'), ''),
+    NULLIF(BTRIM({x}.metadata_json#>>'{image,thumb_url}'), ''),
+    NULLIF(BTRIM({x}.metadata_json#>>'{image,tiny_url}'), ''),
+    NULLIF(BTRIM({x}.metadata_json#>>'{image,icon_url}'), ''),
+    NULLIF(BTRIM({x}.metadata_json#>>'{raw_provider_payload,image,original_url}'), ''),
+    NULLIF(BTRIM({x}.metadata_json#>>'{raw_provider_payload,image,super_url}'), ''),
+    NULLIF(BTRIM({x}.metadata_json#>>'{raw_provider_payload,image,screen_large_url}'), ''),
+    NULLIF(BTRIM({x}.metadata_json#>>'{raw_provider_payload,image,medium_url}'), ''),
+    NULLIF(BTRIM({x}.metadata_json#>>'{raw_provider_payload,image,screen_url}'), ''),
+    NULLIF(BTRIM({x}.metadata_json#>>'{raw_provider_payload,image,small_url}'), ''),
+    NULLIF(BTRIM({x}.metadata_json#>>'{raw_provider_payload,image,thumb_url}'), ''),
+    NULLIF(BTRIM({x}.metadata_json#>>'{raw_provider_payload,image,tiny_url}'), ''),
+    NULLIF(BTRIM({x}.metadata_json#>>'{raw_provider_payload,image,icon_url}'), ''),
+    NULLIF(BTRIM({x}.metadata_json#>>'{raw_provider_payload,image_url}'), ''),
+    NULLIF(BTRIM({x}.metadata_json#>>'{raw_provider_payload,primary_image}'), ''),
+    NULLIF(BTRIM({x}.metadata_json->>'cover_image_url'), '')
+)"#;
+
+/// One set-based statement for the ownership check, filtered count and page.
+/// Rating, mapping and cover are resolved with bounded lateral joins; no
+/// statement is issued per row and no reading-eligibility state is consulted.
+const THREAD_ISSUES_V2_PAGE_SQL_TEMPLATE: &str = r#"
+WITH owned AS (
+    SELECT id FROM threads WHERE id = $1 AND user_id = $2
+), matching AS (
+    SELECT i.id, i.thread_id, i.issue_number,
+           NULLIF(BTRIM(i.issue_number_alias), '') AS issue_number_alias,
+           i.position, i.status, i.read_at, i.created_at
+    FROM issues i
+    JOIN owned o ON o.id = i.thread_id
+    WHERE ($3::text IS NULL OR i.status = $3)
+), totals AS (
+    SELECT count(*) AS total_count FROM matching
+), paged AS (
+    SELECT m.*
+    FROM matching m
+    WHERE ($4::integer IS NULL OR (m.position, m.id) > ($4, $5))
+    ORDER BY m.position, m.id
+    LIMIT $6
+), projected AS (
+    SELECT p.id, p.thread_id, p.issue_number, p.issue_number_alias, p.position, p.status,
+           to_char(p.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS read_at,
+           to_char(p.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at,
+           (SELECT e.rating FROM events e
+            WHERE e.user_id = $2 AND e.issue_id = p.id AND e.type = 'rate'
+              AND e.rating IS NOT NULL
+              AND e.context->>'undone_by_snapshot_id' IS NULL
+            ORDER BY e.timestamp DESC, e.id DESC LIMIT 1) AS rating,
+           COALESCE(id_map.status, 'unmapped') AS mapping_state,
+           CASE WHEN id_map.status = 'confirmed' THEN id_map.external_id END AS comicvine_issue_id,
+           id_map.cover_url AS cover_image_url
+    FROM paged p
+    LEFT JOIN LATERAL (
+        SELECT m.status, x.external_id,
+               CASE WHEN m.status = 'confirmed' THEN {cover} END AS cover_url
+        FROM issue_external_identity_mappings m
+        JOIN external_identities x ON x.id = m.external_identity_id
+        WHERE m.issue_id = p.id AND x.entity_type = 'issue'
+          AND m.status <> 'rejected'
+          AND lower(x.provider) IN ('comicvine', 'comic_vine')
+        ORDER BY (m.status = 'confirmed') DESC, m.confidence DESC NULLS LAST,
+                 m.updated_at DESC, m.id DESC
+        LIMIT 1
+    ) id_map ON true
+)
+SELECT totals.total_count,
+       COALESCE((SELECT jsonb_agg(to_jsonb(projected) ORDER BY projected.position, projected.id)::text
+                 FROM projected), '[]')
+FROM owned CROSS JOIN totals
+"#;
+
+fn thread_issues_v2_page_sql() -> String {
+    THREAD_ISSUES_V2_PAGE_SQL_TEMPLATE.replace(
+        "{cover}",
+        &COVER_URL_SQL.replace("{x}", "x.metadata_json"),
+    )
+}
+
+/// One set-based statement for the credit page: issues are paged by stable
+/// `(position, id)` order and stored credit arrays are joined in bulk. Issues
+/// without a confirmed mapping simply have no credit row.
+const THREAD_CREDITS_V2_PAGE_SQL: &str = r#"
+WITH owned AS (
+    SELECT id FROM threads WHERE id = $1 AND user_id = $2
+), matching AS (
+    SELECT i.id, i.position
+    FROM issues i
+    JOIN owned o ON o.id = i.thread_id
+    WHERE ($3::text IS NULL OR i.status = $3)
+), totals AS (
+    SELECT count(*) AS total_count FROM matching
+), paged AS (
+    SELECT m.id, m.position
+    FROM matching m
+    WHERE ($4::integer IS NULL OR (m.position, m.id) > ($4, $5))
+    ORDER BY m.position, m.id
+    LIMIT $6
+), credits AS (
+    SELECT DISTINCT ON (i.id) i.id,
+           (ei.metadata_json::jsonb -> 'person_credits')::text AS person_credits,
+           (ei.metadata_json::jsonb -> 'creator_credits')::text AS creator_credits
+    FROM issues i
+    JOIN paged p ON p.id = i.id
+    JOIN issue_external_identity_mappings iem ON iem.issue_id = i.id
+    JOIN external_identities ei ON ei.id = iem.external_identity_id
+    WHERE iem.status = 'confirmed'
+      AND ei.provider = 'comicvine' AND ei.entity_type = 'issue'
+    ORDER BY i.id, iem.confidence DESC NULLS LAST, ei.id
+)
+SELECT totals.total_count,
+       COALESCE((SELECT jsonb_agg(to_jsonb(p) ORDER BY p.position, p.id)::text FROM paged p), '[]'),
+       COALESCE((SELECT jsonb_agg(to_jsonb(c) ORDER BY c.id)::text FROM credits c), '[]')
+FROM owned CROSS JOIN totals
+"#;
+
+fn parse_v2_page_query(
+    raw: Option<&str>,
+) -> Result<(Option<String>, i64, Option<String>, Option<i32>, Option<i32>), ApiError> {
+    let (status, page_size, page_token) = crate::issue_read::parse_thread_issue_query(raw)?;
+    let cursor = page_token
+        .as_deref()
+        .filter(|token| !token.is_empty())
+        .map(crate::issue_read::decode_thread_issue_cursor)
+        .transpose()?;
+    let (position, issue_id) = cursor
+        .map(|(position, issue_id)| (Some(position), Some(issue_id)))
+        .unwrap_or((None, None));
+    Ok((status, page_size, page_token, position, issue_id))
+}
+
+/// `GET /api/v2/threads/{thread_id}/issues` — owner-scoped paginated collection.
+pub async fn list_thread_issues_v2(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    thread_id: Result<Path<String>, PathRejection>,
+    raw_query: RawQuery,
+) -> Result<Json<ThreadIssuesV2Page>, ApiError> {
+    let Path(raw) = thread_id.map_err(|_| validation_failed())?;
+    let thread_id: i32 = raw.parse().map_err(|_| validation_failed())?;
+    let (status, page_size, _token, position, issue_id) = parse_v2_page_query(raw_query.0.as_deref())?;
+    let limit = page_size + 1;
+
+    let connection = db::checkout(&state).await?;
+    let row = connection
+        .query_opt(
+            &thread_issues_v2_page_sql(),
+            &[
+                &thread_id,
+                &user.id(),
+                &status,
+                &position,
+                &issue_id,
+                &limit,
+            ],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| thread_not_found(thread_id))?;
+    let payload: String = row.get(1);
+    let mut issues: Vec<ThreadIssueV2Item> = serde_json::from_str(&payload)
+        .map_err(|_| ApiError::Internal("Internal Server Error".into()))?;
+    let next_page_token = if issues.len() as i64 > page_size {
+        issues.truncate(page_size as usize);
+        issues.last().map(|issue| format!("{},{}", issue.position, issue.id))
+    } else {
+        None
+    };
+    Ok(Json(ThreadIssuesV2Page {
+        issues,
+        total_count: row.get(0),
+        page_size,
+        next_page_token,
+    }))
+}
+
+/// `GET /api/v2/threads/{thread_id}/creatorCredits` — bounded bulk credits.
+pub async fn list_thread_creator_credits_v2(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    thread_id: Result<Path<String>, PathRejection>,
+    raw_query: RawQuery,
+) -> Result<Json<ThreadCreatorCreditsPage>, ApiError> {
+    let Path(raw) = thread_id.map_err(|_| validation_failed())?;
+    let thread_id: i32 = raw.parse().map_err(|_| validation_failed())?;
+    let (status, page_size, _token, position, issue_id) = parse_v2_page_query(raw_query.0.as_deref())?;
+    let limit = page_size + 1;
+
+    let connection = db::checkout(&state).await?;
+    let row = connection
+        .query_opt(
+            THREAD_CREDITS_V2_PAGE_SQL,
+            &[
+                &thread_id,
+                &user.id(),
+                &status,
+                &position,
+                &issue_id,
+                &limit,
+            ],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| thread_not_found(thread_id))?;
+    let page_payload: String = row.get(1);
+    let credit_payload: String = row.get(2);
+    let page: Vec<CreditCursorRow> = serde_json::from_str(&page_payload)
+        .map_err(|_| ApiError::Internal("Internal Server Error".into()))?;
+    let credit_rows: Vec<CreditRow> = serde_json::from_str(&credit_payload)
+        .map_err(|_| ApiError::Internal("Internal Server Error".into()))?;
+    let mut by_issue: std::collections::HashMap<i32, CreditRow> = credit_rows
+        .into_iter()
+        .map(|credit| (credit.id, credit))
+        .collect();
+    let mut issues = Vec::new();
+    for row in &page {
+        let Some(credit) = by_issue.remove(&row.id) else {
+            continue;
+        };
+        let mut creators = merge_creators(
+            parse_credit_array(credit.person_credits).as_ref(),
+            parse_credit_array(credit.creator_credits).as_ref(),
+        );
+        creators.truncate(MAX_BULK_CREDITS_PER_ISSUE);
+        if !creators.is_empty() {
+            issues.push(IssueCreatorsEntry {
+                issue_id: row.id,
+                creators,
+            });
+        }
+    }
+    let next_page_token = if page.len() as i64 > page_size {
+        page.iter()
+            .nth(page_size as usize - 1)
+            .map(|row| format!("{},{}", row.position, row.id))
+    } else {
+        None
+    };
+    Ok(Json(ThreadCreatorCreditsPage {
+        thread_id,
+        issues,
+        total_count: row.get(0),
+        page_size,
+        next_page_token,
+    }))
+}
+
+/// Documentation-only v2 collection operation; the mounted handlers above
+/// delegate to the same DTOs and query parser.
+#[utoipa::path(
+    get,
+    path = "/api/v2/threads/{thread_id}/issues",
+    tag = "issues",
+    description = "Owner-scoped, paginated thread issue collection with read state, rating, mapping and cover projection. Never applies a reading-eligibility veto to a read.",
+    params(
+        ("thread_id" = i32, Path, description = "Owned thread ID"),
+        ("status" = Option<String>, Query, description = "Optional unread or read filter"),
+        ("page_size" = Option<i64>, Query, description = "1-100 issues (default 50)"),
+        ("page_token" = Option<String>, Query, description = "position,id continuation cursor")
+    ),
+    responses(
+        (status = 200, description = "Paginated owner-scoped issues", body = ThreadIssuesV2Page),
+        (status = 400, description = "Invalid page token"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Thread not found"),
+        (status = 422, description = "Validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn list_thread_issues_v2_documentation() {}
+
+/// Documentation-only v2 thread-scoped credit projection.
+#[utoipa::path(
+    get,
+    path = "/api/v2/threads/{thread_id}/creatorCredits",
+    tag = "creators",
+    description = "Bounded, owner-scoped, paginated per-issue creator credits for one thread. Issues without a confirmed ComicVine mapping are omitted; no per-issue HTTP fanout.",
+    params(
+        ("thread_id" = i32, Path, description = "Owned thread ID"),
+        ("status" = Option<String>, Query, description = "Optional unread or read filter"),
+        ("page_size" = Option<i64>, Query, description = "1-100 issues (default 50)"),
+        ("page_token" = Option<String>, Query, description = "position,id continuation cursor")
+    ),
+    responses(
+        (status = 200, description = "Paginated thread creator credits", body = ThreadCreatorCreditsPage),
+        (status = 400, description = "Invalid page token"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Thread not found"),
+        (status = 422, description = "Validation failed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn list_thread_creator_credits_v2_documentation() {}
 
 // ---------------------------------------------------------------------------
 // :migrateToIssues

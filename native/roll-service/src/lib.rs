@@ -1207,7 +1207,12 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route(
             "/api/v2/threads/{thread_id}/issues",
-            post(issue_mutation::create_issues),
+            get(thread_issues::list_thread_issues_v2)
+                .post(issue_mutation::create_issues),
+        )
+        .route(
+            "/api/v2/threads/{thread_id}/creatorCredits",
+            get(thread_issues::list_thread_creator_credits_v2),
         )
         .route(
             "/api/v2/threads/{thread_id}/issues/preview",
