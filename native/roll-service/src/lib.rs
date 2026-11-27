@@ -1803,6 +1803,44 @@ mod tests {
         );
     }
 
+    /// The AIP-136 preview shares the `{plan_id}` segment with the standard
+    /// methods: matchit rejects a second, same-shaped catch-all route and the
+    /// whole service router panics at construction. Unauthenticated probes
+    /// prove both the custom-method and resource paths are mounted without
+    /// needing a database.
+    #[tokio::test]
+    async fn continuity_plan_preview_shares_the_resource_segment() {
+        let app = standalone_app();
+        for uri in [
+            "/api/v2/continuityPlans/42:previewReadingOrderProjection",
+            "/api/v2/continuityPlans/42:notARealMethod",
+        ] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri(uri)
+                        .header("content-type", "application/json")
+                        .body(Body::from(r#"{"reading_order_id":7}"#))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{uri}");
+        }
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v2/continuityPlans/42")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
     /// Build the real production router without touching a database. None of
     /// these probes needs a live connection: success, auth rejection and the
     /// fallback are all resolved before any handler checks out a socket.
