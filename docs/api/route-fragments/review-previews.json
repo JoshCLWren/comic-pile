@@ -1,6 +1,7 @@
 {
   "family": "review-previews",
   "owned_path_patterns": [
+    "^/api/v1/continuity\\-plans/[^/]+/reading\\-orders/project\\-preview$",
     "^/api/v1/issue\\-identity/cbl/[^/]+/reading\\-graph\\-preview$"
   ],
   "defaults": {
