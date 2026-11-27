@@ -26337,7 +26337,7 @@
       },
       "ThreadResponse": {
         "type": "object",
-        "description": "The Python `ThreadResponse` projection every lifecycle writer returns.",
+        "description": "Python `ThreadResponse`.",
         "required": [
           "id",
           "title",
@@ -26391,7 +26391,12 @@
             ],
             "format": "double"
           },
-          "manual_creator_credits": {},
+          "manual_creator_credits": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
           "next_unread_issue_id": {
             "type": [
               "integer",

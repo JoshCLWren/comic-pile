@@ -10573,7 +10573,7 @@
         "type": "object"
       },
       "NativeThreadResponse": {
-        "description": "The Python `ThreadResponse` projection every lifecycle writer returns.",
+        "description": "Python `ThreadResponse`.",
         "properties": {
           "blocking_reasons": {
             "items": {
@@ -10614,7 +10614,12 @@
               "null"
             ]
           },
-          "manual_creator_credits": {},
+          "manual_creator_credits": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
           "next_unread_issue_id": {
             "format": "int32",
             "type": [
