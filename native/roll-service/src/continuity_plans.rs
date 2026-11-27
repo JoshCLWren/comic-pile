@@ -1420,7 +1420,6 @@ pub async fn update_continuity_plan(
     let expected_version: Option<String> = payload.expected_updated_at.clone();
     let current_updated_at: DateTime<Utc> = existing.get(4);
     let current_updated_at_iso = iso_utc(current_updated_at);
-    let prior_ordering_mode: String = existing.get(3);
     let prior_lanes: serde_json::Value = existing.get(1);
     let prior_nodes: serde_json::Value = existing.get(2);
 
@@ -1548,16 +1547,7 @@ pub async fn update_continuity_plan(
         .await
         .map_err(db::query_error)?;
 
-    if let Err(error) = compile_plan_rules(
-        &tx,
-        user.id(),
-        plan_id,
-        &payload.nodes,
-        &payload.ordering_mode,
-        Some(&prior_ordering_mode),
-    )
-    .await
-    {
+    if let Err(error) = rebuild_plan_membership(&tx, plan_id, &payload.nodes).await {
         let _ = tx.rollback().await;
         return Err(error);
     }
@@ -1576,7 +1566,6 @@ pub async fn update_continuity_plan(
     };
 
     tx.commit().await.map_err(db::query_error)?;
-    refresh_blocked_state(&state, user.id()).await?;
 
     Ok(Json(plan_response))
 }
@@ -1621,13 +1610,10 @@ pub async fn delete_continuity_plan(
     .map_err(db::query_error)?
     .ok_or_else(|| not_found(format!("Continuity plan {plan_id} not found")))?;
 
-    // Retire canonical edges compiled by this plan before its rules vanish.
-    // After the Roll cutover those Dependency rows are the only authority, so
-    // orphaned edges would otherwise keep blocking issues forever.
-    retire_plan_edges_for_deletion(&tx, user.id(), plan_id).await?;
-
-    // Get marker for deleting plan rules
-    let marker = plan_rule_marker(plan_id);
+    // Remove any legacy plan-owned rule rows left by earlier releases. The
+    // Reading List engine compiled no new rules, so there are no edges to
+    // retire here.
+    let marker = format!("continuity-plan:{plan_id}");
 
     // Tag assignments point at polymorphic ids with no foreign key.
     tx.execute(
@@ -1675,7 +1661,6 @@ pub async fn delete_continuity_plan(
         .map_err(db::query_error)?;
 
     tx.commit().await.map_err(db::query_error)?;
-    refresh_blocked_state(&state, user.id()).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
