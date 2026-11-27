@@ -5,6 +5,7 @@
  * turned into a guessed issue, cover or mapping target.
  */
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SessionPage from '../pages/SessionPage'
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   details: vi.fn(),
   snapshots: vi.fn(),
   undo: vi.fn(),
+  fetchCards: vi.fn(async () => []),
 }))
 
 vi.mock('../hooks/useSession', () => ({
@@ -27,12 +29,14 @@ vi.mock('../services/issueCardsApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/issueCardsApi')>()
   return {
     ...actual,
-    issueCardsApi: {
-      ...actual.issueCardsApi,
-      fetchCards: vi.fn(async () => []),
-    },
+    issueCardsApi: { ...actual.issueCardsApi, fetchCards: mocks.fetchCards },
   }
 })
+vi.mock('../components/ComicIssueMappingAction', () => ({
+  default: ({ issueId }: { issueId: number | null }) => (
+    <span data-testid="shared-map-action">{issueId}</span>
+  ),
+}))
 
 interface LegacyEvent {
   id: number
@@ -71,6 +75,7 @@ function renderSession(events: LegacyEvent[]) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.fetchCards.mockResolvedValue([])
 })
 
 describe('session event issue-card gate (#5904)', () => {
@@ -112,5 +117,35 @@ describe('session event issue-card gate (#5904)', () => {
     expect(screen.getByTestId('issue-card-trigger-909')).toBeInTheDocument()
     expect(document.querySelectorAll('[data-testid^="issue-card-trigger-"]')).toHaveLength(1)
     expect(screen.queryByTestId('comic-issue-card')).not.toBeInTheDocument()
+  })
+
+  it('keeps direct reading available when the owner card has no cover or mapping', async () => {
+    mocks.fetchCards.mockResolvedValue([{
+      issue_id: 909,
+      thread_id: 12,
+      thread_title: 'Saga',
+      issue_number: '6',
+      status: 'unread',
+      rating: null,
+      read_at: null,
+      mapping_state: 'unmapped',
+      has_confirmed_identity: false,
+      comicvine_issue_id: null,
+      cover_image_url: null,
+    }])
+    renderSession([{
+      id: 3,
+      timestamp: '2024-05-01T10:25:00Z',
+      type: 'rate',
+      thread_title: 'Saga',
+      issue_number: '6',
+      issue_id: 909,
+    }])
+
+    await userEvent.click(screen.getByTestId('issue-card-trigger-909'))
+    const card = await screen.findByTestId('comic-issue-card')
+    expect(screen.getByTestId('comic-issue-cover-placeholder')).toBeVisible()
+    expect(screen.getByTestId('shared-map-action')).toHaveTextContent('909')
+    expect(await userEvent.setup().click(screen.getByRole('button', { name: 'Read now' }))).toBeUndefined()
   })
 })
