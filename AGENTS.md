@@ -63,7 +63,7 @@ factory claims and do not bundle unrelated API refactors.
 > after changing `vercel.json`, route fragments, or the inventory.
 > API version is not implementation language.
 
-- Live v2 operations: 151 (151 native-rust + 0 python-fastapi).
+- Live v2 operations: 150 (150 native-rust + 0 python-fastapi).
 - Native ingress: `/api/native_roll.rs` (via `vercel.json`).
 - Full Python-handler surface: 27 operations (v1 27 + unversioned 0); v1 active 0 live Python / 0 migrated (shadowed by Rust); unversioned active 0 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
 - Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404).
@@ -91,7 +91,6 @@ Deployed runtime by cutover owner (`METHOD path -> runtime`):
 - #4851 (4): `GET /api/v2/reading-orders/ -> native-rust`; `POST /api/v2/reading-orders/{reading_order_id}/items -> native-rust`; `POST /api/v2/reading-plan-sync/runs -> native-rust`; `GET /api/v2/reading-plan-sync/status -> native-rust`
 - #4855 (1): `GET /api/v2/demo-roll -> native-rust`
 - #5435 (5): `POST /api/v2/queue-exclusion-groups/{group_id}/restore -> native-rust`; `POST /api/v2/queue-exclusions -> native-rust`; `POST /api/v2/queue-exclusions/restore -> native-rust`; `POST /api/v2/queue-exclusions/status:check -> native-rust`; `POST /api/v2/reading-lists/memberships:check -> native-rust`
-- #5705 (1): `POST /api/v2/threads:checkDuplicates -> native-rust`
 <!-- route-burndown:end -->
 
 ### Route generation ownership (bot-owned)
