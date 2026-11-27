@@ -1,6 +1,6 @@
 //! Native resource-shaped session details read (#4839, parent #4335).
 //!
-//! Serves `GET /api/v2/reading-sessions/{session_id}/details` from the native
+//! Serves `GET /api/v2/readingSessions/{session_id}/details` from the native
 //! Rust router with the same wire contract as the retired v1/unversioned
 //! session details paths.
 //!
@@ -214,7 +214,7 @@ fn session_mode_description(event: &serde_json::Value) -> String {
     }
 }
 
-/// `GET /api/v2/reading-sessions/{session_id}/details`.
+/// `GET /api/v2/readingSessions/{session_id}/details`.
 pub async fn get_session_details(
     Path(session_id): Path<i32>,
     user: AuthenticatedUser,
@@ -749,7 +749,7 @@ pub async fn get_session_details(
 /// Documentation-only operation for the v2 session details.
 #[utoipa::path(
     get,
-    path = "/api/v2/reading-sessions/{session_id}/details",
+    path = "/api/v2/readingSessions/{session_id}/details",
     tag = "sessions",
     params(("session_id" = i32, Path, description = "Owned reading session")),
     responses(
@@ -772,9 +772,9 @@ mod tests {
     fn session_details_openapi_covers_the_v2_path() {
         let document = serde_json::to_value(crate::openapi::canonical_openapi()).expect("openapi");
         let paths = document["paths"].as_object().expect("paths");
-        assert!(paths.contains_key("/api/v2/reading-sessions/{session_id}/details"));
+        assert!(paths.contains_key("/api/v2/readingSessions/{session_id}/details"));
         assert!(!paths.contains_key("/api/v1/sessions/{session_id}/details"));
-        let operation = &document["paths"]["/api/v2/reading-sessions/{session_id}/details"]["get"];
+        let operation = &document["paths"]["/api/v2/readingSessions/{session_id}/details"]["get"];
         assert!(operation["operationId"].is_string());
         assert!(operation["responses"]["200"].as_object().is_some());
         assert!(operation["responses"]["404"].as_object().is_some());

@@ -371,18 +371,17 @@ mod tests {
         let token = encode_page_token(key);
         assert_eq!(parse_page_token(&token).expect("valid token"), key);
 
-        for forged in [
-            "",
-            "not-base64!",
-            "e30",
-            URL_SAFE_NO_PAD.encode("{\"t\":1}").as_str(),
-            URL_SAFE_NO_PAD.encode("{\"t\":1,\"id\":0}").as_str(),
-            URL_SAFE_NO_PAD
-                .encode("{\"t\":999999999999999999999,\"id\":1}")
-                .as_str(),
-        ] {
+        let forged_tokens = vec![
+            String::new(),
+            "not-base64!".to_string(),
+            "e30".to_string(),
+            URL_SAFE_NO_PAD.encode("{\"t\":1}"),
+            URL_SAFE_NO_PAD.encode("{\"t\":1,\"id\":0}"),
+            URL_SAFE_NO_PAD.encode("{\"t\":999999999999999999999,\"id\":1}"),
+        ];
+        for forged in forged_tokens {
             assert!(
-                parse_page_token(forged).is_err(),
+                parse_page_token(&forged).is_err(),
                 "forged token {forged:?} must be rejected before SQL"
             );
         }
@@ -439,6 +438,6 @@ mod tests {
         let wire = serde_json::to_value(&resource).expect("serialize");
         assert_eq!(wire["name"].as_str(), Some("readingSessions/7"));
         assert_eq!(wire["session_id"].as_i64(), Some(7));
-        assert_eq!(wire["next_page_token"], Value::Null);
+        assert!(wire.get("next_page_token").is_none());
     }
 }

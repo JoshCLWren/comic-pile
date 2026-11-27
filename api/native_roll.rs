@@ -259,13 +259,18 @@ fn app() -> Router {
         )
         .route("/api/v2/activity", get(native_dispatch))
         .route("/api/v2/roll/bootstrap", get(native_dispatch))
-        .route("/api/v2/reading-sessions", post(native_dispatch))
+        .route("/api/v2/readingSessions", get(native_dispatch))
+        .route("/api/v2/readingSessions", post(native_dispatch))
         .route(
-            "/api/v2/reading-sessions/{session_id}/snapshots",
+            "/api/v2/readingSessions/{session_id}",
             get(native_dispatch),
         )
         .route(
-            "/api/v2/reading-sessions/{session_id}/details",
+            "/api/v2/readingSessions/{session_id}/snapshots",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/readingSessions/{session_id}/details",
             get(native_dispatch),
         )
         .route("/api/v2/undo/{session_id}/snapshots", get(native_dispatch))
@@ -1343,8 +1348,10 @@ mod tests {
     #[tokio::test]
     async fn v2_reading_session_ingress_reaches_rust_and_requires_auth() {
         for uri in [
-            "/api/v2/reading-sessions/7/details",
-            "/api/v2/reading-sessions/7/snapshots",
+            "/api/v2/readingSessions",
+            "/api/v2/readingSessions/7",
+            "/api/v2/readingSessions/7/details",
+            "/api/v2/readingSessions/7/snapshots",
         ] {
             let mut router = app();
             let response = router
