@@ -784,8 +784,6 @@ export interface ListThreadIssuesV2Request {
   path: {
     thread_id: number
   }
-<<<<<<< HEAD
-=======
   query?: {
     status?: string
     page_size?: number
@@ -804,7 +802,6 @@ export interface ListThreadReadingOrdersRequest {
 export type ListThreadReadingOrdersResponse = components['schemas']['ThreadReadingOrdersResponse']
 
 export interface ListThreadsRequest {
->>>>>>> origin/main
   query?: {
     status?: string
     page_size?: number
