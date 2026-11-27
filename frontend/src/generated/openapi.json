@@ -2520,6 +2520,51 @@
         ],
         "type": "object"
       },
+      "CheckDuplicatesRequest": {
+        "description": "Body of `POST /api/v1/threads/check-duplicates`.",
+        "properties": {
+          "comicvine_volume_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "exclude_thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "format": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "format"
+        ],
+        "type": "object"
+      },
+      "CheckDuplicatesResponse": {
+        "description": "Response of `POST /api/v1/threads/check-duplicates`.",
+        "properties": {
+          "matches": {
+            "items": {
+              "$ref": "#/components/schemas/NativePotentialDuplicateMatch"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "matches"
+        ],
+        "type": "object"
+      },
       "CheckPotentialDuplicatesRequest": {
         "description": "Request to check for possible existing volumes before create or rename.",
         "properties": {
@@ -9595,6 +9640,61 @@
         },
         "required": [
           "issue_number"
+        ],
+        "type": "object"
+      },
+      "NativePotentialDuplicateMatch": {
+        "description": "One possible existing volume.",
+        "properties": {
+          "comicvine_volume_id": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "format": {
+            "type": "string"
+          },
+          "issues_remaining": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "match_type": {
+            "type": "string"
+          },
+          "start_year": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "thread_id",
+          "title",
+          "format",
+          "status",
+          "issues_remaining",
+          "match_type"
         ],
         "type": "object"
       },
@@ -29789,6 +29889,48 @@
         "summary": "Documentation-only operation for the delete/reorder structure preview.",
         "tags": [
           "issues"
+        ]
+      }
+    },
+    "/api/v2/threads:checkDuplicates": {
+      "post": {
+        "description": "Advisory AIP-136 collection custom method: report existing volumes that may be the proposed series. Does not create a Thread. Results are owner-scoped, exclude a named thread, and are capped at five matches.",
+        "operationId": "check_duplicates",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckDuplicatesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckDuplicatesResponse"
+                }
+              }
+            },
+            "description": "Possible existing volumes"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "threads"
         ]
       }
     },
