@@ -1,37 +1,37 @@
-utc: 2026-11-27T00:00:07Z
-uptime: 1177.18s load: 1.93 1.13 0.54
+utc: 2026-11-27T00:00:24Z
+uptime: 1194.03s load: 1.72 1.12 0.55
 processes: 212
 --- memory (MiB)
                total        used        free      shared  buff/cache   available
-Mem:           15700        1553        8029          72        6527       14147
+Mem:           15700        1425        8109          73        6575       14275
 Swap:              0           0           0
 --- disk
 Filesystem            Size  Used Avail Use% Mounted on
 /dev/mapper/cow-root  145G   59G   86G  41% /
 /dev/mapper/cow-root  145G   59G   86G  41% /
 --- top rss (KiB, name only)
-329692 opencode.exe
+329116 opencode.exe
 229772 Runner.Worker
 139344 provjobd3410290
-114196 Runner.Listener
-110208 dockerd
-89112 opencode
+115124 Runner.Listener
+110832 dockerd
+89152 opencode
 61404 cargo
-58348 containerd
+57496 containerd
 55528 php-fpm8.5
-48328 comicvine_v2_ht
+51032 comicvine_v2_ht
 43348 snapd
 38144 opencode-pty
 36412 postgres
 30092 networkd-dispat
-24324 postgres
+25908 postgres
 --- top cpu (name only)
-84.4 comicvine_v2_ht
-40.0 postgres
- 2.8 opencode.exe
- 1.9 provjobd3410290
+85.4 comicvine_v2_ht
+11.6 postgres
+ 2.7 opencode.exe
+ 1.8 provjobd3410290
  1.3 Runner.Worker
- 0.7 cargo
+ 0.6 cargo
  0.2 Runner.Listener
  0.2 containerd
 --- kernel oom/kill
