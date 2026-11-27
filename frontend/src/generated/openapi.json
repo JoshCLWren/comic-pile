@@ -10573,7 +10573,7 @@
         "type": "object"
       },
       "NativeThreadResponse": {
-        "description": "Python `ThreadResponse`.",
+        "description": "The Python `ThreadResponse` projection every lifecycle writer returns.",
         "properties": {
           "blocking_reasons": {
             "items": {
@@ -10614,12 +10614,7 @@
               "null"
             ]
           },
-          "manual_creator_credits": {
-            "items": {
-              "type": "object"
-            },
-            "type": "array"
-          },
+          "manual_creator_credits": {},
           "next_unread_issue_id": {
             "format": "int32",
             "type": [
@@ -17549,6 +17544,47 @@
           "issues_remaining"
         ],
         "title": "ThreadCreate",
+        "type": "object"
+      },
+      "ThreadCreateRequest": {
+        "description": "Body of `POST /api/v1/threads/`.",
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "is_test": {
+            "type": "boolean"
+          },
+          "issues_remaining": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "manual_creator_credits": {
+            "items": {},
+            "type": "array"
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "title",
+          "format",
+          "issues_remaining"
+        ],
         "type": "object"
       },
       "ThreadDependenciesResponse": {
@@ -29541,6 +29577,47 @@
           }
         ],
         "summary": "Documentation-only operation used to emit the generated OpenAPI contract.",
+        "tags": [
+          "threads"
+        ]
+      },
+      "post": {
+        "description": "Create a thread at the end of the authenticated reader's queue. The created resource (including its stable `id`) is returned at 201 with a `Location` header naming the v2 collection member. The write preserves owner assignment, the five-second duplicate-merge guard and the Python validation envelope; it creates no Plan, dependency or issue rows.",
+        "operationId": "create_thread_v2_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThreadCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeThreadResponse"
+                }
+              }
+            },
+            "description": "Created (or the duplicate created seconds earlier)"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the AIP-133 standard Create on the v2\nthreads collection (#5702). The handler lives in `thread_lifecycle` and\nshares the legacy write path; only the URL and the `Location` response\nheader differ.",
         "tags": [
           "threads"
         ]
