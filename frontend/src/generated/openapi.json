@@ -10573,6 +10573,107 @@
         "type": "object"
       },
       "NativeThreadResponse": {
+        "description": "The Python `ThreadResponse` projection every lifecycle writer returns.",
+        "properties": {
+          "blocking_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_blocked": {
+            "type": "boolean"
+          },
+          "is_test": {
+            "type": "boolean"
+          },
+          "issues_remaining": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "last_activity_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "manual_creator_credits": {},
+          "next_unread_issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "next_unread_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "queue_position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "reading_progress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position",
+          "status",
+          "is_test",
+          "is_blocked",
+          "blocking_reasons",
+          "created_at",
+          "manual_creator_credits"
+        ],
+        "type": "object"
+      },
+      "NativeThreadResponse2": {
         "description": "Python `ThreadResponse`.",
         "properties": {
           "blocking_reasons": {
@@ -11983,6 +12084,22 @@
           "issues_to_add"
         ],
         "title": "ReactivateRequest",
+        "type": "object"
+      },
+      "ReactivateThreadRequest": {
+        "description": "Body of `POST /api/v2/threads/{thread_id}:reactivate`.",
+        "properties": {
+          "issues_to_add": {
+            "description": "Number of new unread issues to create for the completed series.",
+            "format": "int32",
+            "maximum": 10000,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "issues_to_add"
+        ],
         "type": "object"
       },
       "ReaderContextCrossover": {
@@ -22753,7 +22870,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeThreadResponse"
+                  "$ref": "#/components/schemas/NativeThreadResponse2"
                 }
               }
             },
@@ -22816,7 +22933,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeThreadResponse"
+                  "$ref": "#/components/schemas/NativeThreadResponse2"
                 }
               }
             },
@@ -29789,6 +29906,57 @@
         "summary": "Documentation-only operation for the delete/reorder structure preview.",
         "tags": [
           "issues"
+        ]
+      }
+    },
+    "/api/v2/threads/{thread_id}:reactivate": {
+      "post": {
+        "operationId": "reactivate_thread_v2",
+        "parameters": [
+          {
+            "description": "Identifier of the completed thread to reactivate",
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReactivateThreadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeThreadResponse"
+                }
+              }
+            },
+            "description": "Completed thread reactivated with the requested unread issues"
+          },
+          "400": {
+            "description": "Thread is not completed"
+          },
+          "404": {
+            "description": "Thread not found for this reader"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "tags": [
+          "threads"
         ]
       }
     },

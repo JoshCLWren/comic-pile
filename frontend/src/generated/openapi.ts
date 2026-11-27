@@ -3472,6 +3472,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/threads/{thread_id}:reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reactivate_thread_v2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/undo/{session_id}/snapshots": {
         parameters: {
             query?: never;
@@ -6899,8 +6915,35 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
-        /** @description Python `ThreadResponse`. */
+        /** @description The Python `ThreadResponse` projection every lifecycle writer returns. */
         NativeThreadResponse: {
+            blocking_reasons: string[];
+            created_at: string;
+            format: string;
+            /** Format: int32 */
+            id: number;
+            is_blocked: boolean;
+            is_test: boolean;
+            /** Format: int32 */
+            issues_remaining: number;
+            last_activity_at?: string | null;
+            /** Format: double */
+            last_rating?: number | null;
+            manual_creator_credits: unknown;
+            /** Format: int32 */
+            next_unread_issue_id?: number | null;
+            next_unread_issue_number?: string | null;
+            notes?: string | null;
+            /** Format: int32 */
+            queue_position: number;
+            reading_progress?: string | null;
+            status: string;
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
+        };
+        /** @description Python `ThreadResponse`. */
+        NativeThreadResponse2: {
             blocking_reasons: string[];
             created_at: string;
             format: string;
@@ -7419,6 +7462,14 @@ export interface components {
             issues_to_add: number;
             /** Thread Id */
             thread_id: number;
+        };
+        /** @description Body of `POST /api/v2/threads/{thread_id}:reactivate`. */
+        ReactivateThreadRequest: {
+            /**
+             * Format: int32
+             * @description Number of new unread issues to create for the completed series.
+             */
+            issues_to_add: number;
         };
         /** @description Python `ReaderContextCrossover`. */
         ReaderContextCrossover: {
@@ -12864,7 +12915,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeThreadResponse"];
+                    "application/json": components["schemas"]["NativeThreadResponse2"];
                 };
             };
             /** @description Already migrated or inconsistent range */
@@ -12926,7 +12977,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeThreadResponse"];
+                    "application/json": components["schemas"]["NativeThreadResponse2"];
                 };
             };
             /** @description Already migrated or issue cannot be created */
@@ -19070,6 +19121,54 @@ export interface operations {
             };
             /** @description Database temporarily unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reactivate_thread_v2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Identifier of the completed thread to reactivate */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReactivateThreadRequest"];
+            };
+        };
+        responses: {
+            /** @description Completed thread reactivated with the requested unread issues */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeThreadResponse"];
+                };
+            };
+            /** @description Thread is not completed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found for this reader */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
