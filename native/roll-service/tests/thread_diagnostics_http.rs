@@ -326,12 +326,7 @@ async fn blocking_info_reports_canonical_unread_blockers_with_isolation() {
     assert_eq!(status, StatusCode::NOT_FOUND);
     let (status, body) = send(
         &state,
-        post(
-            "/api/v1/threads/abc:getBlockingInfo",
-            &token,
-            &csrf,
-            None,
-        ),
+        post("/api/v1/threads/abc:getBlockingInfo", &token, &csrf, None),
     )
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
@@ -544,7 +539,11 @@ async fn eligibility_singleton_ignores_converted_edges_and_stale_blocked_flags()
 
     let (status, body) = send(
         &state,
-        get(&format!("/api/v2/threads/{blocked}/eligibility"), &token, &csrf),
+        get(
+            &format!("/api/v2/threads/{blocked}/eligibility"),
+            &token,
+            &csrf,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
@@ -555,18 +554,28 @@ async fn eligibility_singleton_ignores_converted_edges_and_stale_blocked_flags()
     assert_eq!(body["manual_read_now_allowed"], true);
     assert_eq!(body["blockers"][0]["kind"], "prerequisite");
     assert_eq!(body["blockers"][0]["origin"], "reader");
-    assert_eq!(body["blockers"][0]["waiting_on_issue_ids"], json!([blocker_issue]));
+    assert_eq!(
+        body["blockers"][0]["waiting_on_issue_ids"],
+        json!([blocker_issue])
+    );
 
     let (status, body) = send(
         &state,
-        get(&format!("/api/v2/threads/{healthy}/eligibility"), &token, &csrf),
+        get(
+            &format!("/api/v2/threads/{healthy}/eligibility"),
+            &token,
+            &csrf,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(body["eligible"], true);
     assert_eq!(body["state"], "available");
     assert_eq!(body["blockers"], json!([]));
-    assert_eq!(body["manual_read_now_allowed"], true, "converted edge is inert");
+    assert_eq!(
+        body["manual_read_now_allowed"], true,
+        "converted edge is inert"
+    );
 
     let foreign = thread(&conn, user2, "Foreign").await;
     for (who, csrf_for, id) in [(&token, &csrf, foreign), (&token2, &csrf2, blocked)] {

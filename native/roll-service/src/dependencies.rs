@@ -612,7 +612,10 @@ mod tests {
             assert!(sql.contains("tt.user_id = $2"), "target owner scope");
             assert!(sql.contains("JOIN issues si"), "source joins");
             assert!(sql.contains("JOIN threads st"), "source thread join");
-            assert!(sql.contains("d.origin = 'reader'"), "reader-authored edges only");
+            assert!(
+                sql.contains("d.origin = 'reader'"),
+                "reader-authored edges only"
+            );
             assert!(
                 sql.contains("d.note NOT LIKE 'cbl-order:%'"),
                 "inert history is not an authoring edge"
@@ -657,7 +660,11 @@ mod tests {
         let alpha = get_thread_dependencies(State(state.clone()), user, axum::extract::Path(31))
             .await
             .expect("alpha dependencies");
-        assert_eq!(alpha.0.blocking.len(), 1, "only the reader-authored edge is listed");
+        assert_eq!(
+            alpha.0.blocking.len(),
+            1,
+            "only the reader-authored edge is listed"
+        );
         assert!(alpha.0.blocking[0].target_label.as_deref() == Some("Beta #1"));
         let beta = get_thread_dependencies(State(state.clone()), user, axum::extract::Path(32))
             .await

@@ -1385,7 +1385,10 @@ mod tests {
             "/api/v1/threads:getBlockingInfo",
             "/api/v1/threads/{thread_id}/connected",
         ] {
-            assert!(document["paths"].get(retired).is_none(), "{retired} is retired");
+            assert!(
+                document["paths"].get(retired).is_none(),
+                "{retired} is retired"
+            );
         }
         let expected = include_str!("../../contracts/thread-ordering-v1.openapi.json");
         let generated = thread_ordering_openapi().to_pretty_json().unwrap();
