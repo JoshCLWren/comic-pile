@@ -8,17 +8,16 @@
 //! unread counts, tags, confirmed ComicVine mapping health and the confirmed
 //! provider series metadata that distinguishes same-titled runs.
 //!
-//! Two execution authorities are preserved from the Python service:
+//! The Reading List engine is the sole execution authority. It evaluates the
+//! reading graph in Rust and uses that result for grouping, availability,
+//! frontier and blocking reasons. It needs the bounded reading-order input
+//! snapshot in addition to the page statement.
 //!
-//! * Legacy (production default, `READING_LISTS_ENABLED` off) uses the stored
-//!   `threads.is_blocked` flag for readable/blocked grouping. Authentication,
-//!   the page, the whole-queue total, tags, mapping health and series identity
-//!   are one PostgreSQL statement, including the token's revocation and
-//!   credential-epoch check.
-//! * The owner-activated Reading List engine preview evaluates the reading graph in Rust
-//!   and uses that result for grouping, availability, frontier and blocking
-//!   reasons. It needs the bounded Reading List engine input snapshot in addition to the
-//!   page statement, so the default path is the only one-statement path.
+//! A stored `threads.is_blocked` compatibility flag remains in the v2 wire
+//! contract for the residual `legacy` reader projection, which deletion owners
+//! retire separately (#3677/#3678); it is not a selectable execution mode.
+//! Authentication, the page, the whole-queue total, tags, mapping health and
+//! series identity are resolved in the same owner-scoped statements.
 //!
 //! `POST /api/v2/threads` is the paired AIP-133 standard Create (#5702); its
 //! handler lives in `thread_lifecycle` and shares the legacy write path.

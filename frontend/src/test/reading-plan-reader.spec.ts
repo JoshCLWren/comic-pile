@@ -132,7 +132,7 @@ test.describe('Reading Plan reader surface', () => {
   })
 })
 
-// The ordinary lane proves disabled-mode safety; an enabled local fixture also proves strict execution.
+// The canonical engine is always active; this proves strict Julix execution on the ordinary lane.
 test('Reading List engine explains strict Julix blockers consistently and supports direct list reading', async ({ authenticatedPage: page }) => {
   const headers = await authHeaders(page)
   const first = await createThread(page, { title: 'Julix Dead Remembered', format: 'Comics', issues_remaining: 1, total_issues: 1 })
@@ -147,15 +147,14 @@ test('Reading List engine explains strict Julix blockers consistently and suppor
   expect(reader.ok(), await reader.text()).toBeTruthy()
   // SAFETY: the owned reader endpoint returns execution_mode; no other response fields are read.
   const projection = await reader.json() as { execution_mode: string }
-  expect(projection.execution_mode).toBe(process.env.READING_LISTS_EXPECTED_MODE ?? 'legacy')
-  const enabled = projection.execution_mode === 'reading_lists'
+  expect(projection.execution_mode).toBe('reading_lists')
   const dependency = await page.request.post('/api/v2/dependencies/', { headers, data: { source_type: 'issue', source_id: firstIssue, target_type: 'issue', target_id: laterIssue } })
   expect(dependency.ok(), await dependency.text()).toBeTruthy()
   const createPlan = await page.request.post('/api/v2/continuity-plans/', { headers, data: { name: 'Reader entry point', lanes: [{ id: 'main', name: 'Main', order: 0 }], nodes: [] } })
   expect(createPlan.ok(), await createPlan.text()).toBeTruthy()
   // SAFETY: successful plan creation returns a numeric id; this test reads only that id.
   const plan = await createPlan.json() as { id: number }
-  const reason = enabled ? 'Strict order in Julix strict acceptance: waiting on Julix Dead Remembered #1' : 'Blocked by Julix Dead Remembered: #1'
+  const reason = 'Strict order in Julix strict acceptance: waiting on Julix Dead Remembered #1'
 
   for (const width of [390, 768, 1280]) {
     await page.setViewportSize({ width, height: 900 })
@@ -175,13 +174,8 @@ test('Reading List engine explains strict Julix blockers consistently and suppor
     await page.getByRole('combobox', { name: 'Custom CBL', exact: true }).selectOption(String(list.id))
     await page.getByRole('button', { name: 'Read this list', exact: true }).click()
     const listReader = page.getByRole('region', { name: 'Read Julix strict acceptance', exact: true })
-    if (enabled) {
-      await expect(listReader).toContainText(reason)
-      await expect(listReader.getByRole('button', { name: 'Mark read', exact: true })).toHaveCount(1)
-    } else {
-      await expect(listReader).toContainText('Reading List execution is not active yet')
-      await expect(listReader.getByRole('button', { name: 'Mark read', exact: true })).toHaveCount(0)
-    }
+    await expect(listReader).toContainText(reason)
+    await expect(listReader.getByRole('button', { name: 'Mark read', exact: true })).toHaveCount(1)
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
     const theme = width === 390 ? 'classic' : width === 768 ? 'ink-gold' : 'command-center'
     await page.evaluate((name) => document.documentElement.setAttribute('data-theme', name), theme)

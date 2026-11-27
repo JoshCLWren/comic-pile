@@ -2161,11 +2161,11 @@ async fn set_pending_and_exclude_do_not_deadlock() {
     assert_eq!(e_status, StatusCode::OK, "exclude: {e_status} {e_body:?}");
 }
 
-/// Production fixture: `READING_LISTS_ENABLED` is unset, yet `set-pending` is
-/// authorized by canonical Reading List eligibility, never by the stored
-/// `is_blocked` flag and never by the retired Reading List engine 503 guard (#5525 A16/A17).
+/// Production fixture: `set-pending` is authorized by canonical Reading List
+/// eligibility, never by the stored `is_blocked` flag and never by a retired
+/// eligibility 503 guard (#5525 A16/A17). No deployment switch exists.
 #[tokio::test]
-async fn set_pending_uses_canonical_eligibility_with_reading_lists_unset() {
+async fn set_pending_uses_canonical_eligibility_without_a_deployment_switch() {
     let ctx = setup("lcpendcanon").await;
     let source = seed_thread(&ctx, ctx.user_id, "Prerequisite Series", "active", 1, 0).await;
     let source_issues = track(&ctx, source, &["unread"]).await;
@@ -2340,10 +2340,10 @@ async fn stale_rejects_invalid_parameters() {
     }
 }
 
-/// Production fixture (`READING_LISTS_ENABLED` unset): `stale` must not report a
-/// canonically blocked thread just because its stored flag is false (#5525 A16).
+/// Production fixture: `stale` must not report a canonically blocked thread just
+/// because its stored flag is false (#5525 A16). No deployment switch exists.
 #[tokio::test]
-async fn stale_uses_canonical_eligibility_with_reading_lists_unset() {
+async fn stale_uses_canonical_eligibility_without_a_deployment_switch() {
     let ctx = setup("lcstalecanon").await;
     let source = seed_thread(&ctx, ctx.user_id, "Prerequisite Series", "active", 1, 0).await;
     let source_issues = track(&ctx, source, &["unread"]).await;
