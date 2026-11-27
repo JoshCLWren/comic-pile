@@ -151,7 +151,7 @@ test.describe('ROLL-001: Roll selection', () => {
     const before = {
       bootstrap: ledger.count('GET', '/api/v2/roll/bootstrap'),
       movePatch: ledger.count('PATCH', `/api/v2/queue-entries/${beta.id}`),
-      sessionPost: ledger.count('POST', '/api/v2/reading-sessions'),
+      sessionPost: ledger.count('POST', '/api/v2/readingSessions'),
     }
 
     // Real move action: the second pool row moves to the front through the
@@ -171,9 +171,9 @@ test.describe('ROLL-001: Roll selection', () => {
     // queue-movement invalidation. The session was already resolved by the
     // cold Roll load, so the refresh is the read-only GET alone (#4276): the
     // retired explicit `refetchBootstrap()` used to append one more POST
-    // /v2/reading-sessions and one more GET /v2/roll/bootstrap per move.
+    // /v2/readingSessions and one more GET /v2/roll/bootstrap per move.
     expect(ledger.count('GET', '/api/v2/roll/bootstrap') - before.bootstrap).toBe(1)
-    expect(ledger.count('POST', '/api/v2/reading-sessions') - before.sessionPost).toBe(0)
+    expect(ledger.count('POST', '/api/v2/readingSessions') - before.sessionPost).toBe(0)
     expect(ledger.count('PATCH', `/api/v2/queue-entries/${beta.id}`) - before.movePatch).toBe(1)
   })
 
@@ -202,7 +202,7 @@ test.describe('ROLL-001: Roll selection', () => {
     const before = {
       bootstrap: ledger.count('GET', '/api/v2/roll/bootstrap'),
       orders: ledger.count('POST', '/api/v2/queue-orders'),
-      sessionPost: ledger.count('POST', '/api/v2/reading-sessions'),
+      sessionPost: ledger.count('POST', '/api/v2/readingSessions'),
     }
 
     // The pool header's whole-queue shuffle trigger, addressed by its unique
@@ -224,10 +224,10 @@ test.describe('ROLL-001: Roll selection', () => {
     // One whole-queue shuffle POST and one authoritative bootstrap refresh —
     // a refresh of the already-resolved session, so the read-only GET alone
     // (#4276). The retired explicit `refetchBootstrap()` after the mutation
-    // used to spend a second refresh (POST /v2/reading-sessions + GET
+    // used to spend a second refresh (POST /v2/readingSessions + GET
     // /v2/roll/bootstrap).
     expect(ledger.count('POST', '/api/v2/queue-orders') - before.orders).toBe(1)
     expect(ledger.count('GET', '/api/v2/roll/bootstrap') - before.bootstrap).toBe(1)
-    expect(ledger.count('POST', '/api/v2/reading-sessions') - before.sessionPost).toBe(0)
+    expect(ledger.count('POST', '/api/v2/readingSessions') - before.sessionPost).toBe(0)
   })
 })

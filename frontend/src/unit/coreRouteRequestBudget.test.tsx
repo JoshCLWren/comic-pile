@@ -479,7 +479,7 @@ describe('core route request budgets', () => {
 
   it('Roll initializes once, reads bootstrap once, and mounts the scoped header and pool', async () => {
     const { calls, client } = createRequestRecorder((call) => {
-      if (call.url === '/v2/reading-sessions') return { session_id: 1, created: false }
+      if (call.url === '/v2/readingSessions') return { session_id: 1, created: false }
       if (call.url === '/v2/roll/bootstrap') return bootstrap
       if (call.url === '/v2/roll/die-state') {
         return { die: 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 20, last_roll: null }
@@ -506,7 +506,7 @@ describe('core route request budgets', () => {
     // this budget proves the page mounts each query exactly once.
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
     expect(requestCounts(calls)).toEqual({
-      'POST /v2/reading-sessions': 1,
+      'POST /v2/readingSessions': 1,
       [`GET /v2/roll/bootstrap${timezone ? `?timezone=${timezone}` : ''}`]: 1,
       'GET /v2/roll/die-state': 1,
       'GET /v2/roll/eligible-issue-ids': 1,
@@ -620,7 +620,7 @@ describe('core route request budgets', () => {
         return { threads: [], next_page_token: null, active_count: 0 }
       }
       if (call.url === '/v2/reading-graph') return { status: 'ok' }
-      if (call.url === '/v2/reading-sessions') return { session_id: 1, created: false }
+      if (call.url === '/v2/readingSessions') return { session_id: 1, created: false }
       if (call.url === '/v2/roll/bootstrap') return rollV2BootstrapIdle
       return {}
     })
@@ -637,7 +637,7 @@ describe('core route request budgets', () => {
 
   it('Session detail cold-loads details and snapshots exactly once', async () => {
     const { calls, client } = createRequestRecorder((call) => {
-      if (call.url === '/v2/reading-sessions/7/details') {
+      if (call.url === '/v2/readingSessions/7/details') {
         return {
           session_id: 7,
           started_at: '2026-11-01T00:00:00Z',
@@ -649,7 +649,7 @@ describe('core route request budgets', () => {
           events: [],
         }
       }
-      if (call.url === '/v2/reading-sessions/7/snapshots') return { session_id: 7, snapshots: [] }
+      if (call.url === '/v2/readingSessions/7/snapshots') return { session_id: 7, snapshots: [] }
       return {}
     })
     setDefaultHttpClient(client)
@@ -664,13 +664,13 @@ describe('core route request budgets', () => {
     )
 
     await waitFor(() =>
-      expect(calls.some((call) => call.url === '/v2/reading-sessions/7/snapshots')).toBe(true),
+      expect(calls.some((call) => call.url === '/v2/readingSessions/7/snapshots')).toBe(true),
     )
     await drainSettledWork()
 
     expect(requestCounts(calls)).toEqual({
-      'GET /v2/reading-sessions/7/details': 1,
-      'GET /v2/reading-sessions/7/snapshots': 1,
+      'GET /v2/readingSessions/7/details': 1,
+      'GET /v2/readingSessions/7/snapshots': 1,
     })
     expect(screen.queryByRole('button', { name: /restore start/i })).not.toBeInTheDocument()
     expect(calls.filter((call) => call.url.includes('restore-session-start'))).toEqual([])
@@ -681,7 +681,7 @@ describe('core route request budgets', () => {
     // satisfies the v2 queue-entry patch contract for this probe.
     const { calls, client } = createRequestRecorder((call) => {
       if (call.url === '/v2/roll/bootstrap') return rollV2Bootstrap
-      if (call.url === '/v2/reading-sessions') return { session_id: 1, created: false }
+      if (call.url === '/v2/readingSessions') return { session_id: 1, created: false }
       return {}
     })
     setDefaultHttpClient(client)
@@ -719,7 +719,7 @@ describe('core route request budgets', () => {
 
     expect(countRequests(calls, 'PATCH', `/v2/queue-entries/${poolThread.id}`)).toBe(1)
     expect(countRequests(calls, 'GET', '/v2/roll/bootstrap')).toBe(1)
-    expect(countRequests(calls, 'POST', '/v2/reading-sessions')).toBe(1)
+    expect(countRequests(calls, 'POST', '/v2/readingSessions')).toBe(1)
   })
 
   it('Queue row native reroll replaces Python snooze with one bounded refresh (#4589)', async () => {
@@ -731,7 +731,7 @@ describe('core route request budgets', () => {
         return { threads: [], next_page_token: null, active_count: 0 }
       }
       if (call.url === '/v2/roll/offer') return { ...stubRollResponse }
-      if (call.url === '/v2/reading-sessions') return { session_id: 1, created: false }
+      if (call.url === '/v2/readingSessions') return { session_id: 1, created: false }
       if (call.url === '/v2/roll/bootstrap') return rollV2BootstrapIdle
       return {}
     })
@@ -757,7 +757,7 @@ describe('core route request budgets', () => {
     expect(countRequests(calls, 'POST', '/v2/roll/offer')).toBe(1)
     expect(countRequests(calls, 'POST', '/v1/snooze/')).toBe(0)
     expect(countRequests(calls, 'GET', '/v1/sessions/current/')).toBe(0)
-    expect(countRequests(calls, 'POST', '/v2/reading-sessions')).toBe(0)
+    expect(countRequests(calls, 'POST', '/v2/readingSessions')).toBe(0)
     expect(countRequests(calls, 'GET', '/v2/roll/bootstrap')).toBe(0)
     // One bounded queue-page refresh after the reset (cold + reconciled first page).
     expect(countRequests(calls, 'GET', '/v2/threads')).toBe(2)

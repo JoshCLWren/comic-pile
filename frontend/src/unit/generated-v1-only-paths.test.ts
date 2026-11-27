@@ -38,8 +38,10 @@ describe('generated OpenAPI client surface', () => {
       '/api/v2/roll/override',
       '/api/v2/roll/dismiss-pending',
       '/api/v2/roll/switch-prerequisite',
-      '/api/v2/reading-sessions/{session_id}/details',
-      '/api/v2/reading-sessions/{session_id}/snapshots',
+      '/api/v2/readingSessions',
+      '/api/v2/readingSessions/{session_id}',
+      '/api/v2/readingSessions/{session_id}/details',
+      '/api/v2/readingSessions/{session_id}/snapshots',
     ]) {
       expect(paths).toContain(path)
     }

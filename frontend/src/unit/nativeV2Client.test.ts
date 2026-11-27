@@ -64,7 +64,7 @@ const clientCases: ClientCase[] = [
     name: 'initializes a reading session',
     invoke: (client) => client.initializeSession({ body: { timezone: 'UTC' } }),
     method: 'post',
-    expectedArgs: ['/v2/reading-sessions', { timezone: 'UTC' }],
+    expectedArgs: ['/v2/readingSessions', { timezone: 'UTC' }],
   },
   {
     name: 'reads issue cards in a bounded batch',
