@@ -803,24 +803,6 @@ export type ListThreadReadingOrdersResponse = components['schemas']['ThreadReadi
 
 export interface ListThreadsRequest {
   query?: {
-    status?: string
-    page_size?: number
-    page_token?: string
-  }
-}
-
-export type ListThreadIssuesV2Response = components['schemas']['ThreadIssueListResponse']
-
-export interface ListThreadReadingOrdersRequest {
-  path: {
-    thread_id: number
-  }
-}
-
-export type ListThreadReadingOrdersResponse = components['schemas']['ThreadReadingOrdersResponse']
-
-export interface ListThreadsRequest {
-  query?: {
     filter?: string
     order_by?: string
     sort?: string
