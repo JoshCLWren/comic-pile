@@ -102,6 +102,14 @@ export function DirectReadIssuePanel({
   const canShowEditor = issue?.status !== 'read' || card != null
   const lookup = preferredIssueId == null ? nextUnread : preferredIssue
   const choices = browse.data?.pages.flatMap((page) => page.issues) ?? []
+  // The opt-in picker lists exact owned issues too. One bounded batch serves
+  // all visible choices; collapsed rows issue no provider or card request.
+  const browseIssueIds = useMemo(() => choices.map((candidate) => candidate.id), [choices])
+  const browseCards = useIssueCards(browseIssueIds, { enabled: browseOpen })
+  const browseCardsByIssue = useMemo(
+    () => indexIssueCards(browseCards.data),
+    [browseCards.data],
+  )
 
   return (
     <section className="space-y-3" data-testid="direct-read-issue-panel">
@@ -213,17 +221,29 @@ export function DirectReadIssuePanel({
           )}
           <div className="max-h-64 space-y-1 overflow-y-auto" role="group" aria-label="Owned issues">
             {choices.map((candidate) => (
-              <button
+              <div
                 key={candidate.id}
-                type="button"
-                onClick={() => {
-                  setSelectedIssue(candidate)
-                  setBrowseOpen(false)
-                }}
-                className="block min-h-11 w-full rounded-lg border border-[var(--theme-border)] px-3 text-left text-sm hover:bg-[var(--theme-bg-hover)]"
+                className="space-y-1 rounded-lg border border-[var(--theme-border)] px-3 py-2"
               >
-                {threadTitle} #{candidate.issue_number} ({candidate.status})
-              </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedIssue(candidate)
+                    setBrowseOpen(false)
+                  }}
+                  className="block min-h-11 w-full text-left text-sm hover:bg-[var(--theme-bg-hover)]"
+                >
+                  {threadTitle} #{candidate.issue_number} ({candidate.status})
+                </button>
+                <CompactIssueCardTrigger
+                  issueId={candidate.id}
+                  threadTitle={threadTitle}
+                  issueNumber={String(candidate.issue_number)}
+                  status={candidate.status === 'read' ? 'read' : 'unread'}
+                  card={browseCardsByIssue.get(candidate.id) ?? null}
+                  hideTitle
+                />
+              </div>
             ))}
           </div>
           {browse.hasNextPage && (
