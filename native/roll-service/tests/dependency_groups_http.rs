@@ -941,3 +941,91 @@ async fn delete_group_serializes_with_sibling_issue_write() {
     );
     assert_eq!(d_status, StatusCode::NO_CONTENT, "{d_status} {d_body:?}");
 }
+
+/// The v2 collection CRUD is the only group collection authority (#5710):
+/// validation and conflict semantics survive the path change, and the retired
+/// v1 collection/Get/detail paths plus a v2 `/detail` action all 404.
+#[tokio::test]
+async fn reading_order_groups_v2_crud_validates_and_retires_v1_collection() {
+    let (state, token, csrf, _user_id, _guard) = setup_user("rog-v2-crud").await;
+
+    for blank in ["", "   \t"] {
+        let (status, body) = send(
+            &state,
+            authed(
+                "POST",
+                "/api/v2/readingOrderGroups",
+                &token,
+                &csrf,
+                Some(json!({"name": blank})),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body:?}");
+        assert_eq!(body, json!({"detail": "Validation failed"}));
+    }
+
+    let (status, body) = send(
+        &state,
+        authed(
+            "POST",
+            "/api/v2/readingOrderGroups",
+            &token,
+            &csrf,
+            Some(json!({"name": "  Cosmic Clash  "})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{body:?}");
+    assert_eq!(body["name"], json!("Cosmic Clash"));
+    let group_id = body["id"].as_i64().unwrap();
+
+    let (status, body) = send(
+        &state,
+        authed(
+            "POST",
+            "/api/v2/readingOrderGroups",
+            &token,
+            &csrf,
+            Some(json!({"name": "Cosmic Clash"})),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body:?}");
+    assert_eq!(body["detail"], json!("A group with this name already exists"));
+
+    let (status, body) = send(
+        &state,
+        authed("GET", "/api/v2/readingOrderGroups", &token, &csrf, None),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body.as_array().unwrap().len(), 1);
+
+    for retired in [
+        "/api/v1/reading-order-groups/",
+        "/api/v1/reading-order-groups/1",
+        "/api/v1/reading-order-groups/1/detail",
+        "/api/v2/readingOrderGroups/1/detail",
+    ] {
+        let (status, _) = send(&state, authed("GET", retired, &token, &csrf, None)).await;
+        assert_eq!(
+            status,
+            StatusCode::NOT_FOUND,
+            "retired group path must 404: {retired}"
+        );
+    }
+
+    let (status, _) = send(
+        &state,
+        authed(
+            "DELETE",
+            &format!("/api/v2/readingOrderGroups/{group_id}"),
+            &token,
+            &csrf,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}

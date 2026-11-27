@@ -2296,6 +2296,110 @@ mod tests {
         assert_eq!(ApiError::status(&error), StatusCode::NOT_FOUND);
     }
 
+    /// The v2 CRUD surface keeps the owner scope and folds the enriched detail
+    /// view into canonical Get (#5710).
+    #[tokio::test]
+    async fn v2_group_crud_is_owner_scoped_and_folds_detail() {
+        let _guard = DB_LOCK.lock().await;
+        let state = test_state().await;
+        crate::test_support::reset(&state).await;
+
+        let connection = crate::db::checkout(&state).await.expect("seed connection");
+        for user_id in [7_i32, 8_i32] {
+            connection
+                .execute(
+                    "INSERT INTO users (id, username) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                    &[&user_id, &format!("reader-{user_id}")],
+                )
+                .await
+                .expect("seed user");
+        }
+        connection
+            .execute(
+                "INSERT INTO dependency_groups (id, user_id, name, created_at) \
+                 VALUES (101, 7, 'Crossover', now())",
+                &[],
+            )
+            .await
+            .expect("seed group");
+        connection
+            .execute(
+                "INSERT INTO threads (id, user_id, title, format, issues_remaining, status, queue_position) \
+                 VALUES (11, 7, 'Series', 'Comic', 1, 'active', 1)",
+                &[],
+            )
+            .await
+            .expect("seed thread");
+        connection
+            .execute(
+                "INSERT INTO dependency_group_memberships (id, group_id, thread_id) \
+                 VALUES (201, 101, 11)",
+                &[],
+            )
+            .await
+            .expect("seed membership");
+        drop(connection);
+
+        let detail = get_group_v2(
+            State(state.clone()),
+            AuthenticatedUser::for_test(7),
+            Ok(Path("101".to_string())),
+        )
+        .await
+        .expect("owned v2 Get");
+        assert_eq!(detail.0.name, "Crossover");
+        assert_eq!(detail.0.memberships.len(), 1);
+        assert!(detail.0.linked_plans.is_empty());
+
+        let foreign_get = get_group_v2(
+            State(state.clone()),
+            AuthenticatedUser::for_test(8),
+            Ok(Path("101".to_string())),
+        )
+        .await
+        .expect_err("foreign Get must be hidden");
+        assert_eq!(ApiError::status(&foreign_get), StatusCode::NOT_FOUND);
+
+        let foreign_patch = update_group_v2(
+            State(state.clone()),
+            AuthenticatedUser::for_test(8),
+            Ok(Path("101".to_string())),
+            Ok(Json(DependencyGroupUpdateRequest {
+                name: "Stolen".to_string(),
+            })),
+        )
+        .await
+        .expect_err("foreign PATCH must be hidden");
+        assert_eq!(ApiError::status(&foreign_patch), StatusCode::NOT_FOUND);
+
+        let foreign_delete = delete_group_v2(
+            State(state.clone()),
+            AuthenticatedUser::for_test(8),
+            Ok(Path("101".to_string())),
+        )
+        .await
+        .expect_err("foreign DELETE must be hidden");
+        assert_eq!(ApiError::status(&foreign_delete), StatusCode::NOT_FOUND);
+
+        let deleted = delete_group_v2(
+            State(state.clone()),
+            AuthenticatedUser::for_test(7),
+            Ok(Path("101".to_string())),
+        )
+        .await
+        .expect("owned DELETE");
+        assert_eq!(deleted, StatusCode::NO_CONTENT);
+
+        let missing = get_group_v2(
+            State(state),
+            AuthenticatedUser::for_test(7),
+            Ok(Path("101".to_string())),
+        )
+        .await
+        .expect_err("deleted group must be gone");
+        assert_eq!(ApiError::status(&missing), StatusCode::NOT_FOUND);
+    }
+
     #[test]
     fn inclusive_range_size_does_not_overflow_i32_bounds() {
         assert_eq!(inclusive_range_size(1, 250), 250);
