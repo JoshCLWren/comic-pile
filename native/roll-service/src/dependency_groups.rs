@@ -987,7 +987,10 @@ pub async fn get_group(
     Ok(Json(response))
 }
 
-/// `GET /api/v1/reading-order-groups/{group_id}/detail`
+/// Canonical group detail payload used by the v2 GET handler.
+///
+/// The legacy `/api/v1/reading-order-groups/{group_id}/detail` path is retired;
+/// v2 folds detail into `GET /api/v2/readingOrderGroups/{group_id}`.
 pub async fn get_group_detail(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
