@@ -21,13 +21,13 @@ operation is served by the native Rust ingress `api/native_roll.rs`
 (`vercel.json` routes `/api(?:/.*)?` to it). There is no Python-runtime
 exception, parity oracle, or "Python stays mounted" hold on this surface.
 
-There are 27 retained `/api/v1` operations, all served by native Rust, in three
+There are 22 retained `/api/v1` operations, all served by native Rust, in three
 groups:
 
 | Group | Retained v1 operations | Target v2 resource |
 |-------|------------------------|--------------------|
 | Stateless previews | 3 (`POST /api/v1/catalog/series-mappings/preview`, `POST /api/v1/continuity-plans/{plan_id}/reading-orders/project-preview`, `POST /api/v1/issue-identity/cbl/{list_id}/reading-graph-preview`) | stateless v2 preview operations (#5714, #5715, #5716) |
-| Reading-order groups | 12 (`/api/v1/reading-order-groups…` collection, item, detail, issue-ranges, members, order, plans, and thread-group lookups) | `/api/v2/readingOrderGroups…` and memberships/ranges (#5710, #5711) |
+| Reading-order groups | 7 (`GET/POST /api/v1/reading-order-groups/`, `GET/PATCH/DELETE /api/v1/reading-order-groups/{group_id}`, `GET /api/v1/reading-order-groups/{group_id}/detail`, `PUT /api/v1/reading-order-groups/{group_id}/order`) | `/api/v2/readingOrderGroups…` and memberships/ranges (#5710 retired collection CRUD, #5711 retains order) |
 | Threads | 12 (`/api/v1/threads…` create, check-duplicates, excluded, reactivate, stale, item PATCH/DELETE, exclude, restore, set-pending, test-backdate, issues/creators) | `GET/POST/PATCH/DELETE /api/v2/threads…` (#5701, #5703, #5704, #5705, #5706) |
 
 `docs/api/v2-route-inventory.json` is authoritative for the exact
