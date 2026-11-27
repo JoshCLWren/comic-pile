@@ -129,8 +129,9 @@ interface ThreadPoolMockProps {
   onShuffle: () => void
   onUnsnooze: () => void
   onToggleSnoozed: () => void
+  presentation?: { dieSlot?: React.ReactNode }
 }
-vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: (props: ThreadPoolMockProps) => <div><button onClick={() => props.onThreadClick({ id: 1, title: 'Saga', format: 'Comic' })}>thread</button><button onClick={props.onShuffle}>shuffle pool</button><button onClick={props.onUnsnooze}>unsnooze</button><button onClick={props.onToggleSnoozed}>toggle snoozed</button></div> }))
+vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: (props: ThreadPoolMockProps) => <div>{props.presentation?.dieSlot}<button onClick={() => props.onThreadClick({ id: 1, title: 'Saga', format: 'Comic' })}>thread</button><button onClick={props.onShuffle}>shuffle pool</button><button onClick={props.onUnsnooze}>unsnooze</button><button onClick={props.onToggleSnoozed}>toggle snoozed</button></div> }))
 interface RatingViewMockData {
   activeRatingThread: { title?: string; issue_number?: string | null } | null
   errorMessage: string
