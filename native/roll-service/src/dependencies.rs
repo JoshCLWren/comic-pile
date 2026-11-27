@@ -369,7 +369,7 @@ pub async fn delete_dependency(
     Ok(Json(serde_json::json!({"message": "Dependency deleted"})))
 }
 
-/// `GET /api/v2/threads/{thread_id}/dependencies`
+/// `GET /api/v1/threads/{thread_id}/dependencies`
 ///
 /// Lists dependencies where this thread blocks others (`blocking`) and where
 /// it is blocked (`blocked_by`). Owner-scoped: a missing or foreign thread is
@@ -477,12 +477,12 @@ pub fn create_dependency_documentation() {}
 #[allow(dead_code)]
 pub fn delete_dependency_documentation() {}
 
-/// Documentation-only operation for the mounted v2 thread-dependencies read.
+/// Documentation-only operation for the mounted thread-dependencies read.
 #[utoipa::path(
     get,
-    path = "/api/v2/threads/{thread_id}/dependencies",
+    path = "/api/v1/threads/{thread_id}/dependencies",
     tag = "dependencies",
-    description = "List reader-authored dependency edges where one thread blocks others and where it is blocked: {blocking, blocked_by} of enriched DependencyResponse entries ordered by dependency id. Converted historical edges are excluded; owner-scoped and 404 for a missing or foreign thread.",
+    description = "List owner-scoped dependency edges where one thread blocks others and where it is blocked. Wire parity with Python GET /api/v1/threads/{thread_id}/dependencies: {blocking, blocked_by} of enriched DependencyResponse entries ordered by dependency id.",
     params(
         ("thread_id" = i32, Path, description = "Owned thread identifier")
     ),

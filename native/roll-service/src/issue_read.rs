@@ -176,7 +176,7 @@ pub async fn get_issue_dependencies(
     }))
 }
 
-/// `GET /api/v2/threads/{thread_id}/issueDependencies` — bounded issue-edge batch.
+/// `GET /api/v1/threads/{thread_id}/issue-dependencies` — bounded issue-edge batch.
 pub async fn get_thread_issue_dependencies(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -567,12 +567,12 @@ pub fn get_issue_documentation() {}
 #[allow(dead_code)]
 pub fn get_issue_dependencies_documentation() {}
 
-/// Documentation-only operation for the mounted v2 thread issue-edge batch read.
+/// Documentation-only operation for the mounted thread issue-dependencies batch read.
 #[utoipa::path(
     get,
-    path = "/api/v2/threads/{thread_id}/issueDependencies",
+    path = "/api/v1/threads/{thread_id}/issue-dependencies",
     tag = "dependencies",
-    description = "Return dependency edges for every issue in one owner-scoped thread. Issues are ordered by position and id, incoming/outgoing edges are ordered by dependency id, and foreign endpoints are omitted. One bounded batch: no per-issue round trips.",
+    description = "Return dependency edges for every issue in one owner-scoped thread. Wire parity with Python: issues are ordered by position and id, incoming/outgoing edges are ordered by dependency id, and foreign endpoints are omitted.",
     params(("thread_id" = i32, Path, description = "Owned thread identifier")),
     responses(
         (status = 200, description = "Thread issue dependencies", body = ThreadIssueDependenciesResponse),
@@ -798,7 +798,7 @@ mod tests {
             "/api/v2/issues/7",
             "/api/v1/issues/7/comicvine",
             "/api/v2/issues/7/dependencies",
-            "/api/v2/threads/7/issueDependencies",
+            "/api/v1/threads/7/issue-dependencies",
             "/api/v1/threads/7/issues",
         ] {
             let response = app

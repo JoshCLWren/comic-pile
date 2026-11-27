@@ -1,19 +1,21 @@
-//! Rust cutover for the browser-called thread ordering and
-//! dependency-inspection reads (#4832 part B; v2 diagnostics #5709).
+//! Same-path Rust cutover for the browser-called thread ordering and
+//! dependency-inspection reads (#4832, part B).
 //!
-//! The diagnostic reads are v2-only: eligibility, batch explanations and
-//! connections replaced the retired v1 `getBlockingInfo`/`connected` URLs.
-//! The remaining same-path reads keep their frozen Python wire contract:
+//! Preserves the frozen Python wire contract (the oracle is
+//! `app/api/dependency.py`, `app/api/issue.py`, `app/api/reading_orders.py`,
+//! `app/services/dependency_service.py`, `comic_pile/dependencies.py` and
+//! `app/services/reading_order_service.py`) at the identical HTTP methods and
+//! paths:
 //!
-//! * `GET /api/v2/threads/{thread_id}/eligibility`
-//! * `POST /api/v2/threads:explainEligibility`
-//! * `GET /api/v2/threads/{thread_id}/connections`
-//! * `GET /api/v1/threads/{thread_id}/dependency-order-check`
-//! * `GET /api/v1/threads/{thread_id}/issues:validateOrder`
-//! * `GET /api/v1/threads/{thread_id}/reading-orders`
+//! * `POST /api/v1/threads/{thread_id}:getBlockingInfo`
+//! * `POST /api/v1/threads:getBlockingInfo`
+//! * `GET  /api/v1/threads/{thread_id}/connected`
+//! * `GET  /api/v1/threads/{thread_id}/dependency-order-check`
+//! * `GET  /api/v1/threads/{thread_id}/issues:validateOrder`
+//! * `GET  /api/v1/threads/{thread_id}/reading-orders`
 //!
-//! All six are reads (the batch explanation POST is an idempotent
-//! query), so there are no transactions or side effects to preserve; each
+//! All six are reads (the two `getBlockingInfo` POSTs are idempotent
+//! queries), so there are no transactions or side effects to preserve; each
 //! handler is owner-scoped on every statement.
 //!
 //! Parity notes:
@@ -357,21 +359,12 @@ fn describe_origin(
     format!("{kind} in {list}")
 }
 
-/// (eligible, is_blocked, next_issue_id, blocking_reasons, blocking_dependencies)
-type CanonicalExplanation = (
-    bool,
-    bool,
-    Option<i32>,
-    Vec<String>,
-    Vec<BlockingDependency>,
-);
-
 fn build_canonical_explanation(
     thread_state: Option<&crate::reading_constraints::ThreadEligibility>,
     thread_titles: &HashMap<i32, &str>,
     issues: &HashMap<i32, (i32, &str)>,
     list_names: &HashMap<i32, String>,
-) -> Result<CanonicalExplanation, ApiError> {
+) -> Result<(bool, bool, Option<i32>, Vec<String>, Vec<BlockingDependency>), ApiError> {
     let mut reasons = Vec::new();
     let mut dependencies = Vec::new();
     let Some(thread_state) = thread_state else {
@@ -562,8 +555,7 @@ fn parse_batch_thread_ids(body: &[u8]) -> Result<Vec<i64>, ApiError> {
     Ok(ids)
 }
 
-/// Retired v1 batch blocking handler, retained only for wire-parity tests;
-/// the routed equivalent is `POST /api/v2/threads:explainEligibility`.
+/// Serve `POST /api/v1/threads:getBlockingInfo`.
 pub async fn get_threads_blocking_info(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -909,8 +901,7 @@ fn dependency_rows(rows: &[tokio_postgres::Row]) -> Vec<DependencyRow> {
         .collect()
 }
 
-/// Owner-scoped connected-threads reader behind
-/// `GET /api/v2/threads/{thread_id}/connections`.
+/// Serve `GET /api/v1/threads/{thread_id}/connected`.
 pub async fn get_thread_connected_threads(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,

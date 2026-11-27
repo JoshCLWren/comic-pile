@@ -996,6 +996,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/{thread_id}/connected": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for connected threads. */
+        get: operations["thread_ordering_connected_threads"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{thread_id}/dependencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documentation-only operation for the mounted thread-dependencies read.
+         * @description List owner-scoped dependency edges where one thread blocks others and where it is blocked. Wire parity with Python GET /api/v1/threads/{thread_id}/dependencies: {blocking, blocked_by} of enriched DependencyResponse entries ordered by dependency id.
+         */
+        get: operations["get_thread_dependencies_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/{thread_id}/dependency-order-check": {
         parameters: {
             query?: never;
@@ -1030,6 +1067,26 @@ export interface paths {
          *         HTTPException: 404 when not found; 400 when thread is not active.
          */
         post: operations["exclude_thread_api_v1_threads__thread_id__exclude_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads/{thread_id}/issue-dependencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documentation-only operation for the mounted thread issue-dependencies batch read.
+         * @description Return dependency edges for every issue in one owner-scoped thread. Wire parity with Python: issues are ordered by position and id, incoming/outgoing edges are ordered by dependency id, and foreign endpoints are omitted.
+         */
+        get: operations["get_thread_issue_dependencies_documentation"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1197,6 +1254,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/threads/{thread_id}:getBlockingInfo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the single-thread blocking explanation. */
+        post: operations["thread_ordering_get_blocking_info"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/threads/{thread_id}:migrateToIssues": {
         parameters: {
             query?: never;
@@ -1242,6 +1316,23 @@ export interface paths {
         put?: never;
         /** Documentation-only operation for correcting the current issue. */
         post: operations["thread_issues_set_current"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/threads:getBlockingInfo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the batch blocking explanation. */
+        post: operations["thread_ordering_get_threads_blocking_info"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3301,60 +3392,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/threads/{thread_id}/connections": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Documentation-only operation for v2 connected threads. */
-        get: operations["thread_connections_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v2/threads/{thread_id}/dependencies": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Documentation-only operation for the mounted v2 thread-dependencies read.
-         * @description List reader-authored dependency edges where one thread blocks others and where it is blocked: {blocking, blocked_by} of enriched DependencyResponse entries ordered by dependency id. Converted historical edges are excluded; owner-scoped and 404 for a missing or foreign thread.
-         */
-        get: operations["get_thread_dependencies_documentation"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v2/threads/{thread_id}/eligibility": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Documentation-only operation for v2 thread eligibility. */
-        get: operations["thread_eligibility_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v2/threads/{thread_id}/issue-order": {
         parameters: {
             query?: never;
@@ -3368,26 +3405,6 @@ export interface paths {
          * @description Replace the complete issue order atomically. The projected Option E graph is validated before commit, so a manual reorder cannot introduce a strict-list/series-order cycle.
          */
         put: operations["issue_order_documentation"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v2/threads/{thread_id}/issueDependencies": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Documentation-only operation for the mounted v2 thread issue-edge batch read.
-         * @description Return dependency edges for every issue in one owner-scoped thread. Issues are ordered by position and id, incoming/outgoing edges are ordered by dependency id, and foreign endpoints are omitted. One bounded batch: no per-issue round trips.
-         */
-        get: operations["get_thread_issue_dependencies_documentation"];
-        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -3449,23 +3466,6 @@ export interface paths {
          * @description Preview a delete or reorder edit before commit. Returns exact before/after issues, list memberships, read/rating/identity state, affected Queue/Roll frontier, duplicate risk and projected graph conflicts.
          */
         post: operations["preview_issue_structure_documentation"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v2/threads:explainEligibility": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Documentation-only operation for v2 batch eligibility explanation. */
-        post: operations["threads_explain_eligibility"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3775,14 +3775,6 @@ export interface components {
         /** @description Python `BatchBlockingExplanationResponse`. */
         BatchBlockingExplanationResponse: {
             threads: components["schemas"]["OrderedExplanations"];
-        };
-        /** @description v2 `POST /api/v2/threads:explainEligibility` request. */
-        BatchEligibilityRequest: {
-            thread_ids: number[];
-        };
-        /** @description v2 `POST /api/v2/threads:explainEligibility` response. */
-        BatchEligibilityResponse: {
-            threads: components["schemas"]["OrderedEligibilityExplanations"];
         };
         /** @enum {string} */
         BlockerKind: "strict_order" | "hold" | "after_previous" | "prerequisite" | "reading_cycle";
@@ -6942,10 +6934,6 @@ export interface components {
             normalized_name: string;
             scope: string;
         };
-        /** @description Ordered `thread_id -> eligibility` object, preserving request order. */
-        OrderedEligibilityExplanations: {
-            [key: string]: components["schemas"]["ThreadEligibilityResponse"];
-        };
         /** @description Ordered `thread_id -> explanation` object (Python `dict[int, ...]`). */
         OrderedExplanations: {
             [key: string]: components["schemas"]["BlockingExplanation"];
@@ -9286,17 +9274,6 @@ export interface components {
             title: string;
             /** Format: int32 */
             total_issues?: number | null;
-        };
-        /** @description v2 derived singleton: canonical eligibility for one thread. */
-        ThreadEligibilityResponse: {
-            blocking_dependencies: components["schemas"]["BlockingDependency"][];
-            blocking_reasons: string[];
-            eligible: boolean;
-            is_blocked: boolean;
-            /** Format: int32 */
-            next_issue_id?: number | null;
-            /** Format: int32 */
-            thread_id: number;
         };
         /** @description Newly created issues (Python `IssueListResponse`). Named distinctly from the v2 `IssueListResponse` so merged contracts never collide. */
         ThreadIssueCreateListResponse: {
@@ -12153,6 +12130,101 @@ export interface operations {
             };
         };
     };
+    thread_ordering_connected_threads: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Threads connected through dependencies */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadConnectedResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_thread_dependencies_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thread dependencies */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadDependenciesResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     thread_ordering_dependency_order_check: {
         parameters: {
             query?: never;
@@ -12232,6 +12304,50 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    get_thread_issue_dependencies_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thread issue dependencies */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThreadIssueDependenciesResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -12675,6 +12791,57 @@ export interface operations {
             };
         };
     };
+    thread_ordering_get_blocking_info: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Blocked status and reasons */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockingExplanation"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     thread_issues_migrate: {
         parameters: {
             query?: never;
@@ -12839,6 +13006,58 @@ export interface operations {
                 content?: never;
             };
             /** @description Thread or issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    thread_ordering_get_threads_blocking_info: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchBlockingExplanationRequest"];
+            };
+        };
+        responses: {
+            /** @description Blocking explanations keyed by thread id */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchBlockingExplanationResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description One or more threads not found */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -18619,152 +18838,6 @@ export interface operations {
             };
         };
     };
-    thread_connections_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Owned Thread identifier */
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Threads connected through dependencies */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ThreadConnectedResponse"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Thread not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request validation failed */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    get_thread_dependencies_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Owned thread identifier */
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Thread dependencies */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ThreadDependenciesResponse"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Thread not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    thread_eligibility_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Owned Thread identifier */
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Canonical thread eligibility */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ThreadEligibilityResponse"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Thread not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request validation failed */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     issue_order_documentation: {
         parameters: {
             query?: never;
@@ -18811,50 +18884,6 @@ export interface operations {
             };
             /** @description Projected reading graph would cycle; nothing was changed */
             409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    get_thread_issue_dependencies_documentation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Owned thread identifier */
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Thread issue dependencies */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ThreadIssueDependenciesResponse"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Thread not found */
-            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19034,58 +19063,6 @@ export interface operations {
             };
             /** @description Thread or issue not found */
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    threads_explain_eligibility: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["BatchEligibilityRequest"];
-            };
-        };
-        responses: {
-            /** @description Canonical eligibility explanations keyed by thread id */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BatchEligibilityResponse"];
-                };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description One or more threads not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request validation failed */
-            422: {
                 headers: {
                     [name: string]: unknown;
                 };
