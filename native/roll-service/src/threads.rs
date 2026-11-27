@@ -1741,10 +1741,7 @@ fn cursor_clause(sort: &str, cursor: Option<&QueueCursor>) -> (String, Vec<Param
 #[openapi(
     paths(
         list_threads_documentation,
-<<<<<<< HEAD
         get_thread_v2_documentation,
-=======
->>>>>>> origin/main
         create_thread_v2_documentation,
         list_completed_threads_documentation
     ),
@@ -1805,7 +1802,6 @@ impl utoipa::Modify for ThreadsSecurityAddon {
 #[allow(dead_code)]
 pub(crate) fn list_threads_documentation() {}
 
-<<<<<<< HEAD
 /// Standard resource Get for one owned Thread.
 #[utoipa::path(
     get,
@@ -1822,8 +1818,6 @@ pub(crate) fn list_threads_documentation() {}
 #[allow(dead_code)]
 pub(crate) fn get_thread_v2_documentation() {}
 
-=======
->>>>>>> origin/main
 /// Documentation-only operation for the AIP-133 standard Create on the v2
 /// threads collection (#5702). The handler lives in `thread_lifecycle` and
 /// shares the legacy write path; only the URL and the `Location` response
