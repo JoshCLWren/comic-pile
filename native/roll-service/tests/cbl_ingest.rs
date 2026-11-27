@@ -109,7 +109,9 @@ async fn apply(
 ) -> comicpile_roll_service::cbl_ingest::SyncSummary {
     let mut conn = state.pool.get().await.unwrap();
     let transaction = conn.transaction().await.unwrap();
-    let aliases = alias.map(|value| vec![value.to_string()]).unwrap_or_default();
+    let aliases = alias
+        .map(|value| vec![value.to_string()])
+        .unwrap_or_default();
     let summary = sync_cbl_lists(
         &*transaction,
         "JoshCLWren/CBL-ReadingLists",
@@ -142,7 +144,10 @@ where
     T: tokio_postgres::types::FromSqlOwned,
 {
     let conn = state.pool.get().await.unwrap();
-    conn.query_one(sql, parameters).await.unwrap().get::<_, T>(0)
+    conn.query_one(sql, parameters)
+        .await
+        .unwrap()
+        .get::<_, T>(0)
 }
 
 fn cbl(name: &str, entries: &[(&str, &str, Option<&str>, Option<&str>)]) -> String {
@@ -175,8 +180,17 @@ fn cbl(name: &str, entries: &[(&str, &str, Option<&str>, Option<&str>)]) -> Stri
 async fn dry_run_reports_counts_without_writing_any_rows() {
     let (state, _guard) = setup().await;
     let fixture = MirrorFixture::new(&[
-        ("DC/Batman/Batman.cbl", &cbl("Batman 001", &[("Batman", "1", Some("4059"), Some("9001"))])),
-        ("Marvel/Teams/Fantastic Four.cbl", &cbl("Fantastic Four 001", &[("Fantastic Four", "1", None, Some("7002"))])),
+        (
+            "DC/Batman/Batman.cbl",
+            &cbl("Batman 001", &[("Batman", "1", Some("4059"), Some("9001"))]),
+        ),
+        (
+            "Marvel/Teams/Fantastic Four.cbl",
+            &cbl(
+                "Fantastic Four 001",
+                &[("Fantastic Four", "1", None, Some("7002"))],
+            ),
+        ),
     ]);
     let (parsed, failures) = fixture.parse();
     assert!(failures.is_empty(), "{failures:?}");
@@ -211,8 +225,14 @@ async fn dry_run_reports_counts_without_writing_any_rows() {
 async fn applying_a_pinned_revision_is_idempotent_and_records_provenance() {
     let (state, _guard) = setup().await;
     let fixture = MirrorFixture::new(&[
-        ("DC/Batman/Batman.cbl", &cbl("Batman 001", &[("Batman", "1", Some("4059"), Some("9001"))])),
-        ("DC/Batman/Robin.cbl", &cbl("Robin 002", &[("Robin", "2", Some("4070"), Some("9002"))])),
+        (
+            "DC/Batman/Batman.cbl",
+            &cbl("Batman 001", &[("Batman", "1", Some("4059"), Some("9001"))]),
+        ),
+        (
+            "DC/Batman/Robin.cbl",
+            &cbl("Robin 002", &[("Robin", "2", Some("4070"), Some("9002"))]),
+        ),
     ]);
     let (parsed, failures) = fixture.parse();
     assert!(failures.is_empty());
@@ -264,8 +284,14 @@ async fn applying_a_pinned_revision_is_idempotent_and_records_provenance() {
 async fn changed_revision_deactivates_removed_paths_without_deleting_rows() {
     let (state, _guard) = setup().await;
     let original = MirrorFixture::new(&[
-        ("DC/Batman/Batman.cbl", &cbl("Batman 001", &[("Batman", "1", Some("4059"), Some("9001"))])),
-        ("DC/Batman/Robin.cbl", &cbl("Robin 002", &[("Robin", "2", None, Some("9002"))])),
+        (
+            "DC/Batman/Batman.cbl",
+            &cbl("Batman 001", &[("Batman", "1", Some("4059"), Some("9001"))]),
+        ),
+        (
+            "DC/Batman/Robin.cbl",
+            &cbl("Robin 002", &[("Robin", "2", None, Some("9002"))]),
+        ),
     ]);
     let (parsed, failures) = original.parse();
     apply(&state, &parsed, &failures, "aaa1111", None).await;
@@ -275,9 +301,16 @@ async fn changed_revision_deactivates_removed_paths_without_deleting_rows() {
     )
     .await;
 
-    let changed = MirrorFixture::new(&[
-        ("DC/Batman/Batman.cbl", &cbl("Batman 001 revised", &[("Batman", "1", Some("4059"), Some("9001")), ("Batman", "2", None, Some("9003"))])),
-    ]);
+    let changed = MirrorFixture::new(&[(
+        "DC/Batman/Batman.cbl",
+        &cbl(
+            "Batman 001 revised",
+            &[
+                ("Batman", "1", Some("4059"), Some("9001")),
+                ("Batman", "2", None, Some("9003")),
+            ],
+        ),
+    )]);
     let (next, failures) = changed.parse();
     let summary = apply(&state, &next, &failures, "bbb2222", None).await;
     assert_eq!(summary.updated_lists, 1);
@@ -395,5 +428,8 @@ fn fixture_paths_are_relative_to_the_mirror_root() {
     let fixture = MirrorFixture::new(&[("DC/Nested/One.cbl", "<ReadingList />")]);
     let paths = discover_cbl_files(&fixture.root).unwrap();
     assert_eq!(paths.len(), 1);
-    assert_eq!(ensure_path(&paths[0]), ensure_path(&fixture.root.join("DC/Nested/One.cbl")));
+    assert_eq!(
+        ensure_path(&paths[0]),
+        ensure_path(&fixture.root.join("DC/Nested/One.cbl"))
+    );
 }
