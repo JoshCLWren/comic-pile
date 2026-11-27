@@ -62,9 +62,21 @@ const SELF_SCRIPTS = new Set([
 ]);
 const CALLER_ROOTS = [
   'frontend/src',
-  'scripts',
-  '.github/scripts',
+  'scripts/ops',
   'native/roll-service/parity',
+];
+// Only production first-party clients may introduce drift. Test/spec files and
+// repository tooling contain deliberate fixture paths and external API URLs;
+// they are evidence of a live call only when they match a real route.
+const DRIFT_PATH_PREFIXES = [
+  'frontend/src/services/',
+  'frontend/src/pages/',
+  'frontend/src/hooks/',
+  'frontend/src/query/',
+  'frontend/src/components/',
+  'frontend/src/contexts/',
+  'frontend/src/lib/',
+  'scripts/ops/',
 ];
 
 class CensusError extends Error {}
@@ -345,10 +357,13 @@ export function scanCallers(root) {
       if (/^(?:\/\/|\/\*|\*|#|import\b|from\b)/.test(lineText)) continue;
       const normalized = normalizeCallerPath(raw);
       const method = callerMethod(lineText);
+      const isTest = /\.(test|spec)\.[^.]+$/.test(file.relative)
+        || file.relative.includes('/test/') || file.relative.includes('/unit/');
+      const driftChecked = !isTest && DRIFT_PATH_PREFIXES.some(prefix => file.relative.startsWith(prefix));
       const key = `${file.relative}\0${line}\0${normalized}\0${method}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      found.push({file: file.relative, line, method, path: normalized, raw});
+      found.push({file: file.relative, line, method, path: normalized, raw, drift_checked: driftChecked});
     }
   }
   return found.sort((a, b) => {
@@ -689,16 +704,13 @@ export function validate(census, allowlist, dispositions, callers) {
     failures.push(`${SET_PENDING_KEY}: owner should be #${SET_PENDING_OWNER}, got ${setPending.owner_issue}`);
   }
   for (const caller of callers) {
-    if (!/^\/api\/(?:v1\/|api\/)/.test(caller.path) && !caller.path.startsWith('/api/v1/')) {
-      // Bare /api/<segment> and /v1/<segment> normalized paths are checked too.
-      if (!caller.path.startsWith('/api/')) continue;
-    }
+    if (!caller.drift_checked) continue;
     const isV1OrBare = caller.path.startsWith('/api/v1/')
       || /^\/api\/[^v/]/.test(caller.path) || /^\/api\/v[^12]/.test(caller.path);
     if (!isV1OrBare) continue;
     const matches = v1Routes.some(route => pathsMatch(caller.path, route.path));
     if (!matches) {
-      failures.push(`${caller.file}:${caller.line}: v1/bare call '${caller.raw}' has no allowlisted route`);
+      failures.push(`${caller.file}:${caller.line}: new first-party v1/bare call '${caller.raw}' has no allowlisted route`);
     }
   }
   return failures;
