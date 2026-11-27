@@ -3503,12 +3503,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-<<<<<<< HEAD
         /** Standard resource Get for one owned Thread. */
         get: operations["get_thread_v2_documentation"];
-=======
-        get?: never;
->>>>>>> origin/main
         put?: never;
         post?: never;
         /** @description Delete an owned Thread (AIP-135). A second delete, or a delete of a foreign or already deleted Thread, returns 404. Never 403. */
@@ -9662,15 +9658,12 @@ export interface components {
             next_page_token?: string | null;
             threads: components["schemas"]["ThreadListItem"][];
         };
-<<<<<<< HEAD
         /**
          * @description One v2 threads list response. The active/completed/excluded filters keep the
          *     queue-list projection; the stale filter keeps the legacy detail-shaped
          *     projection. Both are emitted inline (no envelope variant key).
          */
         ThreadListResult: components["schemas"]["ThreadListResponse"] | components["schemas"]["StaleThreadListResponse"];
-=======
->>>>>>> origin/main
         /** @description Committed values a stale client read before issuing a Thread patch. */
         ThreadPatchPrecondition: {
             /** @description Format observed by the client. */
@@ -19487,7 +19480,6 @@ export interface operations {
             };
         };
     };
-<<<<<<< HEAD
     get_thread_v2_documentation: {
         parameters: {
             query?: never;
@@ -19525,8 +19517,6 @@ export interface operations {
             };
         };
     };
-=======
->>>>>>> origin/main
     delete_thread_v2_documentation: {
         parameters: {
             query?: never;

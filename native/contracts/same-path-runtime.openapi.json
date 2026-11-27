@@ -10597,7 +10597,6 @@
       }
     },
     "/api/v2/threads/{thread_id}": {
-<<<<<<< HEAD
       "get": {
         "tags": [
           "threads"
@@ -10640,8 +10639,6 @@
           }
         ]
       },
-=======
->>>>>>> origin/main
       "delete": {
         "tags": [
           "threads"
@@ -27078,7 +27075,6 @@
           }
         }
       },
-<<<<<<< HEAD
       "ThreadListResult": {
         "oneOf": [
           {
@@ -27090,8 +27086,6 @@
         ],
         "description": "One v2 threads list response. The active/completed/excluded filters keep the\nqueue-list projection; the stale filter keeps the legacy detail-shaped\nprojection. Both are emitted inline (no envelope variant key)."
       },
-=======
->>>>>>> origin/main
       "ThreadPatchPrecondition": {
         "type": "object",
         "description": "Committed values a stale client read before issuing a Thread patch.",
