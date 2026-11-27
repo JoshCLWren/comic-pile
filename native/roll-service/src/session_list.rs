@@ -145,12 +145,12 @@ WITH page AS (
            array_agg(e.die_after ORDER BY e.timestamp ASC, e.id ASC)
               FILTER (WHERE e.die_after IS NOT NULL) AS ladder
       FROM events e
-     WHERE e.session_id = ANY($6::int[])
+     WHERE e.session_id IN (SELECT id FROM page)
      GROUP BY e.session_id
 ), snapshot_stats AS (
     SELECT sn.session_id, COUNT(*)::int AS snapshot_count
       FROM snapshots sn
-     WHERE sn.session_id = ANY($6::int[])
+     WHERE sn.session_id IN (SELECT id FROM page)
      GROUP BY sn.session_id
 )
 SELECT p.id, p.started_at, p.ended_at, p.start_die, p.manual_die, p.timezone,
@@ -180,36 +180,12 @@ async fn load_sessions(
         .transpose()?;
     let cursor_id: Option<i32> = cursor.map(|key| key.id);
 
-    // Collect ids first so the aggregate CTEs use one bounded `= ANY($6)`
-    // parameter instead of correlated per-row subqueries.
-    let page_rows = connection
-        .query(
-            "SELECT s.id, s.started_at, s.ended_at, s.start_die, s.manual_die, s.timezone
-               FROM sessions s
-              WHERE s.user_id = $1
-                AND ($2::int IS NULL OR s.id = $2::int)
-                AND ($3::timestamptz IS NULL OR (s.started_at, s.id) < ($3::timestamptz, $4::int))
-              ORDER BY s.started_at DESC, s.id DESC
-              LIMIT $5",
-            &[
-                &user_id,
-                &session_id,
-                &cursor_time,
-                &cursor_id,
-                &limit,
-            ],
-        )
-        .await
-        .map_err(db::query_error)?;
-    let ids: Vec<i32> = page_rows.iter().map(|row| row.get::<_, i32>(0)).collect();
-    if ids.is_empty() {
-        return Ok(Vec::new());
-    }
-
+    // One bounded statement: the page CTE fixes the row set, then the
+    // aggregate CTEs join to it. No correlated subquery and no per-row fetch.
     let rows = connection
         .query(
             SESSION_PAGE_SQL,
-            &[&user_id, &session_id, &cursor_time, &cursor_id, &limit, &ids],
+            &[&user_id, &session_id, &cursor_time, &cursor_id, &limit],
         )
         .await
         .map_err(db::query_error)?;
