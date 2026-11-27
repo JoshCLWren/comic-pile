@@ -59,9 +59,9 @@ pub async fn post_thread_v2_action(
         Err(_) => return ApiError::BadRequest("Validation failed".to_string()).into_response(),
     };
     match segment.split_once(':') {
-        Some((raw_id, "reactivate")) => {
-            reactivate_thread(&state, user, raw_id, &body).await.into_response()
-        }
+        Some((raw_id, "reactivate")) => reactivate_thread(&state, user, raw_id, &body)
+            .await
+            .into_response(),
         _ => ApiError::NotFound("Not Found".to_string()).into_response(),
     }
 }
@@ -178,10 +178,9 @@ mod tests {
     /// The regeneration command for this artifact lives in `native/contracts/README.md`.
     #[test]
     fn checked_in_v2_contract_includes_reactivate_custom_method() {
-        let checked_in: Value = serde_json::from_str(include_str!(
-            "../../contracts/v2-runtime.openapi.json"
-        ))
-        .expect("checked-in v2 runtime contract");
+        let checked_in: Value =
+            serde_json::from_str(include_str!("../../contracts/v2-runtime.openapi.json"))
+                .expect("checked-in v2 runtime contract");
         let operation = &checked_in["paths"]["/api/v2/threads/{thread_id}:reactivate"]["post"];
         assert_eq!(operation["operationId"], "reactivate_thread_v2");
     }

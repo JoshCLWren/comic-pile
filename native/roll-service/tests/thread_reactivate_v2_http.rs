@@ -295,7 +295,10 @@ async fn is_blocked(ctx: &Ctx, thread_id: i32) -> bool {
         .get()
         .await
         .unwrap()
-        .query_one("SELECT is_blocked FROM threads WHERE id = $1", &[&thread_id])
+        .query_one(
+            "SELECT is_blocked FROM threads WHERE id = $1",
+            &[&thread_id],
+        )
         .await
         .unwrap()
         .get(0)
@@ -425,7 +428,10 @@ async fn reactivate_v2_validation_fails_before_any_write() {
     let (status, body) = reactivate(&ctx, done, 0).await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body:?}");
     assert_eq!(body["detail"], "Validation failed");
-    assert_eq!(body["errors"][0]["message"], "Input should be greater than 0");
+    assert_eq!(
+        body["errors"][0]["message"],
+        "Input should be greater than 0"
+    );
 
     let (status, body) = reactivate(&ctx, done, 10_001).await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body:?}");
@@ -465,7 +471,10 @@ async fn concurrent_reactivate_v2_requests_add_issues_once() {
     let (first, second) = tokio::join!(reactivate(&ctx, done, 3), reactivate(&ctx, done, 3));
     let statuses = [first.0, second.0];
     assert_eq!(
-        statuses.iter().filter(|status| **status == StatusCode::OK).count(),
+        statuses
+            .iter()
+            .filter(|status| **status == StatusCode::OK)
+            .count(),
         1,
         "one request must win: {first:?} {second:?}"
     );
@@ -513,7 +522,10 @@ async fn v2_queue_exclusions_are_reader_owned_and_do_not_clear_blocking() {
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(body["excluded_thread_ids"], json!([mine]));
-    assert!(is_blocked(&ctx, mine).await, "exclusion must not clear blocking");
+    assert!(
+        is_blocked(&ctx, mine).await,
+        "exclusion must not clear blocking"
+    );
 
     let (status, body) = call(
         &ctx,
@@ -535,6 +547,9 @@ async fn v2_queue_exclusions_are_reader_owned_and_do_not_clear_blocking() {
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(body["restored_thread_ids"], json!([mine]));
-    assert!(is_blocked(&ctx, mine).await, "restore must not clear blocking");
+    assert!(
+        is_blocked(&ctx, mine).await,
+        "restore must not clear blocking"
+    );
     assert!(!is_blocked(&ctx, theirs).await);
 }

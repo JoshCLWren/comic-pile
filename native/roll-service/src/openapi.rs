@@ -486,8 +486,7 @@ mod tests {
     #[test]
     fn thread_reactivate_custom_method_is_in_runtime_contract() {
         let aggregate = document();
-        let operation =
-            &aggregate["paths"]["/api/v2/threads/{thread_id}:reactivate"]["post"];
+        let operation = &aggregate["paths"]["/api/v2/threads/{thread_id}:reactivate"]["post"];
         assert_eq!(operation["operationId"], "reactivate_thread_v2");
         assert!(operation["responses"]["200"].is_object());
         let body = &operation["requestBody"]["content"]["application/json"]["schema"]["$ref"];
