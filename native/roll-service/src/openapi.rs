@@ -534,6 +534,61 @@ mod tests {
         );
     }
 
+    /// #5715: the canonical projection preview is an AIP-136 custom method on
+    /// the lowerCamelCase `continuityPlans` resource, and the thread collection
+    /// read is an AIP-122 nested collection. Both publish the frozen wire DTOs;
+    /// neither v1 alias leaks into the v2 contract, while the durable v2 commit
+    /// stays registered for the confirmation step.
+    #[test]
+    fn reading_order_v2_operations_are_in_v2_contract() {
+        let doc = document();
+        let preview = &doc["paths"]
+            ["/api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection"]["post"];
+        assert_eq!(preview["operationId"], "preview_reading_order_projection");
+        assert_eq!(
+            preview["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ReadingOrderProjectPreviewRequest"
+        );
+        assert_eq!(
+            preview["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ReadingOrderProjectPreviewResponse"
+        );
+        let thread_orders = &doc["paths"]["/api/v2/threads/{thread_id}/readingOrders"]["get"];
+        assert_eq!(thread_orders["operationId"], "list_thread_reading_orders");
+        assert_eq!(
+            thread_orders["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ThreadReadingOrdersResponse"
+        );
+        for schema in [
+            "ReadingOrderProjectPreviewRequest",
+            "ReadingOrderProjectPreviewResponse",
+            "ReadingOrderProjectPreviewEntry",
+            "ReadingOrderProjectPreviewConflict",
+            "ThreadReadingOrdersResponse",
+            "ReadingOrderResponse",
+            "ReadingOrderItemResponse",
+        ] {
+            assert!(
+                doc["components"]["schemas"][schema].is_object(),
+                "missing {schema} in v2 contract"
+            );
+        }
+        assert!(
+            doc["paths"]["/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview"]
+                .is_null(),
+            "v1 preview must not be published in the canonical v2 contract"
+        );
+        assert!(
+            doc["paths"]["/api/v1/threads/{thread_id}/reading-orders"].is_null(),
+            "v1 thread read must not be published in the canonical v2 contract"
+        );
+        assert!(
+            doc["paths"]["/api/v2/continuity-plans/{plan_id}/reading-orders/project"]["post"]
+                .is_object(),
+            "durable v2 projection commit must stay registered"
+        );
+    }
+
     /// The issue read-state and reader-context operations moved from their
     /// `/api/v1/issues/{id}:action` URLs to v2 resources. Every method must stay
     /// in both the domain document and the aggregate runtime contract with its

@@ -97,12 +97,17 @@ export function createReadingOrdersApi(client: HttpClient) {
         data,
       )
     },
+    /**
+     * Stateless AIP-136 resource custom method (#5715). Preview recomputes from
+     * the plan on every call and writes nothing; the retained v1 preview URL is
+     * not used by any caller.
+     */
     previewProjection: async (
       planId: number,
       readingOrderId: number,
     ): Promise<ReadingOrderProjectionPreview> => {
       return client.post<ReadingOrderProjectionPreview>(
-        `/v1/continuity-plans/${planId}/reading-orders/project-preview`,
+        `/v2/continuityPlans/${planId}:previewReadingOrderProjection`,
         { reading_order_id: readingOrderId },
       )
     },
@@ -115,8 +120,9 @@ export function createReadingOrdersApi(client: HttpClient) {
         { reading_order_id: readingOrderId },
       )
     },
+    /** Canonical AIP-122 collection spelling of the owner-scoped read (#5715). */
     getForThread: async (threadId: number): Promise<ThreadReadingOrdersResponse> => {
-      return client.get<ThreadReadingOrdersResponse>(`/v1/threads/${threadId}/reading-orders`)
+      return client.get<ThreadReadingOrdersResponse>(`/v2/threads/${threadId}/readingOrders`)
     },
     adoptReadingOrder: async (params: {
       readingOrderId: number
