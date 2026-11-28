@@ -482,6 +482,7 @@ describe('core route request budgets', () => {
       if (call.url === '/v2/roll/die-state') {
         return { die: 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 20, last_roll: null }
       }
+      if (call.url === '/v2/roll/last-read') return null
       if (call.url === '/v2/roll/eligible-issue-ids') {
         return { die: 20, issue_ids: [401], thread_ids: [44], pool_reason: 'ready' }
       }
@@ -502,6 +503,7 @@ describe('core route request budgets', () => {
     // The aggregate bootstrap GET and the session-initialization POST are gone
     // from the production request set (#4350).
     expect(countRequests(calls, 'GET', '/v2/roll/die-state')).toBe(1)
+    expect(countRequests(calls, 'GET', '/v2/roll/last-read')).toBe(1)
     expect(countRequests(calls, 'GET', '/v2/roll/eligible-issue-ids')).toBe(1)
     expect(countRequests(calls, 'POST', '/v2/issues/cards')).toBe(1)
     expect(countRequests(calls, 'GET', '/v2/roll/bootstrap')).toBe(0)
@@ -672,6 +674,7 @@ describe('core route request budgets', () => {
       if (call.url === '/v2/roll/die-state') {
         return { die: 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 20, last_roll: null }
       }
+      if (call.url === '/v2/roll/last-read') return null
       if (call.url === '/v2/roll/eligible-issue-ids') {
         return { die: 20, issue_ids: [401], thread_ids: [44], pool_reason: 'ready' }
       }

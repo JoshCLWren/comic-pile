@@ -103,7 +103,7 @@ describe('useRollBootstrap composed scoped view', () => {
     expect(result.current.data?.session_id).toBeUndefined()
   })
 
-  it('uses the exact browser-owned pending selection as the active thread', async () => {
+  it('loads the exact pending card when the eligible pool excludes it', async () => {
     const pending: RollPendingSelection = {
       issue_id: 10,
       thread_id: 3,
@@ -119,12 +119,27 @@ describe('useRollBootstrap composed scoped view', () => {
       clearAll: vi.fn(),
     })
 
+    mockedResources.eligibleIssueIds.mockResolvedValue({
+      die: 6,
+      issue_ids: [20],
+      thread_ids: [4],
+      pool_reason: 'ready',
+    })
+    mockedResources.issueCards.mockImplementation(async (ids: readonly number[]) => ({
+      items: ids.includes(10) ? [card(10, 3, 'unread')] : [card(20, 4, 'unread')],
+    }))
+
     const { result } = renderHook(() => useRollBootstrap(), { wrapper: Wrapper })
     await waitFor(() => expect(result.current.isPending).toBe(false))
 
+    expect(mockedResources.issueCards).toHaveBeenCalledWith([10])
     expect(result.current.data?.pending_thread_id).toBe(3)
     expect(result.current.data?.last_rolled_result).toBe(6)
-    expect(result.current.data?.active_thread?.issue_id).toBe(10)
+    expect(result.current.data?.active_thread).toMatchObject({
+      id: 3,
+      title: 'Current Series',
+      issue_id: 10,
+    })
     expect(result.current.data?.roll_recovery).toBeNull()
   })
 
@@ -192,7 +207,7 @@ describe('useRollBootstrap composed scoped view', () => {
     const { result } = renderHook(() => useRollBootstrap(), { wrapper: Wrapper })
     await waitFor(() => expect(result.current.data?.snoozed_threads).toHaveLength(1))
 
-    expect(mockedThreadsList).toHaveBeenCalledWith({ page_size: 200 })
+    expect(mockedThreadsList).toHaveBeenCalledWith({ ids: '7', page_size: 1 })
     expect(result.current.data?.snoozed_threads[0]).toMatchObject({
       id: 7,
       title: 'Snoozed Series',
