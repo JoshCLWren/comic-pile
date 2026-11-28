@@ -96,7 +96,7 @@ describe('canonical query keys', () => {
     ])
 
     expect(queryKeys.roll.all).toEqual(['roll'])
-    expect(queryKeys.roll.state()).toEqual(['roll', 'bootstrap'])
+    expect(queryKeys.roll.state()).toEqual(['roll', 'state'])
 
     expect(queryKeys.completed.all).toEqual(['completed'])
     expect(queryKeys.completed.pages()).toEqual(['completed', 'pages'])

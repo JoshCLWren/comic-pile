@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import type { RollState } from '../../types/rollState'
 import { queryClient } from '../../query/queryClient'
+import { queryKeys } from '../../query/queryKeys'
 
 /**
  * Sessionless Roll state the Queue reads: the pending roll and the snoozed
@@ -49,12 +50,12 @@ export function useRollPendingSync({
   const onUpdated = useCallback(async () => {
     await refetchQueue()
     if (rollBootstrap) {
-      await queryClient.refetchQueries({ queryKey: ['roll', 'bootstrap'] })
+      await queryClient.refetchQueries({ queryKey: queryKeys.roll.state() })
     }
   }, [refetchQueue, rollBootstrap])
 
   const onRefetchRollState = useCallback(async () => {
-    await queryClient.refetchQueries({ queryKey: ['roll', 'bootstrap'] })
+    await queryClient.refetchQueries({ queryKey: queryKeys.roll.state() })
   }, [])
 
   return { rollState, onUpdated, onRefetchRollState }
