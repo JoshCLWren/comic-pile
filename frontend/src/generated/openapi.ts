@@ -7207,24 +7207,6 @@ export interface components {
             /** Format: int32 */
             total_issues?: number | null;
         };
-        /**
-         * @description Partial update of the authenticated user's preferences.
-         *
-         *     The request is intentionally empty. Serde ignores legacy unknown fields, so
-         *     an older client that still sends `theme` cannot restore or persist a retired
-         *     appearance preference.
-         */
-        NativeUserPreferencesPatchRequest: Record<string, never>;
-        /**
-         * @description Current preference values for the authenticated user.
-         *
-         *     Night Shift is fixed, so no appearance field is exposed. The user id keeps
-         *     the existing endpoint shape available for unrelated preference fields.
-         */
-        NativeUserPreferencesResponse: {
-            /** Format: int32 */
-            user_id: number;
-        };
         NearMatch: {
             color: string;
             /** Format: int32 */
@@ -9982,16 +9964,18 @@ export interface components {
         /**
          * @description Partial update of the authenticated user's preferences.
          *
-         *     `theme` is optional: when omitted or explicit JSON null the current
-         *     preference is left unchanged and a missing row is seeded with the
-         *     default, exactly like the Python `UserPreferencesPatchRequest`.
+         *     The request is intentionally empty. Serde ignores legacy unknown fields, so
+         *     an older client that still sends `theme` cannot restore or persist a retired
+         *     appearance preference.
          */
-        UserPreferencesPatchRequest: {
-            theme?: string | null;
-        };
-        /** @description Current preference values for the authenticated user. */
+        UserPreferencesPatchRequest: Record<string, never>;
+        /**
+         * @description Current preference values for the authenticated user.
+         *
+         *     Night Shift is fixed, so no appearance field is exposed. The user id keeps
+         *     the existing endpoint shape available for unrelated preference fields.
+         */
         UserPreferencesResponse: {
-            theme: string;
             /** Format: int32 */
             user_id: number;
         };
@@ -20306,7 +20290,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeUserPreferencesResponse"];
+                    "application/json": components["schemas"]["UserPreferencesResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -20334,7 +20318,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["NativeUserPreferencesPatchRequest"];
+                "application/json": components["schemas"]["UserPreferencesPatchRequest"];
             };
         };
         responses: {
@@ -20344,7 +20328,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeUserPreferencesResponse"];
+                    "application/json": components["schemas"]["UserPreferencesResponse"];
                 };
             };
             /** @description Not authenticated */

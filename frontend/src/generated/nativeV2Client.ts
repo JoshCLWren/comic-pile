@@ -597,7 +597,7 @@ export interface GetThreadIssueDependenciesRequest {
 
 export type GetThreadIssueDependenciesResponse = components['schemas']['ThreadIssueDependenciesResponse']
 
-export type GetUserPreferencesResponse = components['schemas']['NativeUserPreferencesResponse']
+export type GetUserPreferencesResponse = components['schemas']['UserPreferencesResponse']
 
 export interface ImportIssueRequest {
   body: components['schemas']['ImportIssueRequest']
@@ -866,10 +866,10 @@ export interface PatchThreadRequest {
 export type PatchThreadResponse = components['schemas']['NativeThreadResponse']
 
 export interface PatchUserPreferencesRequest {
-  body: components['schemas']['NativeUserPreferencesPatchRequest']
+  body: components['schemas']['UserPreferencesPatchRequest']
 }
 
-export type PatchUserPreferencesResponse = components['schemas']['NativeUserPreferencesResponse']
+export type PatchUserPreferencesResponse = components['schemas']['UserPreferencesResponse']
 
 export interface PreviewRequest {
   path: {
