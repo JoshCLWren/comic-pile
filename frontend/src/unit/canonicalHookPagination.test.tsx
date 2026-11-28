@@ -228,14 +228,20 @@ describe('canonical hook pagination', () => {
     expect(list).toHaveBeenNthCalledWith(2, 7, { page_size: 100, page_token: 'planner-issues-2' })
   })
 
-  it('drains the shared all-issues query with repeated-token protection', async () => {
+  it('pages thread issues through the shared paginator with repeated-token protection', async () => {
     const list = vi.spyOn(issuesApi, 'list')
       .mockResolvedValueOnce(issuePage([firstIssue], 'repeat'))
       .mockResolvedValueOnce(issuePage([secondIssue], 'repeat'))
-    const { result } = renderHook(() => useThreadAllIssues(7), { wrapper: createWrapper() })
-    await waitFor(() => expect(result.current.data).toEqual([firstIssue, secondIssue]))
+    const { result } = renderHook(() => useThreadIssuePages(7), { wrapper: createWrapper() })
+    await waitFor(() => expect(result.current.issues).toEqual([firstIssue]))
+    expect(result.current.isPending).toBe(false)
+    await result.current.fetchNextPage()
+    await waitFor(() => expect(result.current.issues).toEqual([firstIssue, secondIssue]))
+    expect(result.current.hasNextPage).toBe(false)
     expect(list).toHaveBeenCalledTimes(2)
     expect(list).toHaveBeenNthCalledWith(1, 7, { page_size: 100 })
     expect(list).toHaveBeenNthCalledWith(2, 7, { page_size: 100, page_token: 'repeat' })
+    await result.current.fetchNextPage()
+    expect(list).toHaveBeenCalledTimes(2)
   })
 })

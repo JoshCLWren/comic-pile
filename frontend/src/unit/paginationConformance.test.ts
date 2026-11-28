@@ -15,6 +15,7 @@ interface PaginationBaseline {
 }
 
 function readBaseline(): PaginationBaseline {
+  // SAFETY: the checked-in baseline is a static JSON fixture whose shape is the interface above.
   return JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as PaginationBaseline
 }
 
@@ -40,13 +41,17 @@ const BESPOKE_TOKEN_MECHANICS = [
   /\b(?:nextPageToken|pageToken|token)\s*=\s*(?:data|page|result)\.next_page_token/,
 ]
 
+const CANONICAL_INTERACTIVE_CONSUMERS = [
+  // IssueList / ThreadDetailView paging keeps its opaque cursor in pageParam.
+  'hooks/useThreadIssues.ts',
+]
+
 const CANONICAL_COLLECTOR_CONSUMERS = [
   'components/IssueCorrectionDialog.tsx',
   'hooks/useContinuityPlannerData.ts',
   'hooks/useCrossovers.ts',
   'hooks/useDependencies.ts',
   'hooks/useThreadIssueCreators.ts',
-  'hooks/useThreadIssues.ts',
   'pages/HistoryPage.tsx',
   'pages/QueuePage/IssueToggleList.tsx',
   'pages/QueuePage/useQueueCompletedSearch.ts',
@@ -79,6 +84,13 @@ describe('pagination migration conformance (#2570)', () => {
     for (const surface of CANONICAL_COLLECTOR_CONSUMERS) {
       const source = readFileSync(join(SRC_ROOT, surface), 'utf8')
       expect(source, surface).toMatch(/collectAllPages/)
+    }
+  })
+
+  it('routes interactive paging surfaces through the shared paginator', () => {
+    for (const surface of CANONICAL_INTERACTIVE_CONSUMERS) {
+      const source = readFileSync(join(SRC_ROOT, surface), 'utf8')
+      expect(source, surface).toMatch(/useInfiniteCollection/)
     }
   })
 

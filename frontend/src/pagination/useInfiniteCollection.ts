@@ -129,24 +129,38 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
     return next
   }
 
-  const query = useInfiniteQuery({
+  const queryOptions: UseInfiniteQueryOptions<
+    TPage,
+    Error,
+    InfiniteData<TPage, TToken>,
+    QueryKey,
+    TToken
+  > = {
     queryKey: spec.queryKey,
     queryFn: spec.queryFn,
     initialPageParam: spec.initialPageParam,
     getNextPageParam: (lastPage, allPages, _lastPageParam, allPageParams) =>
-      resolveNextToken(lastPage, allPages as TPage[], allPageParams),
-    // Never pass an explicit `undefined`: TanStack treats that as "use the
-    // global default" for retry, which silently re-enables retries when a
-    // caller relied on a QueryClient with retry disabled.
-    ...(spec.enabled !== undefined ? { enabled: spec.enabled } : {}),
-    ...(spec.retry !== undefined ? { retry: spec.retry } : {}),
-    ...(spec.placeholderData !== undefined ? { placeholderData: spec.placeholderData } : {}),
-    ...(spec.refetchOnWindowFocus !== undefined
-      ? { refetchOnWindowFocus: spec.refetchOnWindowFocus }
-      : {}),
-    ...(spec.staleTime !== undefined ? { staleTime: spec.staleTime } : {}),
-    ...(spec.gcTime !== undefined ? { gcTime: spec.gcTime } : {}),
-  })
+      resolveNextToken(lastPage, allPages, allPageParams),
+  }
+  // Omitted options must stay omitted: TanStack treats an explicit `undefined`
+  // as "use the global default", which silently re-enables retries when a
+  // caller relied on a QueryClient with retry disabled.
+  if (spec.enabled !== undefined) queryOptions.enabled = spec.enabled
+  if (spec.retry !== undefined) queryOptions.retry = spec.retry
+  if (spec.placeholderData !== undefined) queryOptions.placeholderData = spec.placeholderData
+  if (spec.refetchOnWindowFocus !== undefined) {
+    queryOptions.refetchOnWindowFocus = spec.refetchOnWindowFocus
+  }
+  if (spec.staleTime !== undefined) queryOptions.staleTime = spec.staleTime
+  if (spec.gcTime !== undefined) queryOptions.gcTime = spec.gcTime
+
+  const query = useInfiniteQuery<
+    TPage,
+    Error,
+    InfiniteData<TPage, TToken>,
+    QueryKey,
+    TToken
+  >(queryOptions)
 
   const pages = query.data?.pages ?? []
   const lastPage = pages[pages.length - 1] ?? null
@@ -167,7 +181,7 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
 
   const hasNextPage = !!query.hasNextPage
   const nextPageToken: TToken | null = hasNextPage && lastPage
-    ? (resolveNextToken(lastPage, pages, (query.data as InfiniteData<TPage, TToken> | undefined)?.pageParams ?? []) ?? null)
+    ? (resolveNextToken(lastPage, pages, query.data?.pageParams ?? []) ?? null)
     : null
 
   // Depend on the stable query actions, not the whole result object, so a
@@ -194,7 +208,7 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
 
   return {
     items,
-    data: query.data as InfiniteData<TPage, TToken> | undefined,
+    data: query.data,
     pages,
     isInitialLoading,
     isNextPageLoading,

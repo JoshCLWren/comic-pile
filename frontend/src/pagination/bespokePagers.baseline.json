@@ -12,7 +12,7 @@
     "hooks/useCrossovers.ts": "issue range and thread selectors use collectAllPages",
     "hooks/useDependencies.ts": "unread issue selector uses collectAllPages",
     "hooks/useThreadIssueCreators.ts": "creator credit projection uses collectAllPages",
-    "hooks/useThreadIssues.ts": "useThreadAllIssues uses collectAllPages",
+    "hooks/useThreadIssues.ts": "useThreadIssuePages uses useInfiniteCollection for IssueList/ThreadDetailView paging; the test-only all-issues drain was deleted upstream",
     "pages/HistoryPage.tsx": "handleRestoreUnread uses collectAllPages",
     "pages/QueuePage/useQueueCompletedSearch.ts": "handleRestoreCompletedSeries uses collectAllPages",
     "pages/RollPage/useRollModals.ts": "override thread picker uses collectAllPages"
