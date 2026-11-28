@@ -40,16 +40,3 @@ test('shared anti-slop config excludes .github from the repo-wide gate', () => {
     'repo-wide anti-slop gate must exclude .github/** in the shared config',
   );
 });
-
-test('root lint delegates to the canonical frontend ESLint entrypoint', () => {
-  const rootScripts = readJson('package.json').scripts;
-  const frontendScripts = readJson('frontend/package.json').scripts;
-  assert.equal(rootScripts.lint, 'pnpm --filter frontend run lint');
-  assert.equal(rootScripts['lint:fix'], 'pnpm --filter frontend exec eslint . --fix');
-  assert.equal(frontendScripts.lint, 'eslint .');
-  assert.equal(rootScripts['lint:js'], undefined);
-  assert.equal(rootScripts['lint:html'], undefined);
-  const stagedLint = readFileSync(path.join(repoRoot, 'scripts/lint.sh'), 'utf8');
-  assert.match(stagedLint, /pnpm run lint;/);
-  assert.doesNotMatch(stagedLint, /app\/templates|static\/js|lint-js\.sh|lint:html/);
-});

@@ -69,8 +69,11 @@ fi
 
 STAGED_FILES=""
 STAGED_PYTHON_FILES=""
+STAGED_HTML_FILES=""
+STAGED_STATIC_JS_FILES=""
 STAGED_FRONTEND_FILES=""
 STAGED_ROOT_NODE_TOOLING=""
+STAGED_FRONTEND_NODE_TOOLING=""
 
 if [ "$MODE" = "--staged" ]; then
     STAGED_FILES=$(git diff --name-only --cached --diff-filter=ACMRT || true)
@@ -81,10 +84,15 @@ if [ "$MODE" = "--staged" ]; then
     fi
 
     STAGED_PYTHON_FILES=$(printf '%s\n' "$STAGED_FILES" | rg '\.py$' || true)
+    STAGED_HTML_FILES=$(printf '%s\n' "$STAGED_FILES" | rg '^app/templates/.*\.html$' || true)
+    STAGED_STATIC_JS_FILES=$(printf '%s\n' "$STAGED_FILES" | rg '^static/js/.*\.js$' || true)
     STAGED_FRONTEND_FILES=$(printf '%s\n' "$STAGED_FILES" | rg '^frontend/' || true)
 
     STAGED_ROOT_NODE_TOOLING=$(
-        printf '%s\n' "$STAGED_FILES" | rg -e '^(package\.json|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|pnpm-workspace\.yaml|eslint\.config\.(js|cjs|mjs))$' || true
+        printf '%s\n' "$STAGED_FILES" | rg -e '^(package\.json|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|eslint\.config\.(js|cjs|mjs))$' || true
+    )
+    STAGED_FRONTEND_NODE_TOOLING=$(
+        printf '%s\n' "$STAGED_FILES" | rg -e '^frontend/(package\.json|package-lock\.json|yarn\.lock|eslint\.config\.(js|cjs|mjs))$' || true
     )
 fi
 
@@ -96,13 +104,29 @@ should_run_python() {
     [ -n "$STAGED_PYTHON_FILES" ] || printf '%s\n' "$STAGED_FILES" | rg -q '^pyproject\.toml$|^uv\.lock$'
 }
 
+should_run_static_js() {
+    if [ "$MODE" = "--all" ]; then
+        return 0
+    fi
+
+    [ -n "$STAGED_STATIC_JS_FILES" ] || [ -n "$STAGED_ROOT_NODE_TOOLING" ]
+}
+
 should_run_frontend() {
     if [ "$MODE" = "--all" ]; then
         [ -d "frontend" ]
         return
     fi
 
-    [ -n "$STAGED_FRONTEND_FILES" ] || [ -n "$STAGED_ROOT_NODE_TOOLING" ]
+    [ -n "$STAGED_FRONTEND_FILES" ] || [ -n "$STAGED_FRONTEND_NODE_TOOLING" ]
+}
+
+should_run_html() {
+    if [ "$MODE" = "--all" ]; then
+        return 0
+    fi
+
+    [ -n "$STAGED_HTML_FILES" ] || [ -n "$STAGED_ROOT_NODE_TOOLING" ]
 }
 
 ANY_CHECKED=0
@@ -191,6 +215,19 @@ if [ ! -d "node_modules" ]; then
     fi
 fi
 
+if should_run_static_js; then
+    ANY_CHECKED=1
+echo ""
+echo "Running ESLint for JavaScript..."
+
+if ! bash scripts/lint-js.sh; then
+  echo ""
+  echo "${RED}ERROR: JavaScript linting failed.${NC}"
+  echo "${RED}Run 'pnpm --filter frontend run lint:fix' to auto-fix or fix manually.${NC}"
+  exit 1
+fi
+fi
+
 if should_run_frontend; then
     ANY_CHECKED=1
     echo ""
@@ -204,11 +241,23 @@ if should_run_frontend; then
         }
     fi
 
-    if ! pnpm run lint; then
-        echo ""
-        echo "${RED}ERROR: Frontend linting failed.${NC}"
-        exit 1
-    fi
+if ! pnpm --filter frontend run lint; then
+  echo ""
+  echo "${RED}ERROR: Frontend JavaScript linting failed.${NC}"
+  exit 1
+fi
+fi
+
+if should_run_html; then
+  ANY_CHECKED=1
+  echo ""
+  echo "Running htmlhint for HTML templates..."
+  if ! pnpm run lint:html; then
+    echo ""
+    echo "${RED}ERROR: HTML linting failed.${NC}"
+    echo "${RED}Fix HTML template issues manually.${NC}"
+    exit 1
+  fi
 fi
 
 if [ "$ANY_CHECKED" -eq 0 ]; then
