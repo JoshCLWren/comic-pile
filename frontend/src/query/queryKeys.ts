@@ -272,6 +272,8 @@ export const queryKeys = {
     blockingBatchAll: () => ['dependencies', 'blocking-batch'] as const,
     list: () => ['dependencies', 'list'] as const,
     forThread: (threadId: number) => ['dependencies', 'thread', threadId] as const,
+    /** Owner-scoped issue-edge batch for one selected Roll issue (#4350). */
+    issueEdges: (issueId: number) => ['dependencies', 'issue-edges', issueId] as const,
     blocking: (threadId: number) => ['dependencies', 'blocking', threadId] as const,
     blockingBatch: (threadIds: number[]) =>
       ['dependencies', 'blocking-batch', [...threadIds].sort((a, b) => a - b)] as const,

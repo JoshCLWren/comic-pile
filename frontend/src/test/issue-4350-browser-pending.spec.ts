@@ -10,9 +10,14 @@ import { expect } from '@playwright/test'
 import { test } from './fixtures'
 import { createThread, gotoRollPage, startRequestLedger } from './helpers'
 
+interface RetiredRequestCounts {
+  bootstrap: number
+  sessionPost: number
+}
+
 function retiredRequestCounts(
   ledger: { count: (method: string, path: string) => number },
-): { bootstrap: number; sessionPost: number } {
+): RetiredRequestCounts {
   return {
     bootstrap: ledger.count('GET', '/api/v2/roll/bootstrap'),
     sessionPost: ledger.count('POST', '/api/v2/readingSessions'),

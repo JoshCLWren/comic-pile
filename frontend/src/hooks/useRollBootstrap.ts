@@ -1,9 +1,13 @@
 import { useCallback, useMemo } from 'react'
+import { skipToken, useQuery } from '@tanstack/react-query'
 import type { RollBootstrapResponse, RollBootstrapThread } from '../types/rollBootstrap'
-import type { SessionMode } from '../types'
+import type { RateResponsePayload, SessionMode } from '../types'
+import type { ReadingGraphResponse } from '../generated/nativeV2Client'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import { readRollSnoozes } from '../services/api-roll'
+import { dependenciesApi } from '../services/api-dependencies'
+import { buildRollRecovery } from '../services/rollRecovery'
 import { useRollDieState, useRollEligibleIssueIds, useRollIssueCards } from './useRollResources'
 import { useRollPendingSelection } from './useRollPendingSelection'
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from './rollMutationReconciliation'
@@ -35,23 +39,49 @@ const EMPTY_SESSION_MODE: SessionMode = {
  * Read-only Roll view model assembled entirely from scoped native resources.
  *
  * There is no aggregate server request and no session initialization here: the
- * die, ordered eligible pool, visible cards and browser-owned pending selection
- * are the same inputs the Roll surface already consumes. The returned shape is
- * retained as the page's local view model so feature modules share one snapshot;
- * it is never sent to, or fetched from, a bootstrap/session endpoint.
+ * die, ordered eligible pool, visible cards, browser-owned pending selection,
+ * scoped last-read cache and owner-scoped recovery diagnostics are the same
+ * inputs the Roll surface already consumes. The returned shape is retained as
+ * the page's local view model so feature modules share one snapshot; it is
+ * never sent to, or fetched from, a bootstrap/session endpoint.
  */
-export function useRollBootstrap(_api?: unknown) {
-  // The optional transport argument is retained for existing focused tests;
-  // scoped state comes from the shared query cache, never from that transport.
-  void _api
+export function useRollBootstrap() {
   const { pending } = useRollPendingSelection()
   const die = useRollDieState()
   const snoozedIds = useMemo(() => readRollSnoozes(), [])
   const eligible = useRollEligibleIssueIds(snoozedIds)
   const cards = useRollIssueCards(eligible.data?.issue_ids ?? [])
+  const issueIds = eligible.data?.issue_ids ?? []
 
-  const data: RollBootstrapResponse | null = useMemo<RollBootstrapResponse>(() => {
-    const issueIds = eligible.data?.issue_ids ?? []
+  // A pending issue missing from the eligible pool may be continuity-blocked.
+  // Only then is one bounded, owner-scoped issue-edge GET needed; a cold idle
+  // Roll load issues no extra request.
+  const blockedIssueId = pending != null && !issueIds.includes(pending.issue_id)
+    ? pending.issue_id
+    : null
+  const dependencyQuery = useQuery({
+    queryKey: queryKeys.dependencies.issueEdges(blockedIssueId ?? -1),
+    queryFn: () => dependenciesApi.getIssueDependencies(blockedIssueId ?? 0),
+    enabled: blockedIssueId != null,
+  })
+  const prerequisiteIds = useMemo(
+    () => [...new Set((dependencyQuery.data?.incoming ?? []).map((edge) => edge.source_issue_id))],
+    [dependencyQuery.data],
+  )
+  const prerequisiteCards = useRollIssueCards(prerequisiteIds)
+
+  // Both queries are cache-only: the rate mutation and ReadingGraphProblemCard
+  // already own the live fetches on this page.
+  const rateQuery = useQuery<RateResponsePayload | null>({
+    queryKey: queryKeys.roll.lastRead(),
+    queryFn: skipToken,
+  })
+  const graphQuery = useQuery<ReadingGraphResponse | null>({
+    queryKey: queryKeys.readingGraph.status(),
+    queryFn: skipToken,
+  })
+
+  const data = useMemo<RollBootstrapResponse>(() => {
     const threadIds = eligible.data?.thread_ids ?? []
     const cardByIssue = new Map((cards.data?.items ?? []).map((card) => [card.issue_id, card]))
     const rollPool: RollBootstrapThread[] = issueIds.flatMap((issueId, index) => {
@@ -79,14 +109,23 @@ export function useRollBootstrap(_api?: unknown) {
         }
       : null
 
+    const recovery = pending != null
+      ? buildRollRecovery({
+          pending,
+          eligibleIssueIds: issueIds,
+          dependencies: blockedIssueId != null ? dependencyQuery.data ?? null : null,
+          prerequisiteCards: prerequisiteCards.data?.items ?? [],
+          graph: graphQuery.data ?? null,
+          originalTitle: activeThread?.title || null,
+        })
+      : null
+
     return {
-      session_id: 0,
-      user_id: 0,
       pending_thread_id: pending?.thread_id ?? null,
       last_rolled_result: pending?.result ?? null,
       session_mode: EMPTY_SESSION_MODE,
       active_thread: activeThread,
-      roll_recovery: null,
+      roll_recovery: recovery,
       roll_pool: rollPool,
       snoozed_threads: [],
       snoozed_count: snoozedIds.length,
@@ -94,10 +133,26 @@ export function useRollBootstrap(_api?: unknown) {
       skipped_thread_ids: [],
       skipped_threads: [],
       pool_reason: eligible.data?.pool_reason ?? 'ready',
+      // Seeded by the committed rate response, never invented here (#2720).
+      last_read: rateQuery.data?.roll_reconciliation?.last_read ?? null,
     }
-  }, [eligible.data, cards.data, pending, snoozedIds])
+  }, [
+    eligible.data,
+    cards.data,
+    pending,
+    snoozedIds,
+    issueIds,
+    blockedIssueId,
+    dependencyQuery.data,
+    prerequisiteCards.data,
+    graphQuery.data,
+    rateQuery.data,
+  ])
 
-  const isPending = die.isPending || eligible.isPending || (data.roll_pool.length > 0 && cards.isPending)
+  const isPending = die.isPending
+    || eligible.isPending
+    || (data.roll_pool.length > 0 && cards.isPending)
+    || (blockedIssueId != null && dependencyQuery.isPending)
 
   const refetch = useCallback(async (): Promise<RollBootstrapResponse> => {
     // A reconciled mutation publishes its already-fetched scoped snapshot on
@@ -113,10 +168,10 @@ export function useRollBootstrap(_api?: unknown) {
   }, [die, eligible, cards, data])
 
   return {
-    data: data as RollBootstrapResponse | null,
+    data,
     isPending,
-    isError: die.isError || eligible.isError || cards.isError,
-    error: die.error ?? eligible.error ?? cards.error ?? null,
+    isError: die.isError || eligible.isError || cards.isError || dependencyQuery.isError,
+    error: die.error ?? eligible.error ?? cards.error ?? dependencyQuery.error ?? null,
     failureCount: 0,
     isRetrying: false,
     refetch,
