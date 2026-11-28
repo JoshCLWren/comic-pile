@@ -65,6 +65,8 @@ export interface InfiniteCollectionState<TItem, TPage, TToken = PageToken> {
   failureCount: number
   /** True once the current query key has a successful response. */
   isSuccess: boolean
+  /** TanStack fetch status (`idle`, `fetching`, or `paused`). */
+  fetchStatus: 'idle' | 'fetching' | 'paused'
   /**
    * True when the rendered pages are placeholder data kept from the previous
    * query key by `keepPreviousData` while the new key's first page loads.
@@ -135,6 +137,8 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
     retry: spec.retry,
     placeholderData: spec.placeholderData,
     refetchOnWindowFocus: spec.refetchOnWindowFocus,
+    staleTime: spec.staleTime,
+    gcTime: spec.gcTime,
   })
 
   const pages = query.data?.pages ?? []
