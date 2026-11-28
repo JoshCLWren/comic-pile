@@ -1,5 +1,13 @@
 # AGENTS.md
 
+Use **Reading List engine** or **reading-order eligibility** in active code, APIs, UI, tests, docs and issue titles. Retire the old option-letter terminology, including internal symbols, feature flag remnants, log/metric/error names, and regenerate generated contracts with the canonical generator (never hand-edit generated output). The target is one canonical evaluator with no selectable execution mode; the v2 reader projection and UI still carry a per-list `execution_mode` discriminator with a `legacy` branch, which #3676/#3677/#3678 retire. Preserve historical migration files and immutable Git history; if an obsolete persisted identifier requires a forward migration, migrate it rather than editing applied migrations. #3676 owns the naming cleanup and final negative inventory, coordinating with deletion owners.
+
+
+## Binding product target
+
+Owner directive (2026-11-27): ComicPile has one real user. The target is Rust v2 only (zero v1 or obsolete unversioned application routes, clients, rewrites or compatibility shims), one canonical Reading List execution engine, and no reading sessions anywhere (including v2 List/Get/detail/snapshot/undo APIs and session-keyed runtime/storage). Remove obsolete behavior instead of porting or preserving it. No legacy execution parity, shadow mode, fallback, Codex reservation, or arbitrary two-week waiting period. Verify the actual canonical application, use ordinary exact-head CI/review/deployment, and preserve authored lists, explicit prerequisites, exclusions, issue identity, reading history, progress, ratings, notes, and supported individual operation corrections. Authentication/security and ownership checks remain; authentication sessions are not reading sessions. No direct production DB credentials for agents; only specifically restricted destructive production operations or actual personal-data repair need existing authorization. Do not invent a new approval stage. #5958, #3677–#3679, #3230 and #5886 own final removal.
+
+
 Guidelines for AI agents working in this codebase.
 
 ## Rust-cutover backlog freeze (owner direction, 2026-11-15)
