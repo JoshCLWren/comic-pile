@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
+import { act } from 'react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { MobileGallery } from '../pages/RollPage/components/MobileGallery'
@@ -105,5 +106,46 @@ describe('Night Shift mobile gallery extra branches (#5981)', () => {
     )
     expect(screen.getByTestId('roll-mobile-gallery')).toBeInTheDocument()
   })
+
+
+describe('Night Shift mobile gallery swipe (#5981)', () => {
+  it('swipes left to advance', () => {
+    render(
+      <MobileGallery
+        pool={[{ id: 1, title: 'Alpha', format: 'Comic' }, { id: 2, title: 'Beta', format: 'Comic' }, { id: 3, title: 'Gamma', format: 'Comic' }]}
+        cardByIssueId={new Map()}
+        isRolling={false}
+        winningThreadId={null}
+        dieSlot={null}
+        onThreadClick={vi.fn()}
+      />,
+    )
+    const gallery = screen.getByRole('group', { name: /use arrow keys to browse/i })
+    act(() => {
+      fireEvent.pointerDown(gallery, { clientX: 200 })
+      fireEvent.pointerUp(gallery, { clientX: 100 })
+    })
+    expect(screen.getByText(/2 \/ 3/)).toBeInTheDocument()
+  })
+
+  it('cancels pointer tracking', () => {
+    render(
+      <MobileGallery
+        pool={[{ id: 1, title: 'Alpha', format: 'Comic' }, { id: 2, title: 'Beta', format: 'Comic' }]}
+        cardByIssueId={new Map()}
+        isRolling={false}
+        winningThreadId={null}
+        dieSlot={null}
+        onThreadClick={vi.fn()}
+      />,
+    )
+    const gallery = screen.getByRole('group', { name: /use arrow keys to browse/i })
+    act(() => {
+      fireEvent.pointerDown(gallery, { clientX: 200 })
+      fireEvent.pointerCancel(gallery)
+    })
+    expect(screen.getByTestId('roll-mobile-gallery')).toBeInTheDocument()
+  })
+})
 
 })
