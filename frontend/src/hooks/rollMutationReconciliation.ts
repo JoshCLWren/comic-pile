@@ -1,4 +1,8 @@
-import type { ProtectedRollMutationApi, RollBootstrapApi } from '../services/apiTypes'
+import type {
+  ProtectedRollMutationApi,
+  RollBootstrapApi,
+  RollPendingUserId,
+} from '../services/apiTypes'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
 import { rollBootstrapApi } from '../services/rollBootstrapApi'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
@@ -69,8 +73,9 @@ export function publishRollBootstrap(state: RollBootstrapResponse): void {
 
 export async function fetchAndPublishRollBootstrap(
   bootstrapApi: RollBootstrapApi = rollBootstrapApi,
+  userId?: RollPendingUserId,
 ): Promise<RollBootstrapResponse> {
-  const state = await bootstrapApi.get()
+  const state = await bootstrapApi.get(userId)
   publishRollBootstrap(state)
   return state
 }
@@ -84,8 +89,9 @@ export interface AmbiguousRollMutationReconciliation {
 export async function reconcileAmbiguousRollMutation(
   expectedPendingThreadId?: number,
   bootstrapApi: RollBootstrapApi = rollBootstrapApi,
+  userId?: RollPendingUserId,
 ): Promise<AmbiguousRollMutationReconciliation> {
-  const state = await fetchAndPublishRollBootstrap(bootstrapApi)
+  const state = await fetchAndPublishRollBootstrap(bootstrapApi, userId)
   const pendingThreadId = normalizePendingThreadId(state.pending_thread_id)
 
   const committed = expectedPendingThreadId === undefined
@@ -106,6 +112,7 @@ export async function recoverProtectedRollMutation<T>(
   retryMutation: () => Promise<T>,
   wait: (ms: number) => Promise<void> = delay,
   mutationApi: ProtectedRollMutationApi = protectedRollMutationApi,
+  userId?: RollPendingUserId,
 ): Promise<ProtectedRollMutationRecovery<T>> {
   for (let attempt = 0; attempt <= AUTH_RECOVERY_DELAYS_MS.length; attempt += 1) {
     if (attempt > 0) {

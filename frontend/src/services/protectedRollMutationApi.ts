@@ -1,5 +1,6 @@
 import type { RollResponse, SnoozeSessionResponse } from '../types'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
+import type { RollPendingUserId } from './apiTypes'
 import { createRollBootstrapApi } from './rollBootstrapApi'
 import { createNativeRollMutationApi } from './nativeRollMutationApi'
 import { defaultHttpClient, type HttpClient } from './httpClient'
@@ -37,8 +38,8 @@ export function createProtectedRollMutationApi(client: HttpClient) {
      * touched even when the ordinary auth redirect is suppressed. The view is
      * built lazily so transports can be injected in focused tests.
      */
-    bootstrap: async (): Promise<RollBootstrapResponse> =>
-      createRollBootstrapApi(client).get(),
+    bootstrap: async (userId?: RollPendingUserId): Promise<RollBootstrapResponse> =>
+      createRollBootstrapApi(client).get(userId),
   }
 }
 
