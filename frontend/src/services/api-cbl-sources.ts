@@ -229,18 +229,7 @@ export interface CBLAdoptionPreview {
   }
 }
 
-/**
- * Result of a source-linked CBL adoption commit (#4022).
- *
- * `id`/`name` are the compatibility plan projection and must never be used as
- * the destination or identity of an adopted list. `custom_cbl_list_id` is the
- * stable reader-owned Reading List ID returned by the v2 commit endpoint.
- */
 export interface CBLAdoptionCommitResult extends ContinuityPlan {
-  custom_cbl_list_id?: number | null
-  list_version?: number | null
-  selections?: unknown | null
-  overlap_decisions?: unknown | null
   reused_positions: number[]
   created_positions: number[]
   excluded_positions: number[]
@@ -256,10 +245,6 @@ export interface CBLAdoptionPlanChoices {
    * durable persistence for the answer belongs to the overlap-decision store.
    */
   overlap_decisions?: CBLOverlapDecision[]
-  /** Version of the owned list last seen by the reader; guards a stale update. */
-  list_version?: number | null
-  /** Stable key so an ambiguous response can be retried without a double commit. */
-  idempotency_key?: string | null
 }
 
 /** One reader-approved series overlap decision carried into the commit. */
@@ -287,57 +272,32 @@ export function createCblSourcesApi(client: HttpClient) {
     const entriesById = new Map(
       preview.entries.map((entry) => [String(entry.cbl_entry_id), entry]),
     )
-    // The commit applies `series_overrides` after the per-entry plan, so a
-    // position-level override would defeat a rechecked issue inside an excluded
-    // volume. Expand volume choices around explicit per-entry decisions only.
-    const explicitPositions = new Set<number>()
-    for (const entryId of Object.keys(choices.entry_decisions)) {
-      const entry = entriesById.get(entryId)
-      if (entry) explicitPositions.add(entry.cbl_position)
-    }
     const overridesByPosition = new Map<number, 'include' | 'exclude'>()
     for (const [groupId, include] of Object.entries(choices.series_decisions)) {
       const decision = include ? 'include' : 'exclude'
       for (const entry of preview.entries) {
-        if (entry.series_group_id === groupId && !explicitPositions.has(entry.cbl_position)) {
+        if (entry.series_group_id === groupId) {
           overridesByPosition.set(entry.cbl_position, decision)
         }
+      }
+    }
+    for (const [entryId, include] of Object.entries(choices.entry_decisions)) {
+      const entry = entriesById.get(entryId)
+      if (entry) {
+        overridesByPosition.set(entry.cbl_position, include ? 'include' : 'exclude')
       }
     }
     const seriesOverrides = [...overridesByPosition.entries()]
       .sort(([left], [right]) => left - right)
       .map(([cbl_position, decision]) => ({ cbl_position, decision }))
-    const entryDecisions: Record<string, string> = Object.fromEntries(
-      Object.entries(choices.entry_decisions).map(([entryId, include]) => [
-        entryId,
-        include ? 'include' : 'exclude',
-      ]),
-    )
-    type CommitSourcePayload = {
-      entry_decisions: Record<string, string>
-      series_decisions: never[]
-      series_overrides: Array<{ cbl_position: number; decision: 'include' | 'exclude' }>
-      overlap_decisions: CBLOverlapDecision[]
-      content_hash: string
-      revision_sha: string
-      list_version?: number | null
-      idempotency_key?: string | null
-    }
-    const payload: CommitSourcePayload = {
-      entry_decisions: entryDecisions,
+    return {
+      entry_decisions: {},
       series_decisions: [],
       series_overrides: seriesOverrides,
       overlap_decisions: choices.overlap_decisions ?? [],
       content_hash: preview.source.content_hash,
       revision_sha: preview.source.revision_sha,
     }
-    if (choices.list_version !== undefined && choices.list_version !== null) {
-      payload.list_version = choices.list_version
-    }
-    if (choices.idempotency_key) {
-      payload.idempotency_key = choices.idempotency_key
-    }
-    return payload
   }
   return {
     discover: (query: string, limit = 25) =>
@@ -395,11 +355,6 @@ export function createCblSourcesApi(client: HttpClient) {
       client.get<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-preview`),
     plan: (listId: number, choices: CBLAdoptionPlanChoices) =>
       client.post<CBLAdoptionPreview>(`/v1/issue-identity/cbl/${listId}/adoption-plan`, choices),
-    /**
-     * Targeted adoption into an existing plan, used only by the "add material"
-     * surface of a plan the reader already owns (#4023 keeps that surface; the
-     * standalone CBL browser uses source-linked `commitSource` instead).
-     */
     commit: (
       listId: number,
       planId: number,
@@ -412,22 +367,10 @@ export function createCblSourcesApi(client: HttpClient) {
         { timeout: 60_000 },
       ),
     /**
-     * Source-linked, owner-scoped upsert into the reader's canonical Reading
-     * List (#4022). The first add creates the owned list; an exact repeat or a
-     * revised selection updates that same list ID. No plan ID participates in
-     * identity or navigation.
+     * One-decision adoption: adopt the source into a Reading Plan, creating the
+     * plan from the source when it has none yet. This is the "Add this reading
+     * order" action for the CBL browser.
      */
-    commitSource: (
-      listId: number,
-      preview: CBLAdoptionPreview,
-      choices: CBLAdoptionPlanChoices,
-    ) =>
-      client.post<CBLAdoptionCommitResult>(
-        `/v2/reading-lists/${listId}/adoption-commits`,
-        commitPayload(preview, choices),
-        { timeout: 60_000 },
-      ),
-    /** @deprecated Use `commitSource`; the source-linked upsert is also an update. */
     commitNew: (
       listId: number,
       preview: CBLAdoptionPreview,

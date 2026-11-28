@@ -24,11 +24,7 @@
     "v1_with_owner": 57,
     "v1_needing_owner": 0,
     "unknown_ingress": 0,
-<<<<<<< HEAD
     "first_party_call_sites": 928,
-=======
-    "first_party_call_sites": 920,
->>>>>>> origin/main
     "stale_aip_baseline_entries": 4
   },
   "routes": [
@@ -3861,7 +3857,7 @@
         "frontend/src/services/api-cbl-sources.ts",
         "frontend/src/unit/api-cbl-sources.test.ts"
       ],
-      "caller_count": 4,
+      "caller_count": 2,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4844,

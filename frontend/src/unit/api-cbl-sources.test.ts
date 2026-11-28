@@ -97,10 +97,12 @@ describe('cblSourcesApi.commit', () => {
     expect(client.post).toHaveBeenCalledWith(
       '/v2/reading-lists/42/reading-plans/77/adoption-commits',
       {
-        entry_decisions: { '102': 'include', '103': 'exclude' },
+        entry_decisions: {},
         series_decisions: [],
         series_overrides: [
           { cbl_position: 1, decision: 'exclude' },
+          { cbl_position: 2, decision: 'include' },
+          { cbl_position: 3, decision: 'exclude' },
           { cbl_position: 4, decision: 'exclude' },
         ],
         overlap_decisions: [],
@@ -196,10 +198,11 @@ describe('cblSourcesApi.commitNew', () => {
     expect(client.post).toHaveBeenCalledWith(
       '/v2/reading-lists/42/adoption-commits',
       {
-        entry_decisions: { '102': 'include' },
+        entry_decisions: {},
         series_decisions: [],
         series_overrides: [
           { cbl_position: 1, decision: 'exclude' },
+          { cbl_position: 2, decision: 'include' },
           { cbl_position: 3, decision: 'exclude' },
           { cbl_position: 4, decision: 'exclude' },
         ],
@@ -209,74 +212,5 @@ describe('cblSourcesApi.commitNew', () => {
       },
       { timeout: 60_000 },
     )
-  })
-})
-
-describe('cblSourcesApi.commitSource', () => {
-  beforeEach(() => {
-    client.post.mockReset()
-    client.post.mockResolvedValue({
-      id: 78,
-      name: 'Dark Horse/BPRD/Plague of Frogs.cbl',
-      custom_cbl_list_id: 900,
-      list_version: 4,
-      reused_positions: [1],
-      created_positions: [2],
-      excluded_positions: [3],
-      unresolved_positions: [4],
-    })
-  })
-
-  it('sends the owned list version and idempotency key for a source-linked update', async () => {
-    const result = await cblSourcesApi.commitSource(42, reviewedPreview, {
-      series_decisions: {},
-      entry_decisions: {},
-      list_version: 3,
-      idempotency_key: '42:attempt-1',
-    })
-
-    expect(result.custom_cbl_list_id).toBe(900)
-    expect(client.post).toHaveBeenCalledWith(
-      '/v2/reading-lists/42/adoption-commits',
-      expect.objectContaining({
-        list_version: 3,
-        idempotency_key: '42:attempt-1',
-        content_hash: 'hash-42',
-        revision_sha: 'abcdef1234567890',
-      }),
-      { timeout: 60_000 },
-    )
-  })
-
-  it('keeps a rechecked issue inside an excluded volume out of the position overrides', async () => {
-    await cblSourcesApi.commitSource(42, reviewedPreview, {
-      series_decisions: { bprd: false },
-      entry_decisions: { '101': true },
-    })
-    // SAFETY: test double captures the JSON body passed to the mock client.
-    const payload = client.post.mock.calls[0][1] as {
-      entry_decisions: Record<string, string>
-      series_overrides: Array<{ cbl_position: number; decision: string }>
-    }
-    expect(payload.entry_decisions).toEqual({ '101': 'include' })
-    expect(payload.series_overrides).toEqual([
-      { cbl_position: 2, decision: 'exclude' },
-      { cbl_position: 3, decision: 'exclude' },
-      { cbl_position: 4, decision: 'exclude' },
-    ])
-  })
-
-  it('omits the guards on a first add so the server creates the canonical list', async () => {
-    await cblSourcesApi.commitSource(42, reviewedPreview, {
-      series_decisions: {},
-      entry_decisions: {},
-    })
-    // SAFETY: test double captures the JSON body passed to the mock client.
-    const payload = client.post.mock.calls[0][1] as {
-      list_version?: number
-      idempotency_key?: string
-    }
-    expect(payload).not.toHaveProperty('list_version')
-    expect(payload).not.toHaveProperty('idempotency_key')
   })
 })

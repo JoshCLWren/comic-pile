@@ -5,14 +5,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import type { PropsWithChildren } from 'react'
 import { beforeEach, expect, vi } from 'vitest'
-
-// The browser page uses the source-linked commit; older assertions name the
-// deprecated alias. Both names share one mock so existing coverage keeps
-// exercising the real commit call site without weakening its assertions.
-const { adoptionCommitMock } = vi.hoisted(() => ({ adoptionCommitMock: vi.fn() }))
 import CblBrowserPage from '../pages/CblBrowserPage'
 import { cblSourcesApi } from '../services/api-cbl-sources'
-import { customCBLApi } from '../services/api-custom-cbl'
+import { continuityPlansApi } from '../services/api-continuity-plans'
 import { readingGraphApi } from '../services/api-reading-graph'
 import type {
   CBLAdoptionPreview,
@@ -20,7 +15,7 @@ import type {
   CBLCatalogBrowsePage,
   CBLSourceListDiscoveryItem,
 } from '../services/api-cbl-sources'
-import { applyCommittedCblAdoption } from '../query/cacheEffects'
+import { applyCommittedReadingPlan } from '../query/cacheEffects'
 import { cast } from '../utils/cast'
 import {
   MISTER_MIRACLE_OVERLAP,
@@ -35,8 +30,7 @@ vi.mock('../services/api-cbl-sources', () => ({
     preview: vi.fn(),
     plan: vi.fn(),
     commit: vi.fn(),
-    commitSource: adoptionCommitMock,
-    commitNew: adoptionCommitMock,
+    commitNew: vi.fn(),
     compare: vi.fn(),
     findByComicvineIssue: vi.fn(),
     readingListCandidates: vi.fn(),
@@ -82,25 +76,26 @@ vi.mock('../services/api-reading-graph', () => ({
   },
 }))
 
-vi.mock('../services/api-custom-cbl', () => ({
-  customCBLApi: {
+vi.mock('../services/api-continuity-plans', () => ({
+  continuityPlansApi: {
+    list: vi.fn(),
     get: vi.fn(),
   },
 }))
 
 vi.mock('../query/cacheEffects', () => ({
-  applyCommittedCblAdoption: vi.fn(),
+  applyCommittedReadingPlan: vi.fn(),
 }))
 
 export const mockBrowse = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.browse)
 export const mockPreview = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.preview)
 export const mockPlan = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.plan)
 export const mockCommit = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.commit)
-export const mockCommitSource = cast<ReturnType<typeof vi.fn>>(adoptionCommitMock)
-export const mockCommitNew = cast<ReturnType<typeof vi.fn>>(adoptionCommitMock)
+export const mockCommitNew = cast<ReturnType<typeof vi.fn>>(cblSourcesApi.commitNew)
 export const mockGraphPreview = cast<ReturnType<typeof vi.fn>>(readingGraphApi.preview)
-export const mockGetOwnedList = cast<ReturnType<typeof vi.fn>>(customCBLApi.get)
-export const mockApplyCommitted = cast<ReturnType<typeof vi.fn>>(applyCommittedCblAdoption)
+export const mockListPlans = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.list)
+export const mockGetPlan = cast<ReturnType<typeof vi.fn>>(continuityPlansApi.get)
+export const mockApplyCommitted = cast<ReturnType<typeof vi.fn>>(applyCommittedReadingPlan)
 
 export const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -124,7 +119,7 @@ export function renderPage(initialEntry = '/cbl-sources') {
             </>
           }
         />
-        <Route path="/reading-lists/:id" element={<LocationProbe />} />
+        <Route path="/continuity-plans/:id" element={<LocationProbe />} />
       </Routes>
     </MemoryRouter>,
     { wrapper: queryWrapper },
@@ -249,10 +244,9 @@ export function preview(overrides?: {
 beforeEach(() => {
   vi.clearAllMocks()
   queryClient.clear()
-  localStorage.clear()
   mockGraphPreview.mockResolvedValue(withoutOverlap())
   mockBrowse.mockResolvedValue(browsePage())
-  mockGetOwnedList.mockReset()
+  mockListPlans.mockResolvedValue([])
 })
 
 export async function searchFor(user: ReturnType<typeof userEvent.setup>, term = 'ultimate') {

@@ -462,21 +462,13 @@ export default function ThreadDetailView() {
   // Dirty check mirrors the queue page's Edit Series dialog (QueueModals):
   // any edited draft field or queued deferred issue edit must prompt before
   // the close control discards it.
-  //
-  // #5952: for a migrated thread (`total_issues !== null`) the issue count is
-  // server-derived from the issue rows, not an editable draft field. A
-  // completed toggle changes `thread.issues_remaining` on refetch while the
-  // draft still holds the value captured when the dialog opened, so comparing
-  // it would leave an already-saved, clean draft looking dirty. Only compare
-  // the field when it is actually rendered (unmigrated threads); queued issue
-  // edits are tracked separately by `hasPendingIssueEdits`.
   const initialCredits = thread ? getManualCreatorCreditList(thread) : []
   const editFormIsDirty =
     thread != null &&
     (editForm.title !== thread.title ||
       editForm.format !== thread.format ||
       editForm.notes !== (thread.notes ?? '') ||
-      (thread.total_issues === null && editForm.issuesRemaining !== thread.issues_remaining) ||
+      editForm.issuesRemaining !== thread.issues_remaining ||
       JSON.stringify(editForm.manualCreatorCredits) !== JSON.stringify(initialCredits))
   const editHasUnsavedChanges = editFormIsDirty || hasPendingIssueEdits
 

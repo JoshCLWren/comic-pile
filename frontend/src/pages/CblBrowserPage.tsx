@@ -3,38 +3,24 @@ import { FormEvent, Fragment, useEffect, useLayoutEffect, useMemo, useRef, useSt
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CblAdoptionConfirmModal } from '../components/CblAdoptionConfirmModal'
-import { CblAdoptionSummary } from '../components/CblAdoptionSummary'
-import { CblSourceHeading } from '../components/CblSourceHeading'
 import { CblBrowsePagination } from '../components/CblBrowsePagination'
 import ReadingGraphOverlapDialog from '../components/ReadingGraphOverlapDialog'
 import ReadingGraphSummary from '../components/ReadingGraphSummary'
 import TriStateCheckbox from '../components/TriStateCheckbox'
 import { isAmbiguousNetworkFailure } from '../hooks/rollMutationReconciliation'
-import { applyCommittedCblAdoption } from '../query/cacheEffects'
+import { applyCommittedReadingPlan } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
-import { customCBLApi } from '../services/api-custom-cbl'
+import { continuityPlansApi } from '../services/api-continuity-plans'
+import { CblAdoptionTargetFieldset } from '../components/CblAdoptionTargetFieldset'
+import { planMatchesSource, useCblAdoptionTarget } from '../hooks/useCblAdoptionTarget'
 import { CblSourceDetailPanel } from '../components/CblSourceDetailPanel'
 import CompactIssueCardTrigger from '../components/CompactIssueCardTrigger'
 import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 import {
   cblSourcesApi,
-  type CBLAdoptionCommitResult,
-  type CBLAdoptionPlanChoices,
-  type CBLAdoptionPreview,
   type CBLAdoptionPreviewEntry,
   type CBLSourceListDiscoveryItem,
 } from '../services/api-cbl-sources'
-import {
-  canonicalListId,
-  forgetOwnedCblList,
-  parseCommittedOverlapDecisions,
-  parseCommittedSelections,
-  readOwnedCblList,
-  restoreCommittedChoices,
-  restoreOverlapChoices,
-  saveOwnedCblList,
-  type OwnedCblListLink,
-} from '../utils/cblAdoptionOwnership'
 import {
   buildReadingGraphRequest,
   hasGenuineOverlap,
@@ -56,7 +42,7 @@ import {
   type CblSeriesGroup,
 } from '../utils/cblAdoptionPlan'
 import { identityResolutionReason } from '../utils/cblResolutionReason'
-import { displayCblRepository, displayCblSourceTitle } from '../utils/cblSourceDisplay'
+import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle } from '../utils/cblSourceDisplay'
 import { catalogTotalLabel, isStaleBrowsePosition } from '../utils/cblCatalogBrowse'
 import { isObject, isString } from '../utils/runtimeChecks'
 import { countPhraseWithArticle } from '../utils/countPhraseWithArticle'
@@ -167,13 +153,18 @@ function groupSelectionLabel(group: CblSeriesGroup): string {
   return `${group.selectedCount} of ${group.selectableEntries.length} selected`
 }
 
+async function recoverAdoptedPlan(source: CBLSourceListDiscoveryItem) {
+  const plans = await continuityPlansApi.list()
+  const match = plans.find((plan) => planMatchesSource(plan, source))
+  if (!match) return null
+  return continuityPlansApi.get(match.id)
+}
+
 /**
  * Standalone CBL browser: find a trusted reading-order source, preview its
- * consequences without mutation, then commit it into the reader's own
- * source-linked Reading List with one explicit decision. The first add creates
- * the list; a repeat add or a revised selection updates that same list ID.
- * Selecting the source is the data entry — the reader never re-types titles,
- * issue numbers, or source order, and no legacy Reading Plan is involved.
+ * consequences without mutation, then adopt it into a canonical Reading Plan
+ * with one decision. Selecting the source is the data entry — the reader never
+ * re-types titles, issue numbers, or source order.
  */
 export default function CblBrowserPage() {
   const navigate = useNavigate()
@@ -221,18 +212,6 @@ export default function CblBrowserPage() {
   sourceDecisionsRef.current = sourceDecisions
   const [staleReview, setStaleReview] = useState(false)
   const [ambiguousCommit, setAmbiguousCommit] = useState(false)
-  /** The commit response omitted a canonical list ID; never fall back to a plan. */
-  const [commitMissingListId, setCommitMissingListId] = useState(false)
-  /**
-   * Committed source-linked Reading List pointer for the source on screen.
-   * Loaded from committed state on source change and refreshed after a commit;
-   * it is never inferred from a display name or a legacy plan.
-   */
-  const [ownedLink, setOwnedLink] = useState<OwnedCblListLink | null>(null)
-  /** One idempotency key per pending source so an ambiguous retry cannot double-commit. */
-  const idempotencyKeys = useRef<Record<number, string>>({})
-  /** Prevent the committed-choice restore effect from rewriting later local edits. */
-  const restoredLinkRef = useRef<string | null>(null)
   /**
    * Series-level answers for the prospective graph. Keyed by the server's
    * stable overlap identity; restored from saved decisions on reopen.
@@ -272,12 +251,9 @@ export default function CblBrowserPage() {
     setExpandedGroups({})
     setStaleReview(false)
     setAmbiguousCommit(false)
-    setCommitMissingListId(false)
     setOverlapChoices({})
     setGraphDialogOpen(false)
     setGraphDialogContinuesAdd(false)
-    setOwnedLink(deepLinkedListId === null ? null : readOwnedCblList(deepLinkedListId))
-    restoredLinkRef.current = null
     // Restore the checklist saved for the source the URL now shows (#4014),
     // after the reset above, so Back/Forward and the results list both return
     // the reader to the choices they already made.
@@ -349,89 +325,75 @@ export default function CblBrowserPage() {
     gcTime: 20 * 60 * 1000, // 20 minutes
   })
 
-  /** Re-read the committed choices of the source-linked list on reopen. */
-  const ownedListQuery = useQuery({
-    queryKey: ownedLink
-      ? queryKeys.customCBLs.detail(ownedLink.listId)
-      : queryKeys.customCBLs.detail(0),
-    queryFn: () => {
-      if (!ownedLink) throw new Error('No linked Reading List.')
-      return customCBLApi.get(ownedLink.listId)
-    },
-    enabled: ownedLink !== null,
-    staleTime: 0,
-    retry: false,
-  })
-
-  interface CommitVariables {
-    source: CBLSourceListDiscoveryItem
-    preview: CBLAdoptionPreview
-    idempotencyKey: string
-    listVersion: number | null
-  }
-
-  const commitSourceOnce = (variables: CommitVariables) => {
-    const choices: CBLAdoptionPlanChoices = {
-      series_decisions: seriesDecisions,
-      entry_decisions: entryDecisions,
-      overlap_decisions: overlapChoicePayload(graphQuery.data ?? null, overlapChoices),
-      list_version: variables.listVersion,
-      idempotency_key: variables.idempotencyKey,
-    }
-    return cblSourcesApi.commitSource(variables.source.id, variables.preview, choices)
-  }
-
-  const finishCommit = async (committed: CBLAdoptionCommitResult, variables: CommitVariables) => {
-    const listId = canonicalListId(committed)
-    if (listId === null) {
-      // A response without the canonical list identity is not a successful
-      // adoption. Never navigate to the legacy compatibility plan.
-      if (viewedSourceIdRef.current === variables.source.id) setCommitMissingListId(true)
-      return
-    }
-    const link: OwnedCblListLink = {
-      sourceId: variables.source.id,
-      listId,
-      listVersion: committed.list_version ?? variables.listVersion ?? 0,
-      contentHash: variables.preview.source.content_hash,
-      revisionSha: variables.preview.source.revision_sha,
-    }
-    saveOwnedCblList(link)
-    setOwnedLink(link)
-    restoredLinkRef.current = `${link.sourceId}:${link.listId}`
-    delete idempotencyKeys.current[variables.source.id]
-    // The write is real no matter which source the view shows, so the caches
-    // must learn the canonical list. Navigation still belongs to the view the
-    // reader was on: Back during the awaits must not hijack it.
-    await applyCommittedCblAdoption(queryClient, listId)
-    if (viewedSourceIdRef.current === variables.source.id) {
-      setAmbiguousCommit(false)
-      setCommitMissingListId(false)
-      navigate(`/reading-lists/${listId}`)
-    }
-  }
+  const {
+    plansQuery,
+    matchingPlans,
+    selectedPlan: selectedAdoptionTarget,
+    selectedPlanId: adoptionTargetId,
+    sourceAlreadyAdopted,
+    planCheckPending,
+    planCheckFailed,
+    mustChooseTarget: mustChooseAdoptionTarget,
+    chooseTarget: setAdoptionTargetId,
+    resetTarget: resetAdoptionTarget,
+  } = useCblAdoptionTarget(selectedSource, selectedSourceTitle)
 
   const commitMutation = useMutation({
-    mutationFn: commitSourceOnce,
-    onSuccess: finishCommit,
+    mutationFn: ({
+      source,
+      preview,
+      targetPlanId,
+    }: {
+      source: CBLSourceListDiscoveryItem
+      preview: NonNullable<typeof previewQuery.data>
+      targetPlanId: number | null
+    }) => {
+      const choices = {
+        series_decisions: seriesDecisions,
+        entry_decisions: entryDecisions,
+        overlap_decisions: overlapChoicePayload(graphQuery.data ?? null, overlapChoices),
+      }
+      return targetPlanId === null
+        ? cblSourcesApi.commitNew(source.id, preview, choices)
+        : cblSourcesApi.commit(source.id, targetPlanId, preview, choices)
+    },
+    onSuccess: async (committed, variables) => {
+      // The write is real no matter which source the view shows, so the
+      // caches must learn the committed plan. The reader's next step, instead,
+      // belongs to the view they were on: pressing Back or Forward while the
+      // request ran must not be hijacked when it completes. Compare after the
+      // cache work too, because Back can land while that await is pending.
+      await applyCommittedReadingPlan(queryClient, committed)
+      if (viewedSourceIdRef.current === variables.source.id) {
+        setAmbiguousCommit(false)
+        navigate(`/continuity-plans/${committed.id}`)
+      }
+    },
     onError: async (commitError, variables) => {
-      // Only surface messages or navigate for the view that made the request:
-      // Back while a commit is in flight must not hijack the new view.
+      // A lost response can still mean the write settled on the server, so run
+      // recovery and teach the cache about it whatever source the view now
+      // shows. Only surface messages or navigate for the view that made the
+      // request: pressing Back while an Add is in flight must not hijack the
+      // reader's new view or surface stale messages there.
       if (axios.isAxiosError(commitError) && commitError.response?.status === 409) {
-        delete idempotencyKeys.current[variables.source.id]
         if (viewedSourceIdRef.current === variables.source.id) setStaleReview(true)
         return
       }
       if (!isAmbiguousNetworkFailure(commitError)) return
-      // A lost response can still mean the write settled. Retry with the exact
-      // same key and payload so the server replays its receipt instead of
-      // writing twice. No legacy plan lookup or second save path is involved.
       try {
-        const retried = await commitSourceOnce(variables)
-        await finishCommit(retried, variables)
-        return
+        const recovered = await recoverAdoptedPlan(variables.source)
+        if (recovered) {
+          await applyCommittedReadingPlan(queryClient, recovered)
+          // Re-read the view after recovery and cache writes: the reader may
+          // have pressed Back during either await.
+          if (viewedSourceIdRef.current === variables.source.id) {
+            setAmbiguousCommit(false)
+            navigate(`/continuity-plans/${recovered.id}`)
+          }
+          return
+        }
       } catch {
-        // Recovery still cannot confirm whether the write settled.
+        // Recovery cannot confirm whether the plan was created.
       }
       if (viewedSourceIdRef.current === variables.source.id) setAmbiguousCommit(true)
     },
@@ -500,37 +462,6 @@ export default function CblBrowserPage() {
       ? applyCblAdoptionChoices(previewQuery.data, seriesDecisions, entryDecisions)
       : previewQuery.data
   }, [previewQuery.data, seriesDecisions, entryDecisions, hasChoices])
-  /**
-   * Reopen: the owned list is the authority for committed choices. Restore them
-   * once, only when its stored source fingerprint still matches the preview;
-   * a changed source must never silently receive another revision's overrides.
-   */
-  useEffect(() => {
-    if (!ownedLink || !previewQuery.data || !ownedListQuery.data) return
-    const key = `${ownedLink.sourceId}:${ownedLink.listId}`
-    if (restoredLinkRef.current === key) return
-    restoredLinkRef.current = key
-    const detail = ownedListQuery.data
-    if (
-      detail.source_content_hash !== ownedLink.contentHash
-      || detail.source_revision_sha !== ownedLink.revisionSha
-    ) {
-      forgetOwnedCblList(ownedLink.sourceId)
-      setOwnedLink(null)
-      setStaleReview(true)
-      setConfirmOpen(false)
-      return
-    }
-    const restored = restoreCommittedChoices(
-      previewQuery.data,
-      parseCommittedSelections(detail.selections),
-    )
-    setSeriesDecisions(restored.series)
-    setEntryDecisions(restored.entries)
-    setOverlapChoices(restoreOverlapChoices(parseCommittedOverlapDecisions(detail.overlap_decisions)))
-    setAmbiguousCommit(false)
-  }, [ownedLink, previewQuery.data, ownedListQuery.data])
-
   const isPreviewing = previewQuery.isFetching
   const isCommitting = commitMutation.isPending
   const seriesGroups = useMemo(() => (preview ? buildCblSeriesGroups(preview) : []), [preview])
@@ -637,12 +568,10 @@ export default function CblBrowserPage() {
     .join(', ')
   const catalogError = browseQuery.isError ? catalogErrorState(browseQuery.error) : null
   const commitError = staleReview
-    ? 'This source or its Reading List changed after you reviewed it. Refresh the preview before adding it again.'
+    ? 'This source changed after you reviewed it. Refresh the preview before adding it.'
     : ambiguousCommit
-      ? 'ComicPile did not confirm the saved Reading List in time. Reopen this source to check its linked list before trying again.'
-      : commitMissingListId
-        ? 'ComicPile completed the save but did not return the Reading List ID. Find it under Reading Lists before trying again.'
-        : commitMutation.error &&
+      ? 'ComicPile did not confirm the new plan in time. Check Reading Plans before adding again.'
+      : commitMutation.error &&
           commitSourceId === deepLinkedListId &&
           !isAmbiguousNetworkFailure(commitMutation.error)
         ? errorMessage(commitMutation.error, 'Unable to complete the CBL workflow.')
@@ -670,12 +599,12 @@ export default function CblBrowserPage() {
   const resetSelectionState = () => {
     setCustomizing(false)
     setConfirmOpen(false)
+    resetAdoptionTarget()
     setSeriesDecisions({})
     setEntryDecisions({})
     setExpandedGroups({})
     setStaleReview(false)
     setAmbiguousCommit(false)
-    setCommitMissingListId(false)
     setOverlapChoices({})
     setGraphDialogOpen(false)
     setGraphDialogContinuesAdd(false)
@@ -813,17 +742,19 @@ export default function CblBrowserPage() {
         ? 'Refresh the preview before adding it.'
         : needsAttentionCount > 0
           ? `${countPhraseWithArticle(needsAttentionCount, 'entry still needs', 'entries still need')} attention before this source can be added.`
-          : ownedLink && ownedListQuery.isPending
-            ? 'Checking the linked Reading List…'
-            : ownedLink && ownedListQuery.isError
-              ? 'Check the linked Reading List before updating it.'
-              : graphCycleErrors.length > 0
-                ? 'Resolve the reading-order loop before adding this source.'
-                : graphLoading
-                  ? 'Checking the reading graph…'
-                  : (summary?.final_adopted_count ?? 0) === 0
-                    ? 'Nothing is selected to add.'
-                    : null
+          : planCheckPending
+            ? 'Checking existing Reading Plans…'
+            : planCheckFailed
+              ? 'Check existing Reading Plans before adding this source.'
+              : mustChooseAdoptionTarget && selectedAdoptionTarget === null
+                ? 'Choose the exact Reading Plan to update before adding this source.'
+                : graphCycleErrors.length > 0
+                  ? 'Resolve the reading-order loop before adding this source.'
+                  : graphLoading
+                    ? 'Checking the reading graph…'
+                    : (summary?.final_adopted_count ?? 0) === 0
+                      ? 'Nothing is selected to add.'
+                      : null
   const commitBlocked = commitBlockedReason !== null || isCommitting || !preview
   const consequenceLine =
     preview && summary
@@ -857,17 +788,11 @@ export default function CblBrowserPage() {
   const confirmCommit = () => {
     if (!selectedSource || !preview || commitBlocked || pendingOverlaps.length > 0) return
     setConfirmOpen(false)
-    setCommitMissingListId(false)
     setCommitSourceId(selectedSource.id)
-    const key =
-      idempotencyKeys.current[selectedSource.id]
-      ?? `${selectedSource.id}:${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${preview.source.content_hash}`}`
-    idempotencyKeys.current[selectedSource.id] = key
     commitMutation.mutate({
       source: selectedSource,
       preview,
-      idempotencyKey: key,
-      listVersion: ownedListQuery.data?.list_version ?? ownedLink?.listVersion ?? null,
+      targetPlanId: selectedAdoptionTarget?.id ?? null,
     })
   }
 
@@ -879,7 +804,7 @@ export default function CblBrowserPage() {
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-[var(--theme-text-muted)]">
           Browse trusted reading-order sources. Selecting a source is the data entry — preview
-          what it would do, then add or update a Reading List you own in one step.
+          what it would do, then add it as a Reading Plan in one step.
         </p>
       </header>
 
@@ -944,13 +869,30 @@ export default function CblBrowserPage() {
           className="space-y-4 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-4"
           aria-labelledby="cbl-preview-heading"
         >
-          <CblSourceHeading
-            title={selectedSourceTitle}
-            preview={preview}
-            ownedListId={ownedLink?.listId ?? null}
-            ownedListName={ownedListQuery.data?.name ?? null}
-            choicesRestored={restoredLinkRef.current !== null}
-          />
+          <div>
+            <h2
+              id="cbl-preview-heading"
+              className="text-base font-black text-[var(--theme-text-primary)]"
+            >
+              {selectedSourceTitle}
+            </h2>
+            {preview && (
+              <details className="mt-2">
+                <summary className="cursor-pointer text-xs font-bold text-[var(--theme-text-muted)]">
+                  Source details
+                </summary>
+                <div className="mt-2 space-y-1 text-xs text-[var(--theme-text-dim)]">
+                  {displayCblSourcePath(preview.source.source_path) && (
+                    <p>{displayCblSourcePath(preview.source.source_path)}</p>
+                  )}
+                  {displayCblRepository(preview.source.source_repository) && (
+                    <p>{displayCblRepository(preview.source.source_repository)}</p>
+                  )}
+                  <p>Revision {preview.source.revision_sha.slice(0, 8)}</p>
+                </div>
+              </details>
+            )}
+          </div>
 
           {isPreviewing && !preview && (
             <p role="status" className="text-sm text-[var(--theme-text-muted)]">
@@ -964,7 +906,42 @@ export default function CblBrowserPage() {
             </p>
           )}
 
-          {preview && summary && <CblAdoptionSummary preview={preview} needsAttentionCount={needsAttentionCount} />}
+          {preview && summary && (
+            <dl className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-5">
+              <div>
+                <dt className="text-[var(--theme-text-dim)]">
+                  {preview.total_positions === 1 ? 'Entry' : 'Entries'}
+                </dt>
+                <dd className="font-bold text-[var(--theme-text-primary)]">
+                  {preview.total_positions}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[var(--theme-text-dim)]">Already in ComicPile</dt>
+                <dd className="font-bold text-[var(--theme-text-primary)]">
+                  {summary.reused_existing_count}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[var(--theme-text-dim)]">Will be added</dt>
+                <dd className="font-bold text-[var(--theme-text-primary)]">
+                  {summary.missing_would_create_count}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[var(--theme-text-dim)]">Need attention</dt>
+                <dd className="font-bold text-[var(--theme-text-primary)]">
+                  {needsAttentionCount}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-[var(--theme-text-dim)]">Final plan size</dt>
+                <dd className="font-bold text-[var(--theme-text-primary)]">
+                  {summary.final_adopted_count}
+                </dd>
+              </div>
+            </dl>
+          )}
 
           {needsAttentionCount > 0 && (
             <p className="text-xs text-[var(--theme-warning)]">
@@ -979,6 +956,20 @@ export default function CblBrowserPage() {
                 : ''}
             </p>
           )}
+
+          <CblAdoptionTargetFieldset
+            plans={matchingPlans}
+            selectedPlanId={adoptionTargetId}
+            sourceAlreadyAdopted={sourceAlreadyAdopted}
+            disabled={isCommitting}
+            planCheckFailed={planCheckFailed}
+            onChoose={(planId) => {
+              setAdoptionTargetId(planId)
+              setConfirmOpen(false)
+              commitMutation.reset()
+            }}
+            onRetry={() => void plansQuery.refetch()}
+          />
 
           {graphUnavailable && (
             <p role="status" className="text-xs text-[var(--theme-warning)]">
@@ -1019,9 +1010,9 @@ export default function CblBrowserPage() {
                 }`}
               >
                 {isCommitting
-                  ? 'Saving Reading List…'
-                  : ownedLink
-                    ? 'Update this Reading List'
+                  ? 'Adding reading order…'
+                  : selectedAdoptionTarget
+                    ? 'Update selected Reading Plan'
                     : 'Add this reading order'}
               </button>
               {commitBlockedReason && (
@@ -1412,20 +1403,9 @@ export default function CblBrowserPage() {
 
       <CblAdoptionConfirmModal
         isOpen={confirmOpen}
-        listId={ownedLink?.listId ?? null}
-        listName={ownedListQuery.data?.name ?? null}
+        target={selectedAdoptionTarget}
         sourceTitle={selectedSourceTitle}
         consequenceLine={consequenceLine}
-        beforeLine={
-          ownedLink
-            ? `Reading List #${ownedLink.listId} · ${ownedListQuery.data?.issue_count ?? 'saved'} issues`
-            : 'No Reading List has been created for this source yet.'
-        }
-        afterLine={
-          summary
-            ? `${summary.final_adopted_count} issues in the owned Reading List · read status, ratings and manual entries preserved`
-            : null
-        }
         onClose={() => setConfirmOpen(false)}
         onConfirm={confirmCommit}
       />

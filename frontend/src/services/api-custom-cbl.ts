@@ -66,15 +66,6 @@ export interface CustomCBL extends CustomCBLListItem {
   entries: CustomCBLEntry[]
   predecessor_changes?: ReadingListPredecessorChange[]
   warnings?: string[]
-  /** Monotonic version of this owner-scoped list; guards a later CBL commit. */
-  list_version?: number
-  /** Source fingerprint from the last committed CBL adoption (#4022). */
-  source_revision_sha?: string | null
-  source_content_hash?: string | null
-  /** Committed checklist choices, restored when the CBL browser reopens. */
-  selections?: unknown | null
-  /** Reader-approved overlap answers, restored on reopen. */
-  overlap_decisions?: unknown | null
 }
 
 export interface CustomCBLIssueSearchResult {
