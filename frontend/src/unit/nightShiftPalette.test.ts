@@ -154,8 +154,11 @@ describe('Night Shift single-palette contract (#5980)', () => {
   })
 
   it('renders text and status colors at WCAG AA contrast on page and panel', () => {
-    const page = resolveToken(tokens, '--theme-bg-page')
-    const panel = resolveToken(tokens, '--theme-bg-panel')
+    const surfaces = [
+      resolveToken(tokens, '--theme-bg-page'),
+      resolveToken(tokens, '--theme-bg-panel'),
+      resolveToken(tokens, '--theme-bg-hover'),
+    ]
     const textRoles = [
       '--theme-text-primary',
       '--theme-text-muted',
@@ -170,14 +173,21 @@ describe('Night Shift single-palette contract (#5980)', () => {
     ]
     for (const token of textRoles) {
       const color = resolveToken(tokens, token)
-      expect(contrastRatio(color, page), `${token} on page`).toBeGreaterThanOrEqual(4.5)
-      expect(contrastRatio(color, panel), `${token} on panel`).toBeGreaterThanOrEqual(4.5)
+      for (const surface of surfaces) {
+        expect(contrastRatio(color, surface), `${token} on ${surface}`).toBeGreaterThanOrEqual(4.5)
+      }
     }
   })
 
   it('keeps the primary-action foreground readable in both action states', () => {
     const foreground = resolveToken(tokens, '--theme-primary-action-text')
-    for (const token of ['--theme-primary-action', '--theme-primary-action-hover']) {
+    for (const token of [
+      '--theme-primary-action',
+      '--theme-primary-action-hover',
+      '--theme-continuity-accent',
+      '--theme-danger',
+      '--theme-danger-hover',
+    ]) {
       expect(contrastRatio(foreground, resolveToken(tokens, token)), token).toBeGreaterThanOrEqual(4.5)
     }
   })
