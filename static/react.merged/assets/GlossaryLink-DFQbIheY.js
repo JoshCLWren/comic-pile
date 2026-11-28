@@ -1,0 +1,1 @@
+import{b as e,k as t}from"./vendor-Cx3FGUMk.js";var n=t();function r({id:t,children:r}){return(0,n.jsx)(e,{to:`/glossary#${t}`,className:`font-bold text-amber-400 underline underline-offset-2 hover:text-amber-300`,children:r})}export{r as t};

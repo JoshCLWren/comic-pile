@@ -1,0 +1,1 @@
+function e(e,t){return t==null||!Number.isInteger(t)||t<=0?`/thread/${e}`:`/thread/${e}?issue=${t}#issue-${t}`}function t(e){let t=new URLSearchParams(e).get(`issue`);if(!t)return 0;let n=Number(t);return Number.isInteger(n)&&n>0?n:0}export{e as n,t};

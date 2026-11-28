@@ -1,0 +1,1 @@
+import{t as e}from"./httpClient-B_5thRbr.js";function t(e){return{preview:(t,n)=>e.post(`/v1/issue-identity/cbl/${t}/reading-graph-preview`,n)}}var n=t(e());function r(e){return{getGraph:()=>e.get(`/v2/reading-graph`),repair:t=>e.post(`/v2/reading-graph/repairs`,t)}}var i=r(e());export{i as n,n as t};

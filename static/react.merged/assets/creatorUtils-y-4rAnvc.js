@@ -1,0 +1,1 @@
+function e(e){let t=e??[];return t.length===0?``:t.map(e=>e.roles.length===0?e.name:`${e.name} (${e.roles.join(`, `)})`).join(` • `)}export{e as t};
