@@ -7,11 +7,16 @@ import {
 import { threadsApi } from '../services/api-threads'
 import { issuesApi, type IssueListParams } from '../services/api-issues'
 import type { Issue, ThreadListItem } from '../types'
-import { collectAllPages } from '../pagination/collectAllPages'
+import { COLLECT_ALL_DEFAULT_MAX_PAGES, collectAllPages } from '../pagination/collectAllPages'
 import { queryKeys } from '../query/queryKeys'
 import { invalidateAfterCrossoverMutation } from '../query/cacheEffects'
 
 type PositionedIssue = Issue & { position: number }
+
+const ISSUE_PAGE_SIZE = 100
+// native/roll-service/src/thread_issues.rs caps a thread at 10,000 issues.
+const MAX_ISSUE_COLLECTION_PAGES = 100
+const THREAD_PAGE_SIZE = 100
 
 /** Crossover group service surface the Crossovers page depends on. */
 export type CrossoverGroupsApi = Pick<
