@@ -442,6 +442,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
+        "frontend/src/services/api-issues.ts",
         "frontend/src/services/api-threads.ts"
       ]
     },
@@ -489,6 +490,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
+        "frontend/src/services/api-issues.ts",
         "frontend/src/services/api-threads.ts"
       ]
     },
@@ -502,6 +504,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
+        "frontend/src/services/api-issues.ts",
         "frontend/src/services/api-threads.ts"
       ]
     },
@@ -515,6 +518,7 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
+        "frontend/src/services/api-issues.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts"
       ]
@@ -530,12 +534,11 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-migration.ts",
+        "frontend/src/services/api-issues.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
         "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
         "frontend/src/unit/api-auth-failure-isolation.test.ts",
-        "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
         "frontend/src/unit/api.test.ts"
       ]
@@ -552,12 +555,10 @@
       "consumers": [
         "frontend/src/services/api-dependencies.ts",
         "frontend/src/services/api-issues.ts",
-        "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
         "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
         "frontend/src/unit/api-auth-failure-isolation.test.ts",
-        "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
         "frontend/src/unit/api.test.ts"
       ]
@@ -573,12 +574,11 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-migration.ts",
+        "frontend/src/services/api-issues.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
         "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
         "frontend/src/unit/api-auth-failure-isolation.test.ts",
-        "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
         "frontend/src/unit/api.test.ts"
       ]
@@ -594,12 +594,11 @@
       "runtime": "native-rust",
       "consumers": [
         "frontend/src/services/api-dependencies.ts",
-        "frontend/src/services/api-migration.ts",
+        "frontend/src/services/api-issues.ts",
         "frontend/src/services/api-threads.ts",
         "frontend/src/test/cbl-replace-review.spec.ts",
         "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
         "frontend/src/unit/api-auth-failure-isolation.test.ts",
-        "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts",
         "frontend/src/unit/api.test.ts"
       ]
@@ -1516,7 +1515,8 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
-        "frontend/src/services/api-issues.ts"
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/unit/api-issues.test.ts"
       ]
     },
     {

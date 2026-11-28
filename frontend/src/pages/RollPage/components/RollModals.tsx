@@ -1,5 +1,5 @@
-import type { ChangeEvent, FormEvent } from 'react'
-import { useMemo, useState } from 'react'
+import type { FormEvent } from 'react'
+import { useMemo } from 'react'
 import Modal from '../../../components/Modal'
 import { DirectReadIssuePanel } from '../../../components/DirectReadIssuePanel'
 import MigrationDialog from '../../../components/MigrationDialog'
@@ -15,75 +15,6 @@ import type { RollBootstrapThread } from '../../../types/rollBootstrap'
 import type { RatingThread } from '../types'
 import { buildManualPickerOptions } from '../manualPickerOptions'
 import { ManualPickerSearch } from './ManualPickerSearch'
-
-interface SetCurrentIssueModalProps {
-  onSubmit: (issueNumber: string) => Promise<void>
-  onClose: () => void
-}
-
-function SetCurrentIssueModal({ onSubmit, onClose }: SetCurrentIssueModalProps) {
-  const [issueNumber, setIssueNumber] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [error, setError] = useState('')
-
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!issueNumber.trim()) return
-
-    setIsSubmitting(true)
-    setError('')
-    try {
-      await onSubmit(issueNumber.trim())
-      onClose()
-    } catch (err) {
-      setError('Failed to set current issue. Please try again.')
-      console.error('Set current issue failed:', err)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <p className="text-xs text-stone-400">
-        Enter the issue number to set as the current/next issue. All earlier issues will be marked read.
-      </p>
-      <div className="space-y-2">
-        <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
-          Issue Number
-        </label>
-        <input
-          type="text"
-          value={issueNumber}
-          onChange={(event: ChangeEvent<HTMLInputElement>) => setIssueNumber(event.target.value)}
-          placeholder="e.g., 20"
-          className="w-full rounded-xl px-3 py-2 text-sm form-control"
-          required
-          autoFocus
-          disabled={isSubmitting}
-        />
-      </div>
-      {error && <p className="text-xs text-red-400">{error}</p>}
-      <div className="flex gap-2 pt-2">
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={isSubmitting}
-          className="flex-1 py-3 rounded-lg border border-[var(--theme-border)] text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors disabled:opacity-60"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={isSubmitting || !issueNumber.trim()}
-          className="flex-1 py-3 rounded-xl bg-[var(--theme-primary-action)] font-black text-stone-950 hover:bg-[var(--theme-primary-action-hover)] transition-colors disabled:opacity-60"
-        >
-          {isSubmitting ? 'Setting...' : 'Set Current Issue'}
-        </button>
-      </div>
-    </form>
-  )
-}
 
 interface RollModalsProps {
   showMigrationDialog: boolean
@@ -123,9 +54,6 @@ interface RollModalsProps {
   pendingThreadId: number | null
   onCloseActionSheet: () => void
   onAction: (action: string) => void
-  isSetCurrentIssueOpen: boolean
-  onCloseSetCurrentIssue: () => void
-  onSetCurrentIssue: (issueNumber: string) => Promise<void>
   isShuffleOpen: boolean
   onShuffleConfirm: () => void
   onShuffleCancel: () => void
@@ -174,9 +102,6 @@ export function RollModals({
   pendingThreadId,
   onCloseActionSheet,
   onAction,
-  isSetCurrentIssueOpen,
-  onCloseSetCurrentIssue,
-  onSetCurrentIssue,
   isShuffleOpen,
   onShuffleConfirm,
   onShuffleCancel,
@@ -334,14 +259,6 @@ export function RollModals({
           </button>
           <button
             type="button"
-            onClick={() => onAction('set-current-issue')}
-            className="w-full py-3 px-4 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
-          >
-            <span className="text-lg">🎯</span>
-            <span>Set Current Issue</span>
-          </button>
-          <button
-            type="button"
             onClick={() => onAction('move-front')}
             className="w-full py-3 px-4 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl text-left text-sm font-black text-stone-300 hover:bg-white/10 transition-all flex items-center gap-3"
           >
@@ -384,19 +301,6 @@ export function RollModals({
           </button>
         </div>
       </Modal>
-
-      {isSetCurrentIssueOpen && selectedThread && (
-        <Modal
-          isOpen={isSetCurrentIssueOpen}
-          title={`Set Current Issue: ${selectedThread.title}`}
-          onClose={onCloseSetCurrentIssue}
-        >
-          <SetCurrentIssueModal
-            onSubmit={onSetCurrentIssue}
-            onClose={onCloseSetCurrentIssue}
-          />
-        </Modal>
-      )}
 
       {isShuffleOpen && (
         <ShuffleQueueDialog

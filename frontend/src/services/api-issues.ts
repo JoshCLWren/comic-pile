@@ -53,18 +53,64 @@ export interface IssueReadOperationUndoResponse {
   skipped_issue_ids: number[]
 }
 
-export interface SetCurrentIssueResponse {
-  thread_id: number
-  title: string
-  format: string
-  issues_remaining: number
-  queue_position: number
-  issue_id: number | null
-  issue_number: string | null
-  next_issue_id: number | null
-  next_issue_number: string | null
-  total_issues: number | null
-  reading_progress: string | null
+/** Server cap for issues on one thread (`MAX_ISSUES` in thread_issues.rs). */
+const MAX_MIGRATION_ISSUES = 10_000
+/** Server cap for one issue-range create (`MAX_ISSUES_PER_REQUEST` in issue_mutation.rs). */
+const MAX_ISSUES_PER_CREATE = 1_000
+/** Server cap for one bulk read-marker request (`MAX_BULK_ISSUES` in issue_read_state.rs). */
+const BULK_READ_MARKER_CHUNK_SIZE = 100
+
+/**
+ * Convert an untracked thread into individual v2 issue resources (#5707).
+ *
+ * The retired one-shot v1 migration action bundled issue creation and
+ * reading progress in one server-authoritative call. The v2 contract composes
+ * the same result from scoped resources: create the range in bounded chunks
+ * (the create endpoint accepts at most 1,000 issues per request), mark the
+ * first `lastIssueRead` issues read in bounded bulk requests (the server
+ * re-derives queue and reading state), then read the updated thread. No
+ * client-side next-unread pointer is stored. Every request is owned-scoped and
+ * bounded before any allocation or loop.
+ *
+ * @param client - HTTP transport used for every request.
+ * @param threadId - Thread whose issues are materialized.
+ * @param lastIssueRead - Count of leading issues already read.
+ * @param totalIssues - Total issue count to create.
+ * @returns The updated thread, preserving the migration dialog's wire contract.
+ */
+export async function migrateThreadToIssues(
+  client: HttpClient,
+  threadId: number,
+  lastIssueRead: number,
+  totalIssues: number,
+): Promise<Thread> {
+  if (
+    !Number.isSafeInteger(threadId) || threadId <= 0 ||
+    !Number.isSafeInteger(totalIssues) || totalIssues < 1 || totalIssues > MAX_MIGRATION_ISSUES ||
+    !Number.isSafeInteger(lastIssueRead) || lastIssueRead < 0 || lastIssueRead > totalIssues
+  ) {
+    throw new Error('Invalid migration values. Both must be whole numbers and last read must be 0-total.')
+  }
+
+  const createdIds: number[] = []
+  for (let start = 1; start <= totalIssues; start += MAX_ISSUES_PER_CREATE) {
+    const end = Math.min(start + MAX_ISSUES_PER_CREATE - 1, totalIssues)
+    const created = await client.post<IssueListResponse, { issue_range: string }>(
+      `/v2/threads/${threadId}/issues`,
+      { issue_range: `${start}-${end}` },
+    )
+    for (const issue of created.issues ?? []) createdIds.push(issue.id)
+  }
+  const readIds = createdIds.slice(0, lastIssueRead)
+  for (let offset = 0; offset < readIds.length; offset += BULK_READ_MARKER_CHUNK_SIZE) {
+    await client.post('/v2/issue-read-markers', {
+      issue_ids: readIds.slice(offset, offset + BULK_READ_MARKER_CHUNK_SIZE),
+    })
+  }
+
+  // There is no v2 single-thread GET; the existing v1 read keeps the dialog's
+  // full Thread contract while #5701 owns the v2 thread-read migration.
+  return client.get<Thread>(`/v1/threads/${threadId}`)
 }
 
 interface CreateIssuesPayload {
@@ -340,26 +386,8 @@ export function createIssuesApi(client: HttpClient) {
      * @param totalIssues - Total number of issues in the series
      * @returns The updated thread object
      */
-    migrateThread: async (threadId: number, lastIssueRead: number, totalIssues: number): Promise<Thread> => {
-      return client.post(`/v1/threads/${threadId}:migrateToIssues`, {
-        last_issue_read: lastIssueRead,
-        total_issues: totalIssues,
-      })
-    },
-
-  /**
-   * Atomically set the current issue for an active thread
-   * Marks all issues before the target as read, sets target as unread,
-   * and updates the session's pending issue.
-   * @param threadId - The thread to correct
-   * @param issueNumber - The target issue number to set as current
-   * @returns Response with corrected thread and issue info
-   */
-    setCurrentIssue: async (threadId: number, issueNumber: string): Promise<SetCurrentIssueResponse> => {
-      return client.post(`/v1/threads/${threadId}:setCurrentIssue`, {
-        issue_number: issueNumber,
-      })
-    },
+    migrateThread: async (threadId: number, lastIssueRead: number, totalIssues: number): Promise<Thread> =>
+      migrateThreadToIssues(client, threadId, lastIssueRead, totalIssues),
 
     /**
      * Get reader-context for an issue
