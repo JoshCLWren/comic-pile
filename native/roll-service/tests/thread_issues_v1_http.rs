@@ -532,7 +532,7 @@ async fn create_issues_validation_isolation_and_not_found() {
     )
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
-    assert_eq!(body["detail"], "Thread 987654 not found");
+    assert_eq!(body["detail"], "Thread not found");
     // Cross-user: same 404 as a missing thread, and nothing is written.
     let (status, body) = send(
         &state,
@@ -545,7 +545,7 @@ async fn create_issues_validation_isolation_and_not_found() {
     )
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
-    assert_eq!(body["detail"], format!("Thread {thread} not found"));
+    assert_eq!(body["detail"], "Thread not found");
     assert!(positions(&conn, thread).await.is_empty());
 }
 
