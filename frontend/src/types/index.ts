@@ -67,7 +67,7 @@ export type Thread = components['schemas']['ThreadResponse']
  * post-rate state. Typing the mutation response here keeps the reconciliation
  * data on the wire instead of dropping it at the service boundary.
  */
-export type RateResponsePayload = components['schemas']['ThreadResponse'] & {
+export type RateResponsePayload = Omit<components['schemas']['ThreadResponse'], 'format'> & {
   /** Actual read time of the issue returned by the native v2 writer. */
   rated_issue_read_at?: string | null
   roll_reconciliation?: {
