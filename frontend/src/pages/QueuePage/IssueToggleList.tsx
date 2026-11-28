@@ -275,19 +275,15 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     const collected = await collectAllPages({
       fetchPage: (token) => {
         const params: IssueListParams = { page_size: 100 }
-        if (token) {
-          params.page_token = token
-        }
+        if (token) params.page_token = token
         return issuesService.list(threadId, params)
       },
       selectItems: (page) => page.issues,
       selectNextToken: (page) => page.next_page_token || null,
       maxPages: MAX_ISSUE_COLLECTION_PAGES,
     })
-    // The server's `total_count` is the authority for the completeness check
-    // (#3764). Keep the largest count any page reported: a count that grows
-    // while pages are fetched would otherwise let a truncated list pass the
-    // check against a stale, smaller total.
+    // The largest reported `total_count` is the authority for the completeness
+    // check (#3764); a stale smaller total must not let a truncated list pass.
     const totalCount = collected.pages.reduce(
       (largest, page) => Math.max(largest, page.total_count ?? 0),
       0,
