@@ -59,7 +59,7 @@ async fn register_user(state: &Arc<AppState>, username: &str) -> (String, String
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri("/api/v1/auth/register")
+                .uri("/api/v2/auth/register")
                 .header(
                     "x-forwarded-for",
                     format!(
@@ -333,6 +333,33 @@ async fn delete_v2_removes_thread_and_subsequent_operations_return_404() {
     )
     .await
     .unwrap();
+    let issue_id: i32 = conn
+        .query_one(
+            "INSERT INTO issues (thread_id, issue_number, status, created_at, position)
+             VALUES ($1, '1', 'unread', NOW(), 1) RETURNING id",
+            &[&thread],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let reading_list_id: i32 = conn
+        .query_one(
+            "INSERT INTO custom_cbl_lists (user_id, name, description, mode, created_at, updated_at, overlap_decisions_updated_at)
+             VALUES ($1, 'Delete fixture list', NULL, 'loose', NOW(), NOW(), NOW()) RETURNING id",
+            &[&ctx.user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let reading_list_entry_id: i32 = conn
+        .query_one(
+            "INSERT INTO custom_cbl_entries (list_id, issue_id, position, created_at, is_checkpoint, checkpoint_target_issue_ids, gate, skipped)
+             VALUES ($1, $2, 0, NOW(), false, '[]'::json, 'none', false) RETURNING id",
+            &[&reading_list_id, &issue_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
     drop(conn);
 
     let (status, body) = call(&ctx, "DELETE", &uri, None).await;
@@ -344,14 +371,20 @@ async fn delete_v2_removes_thread_and_subsequent_operations_return_404() {
         .query_one(
             "SELECT (SELECT count(*) FROM events WHERE id = $1),
                     (SELECT count(*) FROM snapshots WHERE id = $2),
-                    (SELECT count(*) FROM reading_order_items WHERE thread_id = $3)",
-            &[&event_id, &snapshot_id, &thread],
+                    (SELECT count(*) FROM reading_order_items WHERE thread_id = $3),
+                    (SELECT count(*) FROM custom_cbl_entries WHERE id = $4)",
+            &[&event_id, &snapshot_id, &thread, &reading_list_entry_id],
         )
         .await
         .unwrap();
     assert_eq!(remaining.get::<_, i64>(0), 0, "thread event removed");
     assert_eq!(remaining.get::<_, i64>(1), 0, "dependent snapshot removed");
     assert_eq!(remaining.get::<_, i64>(2), 0, "reading-order item removed");
+    assert_eq!(
+        remaining.get::<_, i64>(3),
+        0,
+        "reading-list membership removed"
+    );
     drop(conn);
 
     let (status, body) = call(&ctx, "DELETE", &uri, None).await;
@@ -359,4 +392,67 @@ async fn delete_v2_removes_thread_and_subsequent_operations_return_404() {
     assert_eq!(body["detail"], format!("Thread {thread} not found"));
     let (status, body) = call(&ctx, "PATCH", &uri, Some(json!({"title": "No"}))).await;
     assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
+}
+
+#[tokio::test]
+async fn delete_v2_removes_thread_with_reading_list_membership_dependencies() {
+    // #5950: a confirmed delete must also succeed when the thread's issues are
+    // referenced by Reading List membership rows. Those entries carry an
+    // `issue_id` FK (not a `thread_id` FK), so they are cleaned up only by the
+    // cascading issue delete. Prove the whole chain resolves to 204 and leaves
+    // no orphaned membership or removed list behind.
+    let ctx = setup("v2deletelist").await;
+    let thread = seed_thread(&ctx, ctx.user_id, "Listed series").await;
+    let conn = ctx.state.pool.get().await.unwrap();
+    let issue_id: i32 = conn
+        .query_one(
+            "INSERT INTO issues (thread_id, issue_number, status, position, created_at)
+             VALUES ($1, '1', 'unread', 1, NOW()) RETURNING id",
+            &[&thread],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let list_id: i32 = conn
+        .query_one(
+            "INSERT INTO custom_cbl_lists (user_id, name, created_at, updated_at)
+             VALUES ($1, 'Delete fixture list', NOW(), NOW()) RETURNING id",
+            &[&ctx.user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    conn.execute(
+        "INSERT INTO custom_cbl_entries (list_id, issue_id, position, created_at)
+         VALUES ($1, $2, 1, NOW())",
+        &[&list_id, &issue_id],
+    )
+    .await
+    .unwrap();
+    drop(conn);
+
+    let uri = format!("/api/v2/threads/{thread}");
+    let (status, body) = call(&ctx, "DELETE", &uri, None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body:?}");
+
+    let conn = ctx.state.pool.get().await.unwrap();
+    let counts = conn
+        .query_one(
+            "SELECT (SELECT count(*) FROM threads WHERE id = $1),
+                    (SELECT count(*) FROM issues WHERE thread_id = $1),
+                    (SELECT count(*) FROM custom_cbl_entries WHERE issue_id = $2),
+                    (SELECT count(*) FROM custom_cbl_lists WHERE id = $3)",
+            &[&thread, &issue_id, &list_id],
+        )
+        .await
+        .unwrap();
+    assert_eq!(counts.get::<_, i64>(0), 0, "thread removed");
+    assert_eq!(counts.get::<_, i64>(1), 0, "thread issues removed");
+    assert_eq!(
+        counts.get::<_, i64>(2),
+        0,
+        "reading-list membership removed"
+    );
+    assert_eq!(counts.get::<_, i64>(3), 1, "reading list itself retained");
+    drop(conn);
 }
