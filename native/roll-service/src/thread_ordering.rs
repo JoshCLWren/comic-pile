@@ -419,15 +419,6 @@ pub async fn post_thread_action(
         Some((raw_id, "getBlockingInfo")) => get_thread_blocking_info(&state, user, raw_id)
             .await
             .map(IntoResponse::into_response),
-        Some((raw_id, "migrateToIssues")) => {
-            thread_issues::migrate_to_issues(&state, user, raw_id, &body).await
-        }
-        Some((raw_id, "migrateToIssuesSimple")) => {
-            thread_issues::migrate_to_issues_simple(&state, user, raw_id, &body).await
-        }
-        Some((raw_id, "setCurrentIssue")) => {
-            thread_issues::set_current_issue(&state, user, raw_id, &body).await
-        }
         _ => Err(ApiError::NotFound("Not Found".to_string())),
     }
 }
