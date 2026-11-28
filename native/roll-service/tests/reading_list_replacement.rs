@@ -434,7 +434,10 @@ async fn undo_restores_only_list_membership_and_keeps_later_read_event() {
         .await
         .unwrap()
         .get(0);
-    assert_eq!(committed_overlap, 4026111, "approved overlap must be committed");
+    assert_eq!(
+        committed_overlap, 4026111,
+        "approved overlap must be committed"
+    );
     drop(conn);
 
     // A read event that happens after the replacement is independent history.
@@ -474,6 +477,38 @@ async fn undo_restores_only_list_membership_and_keeps_later_read_event() {
     );
 
     let conn = fixture.state.pool.get().await.unwrap();
+    let intent_row = conn
+        .query_one(
+            "SELECT is_checkpoint, gate, skipped FROM custom_cbl_entries
+             WHERE list_id = $1 AND issue_id = $2",
+            &[&TARGET_LIST_ID, &ISSUE_MANUAL],
+        )
+        .await
+        .unwrap();
+    let restored_intent = (
+        intent_row.get::<_, bool>(0),
+        intent_row.get::<_, String>(1),
+        intent_row.get::<_, bool>(2),
+    );
+    assert_eq!(
+        restored_intent,
+        (true, "hold".to_string(), true),
+        "Undo must restore exact gating decisions, not just membership"
+    );
+    let restored_overlap: i32 = conn
+        .query_one(
+            "SELECT continuing_external_identity_id FROM custom_cbl_overlap_decisions
+             WHERE list_id = $1",
+            &[&TARGET_LIST_ID],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(
+        restored_overlap, 4026110,
+        "Undo must restore the saved overlap choice"
+    );
+
     let events: i64 = conn
         .query_one(
             "SELECT COUNT(*)::bigint FROM events WHERE issue_id = $1",
