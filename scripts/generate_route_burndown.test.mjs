@@ -421,8 +421,6 @@ test('identity-inbox v2 resources retain all seven native contracts and Rust ing
     assert.ok(op?.operationId, 'missing native operationId for ' + method + ' ' + route);
     assert.ok(Object.keys(op.responses).some(code => code.startsWith('2')), route);
     assert.equal(liveOperation(fragment, method, route).dest, '/api/native_api.rs', route);
-<<<<<<< HEAD
-=======
   }
 });
 
@@ -469,6 +467,5 @@ test('retired roll override is a tombstone that regeneration drops from the inve
   assert.ok(!regenerated.operations.some(retired), 'regenerated inventory still lists POST /api/v2/roll/override');
   for (const bucket of ['v1_operations', 'unversioned_operations']) {
     assert.ok(!(regenerated.full_surface?.[bucket] ?? []).some(retired), bucket + ' still lists the retired route');
->>>>>>> origin/main
   }
 });
