@@ -31,6 +31,8 @@ import re
 import subprocess
 from typing import Final
 
+type JsonObject = dict[str, object]
+
 GENERATED_PATHS: Final = frozenset(
     {
         "vercel.json",
