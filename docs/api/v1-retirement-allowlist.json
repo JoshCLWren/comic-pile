@@ -8,8 +8,8 @@
   "require_runtime": "native-rust",
   "known_unowned_baseline": [],
   "summary": {
-    "total_entries": 129,
-    "with_owner": 129,
+    "total_entries": 132,
+    "with_owner": 132,
     "baseline_debt": 0,
     "nonconforming_v2": 98
   },
@@ -221,6 +221,19 @@
       ]
     },
     {
+      "method": "POST",
+      "path": "/api/v1/threads/check-duplicates",
+      "version": "v1",
+      "owner_issue": 5958,
+      "disposition": "retire-without-replacement",
+      "rollout_status": "pinned-404",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
+      ]
+    },
+    {
       "method": "GET",
       "path": "/api/v1/threads/completed/threads",
       "version": "v1",
@@ -252,6 +265,19 @@
         "frontend/src/unit/api.test.ts",
         "frontend/src/unit/continuityIdentityRequestBudget.test.tsx",
         "frontend/src/unit/coreRouteRequestBudget.test.tsx"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/threads/groups:batch",
+      "version": "v1",
+      "owner_issue": 5958,
+      "disposition": "retire-without-replacement",
+      "rollout_status": "pinned-404",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
       ]
     },
     {
@@ -288,6 +314,27 @@
       "owner_issue": 5701,
       "disposition": "GET /api/v2/threads/{thread_id}",
       "rollout_status": "slice-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/services/api-migration.ts",
+        "frontend/src/services/api-threads.ts",
+        "frontend/src/test/cbl-replace-review.spec.ts",
+        "frontend/src/unit/ThreadDetailView.request-budget.test.tsx",
+        "frontend/src/unit/api-auth-failure-isolation.test.ts",
+        "frontend/src/unit/api-issues-coverage.test.ts",
+        "frontend/src/unit/api-issues.test.ts",
+        "frontend/src/unit/api.test.ts"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/threads/{thread_id}",
+      "version": "v1",
+      "owner_issue": 5958,
+      "disposition": "retire-without-replacement",
+      "rollout_status": "pinned-404",
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [

@@ -888,6 +888,26 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/threads/{thread_id}/set-pending",
             post(thread_lifecycle::set_pending_thread),
         )
+        // #5958: retired method pins. These paths overlap the still-owned
+        // GET /api/v1/threads/{thread_id} catch-all; without explicit pins
+        // axum's method fallback would answer 405 instead of the 404 the
+        // retirement contract requires. They dispatch no application logic.
+        .route(
+            "/api/v1/threads/check-duplicates",
+            post(|| async { ApiError::NotFound("Not Found".to_string()) }),
+        )
+        .route(
+            "/api/v1/threads/groups:batch",
+            post(|| async { ApiError::NotFound("Not Found".to_string()) }),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}",
+            put(|| async { ApiError::NotFound("Not Found".to_string()) }),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}",
+            delete(|| async { ApiError::NotFound("Not Found".to_string()) }),
+        )
         // #5958: the test-only backdate route is retired; no product v2
         // successor exists and no shipped caller uses it.
         .route(

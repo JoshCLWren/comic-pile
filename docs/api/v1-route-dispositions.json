@@ -363,42 +363,6 @@
       "retired_by_issue": 5958
     },
     {
-      "issue": 5705,
-      "method": "POST",
-      "path": "/api/v1/threads/check-duplicates",
-      "status": "not-live",
-      "disposition": "POST /api/v2/threads:checkDuplicates",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
-      "retired_by_issue": 5958
-    },
-    {
-      "issue": 5711,
-      "method": "POST",
-      "path": "/api/v1/threads/groups:batch",
-      "status": "not-live",
-      "disposition": "retire-without-replacement",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
-      "retired_by_issue": 5958
-    },
-    {
-      "issue": 5703,
-      "method": "DELETE",
-      "path": "/api/v1/threads/{thread_id}",
-      "status": "not-live",
-      "disposition": "DELETE /api/v2/threads/{thread_id}",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
-      "retired_by_issue": 5958
-    },
-    {
-      "issue": 5703,
-      "method": "PUT",
-      "path": "/api/v1/threads/{thread_id}",
-      "status": "not-live",
-      "disposition": "PATCH /api/v2/threads/{thread_id}",
-      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
-      "retired_by_issue": 5958
-    },
-    {
       "issue": 5706,
       "method": "GET",
       "path": "/api/v1/threads/{thread_id}/issues",
@@ -667,6 +631,30 @@
       "replacement": "retire-without-replacement",
       "rollout_status": "awaiting-caller-migration-4350",
       "notes": "#4299 owns server deletion after #4350 moves every caller to scoped Roll resources."
+    },
+    "POST /api/v1/threads/groups:batch": {
+      "owner_issue": 5958,
+      "replacement": "retire-without-replacement",
+      "rollout_status": "pinned-404",
+      "notes": "#5958: explicit 404 tombstone; overlaps the still-owned GET /api/v1/threads/{thread_id} alias and must not answer 405."
+    },
+    "PUT /api/v1/threads/{thread_id}": {
+      "owner_issue": 5958,
+      "replacement": "retire-without-replacement",
+      "rollout_status": "pinned-404",
+      "notes": "#5958: explicit 404 tombstone; overlaps the still-owned GET /api/v1/threads/{thread_id} alias and must not answer 405."
+    },
+    "POST /api/v1/threads/check-duplicates": {
+      "owner_issue": 5958,
+      "replacement": "retire-without-replacement",
+      "rollout_status": "pinned-404",
+      "notes": "#5958: explicit 404 tombstone; overlaps the still-owned GET /api/v1/threads/{thread_id} alias and must not answer 405."
+    },
+    "DELETE /api/v1/threads/{thread_id}": {
+      "owner_issue": 5958,
+      "replacement": "retire-without-replacement",
+      "rollout_status": "pinned-404",
+      "notes": "#5958: explicit 404 tombstone; overlaps the still-owned GET /api/v1/threads/{thread_id} alias and must not answer 405."
     }
   },
   "known_stale_callers": [

@@ -395,6 +395,15 @@ fn app() -> Router {
             "/api/v1/threads/{thread_id}/set-pending",
             post(native_dispatch),
         )
+        // #5958: retired method pins matching the inner router. They overlap
+        // the still-owned GET /api/v1/threads/{thread_id} alias, so an explicit
+        // native_not_found is required for a 404 rather than a 405.
+        .route("/api/v1/threads/check-duplicates", post(native_not_found))
+        .route("/api/v1/threads/groups:batch", post(native_not_found))
+        .route(
+            "/api/v1/threads/{thread_id}",
+            put(native_not_found).delete(native_not_found),
+        )
         .route("/api/v2/reading-graph", get(native_dispatch))
         .route("/api/v2/reading-graph/repairs", post(native_dispatch))
         .route("/api/v2/dependencies/", post(native_dispatch))

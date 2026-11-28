@@ -267,6 +267,50 @@
       "status": "target",
       "owning_issue": 4832,
       "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/check-duplicates",
+      "dest": "/api/native_api.rs",
+      "src": "^/api/v1/threads/check\\\\-duplicates$",
+      "runtime": "native-rust",
+      "status": "retired-404-tombstone",
+      "owning_issue": 5958,
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/groups:batch",
+      "dest": "/api/native_api.rs",
+      "src": "^/api/v1/threads/groups:batch$",
+      "runtime": "native-rust",
+      "status": "retired-404-tombstone",
+      "owning_issue": 5958,
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "PUT",
+      "path": "/api/v1/threads/{thread_id}",
+      "dest": "/api/native_api.rs",
+      "src": "^/api/v1/threads/[^/]+$",
+      "runtime": "native-rust",
+      "status": "retired-404-tombstone",
+      "owning_issue": 5958,
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "DELETE",
+      "path": "/api/v1/threads/{thread_id}",
+      "dest": "/api/native_api.rs",
+      "src": "^/api/v1/threads/[^/]+$",
+      "runtime": "native-rust",
+      "status": "retired-404-tombstone",
+      "owning_issue": 5958,
+      "exclude_from_inventory": true
     }
   ]
 }

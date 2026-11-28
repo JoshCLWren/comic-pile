@@ -13,13 +13,13 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 
 ## Coverage summary
 
-- Live API routes: 208 (v1 28, v2 177, unversioned 3).
-- v1 routes with a named retirement owner: 28.
+- Live API routes: 211 (v1 31, v2 177, unversioned 3).
+- v1 routes with a named retirement owner: 31.
 - v1 routes needing an owner issue: 0 (visible baseline debt, not a pass).
 - Routes with unresolved production ingress: 0.
 - Scanned first-party call sites: 918.
 - Stale AIP baseline entries (no live route): 4.
-- Allowlist entries: 129 (owner 129, baseline debt 0, nonconforming v2 98).
+- Allowlist entries: 132 (owner 132, baseline debt 0, nonconforming v2 98).
 
 ## Ownership matrix
 
@@ -41,11 +41,14 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | GET | `/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates` | `issue_identity::find_cbl_candidates_for_reading_list` | v1 | frontend/src/services/api-cbl-sources.ts | /api/native_roll.rs | #5713 | GET /api/v2/readingLists/{list_id}/cblCandidates | slice-open |
 | GET | `/api/v1/taste/discoveries` | `taste_discoveries::list_taste_discoveries` | v1 | frontend/src/services/api-taste.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/unit/api-taste.test.ts | /api/native_roll.rs | #5717 | GET /api/v2/users/me/tasteDiscoveries \| POST /api/v2/users/me/tasteDiscoveries/{id}:dismiss | slice-open |
 | POST | `/api/v1/taste/discoveries/{signal_id}/dismiss` | `taste_discoveries::dismiss_taste_discovery` | v1 | frontend/src/services/api-taste.ts, frontend/src/unit/api-taste.test.ts | /api/native_roll.rs | #5717 | GET /api/v2/users/me/tasteDiscoveries \| POST /api/v2/users/me/tasteDiscoveries/{id}:dismiss | slice-open |
+| POST | `/api/v1/threads/check-duplicates` | `<inline>` | v1 | frontend/src/services/api-threads.ts | /api/native_roll.rs | #5958 | retire-without-replacement | pinned-404 |
 | GET | `/api/v1/threads/completed/threads` | `threads::list_completed_threads` | v1 | frontend/src/services/api-threads.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/unit/api.test.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx | /api/native_roll.rs | #5701 | GET /api/v2/threads?filter=status eq 'completed' | slice-open |
 | GET | `/api/v1/threads/excluded/threads` | `thread_lifecycle::list_excluded_threads` | v1 | frontend/src/services/api-threads.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/test/p0-snooze-unsnooze.spec.ts, frontend/src/unit/api.test.ts, frontend/src/unit/continuityIdentityRequestBudget.test.tsx, frontend/src/unit/coreRouteRequestBudget.test.tsx | /api/native_roll.rs | #5704 | GET /api/v2/threads?filter=excluded | slice-open |
+| POST | `/api/v1/threads/groups:batch` | `<inline>` | v1 | frontend/src/services/api-threads.ts | /api/native_roll.rs | #5958 | retire-without-replacement | pinned-404 |
 | POST | `/api/v1/threads/reactivate` | `thread_lifecycle::reactivate_thread` | v1 | frontend/src/services/api-threads.ts | /api/native_roll.rs | #5704 | POST /api/v2/threads/{thread_id}:reactivate | slice-open |
 | GET | `/api/v1/threads/stale` | `thread_lifecycle::list_stale_threads` | v1 | frontend/src/services/api-threads.ts, frontend/src/test/cbl-replace-review.spec.ts | /api/native_roll.rs | #5701 | GET /api/v2/threads?filter=stale | slice-open |
 | GET | `/api/v1/threads/{thread_id}` | `threads::get_thread_detail` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/services/api-migration.ts, frontend/src/services/api-threads.ts, frontend/src/test/cbl-replace-review.spec.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-auth-failure-isolation.test.ts, frontend/src/unit/api-issues-coverage.test.ts, frontend/src/unit/api-issues.test.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #5701 | GET /api/v2/threads/{thread_id} | slice-open |
+| PUT | `/api/v1/threads/{thread_id}` | `<inline>` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/services/api-migration.ts, frontend/src/services/api-threads.ts, frontend/src/test/cbl-replace-review.spec.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-auth-failure-isolation.test.ts, frontend/src/unit/api-issues-coverage.test.ts, frontend/src/unit/api-issues.test.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #5958 | retire-without-replacement | pinned-404 |
 | GET | `/api/v1/threads/{thread_id}/connected` | `thread_ordering::get_thread_connected_threads` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx | /api/native_roll.rs | #5709 | GET /api/v2/dependencies/blocked | slice-open |
 | GET | `/api/v1/threads/{thread_id}/dependencies` | `dependencies::get_thread_dependencies` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/test/p0-dependencies-reading-order.spec.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #5709 | GET /api/v2/dependencies/blocked | slice-open |
 | GET | `/api/v1/threads/{thread_id}/dependency-order-check` | `thread_ordering::check_thread_dependency_order` | v1 | none | /api/native_roll.rs | #5709 | GET /api/v2/dependencies/blocked | slice-open |
@@ -236,7 +239,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 
 ## Owner issue cross-reference
 
-Existing owner/disposition issues resolved for this census: #4299, #4335, #4342, #4344, #4443, #4459, #4595, #4623, #4653, #4684, #4822, #4835, #4836, #4838, #4839, #4841, #4844, #4849, #4850, #4851, #4855, #5435, #5701, #5704, #5709, #5712, #5713, #5714, #5717, #5718.
+Existing owner/disposition issues resolved for this census: #4299, #4335, #4342, #4344, #4443, #4459, #4595, #4623, #4653, #4684, #4822, #4835, #4836, #4838, #4839, #4841, #4844, #4849, #4850, #4851, #4855, #5435, #5701, #5704, #5709, #5712, #5713, #5714, #5717, #5718, #5958.
 No new backlog issue is created by this tooling task: every current live v1 method resolves to an existing owner issue and an AIP destination or an explicit retire-without-replacement decision.
 
 Non-browser / helper / infrastructure surface included in the census:
@@ -244,6 +247,9 @@ Non-browser / helper / infrastructure surface included in the census:
 - `POST /api/bug-reports/` — compatibility-alias-debt (owner #5718).
 - `GET /api/metrics` — active-infrastructure (owner #4335).
 - `GET /api/threads/{thread_id}` — compatibility-alias-debt (owner #5701).
+- `POST /api/v1/threads/check-duplicates` — pinned-404 (owner #5958).
+- `POST /api/v1/threads/groups:batch` — pinned-404 (owner #5958).
+- `PUT /api/v1/threads/{thread_id}` — pinned-404 (owner #5958).
 
 ## Retired legacy issues cross-referenced (no live v1 registration)
 
@@ -289,10 +295,6 @@ Non-browser / helper / infrastructure surface included in the census:
 - #4343: `GET /api/v1/sessions/current/` — not-live; retire-without-replacement.
 - #5708: `GET /api/v1/sessions/{session_id}` — not-live; GET /api/v2/readingSessions | GET /api/v2/readingSessions/{session_id}.
 - #5702: `POST /api/v1/threads/` — not-live; POST /api/v2/threads.
-- #5705: `POST /api/v1/threads/check-duplicates` — not-live; POST /api/v2/threads:checkDuplicates.
-- #5711: `POST /api/v1/threads/groups:batch` — not-live; retire-without-replacement.
-- #5703: `DELETE /api/v1/threads/{thread_id}` — not-live; DELETE /api/v2/threads/{thread_id}.
-- #5703: `PUT /api/v1/threads/{thread_id}` — not-live; PATCH /api/v2/threads/{thread_id}.
 - #5706: `GET /api/v1/threads/{thread_id}/issues` — not-live; GET|POST /api/v2/threads/{thread_id}/issues.
 - #5706: `POST /api/v1/threads/{thread_id}/issues` — not-live; GET|POST /api/v2/threads/{thread_id}/issues.
 - #5706: `GET /api/v1/threads/{thread_id}/issues/creators` — not-live; GET /api/v2/threads/{thread_id}/creatorCredits.
