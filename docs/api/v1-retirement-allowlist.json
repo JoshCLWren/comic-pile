@@ -8,13 +8,8 @@
   "require_runtime": "native-rust",
   "known_unowned_baseline": [],
   "summary": {
-<<<<<<< HEAD
-    "total_entries": 174,
-    "with_owner": 174,
-=======
     "total_entries": 159,
     "with_owner": 159,
->>>>>>> origin/main
     "baseline_debt": 0,
     "nonconforming_v2": 98
   },
@@ -776,6 +771,22 @@
       "consumers": [
         "frontend/src/services/api-threads.ts",
         "frontend/src/unit/api.test.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}/set-pending",
+      "version": "v1",
+      "owner_issue": 4344,
+      "disposition": "retire-without-replacement",
+      "rollout_status": "owner-issue-open",
+      "needs_owner_issue": false,
+      "runtime": "native-rust",
+      "consumers": [
+        "frontend/src/services/api-threads.ts",
+        "frontend/src/test/cbl-replace-review.spec.ts",
+        "frontend/src/test/helpers.ts",
+        "frontend/src/test/issue-1885-roll-target-sizes.spec.ts"
       ]
     },
     {
