@@ -19,6 +19,14 @@ export function useRollDieState(api: RollResourcesApi = rollResourcesApi) {
   })
 }
 
+/** Latest durable rating, independent of reading-session initialization. */
+export function useRollLastReadRecord(api: RollResourcesApi = rollResourcesApi) {
+  return useQuery({
+    queryKey: queryKeys.roll.lastReadRecord(),
+    queryFn: () => api.lastRead(),
+  })
+}
+
 /**
  * Ordered eligible issue identifiers for the current die, with browser-owned
  * temporary snoozes applied exactly as the offer does.

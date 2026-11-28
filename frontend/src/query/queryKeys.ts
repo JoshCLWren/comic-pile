@@ -187,6 +187,8 @@ export const queryKeys = {
      * without clobbering a newer rate.
      */
     lastRead: () => ['roll', 'last-read'] as const,
+    /** Sessionless durable last-read record from `GET /v2/roll/last-read`. */
+    lastReadRecord: () => ['roll', 'last-read-record'] as const,
   },
   demo: {
     /**

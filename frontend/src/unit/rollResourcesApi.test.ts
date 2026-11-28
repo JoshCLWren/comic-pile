@@ -15,6 +15,12 @@ describe('rollResourcesApi', () => {
     expect(transport.get).toHaveBeenCalledWith('/v2/roll/die-state')
   })
 
+  it('reads the sessionless durable last-read record', async () => {
+    const { transport, api } = apiWithTransport()
+    await api.lastRead()
+    expect(transport.get).toHaveBeenCalledWith('/v2/roll/last-read')
+  })
+
   it('reads eligible issue ids, defaulting to no snoozes', async () => {
     const { transport, api } = apiWithTransport()
     await api.eligibleIssueIds()

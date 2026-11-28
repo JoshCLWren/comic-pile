@@ -18,6 +18,7 @@ vi.mock('../hooks/useRollPendingSelection', () => ({ useRollPendingSelection: vi
 vi.mock('../services/rollResourcesApi', () => ({
   rollResourcesApi: {
     dieState: vi.fn(),
+    lastRead: vi.fn(),
     eligibleIssueIds: vi.fn(),
     issueCards: vi.fn(),
   },
@@ -75,6 +76,7 @@ describe('useRollBootstrap composed scoped view', () => {
       clearAll: vi.fn(),
     })
     mockedResources.dieState.mockResolvedValue({ die: 6, default_die: 6, ladder: [2, 4, 6, 8, 10, 12, 20] })
+    mockedResources.lastRead.mockResolvedValue(null)
     mockedResources.eligibleIssueIds.mockResolvedValue({
       die: 6,
       issue_ids: [10],

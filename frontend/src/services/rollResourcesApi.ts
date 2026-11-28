@@ -3,10 +3,11 @@ import {
   type DieStateResponse,
   type EligibleIssueIdsResponse,
   type IssueCardsResponse,
+  type RollLastRead,
 } from '../generated/nativeV2Client'
 import { defaultHttpClient, type HttpClient } from './httpClient'
 
-export type { DieStateResponse, EligibleIssueIdsResponse, IssueCardsResponse }
+export type { DieStateResponse, EligibleIssueIdsResponse, IssueCardsResponse, RollLastRead }
 
 /**
  * Build the scoped Roll resource service bound to an HTTP client.
@@ -27,6 +28,7 @@ export function createRollResourcesApi(client: HttpClient) {
 
   return {
     dieState: (): Promise<DieStateResponse> => nativeV2.dieState(),
+    lastRead: (): Promise<RollLastRead | null> => nativeV2.lastRead(),
     eligibleIssueIds: (snoozedThreadIds: readonly number[] = []): Promise<EligibleIssueIdsResponse> =>
       nativeV2.eligibleIssueIds({
         query: snoozedThreadIds.length > 0 ? { snoozed: snoozedThreadIds.join(',') } : {},

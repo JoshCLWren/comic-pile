@@ -9,7 +9,12 @@ import { readRollSnoozes } from '../services/api-roll'
 import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api-dependencies'
 import { buildRollRecovery } from '../services/rollRecovery'
-import { useRollDieState, useRollEligibleIssueIds, useRollIssueCards } from './useRollResources'
+import {
+  useRollDieState,
+  useRollEligibleIssueIds,
+  useRollIssueCards,
+  useRollLastReadRecord,
+} from './useRollResources'
 import { useRollPendingSelection } from './useRollPendingSelection'
 import { publishRollBootstrap } from './rollMutationReconciliation'
 
@@ -122,6 +127,7 @@ export function useRollBootstrap(): UseRollBootstrapResult {
 
   // Both queries are cache-only: the rate mutation and ReadingGraphProblemCard
   // already own the live fetches on this page.
+  const lastReadRecord = useRollLastReadRecord()
   const rateQuery = useQuery<RateResponsePayload | null>({
     queryKey: queryKeys.roll.lastRead(),
     queryFn: skipToken,
@@ -205,8 +211,7 @@ export function useRollBootstrap(): UseRollBootstrapResult {
       skipped_thread_ids: [],
       skipped_threads: [],
       pool_reason: eligible.data?.pool_reason ?? 'ready',
-      // Seeded by the committed rate response, never invented here (#2720).
-      last_read: rateQuery.data?.roll_reconciliation?.last_read ?? null,
+      last_read: lastReadRecord.data ?? rateQuery.data?.roll_reconciliation?.last_read ?? null,
     }
   }, [
     cards.data,
@@ -219,6 +224,7 @@ export function useRollBootstrap(): UseRollBootstrapResult {
     dependencyQuery.data,
     prerequisiteCards.data,
     graphQuery.data,
+    lastReadRecord.data,
     rateQuery.data,
     snoozedSummaries.data,
     eligible.data?.pool_reason,
@@ -228,6 +234,7 @@ export function useRollBootstrap(): UseRollBootstrapResult {
   const data: RollBootstrapResponse | null = reconciled.data ?? composed
   const isPending = die.isPending
     || eligible.isPending
+    || lastReadRecord.isPending
     || (issueIds.length > 0 && cards.isPending)
     || (pendingCardIds.length > 0 && pendingCards.isPending)
   const recoveryIsPending = reconciled.data == null && blockedIssueId != null && (
@@ -273,8 +280,10 @@ export function useRollBootstrap(): UseRollBootstrapResult {
   return {
     data,
     isPending,
-    isError: die.isError || eligible.isError || cards.isError || pendingCards.isError,
-    error: die.error ?? eligible.error ?? cards.error ?? pendingCards.error ?? null,
+    isError: die.isError || eligible.isError || lastReadRecord.isError
+      || cards.isError || pendingCards.isError,
+    error: die.error ?? eligible.error ?? lastReadRecord.error
+      ?? cards.error ?? pendingCards.error ?? null,
     failureCount: 0,
     isRetrying: false,
     recoveryIsPending,

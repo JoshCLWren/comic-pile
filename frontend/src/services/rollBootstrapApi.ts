@@ -33,13 +33,14 @@ export function createRollBootstrapApi(client: HttpClient) {
 
   return {
     get: async (userId?: RollPendingUserId): Promise<RollBootstrapResponse> => {
-      const [eligible, snoozes] = await Promise.all([
+      const [eligible, snoozes, lastRead] = await Promise.all([
         nativeV2.eligibleIssueIds({
           query: readRollSnoozes().length > 0
             ? { snoozed: readRollSnoozes().join(',') }
             : {},
         }),
         Promise.resolve(readRollSnoozes()),
+        nativeV2.lastRead(),
       ])
       const issueIds = eligible.issue_ids
       const cards = issueIds.length > 0
@@ -141,7 +142,7 @@ export function createRollBootstrapApi(client: HttpClient) {
         skipped_thread_ids: [],
         skipped_threads: [],
         pool_reason: eligible.pool_reason,
-        last_read: rate?.roll_reconciliation?.last_read ?? null,
+        last_read: lastRead ?? rate?.roll_reconciliation?.last_read ?? null,
       }
     },
     switchPrerequisite: (request: RollPrerequisiteSwitchRequest) =>
