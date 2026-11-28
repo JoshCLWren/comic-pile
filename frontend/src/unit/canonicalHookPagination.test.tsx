@@ -21,6 +21,18 @@ const firstIssue: Issue = {
   read_at: null, created_at: '2026-01-01T00:00:00Z',
 }
 const secondIssue: Issue = { ...firstIssue, id: 2, issue_number: '2', position: 2 }
+const thread: ThreadListItem = {
+  id: 1,
+  title: 'Series',
+  format: 'single issues',
+  issues_remaining: 0,
+  queue_position: 1,
+  status: 'active',
+  is_blocked: false,
+  blocking_reasons: [],
+  last_activity_at: null,
+  created_at: '2026-01-01T00:00:00Z',
+}
 
 function issuePage(issues: Issue[], next_page_token: string | null): IssueListResponse {
   return { issues, total_count: 2, page_size: 100, next_page_token }
@@ -113,7 +125,7 @@ describe('canonical hook pagination', () => {
     const list = vi.fn(async () => {
       count += 1
       return {
-        threads: [{ id: count }],
+        threads: [{ ...thread, id: count }],
         active_count: threadCount,
         filtered_count: threadCount,
         next_page_token: count < threadCount ? String(count) : null,
