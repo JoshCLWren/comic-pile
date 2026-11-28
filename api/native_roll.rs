@@ -1313,6 +1313,92 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn retired_unowned_legacy_aliases_return_json_404_at_ingress() {
+        // #5958: every route in this table was unowned residue whose owning
+        // migration has closed. Inner router and Vercel ingress must agree that
+        // they are gone; the fallback is the Rust JSON 404.
+        let retired: &[(&str, &str)] = &[
+            ("GET", "/api/v1/creators"),
+            ("GET", "/api/v1/creators/"),
+            ("GET", "/api/v1/creators/summaries"),
+            ("PUT", "/api/v1/releases/"),
+            ("GET", "/api/v1/releases/source"),
+            ("GET", "/api/v1/releases/7"),
+            ("POST", "/api/v1/releases/7/retract"),
+            ("GET", "/api/v1/continuity-rules/"),
+            ("GET", "/api/v1/continuity-rules/3"),
+            ("POST", "/api/v1/continuity-rules/"),
+            ("PUT", "/api/v1/continuity-rules/3"),
+            ("DELETE", "/api/v1/continuity-rules/3"),
+            ("GET", "/api/v1/roll/events/9/recommendation-explanation"),
+            ("GET", "/api/roll/events/9/recommendation-explanation"),
+            ("POST", "/api/v1/threads/"),
+            ("POST", "/api/v1/threads/check-duplicates"),
+            ("POST", "/api/v1/threads/groups:batch"),
+            ("PUT", "/api/v1/threads/21"),
+            ("DELETE", "/api/v1/threads/21"),
+            ("GET", "/api/v1/threads/21/issues"),
+            ("POST", "/api/v1/threads/21/issues"),
+            ("GET", "/api/v1/threads/21/issues/creators"),
+            ("POST", "/api/v1/threads/21/issues:reorder"),
+            ("GET", "/api/v1/threads/21/issues:validateOrder"),
+            ("GET", "/api/v1/threads/21/reading-orders"),
+            ("PUT", "/api/v1/reading-order-groups/7/order"),
+            ("GET", "/api/v1/metrics"),
+        ];
+        for (method, uri) in retired {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(*method)
+                        .uri(*uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{method} {uri}");
+            let bytes = to_bytes(response.into_body(), 8192)
+                .await
+                .expect("body bytes");
+            assert_eq!(
+                String::from_utf8_lossy(&bytes),
+                r#"{"detail":"Not Found"}"#,
+                "{method} {uri}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn release_sync_cron_v2_path_reaches_the_secret_gate() {
+        // #5958: the real Vercel Cron now calls the v2 path. Without a matching
+        // ingress route it would fall through to the JSON 404 rather than the
+        // CRON_SECRET gate, so proving "not 404" here is the parity assertion.
+        let mut router = app();
+        let response = router
+            .call(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v2/cron/release-sync")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("router response");
+        assert!(
+            response.status() == StatusCode::UNAUTHORIZED
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+            "v2 cron must reach the secret gate, got {}",
+            response.status()
+        );
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime").unwrap(),
+            "rust"
+        );
+    }
+
+    #[tokio::test]
     async fn comicvine_v2_ingress_preserves_canonical_paths_and_requires_auth() {
         for (method, uri) in [
             ("GET", "/api/v2/comicvine/search/series?q=batman"),
@@ -2536,7 +2622,7 @@ mod tests {
                 assert_eq!(unread["issues"].as_array().expect("filtered").len(), 2);
 
                 let (status, missing, _, _) =
-                    call_app(request("/api/v1/threads/999/issues".into(), &access)).await;
+                    call_app(request("/api/v2/threads/999/issues".into(), &access)).await;
                 assert_eq!(status, StatusCode::NOT_FOUND);
                 assert_eq!(missing["detail"], "Thread 999 not found");
 
@@ -2578,14 +2664,14 @@ mod tests {
 
                 let mut router = app();
                 for uri in [
-                    "/api/v1/threads/not-an-int/issues",
+                    "/api/v2/threads/not-an-int/issues",
                     "/api/v2/threads/21/issues?page_size=abc",
                     "/api/v2/threads/21/issues?page_size=99999999999999999999",
                     "/api/v2/threads/21/issues?page_size=0",
                     "/api/v2/threads/21/issues?page_size=101",
                     "/api/v2/threads/21/issues?status=invalid",
                     // Invalid-UTF-8 path extraction must also use the 422 envelope.
-                    "/api/v1/threads/%FF/issues",
+                    "/api/v2/threads/%FF/issues",
                 ] {
                     let request = Request::builder()
                         .method("GET")
