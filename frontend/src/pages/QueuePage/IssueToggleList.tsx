@@ -33,6 +33,7 @@ import CompactIssueCardTrigger from '../../components/CompactIssueCardTrigger'
 import { useIssueCards, indexIssueCards } from '../../hooks/useIssueCards'
 import type { IssueReadRateResponse } from '../../services/issueCardsApi'
 import { getDependencyTooltip } from '../../utils/dependencyHelpers'
+import { collectAllPages, MAX_ISSUE_COLLECTION_PAGES } from '../../pagination/collectAllPages'
 import {
   reorderIssuesForDrop,
   moveIssueByStep,
@@ -271,34 +272,31 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   }, [onIssueChanged, syncOptimisticIssues])
 
   const fetchAllIssues = useCallback(async (): Promise<Issue[]> => {
-    const allIssues: Issue[] = []
-    const seenPageTokens = new Set<string>()
-    let nextPageToken: string | null = null
-    let totalCount = 0
-
-    while (true) {
-      const params: IssueListParams = { page_size: 100 }
-      if (nextPageToken) {
-        params.page_token = nextPageToken
-      }
-      const data = await issuesService.list(threadId, params)
-      // The server's `total_count` is the authority for the completeness
-      // check (#3764). Keep the largest count any page reported: a count that
-      // grows while the pages are being fetched would otherwise let a
-      // truncated list pass the check against a stale, smaller total.
-      if (data.total_count > totalCount) {
-        totalCount = data.total_count
-      }
-      allIssues.push(...data.issues)
-
-      if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {
-        totalCountRef.current = totalCount
-        return allIssues
-      }
-
-      seenPageTokens.add(data.next_page_token)
-      nextPageToken = data.next_page_token
+    const collected = await collectAllPages({
+      fetchPage: (token) => {
+        const params: IssueListParams = { page_size: 100 }
+        if (token) {
+          params.page_token = token
+        }
+        return issuesService.list(threadId, params)
+      },
+      selectItems: (page) => page.issues,
+      selectNextToken: (page) => page.next_page_token || null,
+      maxPages: MAX_ISSUE_COLLECTION_PAGES,
+    })
+    // The server's `total_count` is the authority for the completeness check
+    // (#3764). Keep the largest count any page reported: a count that grows
+    // while pages are fetched would otherwise let a truncated list pass the
+    // check against a stale, smaller total.
+    const totalCount = collected.pages.reduce(
+      (largest, page) => Math.max(largest, page.total_count ?? 0),
+      0,
+    )
+    totalCountRef.current = totalCount
+    if (collected.stopReason === 'max-pages') {
+      throw new Error('Unable to load the complete issue list for this series.')
     }
+    return collected.items
   }, [issuesService, threadId])
 
   const fetchDependencies = useCallback(async (): Promise<Record<number, IssueDependenciesResponse>> => {
