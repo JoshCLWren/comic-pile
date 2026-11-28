@@ -182,6 +182,33 @@ describe('Night Shift single-palette contract (#5980)', () => {
     }
   })
 
+  it('keeps solid action controls on the dark high-contrast foreground', () => {
+    const visit = (directory: string): string[] => {
+      const files: string[] = []
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const path = resolve(directory, entry.name)
+        if (entry.isDirectory()) {
+          if (entry.name !== 'generated' && entry.name !== 'types') files.push(...visit(path))
+          continue
+        }
+        if (/\.(?:ts|tsx)$/.test(entry.name) && !/\.(?:test|spec)\./.test(entry.name)) files.push(path)
+      }
+      return files
+    }
+    for (const path of visit(resolve(process.cwd(), 'src'))) {
+      for (const line of readFrontendFile(path).split('\n')) {
+        if (/bg-\[var\(--theme-(?:primary-action|danger)\)\](?!\/)/.test(line)) {
+          expect(line, `${path} solid action must use primary-action foreground`).not.toMatch(
+            /text-\[var\(--theme-text-primary\)\]|text-black/,
+          )
+        }
+        expect(line).not.toContain(
+          "backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)'",
+        )
+      }
+    }
+  })
+
   it('documents every canonical role in the visual grammar', () => {
     const grammar = readVisualGrammar()
     for (const [token] of tokens) {
