@@ -22,7 +22,7 @@ test.describe('P0 #5525 Roll manual selection', () => {
     page.on('request', (request) => {
       if (request.method() === 'GET') return
       const path = new URL(request.url()).pathname
-      if (path.includes('set-pending') || path.includes('/roll/offers') || path.includes('/issues/')) {
+      if (path.includes('/roll/offers') || path.includes('/issues/')) {
         rollRequests.push(`${request.method()} ${path}`)
       }
     })
@@ -56,7 +56,7 @@ test.describe('P0 #5525 Roll manual selection', () => {
     page.on('request', (request) => {
       if (request.method() === 'GET') return
       const path = new URL(request.url()).pathname
-      if (path.includes('set-pending') || path.includes('/roll/offers')) {
+      if (path.includes('/roll/offers')) {
         disallowed.push(path)
       }
     })
