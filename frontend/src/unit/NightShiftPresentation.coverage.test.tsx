@@ -11,6 +11,8 @@ import type { RollBootstrapThread } from '../types/rollBootstrap'
 import { CoverFlight, type CoverFlightState } from '../pages/RollPage/components/CoverFlight'
 import { CoverBoard } from '../pages/RollPage/components/CoverBoard'
 import { MobileGallery } from '../pages/RollPage/components/MobileGallery'
+import { RollCover } from '../pages/RollPage/components/RollCover'
+import { RollDiceButton } from '../pages/RollPage/components/RollDiceButton'
 
 const flight: CoverFlightState = {
   url: 'https://cdn.example.com/cover.jpg',
@@ -317,3 +319,210 @@ describe('MobileGallery guard and wraparound paths (#5981)', () => {
     }
   })
 })
+
+describe('MobileGallery additional guard branches (#5981)', () => {
+  it('ignores pointer releases without a start and unknown keys', () => {
+    render(
+      <MobileGallery
+        pool={pool}
+        cardByIssueId={new Map()}
+        isRolling={false}
+        winningThreadId={null}
+        dieSlot={null}
+        onThreadClick={vi.fn()}
+      />,
+    )
+    const gallery = screen.getByRole('group', { name: /use arrow keys to browse/i })
+    fireEvent.pointerUp(gallery, { clientX: 10 })
+    expect(screen.getByText('1 / 4')).toBeInTheDocument()
+    fireEvent.keyDown(gallery, { key: 'Enter' })
+    expect(screen.getByText('1 / 4')).toBeInTheDocument()
+  })
+
+  it('does not advance while rolling', () => {
+    render(
+      <MobileGallery
+        pool={pool.slice(0, 1)}
+        cardByIssueId={new Map()}
+        isRolling
+        winningThreadId={null}
+        dieSlot={null}
+        onThreadClick={vi.fn()}
+      />,
+    )
+    const gallery = screen.getByRole('group', { name: /use arrow keys to browse/i })
+    gallery.focus()
+    fireEvent.keyDown(gallery, { key: 'ArrowRight' })
+    expect(screen.getByText('1 / 1')).toBeInTheDocument()
+  })
+
+  it('does not advance for a one-item pool', () => {
+    render(
+      <MobileGallery
+        pool={pool.slice(0, 1)}
+        cardByIssueId={new Map()}
+        isRolling={false}
+        winningThreadId={null}
+        dieSlot={null}
+        onThreadClick={vi.fn()}
+      />,
+    )
+    const gallery = screen.getByRole('group', { name: /use arrow keys to browse/i })
+    gallery.focus()
+    fireEvent.keyDown(gallery, { key: 'ArrowRight' })
+    expect(screen.getByText('1 / 1')).toBeInTheDocument()
+  })
+
+  it('moves backward on ArrowLeft', () => {
+    render(
+      <MobileGallery
+        pool={pool}
+        cardByIssueId={new Map()}
+        isRolling={false}
+        winningThreadId={null}
+        dieSlot={null}
+        onThreadClick={vi.fn()}
+      />,
+    )
+    const gallery = screen.getByRole('group', { name: /use arrow keys to browse/i })
+    gallery.focus()
+    fireEvent.keyDown(gallery, { key: 'ArrowLeft' })
+    expect(screen.getByText('4 / 4')).toBeInTheDocument()
+  })
+
+  it('renders a cover with an issue id, card and winning id', () => {
+    const issuePool: RollBootstrapThread[] = [
+      { id: 1, title: 'Alpha', format: 'Comic', issue_id: 100 },
+    ]
+    const cardMap = new Map([[100, { status: 'unread' } as never]])
+    render(
+      <MobileGallery
+        pool={issuePool}
+        cardByIssueId={cardMap}
+        isRolling={false}
+        winningThreadId={1}
+        dieSlot={null}
+        onThreadClick={vi.fn()}
+      />,
+    )
+    expect(screen.getByText('1 / 1')).toBeInTheDocument()
+  })
+
+  it('suppresses taps while rolling', () => {
+    const onThreadClick = vi.fn()
+    render(
+      <MobileGallery
+        pool={pool}
+        cardByIssueId={new Map()}
+        isRolling
+        winningThreadId={null}
+        dieSlot={null}
+        onThreadClick={onThreadClick}
+      />,
+    )
+    // tapping the active cover while rolling does not open actions
+    const cover = screen.getByRole('button', { name: /Die face 1: Alpha/i })
+    fireEvent.click(cover)
+    expect(onThreadClick).not.toHaveBeenCalled()
+  })
+})
+
+describe('CoverFlight double-finish guard (#5981)', () => {
+  it('ignores a second finish after the animation resolves', async () => {
+    let resolveFinished: (() => void) | null = null
+    const finished = new Promise<void>((resolve) => {
+      resolveFinished = resolve
+    })
+    const cancel = vi.fn()
+    const restore = installAnimate(finished, cancel)
+    const rectSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue(workspaceRect)
+    try {
+      const onDone = vi.fn()
+      render(<CoverFlight flight={flight} onDone={onDone} />)
+      await act(async () => {
+        resolveFinished?.()
+      })
+      expect(onDone).toHaveBeenCalledTimes(1)
+      act(() => {
+        window.dispatchEvent(new Event('resize'))
+      })
+      expect(onDone).toHaveBeenCalledTimes(1)
+    } finally {
+      rectSpy.mockRestore()
+      restore()
+    }
+  })
+})
+
+describe('RollCover guard branches (#5981)', () => {
+  it('activates on Space and renders an unread, null-card, read-badge cover', () => {
+    const onOpen = vi.fn()
+    const { rerender } = render(
+      <RollCover
+        thread={{ id: 1, title: 'Alpha', format: 'Comic' }}
+        face={1}
+        card={null}
+        winner={false}
+        onOpen={onOpen}
+      />,
+    )
+    const cover = screen.getByTestId('roll-pool-cover')
+    fireEvent.keyDown(cover, { key: ' ' })
+    expect(onOpen).toHaveBeenCalled()
+
+    rerender(
+      <RollCover
+        thread={{ id: 2, title: 'Beta', format: 'Comic', issue_id: 2 }}
+        face={2}
+        card={{ status: 'read' } as never}
+        winner={true}
+        onOpen={vi.fn()}
+      />,
+    )
+    expect(screen.getByText('✓')).toBeInTheDocument()
+
+    rerender(
+      <RollCover
+        thread={{ id: 3, title: 'Gamma', format: 'Comic', issue_id: 3 }}
+        face={3}
+        card={{ status: 'unread' } as never}
+        winner={false}
+        onOpen={vi.fn()}
+      />,
+    )
+    expect(screen.getByTestId('roll-pool-cover')).toBeInTheDocument()
+  })
+})
+
+describe('RollDiceButton guard branches (#5981)', () => {
+  it('falls back for unsupported sides and falsy values, and skips keydown when busy', () => {
+    const onRoll = vi.fn()
+    const { rerender } = render(
+      <RollDiceButton sides={3} value={0} isRolling={false} hasRolled={false} onRoll={onRoll} />,
+    )
+    const die = screen.getByTestId('main-die-3d')
+    // keydown while disabled
+    rerender(
+      <RollDiceButton sides={3} value={0} isRolling={false} hasRolled={false} disabled onRoll={onRoll} />,
+    )
+    fireEvent.keyDown(screen.getByTestId('main-die-3d'), { key: 'Enter' })
+    expect(onRoll).not.toHaveBeenCalled()
+    // non-disabled rolling skips too
+    rerender(
+      <RollDiceButton sides={6} value={5} isRolling hasRolled={false} onRoll={onRoll} />,
+    )
+    fireEvent.keyDown(screen.getByTestId('main-die-3d'), { key: ' ' })
+    expect(onRoll).not.toHaveBeenCalled()
+  })
+})
+
+describe('coverBoardLayout additional branches (#5981)', () => {
+  it('handles empty carousel pools and partial allocation break', () => {
+    expect(carouselOffset(0, 0, 0)).toBe(0)
+    // allocate with faceCount exceeding total exercises trim break guard
+    expect(allocateCoverFaces(10, [2, 2, 2])).toEqual([2, 2, 2])
+  })
+})
+
