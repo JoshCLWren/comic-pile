@@ -142,8 +142,6 @@ beforeEach(() => {
   vi.mocked(useSetDie).mockReturnValue(cast<ReturnType<typeof useSetDie>>({ mutate: vi.fn(), isPending: false }))
   // SAFETY: Test stub for useRoll; minimal stub preserves the mutation contract used by the component.
   vi.mocked(useRoll).mockReturnValue(cast<ReturnType<typeof useRoll>>({ mutate: vi.fn(), isPending: false }))
-  // SAFETY: Test stub for useDismissPending; only mutate/isPending are observed.
-  vi.mocked(useDismissPending).mockReturnValue(cast<ReturnType<typeof useDismissPending>>({ mutate: vi.fn(), isPending: false }))
   // SAFETY: Test stub for useSnooze; stub matches the hook's mutation surface.
   vi.mocked(useSnooze).mockReturnValue(cast<ReturnType<typeof useSnooze>>({ mutate: vi.fn(), isPending: false }))
   // SAFETY: Test stub for useMoveToFront; minimal shape covers the exercised mutation.

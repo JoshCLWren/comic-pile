@@ -99,7 +99,6 @@ function mockState(overrides: Partial<RollPageState & RollPageStateSetters> = {}
 }
 
 const mockRateMutation = { mutate: vi.fn().mockResolvedValue({ rate: undefined, bootstrap: null }), isPending: false }
-const mockDismissPendingMutation = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false }
 const mockRefetchBootstrap = vi.fn().mockResolvedValue(undefined)
 const mockClearPending = vi.fn()
 
@@ -108,7 +107,7 @@ function renderUseRollRating(
 ) {
   const state = mockState({ activeRatingThread: ACTIVE_THREAD, ...stateOverrides })
   const { result } = renderHook(
-    () => useRollRating({ state, bootstrap: null, rateMutation: mockRateMutation, dismissPendingMutation: mockDismissPendingMutation, refetchRollState: mockRefetchBootstrap, clearPending: mockClearPending }),
+    () => useRollRating({ state, bootstrap: null, rateMutation: mockRateMutation, refetchRollState: mockRefetchBootstrap, clearPending: mockClearPending }),
     { wrapper: createWrapper() },
   )
   return { result, state }

@@ -19,7 +19,7 @@ function createWrapper() {
 
 const api = vi.hoisted(() => ({
   queueApi: { moveToPosition: vi.fn(), moveToFront: vi.fn(), moveToBack: vi.fn(), shuffle: vi.fn() },
-  rollApi: { roll: vi.fn(), dismissPending: vi.fn(), setDie: vi.fn(), reroll: vi.fn(), unsnooze: vi.fn() },
+  rollApi: { roll: vi.fn(), setDie: vi.fn(), reroll: vi.fn(), unsnooze: vi.fn() },
   undoApi: { listSnapshots: vi.fn(), undo: vi.fn() },
   threadsApi: { listStale: vi.fn() },
   sessionApi: { getDetails: vi.fn(), getSnapshots: vi.fn() },
@@ -46,7 +46,7 @@ const toast = createToastSpy()
 
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks/useRate'
-import { useDismissPending, useReroll, useRoll, useSetDie, useUnsnooze } from '../hooks/useRoll'
+import { useReroll, useRoll, useSetDie, useUnsnooze } from '../hooks/useRoll'
 import { useSessionDetails, useSessionSnapshots } from '../hooks/useSession'
 import { useSnapshots, useUndo } from '../hooks/useUndo'
 import { useStaleThreads } from '../hooks/useThread'
@@ -107,7 +107,6 @@ describe('mutation hook success and failure paths', () => {
 
   it('runs roll mutations', async () => {
     const roll = renderHook(() => useRoll(), { wrapper: createWrapper() }); await act(async () => await roll.result.current.mutate())
-    const dismiss = renderHook(() => useDismissPending(), { wrapper: createWrapper() }); await act(async () => await dismiss.result.current.mutate())
     const setDie = renderHook(() => useSetDie(), { wrapper: createWrapper() }); await act(async () => await setDie.result.current.mutate(6))
     const reroll = renderHook(() => useReroll(), { wrapper: createWrapper() }); await act(async () => await reroll.result.current.mutate())
     const unsnooze = renderHook(() => useUnsnooze(), { wrapper: createWrapper() }); await act(async () => await unsnooze.result.current.mutate(8))
@@ -124,9 +123,6 @@ describe('mutation hook success and failure paths', () => {
     api.rollApi.roll.mockRejectedValueOnce(new Error('roll failed'))
     const failedRoll = renderHook(() => useRoll(), { wrapper: createWrapper() })
     await act(async () => expect(failedRoll.result.current.mutate()).rejects.toThrow('roll failed'))
-    api.rollApi.dismissPending.mockRejectedValueOnce(new Error('dismiss failed'))
-    const failedDismiss = renderHook(() => useDismissPending(), { wrapper: createWrapper() })
-    await act(async () => expect(failedDismiss.result.current.mutate()).rejects.toThrow('dismiss failed'))
     api.rollApi.setDie.mockRejectedValueOnce(new Error('die failed'))
     const failedDie = renderHook(() => useSetDie(), { wrapper: createWrapper() })
     await act(async () => expect(failedDie.result.current.mutate(6)).rejects.toThrow('die failed'))

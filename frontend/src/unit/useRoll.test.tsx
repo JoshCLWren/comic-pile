@@ -21,7 +21,6 @@ function wrapper({ children }: { children: ReactNode }) {
 vi.mock('../services/api-roll', () => ({
   rollApi: {
     roll: vi.fn(),
-    dismissPending: vi.fn(),
     setDie: vi.fn(),
     reroll: vi.fn(),
   },
@@ -51,8 +50,6 @@ async function setupMutation<TArg, TReturn>(
 beforeEach(() => {
   // SAFETY: Mocked roll payload is not inspected by the assertions; empty object satisfies the success path shape.
   mockedRollApi.roll.mockResolvedValue(cast<Awaited<ReturnType<typeof mockedRollApi.roll>>>({}))
-  // SAFETY: dismissPending resolves void; undefined is the expected value.
-  mockedRollApi.dismissPending.mockResolvedValue(cast<Awaited<ReturnType<typeof mockedRollApi.dismissPending>>>(undefined))
   // SAFETY: setDie resolves void; undefined matches the mocked resolution.
   mockedRollApi.setDie.mockResolvedValue(cast<Awaited<ReturnType<typeof mockedRollApi.setDie>>>(undefined))
   // SAFETY: reroll mock returns an empty roll success shape that the test does not inspect.
@@ -62,11 +59,6 @@ beforeEach(() => {
 it('calls roll mutation', async () => {
   await setupMutation(useRoll, undefined)
   expect(mockedRollApi.roll).toHaveBeenCalled()
-})
-
-it('calls dismiss pending mutation', async () => {
-  await setupMutation(useDismissPending, undefined)
-  expect(mockedRollApi.dismissPending).toHaveBeenCalled()
 })
 
 it('calls set die mutation', async () => {

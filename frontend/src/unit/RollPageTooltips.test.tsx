@@ -5,7 +5,6 @@ import '@testing-library/jest-dom'
 import RollPage from '../pages/RollPage'
 import { useStaleThreads } from '../hooks/useThread'
 import {
- useDismissPending,
  useRoll,
  useSetDie,
 } from '../hooks/useRoll'
@@ -67,7 +66,6 @@ const mockedUseSetDie = vi.mocked(useSetDie) as any
 // SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
 const mockedUseRoll = vi.mocked(useRoll) as any
 // SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
-const mockedUseDismissPending = vi.mocked(useDismissPending) as any
 // SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
 const mockedUseSnooze = vi.mocked(useSnooze) as any
 // SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.

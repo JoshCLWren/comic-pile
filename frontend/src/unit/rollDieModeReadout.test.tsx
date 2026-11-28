@@ -21,7 +21,6 @@ const setDie = vi.fn<(die: number) => Promise<void>>().mockResolvedValue(undefin
 
 const rollApi: RollApi = {
   roll: vi.fn(),
-  dismissPending: vi.fn(),
   reroll: vi.fn(),
   unsnooze: vi.fn(),
   setDie,
@@ -131,7 +130,6 @@ function renderUseRatingView(currentDie = 6) {
         snooze: { handleSnooze: vi.fn().mockResolvedValue(undefined) },
         rateMutation: { isPending: false },
         snoozeMutation: { isPending: false },
-        dismissPendingMutation: { isPending: false },
         ratingViewTopRef: { current: null },
       }),
     { wrapper: wrapper(testClient()) },

@@ -37,7 +37,6 @@ const spies = vi.hoisted(() => ({
   setDie: vi.fn().mockResolvedValue({}),
   clearDie: vi.fn().mockResolvedValue({}),
   roll: vi.fn().mockResolvedValue({}),
-  dismissPending: vi.fn().mockResolvedValue({}),
   snooze: vi.fn().mockResolvedValue({}),
   unsnooze: vi.fn().mockResolvedValue({}),
   moveFront: vi.fn().mockResolvedValue({}),
@@ -134,7 +133,6 @@ vi.mock('../hooks/useRoll', () => ({
   useSetDie: () => ({ mutate: spies.setDie, isPending: false }),
   useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
   useRoll: () => ({ mutate: spies.roll, isPending: false }),
-  useDismissPending: () => ({ mutate: spies.dismissPending, isPending: false }),
 }))
 vi.mock('../hooks/useSnooze', () => ({
   useSnooze: () => ({ mutate: spies.snooze, isPending: false }),

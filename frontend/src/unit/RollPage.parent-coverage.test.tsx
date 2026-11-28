@@ -512,12 +512,6 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('button', { name: 'refresh rating' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'cancel rating' })).toBeInTheDocument())
     spies.refetch.mockResolvedValue({})
-    // The native dismiss removes the pending offer before bootstrap refresh.
-    // Keep this mock faithful so pending-session hydration cannot reopen it.
-    spies.dismissPending.mockImplementationOnce(async () => {
-      bootstrapData.pending_thread_id = null
-      bootstrapData.active_thread = null
-    })
     await user.click(screen.getByRole('button', { name: 'cancel rating' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Roll the dice' })).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: /^Pick manually$/ }))
@@ -1071,10 +1065,6 @@ describe('RollPage parent handlers', () => {
     render(<RollPage />)
     enterPendingRollRating()
     await waitFor(() => expect(screen.getByRole('button', { name: 'cancel rating' })).toBeInTheDocument())
-    spies.dismissPending.mockImplementationOnce(async () => {
-      bootstrapData.pending_thread_id = null
-      bootstrapData.active_thread = null
-    })
     await user.click(screen.getByRole('button', { name: 'cancel rating' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Roll the dice' })).toBeInTheDocument())
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' })

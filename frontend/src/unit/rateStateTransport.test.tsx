@@ -130,7 +130,6 @@ function useRateTransportHarness() {
     state,
     bootstrap: bootstrap.data,
     rateMutation,
-    dismissPendingMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
     refetchRollState: bootstrap.refetch,
   })
   return { bootstrap, rateMutation, state, rating }
@@ -257,7 +256,6 @@ function useDirectRatingHarness(
     state,
     bootstrap,
     rateMutation,
-    dismissPendingMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
     refetchRollState,
   })
   return { state, rating }
