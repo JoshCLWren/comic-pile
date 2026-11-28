@@ -32,7 +32,7 @@
 #![forbid(unsafe_code)]
 
 use crate::{
-    auth::AuthenticatedUser, db, option_inputs, queue, thread_ordering, ApiError, AppState,
+    auth::AuthenticatedUser, db, queue, thread_ordering, ApiError, AppState,
 };
 use axum::{
     body::Bytes,
@@ -588,118 +588,6 @@ async fn apply_tracking_state(
     .await
     .map_err(db::query_error)?;
     Ok(TrackingState { total, next_unread })
-}
-
-fn normalize_format_value(value: &str) -> String {
-    match value.trim().to_lowercase().as_str() {
-        "comic" | "comics" => "Comic".to_string(),
-        "digital" => "Digital".to_string(),
-        _ => value.trim().to_string(),
-    }
-}
-
-/// The reader's dense Queue ordinal for one thread
-/// (`queue_display.display_position`), zero when outside the Queue.
-async fn display_position(
-    tx: &Transaction<'_>,
-    user: AuthenticatedUser,
-    thread_id: i32,
-    option_e: bool,
-) -> Result<i32, ApiError> {
-    let rows = tx
-        .query(
-            "SELECT id, is_blocked, queue_position FROM threads \
-             WHERE user_id = $1 AND status = 'active' AND queue_position >= 1 \
-             ORDER BY queue_position, id",
-            &[&user.id()],
-        )
-        .await
-        .map_err(db::query_error)?;
-    let candidates: Option<HashSet<i32>> = if option_e {
-        let validated = option_inputs::load_validated_contained_in_transaction(tx, user).await?;
-        let frontiers = validated
-            .eligible_frontiers()
-            .map_err(|_| ApiError::Internal("Invalid reading constraints".to_string()))?;
-        Some(
-            frontiers
-                .iter()
-                .map(|frontier| frontier.thread_id)
-                .collect(),
-        )
-    } else {
-        None
-    };
-    let mut ordered: Vec<(bool, i32, i32)> = rows
-        .iter()
-        .map(|row| {
-            let id: i32 = row.get(0);
-            let blocked = match &candidates {
-                Some(set) => !set.contains(&id),
-                None => row.get(1),
-            };
-            (blocked, row.get::<_, i32>(2), id)
-        })
-        .collect();
-    ordered.sort();
-    Ok(ordered
-        .iter()
-        .position(|(_, _, id)| *id == thread_id)
-        .map_or(0, |index| index as i32 + 1))
-}
-
-/// `thread_to_response`, read inside the writing transaction.
-async fn thread_response(
-    tx: &Transaction<'_>,
-    user: AuthenticatedUser,
-    thread_id: i32,
-    option_e: bool,
-) -> Result<ThreadResponse, ApiError> {
-    let sql = format!(
-        "SELECT t.title, t.format, t.issues_remaining, t.status, t.last_rating, {last_activity}, \
-                t.notes, t.is_test, t.is_blocked, {created}, t.total_issues, t.reading_progress, \
-                t.next_unread_issue_id, t.manual_creator_credits::text, \
-                (SELECT i.issue_number FROM issues i WHERE i.id = t.next_unread_issue_id), \
-                (SELECT count(*) FROM issues i WHERE i.thread_id = t.id AND i.status = 'unread' AND i.merged_into_issue_id IS NULL) \
-         FROM threads t WHERE t.id = $1 AND t.user_id = $2",
-        last_activity = iso("t.last_activity_at"),
-        created = iso("t.created_at"),
-    );
-    let row = tx
-        .query_opt(&sql, &[&thread_id, &user.id()])
-        .await
-        .map_err(db::query_error)?
-        .ok_or_else(|| thread_not_found(thread_id))?;
-    let total_issues: Option<i32> = row.get(10);
-    let unread: i64 = row.get(15);
-    let issues_remaining = if total_issues.is_some() {
-        unread as i32
-    } else {
-        row.get(2)
-    };
-    let queue_position = display_position(tx, user, thread_id, option_e).await?;
-    let credits: Option<String> = row.get(13);
-    Ok(ThreadResponse {
-        id: thread_id,
-        title: row.get(0),
-        format: normalize_format_value(&row.get::<_, String>(1)),
-        issues_remaining,
-        queue_position,
-        status: row.get(3),
-        last_rating: row.get(4),
-        last_activity_at: row.get(5),
-        notes: row.get(6),
-        is_test: row.get(7),
-        is_blocked: row.get(8),
-        blocking_reasons: Vec::new(),
-        created_at: row.get(9),
-        total_issues,
-        reading_progress: row.get(11),
-        next_unread_issue_id: row.get(12),
-        next_unread_issue_number: row.get(14),
-        manual_creator_credits: credits
-            .and_then(|text| serde_json::from_str(&text).ok())
-            .unwrap_or_else(|| Value::Array(Vec::new())),
-    })
 }
 
 fn insert_error(error: tokio_postgres::Error) -> ApiError {
