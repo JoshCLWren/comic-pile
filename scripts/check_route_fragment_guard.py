@@ -359,6 +359,26 @@ def regenerated_pr_violations(
     return violations
 
 
+def _text_at_revision(revision: str, path: str) -> str:
+    """Read a file at a revision, returning empty text when it is absent."""
+    present = _git_text("ls-tree", "--name-only", revision, "--", path).strip()
+    return _git_text("show", f"{revision}:{path}") if present else ""
+
+
+def _action_route_violations_for_refs(
+    changed_files: list[str], base: str, head: str
+) -> list[str]:
+    """Compare changed fragments at the merge base and proposed head."""
+    sources = sorted(path for path in changed_files if is_source_fragment(path))
+    if not sources:
+        return []
+    merge_base = _git_text("merge-base", base, head).strip()
+    base_fragments = {path: _text_at_revision(merge_base, path) for path in sources}
+    head_fragments = {path: _text_at_revision(head, path) for path in sources}
+    exemptions = _text_at_revision(head, ACTION_EXEMPTIONS_PATH)
+    return find_action_route_violations(base_fragments, head_fragments, exemptions)
+
+
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments.
 
