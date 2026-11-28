@@ -261,7 +261,7 @@ async fn every_operation_requires_authentication() {
     let (state, _token, _csrf, _user_id, _guard) = setup_user("tiss-auth").await;
     for (method, path) in [
         ("POST", "/api/v2/threads/1/issues"),
-        ("POST", "/api/v1/threads/1/issues:reorder"),
+        ("PUT", "/api/v2/threads/1/issue-order"),
         ("POST", "/api/v1/threads/1:migrateToIssues"),
         ("POST", "/api/v1/threads/1:migrateToIssuesSimple"),
         ("POST", "/api/v1/threads/1:setCurrentIssue"),
@@ -539,11 +539,12 @@ async fn reorder_rewrites_positions_and_validates() {
     let thread = plain_thread(&conn, user_id, "Reorder", 3, 1).await;
     let ids = seed_issues(&conn, thread, &["1", "2", "3"], "unread").await;
     frontier(&conn, thread, ids[0]).await;
-    let path = format!("/api/v1/threads/{thread}/issues:reorder");
+    let path = format!("/api/v2/threads/{thread}/issue-order");
 
     let (status, _) = send(
         &state,
-        post(
+        authed("PUT",
+            "PUT",
             &path,
             &token,
             &csrf,
@@ -578,7 +579,7 @@ async fn reorder_rewrites_positions_and_validates() {
         json!({"issue_ids": [ids[0], ids[0], ids[1]]}),
         json!({"issue_ids": [ids[0], ids[1], 424242]}),
     ] {
-        let (status, body) = send(&state, post(&path, &token, &csrf, Some(bad))).await;
+        let (status, body) = send(&state, authed("PUT", &path, &token, &csrf, Some(bad))).await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert_eq!(
             body["detail"],
@@ -590,14 +591,15 @@ async fn reorder_rewrites_positions_and_validates() {
         json!({}),
         json!({"issue_ids": ["x"]}),
     ] {
-        let (status, body) = send(&state, post(&path, &token, &csrf, Some(bad))).await;
+        let (status, body) = send(&state, authed("PUT", &path, &token, &csrf, Some(bad))).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
         assert_eq!(body["detail"], "Validation failed");
     }
     let (status, _) = send(
         &state,
-        post(
-            "/api/v1/threads/987654/issues:reorder",
+        authed(
+            "PUT",
+            "/api/v2/threads/987654/issue-order",
             &token,
             &csrf,
             Some(json!({"issue_ids": [1]})),
@@ -607,7 +609,8 @@ async fn reorder_rewrites_positions_and_validates() {
     assert_eq!(status, StatusCode::NOT_FOUND);
     let (status, _) = send(
         &state,
-        post(
+        authed("PUT",
+            "PUT",
             &path,
             &other_token,
             &other_csrf,
@@ -1222,7 +1225,7 @@ async fn set_current_issue_marks_earlier_read_and_pins_session() {
         json!({"issue_number": "2", "extra": true}),
         json!({"issue_number": 2}),
     ] {
-        let (status, body) = send(&state, post(&path, &token, &csrf, Some(bad))).await;
+        let (status, body) = send(&state, authed("PUT", &path, &token, &csrf, Some(bad))).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
         assert_eq!(body["detail"], "Validation failed");
     }
@@ -1538,8 +1541,9 @@ async fn reorder_and_set_current_issue_on_same_thread_do_not_deadlock() {
         tokio::spawn(async move {
             send(
                 &state,
-                post(
-                    &format!("/api/v1/threads/{thread}/issues:reorder"),
+                authed(
+                    "PUT",
+                    &format!("/api/v2/threads/{thread}/issue-order"),
                     &token,
                     &csrf,
                     Some(json!({"issue_ids": reversed})),
