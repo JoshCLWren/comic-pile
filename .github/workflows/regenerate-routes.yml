@@ -5,7 +5,8 @@ name: Regenerate Routes (Post-Merge)
 # Route PRs touch only docs/api/route-fragments/*.json source fragments
 # (excluding the generated vercel-rewrites.json artifact). vercel.json,
 # docs/api/v2-route-inventory.json, docs/api/route-fragments/
-# vercel-rewrites.json, and the AGENTS.md route-burndown section are
+# vercel-rewrites.json, docs/API_V1_CANONICAL.md, docs/api/live-route-census.json,
+# docs/api/LIVE_ROUTE_CENSUS.md, and the AGENTS.md route-burndown section are
 # bot-owned and are regenerated here after source fragments land.
 # Regeneration is published as a PR because main's required CI Summary rule
 # rejects unchecked direct pushes. The PR runs ordinary CI and auto-merges
@@ -63,15 +64,16 @@ jobs:
       - name: Regenerate routing artifacts
         run: |
           set -euo pipefail
-          # Both generators emit the canonical native/static builds and read
-          # only the route fragments plus the previous document, so
-          # regeneration is idempotent and order-independent. The burndown
-          # generator owns the inventory, AGENTS.md block and rewrite artifact.
+          # The burndown generator owns the inventory, AGENTS.md block and rewrite artifact.
+          # The census generator produces the v1-canonical guide and live-route-census docs.
+          # Both generators are idempotent and order-independent.
           node scripts/generate_route_burndown.mjs
           node scripts/generate_vercel_routes.mjs
+          node scripts/generate_live_route_census.mjs
           node scripts/generate_route_burndown.mjs
           node scripts/generate_vercel_routes.mjs --check
           node scripts/generate_route_burndown.mjs --check
+          node scripts/generate_live_route_census.mjs --check
 
       - name: Open or refresh CI-gated regeneration PR
         env:
@@ -80,7 +82,10 @@ jobs:
         run: |
           set -euo pipefail
           git add vercel.json docs/api/v2-route-inventory.json \
-            docs/api/route-fragments/vercel-rewrites.json AGENTS.md
+            docs/api/route-fragments/vercel-rewrites.json \
+            docs/API_V1_CANONICAL.md \
+            docs/api/live-route-census.json docs/api/LIVE_ROUTE_CENSUS.md \
+            AGENTS.md
           branch='automation/route-regeneration/current'
           if [[ -z "${GH_TOKEN:-}" ]]; then
             echo '::error::PR_REBASE_TOKEN is required so the generated PR triggers normal CI.'
@@ -108,7 +113,10 @@ jobs:
             git fetch --no-tags origin "$branch"
             if git diff --quiet FETCH_HEAD HEAD -- \
               vercel.json docs/api/v2-route-inventory.json \
-              docs/api/route-fragments/vercel-rewrites.json AGENTS.md; then
+              docs/api/route-fragments/vercel-rewrites.json \
+              docs/API_V1_CANONICAL.md \
+              docs/api/live-route-census.json docs/api/LIVE_ROUTE_CENSUS.md \
+              AGENTS.md; then
               echo "Regenerated files match existing PR #$existing; preserving its exact CI head."
               exit 0
             fi
@@ -130,7 +138,7 @@ jobs:
               --title 'chore(routes): regenerate checked routing artifacts' \
               --body 'Bot-generated route artifacts only. CI verifies deterministic output at the exact PR head before the required CI Summary check permits merge.
 
-          Refs #4931. No generated files are written directly to protected main.
+          No generated files are written directly to protected main.
 
           <!-- route-regeneration:bot-owned -->')"
             echo "Opened regeneration PR $pr."
