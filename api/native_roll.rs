@@ -529,6 +529,22 @@ fn app() -> Router {
             "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/adoption-commits",
             post(native_dispatch),
         )
+        // #4026: explicit-target, source-aware CBL replacement. The inner
+        // service owns these handlers, but this Vercel entry keeps its own
+        // route table; without matching entries a deployed request falls
+        // through to native_not_found before the handler runs.
+        .route(
+            "/api/v2/reading-lists/{list_id}/replacements:preview",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}/replacements",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}/replacements:undo",
+            post(native_dispatch),
+        )
         .route("/api/v2/analytics/metrics", get(native_dispatch))
         .route("/api/v2/issues/{issue_id}/comicvine", get(native_dispatch))
         .route("/api/v2/issues/{issue_id}", get(native_dispatch))
