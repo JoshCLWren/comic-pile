@@ -421,6 +421,8 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::issue_read_state::IssueReadStateApi::openapi())
         .merge_from(crate::comicvine_issue::ComicVineIssueApi::openapi())
         .merge_from(crate::custom_cbl::CustomCblApi::openapi())
+        // #4026: explicit-target CBL replacement contract (preview/commit/undo).
+        .merge_from(crate::reading_list_replacement::ReadingListReplacementApi::openapi())
         .merge_from(crate::reading_orders::ReadingOrdersApi::openapi())
         .merge_from(crate::reading_plan_sync::ReadingPlanSyncApi::openapi())
         .merge_from(crate::undo_snapshots::UndoSnapshotsApi::openapi())

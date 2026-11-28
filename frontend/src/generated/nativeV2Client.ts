@@ -1147,6 +1147,33 @@ export interface ReplaceIdentityRequest {
 
 export type ReplaceIdentityResponse = components['schemas']['IssueIdentityResponse']
 
+export interface ReplacementCommitRequest {
+  path: {
+    list_id: number
+  }
+  body: components['schemas']['ReplacementCommitRequest']
+}
+
+export type ReplacementCommitResponse = components['schemas']['ReplacementCommitResponse']
+
+export interface ReplacementPreviewRequest {
+  path: {
+    list_id: number
+  }
+  body: components['schemas']['ReplacementPreviewRequest']
+}
+
+export type ReplacementPreviewResponse = components['schemas']['ReplacementPreviewResponse']
+
+export interface ReplacementUndoRequest {
+  path: {
+    list_id: number
+  }
+  body: components['schemas']['ReplacementUndoRequest']
+}
+
+export type ReplacementUndoResponse = components['schemas']['ReplacementUndoResponse']
+
 export interface ResetRequest {
   body: components['schemas']['ResetDiceRequest']
 }
@@ -1535,6 +1562,9 @@ export interface NativeV2Client {
   removeIdentity(args: RemoveIdentityRequest): Promise<RemoveIdentityResponse>
   repair(args: RepairRequest): Promise<RepairResponse>
   replaceIdentity(args: ReplaceIdentityRequest): Promise<ReplaceIdentityResponse>
+  replacementCommit(args: ReplacementCommitRequest): Promise<ReplacementCommitResponse>
+  replacementPreview(args: ReplacementPreviewRequest): Promise<ReplacementPreviewResponse>
+  replacementUndo(args: ReplacementUndoRequest): Promise<ReplacementUndoResponse>
   reset(args: ResetRequest): Promise<ResetResponse>
   resetPassword(args: ResetPasswordRequest): Promise<ResetPasswordResponse>
   resolveInput(args: ResolveInputRequest): Promise<ResolveInputResponse>
@@ -2356,6 +2386,24 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     replaceIdentity(args: ReplaceIdentityRequest) {
       return client.post<ReplaceIdentityResponse, ReplaceIdentityRequest['body']>(
         `/v2/comicvine/issues/${encodeURIComponent(String(args.path.issue_id))}/identity:replace`,
+        args.body,
+      )
+    },
+    replacementCommit(args: ReplacementCommitRequest) {
+      return client.post<ReplacementCommitResponse, ReplacementCommitRequest['body']>(
+        `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/replacements`,
+        args.body,
+      )
+    },
+    replacementPreview(args: ReplacementPreviewRequest) {
+      return client.post<ReplacementPreviewResponse, ReplacementPreviewRequest['body']>(
+        `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/replacements:preview`,
+        args.body,
+      )
+    },
+    replacementUndo(args: ReplacementUndoRequest) {
+      return client.post<ReplacementUndoResponse, ReplacementUndoRequest['body']>(
+        `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/replacements:undo`,
         args.body,
       )
     },
