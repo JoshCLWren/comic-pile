@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-28T06:18:23+00:00",
+  "generated_at": "2026-11-28T06:22:31+00:00",
   "models": [
     {
       "health": {
@@ -23754,7 +23754,7 @@
   },
   "counts_generated_at": "2026-11-28T06:00:22.558399+00:00",
   "model_exclusions": {
-    "generated_at": "2026-11-28T06:18:24Z",
+    "generated_at": "2026-11-28T06:22:31Z",
     "sources": {
       "nvidia": [
         "google/diffusiongemma-26b-a4b-it",
@@ -23773,10 +23773,10 @@
       "reads": false,
       "writes": false
     },
-    "checked_at": "2026-11-28T06:18:24.514441+00:00",
-    "days_elapsed": 27.263,
+    "checked_at": "2026-11-28T06:22:32.000487+00:00",
+    "days_elapsed": 27.266,
     "days_in_month": 30.0,
-    "days_left": 2.74,
+    "days_left": 2.73,
     "in_use": true,
     "label": "",
     "metrics": {
@@ -23792,31 +23792,31 @@
       },
       "rows_read": {
         "allowance": 500000000,
-        "database": 73314358,
-        "organization": 73314358,
+        "database": 73368643,
+        "organization": 73368643,
         "owner_target": 50000000,
-        "projected_database": 80674568,
-        "projected_organization": 80674568,
-        "projected_share": 0.1613,
-        "share_used": 0.1466
+        "projected_database": 80725420,
+        "projected_organization": 80725420,
+        "projected_share": 0.1615,
+        "share_used": 0.1467
       },
       "rows_written": {
         "allowance": 10000000,
-        "database": 255914,
-        "organization": 255914,
+        "database": 256023,
+        "organization": 256023,
         "owner_target": 1000000,
-        "projected_database": 281606,
-        "projected_organization": 281606,
+        "projected_database": 281695,
+        "projected_organization": 281695,
         "projected_share": 0.0282,
         "share_used": 0.0256
       },
       "storage_bytes": {
         "allowance": 5000000000,
-        "database": 26935296,
-        "organization": 26935296,
+        "database": 26943488,
+        "organization": 26943488,
         "owner_target": 250000000,
-        "projected_database": 26935296,
-        "projected_organization": 26935296,
+        "projected_database": 26943488,
+        "projected_organization": 26943488,
         "projected_share": 0.0054,
         "share_used": 0.0054
       }
@@ -23834,7 +23834,7 @@
     "top_queries_error": "Turso database stats answered HTTP 404 (check FACTORY_TURSO_ORG / FACTORY_TURSO_DATABASE)"
   },
   "schema": {
-    "checked_at": "2026-11-28T06:18:28+00:00",
+    "checked_at": "2026-11-28T06:22:34+00:00",
     "code_version": 7,
     "last_upgrade": {
       "at": "2026-11-28T01:36:43+00:00",
@@ -24022,7 +24022,7 @@
     "stored_version": 7
   },
   "crashes": {
-    "generated_at": "2026-11-28T06:18:28Z",
+    "generated_at": "2026-11-28T06:22:34Z",
     "groups": [
       {
         "count": 9,
@@ -24083,13 +24083,31 @@
   },
   "ready": {
     "cycles": [],
-    "generated_at": "2026-11-28T06:17:09+00:00",
+    "generated_at": "2026-11-28T06:21:41+00:00",
     "items": [
+      {
+        "action": "implement",
+        "lane": 3,
+        "priority": 3,
+        "rank": 1,
+        "stage": "new",
+        "target": "issue:5952",
+        "title": "[Muse QA] Edit Series still asks to discard changes after a completed save"
+      },
+      {
+        "action": "implement",
+        "lane": 3,
+        "priority": 3,
+        "rank": 2,
+        "stage": "new",
+        "target": "issue:5958",
+        "title": "Retire remaining unowned legacy API aliases and move release cron to v2"
+      },
       {
         "action": "merge-conflict",
         "lane": 3,
         "priority": 3,
-        "rank": 1,
+        "rank": 3,
         "stage": "factory:review",
         "target": "pr:5986",
         "title": "Retire remaining Roll Bootstrap and session-initialization client callers"
@@ -24098,74 +24116,71 @@
         "action": "review",
         "lane": 3,
         "priority": 3,
-        "rank": 2,
+        "rank": 4,
         "stage": "factory:review",
         "target": "pr:5999",
         "title": "Rehearse shared-identity simplification and owner isolation on local PostgreSQL"
       },
       {
-        "action": "merge-conflict",
+        "action": "implement",
         "lane": 3,
         "priority": 2,
-        "rank": 3,
-        "stage": "factory:review",
-        "target": "pr:5987",
-        "title": "Adopt Night Shift as ComicPile's sole visual identity and remove theme selection"
+        "rank": 5,
+        "stage": "new",
+        "target": "issue:3035",
+        "title": "Audit and safely retire remaining Thread.format consumers (core tag prerequisites closed)"
       },
       {
-        "action": "review",
+        "action": "implement",
         "lane": 3,
-        "priority": 0,
-        "rank": 4,
-        "stage": "factory:review",
-        "target": "pr:6001",
-        "title": "Delete nine frontend runtime functions used only by their own tests"
+        "priority": 2,
+        "rank": 6,
+        "stage": "new",
+        "target": "issue:3575",
+        "title": "Search and filter chronological History by text, date, series and activity type"
+      },
+      {
+        "action": "implement",
+        "lane": 3,
+        "priority": 2,
+        "rank": 7,
+        "stage": "new",
+        "target": "issue:3604",
+        "title": "Investigate unstable Queue membership with deterministic read-only fixtures"
+      },
+      {
+        "action": "implement",
+        "lane": 3,
+        "priority": 2,
+        "rank": 8,
+        "stage": "new",
+        "target": "issue:4023",
+        "title": "CBL Add/Update screen: review selection and commit the owned Reading List"
+      },
+      {
+        "action": "implement",
+        "lane": 3,
+        "priority": 2,
+        "rank": 9,
+        "stage": "new",
+        "target": "issue:4026",
+        "title": "CBL replace: explicitly target one owned Reading List, with safe undo"
+      },
+      {
+        "action": "implement",
+        "lane": 3,
+        "priority": 2,
+        "rank": 10,
+        "stage": "new",
+        "target": "issue:4255",
+        "title": "Verify canonical Reading List intent and preserved reader data before legacy removal"
       }
     ]
   },
   "gh_usage": {
-    "generated_at": "2026-11-28T06:18:29Z",
+    "generated_at": "2026-11-28T06:22:35Z",
     "jobs": {
       "dispatch": [
-        {
-          "at": 1795844990,
-          "buckets": {
-            "reader": 13,
-            "workflow": 5
-          },
-          "budget": {
-            "limit": 5000,
-            "remaining": 3993,
-            "reset": 1795846978
-          },
-          "cache_hits": 0,
-          "github": 18,
-          "label": "dispatch pr:5997",
-          "paginated": 4,
-          "top": [
-            [
-              "api GET repos/R/issues/N",
-              4
-            ],
-            [
-              "api GET repos/R/issues",
-              2
-            ],
-            [
-              "api GET repos/R/actions/workflows/free-model-factory-entry.yml/runs paginate",
-              2
-            ],
-            [
-              "api GET repos/R/pulls",
-              1
-            ],
-            [
-              "api GET repos/R/actions/runs",
-              1
-            ]
-          ],
-          "writes": 0
-        },
         {
           "at": 1795845190,
           "buckets": {
@@ -24594,48 +24609,48 @@
             ]
           ],
           "writes": 13
-        }
-      ],
-      "merge": [
+        },
         {
-          "at": 1795843895,
+          "at": 1795846902,
           "buckets": {
-            "reader": 47,
-            "workflow": 12
+            "reader": 259,
+            "workflow": 62
           },
           "budget": {
             "limit": 5000,
-            "remaining": 4649,
+            "remaining": 3187,
             "reset": 1795846978
           },
-          "cache_hits": 0,
-          "github": 59,
-          "label": "merge drain",
-          "paginated": 17,
+          "cache_hits": 2,
+          "github": 321,
+          "label": "dispatch roster",
+          "paginated": 67,
           "top": [
             [
+              "api GET repos/R/issues/N",
+              75
+            ],
+            [
               "api GET repos/R/issues/N/comments paginate",
-              12
+              50
             ],
             [
-              "gh workflow run",
-              4
-            ],
-            [
-              "api GET repos/R/actions/workflows/ci.yml/runs",
-              3
+              "gh pr checks",
+              30
             ],
             [
               "api GET repos/R/issues",
-              2
+              29
             ],
             [
-              "gh pr list",
-              2
+              "api GET repos/R/pulls/N",
+              24
             ]
           ],
-          "writes": 2
-        },
+          "writes": 23
+        }
+      ],
+      "merge": [
         {
           "at": 1795844112,
           "buckets": {
@@ -25035,6 +25050,45 @@
           "budget": {
             "limit": 5000,
             "remaining": 3342,
+            "reset": 1795846978
+          },
+          "cache_hits": 0,
+          "github": 50,
+          "label": "merge drain",
+          "paginated": 16,
+          "top": [
+            [
+              "api GET repos/R/issues/N/comments paginate",
+              12
+            ],
+            [
+              "api GET repos/R/issues",
+              2
+            ],
+            [
+              "gh pr list",
+              2
+            ],
+            [
+              "api GET repos/R/pulls paginate",
+              2
+            ],
+            [
+              "api GET repos/R/pulls",
+              1
+            ]
+          ],
+          "writes": 2
+        },
+        {
+          "at": 1795846764,
+          "buckets": {
+            "reader": 42,
+            "workflow": 8
+          },
+          "budget": {
+            "limit": 5000,
+            "remaining": 3234,
             "reset": 1795846978
           },
           "cache_hits": 0,
