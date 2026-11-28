@@ -81,7 +81,6 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | GET | `/api/v1/threads/{thread_id}/issues:validateOrder` | `thread_ordering::validate_issue_order` | v1 | none | /api/native_roll.rs | #5706 | GET /api/v2/threads/{thread_id}/issues \| POST /api/v2/threads/{thread_id}/issues | slice-open |
 | GET | `/api/v1/threads/{thread_id}/reading-orders` | `thread_ordering::get_thread_reading_orders` | v1 | none | /api/native_roll.rs | #5715 | GET /api/v2/threads/{thread_id}/readingOrders | slice-open |
 | POST | `/api/v1/threads/{thread_id}/restore` | `thread_lifecycle::restore_thread` | v1 | frontend/src/services/api-threads.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #5704 | POST /api/v2/queue-exclusions/restore | slice-open |
-| POST | `/api/v1/threads/{thread_id}/set-pending` | `thread_lifecycle::set_pending_thread` | v1 | frontend/src/services/api-threads.ts, frontend/src/test/cbl-replace-review.spec.ts, frontend/src/test/helpers.ts, frontend/src/test/issue-1885-roll-target-sizes.spec.ts | /api/native_roll.rs | #4344 | retire-without-replacement | owner-issue-open |
 | PUT | `/api/v1/threads/{thread_id}/test-backdate` | `thread_lifecycle::backdate_thread_for_testing` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/services/api-dependency-groups.ts, frontend/src/services/api-issues.ts, frontend/src/services/api-migration.ts, frontend/src/services/api-reading-orders.ts, frontend/src/services/api-threads.ts | /api/native_roll.rs | #4335 | retire-without-replacement | test-helper-debt |
 | POST | `/api/v1/threads:getBlockingInfo` | `thread_ordering::get_threads_blocking_info` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/useReadingBoundaries.request-budget.test.tsx | /api/native_roll.rs | #5709 | GET /api/v2/dependencies/blocked | slice-open |
 | GET | `/api/v1/users/me/taste-signals` | `preferences::list_taste_signals` | v1 | none | /api/native_roll.rs | #5717 | PATCH /api/v2/users/me/tasteSignals/{signal_id} | slice-open |
@@ -281,7 +280,6 @@ Non-browser / helper / infrastructure surface included in the census:
 
 - #4341: `POST /api/v1/roll/override` — not-live; retire-without-replacement.
 - #4343: `GET /api/v1/sessions/current/` — not-live; retire-without-replacement.
-- #5525: `POST /api/v1/threads/{thread_id}/set-pending` — live-p0-evidence; retire-without-replacement.
 - #5707: `POST /api/v1/threads/{thread_id}:setCurrentIssue` — not-live; POST /api/v2/threads/{thread_id}/issues | PATCH /api/v2/issues/{issue_id}.
 - #5708: `GET /api/v1/sessions/{session_id}` — not-live; GET /api/v2/readingSessions | GET /api/v2/readingSessions/{session_id}.
 - #5710: `GET /api/v1/reading-order-groups/` — not-live; GET|POST|PATCH|DELETE /api/v2/readingOrderGroups[/{group_id}].
@@ -307,5 +305,3 @@ Non-browser / helper / infrastructure surface included in the census:
 None. Every live v1 method has an owner or an explicit disposition.
 
 ## Verification
-
-`node scripts/generate_live_route_census.mjs --check` regenerates the matrix, compares the checked-in artifacts byte-for-byte, and fails on duplicate registrations, unowned new routes, unknown ingress/runtime, stale allowlist entries, or a new first-party v1 call. The regression `POST /api/v1/threads/{thread_id}/set-pending` must always be present with owner #4344.
