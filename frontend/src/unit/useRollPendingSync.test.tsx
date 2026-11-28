@@ -39,7 +39,7 @@ describe('useRollPendingSync', () => {
       useRollPendingSync({
         rollBootstrap: bootstrap({
           pending_thread_id: 99,
-          snoozed_threads: [{ id: 5, title: 'Saga', format: 'Comic' }],
+          snoozed_threads: [{ id: 5, title: 'Saga',}],
         }),
         refetchQueue: vi.fn(),
       }),
@@ -53,7 +53,6 @@ describe('useRollPendingSync', () => {
     const displayed = Array.from({ length: 20 }, (_, index) => ({
       id: index + 1,
       title: `Series ${index + 1}`,
-      format: 'Comic',
     }))
     const allIds = Array.from({ length: 25 }, (_, index) => index + 1)
     const { result } = renderHook(() =>

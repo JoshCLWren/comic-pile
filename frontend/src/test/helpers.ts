@@ -410,7 +410,6 @@ export async function createThread(
   page: Page,
   threadData: {
     title: string;
-    format: string;
     issues_remaining: number;
     total_issues?: number;
     issue_range?: string;
@@ -422,7 +421,7 @@ export async function createThread(
 
   const dataWithoutTotal: ThreadCreatePayload = {
     title: threadData.title,
-    format: threadData.format,
+
     issues_remaining: threadData.issues_remaining,
   };
   if (threadData.notes !== undefined) {
@@ -578,7 +577,6 @@ export const SELECTORS = {
 		threadItem: '[data-testid="queue-thread-item"]',
 		newThreadButton: 'button:has-text("Add Series")',
 		titleInput: 'label:has-text("Title") + input',
-		formatSelect: 'label:has-text("Format") + select',
 		issuesRemainingInput: 'label:has-text("Issues Remaining") + input, label:has-text("Issues") + input',
 	},
 	roll: {

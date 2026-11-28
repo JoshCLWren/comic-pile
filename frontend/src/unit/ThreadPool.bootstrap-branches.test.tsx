@@ -16,7 +16,7 @@ describe('ThreadPool bootstrap edge branches', () => {
 
     render(
       <MemoryRouter><ThreadPool
-        pool={[{ id: 1, title: 'Saga', format: 'Comic' }]}
+        pool={[{ id: 1, title: 'Saga',}]}
         isRatingView={false}
         selectedThreadId={0}
         snoozedThreads={[]}

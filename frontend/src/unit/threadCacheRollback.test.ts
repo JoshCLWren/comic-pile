@@ -7,7 +7,6 @@ import type { Thread } from '../types'
 const thread: Thread = {
   id: 7,
   title: 'Mister Miracle',
-  format: 'issue',
   issues_remaining: 4,
   total_issues: 12,
   queue_position: 3,

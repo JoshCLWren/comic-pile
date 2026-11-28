@@ -24,7 +24,6 @@ test.describe('Roll primary-action hierarchy (#2197, #5981)', () => {
     const page = authenticatedPage
     await createThread(page, {
       title: 'Primary Action Thread',
-      format: 'Issue',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -56,7 +55,6 @@ test.describe('Roll primary-action hierarchy (#2197, #5981)', () => {
     const page = authenticatedPage
     await createThread(page, {
       title: 'Keyboard Roll Thread',
-      format: 'Issue',
       issues_remaining: 2,
       total_issues: 2,
     })
@@ -76,7 +74,6 @@ test.describe('Roll primary-action hierarchy (#2197, #5981)', () => {
     const page = authenticatedPage
     await createThread(page, {
       title: 'Enter Roll Thread',
-      format: 'Issue',
       issues_remaining: 2,
       total_issues: 2,
     })

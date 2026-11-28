@@ -28,7 +28,7 @@ function renderRatingView({ currentDie, rating, predictedDie }: { currentDie: nu
           activeRatingThread: {
             id: 1,
             title: 'Test',
-            format: 'Comic',
+
             issues_remaining: 3,
             total_issues: 10,
             reading_progress: 'in_progress',

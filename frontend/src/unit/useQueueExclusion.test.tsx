@@ -41,7 +41,6 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
   return {
     id: 7,
     title: 'Descender',
-    format: 'Comic',
     status: 'excluded',
     queue_position: 0,
     issues_remaining: 4,

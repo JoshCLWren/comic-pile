@@ -319,8 +319,8 @@ async fn release_list_backfill_preserves_subscriptions_and_requires_unambiguous_
         .batch_execute(
             "INSERT INTO users (id, username) VALUES (3874, 'release-owner'), (3875, 'other-owner');
              INSERT INTO threads
-               (id, user_id, title, format, issues_remaining, queue_position, status)
-             VALUES (387400, 3874, 'Release thread', 'Comic', 0, 1, 'active');
+               (id, user_id, title, issues_remaining, queue_position, status)
+             VALUES (387400, 3874, 'Release thread', 0, 1, 'active');
              INSERT INTO continuity_plans
                (id, user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at)
              VALUES (387401, 3874, 'Unambiguous', 'informational', '[]'::json, '[]'::json, NOW(), NOW()),

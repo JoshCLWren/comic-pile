@@ -5,7 +5,7 @@ import { createThread } from './helpers'
 for (const width of [390, 1280]) {
   test(`Queue boundary failure recovers through Retry at ${width}px`, async ({ authenticatedPage: page, allowExpectedBrowserFailures }) => {
     await page.setViewportSize({ width, height: 900 })
-    const thread = await createThread(page, { title: 'Boundary retry series', format: 'Issue', issues_remaining: 2, total_issues: 2 })
+    const thread = await createThread(page, { title: 'Boundary retry series',issues_remaining: 2, total_issues: 2 })
     let failing = true
     allowExpectedBrowserFailures.allow({ category: 'console', message: '503 (Service Unavailable)' })
     await page.route('**/api/v2/reading-boundaries', async route => {

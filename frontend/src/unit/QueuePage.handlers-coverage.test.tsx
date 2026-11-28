@@ -391,7 +391,6 @@ describe('QueuePage callback coverage', () => {
     renderPage()
 
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
-    await user.selectOptions(screen.getByLabelText('Format'), 'Graphic Novel')
     await user.clear(screen.getByLabelText('Issues already read (optional)'))
     await user.type(screen.getByLabelText('Issues already read (optional)'), '2')
     await user.type(screen.getByLabelText('Notes'), 'remember this')
@@ -400,7 +399,6 @@ describe('QueuePage callback coverage', () => {
     await user.click(screen.getByText('edit modal callback'))
     await user.clear(screen.getByLabelText('Title'))
     await user.type(screen.getByLabelText('Title'), 'Edited Saga')
-    await user.selectOptions(screen.getByLabelText('Format'), 'Manga')
     await user.clear(screen.getByLabelText('Issues Remaining'))
     await user.type(screen.getByLabelText('Issues Remaining'), '4')
     await user.type(screen.getByLabelText('Notes'), 'updated')

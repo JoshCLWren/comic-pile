@@ -545,14 +545,10 @@
         "required": [
           "thread_id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position"
         ],
         "properties": {
-          "format": {
-            "type": "string"
-          },
           "issue_id": {
             "type": [
               "integer",
@@ -666,7 +662,6 @@
         "required": [
           "id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position",
           "status",
@@ -684,9 +679,6 @@
             }
           },
           "created_at": {
-            "type": "string"
-          },
-          "format": {
             "type": "string"
           },
           "id": {

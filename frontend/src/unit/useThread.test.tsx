@@ -73,7 +73,7 @@ it('creates, updates, deletes, and reactivates threads', async () => {
   const wrapper = createWrapper()
   const { result: createResult } = renderHook(() => useCreateThread(), { wrapper })
   await act(async () => {
-    await createResult.current.mutate({ title: 'New', format: 'Comics', issues_remaining: 5 })
+    await createResult.current.mutate({ title: 'New',issues_remaining: 5 })
   })
 
   const { result: updateResult } = renderHook(() => useUpdateThread(), { wrapper })
@@ -93,7 +93,6 @@ it('creates, updates, deletes, and reactivates threads', async () => {
 
   expect(mockedThreadsApi.create).toHaveBeenCalledWith({
     title: 'New',
-    format: 'Comics',
     issues_remaining: 5,
   })
   expect(mockedThreadsApi.update).toHaveBeenCalledWith(7, { title: 'Updated' })
@@ -107,7 +106,6 @@ it('refreshes Roll and plan views when a thread is renamed (#5264)', async () =>
   const updatedThread = {
     id: 7,
     title: 'Renamed',
-    format: 'issue',
     issues_remaining: 4,
     total_issues: 12,
     queue_position: 3,
@@ -261,7 +259,7 @@ it('uses response details and ignores late hook results after unmount', async ()
   axiosError.response = { status: 422, data: { detail: 'server detail' }, headers: {}, config: { headers: {} }, statusText: 'Unprocessable Entity' } as never
   mockedThreadsApi.create.mockRejectedValueOnce(axiosError)
   const { result } = renderHook(() => useCreateThread(), { wrapper })
-  await expect(act(async () => result.current.mutate({ title: 'x', format: 'Comic', issues_remaining: 1 }))).rejects.toBe(axiosError)
+  await expect(act(async () => result.current.mutate({ title: 'x',issues_remaining: 1 }))).rejects.toBe(axiosError)
 
   let resolveThread!: (value: never) => void
   mockedThreadsApi.get.mockImplementationOnce(() => new Promise((resolve) => { resolveThread = resolve }))

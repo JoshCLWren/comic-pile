@@ -325,7 +325,6 @@ export default function RollPage() {
       const threadMetadata: ThreadMetadata = {
         id: response.thread_id,
         title: response.title,
-        format: response.format,
         issues_remaining: response.issues_remaining,
         queue_position: response.queue_position,
         total_issues: response.total_issues,
@@ -700,7 +699,6 @@ export default function RollPage() {
             state.setThreadToMigrate({
               id: state.selectedThread.id,
               title: state.selectedThread.title,
-              format: state.selectedThread.format,
               issues_remaining: 0,
               queue_position: 0,
               total_issues: null,

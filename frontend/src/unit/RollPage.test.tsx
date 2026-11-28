@@ -234,7 +234,6 @@ it('requests one scoped card batch and prefers its title and issue number (#4719
       roll_pool: [{
         id: 1,
         title: 'Bootstrap title',
-        format: 'Comic',
         issue_id: 11,
         issue_number: '1',
       }],
@@ -353,8 +352,8 @@ it('loads every active override page only after the modal opens', async () => {
   await waitFor(() => expect(threadsApi.list).toHaveBeenCalledTimes(2))
   expect(threadsApi.list).toHaveBeenNthCalledWith(1, { page_size: 200 }, undefined)
   expect(threadsApi.list).toHaveBeenNthCalledWith(2, { page_size: 200 }, 'page-2')
-  expect(await screen.findByRole('option', { name: 'First Choice (Comic)' })).toBeInTheDocument()
-  expect(await screen.findByRole('option', { name: 'Second Choice (Comic)' })).toBeInTheDocument()
+  expect(await screen.findByRole('option', { name: 'First Choice' })).toBeInTheDocument()
+  expect(await screen.findByRole('option', { name: 'Second Choice' })).toBeInTheDocument()
 })
 
 it('uses the scoped die in the die-selection modal when bootstrap differs (#4719)', async () => {

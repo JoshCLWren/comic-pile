@@ -12,7 +12,6 @@ function render(ui: React.ReactElement) {
 const mockThread = {
   id: 1,
   title: 'Saga',
-  format: 'Comic',
   status: 'active' as const,
   queue_position: 1,
   issues_remaining: 5,

@@ -7,7 +7,7 @@ import type { RollResponse } from '../types'
 const seededRoll: RollResponse = {
   thread_id: 999,
   title: 'Sample: The Dark Knight Returns (Demo)',
-  format: 'comic',
+
   issues_remaining: 3,
   queue_position: 1,
   die_size: 6,

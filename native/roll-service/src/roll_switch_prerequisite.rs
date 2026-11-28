@@ -511,8 +511,8 @@ mod tests {
         let (mut client, _db) = seeded(
             r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
                  INSERT INTO threads
-                     (id, user_id, title, format, issues_remaining, status, queue_position)
-                 VALUES (10, 1, 'Pending', 'Comic', 1, 'active', 1);
+                     (id, user_id, title, issues_remaining, status, queue_position)
+                 VALUES (10, 1, 'Pending', 1, 'active', 1);
                  INSERT INTO sessions
                      (id, user_id, started_at, start_die, pending_thread_id,
                       snoozed_thread_ids)
@@ -540,9 +540,9 @@ mod tests {
         let (mut client, _db) = seeded(
             r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
                  INSERT INTO threads
-                     (id, user_id, title, format, issues_remaining, status, queue_position)
-                 VALUES (10, 1, 'First', 'Comic', 1, 'active', 1),
-                        (20, 1, 'Second', 'Comic', 1, 'active', 2);
+                     (id, user_id, title, issues_remaining, status, queue_position)
+                 VALUES (10, 1, 'First', 1, 'active', 1),
+                        (20, 1, 'Second', 1, 'active', 2);
                  INSERT INTO issues
                      (id, thread_id, issue_number, status, created_at, position)
                  VALUES (100, 10, '1', 'unread', now(), 1),
@@ -612,8 +612,8 @@ mod tests {
         let (mut client, _db) = seeded(
             r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
                  INSERT INTO threads
-                     (id, user_id, title, format, issues_remaining, status, queue_position)
-                 VALUES (20, 1, 'Second', 'Comic', 1, 'active', 1);
+                     (id, user_id, title, issues_remaining, status, queue_position)
+                 VALUES (20, 1, 'Second', 1, 'active', 1);
                  INSERT INTO issues
                      (id, thread_id, issue_number, status, created_at, position)
                  VALUES (200, 20, '2', 'unread', now(), 1);
@@ -643,8 +643,8 @@ mod tests {
         let (mut client, _db) = seeded(
             r#"INSERT INTO users (id, username) VALUES (1, 'reader-1'), (2, 'reader-2');
                  INSERT INTO threads
-                     (id, user_id, title, format, issues_remaining, status, queue_position)
-                 VALUES (20, 1, 'Second', 'Comic', 1, 'active', 1);
+                     (id, user_id, title, issues_remaining, status, queue_position)
+                 VALUES (20, 1, 'Second', 1, 'active', 1);
                  INSERT INTO issues
                      (id, thread_id, issue_number, status, created_at, position)
                  VALUES (200, 20, '2', 'unread', now(), 1);

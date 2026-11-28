@@ -203,7 +203,6 @@
         },
         "routes": [],
         "thread": {
-          "format": "Comic",
           "id": 2,
           "last_activity_at": "2026-01-04T12:00:00+00:00",
           "title": "Beta"
@@ -229,7 +228,6 @@
     ],
     "skipped_threads": [
       {
-        "format": "Comic",
         "id": 1,
         "last_activity_at": "2026-01-04T12:00:00+00:00",
         "title": "Alpha"

@@ -969,7 +969,6 @@ mod tests {
             &[
                 "id",
                 "title",
-                "format",
                 "issues_remaining",
                 "queue_position",
                 "last_rolled_result",
@@ -1001,7 +1000,7 @@ mod tests {
         assert_fields(
             &document,
             "BootstrapThreadSummary",
-            &["id", "title", "format", "last_activity_at", "tags"],
+            &["id", "title", "last_activity_at", "tags"],
         );
         assert_fields(
             &document,

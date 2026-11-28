@@ -53,12 +53,10 @@ export function ContinuityThreadSelector({
     if (!normalized) return []
     return threads
       .filter((thread) => thread.id !== excludeThreadId)
-      .filter((thread) => `${thread.title} ${thread.format}`.toLocaleLowerCase().includes(normalized))
+      .filter((thread) => thread.title.toLocaleLowerCase().includes(normalized))
       .sort((a, b) => {
         const titleRank = a.title.localeCompare(b.title)
         if (titleRank !== 0) return titleRank
-        const formatRank = a.format.localeCompare(b.format)
-        if (formatRank !== 0) return formatRank
         return a.id - b.id
       })
       .slice(0, 50)
@@ -109,7 +107,6 @@ export function ContinuityThreadSelector({
           >
             {value.title}
           </p>
-          {value.format ? <p className="mt-1 text-xs text-stone-500">{value.format}</p> : null}
         </div>
       )}
 
@@ -138,7 +135,6 @@ export function ContinuityThreadSelector({
               <span className="block font-semibold">{thread.title}</span>
               <span className="block text-xs text-stone-500">
                 {[
-                  thread.format,
                   isNumber(thread.issues_remaining) ? `${thread.issues_remaining} remaining` : null,
                   isNumber(thread.total_issues) ? `${thread.total_issues} total` : null,
                 ]

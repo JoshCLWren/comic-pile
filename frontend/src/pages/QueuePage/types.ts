@@ -32,7 +32,6 @@ export type QueuedIssueMutation =
 
 export type QueueFormState = {
   title: string
-  format: string
   issuesRemaining: number
   notes: string
   issues: string
@@ -43,7 +42,6 @@ export type QueueFormState = {
 /** Body of an edit mutation derived from the queue form state. */
 export interface EditThreadData {
   title: string
-  format: string
   /**
    * Notes as typed by the reader. Always sent, including an empty string when
    * the field was cleared, so clearing a note persists (issue #3629). The API
@@ -58,12 +56,9 @@ export interface EditThreadData {
 
 export const DEFAULT_CREATE_STATE: QueueFormState = {
   title: '',
-  format: 'Comic',
   issuesRemaining: 1,
   notes: '',
   issues: '',
   lastIssueRead: 0,
   manualCreatorCredits: [],
 }
-
-export const FORMAT_OPTIONS = ['Comic', 'Manga', 'Trade Paperback', 'Graphic Novel', 'Digital', 'Other'] as const

@@ -63,19 +63,16 @@ test.describe('Reading List gate authoring', () => {
     allowExpectedBrowserFailures.allow({ category: 'console', message: '409' })
     const first = await createThread(page, {
       title: 'Gate First Series',
-      format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
     })
     const skipped = await createThread(page, {
       title: 'Gate Skipped Series',
-      format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
     })
     const last = await createThread(page, {
       title: 'Gate Last Series',
-      format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
     })
@@ -156,7 +153,6 @@ test.describe('Reading List gate authoring', () => {
     const longName = 'Hellboy and the B.P.R.D.: The Very Long and Unforgettable Midnight Investigation'
     const created = await createThread(page, {
       title: longName,
-      format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
     })

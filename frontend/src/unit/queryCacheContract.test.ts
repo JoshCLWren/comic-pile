@@ -30,7 +30,6 @@ import type { ContinuityPlan } from '../services/api-continuity-plans'
 const thread: Thread = {
   id: 7,
   title: 'Mister Miracle',
-  format: 'issue',
   issues_remaining: 4,
   total_issues: 12,
   queue_position: 3,
@@ -214,12 +213,10 @@ describe('targeted cache effects', () => {
     const existing: Thread = {
       ...thread,
       queue_position: 27,
-      format: 'Trade Paperback',
       created_at: '2025-01-01T00:00:00Z',
     }
     expect(update(existing)).toMatchObject({
       queue_position: 27,
-      format: 'Trade Paperback',
       created_at: '2025-01-01T00:00:00Z',
       issues_remaining: thread.issues_remaining,
       last_rating: thread.last_rating,

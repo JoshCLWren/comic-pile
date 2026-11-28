@@ -93,7 +93,6 @@ const MAX_ISSUES_TO_ADD: i64 = 10_000;
 pub struct ThreadResponse {
     pub id: i32,
     pub title: String,
-    pub format: String,
     pub issues_remaining: i32,
     pub queue_position: i32,
     pub status: String,
@@ -116,7 +115,6 @@ pub struct ThreadResponse {
 pub struct RollResponse {
     pub thread_id: i32,
     pub title: String,
-    pub format: String,
     pub issues_remaining: i32,
     pub queue_position: i32,
     pub die_size: i32,
@@ -136,7 +134,6 @@ pub struct RollResponse {
 #[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 pub struct ThreadCreateRequest {
     pub title: String,
-    pub format: String,
     pub issues_remaining: i32,
     pub total_issues: Option<i32>,
     pub notes: Option<String>,
@@ -150,7 +147,6 @@ pub struct ThreadCreateRequest {
 #[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 pub struct ThreadUpdateRequest {
     pub title: Option<String>,
-    pub format: Option<String>,
     pub issues_remaining: Option<i32>,
     pub notes: Option<String>,
     pub manual_creator_credits: Option<Vec<Value>>,
@@ -158,9 +154,8 @@ pub struct ThreadUpdateRequest {
 }
 
 /// Fields a caller may name in an AIP-134 `update_mask` for a Thread patch.
-pub const THREAD_PATCH_FIELDS: [&str; 6] = [
+pub const THREAD_PATCH_FIELDS: [&str; 5] = [
     "title",
-    "format",
     "issues_remaining",
     "notes",
     "manual_creator_credits",
@@ -177,8 +172,6 @@ pub const THREAD_PATCH_FIELDS: [&str; 6] = [
 pub struct ThreadPatchRequest {
     /// New series title. Omitted fields are preserved.
     pub title: Option<String>,
-    /// New format; normalized to the reader's canonical vocabulary.
-    pub format: Option<String>,
     /// Manual issue counter for untracked series (legacy queue transition).
     pub issues_remaining: Option<i32>,
     /// Notes. `null` or a blank string clears the stored value; omit to keep it.
@@ -200,8 +193,6 @@ pub struct ThreadPatchRequest {
 pub struct ThreadPatchPrecondition {
     /// Title observed by the client.
     pub title: Option<String>,
-    /// Format observed by the client.
-    pub format: Option<String>,
     /// Notes observed by the client; `null` means it observed no notes.
     pub notes: Option<Option<String>>,
     /// Manual creator credits observed by the client.
@@ -225,7 +216,6 @@ pub struct SetPendingRequest {
 #[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 pub struct CheckDuplicatesRequest {
     pub title: String,
-    pub format: String,
     pub comicvine_volume_id: Option<i32>,
     pub exclude_thread_id: Option<i32>,
 }
@@ -241,7 +231,6 @@ pub struct GroupsBatchRequest {
 pub struct PotentialDuplicateMatch {
     pub thread_id: i32,
     pub title: String,
-    pub format: String,
     pub status: String,
     pub issues_remaining: i32,
     pub total_issues: Option<i32>,
@@ -286,16 +275,6 @@ fn not_found(thread_id: i64) -> ApiError {
 
 fn json_response(status: StatusCode, body: impl Serialize) -> Response {
     (status, Json(body)).into_response()
-}
-
-/// Mirror `app.models.thread.normalize_format_value`.
-fn normalize_format_value(value: &str) -> String {
-    let stripped = value.trim();
-    match stripped.to_lowercase().as_str() {
-        "comic" | "comics" => "Comic".to_string(),
-        "digital" => "Digital".to_string(),
-        _ => stripped.to_string(),
-    }
 }
 
 /// Mirror `app.models.thread.normalize_notes_value`.
@@ -485,7 +464,7 @@ async fn load_views(
              FROM threads
              WHERE user_id = $1 AND status = 'active' AND queue_position >= 1
          )
-         SELECT t.id, t.title, t.format,
+         SELECT t.id, t.title,
                 CASE WHEN t.total_issues IS NOT NULL
                      THEN (SELECT count(*)::int FROM issues i
                            WHERE i.thread_id = t.id AND i.status = 'unread')
@@ -516,27 +495,24 @@ async fn load_views(
         .map_err(db::query_error)?;
     rows.iter()
         .map(|row| -> Result<ThreadResponse, ApiError> {
-            let credits: Value = row.try_get(16).map_err(db::query_error)?;
+            let credits: Value = row.try_get(15).map_err(db::query_error)?;
             Ok(ThreadResponse {
                 id: row.try_get(0).map_err(db::query_error)?,
                 title: row.try_get(1).map_err(db::query_error)?,
-                format: normalize_format_value(
-                    &row.try_get::<_, String>(2).map_err(db::query_error)?,
-                ),
-                issues_remaining: row.try_get(3).map_err(db::query_error)?,
-                queue_position: row.try_get(4).map_err(db::query_error)?,
-                status: row.try_get(5).map_err(db::query_error)?,
-                last_rating: row.try_get(6).map_err(db::query_error)?,
-                last_activity_at: row.try_get(7).map_err(db::query_error)?,
-                notes: row.try_get(8).map_err(db::query_error)?,
-                is_test: row.try_get(9).map_err(db::query_error)?,
-                is_blocked: row.try_get(10).map_err(db::query_error)?,
+                issues_remaining: row.try_get(2).map_err(db::query_error)?,
+                queue_position: row.try_get(3).map_err(db::query_error)?,
+                status: row.try_get(4).map_err(db::query_error)?,
+                last_rating: row.try_get(5).map_err(db::query_error)?,
+                last_activity_at: row.try_get(6).map_err(db::query_error)?,
+                notes: row.try_get(7).map_err(db::query_error)?,
+                is_test: row.try_get(8).map_err(db::query_error)?,
+                is_blocked: row.try_get(9).map_err(db::query_error)?,
                 blocking_reasons: Vec::new(),
-                created_at: row.try_get(11).map_err(db::query_error)?,
-                total_issues: row.try_get(12).map_err(db::query_error)?,
-                reading_progress: row.try_get(13).map_err(db::query_error)?,
-                next_unread_issue_id: row.try_get(14).map_err(db::query_error)?,
-                next_unread_issue_number: row.try_get(15).map_err(db::query_error)?,
+                created_at: row.try_get(10).map_err(db::query_error)?,
+                total_issues: row.try_get(11).map_err(db::query_error)?,
+                reading_progress: row.try_get(12).map_err(db::query_error)?,
+                next_unread_issue_id: row.try_get(13).map_err(db::query_error)?,
+                next_unread_issue_number: row.try_get(14).map_err(db::query_error)?,
                 manual_creator_credits: if credits.is_array() {
                     credits
                 } else {
@@ -637,7 +613,6 @@ macro_rules! with_tx {
 struct OwnedThread {
     id: i32,
     title: String,
-    format: String,
     issues_remaining: i32,
     total_issues: Option<i32>,
     reading_progress: Option<String>,
@@ -656,7 +631,7 @@ async fn find_owned(
 ) -> Result<OwnedThread, ApiError> {
     let id = i32::try_from(thread_id).map_err(|_| not_found(thread_id))?;
     let sql = format!(
-        "SELECT id, title, format, issues_remaining, total_issues, reading_progress,
+        "SELECT id, title, issues_remaining, total_issues, reading_progress,
                 status, queue_position, notes, manual_creator_credits
          FROM threads WHERE id = $1 AND user_id = $2{}",
         if for_update { " FOR UPDATE" } else { "" }
@@ -669,14 +644,13 @@ async fn find_owned(
     Ok(OwnedThread {
         id: row.get(0),
         title: row.get(1),
-        format: row.get(2),
-        issues_remaining: row.get(3),
-        total_issues: row.get(4),
-        reading_progress: row.get(5),
-        status: row.get(6),
-        queue_position: row.get(7),
-        notes: row.get(8),
-        manual_creator_credits: row.get(9),
+        issues_remaining: row.get(2),
+        total_issues: row.get(3),
+        reading_progress: row.get(4),
+        status: row.get(5),
+        queue_position: row.get(6),
+        notes: row.get(7),
+        manual_creator_credits: row.get(8),
     })
 }
 
@@ -702,7 +676,6 @@ macro_rules! retry_deadlock {
 
 struct CreateInput {
     title: String,
-    format: String,
     issues_remaining: i32,
     total_issues: Option<i32>,
     notes: Option<String>,
@@ -776,17 +749,6 @@ fn parse_create(body: Option<Value>) -> Result<CreateInput, LifecycleError> {
         true,
     );
     validate_title(&mut check, &["body", "title"], &title);
-    let format = str_field(
-        &mut check,
-        &["body", "format"],
-        map.get("format"),
-        StrRules {
-            min: Some(1),
-            max: None,
-        },
-        false,
-        true,
-    );
     let issues_remaining = int_field(
         &mut check,
         &["body", "issues_remaining"],
@@ -837,7 +799,6 @@ fn parse_create(body: Option<Value>) -> Result<CreateInput, LifecycleError> {
     check.finish(raw_body)?;
     Ok(CreateInput {
         title: title.unwrap_or_default(),
-        format: format.unwrap_or_default(),
         issues_remaining: issues_remaining.unwrap_or_default(),
         total_issues,
         notes,
@@ -852,19 +813,17 @@ async fn create_once(
     input: &CreateInput,
 ) -> Result<i32, LifecycleError> {
     with_tx!(state, tx, db::tx_error, {
-        let format_value = normalize_format_value(&input.format);
         // #3466: a double-clicked "Create Series" merges into the first create.
         let existing = tx
             .query_opt(
                 "SELECT id FROM threads
-             WHERE user_id = $1 AND lower(title) = $2 AND format = $3
-               AND issues_remaining = $4
+             WHERE user_id = $1 AND lower(title) = $2
+               AND issues_remaining = $3
                AND created_at >= NOW() - interval '5 seconds'
              ORDER BY created_at DESC, id DESC LIMIT 1",
                 &[
                     &user.id(),
                     &input.title.to_lowercase(),
-                    &format_value,
                     &input.issues_remaining,
                 ],
             )
@@ -879,14 +838,13 @@ async fn create_once(
         let row = tx
             .query_one(
                 "INSERT INTO threads
-               (title, format, issues_remaining, total_issues, queue_position, user_id,
+               (title, issues_remaining, total_issues, queue_position, user_id,
                 notes, manual_creator_credits, is_test, status, is_blocked,
                 queue_position_is_manual, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active', false, false, NOW())
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active', false, false, NOW())
              RETURNING id",
                 &[
                     &input.title,
-                    &format_value,
                     &input.issues_remaining,
                     &input.total_issues,
                     &(max_position + 1),
@@ -945,7 +903,6 @@ pub async fn create_thread_v2(
 
 struct UpdateInput {
     title: Option<String>,
-    format: Option<String>,
     issues_remaining: Option<i32>,
     notes_present: bool,
     notes: Option<String>,
@@ -983,17 +940,6 @@ fn parse_update(
         false,
     );
     validate_title(check, &["body", "title"], &title);
-    let format = str_field(
-        check,
-        &["body", "format"],
-        map.get("format"),
-        StrRules {
-            min: Some(1),
-            max: None,
-        },
-        true,
-        false,
-    );
     let issues_remaining = int_field(
         check,
         &["body", "issues_remaining"],
@@ -1041,7 +987,6 @@ fn parse_update(
     Ok((
         UpdateInput {
             title,
-            format,
             issues_remaining,
             notes_present: map.contains_key("notes"),
             notes,
@@ -1060,7 +1005,6 @@ fn check_errors(check: &Check) -> Vec<Value> {
 #[derive(Debug, Default)]
 struct PatchPrecondition {
     title: Option<String>,
-    format: Option<String>,
     notes_present: bool,
     notes: Option<String>,
     credits: Option<Vec<Value>>,
@@ -1124,10 +1068,7 @@ fn parse_precondition(check: &mut Check, value: &Value) -> PatchPrecondition {
         return precondition;
     };
     for key in object.keys() {
-        if !matches!(
-            key.as_str(),
-            "title" | "format" | "notes" | "manual_creator_credits"
-        ) {
+        if !matches!(key.as_str(), "title" | "notes" | "manual_creator_credits") {
             check.push(
                 &["body", "expected", key],
                 "extra_forbidden",
@@ -1142,17 +1083,6 @@ fn parse_precondition(check: &mut Check, value: &Value) -> PatchPrecondition {
         StrRules {
             min: Some(1),
             max: Some(200),
-        },
-        false,
-        false,
-    );
-    precondition.format = str_field(
-        check,
-        &["body", "expected", "format"],
-        object.get("format"),
-        StrRules {
-            min: Some(1),
-            max: None,
         },
         false,
         false,
@@ -1222,12 +1152,6 @@ fn check_precondition(
     if let Some(title) = &expected.title {
         if *title != thread.title {
             current.insert("title".to_owned(), json!(thread.title));
-        }
-    }
-    if let Some(format) = &expected.format {
-        let normalized = normalize_format_value(format);
-        if normalized != thread.format {
-            current.insert("format".to_owned(), json!(thread.format));
         }
     }
     if expected.notes_present {
@@ -1339,15 +1263,6 @@ async fn update_once(
             tx.execute(
                 "UPDATE threads SET title = $2 WHERE id = $1",
                 &[&thread.id, title],
-            )
-            .await
-            .map_err(db::tx_error)?;
-        }
-        if let Some(format) = &input.format {
-            let format_value = normalize_format_value(format);
-            tx.execute(
-                "UPDATE threads SET format = $2 WHERE id = $1",
-                &[&thread.id, &format_value],
             )
             .await
             .map_err(db::tx_error)?;
@@ -2054,7 +1969,6 @@ fn parse_set_pending(body: Option<Value>) -> Result<Option<i32>, LifecycleError>
 struct SetPendingSelection {
     thread_id: i32,
     title: String,
-    format: String,
     issues_remaining: i32,
     total_issues: Option<i32>,
     reading_progress: Option<String>,
@@ -2140,7 +2054,6 @@ async fn validate_set_pending_selection(
     Ok(SetPendingSelection {
         thread_id: thread.id,
         title: thread.title.clone(),
-        format: normalize_format_value(&thread.format),
         issues_remaining: thread.issues_remaining,
         total_issues: thread.total_issues,
         reading_progress: thread.reading_progress.clone(),
@@ -2250,7 +2163,6 @@ async fn set_pending_once(
         Ok(RollResponse {
             thread_id: selection.thread_id,
             title: selection.title,
-            format: selection.format,
             issues_remaining: selection.issues_remaining,
             queue_position: selection.queue_position,
             die_size: active.current_die,
@@ -2622,7 +2534,6 @@ fn publication_year_from_metadata(metadata: &serde_json::Map<String, Value>) -> 
 struct Candidate {
     id: i32,
     title: String,
-    format: String,
     status: String,
     issues_remaining: i32,
     total_issues: Option<i32>,
@@ -2632,15 +2543,13 @@ fn candidate(row: &tokio_postgres::Row) -> Candidate {
     Candidate {
         id: row.get(0),
         title: row.get(1),
-        format: row.get(2),
-        status: row.get(3),
-        issues_remaining: row.get(4),
-        total_issues: row.get(5),
+        status: row.get(2),
+        issues_remaining: row.get(3),
+        total_issues: row.get(4),
     }
 }
 
-const CANDIDATE_COLUMNS: &str =
-    "t.id, t.title, t.format, t.status, t.issues_remaining, t.total_issues";
+const CANDIDATE_COLUMNS: &str = "t.id, t.title, t.status, t.issues_remaining, t.total_issues";
 
 /// `POST /api/v1/threads/check-duplicates`
 pub async fn check_potential_duplicates(
@@ -2658,17 +2567,6 @@ pub async fn check_potential_duplicates(
         StrRules {
             min: Some(1),
             max: Some(200),
-        },
-        false,
-        true,
-    );
-    let format_value = str_field(
-        &mut check,
-        &["body", "format"],
-        map.get("format"),
-        StrRules {
-            min: Some(1),
-            max: Some(50),
         },
         false,
         true,
@@ -2698,7 +2596,6 @@ pub async fn check_potential_duplicates(
     let exclude = to_i32(&mut check, &["body", "exclude_thread_id"], exclude);
     check.finish(raw_body)?;
     let title = title.unwrap_or_default();
-    let format_value = format_value.unwrap_or_default();
     let user_id = user.id();
 
     let connection = db::checkout(&state).await?;
@@ -2735,7 +2632,6 @@ pub async fn check_potential_duplicates(
         strong = rows.iter().map(candidate).collect();
     }
 
-    let normalized_format = normalize_format_value(&format_value);
     let strong_ids: HashSet<i32> = strong.iter().map(|thread| thread.id).collect();
     let normalized_title = normalize_title(&title);
     let mut similar: Vec<Candidate> = Vec::new();
@@ -2781,15 +2677,12 @@ pub async fn check_potential_duplicates(
         similar.extend(complete);
         similar.extend(fuzzy.iter().map(candidate));
     }
-    let mut considered: Vec<(f64, bool, Candidate)> = similar
+    let mut considered: Vec<(f64, Candidate)> = similar
         .into_iter()
         .filter(|thread| !strong_ids.contains(&thread.id))
         .filter_map(|thread| {
             let similarity = title_similarity(&title, &thread.title);
-            (similarity >= MIN_TITLE_SIMILARITY).then(|| {
-                let same_format = normalize_format_value(&thread.format) == normalized_format;
-                (similarity, same_format, thread)
-            })
+            (similarity >= MIN_TITLE_SIMILARITY).then_some((similarity, thread))
         })
         .collect();
     considered.sort_by(|left, right| {
@@ -2797,8 +2690,7 @@ pub async fn check_potential_duplicates(
             .0
             .partial_cmp(&left.0)
             .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| (!left.1).cmp(&(!right.1)))
-            .then_with(|| left.2.id.cmp(&right.2.id))
+            .then_with(|| left.1.id.cmp(&right.1.id))
     });
     let remaining_slots = MAX_POTENTIAL_DUPLICATE_MATCHES.saturating_sub(strong.len());
     let mut candidates: Vec<(Candidate, &'static str)> = strong
@@ -2809,7 +2701,7 @@ pub async fn check_potential_duplicates(
         considered
             .into_iter()
             .take(remaining_slots)
-            .map(|(_, _, thread)| (thread, "similar_title")),
+            .map(|(_, thread)| (thread, "similar_title")),
     );
 
     let ids: Vec<i32> = candidates.iter().map(|(thread, _)| thread.id).collect();
@@ -2877,7 +2769,6 @@ pub async fn check_potential_duplicates(
             PotentialDuplicateMatch {
                 thread_id: thread.id,
                 title: thread.title.clone(),
-                format: normalize_format_value(&thread.format),
                 status: thread.status.clone(),
                 issues_remaining: if thread.total_issues.is_some() {
                     unread.get(&thread.id).copied().unwrap_or(0)
@@ -3340,13 +3231,6 @@ mod tests {
     }
 
     #[test]
-    fn format_normalization_mirrors_python() {
-        assert_eq!(normalize_format_value(" comics "), "Comic");
-        assert_eq!(normalize_format_value("DIGITAL"), "Digital");
-        assert_eq!(normalize_format_value(" Trade "), "Trade");
-    }
-
-    #[test]
     fn publication_year_prefers_start_year_then_dates() {
         assert_eq!(coerce_publication_year(Some(&json!("1999"))), Some(1999));
         assert_eq!(coerce_publication_year(Some(&json!(true))), None);
@@ -3380,14 +3264,12 @@ mod tests {
         let mut check = Check::default();
         let body = json!({
             "title": "A newer title",
-            "format": "Comic",
             "update_mask": ["notes"]
         });
         let (input, expected) = parse_patch(&mut check, Some(body)).unwrap();
         assert!(check.is_clean());
         assert!(expected.is_none());
         assert_eq!(input.title, None);
-        assert_eq!(input.format, None);
         assert!(input.notes_present);
         assert_eq!(input.notes, None);
 
@@ -3410,7 +3292,6 @@ mod tests {
         assert_eq!(input.title.as_deref(), Some("Renamed"));
         assert!(input.notes_present);
         assert_eq!(input.notes, None);
-        assert_eq!(input.format, None);
         assert_eq!(input.credits, None);
     }
 
@@ -3428,11 +3309,28 @@ mod tests {
             .any(|error| error["field"] == "body.update_mask"));
     }
 
+    #[test]
+    fn patch_no_longer_accepts_the_retired_format_field() {
+        let mut check = Check::default();
+        assert!(parse_patch(
+            &mut check,
+            Some(json!({"title": "x", "update_mask": ["format"]})),
+        )
+        .is_ok());
+        assert!(!check.is_clean());
+
+        let mut check = Check::default();
+        parse_precondition(&mut check, &json!({"format": "Comic"}));
+        assert!(!check.is_clean());
+        assert!(check_errors(&check)
+            .iter()
+            .any(|error| error["field"] == "body.expected.format"));
+    }
+
     fn owned_thread_for_precondition() -> OwnedThread {
         OwnedThread {
             id: 7,
             title: "Committed title".to_owned(),
-            format: "Comic".to_owned(),
             issues_remaining: 3,
             total_issues: None,
             reading_progress: None,
@@ -3447,7 +3345,6 @@ mod tests {
     fn patch_precondition_accepts_the_committed_snapshot() {
         let expected = PatchPrecondition {
             title: Some("Committed title".to_owned()),
-            format: Some("comics".to_owned()),
             notes_present: true,
             notes: Some("committed notes".to_owned()),
             credits: Some(vec![json!({"name": "  Jane   Doe ", "roles": ["Writer"]})]),
@@ -3459,7 +3356,6 @@ mod tests {
     fn patch_precondition_returns_409_with_current_values_when_stale() {
         let expected = PatchPrecondition {
             title: Some("Stale title".to_owned()),
-            format: Some("Comic".to_owned()),
             notes_present: true,
             notes: Some("stale notes".to_owned()),
             credits: None,

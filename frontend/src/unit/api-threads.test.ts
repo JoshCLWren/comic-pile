@@ -5,7 +5,7 @@ import { createHttpClientStub } from './httpClientStub'
 describe('threadsApi.create', () => {
   it('posts to the canonical v2 threads collection (#5702)', async () => {
     const client = createHttpClientStub()
-    const payload = { title: 'Saga', format: 'Comic', issues_remaining: 4 }
+    const payload = { title: 'Saga', issues_remaining: 4 }
     client.post.mockResolvedValueOnce({ ...payload, id: 7 })
 
     const api = createThreadsApi(client)
@@ -25,7 +25,7 @@ describe('threadsApi.update', () => {
     await api.update(5, {
       title: 'Renamed',
       notes: 'kept',
-      expected: { title: 'Old', format: 'Comic', notes: null, manual_creator_credits: [] },
+      expected: { title: 'Old',notes: null, manual_creator_credits: [] },
     })
 
     expect(client.patch).toHaveBeenCalledTimes(1)
@@ -33,7 +33,7 @@ describe('threadsApi.update', () => {
       title: 'Renamed',
       notes: 'kept',
       update_mask: ['title', 'notes'],
-      expected: { title: 'Old', format: 'Comic', notes: null, manual_creator_credits: [] },
+      expected: { title: 'Old', notes: null, manual_creator_credits: [] },
     })
   })
 })
@@ -95,7 +95,6 @@ describe('threadsApi.checkPotentialDuplicates', () => {
     const client = createHttpClientStub()
     const request = {
       title: 'Amazing Spider-Man',
-      format: 'Comic',
       comicvine_volume_id: 4050,
       exclude_thread_id: 12,
     }
@@ -114,11 +113,10 @@ describe('threadsApi.checkPotentialDuplicates', () => {
     client.post.mockResolvedValueOnce({ matches: [] })
 
     const api = createThreadsApi(client)
-    await api.checkPotentialDuplicates({ title: 'Saga', format: 'Comic' })
+    await api.checkPotentialDuplicates({ title: 'Saga',})
 
     expect(client.post).toHaveBeenCalledWith('/v2/threads:checkDuplicates', {
       title: 'Saga',
-      format: 'Comic',
     })
   })
 })

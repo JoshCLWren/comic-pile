@@ -52,7 +52,6 @@ test.describe('Issue #4501: core-view request budgets', () => {
     const title = 'Budget Thread'
     const thread = await createThread(page, {
       title,
-      format: 'Comic',
       issues_remaining: 2,
       total_issues: 2,
     })
@@ -90,7 +89,6 @@ test.describe('Issue #4501: core-view request budgets', () => {
     allowLocalRollBootstrapBoundary(allowExpectedBrowserFailures)
     await createThread(page, {
       title: 'Debounce Thread',
-      format: 'Comic',
       issues_remaining: 1,
       total_issues: 1,
     })

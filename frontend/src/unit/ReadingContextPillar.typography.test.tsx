@@ -29,7 +29,6 @@ vi.mock('../pages/RollPage/components/ReadingPathPanel', () => ({
 const activeRatingThread = {
   id: 42,
   title: 'Saga',
-  format: 'Comic',
   issues_remaining: 5,
   queue_position: 0,
   total_issues: 10,

@@ -121,10 +121,10 @@ describe('RollPage bootstrap modal coverage', () => {
     await waitFor(() => expect(spies.list).toHaveBeenCalled())
     const picker = screen.getByRole('combobox')
     await user.click(picker)
-    expect(screen.getByRole('option', { name: 'Saga (Comic)' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: /Watchmen \(Comic\)/ })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Saga' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /Watchmen/ })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('option', { name: 'Saga (Comic)' }))
+    await user.click(screen.getByRole('option', { name: 'Saga' }))
     await user.click(screen.getByRole('button', { name: 'Open issue card' }))
     expect(screen.getByText('Direct issue card for Saga')).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Pick manually' })).not.toBeInTheDocument())

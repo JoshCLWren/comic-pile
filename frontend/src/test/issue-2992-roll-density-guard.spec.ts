@@ -205,7 +205,6 @@ test.describe('Issue #2992 Roll density and title guard', () => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height })
       await createThread(page, {
         title: THREAD_TITLE,
-        format: 'Comic',
         issues_remaining: 3,
         total_issues: 3,
       })

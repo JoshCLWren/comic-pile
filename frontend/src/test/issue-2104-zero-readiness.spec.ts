@@ -64,7 +64,6 @@ test.describe('Issue #2104 zero readiness network requests', () => {
 
     const thread = await createThread(page, {
       title: 'Zero Readiness Series',
-      format: 'Comic',
       issues_remaining: 2,
       total_issues: 2,
     })

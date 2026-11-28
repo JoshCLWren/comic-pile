@@ -342,7 +342,6 @@ test.describe('Roll desktop layout packs regions into the viewport (issue #1943)
     await page.setViewportSize(DESKTOP_VIEWPORT)
     await createThread(page, {
       title: 'Rich Layout Thread',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -379,7 +378,6 @@ test.describe('Roll desktop layout packs regions into the viewport (issue #1943)
     await page.setViewportSize(DESKTOP_VIEWPORT)
     await createThread(page, {
       title: 'Sparse Layout Thread',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -413,7 +411,6 @@ test.describe('Roll desktop layout packs regions into the viewport (issue #1943)
     await page.setViewportSize(DESKTOP_VIEWPORT)
     await createThread(page, {
       title: 'No Context Layout Thread',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -444,7 +441,6 @@ test.describe('Roll desktop layout packs regions into the viewport (issue #1943)
     await page.setViewportSize(DESKTOP_VIEWPORT)
     await createThread(page, {
       title: 'Cover Heavy Layout Thread',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })

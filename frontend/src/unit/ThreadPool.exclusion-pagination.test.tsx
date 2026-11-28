@@ -30,7 +30,7 @@ function mount(overrides: Partial<PoolProps> = {}) {
 }
 
 const eligible: RollBootstrapThread = {
-  id: 8, title: 'Saga', format: 'Comic', issue_number: '2',
+  id: 8, title: 'Saga',issue_number: '2',
 }
 
 describe('Roll diagnostics removal (#4441)', () => {
@@ -58,7 +58,7 @@ describe('Roll diagnostics removal (#4441)', () => {
   })
 
   it('continues to surface snoozed options without retired report panels', () => {
-    mount({ snoozedThreads: [{ id: 12, title: 'On break', format: 'Comic' }], snoozedExpanded: true })
+    mount({ snoozedThreads: [{ id: 12, title: 'On break',}], snoozedExpanded: true })
 
     expect(screen.getByText('On break')).toBeInTheDocument()
     expect(screen.getByText('Snoozed (1)')).toBeInTheDocument()

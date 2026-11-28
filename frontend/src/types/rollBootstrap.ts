@@ -24,7 +24,6 @@ export type RollPoolReason =
 export interface RollBootstrapThread {
   id: number
   title: string
-  format: string
   issue_id?: number | null
   issue_number?: string | null
   blocking_reasons?: string[]

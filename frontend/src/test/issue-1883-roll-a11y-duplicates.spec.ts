@@ -95,13 +95,11 @@ async function seedInterrelatedThreads(
 ): Promise<void> {
   const threadA = await createThread(page, {
     title: 'Alpha Cluster',
-    format: 'Comic',
     issues_remaining: 5,
     total_issues: 5,
   });
   const threadB = await createThread(page, {
     title: 'Beta Signal',
-    format: 'Comic',
     issues_remaining: 3,
     total_issues: 3,
   });

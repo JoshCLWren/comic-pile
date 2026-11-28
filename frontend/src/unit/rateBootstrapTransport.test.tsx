@@ -32,7 +32,6 @@ const mockedBootstrapApi = vi.mocked(rollBootstrapApi)
 const THREAD: Thread = {
   id: 1,
   title: 'Saga',
-  format: 'issue',
   issues_remaining: 4,
   total_issues: 10,
   queue_position: 2,
@@ -50,7 +49,7 @@ const METADATA: ThreadMetadata = {
   id: 1,
   thread_id: 1,
   title: 'Saga',
-  format: 'comic',
+
   issues_remaining: 5,
   queue_position: 1,
   total_issues: 10,
@@ -82,14 +81,14 @@ function bootstrapState(overrides: Partial<RollBootstrapResponse> = {}): RollBoo
     active_thread: {
       id: 1,
       title: 'Saga',
-      format: 'comic',
+
       issues_remaining: 5,
       total_issues: 10,
       queue_position: 1,
       issue_number: '5',
       last_rolled_result: 4,
     },
-    roll_pool: [{ id: 1, title: 'Saga', format: 'comic' }],
+    roll_pool: [{ id: 1, title: 'Saga',}],
     snoozed_threads: [],
     snoozed_count: 0,
     skipped_thread_ids: [],

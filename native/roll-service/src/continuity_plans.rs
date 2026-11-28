@@ -4157,8 +4157,8 @@ mod tests {
         connection
             .batch_execute(
                 "INSERT INTO users (id, username) VALUES (4838, 'plan-writer-test');
-                 INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status)
-                 VALUES (4838, 4838, 'Plan test', 'Comic', 2, 1, 'active');
+                 INSERT INTO threads (id, user_id, title, issues_remaining, queue_position, status)
+                 VALUES (4838, 4838, 'Plan test', 2, 1, 'active');
                  INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
                  VALUES (483801, 4838, '1', 'unread', NOW(), 1),
                         (483802, 4838, '2', 'unread', NOW(), 2);",

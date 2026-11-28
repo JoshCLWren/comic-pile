@@ -1363,15 +1363,13 @@ mod tests {
                 r#"INSERT INTO users (id, username)
                        VALUES (1, 'roll-reader'), (2, 'other-reader');
                    INSERT INTO threads
-                       (id, user_id, title, format, status, issues_remaining,
-                        reading_progress, queue_position, queue_position_is_manual,
-                        is_blocked, total_issues)
+                       (id, user_id, title, status, issues_remaining, reading_progress, queue_position, queue_position_is_manual, is_blocked, total_issues)
                    VALUES
-                       (10,1,'Offered run','Comic','active',2,'in_progress',1,false,false,2),
-                       (20,1,'Second run','Comic','active',1,'in_progress',2,false,false,1),
-                       (30,1,'Control run','Comic','active',1,'in_progress',3,false,false,1),
-                       (40,1,'Blocked run','Comic','active',1,'in_progress',4,false,true,1),
-                       (60,2,'Foreign run','Comic','active',1,'in_progress',1,false,false,1);
+                       (10, 1, 'Offered run', 'active', 2, 'in_progress', 1, false, false, 2),
+                       (20, 1, 'Second run', 'active', 1, 'in_progress', 2, false, false, 1),
+                       (30, 1, 'Control run', 'active', 1, 'in_progress', 3, false, false, 1),
+                       (40, 1, 'Blocked run', 'active', 1, 'in_progress', 4, false, true, 1),
+                       (60, 2, 'Foreign run', 'active', 1, 'in_progress', 1, false, false, 1);
                    INSERT INTO issues
                        (id, thread_id, issue_number, status, position, created_at)
                    VALUES
@@ -1477,21 +1475,13 @@ mod tests {
         first
             .batch_execute(r#"INSERT INTO users (id, username) VALUES (1, 'reader-1'), (2, 'reader-2');
                  INSERT INTO threads
-                     (id, user_id, title, format, status, issues_remaining,
-                      next_unread_issue_id, reading_progress, last_rating,
-                      queue_position, queue_position_is_manual,
-                      last_activity_at, is_blocked)
+                     (id, user_id, title, status, issues_remaining, next_unread_issue_id, reading_progress, last_rating, queue_position, queue_position_is_manual, last_activity_at, is_blocked)
                  VALUES
-                     (10, 1, 'Excluded run', 'Comic', 'excluded', 3, NULL,
-                      'in_progress', 4.0, 0, true, NULL, false),
-                     (20, 2, 'Private run', 'Comic', 'active', 1, NULL,
-                      'in_progress', NULL, 1, false, NULL, false),
-                     (30, 1, 'Dependent run', 'Comic', 'active', 1, NULL,
-                      'in_progress', NULL, 2, false, NULL, true),
-                     (40, 1, 'Cbl control run', 'Comic', 'active', 1, NULL,
-                      'in_progress', NULL, 3, false, NULL, false),
-                     (50, 1, 'Finished run', 'Comic', 'completed', 0, NULL,
-                      'completed', NULL, 0, false, NULL, false);
+                     (10, 1, 'Excluded run', 'excluded', 3, NULL, 'in_progress', 4.0, 0, true, NULL, false),
+                     (20, 2, 'Private run', 'active', 1, NULL, 'in_progress', NULL, 1, false, NULL, false),
+                     (30, 1, 'Dependent run', 'active', 1, NULL, 'in_progress', NULL, 2, false, NULL, true),
+                     (40, 1, 'Cbl control run', 'active', 1, NULL, 'in_progress', NULL, 3, false, NULL, false),
+                     (50, 1, 'Finished run', 'completed', 0, NULL, 'completed', NULL, 0, false, NULL, false);
                  INSERT INTO issues
                      (id, thread_id, issue_number, status, position, read_at, created_at)
                  VALUES

@@ -20,7 +20,6 @@ test.describe('Issue #4140: HTTP request count verification', () => {
     const title = 'HTTP Request Count Thread'
     await createThread(page, {
       title,
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -58,7 +57,6 @@ test.describe('Issue #4140: HTTP request count verification', () => {
     const title = 'Round-trip Thread'
     await createThread(page, {
       title,
-      format: 'Comic',
       issues_remaining: 2,
       total_issues: 2,
     })

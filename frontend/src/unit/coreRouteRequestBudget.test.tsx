@@ -80,7 +80,6 @@ function renderAt(path: string, element: ReactNode, strict = false): ReactNode {
 const queueThreads = [1, 2].map((id) => ({
   id,
   title: `Series ${id}`,
-  format: 'Comic',
   issues_remaining: 3,
   total_issues: 3,
   status: 'active',
@@ -107,7 +106,7 @@ const queueThreads = [1, 2].map((id) => ({
 const stubRollResponse: RollResponse = {
   thread_id: 1,
   title: 'Series 1',
-  format: 'Comic',
+
   issues_remaining: 3,
   queue_position: 1,
   die_size: 20,

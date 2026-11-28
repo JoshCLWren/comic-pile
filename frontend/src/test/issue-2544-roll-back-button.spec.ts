@@ -95,7 +95,6 @@ test.describe('Issue #2544: Roll Page Back Button', () => {
 
     await createThread(page, {
       title: 'Back Button Thread',
-      format: 'Issue',
       issues_remaining: 1,
       total_issues: 1,
     })

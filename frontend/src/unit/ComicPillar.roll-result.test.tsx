@@ -67,7 +67,7 @@ function rolledThread(overrides: Partial<RatingThread> = {}): RatingThread {
   return {
     id: 7,
     title: 'Stormwatch Vol. 1',
-    format: 'single',
+
     issues_remaining: 5,
     queue_position: 5,
     total_issues: 12,

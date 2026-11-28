@@ -42,7 +42,6 @@ const mockedListIssues = vi.mocked(issuesApi.list)
 function makeThread(overrides: Partial<Thread> & { id: number; title: string }): Thread {
   // SAFETY: the thread fixture supplies only the fields the dependency list reads
   return {
-    format: 'comic',
     status: 'active',
     issues_remaining: 10,
     total_issues: 10,

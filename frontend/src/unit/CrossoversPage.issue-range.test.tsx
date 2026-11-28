@@ -60,7 +60,6 @@ const secondCrossover = {
 const thread = {
   id: 22,
   title: 'Nova',
-  format: 'single issues',
   issues_remaining: 3,
   total_issues: 3,
   queue_position: 4,

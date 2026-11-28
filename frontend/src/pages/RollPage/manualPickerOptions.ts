@@ -10,7 +10,6 @@ type ComicVineMappingHealth = components['schemas']['ComicVineMappingHealth']
 export interface ManualPickerThread {
   id: number
   title: string
-  format: string
   tags?: Array<{ name: string }>
   /** Next unread issue number for queue-backed rows. */
   next_unread_issue_number?: string | null
@@ -56,7 +55,7 @@ interface PickerRow {
  */
 
 /**
- * Build the quiet base label: `Title (Format)` plus visible tag names.
+ * Build the quiet base label: the thread title plus visible tag names.
  *
  * Args:
  *     thread: The thread row to label.
@@ -66,7 +65,7 @@ interface PickerRow {
  */
 function buildBaseLabel(thread: ManualPickerThread): string {
   const tagNames = (thread.tags ?? []).map((tag) => tag.name).join(', ')
-  const base = `${thread.title} (${thread.format})`
+  const base = thread.title
   return tagNames ? `${base} · ${tagNames}` : base
 }
 

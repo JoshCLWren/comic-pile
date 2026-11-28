@@ -6,7 +6,6 @@ import DependencyBuilder from '../../components/DependencyBuilder'
 import MigrationDialog from '../../components/MigrationDialog'
 import AddSeriesFromComicVineDialog from '../../components/AddSeriesFromComicVineDialog'
 import { IssueToggleList, type IssueToggleListHandle } from './IssueToggleList'
-import { FormatSelect } from './FormatSelect'
 import { PotentialDuplicateAdvisory } from './PotentialDuplicateAdvisory'
 import { usePotentialDuplicates } from '../../hooks/usePotentialDuplicates'
 import { getManualCreatorCreditList } from '../../types'
@@ -338,7 +337,6 @@ export function QueueModals({
   const editFormIsDirty =
     editingThread != null &&
     (editForm.title !== editingThread.title ||
-      editForm.format !== editingThread.format ||
       editForm.notes !== (editingThread.notes ?? '') ||
       editForm.issuesRemaining !== editingThread.issues_remaining ||
       JSON.stringify(editForm.manualCreatorCredits) !== JSON.stringify(initialCredits))
@@ -357,7 +355,6 @@ export function QueueModals({
   // because an invalid entry is held outside the form state.
   const createFormIsDirty =
     createForm.title !== DEFAULT_CREATE_STATE.title ||
-    createForm.format !== DEFAULT_CREATE_STATE.format ||
     createForm.issues !== DEFAULT_CREATE_STATE.issues ||
     createForm.notes !== DEFAULT_CREATE_STATE.notes ||
     createForm.lastIssueRead !== DEFAULT_CREATE_STATE.lastIssueRead ||
@@ -406,12 +403,10 @@ export function QueueModals({
   // context for the reader, never a block on a legitimate same-named volume.
   const createDuplicates = usePotentialDuplicates({
     title: openModal === 'create' ? createForm.title : '',
-    format: createForm.format,
     enabled: openModal === 'create',
   })
   const editDuplicates = usePotentialDuplicates({
     title: openModal === 'edit' ? editForm.title : '',
-    format: editForm.format,
     excludeThreadId: editingThread?.id,
     enabled: openModal === 'edit' && editingThread != null,
   })
@@ -458,27 +453,12 @@ export function QueueModals({
               </p>
             )}
             <PotentialDuplicateAdvisory
-              candidateKey={`create|${createForm.title.trim()}|${createForm.format}`}
+              candidateKey={`create|${createForm.title.trim()}`}
               matches={createDuplicates.matches}
               isChecking={createDuplicates.isChecking}
               isError={createDuplicates.isError}
             />
           </div>
-          <div className="space-y-2">
-            <label
-              htmlFor="create-thread-format"
-              className="text-[10px] font-bold uppercase tracking-widest text-stone-500"
-            >
-              Format
-            </label>
-            <FormatSelect
-              id="create-thread-format"
-              value={createForm.format}
-              onChange={(value) => setCreateForm({ ...createForm, format: value })}
-              required
-            />
-          </div>
-
           <div className="space-y-2">
             <label
               htmlFor="create-thread-issues"
@@ -678,25 +658,10 @@ export function QueueModals({
                 </p>
               )}
               <PotentialDuplicateAdvisory
-                candidateKey={`edit|${editingThread?.id ?? 'none'}|${editForm.title.trim()}|${editForm.format}`}
+                candidateKey={`edit|${editingThread?.id ?? 'none'}|${editForm.title.trim()}`}
                 matches={editDuplicates.matches}
                 isChecking={editDuplicates.isChecking}
                 isError={editDuplicates.isError}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label
-                htmlFor="edit-thread-format"
-                className="text-[10px] font-bold uppercase tracking-widest text-stone-500"
-              >
-                Format
-              </label>
-              <FormatSelect
-                id="edit-thread-format"
-                value={editForm.format}
-                onChange={(value) => setEditForm({ ...editForm, format: value })}
-                required
               />
             </div>
 
@@ -814,7 +779,7 @@ export function QueueModals({
       >
         <div className="space-y-4">
           <p className="text-sm text-[var(--theme-text-muted)]">
-            Your unsaved title, format, notes, creator, or issue changes will be discarded.
+            Your unsaved title, notes, creator, or issue changes will be discarded.
           </p>
           <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
             <button
@@ -859,7 +824,7 @@ export function QueueModals({
               <option value="">Select a series...</option>
               {completedThreads.map((thread) => (
                 <option key={thread.id} value={String(thread.id)}>
-                  {thread.title} ({thread.format})
+                  {thread.title}
                 </option>
               ))}
             </select>

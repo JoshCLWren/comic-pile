@@ -60,7 +60,7 @@ test.describe('Continuity plan parallel lanes', () => {
     const token = await getAuthToken(page)
     const csrf = await getCsrf(page, token)
 
-    const thread = await createThread(page, { title: 'Parallel Alpha', format: 'Comics', issues_remaining: 2, total_issues: 2 })
+    const thread = await createThread(page, { title: 'Parallel Alpha',issues_remaining: 2, total_issues: 2 })
     const issueA = await getFirstIssueId(page, token, thread.id)
     const issueListHeaders: Record<string, string> = {}
     if (token) {
@@ -108,7 +108,7 @@ test.describe('Continuity plan parallel lanes', () => {
     const token = await getAuthToken(page)
     const csrf = await getCsrf(page, token)
 
-    const thread = await createThread(page, { title: 'Parallel Beta', format: 'Comics', issues_remaining: 2, total_issues: 2 })
+    const thread = await createThread(page, { title: 'Parallel Beta',issues_remaining: 2, total_issues: 2 })
     const issueListHeaders: Record<string, string> = {}
     if (token) {
       issueListHeaders['Authorization'] = `Bearer ${token}`

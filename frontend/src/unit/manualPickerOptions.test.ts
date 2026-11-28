@@ -21,7 +21,7 @@ function mapping(overrides: Partial<ComicVineMappingHealth>): ComicVineMappingHe
 }
 
 function thread(overrides: Partial<ManualPickerThread> & { id: number }): ManualPickerThread {
-  return { title: 'Saga', format: 'Single Issues', ...overrides }
+  return { title: 'Saga',...overrides }
 }
 
 const labelsOf = (options: Array<{ id: number; label: string }>) =>
@@ -43,13 +43,13 @@ describe('buildManualPickerOptions (#3704)', () => {
     })
     expect(result.activeOptions).toEqual([{
       id: 1,
-      label: 'Saga (Single Issues)',
+      label: 'Saga',
       threadTitle: 'Saga',
       coverImageUrl: 'https://example.test/saga.jpg',
     }])
     expect(result.snoozedOptions).toEqual([{
       id: 2,
-      label: 'Hellboy (Single Issues)',
+      label: 'Hellboy',
       threadTitle: 'Hellboy',
       coverImageUrl: 'https://example.test/hellboy.jpg',
     }])
@@ -64,7 +64,7 @@ describe('buildManualPickerOptions (#3704)', () => {
     })
 
     expect(result.activeOptions).toEqual([
-      { id: 1, label: 'Daredevil (Single Issues)' },
+      { id: 1, label: 'Daredevil' },
     ])
     expect(result.snoozedOptions).toEqual([])
   })
@@ -79,8 +79,8 @@ describe('buildManualPickerOptions (#3704)', () => {
     })
 
     expect(labelsOf(result.activeOptions)).toEqual([
-      'Saga (Single Issues) · Up next: #12 · 3 issues remaining',
-      'Saga (Single Issues) · Up next: #40 · 1 issue remaining',
+      'Saga · Up next: #12 · 3 issues remaining',
+      'Saga · Up next: #40 · 1 issue remaining',
     ])
   })
 
@@ -94,7 +94,7 @@ describe('buildManualPickerOptions (#3704)', () => {
     })
 
     expect(result.activeOptions[0]?.label).toBe(
-      'Saga (Single Issues) · Up next: #12 · 0 issues remaining',
+      'Saga · Up next: #12 · 0 issues remaining',
     )
   })
 
@@ -105,8 +105,8 @@ describe('buildManualPickerOptions (#3704)', () => {
     })
 
     expect(labelsOf(result.activeOptions)).toEqual([
-      'Saga (Single Issues) · Series #3',
-      'Saga (Single Issues) · Series #4',
+      'Saga · Series #3',
+      'Saga · Series #4',
     ])
   })
 
@@ -120,8 +120,8 @@ describe('buildManualPickerOptions (#3704)', () => {
     })
 
     expect(labelsOf(result.activeOptions)).toEqual([
-      'Saga (Single Issues) · Up next: #5 · 2 issues remaining · Series #7',
-      'Saga (Single Issues) · Up next: #5 · 2 issues remaining · Series #8',
+      'Saga · Up next: #5 · 2 issues remaining · Series #7',
+      'Saga · Up next: #5 · 2 issues remaining · Series #8',
     ])
   })
 
@@ -145,8 +145,8 @@ describe('buildManualPickerOptions (#3704)', () => {
     })
 
     expect(labelsOf(result.activeOptions)).toEqual([
-      'Saga (Single Issues) · 4 issues need review',
-      'Saga (Single Issues) · 2 of 10 mapped',
+      'Saga · 4 issues need review',
+      'Saga · 2 of 10 mapped',
     ])
   })
 
@@ -168,8 +168,8 @@ describe('buildManualPickerOptions (#3704)', () => {
     })
 
     expect(labelsOf(result.activeOptions)).toEqual([
-      'Quiet One (Single Issues)',
-      'Quiet Two (Single Issues)',
+      'Quiet One',
+      'Quiet Two',
     ])
   })
 
@@ -183,8 +183,8 @@ describe('buildManualPickerOptions (#3704)', () => {
     })
 
     expect(labelsOf(result.activeOptions)).toEqual([
-      'Saga (Single Issues) · Series #17',
-      'Saga (Single Issues) · Series #18',
+      'Saga · Series #17',
+      'Saga · Series #18',
     ])
   })
 
@@ -204,8 +204,8 @@ describe('buildManualPickerOptions (#3704)', () => {
     })
 
     expect(labelsOf(result.activeOptions)).toEqual([
-      'Saga (Single Issues) · 1 issue is missing details',
-      'Saga (Single Issues) · 3 issues are missing details',
+      'Saga · 1 issue is missing details',
+      'Saga · 3 issues are missing details',
     ])
   })
 
@@ -215,8 +215,8 @@ describe('buildManualPickerOptions (#3704)', () => {
       snoozedThreads: [thread({ id: 22, issue_number: '9' })],
     })
 
-    expect(labelsOf(result.activeOptions)).toEqual(['Saga (Single Issues) · Up next: #7'])
-    expect(labelsOf(result.snoozedOptions)).toEqual(['Saga (Single Issues) · Up next: #9'])
+    expect(labelsOf(result.activeOptions)).toEqual(['Saga · Up next: #7'])
+    expect(labelsOf(result.snoozedOptions)).toEqual(['Saga · Up next: #9'])
   })
 
   it('treats same-named rows with different tags as already distinct', () => {
@@ -229,8 +229,8 @@ describe('buildManualPickerOptions (#3704)', () => {
     })
 
     expect(labelsOf(result.activeOptions)).toEqual([
-      'Saga (Single Issues) · Comixology',
-      'Saga (Single Issues) · Library, Trade',
+      'Saga · Comixology',
+      'Saga · Library, Trade',
     ])
   })
 
@@ -241,10 +241,10 @@ describe('buildManualPickerOptions (#3704)', () => {
     })
 
     expect(labelsOf(result.activeOptions)).toEqual([
-      'Saga (Single Issues) · Up next: #12',
+      'Saga · Up next: #12',
     ])
     expect(labelsOf(result.snoozedOptions)).toEqual([
-      'Saga (Single Issues) · Up next: #40',
+      'Saga · Up next: #40',
     ])
   })
 
@@ -260,7 +260,7 @@ describe('buildManualPickerOptions (#3704)', () => {
     // The duplicate is dropped before label counting, so the single remaining
     // row is unique again and keeps its quiet label.
     expect(result.activeOptions).toEqual([
-      { id: 51, label: 'Saga (Single Issues)' },
+      { id: 51, label: 'Saga' },
     ])
     expect(result.snoozedOptions).toEqual([])
   })
@@ -271,7 +271,7 @@ describe('buildManualPickerOptions (#3704)', () => {
       snoozedThreads: [thread({ id: 61, title: 'Held Active' })],
     })
 
-    expect(result.activeOptions).toEqual([{ id: 61, label: 'Held Active (Single Issues)' }])
+    expect(result.activeOptions).toEqual([{ id: 61, label: 'Held Active' }])
     expect(result.snoozedOptions).toEqual([])
   })
 
@@ -287,8 +287,8 @@ describe('buildManualPickerOptions (#3704)', () => {
       snoozedThreads: [thread({ id: 102, title: 'Mister Miracle' })],
     })
 
-    expect(labelsOf(result.activeOptions)).toEqual(['Mister Miracle (Single Issues) · Series #101'])
-    expect(labelsOf(result.snoozedOptions)).toEqual(['Mister Miracle (Single Issues) · Series #102'])
+    expect(labelsOf(result.activeOptions)).toEqual(['Mister Miracle · Series #101'])
+    expect(labelsOf(result.snoozedOptions)).toEqual(['Mister Miracle · Series #102'])
   })
 
   it('does not add thread ID fallback for single options that have disambiguating information', () => {
@@ -297,13 +297,13 @@ describe('buildManualPickerOptions (#3704)', () => {
       snoozedThreads: [thread({ id: 102, title: 'Mister Miracle', next_unread_issue_number: '10' })],
     })
 
-    expect(labelsOf(result.activeOptions)).toEqual(['Mister Miracle (Single Issues) · Up next: #5'])
-    expect(labelsOf(result.snoozedOptions)).toEqual(['Mister Miracle (Single Issues) · Up next: #10'])
+    expect(labelsOf(result.activeOptions)).toEqual(['Mister Miracle · Up next: #5'])
+    expect(labelsOf(result.snoozedOptions)).toEqual(['Mister Miracle · Up next: #10'])
   })
 
   it('identifies the bare row when a same-name pair differs only by parenthetical metadata', () => {
-    // The QA case from #4228: "Mister Miracle (Comic)" beside
-    // "Mister Miracle (1989–1991) (Comic)", where only the first has no
+    // The QA case from #4228: "Mister Miracle" beside
+    // "Mister Miracle (1989–1991)", where only the first has no
     // identity context at all.
     const result = buildManualPickerOptions({
       activeThreads: [
@@ -314,8 +314,8 @@ describe('buildManualPickerOptions (#3704)', () => {
     })
 
     expect(labelsOf(result.activeOptions)).toEqual([
-      'Mister Miracle (Single Issues) · Series #201',
-      'Mister Miracle (1989–1991) (Single Issues)',
+      'Mister Miracle · Series #201',
+      'Mister Miracle (1989–1991)',
     ])
   })
 
@@ -329,8 +329,8 @@ describe('buildManualPickerOptions (#3704)', () => {
     })
 
     expect(labelsOf(result.activeOptions)).toEqual([
-      'Superman (Vol. 2) (Single Issues)',
-      'Superman (Vol. 7) (Single Issues)',
+      'Superman (Vol. 2)',
+      'Superman (Vol. 7)',
     ])
   })
 
@@ -344,8 +344,8 @@ describe('buildManualPickerOptions (#3704)', () => {
     })
 
     expect(labelsOf(result.activeOptions)).toEqual([
-      '(2025 - Present) (Single Issues) · Series #401',
-      '(2024 - Present) (Single Issues) · Series #402',
+      '(2025 - Present) · Series #401',
+      '(2024 - Present) · Series #402',
     ])
   })
 })

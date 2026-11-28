@@ -144,7 +144,7 @@ it('calls dependency endpoints with expected paths', async () => {
 
 it('calls every remaining API resource endpoint', async () => {
   await threadsApi.list(undefined, 'next')
-  await threadsApi.create({ title: 'T', format: 'Comic', issues_remaining: 1 })
+  await threadsApi.create({ title: 'T',issues_remaining: 1 })
   await threadsApi.update(1, { title: 'Updated' })
   await threadsApi.delete(1)
   await threadsApi.reactivate({ thread_id: 1, issues_to_add: 2 })

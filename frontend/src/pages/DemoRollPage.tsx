@@ -95,10 +95,6 @@ export default function DemoRollPage({ api = demoApi }: DemoRollPageProps) {
 
           <dl className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
             <div>
-              <dt className="text-xs text-[var(--theme-text-muted)]">Format</dt>
-              <dd className="font-bold text-[var(--theme-text-primary)]">{data.format}</dd>
-            </div>
-            <div>
               <dt className="text-xs text-[var(--theme-text-muted)]">Issues remaining</dt>
               <dd className="font-bold text-[var(--theme-text-primary)]">{data.issues_remaining}</dd>
             </div>

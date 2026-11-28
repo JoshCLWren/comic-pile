@@ -122,7 +122,6 @@ async function enterRatingView(page: Page): Promise<void> {
   await installRatingRoutes(page)
   await createThread(page, {
     title: THREAD_TITLE,
-    format: 'Issue',
     issues_remaining: 3,
     total_issues: 3,
   })

@@ -51,13 +51,11 @@ test.describe('Reading Plan reader surface', () => {
     const headers = await authHeaders(page)
     const xmen = await createThread(page, {
       title: 'Reader X-Men',
-      format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
     })
     const cable = await createThread(page, {
       title: 'Reader Cable',
-      format: 'Comics',
       issues_remaining: 1,
       total_issues: 1,
     })
@@ -135,8 +133,8 @@ test.describe('Reading Plan reader surface', () => {
 // The ordinary lane proves disabled-mode safety; an enabled local fixture also proves strict execution.
 test('Option E explains strict Julix blockers consistently and supports direct list reading', async ({ authenticatedPage: page }) => {
   const headers = await authHeaders(page)
-  const first = await createThread(page, { title: 'Julix Dead Remembered', format: 'Comics', issues_remaining: 1, total_issues: 1 })
-  const later = await createThread(page, { title: 'Julix King of Fear', format: 'Comics', issues_remaining: 1, total_issues: 1 })
+  const first = await createThread(page, { title: 'Julix Dead Remembered',issues_remaining: 1, total_issues: 1 })
+  const later = await createThread(page, { title: 'Julix King of Fear',issues_remaining: 1, total_issues: 1 })
   const firstIssue = await firstIssueId(page, headers, first.id)
   const laterIssue = await firstIssueId(page, headers, later.id)
   const createdList = await page.request.post('/api/v2/reading-lists', { headers, data: { name: 'Julix strict acceptance', mode: 'strict', issue_ids: [firstIssue, laterIssue] } })

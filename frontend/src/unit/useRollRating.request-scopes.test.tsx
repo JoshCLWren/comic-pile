@@ -24,7 +24,7 @@ const getConnectedThreads = vi.mocked(dependenciesApi.getConnectedThreads)
 const ACTIVE_THREAD: RatingThread = {
   id: 1,
   title: 'Saga',
-  format: 'Comic',
+
   issues_remaining: 5,
   total_issues: 10,
   queue_position: 0,
@@ -35,7 +35,7 @@ const THREAD_METADATA: ThreadMetadata = {
   title: 'Test Thread',
   id: 1,
   thread_id: 1,
-  format: 'comic',
+
   issues_remaining: 5,
   queue_position: 1,
 }

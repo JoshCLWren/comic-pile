@@ -1438,8 +1438,8 @@ mod tests {
             .batch_execute(
                 r#"
                 INSERT INTO users (id, username) VALUES (9101, 'statement-count-reader');
-                INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status, total_issues, reading_progress, created_at)
-                VALUES (9101, 9101, 'Series #1', 'comic', 1, 1, 'active', 1, 'not_started', NOW());
+                INSERT INTO threads (id, user_id, title, issues_remaining, queue_position, status, total_issues, reading_progress, created_at)
+                VALUES (9101, 9101, 'Series #1', 1, 1, 'active', 1, 'not_started', NOW());
                 INSERT INTO issues (id, thread_id, issue_number, position, status, created_at)
                 VALUES (9101, 9101, '1', 0, 'unread', NOW());
                 INSERT INTO cbl_sources (id, repository, revision_sha, synced_at, created_at, updated_at)
@@ -1520,10 +1520,10 @@ mod tests {
                 r#"
                 INSERT INTO users (id, username) VALUES (9401, 'duplicate-identity-reader');
                 INSERT INTO threads
-                    (id, user_id, title, format, issues_remaining, queue_position, status, total_issues, reading_progress, created_at)
+                    (id, user_id, title, issues_remaining, queue_position, status, total_issues, reading_progress, created_at)
                 VALUES
-                    (9401, 9401, 'Thread A', 'comic', 2, 1, 'active', 2, 'in_progress', NOW()),
-                    (9402, 9401, 'Thread B', 'comic', 2, 2, 'active', 2, 'in_progress', NOW());
+                    (9401, 9401, 'Thread A', 2, 1, 'active', 2, 'in_progress', NOW()),
+                    (9402, 9401, 'Thread B', 2, 2, 'active', 2, 'in_progress', NOW());
                 INSERT INTO issues (id, thread_id, issue_number, position, status, read_at, created_at)
                 VALUES
                     (9401, 9401, '1', 0, 'read', '2026-01-02T00:00:00Z', NOW()),

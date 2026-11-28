@@ -98,7 +98,6 @@ function renderQueue(): void {
 const queueThread = (id: number, title: string, position: number) => ({
   id,
   title,
-  format: 'Comic',
   status: 'active',
   queue_position: position,
   issues_remaining: 5,

@@ -72,7 +72,6 @@ const bootstrapData: any = {
   active_thread: {
     id: 1,
     title: 'Saga',
-    format: 'Comic',
     issues_remaining: 2,
     queue_position: 1,
     total_issues: 10,
@@ -100,7 +99,7 @@ const rateResponse = {
 const cachedLastRead: RateResponsePayload = {
   id: 1,
   title: 'Saga',
-  format: 'Comic',
+
   issues_remaining: 3,
   total_issues: 10,
   queue_position: 1,
@@ -212,7 +211,6 @@ beforeEach(() => {
   spies.setPending.mockResolvedValue({
     thread_id: 1,
     title: 'Saga',
-    format: 'Comic',
     issues_remaining: 2,
     queue_position: 1,
     total_issues: 10,

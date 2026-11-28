@@ -73,7 +73,6 @@ pub struct UndoApplyResponse {
 pub struct SessionActiveThread {
     pub id: i32,
     pub title: String,
-    pub format: String,
     pub issues_remaining: i32,
     pub queue_position: i32,
     pub last_rolled_result: Option<i32>,
@@ -135,8 +134,8 @@ const SNAPSHOT_COUNT_SQL: &str = "SELECT count(*)::int FROM snapshots WHERE sess
 const LADDER_SQL: &str = "SELECT die_after FROM events WHERE session_id = $1 AND type IN ('rate','snooze','undo') AND die_after IS NOT NULL ORDER BY timestamp ASC, id ASC";
 const CURRENT_DIE_SQL: &str = "SELECT die_after, context::text FROM events WHERE session_id = $1 AND type IN ('rate','snooze','undo') AND die_after IS NOT NULL ORDER BY timestamp DESC, id DESC LIMIT 1";
 const LATEST_ACTION_SQL: &str = "SELECT type, selected_thread_id, result FROM events WHERE session_id = $1 AND type IN ('roll','rate','snooze','rolled_but_skipped') ORDER BY timestamp DESC, id DESC LIMIT 1";
-const PENDING_THREAD_SQL: &str = "SELECT id, title, format, issues_remaining, total_issues, reading_progress, next_unread_issue_id, user_id FROM threads WHERE id = $1 AND user_id = $2";
-const ROLLED_THREAD_SQL: &str = "SELECT id, title, format, issues_remaining, total_issues, reading_progress, next_unread_issue_id, user_id FROM threads WHERE id = $1";
+const PENDING_THREAD_SQL: &str = "SELECT id, title, issues_remaining, total_issues, reading_progress, next_unread_issue_id, user_id FROM threads WHERE id = $1 AND user_id = $2";
+const ROLLED_THREAD_SQL: &str = "SELECT id, title, issues_remaining, total_issues, reading_progress, next_unread_issue_id, user_id FROM threads WHERE id = $1";
 const UNREAD_COUNT_SQL: &str =
     "SELECT count(*)::int FROM issues WHERE thread_id = $1 AND status = 'unread'";
 const NEXT_ISSUE_SQL: &str = "SELECT id, issue_number FROM issues WHERE id = $1";
@@ -176,16 +175,6 @@ fn internal() -> ApiError {
         StatusCode::INTERNAL_SERVER_ERROR,
         "Internal Server Error".to_string(),
     )
-}
-
-/// Python `normalize_format_value`: trim, then map known variants.
-pub(crate) fn normalize_format(value: &str) -> String {
-    let stripped = value.trim();
-    match stripped.to_ascii_lowercase().as_str() {
-        "comic" | "comics" => "Comic".to_string(),
-        "digital" => "Digital".to_string(),
-        _ => stripped.to_string(),
-    }
 }
 
 fn normalize_bandwidth_level(value: Option<&str>) -> Option<String> {
@@ -368,7 +357,7 @@ async fn apply_full_snapshot(
     if !restore_thread_ids.is_empty() {
         let threads_rows = tx
             .query(
-                "SELECT id, title, format, issues_remaining, total_issues, reading_progress, next_unread_issue_id, user_id FROM threads WHERE id = ANY($1)",
+                "SELECT id, title, issues_remaining, total_issues, reading_progress, next_unread_issue_id, user_id FROM threads WHERE id = ANY($1)",
                 &[&restore_thread_ids],
             )
             .await
@@ -633,7 +622,7 @@ async fn apply_delta_snapshot(
     if !restore_thread_ids.is_empty() {
         let threads_rows = tx
             .query(
-                "SELECT id, title, format, issues_remaining, total_issues, reading_progress, next_unread_issue_id, user_id FROM threads WHERE id = ANY($1)",
+                "SELECT id, title, issues_remaining, total_issues, reading_progress, next_unread_issue_id, user_id FROM threads WHERE id = ANY($1)",
                 &[&restore_thread_ids],
             )
             .await
@@ -985,14 +974,6 @@ async fn restore_thread_from_state(
             tx.execute(
                 "UPDATE threads SET title = $1 WHERE id = $2 AND user_id = $3",
                 &[&title, &thread_id, &user_id],
-            )
-            .await
-            .map_err(db::query_error)?;
-        }
-        if let Some(format) = state.get("format").and_then(|v| v.as_str()) {
-            tx.execute(
-                "UPDATE threads SET format = $1 WHERE id = $2 AND user_id = $3",
-                &[&format, &thread_id, &user_id],
             )
             .await
             .map_err(db::query_error)?;
@@ -1569,15 +1550,8 @@ pub async fn undo_to_snapshot(
                                         );
                                         internal()
                                     })?;
-                                    let format: String = thread_row.try_get(2).map_err(|e| {
-                                        tracing::debug!(
-                                            error_kind = crate::error_kind(&e),
-                                            "preserved underlying error before mapping"
-                                        );
-                                        internal()
-                                    })?;
                                     let stored_remaining: i32 =
-                                        thread_row.try_get(3).map_err(|e| {
+                                        thread_row.try_get(2).map_err(|e| {
                                             tracing::debug!(
                                                 error_kind = crate::error_kind(&e),
                                                 "preserved underlying error before mapping"
@@ -1585,7 +1559,7 @@ pub async fn undo_to_snapshot(
                                             internal()
                                         })?;
                                     let total_issues: Option<i32> =
-                                        thread_row.try_get(4).map_err(|e| {
+                                        thread_row.try_get(3).map_err(|e| {
                                             tracing::debug!(
                                                 error_kind = crate::error_kind(&e),
                                                 "preserved underlying error before mapping"
@@ -1593,7 +1567,7 @@ pub async fn undo_to_snapshot(
                                             internal()
                                         })?;
                                     let reading_progress: Option<String> =
-                                        thread_row.try_get(5).map_err(|e| {
+                                        thread_row.try_get(4).map_err(|e| {
                                             tracing::debug!(
                                                 error_kind = crate::error_kind(&e),
                                                 "preserved underlying error before mapping"
@@ -1601,7 +1575,7 @@ pub async fn undo_to_snapshot(
                                             internal()
                                         })?;
                                     let next_unread_issue_id: Option<i32> =
-                                        thread_row.try_get(6).map_err(|e| {
+                                        thread_row.try_get(5).map_err(|e| {
                                             tracing::debug!(
                                                 error_kind = crate::error_kind(&e),
                                                 "preserved underlying error before mapping"
@@ -1744,7 +1718,6 @@ pub async fn undo_to_snapshot(
                                     Some(SessionActiveThread {
                                         id: thread_id_value,
                                         title,
-                                        format: normalize_format(&format),
                                         issues_remaining,
                                         queue_position,
                                         last_rolled_result: safe_result,
@@ -1956,7 +1929,7 @@ mod tests {
         connection
             .batch_execute(
                 "INSERT INTO users (id, username) VALUES (9101, 'undo-json-test');
-                 INSERT INTO threads (id, user_id, title, format, issues_remaining, total_issues, reading_progress, queue_position, status, is_blocked) VALUES (9201, 9101, 'Snoozed Comic', 'comics', 3, NULL, NULL, 1, 'active', false);
+                 INSERT INTO threads (id, user_id, title, issues_remaining, total_issues, reading_progress, queue_position, status, is_blocked) VALUES (9201, 9101, 'Snoozed Comic', 3, NULL, NULL, 1, 'active', false);
                  INSERT INTO sessions (id, user_id, started_at, ended_at, start_die, manual_die, pending_thread_id, reading_mode_suggested, snoozed_thread_ids) VALUES (9301, 9101, NOW(), NULL, 6, NULL, NULL, false, '[9201]'::json);
                  INSERT INTO snapshots (id, session_id, thread_states, session_state, created_at, description) VALUES (9401, 9301, '{}'::json, '{}'::json, NOW(), 'Pre-undo');",
             )
@@ -1993,9 +1966,9 @@ mod tests {
         connection
             .batch_execute(
                 "INSERT INTO users (id, username) VALUES (9101, 'undo-die-test');
-                 INSERT INTO threads (id, user_id, title, format, issues_remaining, total_issues, reading_progress, queue_position, status, is_blocked)
-                 VALUES (9201, 9101, 'Tesla Strong', 'Comic', 1, 2, 'in_progress', 1, 'active', false),
-                        (9202, 9101, 'Other Comic', 'Comic', 1, 1, NULL, 2, 'active', false);
+                 INSERT INTO threads (id, user_id, title, issues_remaining, total_issues, reading_progress, queue_position, status, is_blocked)
+                 VALUES (9201, 9101, 'Tesla Strong', 1, 2, 'in_progress', 1, 'active', false),
+                        (9202, 9101, 'Other Comic', 1, 1, NULL, 2, 'active', false);
                  INSERT INTO issues (id, thread_id, issue_number, status, read_at, created_at, position)
                  VALUES (9501, 9201, '1', 'read', NOW(), NOW(), 1),
                         (9502, 9201, '2', 'unread', NULL, NOW(), 2);
@@ -2181,8 +2154,8 @@ mod tests {
                         (9722, 'comicvine', 'issue', 'ext-2', '{}'::json, NOW(), NOW());
                  INSERT INTO catalog_issues (id, canonical_external_identity_id, created_at, updated_at)
                  VALUES (9611, 9711, NOW(), NOW()), (9622, 9722, NOW(), NOW());
-                 INSERT INTO threads (id, user_id, title, format, issues_remaining, total_issues, queue_position, status, is_blocked)
-                 VALUES (9201, 9101, 'Linked Comic', 'Comic', 2, 2, 1, 'active', false);
+                 INSERT INTO threads (id, user_id, title, issues_remaining, total_issues, queue_position, status, is_blocked)
+                 VALUES (9201, 9101, 'Linked Comic', 2, 2, 1, 'active', false);
                  INSERT INTO issues (id, thread_id, issue_number, status, read_at, created_at, position, catalog_issue_id)
                  VALUES (9501, 9201, '1', 'read', NOW(), NOW(), 1, 9611),
                         (9502, 9201, '2', 'unread', NULL, NOW(), 2, 9622);
@@ -2242,9 +2215,9 @@ mod tests {
         connection
             .batch_execute(
                 "INSERT INTO users (id, username) VALUES (9101, 'undo-pending-test');
-                 INSERT INTO threads (id, user_id, title, format, issues_remaining, total_issues, queue_position, status, is_blocked)
-                 VALUES (9201, 9101, 'In Snapshot', 'Comic', 3, 3, 1, 'active', false),
-                        (9299, 9101, 'Added Later', 'Comic', 1, 1, 2, 'active', false);
+                 INSERT INTO threads (id, user_id, title, issues_remaining, total_issues, queue_position, status, is_blocked)
+                 VALUES (9201, 9101, 'In Snapshot', 3, 3, 1, 'active', false),
+                        (9299, 9101, 'Added Later', 1, 1, 2, 'active', false);
                  INSERT INTO sessions (id, user_id, started_at, ended_at, start_die, manual_die, pending_thread_id, reading_mode_suggested, snoozed_thread_ids)
                  VALUES (9301, 9101, NOW(), NULL, 12, NULL, 9299, false, '[]'::json);
                  INSERT INTO snapshots (id, session_id, thread_states, session_state, created_at, description)
@@ -2300,8 +2273,8 @@ mod tests {
         connection
             .batch_execute(
                 "INSERT INTO users (id, username) VALUES (9101, 'undo-lock-test');
-                 INSERT INTO threads (id, user_id, title, format, issues_remaining, total_issues, queue_position, status, is_blocked)
-                 VALUES (9201, 9101, 'Offer Target', 'Comic', 3, 3, 1, 'active', false);
+                 INSERT INTO threads (id, user_id, title, issues_remaining, total_issues, queue_position, status, is_blocked)
+                 VALUES (9201, 9101, 'Offer Target', 3, 3, 1, 'active', false);
                  INSERT INTO sessions (id, user_id, started_at, ended_at, start_die, manual_die, pending_thread_id, reading_mode_suggested, snoozed_thread_ids)
                  VALUES (9301, 9101, NOW(), NULL, 12, NULL, NULL, false, '[]'::json);
                  INSERT INTO snapshots (id, session_id, thread_states, session_state, created_at, description)

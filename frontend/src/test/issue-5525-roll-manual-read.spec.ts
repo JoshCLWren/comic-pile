@@ -13,7 +13,6 @@ test.describe('P0 #5525 Roll manual selection', () => {
     const title = 'Manual Roll Face'
     await createThread(page, {
       title,
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -47,7 +46,6 @@ test.describe('P0 #5525 Roll manual selection', () => {
     const title = 'Independent Manual Pick'
     await createThread(page, {
       title,
-      format: 'Comic',
       issues_remaining: 2,
       total_issues: 2,
     })

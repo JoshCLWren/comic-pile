@@ -179,7 +179,6 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
       setEditingThread(thread)
       setEditForm({
         title: thread.title,
-        format: thread.format,
         issuesRemaining: thread.issues_remaining,
         notes: thread.notes || '',
         issues: '',
@@ -192,7 +191,6 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
         setEditingThread(thread)
         setEditForm({
           title: thread.title,
-          format: thread.format,
           issuesRemaining: thread.issues_remaining,
           notes: thread.notes || '',
           issues: '',
@@ -387,7 +385,6 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
         // SAFETY: submitCreate resolves to the created thread record or null when creation is skipped.
         const result = (await submitCreate({
           title: createForm.title,
-          format: createForm.format,
           issues_remaining: issuesRemaining,
           notes: createForm.notes ?? null,
           manual_creator_credits: createForm.manualCreatorCredits,
@@ -446,7 +443,6 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
       try {
         const data: EditThreadData = {
           title: editForm.title,
-          format: editForm.format,
           // Send the field verbatim so an emptied Notes field is sent as an
           // explicit clear. Only omitting `notes` leaves the saved value
           // unchanged (issue #3629).
@@ -456,7 +452,6 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
           // was opened; the server compares under the row lock and returns 409.
           expected: {
             title: editingThread.title,
-            format: editingThread.format,
             notes: editingThread.notes ?? null,
             manual_creator_credits: getManualCreatorCreditList(editingThread),
           },

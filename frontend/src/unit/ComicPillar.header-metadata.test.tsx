@@ -78,7 +78,7 @@ const STORE_DATE = '1993-06-15'
 const linkedThread: RatingThread = {
   id: 7,
   title: 'Stormwatch Vol. 1',
-  format: 'single',
+
   issues_remaining: 5,
   queue_position: 1,
   total_issues: 12,

@@ -17,7 +17,6 @@ test.describe('Night Shift Roll (#5981)', () => {
     const page = authenticatedPage
     await createThread(page, {
       title: 'Night Shift Series',
-      format: 'Comic',
       issues_remaining: 5,
       total_issues: 5,
     })
@@ -45,7 +44,6 @@ test.describe('Night Shift Roll (#5981)', () => {
     const page = authenticatedPage
     await createThread(page, {
       title: 'Night Shift Result',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -66,13 +64,11 @@ test.describe('Night Shift Roll (#5981)', () => {
     await page.setViewportSize({ width: 390, height: 844 })
     await createThread(page, {
       title: 'Gallery Alpha',
-      format: 'Comic',
       issues_remaining: 2,
       total_issues: 2,
     })
     await createThread(page, {
       title: 'Gallery Beta',
-      format: 'Comic',
       issues_remaining: 2,
       total_issues: 2,
     })
@@ -105,7 +101,6 @@ test.describe('Night Shift Roll (#5981)', () => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await createThread(page, {
       title: 'Reduced Motion Series',
-      format: 'Comic',
       issues_remaining: 2,
       total_issues: 2,
     })

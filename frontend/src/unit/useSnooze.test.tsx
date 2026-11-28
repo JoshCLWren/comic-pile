@@ -62,7 +62,7 @@ const bootstrapState = (
   active_thread: null,
   roll_pool: [],
   snoozed_threads: pendingThreadId === null
-    ? [{ id: 7, title: 'Doom Patrol', format: 'series' }]
+    ? [{ id: 7, title: 'Doom Patrol',}]
     : [],
   snoozed_count: pendingThreadId === null ? 1 : 0,
   skipped_thread_ids: [],

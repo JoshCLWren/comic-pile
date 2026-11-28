@@ -81,7 +81,7 @@ const UNREAD_COUNTS_SQL: &str = "SELECT i.thread_id, COUNT(*) FROM issues i \
      WHERE i.status = 'unread' AND i.thread_id = ANY($1::int[]) GROUP BY i.thread_id";
 const ISSUE_PROGRESS_SQL: &str = "SELECT i.id, i.thread_id, i.status FROM issues i \
      WHERE i.id = ANY($1::int[])";
-const THREADS_DETAIL_SQL: &str = "SELECT t.id, t.title, t.format, t.issues_remaining, \
+const THREADS_DETAIL_SQL: &str = "SELECT t.id, t.title, t.issues_remaining, \
      t.queue_position, t.status, t.last_rating, \
      to_char(t.last_activity_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') AS last_activity_at, \
      t.notes, t.is_test, t.is_blocked, \
@@ -295,15 +295,6 @@ fn format_created_at(created_at: DateTime<Utc>) -> String {
         SecondsFormat::Micros
     };
     created_at.to_rfc3339_opts(precision, true)
-}
-
-fn normalize_thread_format(format: &str) -> String {
-    let trimmed = format.trim();
-    match trimmed.to_ascii_lowercase().as_str() {
-        "comic" | "comics" => "Comic".to_string(),
-        "digital" => "Digital".to_string(),
-        _ => trimmed.to_string(),
-    }
 }
 
 fn unprocessable(detail: impl Into<String>) -> ApiError {
@@ -641,7 +632,7 @@ async fn threads_by_ids(
         .map_err(db::query_error)?;
     for row in rows {
         let manual_creator_credits = row
-            .get::<_, Option<String>>(16)
+            .get::<_, Option<String>>(15)
             .and_then(|value| serde_json::from_str(&value).ok())
             .unwrap_or_else(|| serde_json::Value::Array(Vec::new()));
         result.insert(
@@ -649,21 +640,20 @@ async fn threads_by_ids(
             Some(ThreadDetailResponse {
                 id: row.get(0),
                 title: row.get(1),
-                format: normalize_thread_format(row.get::<_, String>(2).as_str()),
-                issues_remaining: row.get(3),
-                queue_position: row.get(4),
-                status: row.get(5),
-                last_rating: row.get(6),
-                last_activity_at: row.get(7),
-                notes: row.get(8),
-                is_test: row.get(9),
-                is_blocked: row.get(10),
+                issues_remaining: row.get(2),
+                queue_position: row.get(3),
+                status: row.get(4),
+                last_rating: row.get(5),
+                last_activity_at: row.get(6),
+                notes: row.get(7),
+                is_test: row.get(8),
+                is_blocked: row.get(9),
                 blocking_reasons: Vec::new(),
-                created_at: row.get(11),
-                total_issues: row.get(12),
-                reading_progress: row.get(13),
-                next_unread_issue_id: row.get(14),
-                next_unread_issue_number: row.get(15),
+                created_at: row.get(10),
+                total_issues: row.get(11),
+                reading_progress: row.get(12),
+                next_unread_issue_id: row.get(13),
+                next_unread_issue_number: row.get(14),
                 manual_creator_credits,
             }),
         );
@@ -2165,8 +2155,8 @@ mod tests {
         for (thread_id, user_id) in [(11_i32, 7_i32), (12, 7), (13, 8)] {
             connection
                 .execute(
-                    "INSERT INTO threads (id, user_id, title, format, issues_remaining, status, queue_position, is_blocked) \
-                     VALUES ($1, $2, $3, 'Comic', 1, 'active', 1, false)",
+                    "INSERT INTO threads (id, user_id, title, issues_remaining, status, queue_position, is_blocked) \
+                     VALUES ($1, $2, $3, 1, 'active', 1, false)",
                     &[&thread_id, &user_id, &format!("Thread {thread_id}")],
                 )
                 .await
@@ -2252,8 +2242,8 @@ mod tests {
             .expect("seed group");
         connection
             .execute(
-                "INSERT INTO threads (id, user_id, title, format, issues_remaining, status, queue_position) \
-                 VALUES (11, 7, 'Series', 'Comic', 1, 'active', 1)",
+                "INSERT INTO threads (id, user_id, title, issues_remaining, status, queue_position) \
+                 VALUES (11, 7, 'Series', 1, 'active', 1)",
                 &[],
             )
             .await
@@ -2356,8 +2346,8 @@ mod tests {
         }
         connection
             .execute(
-                "INSERT INTO threads (id, user_id, title, format, issues_remaining, status, queue_position, is_blocked) \
-                 VALUES (11, 7, 'Thread 11', 'Comic', 4, 'active', 1, false)",
+                "INSERT INTO threads (id, user_id, title, issues_remaining, status, queue_position, is_blocked) \
+                 VALUES (11, 7, 'Thread 11', 4, 'active', 1, false)",
                 &[],
             )
             .await

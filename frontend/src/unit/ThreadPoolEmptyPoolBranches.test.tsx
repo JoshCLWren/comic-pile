@@ -62,7 +62,7 @@ describe('ThreadPool empty-pool branch coverage', () => {
     navigate.mockClear()
     mount({
       pool: [],
-      snoozedThreads: [{ id: 2, title: 'Paused', format: 'Comic' }],
+      snoozedThreads: [{ id: 2, title: 'Paused',}],
       onResetDice: vi.fn(),
     })
     fireEvent.click(screen.getByRole('button', { name: 'Add Comics' }))

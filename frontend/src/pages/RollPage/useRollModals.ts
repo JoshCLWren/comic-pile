@@ -157,7 +157,7 @@ export function useRollModals({
       setOverrideErrorMessage('Choose an owned series first.')
       return
     }
-    setSelectedThread({ id: selected.id, title: selected.title, format: selected.format })
+    setSelectedThread({ id: selected.id, title: selected.title })
     setIsOverrideOpen(false)
     setOverrideThreadId('')
     setOverrideErrorMessage('')

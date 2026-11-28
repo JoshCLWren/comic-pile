@@ -930,8 +930,8 @@ mod tests {
                 let thread_id: i32 = connection
                     .query_one(
                         "INSERT INTO threads
-                         (user_id, title, format, status, issues_remaining, queue_position, created_at)
-                         VALUES ($1, 'Creator regression', 'comic', 'active', 0, 1, now())
+                         (user_id, title, status, issues_remaining, queue_position, created_at)
+                         VALUES ($1, 'Creator regression', 'active', 0, 1, now())
                          RETURNING id",
                         &[&user_id],
                     )

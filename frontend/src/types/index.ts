@@ -16,7 +16,7 @@ export interface ThreadQueueExclusionGroup {
  * last_rating, or is_test to reduce payload
  * size for large lists.
  */
-export type ThreadListItem = components['schemas']['QueueThreadListItem'] & {
+export type ThreadListItem = Omit<components['schemas']['QueueThreadListItem'], 'format'> & {
   queue_exclusion_group?: ThreadQueueExclusionGroup | null
   /**
    * Derived series cover from the native `/api/v2/threads` projection (#5433):
@@ -55,7 +55,7 @@ export interface BulkQueueRestoreResponse {
 /**
  * Represents a comic thread/series
  */
-export type Thread = components['schemas']['ThreadResponse']
+export type Thread = Omit<components['schemas']['ThreadResponse'], 'format'>
 
 /**
  * Thread response with roll reconciliation (formerly from POST /v1/rate/ #2720,
@@ -67,7 +67,7 @@ export type Thread = components['schemas']['ThreadResponse']
  * post-rate state. Typing the mutation response here keeps the reconciliation
  * data on the wire instead of dropping it at the service boundary.
  */
-export type RateResponsePayload = components['schemas']['ThreadResponse'] & {
+export type RateResponsePayload = Omit<components['schemas']['ThreadResponse'], 'format'> & {
   /** Actual read time of the issue returned by the native v2 writer. */
   rated_issue_read_at?: string | null
   roll_reconciliation?: {
@@ -147,7 +147,6 @@ export interface ManualCreatorCredit {
 
 export interface ThreadCreatePayload {
   title: string;
-  format: string;
   issues_remaining: number;
   total_issues?: number;
   notes?: string | null;
@@ -156,7 +155,6 @@ export interface ThreadCreatePayload {
 
 export interface ThreadUpdatePayload {
   title?: string;
-  format?: string;
   notes?: string | null;
   manual_creator_credits?: ManualCreatorCredit[];
 }
@@ -164,7 +162,6 @@ export interface ThreadUpdatePayload {
 /** AIP-134 partial update body for `PATCH /api/v2/threads/{thread_id}`. */
 export interface ThreadPatchPayload {
   title?: string;
-  format?: string;
   issues_remaining?: number | null;
   notes?: string | null;
   manual_creator_credits?: ManualCreatorCredit[] | null;
@@ -174,7 +171,6 @@ export interface ThreadPatchPayload {
   /** Stale-client precondition; 409 with current values on mismatch. */
   expected?: {
     title?: string;
-    format?: string;
     notes?: string | null;
     manual_creator_credits?: ManualCreatorCredit[];
   };
@@ -192,7 +188,6 @@ export type PotentialDuplicateMatchType = 'same_comicvine_volume' | 'similar_tit
 export interface PotentialDuplicateMatch {
   thread_id: number;
   title: string;
-  format: string;
   status: string;
   issues_remaining: number;
   total_issues: number | null;
@@ -205,7 +200,6 @@ export interface PotentialDuplicateMatch {
 
 export interface CheckPotentialDuplicatesRequest {
   title: string;
-  format: string;
   comicvine_volume_id?: number;
   exclude_thread_id?: number;
 }
@@ -252,7 +246,6 @@ export interface ReactivateThreadPayload {
 export interface SessionThread {
   id: number;
   title: string;
-  format: string;
   notes?: string | null;
   issues_remaining?: number;
   queue_position?: number;
@@ -381,8 +374,9 @@ export interface SessionDetails {
 // Preserve the Queue's established item projection while adopting the native
 // response's generated whole-collection match total (#3614). The field is
 // optional because completed/excluded reads and the frozen Python schema omit it.
-export type ThreadListResponse = components['schemas']['QueueThreadListResponse'] &
-  Pick<components['schemas']['ThreadListResponse'], 'filtered_count'>
+export type ThreadListResponse = Omit<components['schemas']['QueueThreadListResponse'], 'threads'> & {
+  threads: ThreadListItem[]
+} & Pick<components['schemas']['ThreadListResponse'], 'filtered_count'>
 
 // The session index and current-session wire types were retired with the
 // legacy session surface (#4839, #4343); supported reads use the
@@ -540,8 +534,6 @@ export interface RollResponse {
   thread_id: number;
   /** Title of the selected thread */
   title: string;
-  /** Format of the comic (e.g., 'issue', 'trade', 'omnibus') */
-  format: string;
   /** Number of issues remaining to read in the thread */
   issues_remaining: number;
   /** Position in the reading queue */
@@ -578,7 +570,6 @@ export interface RollResponse {
 export interface SetCurrentIssueResponse {
   thread_id: number;
   title: string;
-  format: string;
   issues_remaining: number;
   queue_position: number;
   issue_id: number | null;

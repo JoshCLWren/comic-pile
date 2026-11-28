@@ -36,7 +36,6 @@ test.describe('issue #2492: fresh roll keeps the rating start at the top when re
       for (let index = 0; index < 3; index++) {
         await createThread(page, {
           title: `Reading Boundaries Thread ${index + 1}`,
-          format: 'Issue',
           issues_remaining: 10,
           total_issues: 10,
         })

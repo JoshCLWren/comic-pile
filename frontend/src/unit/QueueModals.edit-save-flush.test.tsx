@@ -42,19 +42,11 @@ vi.mock('../pages/QueuePage/IssueToggleList', () => ({
   }),
 }))
 
-vi.mock('../pages/QueuePage/FormatSelect', () => ({
-  FormatSelect: ({ id, value, onChange }: { id: string; value: string; onChange: (v: string) => void }) => (
-    <select id={id} value={value} onChange={(event) => onChange(event.target.value)}>
-      <option value="Comic">Comic</option>
-    </select>
-  ),
-}))
 
 // SAFETY: test fixture supplies only the fields QueueModals reads for the edit form.
 const EDITING_THREAD = {
   id: 99,
   title: 'Test Series',
-  format: 'Comic',
   notes: null,
   issues_remaining: 1,
   total_issues: 12,

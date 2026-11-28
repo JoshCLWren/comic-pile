@@ -104,7 +104,7 @@ test.describe('Roll pointer target sizes (#1885)', () => {
     authenticatedPage,
   }) => {
     const page = authenticatedPage
-    await createThread(page, { title: 'Target Die Thread', format: 'Issue', issues_remaining: 3, total_issues: 3 })
+    await createThread(page, { title: 'Target Die Thread',issues_remaining: 3, total_issues: 3 })
 
     await page.setViewportSize({ width: 1920, height: 926 })
     await page.goto('/', { waitUntil: 'domcontentloaded' })
@@ -155,8 +155,8 @@ test.describe('Roll pointer target sizes (#1885)', () => {
 
   test('header compact controls meet the 24px minimum', async ({ authenticatedPage }) => {
     const page = authenticatedPage
-    await createThread(page, { title: 'Compact Header Thread A', format: 'Issue', issues_remaining: 2, total_issues: 2 })
-    await createThread(page, { title: 'Compact Header Thread B', format: 'Issue', issues_remaining: 2, total_issues: 2 })
+    await createThread(page, { title: 'Compact Header Thread A',issues_remaining: 2, total_issues: 2 })
+    await createThread(page, { title: 'Compact Header Thread B',issues_remaining: 2, total_issues: 2 })
 
     await page.setViewportSize({ width: 1280, height: 800 })
     await page.goto('/', { waitUntil: 'domcontentloaded' })
@@ -183,8 +183,8 @@ test.describe('Roll pointer target sizes (#1885)', () => {
     authenticatedPage,
   }) => {
     const page = authenticatedPage
-    const blocking = await createThread(page, { title: 'Blocking Alpha', format: 'Issue', issues_remaining: 2, total_issues: 2 })
-    const blocked = await createThread(page, { title: 'Blocked Beta', format: 'Issue', issues_remaining: 2, total_issues: 2 })
+    const blocking = await createThread(page, { title: 'Blocking Alpha',issues_remaining: 2, total_issues: 2 })
+    const blocked = await createThread(page, { title: 'Blocked Beta',issues_remaining: 2, total_issues: 2 })
 
     // The canonical dependency evaluator rejects set-pending on a thread that
     // is already blocked. Put the thread in the pending state first, then seed

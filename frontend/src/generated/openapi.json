@@ -359,9 +359,6 @@
       "BootstrapActiveThread": {
         "description": "Currently pending thread shown by the Roll surface.",
         "properties": {
-          "format": {
-            "type": "string"
-          },
           "id": {
             "format": "int32",
             "type": "integer"
@@ -459,7 +456,6 @@
         "required": [
           "id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position",
           "issues_read",
@@ -981,9 +977,6 @@
       "BootstrapThreadSummary": {
         "description": "Owner-scoped thread summary shown by Roll snooze chips and rollable rows.",
         "properties": {
-          "format": {
-            "type": "string"
-          },
           "id": {
             "format": "int32",
             "type": "integer"
@@ -1007,7 +1000,6 @@
         "required": [
           "id",
           "title",
-          "format",
           "tags"
         ],
         "type": "object"
@@ -2588,16 +2580,12 @@
               "null"
             ]
           },
-          "format": {
-            "type": "string"
-          },
           "title": {
             "type": "string"
           }
         },
         "required": [
-          "title",
-          "format"
+          "title"
         ],
         "type": "object"
       },
@@ -6133,9 +6121,6 @@
               "null"
             ]
           },
-          "format": {
-            "type": "string"
-          },
           "issue_id": {
             "format": "int32",
             "type": [
@@ -6206,7 +6191,6 @@
         "required": [
           "thread_id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position",
           "die_size",
@@ -9781,9 +9765,6 @@
               "null"
             ]
           },
-          "format": {
-            "type": "string"
-          },
           "issues_remaining": {
             "format": "int32",
             "type": "integer"
@@ -9819,7 +9800,6 @@
         "required": [
           "thread_id",
           "title",
-          "format",
           "status",
           "issues_remaining",
           "match_type"
@@ -10617,9 +10597,6 @@
       "NativeSetCurrentIssueResponse": {
         "description": "Python `SetCurrentIssueResponse`.",
         "properties": {
-          "format": {
-            "type": "string"
-          },
           "issue_id": {
             "format": "int32",
             "type": [
@@ -10678,7 +10655,6 @@
         "required": [
           "thread_id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position"
         ],
@@ -10714,9 +10690,6 @@
             "type": "array"
           },
           "created_at": {
-            "type": "string"
-          },
-          "format": {
             "type": "string"
           },
           "id": {
@@ -10793,7 +10766,6 @@
         "required": [
           "id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position",
           "status",
@@ -15675,9 +15647,6 @@
               "null"
             ]
           },
-          "format": {
-            "type": "string"
-          },
           "issue_id": {
             "format": "int32",
             "type": [
@@ -15763,7 +15732,6 @@
         "required": [
           "thread_id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position",
           "die_size",
@@ -16434,9 +16402,6 @@
       "SessionActiveThread": {
         "description": "Active thread projection.",
         "properties": {
-          "format": {
-            "type": "string"
-          },
           "id": {
             "format": "int32",
             "type": "integer"
@@ -16522,7 +16487,6 @@
         "required": [
           "id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position",
           "tags"
@@ -17750,9 +17714,6 @@
       "ThreadCreateRequest": {
         "description": "Body of `POST /api/v1/threads/`.",
         "properties": {
-          "format": {
-            "type": "string"
-          },
           "is_test": {
             "type": "boolean"
           },
@@ -17783,7 +17744,6 @@
         },
         "required": [
           "title",
-          "format",
           "issues_remaining"
         ],
         "type": "object"
@@ -17878,9 +17838,6 @@
           "created_at": {
             "type": "string"
           },
-          "format": {
-            "type": "string"
-          },
           "id": {
             "format": "int32",
             "type": "integer"
@@ -17955,7 +17912,6 @@
         "required": [
           "id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position",
           "status",
@@ -18110,9 +18066,6 @@
           "created_at": {
             "type": "string"
           },
-          "format": {
-            "type": "string"
-          },
           "id": {
             "format": "int32",
             "type": "integer"
@@ -18198,7 +18151,6 @@
         "required": [
           "id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position",
           "status",
@@ -18247,13 +18199,6 @@
       "ThreadPatchPrecondition": {
         "description": "Committed values a stale client read before issuing a Thread patch.",
         "properties": {
-          "format": {
-            "description": "Format observed by the client.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "manual_creator_credits": {
             "description": "Manual creator credits observed by the client.",
             "items": {},
@@ -18291,13 +18236,6 @@
               {
                 "type": "null"
               }
-            ]
-          },
-          "format": {
-            "description": "New format; normalized to the reader's canonical vocabulary.",
-            "type": [
-              "string",
-              "null"
             ]
           },
           "is_test": {
@@ -18978,9 +18916,6 @@
               "null"
             ]
           },
-          "format": {
-            "type": "string"
-          },
           "issue_id": {
             "format": "int32",
             "type": [
@@ -19069,7 +19004,6 @@
         "required": [
           "thread_id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position",
           "die_size",

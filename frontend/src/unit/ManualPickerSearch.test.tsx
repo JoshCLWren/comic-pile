@@ -9,9 +9,9 @@ import {
 } from '../pages/RollPage/components/ManualPickerSearch'
 
 const activeOptions: ManualPickerSearchOption[] = [
-  { id: 1, label: 'Saga (Comic)' },
-  { id: 2, label: 'Superman (Comic) · Up next: #5' },
-  { id: 3, label: 'Superman (Comic) · Up next: #9' },
+  { id: 1, label: 'Saga' },
+  { id: 2, label: 'Superman · Up next: #5' },
+  { id: 3, label: 'Superman · Up next: #9' },
 ]
 
 function Harness({
@@ -53,7 +53,7 @@ describe('ManualPickerSearch', () => {
       <ManualPickerSearch
         activeOptions={[{
           id: 11,
-          label: 'Geiger (Comic)',
+          label: 'Geiger',
           threadTitle: 'Geiger',
           coverImageUrl: 'https://example.test/geiger.jpg',
         }]}
@@ -62,7 +62,7 @@ describe('ManualPickerSearch', () => {
       />,
     )
     await userEvent.click(screen.getByRole('combobox'))
-    const option = screen.getByRole('option', { name: 'Geiger (Comic)' })
+    const option = screen.getByRole('option', { name: 'Geiger' })
     expect(option.querySelector('[data-testid="comic-issue-cover"] img')).toHaveAttribute(
       'src', 'https://example.test/geiger.jpg',
     )
@@ -77,15 +77,15 @@ describe('ManualPickerSearch', () => {
     const input = screen.getByRole('combobox')
     await user.type(input, 'super')
 
-    expect(screen.getByRole('option', { name: 'Superman (Comic) · Up next: #5' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Superman (Comic) · Up next: #9' })).toBeInTheDocument()
-    expect(screen.queryByRole('option', { name: 'Saga (Comic)' })).not.toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Superman · Up next: #5' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Superman · Up next: #9' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Saga' })).not.toBeInTheDocument()
 
     // The already-known disambiguating identity is searchable too.
     await user.clear(input)
     await user.type(input, '#9')
-    expect(screen.getByRole('option', { name: 'Superman (Comic) · Up next: #9' })).toBeInTheDocument()
-    expect(screen.queryByRole('option', { name: 'Superman (Comic) · Up next: #5' })).not.toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Superman · Up next: #9' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Superman · Up next: #5' })).not.toBeInTheDocument()
 
     await user.clear(input)
     await user.type(input, 'nothing matches')
@@ -93,7 +93,7 @@ describe('ManualPickerSearch', () => {
       'aria-disabled',
       'true',
     )
-    expect(screen.queryByRole('option', { name: 'Saga (Comic)' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Saga' })).not.toBeInTheDocument()
   })
 
   it('filters on thread identity ID even when labels have no disambiguation', async () => {
@@ -104,18 +104,18 @@ describe('ManualPickerSearch', () => {
 
     // A thread id is usable identity when the label carries no disambiguating text.
     await user.type(input, '2')
-    expect(screen.getByRole('option', { name: 'Superman (Comic) · Up next: #5' })).toBeInTheDocument()
-    expect(screen.queryByRole('option', { name: 'Saga (Comic)' })).not.toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Superman · Up next: #5' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Saga' })).not.toBeInTheDocument()
 
     await user.clear(input)
     await user.type(input, '3')
-    expect(screen.getByRole('option', { name: 'Superman (Comic) · Up next: #9' })).toBeInTheDocument()
-    expect(screen.queryByRole('option', { name: 'Saga (Comic)' })).not.toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Superman · Up next: #9' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Saga' })).not.toBeInTheDocument()
 
     await user.clear(input)
     await user.type(input, '1')
-    expect(screen.getByRole('option', { name: 'Saga (Comic)' })).toBeInTheDocument()
-    expect(screen.queryByRole('option', { name: 'Superman (Comic) · Up next: #5' })).not.toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Saga' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Superman · Up next: #5' })).not.toBeInTheDocument()
   })
 
   it('exposes exactly one selected option, matching aria-activedescendant', async () => {
@@ -134,11 +134,11 @@ describe('ManualPickerSearch', () => {
 
     expect(selected).toHaveLength(1)
     expect(input).toHaveAttribute('aria-activedescendant', selected[0].id)
-    expect(screen.getByRole('option', { name: 'Superman (Comic) · Up next: #5' })).toHaveAttribute(
+    expect(screen.getByRole('option', { name: 'Superman · Up next: #5' })).toHaveAttribute(
       'aria-selected',
       'true',
     )
-    expect(screen.getByRole('option', { name: 'Saga (Comic)' })).toHaveAttribute(
+    expect(screen.getByRole('option', { name: 'Saga' })).toHaveAttribute(
       'aria-selected',
       'false',
     )
@@ -155,7 +155,7 @@ describe('ManualPickerSearch', () => {
     expect(screen.getByTestId('picked-value')).toHaveTextContent('2')
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
     expect(screen.getByTestId('manual-picker-selection')).toHaveTextContent(
-      'Selected: Superman (Comic) · Up next: #5',
+      'Selected: Superman · Up next: #5',
     )
   })
 
@@ -182,12 +182,12 @@ describe('ManualPickerSearch', () => {
 
     const input = screen.getByRole('combobox')
     await user.type(input, 'saga')
-    expect(screen.getByRole('option', { name: 'Saga (Comic)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Saga' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Clear search' }))
     expect(input).toHaveValue('')
-    expect(screen.getByRole('option', { name: 'Saga (Comic)' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Superman (Comic) · Up next: #5' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Saga' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Superman · Up next: #5' })).toBeInTheDocument()
   })
 
   it('keeps the highlighted option in view as arrow keys move past the visible rows', async () => {
@@ -271,11 +271,11 @@ describe('ManualPickerSearch', () => {
     const input = screen.getByRole('combobox')
     await user.click(input)
     await user.keyboard('{ArrowDown}')
-    const secondId = screen.getByRole('option', { name: 'Superman (Comic) · Up next: #5' }).id
+    const secondId = screen.getByRole('option', { name: 'Superman · Up next: #5' }).id
     expect(input).toHaveAttribute('aria-activedescendant', secondId)
 
     await user.keyboard('{ArrowUp}')
-    const firstId = screen.getByRole('option', { name: 'Saga (Comic)' }).id
+    const firstId = screen.getByRole('option', { name: 'Saga' }).id
     expect(input).toHaveAttribute('aria-activedescendant', firstId)
 
     // Zero matches must not leave a dangling active option or throw.
@@ -317,7 +317,7 @@ describe('ManualPickerSearch', () => {
       <ManualPickerSearch
         activeOptions={[{
           id: 1,
-          label: 'Saga (Comic)',
+          label: 'Saga',
           threadTitle: 'Saga',
           coverImageUrl: 'https://example.test/saga-series.jpg',
         }]}
@@ -326,7 +326,7 @@ describe('ManualPickerSearch', () => {
       />,
     )
     fireEvent.focus(screen.getByRole('combobox'))
-    expect(screen.getByRole('option', { name: 'Saga (Comic)' })).toBeVisible()
+    expect(screen.getByRole('option', { name: 'Saga' })).toBeVisible()
     expect(document.querySelector('[data-testid^="issue-card-trigger-"]')).toBeNull()
   })
 })

@@ -511,8 +511,8 @@ mod tests {
             .expect("disposable Postgres connection");
         conn.batch_execute(
             "INSERT INTO users (id, username) VALUES (1,'dependency-handler-owner');
-             INSERT INTO threads (id,title,format,issues_remaining,queue_position,status,user_id,created_at)
-             VALUES (11,'Alpha','comic',0,1,'active',1,NOW()),(12,'Beta','comic',0,2,'active',1,NOW());
+             INSERT INTO threads (id, title, issues_remaining, queue_position, status, user_id, created_at)
+             VALUES (11, 'Alpha', 0, 1, 'active', 1, NOW()),(12, 'Beta', 0, 2, 'active', 1, NOW());
              INSERT INTO issues (id,thread_id,issue_number,status,created_at,position)
              VALUES (101,11,'1','unread',NOW(),1),(102,11,'2','unread',NOW(),2),
                     (201,12,'1','unread',NOW(),1),(202,12,'2','unread',NOW(),2);",
@@ -625,8 +625,8 @@ mod tests {
             .expect("disposable Postgres connection");
         conn.batch_execute(
             "INSERT INTO users (id, username) VALUES (1,'thread-deps-owner');
-             INSERT INTO threads (id,title,format,issues_remaining,queue_position,status,user_id,created_at)
-             VALUES (21,'Alpha','comic',0,1,'active',1,NOW()),(22,'Beta','comic',0,2,'active',1,NOW());
+             INSERT INTO threads (id, title, issues_remaining, queue_position, status, user_id, created_at)
+             VALUES (21, 'Alpha', 0, 1, 'active', 1, NOW()),(22, 'Beta', 0, 2, 'active', 1, NOW());
              INSERT INTO issues (id,thread_id,issue_number,status,created_at,position)
              VALUES (301,21,'1','unread',NOW(),1),(401,22,'1','unread',NOW(),1);
              INSERT INTO dependencies (source_issue_id,target_issue_id,origin,classification,note,created_at)

@@ -266,7 +266,6 @@ it('updates the Next issue title immediately after a same-tab rename and rename 
   const currentThread = () => ({
     id: 1,
     title: currentTitle,
-    format: 'Comics',
     issues_remaining: 1,
     queue_position: 1,
     status: 'active',
@@ -320,7 +319,6 @@ it('refreshes the Next issue title on tab visibility and focus after another-tab
     async () => ({
       id: 1,
       title: currentTitle,
-      format: 'Comics',
       issues_remaining: 1,
       queue_position: 1,
       status: 'active',

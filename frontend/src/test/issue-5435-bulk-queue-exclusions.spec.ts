@@ -39,13 +39,11 @@ test.describe('Issue 5435: bulk queue exclusions for reading containers', () => 
     const page = authenticatedPage
     const alpha = await createThread(page, {
       title: 'Bulk Exclusion Alpha',
-      format: 'comic',
       issues_remaining: 1,
       total_issues: 1,
     })
     const beta = await createThread(page, {
       title: 'Bulk Exclusion Beta',
-      format: 'comic',
       issues_remaining: 1,
       total_issues: 1,
     })

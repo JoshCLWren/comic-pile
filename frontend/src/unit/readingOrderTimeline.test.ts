@@ -6,7 +6,6 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
   return {
     id: overrides.id ?? 1,
     title: overrides.title ?? 'Planetary',
-    format: overrides.format ?? 'Issues',
     issues_remaining: overrides.issues_remaining ?? 10,
     total_issues: overrides.total_issues !== undefined ? overrides.total_issues : 27,
     next_unread_issue_id: overrides.next_unread_issue_id ?? 1010,

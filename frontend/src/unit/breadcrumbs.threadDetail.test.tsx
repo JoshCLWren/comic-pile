@@ -88,7 +88,6 @@ beforeEach(() => {
   mockedThreadsApiGet.mockResolvedValue({
     id: 42,
     title: 'Saga',
-    format: 'Comics',
     issues_remaining: 5,
     queue_position: 1,
     status: 'active',

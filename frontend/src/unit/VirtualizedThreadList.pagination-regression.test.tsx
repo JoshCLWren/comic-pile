@@ -19,7 +19,6 @@ function createMockThread(id: number): ThreadListItem {
   return {
     id,
     title: `Thread ${id}`,
-    format: 'Comic',
     issues_remaining: 5,
     total_issues: 10,
     queue_position: id,

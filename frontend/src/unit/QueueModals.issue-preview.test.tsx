@@ -45,21 +45,6 @@ vi.mock('../contexts/useBugReportRestore', () => ({
   useBugReportRestore: () => restoreActionMocks,
 }))
 
-vi.mock('../pages/QueuePage/FormatSelect', () => ({
-  FormatSelect: ({
-    id,
-    value,
-    onChange,
-  }: {
-    id: string
-    value: string
-    onChange: (value: string) => void
-  }) => (
-    <select id={id} value={value} onChange={(event) => onChange(event.target.value)}>
-      <option value="Comic">Comic</option>
-    </select>
-  ),
-}))
 
 // The real preview hook reports create failures through the toast context;
 // the stub keeps the harness renderable without a ToastProvider.

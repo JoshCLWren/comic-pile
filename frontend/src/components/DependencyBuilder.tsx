@@ -558,7 +558,7 @@ export default function DependencyBuilder({
                     selectedThreadId === candidate.id ? 'bg-white/10 text-white' : 'text-stone-300'
                   }`}
                 >
-                  {candidate.title} <span className="text-xs text-stone-500">({candidate.format})</span>
+                  {candidate.title}
                 </button>
               ))}
             </div>

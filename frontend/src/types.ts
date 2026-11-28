@@ -25,7 +25,7 @@ export type AuthTokens = components['schemas']['TokenResponse']
  * frontend call sites. Keep incompatible ergonomic types handwritten until the
  * backend schema and frontend contract can be migrated together deliberately.
  */
-export type ThreadUpdatePayload = components['schemas']['ThreadUpdate']
+export type ThreadUpdatePayload = Omit<components['schemas']['ThreadUpdate'], 'format'>
 /** AIP-134 partial update body for `PATCH /api/v2/threads/{thread_id}`. */
 export type ThreadPatchPayload = import('./types/index').ThreadPatchPayload
 export type ReactivateThreadPayload = components['schemas']['ReactivateRequest']

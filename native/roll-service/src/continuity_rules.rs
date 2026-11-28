@@ -733,8 +733,8 @@ mod tests {
         connection
             .batch_execute(
                 "INSERT INTO users (id, username) VALUES (1001, 'continuity-rules-test');
-                 INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status)
-                 VALUES (2001, 1001, 'Continuity test', 'Comic', 2, 1, 'active');
+                 INSERT INTO threads (id, user_id, title, issues_remaining, queue_position, status)
+                 VALUES (2001, 1001, 'Continuity test', 2, 1, 'active');
                  INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
                  VALUES
                    (3001, 2001, '1', 'unread', NOW(), 1),

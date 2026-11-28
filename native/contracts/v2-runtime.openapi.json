@@ -8748,16 +8748,12 @@
         "required": [
           "id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position",
           "issues_read",
           "tags"
         ],
         "properties": {
-          "format": {
-            "type": "string"
-          },
           "id": {
             "type": "integer",
             "format": "int32"
@@ -9370,13 +9366,9 @@
         "required": [
           "id",
           "title",
-          "format",
           "tags"
         ],
         "properties": {
-          "format": {
-            "type": "string"
-          },
           "id": {
             "type": "integer",
             "format": "int32"
@@ -9804,8 +9796,7 @@
         "type": "object",
         "description": "Body of `POST /api/v1/threads/check-duplicates`.",
         "required": [
-          "title",
-          "format"
+          "title"
         ],
         "properties": {
           "comicvine_volume_id": {
@@ -9821,9 +9812,6 @@
               "null"
             ],
             "format": "int32"
-          },
-          "format": {
-            "type": "string"
           },
           "title": {
             "type": "string"
@@ -13199,7 +13187,6 @@
         "required": [
           "thread_id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position",
           "die_size",
@@ -13217,9 +13204,6 @@
               "string",
               "null"
             ]
-          },
-          "format": {
-            "type": "string"
           },
           "issue_id": {
             "type": [
@@ -16402,7 +16386,6 @@
         "required": [
           "thread_id",
           "title",
-          "format",
           "status",
           "issues_remaining",
           "match_type"
@@ -16414,9 +16397,6 @@
               "null"
             ],
             "format": "int64"
-          },
-          "format": {
-            "type": "string"
           },
           "issues_remaining": {
             "type": "integer",
@@ -19599,7 +19579,6 @@
         "required": [
           "thread_id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position",
           "die_size",
@@ -19617,9 +19596,6 @@
               "string",
               "null"
             ]
-          },
-          "format": {
-            "type": "string"
           },
           "issue_id": {
             "type": [
@@ -20072,15 +20048,11 @@
         "required": [
           "id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position",
           "tags"
         ],
         "properties": {
-          "format": {
-            "type": "string"
-          },
           "id": {
             "type": "integer",
             "format": "int32"
@@ -20936,13 +20908,9 @@
         "description": "Body of `POST /api/v1/threads/`.",
         "required": [
           "title",
-          "format",
           "issues_remaining"
         ],
         "properties": {
-          "format": {
-            "type": "string"
-          },
           "is_test": {
             "type": "boolean"
           },
@@ -21036,7 +21004,6 @@
         "required": [
           "id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position",
           "status",
@@ -21054,9 +21021,6 @@
             }
           },
           "created_at": {
-            "type": "string"
-          },
-          "format": {
             "type": "string"
           },
           "id": {
@@ -21206,7 +21170,6 @@
         "required": [
           "id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position",
           "status",
@@ -21234,9 +21197,6 @@
             ]
           },
           "created_at": {
-            "type": "string"
-          },
-          "format": {
             "type": "string"
           },
           "id": {
@@ -21360,13 +21320,6 @@
         "type": "object",
         "description": "Committed values a stale client read before issuing a Thread patch.",
         "properties": {
-          "format": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Format observed by the client."
-          },
           "manual_creator_credits": {
             "type": [
               "array",
@@ -21405,13 +21358,6 @@
                 "type": "null"
               }
             ]
-          },
-          "format": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "New format; normalized to the reader's canonical vocabulary."
           },
           "is_test": {
             "type": [
@@ -21524,7 +21470,6 @@
         "required": [
           "id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position",
           "status",
@@ -21542,9 +21487,6 @@
             }
           },
           "created_at": {
-            "type": "string"
-          },
-          "format": {
             "type": "string"
           },
           "id": {
@@ -21919,7 +21861,6 @@
         "required": [
           "thread_id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position",
           "die_size",
@@ -21938,9 +21879,6 @@
               "string",
               "null"
             ]
-          },
-          "format": {
-            "type": "string"
           },
           "issue_id": {
             "type": [

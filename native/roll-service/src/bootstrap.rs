@@ -46,7 +46,6 @@ pub struct BootstrapTag {
 pub struct BootstrapThreadSummary {
     pub id: i32,
     pub title: String,
-    pub format: String,
     pub last_activity_at: Option<String>,
     pub tags: Vec<BootstrapTag>,
 }
@@ -130,7 +129,6 @@ pub struct BootstrapBandwidth {
 pub struct BootstrapActiveThread {
     pub id: i32,
     pub title: String,
-    pub format: String,
     pub issues_remaining: i32,
     pub queue_position: i32,
     pub last_rolled_result: Option<i32>,
@@ -216,12 +214,10 @@ pub struct ReadingSessionCreatedResponse {
 fn thread_value(row: &tokio_postgres::Row) -> Result<BootstrapThreadSummary, ApiError> {
     let id: i32 = row.try_get(0).map_err(db::query_error)?;
     let title: String = row.try_get(1).map_err(db::query_error)?;
-    let format: String = row.try_get(2).map_err(db::query_error)?;
-    let last_activity_at: Option<String> = row.try_get(3).map_err(db::query_error)?;
+    let last_activity_at: Option<String> = row.try_get(2).map_err(db::query_error)?;
     Ok(BootstrapThreadSummary {
         id,
         title,
-        format,
         last_activity_at,
         tags: Vec::new(),
     })
@@ -300,21 +296,21 @@ fn extract_cover_source(metadata: &Value) -> Option<&str> {
 
 fn candidate_item(row: &tokio_postgres::Row) -> Result<(i32, BootstrapRollableItem), ApiError> {
     let thread_id: i32 = row.try_get(0).map_err(db::query_error)?;
-    let issue_id: i32 = row.try_get(4).map_err(db::query_error)?;
-    let issue_number: String = row.try_get(5).map_err(db::query_error)?;
-    let metadata: Option<String> = row.try_get(6).map_err(db::query_error)?;
-    let mapping_status: Option<String> = row.try_get(7).map_err(db::query_error)?;
-    let _series_mapping_status: Option<String> = row.try_get(8).map_err(db::query_error)?;
-    let read_count: i64 = row.try_get(9).map_err(db::query_error)?;
-    let issue_count: i64 = row.try_get(10).map_err(db::query_error)?;
-    let latest_rating: Option<f64> = row.try_get(11).map_err(db::query_error)?;
-    let average_rating: Option<f64> = row.try_get(12).map_err(db::query_error)?;
-    let rating_count: i64 = row.try_get(13).map_err(db::query_error)?;
-    let routes: Vec<String> = row.try_get(14).map_err(db::query_error)?;
-    let issue_confirmed: i64 = row.try_get(15).map_err(db::query_error)?;
-    let issue_candidates: i64 = row.try_get(16).map_err(db::query_error)?;
-    let series_confirmed: i64 = row.try_get(17).map_err(db::query_error)?;
-    let series_candidates: i64 = row.try_get(18).map_err(db::query_error)?;
+    let issue_id: i32 = row.try_get(3).map_err(db::query_error)?;
+    let issue_number: String = row.try_get(4).map_err(db::query_error)?;
+    let metadata: Option<String> = row.try_get(5).map_err(db::query_error)?;
+    let mapping_status: Option<String> = row.try_get(6).map_err(db::query_error)?;
+    let _series_mapping_status: Option<String> = row.try_get(7).map_err(db::query_error)?;
+    let read_count: i64 = row.try_get(8).map_err(db::query_error)?;
+    let issue_count: i64 = row.try_get(9).map_err(db::query_error)?;
+    let latest_rating: Option<f64> = row.try_get(10).map_err(db::query_error)?;
+    let average_rating: Option<f64> = row.try_get(11).map_err(db::query_error)?;
+    let rating_count: i64 = row.try_get(12).map_err(db::query_error)?;
+    let routes: Vec<String> = row.try_get(13).map_err(db::query_error)?;
+    let issue_confirmed: i64 = row.try_get(14).map_err(db::query_error)?;
+    let issue_candidates: i64 = row.try_get(15).map_err(db::query_error)?;
+    let series_confirmed: i64 = row.try_get(16).map_err(db::query_error)?;
+    let series_candidates: i64 = row.try_get(17).map_err(db::query_error)?;
     let meta: Value = metadata
         .as_deref()
         .and_then(|m| serde_json::from_str(m).ok())
@@ -385,7 +381,7 @@ fn candidate_item(row: &tokio_postgres::Row) -> Result<(i32, BootstrapRollableIt
 }
 
 const CANDIDATES: &str = r#"
-SELECT t.id, t.title, t.format, t.last_activity_at::text, i.id, i.issue_number,
+SELECT t.id, t.title, t.last_activity_at::text, i.id, i.issue_number,
  mapping.metadata::text, mapping.status, series_mapping.status,
  (SELECT count(*) FROM issues owned WHERE owned.thread_id=t.id AND owned.status='read' AND owned.merged_into_issue_id IS NULL),
  (SELECT count(*) FROM issues owned WHERE owned.thread_id=t.id AND owned.merged_into_issue_id IS NULL),
@@ -501,7 +497,7 @@ async fn current_active_thread(
     // `queue_position` (issue #5263).
     let position = crate::threads::display_position_expr("$3", "$1", "$4", "$5");
     let sql = format!(
-        "SELECT t.id,t.title,t.format,t.issues_remaining,t.queue_position,
+        "SELECT t.id,t.title,t.issues_remaining,t.queue_position,
                t.total_issues,t.reading_progress,t.last_rating,t.next_unread_issue_id,
                i.issue_number,
                NULLIF(BTRIM(i.issue_number_alias), '') AS issue_number_alias,
@@ -536,22 +532,21 @@ async fn current_active_thread(
         .ok_or_else(|| ApiError::Internal("Invalid native Roll response".to_string()))?;
     let id: i32 = row.try_get(0).map_err(db::query_error)?;
     let title: String = row.try_get(1).map_err(db::query_error)?;
-    let format: String = row.try_get(2).map_err(db::query_error)?;
-    let issues_remaining: i32 = row.try_get(3).map_err(db::query_error)?;
+    let issues_remaining: i32 = row.try_get(2).map_err(db::query_error)?;
     // SQL NULL means the thread is outside the active queue; fall back to the
     // stored value instead of panicking on a NULL -> i32 read.
-    let computed_position: Option<i32> = row.try_get(14).map_err(db::query_error)?;
-    let stored_position: i32 = row.try_get(4).map_err(db::query_error)?;
+    let computed_position: Option<i32> = row.try_get(13).map_err(db::query_error)?;
+    let stored_position: i32 = row.try_get(3).map_err(db::query_error)?;
     let queue_position = computed_position.unwrap_or(stored_position);
-    let total_issues: Option<i32> = row.try_get(5).map_err(db::query_error)?;
-    let reading_progress: Option<String> = row.try_get(6).map_err(db::query_error)?;
-    let last_rating: Option<f64> = row.try_get(7).map_err(db::query_error)?;
-    let next_issue_id: Option<i32> = row.try_get(8).map_err(db::query_error)?;
-    let next_issue_number: Option<String> = row.try_get(9).map_err(db::query_error)?;
-    let issue_number_alias: Option<String> = row.try_get(10).map_err(db::query_error)?;
-    let provider_issue_number: Option<String> = row.try_get(11).map_err(db::query_error)?;
-    let issues_read: i32 = row.try_get(12).map_err(db::query_error)?;
-    let last_rolled_result: Option<i32> = row.try_get(13).map_err(db::query_error)?;
+    let total_issues: Option<i32> = row.try_get(4).map_err(db::query_error)?;
+    let reading_progress: Option<String> = row.try_get(5).map_err(db::query_error)?;
+    let last_rating: Option<f64> = row.try_get(6).map_err(db::query_error)?;
+    let next_issue_id: Option<i32> = row.try_get(7).map_err(db::query_error)?;
+    let next_issue_number: Option<String> = row.try_get(8).map_err(db::query_error)?;
+    let issue_number_alias: Option<String> = row.try_get(9).map_err(db::query_error)?;
+    let provider_issue_number: Option<String> = row.try_get(10).map_err(db::query_error)?;
+    let issues_read: i32 = row.try_get(11).map_err(db::query_error)?;
+    let last_rolled_result: Option<i32> = row.try_get(12).map_err(db::query_error)?;
     let tag_rows = conn
         .query(
             "SELECT row_to_json(tag)::text FROM tag_assignments assignment
@@ -579,7 +574,6 @@ async fn current_active_thread(
     Ok(Some(BootstrapActiveThread {
         id,
         title,
-        format,
         issues_remaining,
         queue_position,
         last_rolled_result,
@@ -1147,7 +1141,7 @@ pub async fn bootstrap_v2(
         Vec::new()
     } else {
         conn.query(
-            "SELECT id,title,format,last_activity_at::text FROM threads
+            "SELECT id,title,last_activity_at::text FROM threads
              WHERE user_id=$1 AND id=ANY($2::int[])",
             &[&user.id(), &display_ids],
         )
@@ -1491,10 +1485,9 @@ mod cover_source_tests {
             .batch_execute(
                 r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
                  INSERT INTO threads
-                     (id, user_id, title, format, issues_remaining, status,
-                      queue_position, last_activity_at)
-                 VALUES (10, 1, 'First', 'Comic', 1, 'active', 1, NULL),
-                        (20, 1, 'Second', 'Comic', 1, 'active', 2, NULL);
+                     (id, user_id, title, issues_remaining, status, queue_position, last_activity_at)
+                 VALUES (10, 1, 'First', 1, 'active', 1, NULL),
+                        (20, 1, 'Second', 1, 'active', 2, NULL);
                  INSERT INTO sessions (id, user_id, started_at, start_die)
                  VALUES (1, 1, NOW() - interval '1 hour', 6);
                  INSERT INTO events (thread_id, type, timestamp, context)
@@ -1581,12 +1574,11 @@ mod pool_parity_tests {
             .batch_execute(
                 r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
                  INSERT INTO threads
-                     (id, user_id, title, format, issues_remaining, status,
-                      queue_position, last_activity_at)
+                     (id, user_id, title, issues_remaining, status, queue_position, last_activity_at)
                  SELECT id, 1, 'Thread ' || id, 'Comic', 1, 'active', id, NULL
                  FROM generate_series(1, 12) AS id;
                  INSERT INTO sessions (id, user_id, started_at, start_die)
-                 VALUES (1, 1, now() - interval '1 day', 6);
+                 VALUES (1, 1, now() - interval '1 day');
                  INSERT INTO events (thread_id, type, timestamp)
                  VALUES (2, 'snooze', now());"#,
             )

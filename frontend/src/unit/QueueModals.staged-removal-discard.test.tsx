@@ -44,7 +44,6 @@ const mockedDelete = vi.mocked(issuesApi.delete)
 const EDITING_THREAD = {
   id: 99,
   title: 'Detective Comics',
-  format: 'Comic',
   notes: null,
   issues_remaining: 1,
   total_issues: 4,

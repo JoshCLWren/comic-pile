@@ -45,7 +45,6 @@ pub struct RollOfferRequest {
 pub struct RollOfferResponse {
     pub thread_id: i32,
     pub title: String,
-    pub format: String,
     pub issues_remaining: i32,
     pub queue_position: i32,
     pub die_size: i32,
@@ -102,7 +101,6 @@ fn cookie_exclusions(snoozed: &[i32], eligible: &HashSet<i32>) -> HashSet<i32> {
 struct OfferMetadata {
     thread_id: i32,
     title: String,
-    format: String,
     issues_remaining: i32,
     queue_position: i32,
     total_issues: Option<i32>,
@@ -124,7 +122,7 @@ async fn offer_metadata(
     // the Queue list and Thread Detail, not the raw stored `queue_position`.
     let position = crate::threads::display_position_expr("$2", "$1", "$3", "$4");
     let sql = format!(
-        "SELECT t.id,t.title,t.format,t.issues_remaining,t.queue_position,
+        "SELECT t.id,t.title,t.issues_remaining,t.queue_position,
                 t.total_issues,t.reading_progress,
                 {position} AS computed_position,
                 t.next_unread_issue_id,
@@ -140,18 +138,17 @@ async fn offer_metadata(
         .ok_or_else(|| ApiError::Internal("Roll offer unavailable".to_string()))?;
     // SQL NULL means the thread is outside the active queue; fall back to the
     // stored value instead of panicking on a NULL -> i32 read.
-    let computed_position: Option<i32> = row.try_get(7).map_err(db::query_error)?;
-    let stored_position: i32 = row.try_get(4).map_err(db::query_error)?;
+    let computed_position: Option<i32> = row.try_get(6).map_err(db::query_error)?;
+    let stored_position: i32 = row.try_get(3).map_err(db::query_error)?;
     Ok(OfferMetadata {
         thread_id: row.try_get(0).map_err(db::query_error)?,
         title: row.try_get(1).map_err(db::query_error)?,
-        format: row.try_get(2).map_err(db::query_error)?,
-        issues_remaining: row.try_get(3).map_err(db::query_error)?,
+        issues_remaining: row.try_get(2).map_err(db::query_error)?,
         queue_position: computed_position.unwrap_or(stored_position),
-        total_issues: row.try_get(5).map_err(db::query_error)?,
-        reading_progress: row.try_get(6).map_err(db::query_error)?,
-        next_unread_issue_id: row.try_get(8).map_err(db::query_error)?,
-        next_unread_issue_number: row.try_get(9).map_err(db::query_error)?,
+        total_issues: row.try_get(4).map_err(db::query_error)?,
+        reading_progress: row.try_get(5).map_err(db::query_error)?,
+        next_unread_issue_id: row.try_get(7).map_err(db::query_error)?,
+        next_unread_issue_number: row.try_get(8).map_err(db::query_error)?,
     })
 }
 
@@ -166,7 +163,6 @@ fn response(
     RollOfferResponse {
         thread_id: metadata.thread_id,
         title: metadata.title,
-        format: metadata.format,
         issues_remaining: metadata.issues_remaining,
         queue_position: metadata.queue_position,
         die_size: die,
@@ -532,7 +528,6 @@ pub struct UnsnoozeRequest {
 pub struct UnsnoozeResponse {
     pub thread_id: i32,
     pub title: String,
-    pub format: String,
     pub issues_remaining: i32,
     pub queue_position: i32,
     pub die_size: i32,
@@ -712,7 +707,6 @@ pub async fn unsnooze(
     Ok(Json(UnsnoozeResponse {
         thread_id: metadata.thread_id,
         title: metadata.title,
-        format: metadata.format,
         issues_remaining: metadata.issues_remaining,
         queue_position: metadata.queue_position,
         die_size,
@@ -944,9 +938,8 @@ mod tests {
             &url,
             r#"INSERT INTO users (id, username) VALUES (1, 'reader-1'), (2, 'reader-2');
                  INSERT INTO threads
-                     (id, user_id, title, format, issues_remaining, status,
-                      queue_position, total_issues, reading_progress)
-                 VALUES (10, 1, 'Saga', 'Comic', 3, 'active', 1, 12, '25%');
+                     (id, user_id, title, issues_remaining, status, queue_position, total_issues, reading_progress)
+                 VALUES (10, 1, 'Saga', 3, 'active', 1, 12, '25%');
                  INSERT INTO issues
                      (id, thread_id, issue_number, status, created_at, position)
                  VALUES (100, 10, '1', 'unread', now(), 1);
@@ -994,10 +987,10 @@ mod tests {
             &url,
             r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
                  INSERT INTO threads
-                     (id, user_id, title, format, issues_remaining, status, queue_position)
-                 VALUES (10, 1, 'Late', 'Comic', 0, 'active', 30),
-                        (11, 1, 'Early', 'Comic', 0, 'active', 10),
-                        (12, 1, 'Middle', 'Comic', 0, 'active', 20);"#,
+                     (id, user_id, title, issues_remaining, status, queue_position)
+                 VALUES (10, 1, 'Late', 0, 'active', 30),
+                        (11, 1, 'Early', 0, 'active', 10),
+                        (12, 1, 'Middle', 0, 'active', 20);"#,
         )
         .await;
         let owner = AuthenticatedUser::for_test(1);
@@ -1028,8 +1021,8 @@ mod tests {
             r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
                  INSERT INTO sessions (id, user_id, start_die) VALUES (1, 1, 6);
                  INSERT INTO threads
-                     (id, user_id, title, format, issues_remaining, status, queue_position)
-                 VALUES (10, 1, 'First', 'Comic', 1, 'active', 1);
+                     (id, user_id, title, issues_remaining, status, queue_position)
+                 VALUES (10, 1, 'First', 1, 'active', 1);
                  INSERT INTO issues
                      (id, thread_id, issue_number, status, created_at, position)
                  VALUES (100, 10, '1', 'unread', now(), 1);"#,
@@ -1072,8 +1065,8 @@ mod tests {
             r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
                  INSERT INTO sessions (id, user_id, start_die) VALUES (1, 1, 6);
                  INSERT INTO threads
-                     (id, user_id, title, format, issues_remaining, status, queue_position)
-                 VALUES (10, 1, 'First', 'Comic', 1, 'active', 1);
+                     (id, user_id, title, issues_remaining, status, queue_position)
+                 VALUES (10, 1, 'First', 1, 'active', 1);
                  INSERT INTO issues
                      (id, thread_id, issue_number, status, created_at, position)
                  VALUES (100, 10, '1', 'unread', now(), 1);"#,
@@ -1172,8 +1165,8 @@ mod tests {
             .batch_execute(
                 r#"INSERT INTO users (id, username) VALUES (1, 'route-reader');
                  INSERT INTO threads
-                     (id, user_id, title, format, issues_remaining, status, queue_position)
-                 VALUES (8, 1, 'Eight', 'Comic', 1, 'active', 1);
+                     (id, user_id, title, issues_remaining, status, queue_position)
+                 VALUES (8, 1, 'Eight', 1, 'active', 1);
                  INSERT INTO issues
                      (id, thread_id, issue_number, status, created_at, position)
                  VALUES (80, 8, '1', 'unread', now(), 1);

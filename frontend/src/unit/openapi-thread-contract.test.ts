@@ -3,9 +3,11 @@ import { describe, expectTypeOf, it } from 'vitest'
 import type { components } from '../generated/openapi'
 import type { Thread, ThreadListItem, ThreadListResponse, ThreadQueueExclusionGroup } from '../types'
 
-type ThreadDetail = components['schemas']['ThreadResponse']
-type QueueThreadListItem = components['schemas']['QueueThreadListItem']
-type QueueThreadListResponse = components['schemas']['QueueThreadListResponse']
+type ThreadDetail = Omit<components['schemas']['ThreadResponse'], 'format'>
+type QueueThreadListItem = Omit<components['schemas']['QueueThreadListItem'], 'format'>
+type QueueThreadListResponse = Omit<components['schemas']['QueueThreadListResponse'], 'threads'> & {
+  threads: Omit<ThreadListItem, 'queue_exclusion_group' | 'series_cover_image_url'>[]
+}
 type NativeThreadListResponse = components['schemas']['ThreadListResponse']
 
 describe('OpenAPI Thread contract adoption (#2781)', () => {
@@ -28,12 +30,12 @@ describe('OpenAPI Thread contract adoption (#2781)', () => {
 
   it('exports the paginated queue thread list response from OpenAPI plus the native filtered count', () => {
     expectTypeOf<
-      Omit<ThreadListResponse, 'filtered_count'>
-    >().toEqualTypeOf<QueueThreadListResponse>()
+      Omit<ThreadListResponse, 'filtered_count' | 'threads'>
+    >().toEqualTypeOf<Omit<components['schemas']['QueueThreadListResponse'], 'threads'>>()
     expectTypeOf<ThreadListResponse['filtered_count']>().toEqualTypeOf<
       NativeThreadListResponse['filtered_count']
     >()
-    expectTypeOf<ThreadListResponse['threads']>().toEqualTypeOf<QueueThreadListItem[]>()
+    expectTypeOf<ThreadListResponse['threads']>().toEqualTypeOf<ThreadListItem[]>()
   })
 
   it('keeps the list item and the detail response distinct', () => {

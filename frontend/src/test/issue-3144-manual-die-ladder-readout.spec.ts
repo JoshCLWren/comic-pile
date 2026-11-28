@@ -45,7 +45,6 @@ test.describe('Decision card die readout with a pinned die (#3144)', () => {
     const threadTitle = 'Manual Die Readout Thread'
     await createThread(page, {
       title: threadTitle,
-      format: 'Issue',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -79,7 +78,6 @@ test.describe('Decision card die readout with a pinned die (#3144)', () => {
     const threadTitle = 'Automatic Die Readout Thread'
     await createThread(page, {
       title: threadTitle,
-      format: 'Issue',
       issues_remaining: 3,
       total_issues: 3,
     })

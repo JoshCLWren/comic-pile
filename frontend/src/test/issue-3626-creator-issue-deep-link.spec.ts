@@ -156,7 +156,6 @@ test.describe('Issue #3626: creator issue deep links', () => {
     await page.setViewportSize({ width: 1280, height: 720 })
     const hellboy = await createThread(page, {
       title: 'Hellboy Deep Link',
-      format: 'Issue',
       issues_remaining: 120,
       total_issues: 120,
     })
@@ -217,7 +216,6 @@ test.describe('Issue #3626: creator issue deep links', () => {
   }) => {
     const hellboy = await createThread(page, {
       title: 'Hellboy Rated Row',
-      format: 'Issue',
       issues_remaining: 120,
       total_issues: 120,
     })
@@ -271,13 +269,11 @@ test.describe('Issue #3626: creator issue deep links', () => {
   }) => {
     const first = await createThread(page, {
       title: 'Hellboy Alpha',
-      format: 'Issue',
       issues_remaining: 3,
       total_issues: 3,
     })
     const second = await createThread(page, {
       title: 'Hellboy Beta',
-      format: 'Issue',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -300,7 +296,6 @@ test.describe('Issue #3626: creator issue deep links', () => {
   }) => {
     const thread = await createThread(page, {
       title: 'Hellboy History',
-      format: 'Issue',
       issues_remaining: 12,
       total_issues: 12,
     })
@@ -335,7 +330,6 @@ test.describe('Issue #3626: creator issue deep links', () => {
   }) => {
     const thread = await createThread(page, {
       title: 'Hellboy Missing Target',
-      format: 'Issue',
       issues_remaining: 3,
       total_issues: 3,
     })

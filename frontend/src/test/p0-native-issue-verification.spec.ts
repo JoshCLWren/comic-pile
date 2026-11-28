@@ -43,7 +43,6 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     // Create a thread with issues
     await createThread(page, {
       title: 'Native Patch Verification Thread',
-      format: 'Comic',
       issues_remaining: 2,
       total_issues: 2,
     })
@@ -162,7 +161,6 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     // Create multiple threads
     await createThread(page, {
       title: 'Roll Offer Rating Thread',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -202,7 +200,6 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
 
     const thread = await createThread(page, {
       title: 'Idempotency Retry Thread',
-      format: 'Issue',
       issues_remaining: 1,
       total_issues: 1,
     })
@@ -293,7 +290,6 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
 
     await createThread(page, {
       title: 'Schema Compliance Thread',
-      format: 'Comic',
       issues_remaining: 1,
       total_issues: 1,
     })

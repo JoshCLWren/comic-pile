@@ -27,7 +27,6 @@ export function adaptNativeV2Rate(native: IssueReadRateResponse): RateResponsePa
     // ThreadResponse fields from native thread progress
     id: thread.thread_id,
     title: issue.thread_title,
-    format: '', // Not in native thread progress, but required by Python shape
     issues_remaining: thread.issues_remaining,
     queue_position: 0, // Not in native thread progress
     status: thread.status,

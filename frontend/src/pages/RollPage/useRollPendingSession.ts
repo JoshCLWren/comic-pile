@@ -49,7 +49,6 @@ export function useRollPendingSession({ state, bootstrap, rollPool }: UseRollPen
         ? {
             id: bootstrap.active_thread.id,
             title: bootstrap.active_thread.title,
-            format: bootstrap.active_thread.format,
             issues_remaining: bootstrap.active_thread.issues_remaining ?? 0,
             queue_position: bootstrap.active_thread.queue_position ?? 0,
             total_issues: bootstrap.active_thread.total_issues ?? null,
@@ -80,7 +79,6 @@ export function useRollPendingSession({ state, bootstrap, rollPool }: UseRollPen
       setActiveRatingThread({
         id: pendingMetadata.id ?? pendingId,
         title: pendingMetadata.title,
-        format: pendingMetadata.format ?? '',
         issues_remaining: pendingMetadata.issues_remaining ?? 0,
         queue_position: pendingMetadata.queue_position ?? 0,
         total_issues: pendingMetadata.total_issues ?? null,

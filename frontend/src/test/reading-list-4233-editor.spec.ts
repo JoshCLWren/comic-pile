@@ -28,7 +28,7 @@ test.describe('Reading List editor 4233', () => {
       `RL4233 Delta ${suffix}`,
     ]
     for (const title of names) {
-      await createThread(page, { title, format: 'Comics', issues_remaining: 1, total_issues: 1 })
+      await createThread(page, { title,issues_remaining: 1, total_issues: 1 })
     }
     await createReadingPlan(page, `RL4233 Plan ${suffix}`)
     const builder = page.locator('section[aria-labelledby="custom-cbl-heading"]')
@@ -63,7 +63,7 @@ test.describe('Reading List editor 4233', () => {
     await expect(builder.getByText(/Next added issue will be inserted before position 3/)).toBeVisible()
 
     const insertTitle = `RL4233 Inserted ${suffix}`
-    await createThread(page, { title: insertTitle, format: 'Comics', issues_remaining: 1, total_issues: 1 })
+    await createThread(page, { title: insertTitle,issues_remaining: 1, total_issues: 1 })
     await page.getByLabel('Search issues for custom CBL').fill(insertTitle)
     await page.getByRole('button', { name: 'Find issues' }).click()
     await page.getByRole('button', { name: new RegExp(`${insertTitle} #1`) }).click()

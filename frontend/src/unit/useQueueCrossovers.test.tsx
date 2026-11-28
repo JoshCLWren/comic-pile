@@ -25,7 +25,6 @@ function thread(id: number): ThreadListItem {
   return {
     id,
     title: `Series ${id}`,
-    format: 'Comic',
     status: 'active',
     queue_position: id,
     issues_remaining: 3,

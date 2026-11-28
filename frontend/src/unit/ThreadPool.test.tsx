@@ -9,14 +9,14 @@ const mockPool: RollBootstrapThread[] = [
   {
     id: 1,
     title: 'The Amazing Spider-Man',
-    format: 'Mainline',
+
     issue_number: '1',
     route_labels: ['Main Story'],
   },
   {
     id: 2,
     title: 'Batman',
-    format: 'DC',
+
     issue_number: '1',
     route_labels: ['Main Story'],
   },
@@ -115,7 +115,7 @@ describe('ThreadPool Component', () => {
         {
           id: 11,
           title: 'Amazing Spider-Man',
-          format: 'Mainline',
+
           route_labels: [],
           tags: [
             {
@@ -130,7 +130,7 @@ describe('ThreadPool Component', () => {
             },
           ],
         },
-        { id: 12, title: 'Batman', format: 'DC', route_labels: [] },
+        { id: 12, title: 'Batman',route_labels: [] },
       ],
     })
 
@@ -152,7 +152,7 @@ describe('ThreadPool Component', () => {
         {
           id: 11,
           title: 'Amazing Spider-Man',
-          format: 'Mainline',
+
           route_labels: [],
           tags: [
             {
@@ -229,7 +229,7 @@ describe('ThreadPool Component', () => {
     renderPool({
       pool: [],
       emptyPoolReason: 'all_completed',
-      snoozedThreads: [{ id: 2, title: 'Paused', format: 'Comic' }],
+      snoozedThreads: [{ id: 2, title: 'Paused',}],
     })
 
     expect(screen.getByText(/every series is completed/i)).toBeInTheDocument()

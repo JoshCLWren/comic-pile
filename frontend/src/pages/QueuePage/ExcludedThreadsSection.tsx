@@ -132,9 +132,6 @@ export default function ExcludedThreadsSection({
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-black text-[var(--theme-text-primary)] truncate">{thread.title}</p>
-                      <p className="text-[8px] font-black text-[var(--theme-text-muted)] uppercase tracking-widest">
-                        {thread.format}
-                      </p>
                     </div>
                     <button
                       type="button"
@@ -166,9 +163,6 @@ export default function ExcludedThreadsSection({
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-black text-[var(--theme-text-primary)] truncate">{thread.title}</p>
-                      <p className="text-[8px] font-black text-[var(--theme-text-muted)] uppercase tracking-widest">
-                        {thread.format}
-                      </p>
                     </div>
                     <button
                       type="button"

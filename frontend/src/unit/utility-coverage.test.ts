@@ -18,7 +18,7 @@ const issue = (id: number, status: 'read' | 'unread' = 'unread'): Issue => ({
 })
 
 const thread = (id: number): Thread => ({
-  id, title: `Thread ${id}`, format: 'Comics', issues_remaining: 2, total_issues: 4,
+  id, title: `Thread ${id}`,issues_remaining: 2, total_issues: 4,
   next_unread_issue_id: null, queue_position: id, status: 'active',
   is_blocked: id === 2, blocking_reasons: [], created_at: '2024-01-01', reading_progress: '50',
   last_activity_at: null, last_rating: null, notes: null, is_test: false,
@@ -144,7 +144,7 @@ describe('roll utilities', () => {
   it('maps metadata fallback branches and progress values', () => {
     const session = { ...thread(4), issue_id: 7, issue_number: '7', next_issue_id: 8, next_issue_number: '8', last_rolled_result: 5 }
     expect(mapSessionThreadToRatingThread(session).id).toBe(4)
-    expect(buildRatingThread(3, 6, { title: 'Meta', id: 9, format: 'Manga', result: 4 })?.id).toBe(9)
+    expect(buildRatingThread(3, 6, { title: 'Meta', id: 9,result: 4 })?.id).toBe(9)
     expect(buildRatingThread(null, null, null, session)?.title).toBe('Thread 4')
     expect(buildRatingThread(4, null, null, session)?.id).toBe(4)
     expect(buildRatingThread(9, null, null, session)).toBeNull()
@@ -280,9 +280,9 @@ describe('nullish operand branches', () => {
     // L31 `metadata.id ?? metadata.thread_id ?? Number(threadId)` — both metadata ids nullish
     // SAFETY: the rating helper reads only the thread fields the assertion checks
     expect(buildRatingThread(7, null, { title: 'Meta', id: undefined, thread_id: undefined } as never)?.id).toBe(7)
-    // L33 `metadata.format ?? sessionThread?.format ?? ''` — metadata.format and sessionThread both nullish
+    // L31 `issues_remaining ?? 0` — metadata and sessionThread both omit the count
     // SAFETY: the rating helper reads only the thread fields the assertion checks
-    expect(buildRatingThread(7, null, { title: 'Meta', format: undefined } as never)?.format).toBe('')
+    expect(buildRatingThread(7, null, { title: 'Meta', issues_remaining: undefined } as never)?.issues_remaining).toBe(0)
     // L61 `issues_remaining || 0` — issues_remaining falsy (0)
     expect(getProgressPercentage({ total_issues: 4, issues_remaining: 0 })).toBe(100)
     // L67 `if (!layer) return` — explosion layer absent

@@ -39,13 +39,11 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
     const page = authenticatedPage
     const primary = await createThread(page, {
       title: 'Snooze Me Thread',
-      format: 'Issue',
       issues_remaining: 3,
       total_issues: 3,
     })
     const replacement = await createThread(page, {
       title: 'Snooze Replacement Thread',
-      format: 'Issue',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -74,13 +72,11 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
     const page = authenticatedPage
     const primary = await createThread(page, {
       title: 'Queue Snooze Thread',
-      format: 'Issue',
       issues_remaining: 3,
       total_issues: 3,
     })
     const replacement = await createThread(page, {
       title: 'Queue Snooze Replacement',
-      format: 'Issue',
       issues_remaining: 3,
       total_issues: 3,
     })
@@ -118,13 +114,11 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
     const ledger = startRequestLedger(page)
     const primary = await createThread(page, {
       title: 'Single Owner Snooze Thread',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })
     const replacement = await createThread(page, {
       title: 'Replacement Offer Thread',
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })

@@ -23,7 +23,6 @@ test('manual picker keyboard scroll brings highlighted option into view with ove
   for (let i = 0; i < seriesCount; i += 1) {
     await createThread(page, {
       title: `Overflow Series ${i + 1}`,
-      format: 'Issue',
       issues_remaining: 5,
       total_issues: 5,
     })

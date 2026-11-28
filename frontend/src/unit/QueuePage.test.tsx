@@ -203,7 +203,6 @@ beforeEach(() => {
   mockedThreadsApi.setPending.mockResolvedValue({
     thread_id: 1,
     title: 'Saga',
-    format: 'Comic',
     issues_remaining: 5,
     queue_position: 1,
     die_size: 6,
@@ -308,7 +307,7 @@ describe('Visible action Snooze/Unsnooze', () => {
     mockReroll.mockReset().mockResolvedValue({
       thread_id: 2,
       title: 'Next comic',
-      format: 'Comic',
+
       issues_remaining: 4,
       queue_position: 2,
       die_size: 8,
@@ -561,7 +560,7 @@ describe('Keyboard Accessibility', () => {
       let data: ThreadListItem[] = []
       if (searchTerm === 'done') {
         data = [
-          { id: 2, title: 'Done', format: 'Comic', status: 'completed', queue_position: 0, issues_remaining: 0, total_issues: null, created_at: '2023-01-01', notes: 'Finished', is_blocked: false, blocking_reasons: [], last_activity_at: null },
+          { id: 2, title: 'Done',status: 'completed', queue_position: 0, issues_remaining: 0, total_issues: null, created_at: '2023-01-01', notes: 'Finished', is_blocked: false, blocking_reasons: [], last_activity_at: null },
         ]
       }
       return {
@@ -1176,7 +1175,6 @@ it('keeps the thread when delete confirmation is cancelled', async () => {
   const manyThreads = Array.from({ length: 55 }, (_, index) => ({
     id: index + 1,
     title: `Thread ${index + 1}`,
-    format: 'Comic',
     status: 'active',
     queue_position: index + 1,
     issues_remaining: 1,
@@ -1218,7 +1216,6 @@ describe('Roll nudge after first thread creation', () => {
 
     // Fill and submit form
     await user.type(screen.getByLabelText('Title'), 'New Series')
-    await user.type(screen.getByLabelText('Format'), 'Comic')
     await user.type(screen.getByLabelText('Issues'), '5')
     await user.click(screen.getByRole('button', { name: /create series/i }))
 
@@ -1248,7 +1245,6 @@ describe('Roll nudge after first thread creation', () => {
 
     // Fill and submit form
     await user.type(screen.getByLabelText('Title'), 'New Series')
-    await user.type(screen.getByLabelText('Format'), 'Comic')
     await user.type(screen.getByLabelText('Issues'), '5')
     await user.click(screen.getByRole('button', { name: /create series/i }))
 
@@ -1275,7 +1271,6 @@ describe('Roll nudge after first thread creation', () => {
     // Open create modal and submit
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
     await user.type(screen.getByLabelText('Title'), 'New Series')
-    await user.type(screen.getByLabelText('Format'), 'Comic')
     await user.type(screen.getByLabelText('Issues'), '5')
     await user.click(screen.getByRole('button', { name: /create series/i }))
 
@@ -1305,7 +1300,6 @@ describe('Roll nudge after first thread creation', () => {
     // Open create modal and submit
     await user.click(screen.getAllByRole('button', { name: /add series/i })[0])
     await user.type(screen.getByLabelText('Title'), 'New Series')
-    await user.type(screen.getByLabelText('Format'), 'Comic')
     await user.type(screen.getByLabelText('Issues'), '5')
     await user.click(screen.getByRole('button', { name: /create series/i }))
 

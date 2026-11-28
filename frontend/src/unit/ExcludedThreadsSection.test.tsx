@@ -8,7 +8,6 @@ function makeExcluded(overrides: Partial<ThreadListItem> = {}): ThreadListItem {
   return {
     id: 7,
     title: 'Descender',
-    format: 'Comic',
     status: 'excluded',
     queue_position: 0,
     issues_remaining: 4,

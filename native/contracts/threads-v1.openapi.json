@@ -547,8 +547,7 @@
         "type": "object",
         "description": "Body of `POST /api/v1/threads/check-duplicates`.",
         "required": [
-          "title",
-          "format"
+          "title"
         ],
         "properties": {
           "comicvine_volume_id": {
@@ -564,9 +563,6 @@
               "null"
             ],
             "format": "int32"
-          },
-          "format": {
-            "type": "string"
           },
           "title": {
             "type": "string"
@@ -664,7 +660,6 @@
         "required": [
           "thread_id",
           "title",
-          "format",
           "status",
           "issues_remaining",
           "match_type"
@@ -676,9 +671,6 @@
               "null"
             ],
             "format": "int64"
-          },
-          "format": {
-            "type": "string"
           },
           "issues_remaining": {
             "type": "integer",
@@ -788,7 +780,6 @@
         "required": [
           "thread_id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position",
           "die_size",
@@ -806,9 +797,6 @@
               "string",
               "null"
             ]
-          },
-          "format": {
-            "type": "string"
           },
           "issue_id": {
             "type": [
@@ -896,13 +884,9 @@
         "description": "Body of `POST /api/v1/threads/`.",
         "required": [
           "title",
-          "format",
           "issues_remaining"
         ],
         "properties": {
-          "format": {
-            "type": "string"
-          },
           "is_test": {
             "type": "boolean"
           },
@@ -938,7 +922,6 @@
         "required": [
           "id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position",
           "status",
@@ -966,9 +949,6 @@
             ]
           },
           "created_at": {
-            "type": "string"
-          },
-          "format": {
             "type": "string"
           },
           "id": {
@@ -1094,7 +1074,6 @@
         "required": [
           "id",
           "title",
-          "format",
           "issues_remaining",
           "queue_position",
           "status",
@@ -1112,9 +1091,6 @@
             }
           },
           "created_at": {
-            "type": "string"
-          },
-          "format": {
             "type": "string"
           },
           "id": {
@@ -1237,12 +1213,6 @@
         "type": "object",
         "description": "Body of `PUT /api/v1/threads/{thread_id}`.",
         "properties": {
-          "format": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "is_test": {
             "type": [
               "boolean",

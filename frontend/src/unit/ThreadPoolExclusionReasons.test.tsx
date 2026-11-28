@@ -30,7 +30,7 @@ function mount(overrides: Partial<PoolProps> = {}) {
 }
 
 const eligible: RollBootstrapThread = {
-  id: 24, title: 'Planetary', format: 'Comic', issue_number: '7',
+  id: 24, title: 'Planetary',issue_number: '7',
 }
 
 describe('Retired Roll exclusion details (#4441)', () => {
@@ -59,7 +59,7 @@ describe('Retired Roll exclusion details (#4441)', () => {
   })
 
   it('offers queue navigation for snoozed-only state without an exclusion report', () => {
-    mount({ snoozedThreads: [{ id: 2, title: 'Paused', format: 'Comic' }] })
+    mount({ snoozedThreads: [{ id: 2, title: 'Paused',}] })
 
     expect(screen.getByText('Every series is snoozed')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Go to Queue' })).toBeInTheDocument()
@@ -69,7 +69,7 @@ describe('Retired Roll exclusion details (#4441)', () => {
   it('offers a working Reset Dice action in snoozed-only zero-choice state', () => {
     const onResetDice = vi.fn()
     mount({
-      snoozedThreads: [{ id: 2, title: 'Paused', format: 'Comic' }],
+      snoozedThreads: [{ id: 2, title: 'Paused',}],
       onResetDice,
     })
 
@@ -80,7 +80,7 @@ describe('Retired Roll exclusion details (#4441)', () => {
 
   it('surfaces Reset Dice failures in snoozed-only zero-choice state', () => {
     mount({
-      snoozedThreads: [{ id: 2, title: 'Paused', format: 'Comic' }],
+      snoozedThreads: [{ id: 2, title: 'Paused',}],
       onResetDice: vi.fn(),
       resetDiceError: 'Reset failed. Try again.',
     })
@@ -101,7 +101,7 @@ describe('Retired Roll exclusion details (#4441)', () => {
   it('shows Reset Dice for an empty scoped pool with browser snoozes and zero bootstrap snoozes', () => {
     const onResetDice = vi.fn()
     mount({
-      pool: [{ id: 1, title: 'Hidden', format: 'Comic' }],
+      pool: [{ id: 1, title: 'Hidden',}],
       eligibleThreadIds: [],
       snoozedThreads: [],
       snoozedCount: 0,
@@ -117,7 +117,7 @@ describe('Retired Roll exclusion details (#4441)', () => {
 
   it('disables the zero-choice Reset Dice button while a reset is pending', () => {
     mount({
-      snoozedThreads: [{ id: 2, title: 'Paused', format: 'Comic' }],
+      snoozedThreads: [{ id: 2, title: 'Paused',}],
       onResetDice: vi.fn(),
       resetDicePending: true,
     })

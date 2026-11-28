@@ -74,7 +74,6 @@ function renderNewPlanPage() {
 const thread = {
   id: 4,
   title: 'Mister Miracle',
-  format: 'single issues',
   issues_remaining: 12,
   total_issues: 12,
   queue_position: 1,

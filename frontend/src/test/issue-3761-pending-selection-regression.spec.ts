@@ -22,7 +22,6 @@ test.describe('Issue #3761: Pending selection regression', () => {
     const title = 'Pending Selection Regression Thread'
     await createThread(page, {
       title,
-      format: 'Comic',
       issues_remaining: 2,
       total_issues: 2,
     })

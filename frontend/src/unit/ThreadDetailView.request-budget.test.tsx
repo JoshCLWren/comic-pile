@@ -41,7 +41,6 @@ const THREADS = {
   42: {
     id: 42,
     title: 'Saga',
-    format: 'Comics',
     issues_remaining: 5,
     queue_position: 1,
     status: 'active',
@@ -53,7 +52,6 @@ const THREADS = {
   43: {
     id: 43,
     title: 'Monstress',
-    format: 'Comics',
     issues_remaining: 2,
     queue_position: 2,
     status: 'active',

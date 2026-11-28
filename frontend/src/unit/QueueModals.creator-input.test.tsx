@@ -36,21 +36,6 @@ vi.mock('../pages/QueuePage/IssueToggleList', () => ({
   IssueToggleList: () => null,
 }))
 
-vi.mock('../pages/QueuePage/FormatSelect', () => ({
-  FormatSelect: ({
-    id,
-    value,
-    onChange,
-  }: {
-    id: string
-    value: string
-    onChange: (value: string) => void
-  }) => (
-    <select id={id} value={value} onChange={(event) => onChange(event.target.value)}>
-      <option value="Comic">Comic</option>
-    </select>
-  ),
-}))
 
 function Harness() {
   const [createForm, setCreateForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)

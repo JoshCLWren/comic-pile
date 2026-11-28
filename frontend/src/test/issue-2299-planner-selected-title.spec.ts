@@ -51,7 +51,6 @@ test.describe('Continuity Planner selected series title (#2299)', () => {
       const page = authenticatedPage
       await createThread(page, {
         title: LONG_TITLE,
-        format: 'omnibus',
         issues_remaining: 2,
         total_issues: 2,
       })
@@ -114,7 +113,6 @@ test.describe('Continuity Planner selected series title (#2299)', () => {
     const page = authenticatedPage
     await createThread(page, {
       title: LONG_TITLE,
-      format: 'omnibus',
       issues_remaining: 2,
       total_issues: 2,
     })

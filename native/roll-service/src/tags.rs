@@ -1899,9 +1899,9 @@ mod db_tests {
         client
             .batch_execute(
                 "INSERT INTO users (id, username) VALUES (1, 'reader-1'); \
-                 INSERT INTO threads (id, user_id, title, format, issues_remaining, \
+                 INSERT INTO threads (id, user_id, title, issues_remaining, \
                      status, queue_position) \
-                 VALUES (10, 1, 'Cable', 'Comic', 1, 'active', 1);",
+                 VALUES (10, 1, 'Cable', 1, 'active', 1);",
             )
             .await
             .expect("seed canonical schema");

@@ -181,7 +181,6 @@ test.describe('Issue #2919 Roll result layout overlap and clipping', () => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height })
       await createThread(page, {
         title: THREAD_TITLE,
-        format: 'Comic',
         issues_remaining: 3,
         total_issues: 3,
       })
@@ -236,7 +235,6 @@ test.describe('Issue #2919 Roll result layout overlap and clipping', () => {
     await page.setViewportSize(MOBILE_VIEWPORT)
     await createThread(page, {
       title: THREAD_TITLE,
-      format: 'Comic',
       issues_remaining: 3,
       total_issues: 3,
     })

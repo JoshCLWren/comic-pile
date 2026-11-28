@@ -32,7 +32,7 @@ function renderBuilder(ui: ReactElement) {
   return render(ui, { wrapper: ToastStubProvider })
 }
 
-const thread: Thread = { id: 1, title: 'Target', format: 'Comic', issues_remaining: 1, total_issues: 3, next_unread_issue_id: null, reading_progress: null, queue_position: 1, status: 'active', is_blocked: false, blocking_reasons: [], last_rating: null, last_activity_at: null, notes: null, is_test: false, created_at: 'now' }
+const thread: Thread = { id: 1, title: 'Target',issues_remaining: 1, total_issues: 3, next_unread_issue_id: null, reading_progress: null, queue_position: 1, status: 'active', is_blocked: false, blocking_reasons: [], last_rating: null, last_activity_at: null, notes: null, is_test: false, created_at: 'now' }
 const dependency: Dependency = { id: 4, source_thread_id: 2, target_thread_id: 1, source_issue_id: null, target_issue_id: null, is_issue_level: false, source_label: 'Source', target_label: 'Target', created_at: 'now' }
 
 describe('DependencyBuilder', () => {

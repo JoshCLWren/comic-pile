@@ -37,7 +37,7 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
     activeRatingThread: {
       id: 1,
       title: 'Saga',
-      format: 'Comic',
+
       issues_remaining: 5,
       total_issues: 10,
       issue_number: '3',
@@ -94,7 +94,7 @@ describe('RatingView crossovers behind the optional context card (#2764)', () =>
       activeRatingThread: {
         id: 42,
         title: 'Silver Surfer',
-        format: 'Comic',
+
         issues_remaining: 3,
         total_issues: 6,
         issue_number: '3',

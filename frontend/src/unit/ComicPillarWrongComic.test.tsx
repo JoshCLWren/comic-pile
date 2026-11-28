@@ -94,7 +94,6 @@ const mockIssue = {
 const confirmedThread = {
   id: 7,
   title: 'Stormwatch Vol. 1',
-  format: 'single',
   issues_remaining: 5,
   queue_position: 1,
   total_issues: 12,

@@ -9,7 +9,7 @@ interface PotentialDuplicateAdvisoryProps {
   /** True when the advisory lookup failed; the forms stay usable. */
   isError?: boolean
   /**
-   * Identity of the current candidate (dialog, title, format, edited thread).
+   * Identity of the current candidate (dialog, title, edited thread).
    *
    * Dismissal is remembered per candidate, so editing the title re-arms the
    * advisory instead of keeping a stale "dismissed" state from a previous
@@ -20,7 +20,6 @@ interface PotentialDuplicateAdvisoryProps {
 
 function matchContext(match: PotentialDuplicateMatch): string {
   const parts = [
-    match.format,
     match.start_year !== null ? `started ${match.start_year}` : null,
     match.comicvine_volume_id !== null ? `ComicVine volume ${match.comicvine_volume_id}` : null,
     match.issues_remaining > 0 ? `${match.issues_remaining} unread` : 'all read',

@@ -193,8 +193,8 @@ mod tests {
         let connection = state.pool.get().await.expect("fixture connection");
         connection.batch_execute(
             "INSERT INTO users (id,username) VALUES (1,'legacy-owner'),(2,'legacy-other');
-             INSERT INTO threads (id,title,format,issues_remaining,queue_position,status,user_id,created_at)
-             VALUES (11,'Source','comic',1,1,'active',1,NOW()),(12,'Target','comic',1,2,'active',1,NOW());
+             INSERT INTO threads (id, title, issues_remaining, queue_position, status, user_id, created_at)
+             VALUES (11, 'Source', 1, 1, 'active', 1, NOW()),(12, 'Target', 1, 2, 'active', 1, NOW());
              INSERT INTO issues (id,thread_id,issue_number,status,created_at,position)
              VALUES (101,11,'1','unread',NOW(),1),(201,12,'1','unread',NOW(),1);"
         ).await.expect("dependency fixtures");

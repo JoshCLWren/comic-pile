@@ -18,7 +18,6 @@ export function mapSessionThreadToRatingThread(thread: SessionThread): RatingThr
   return {
     id: thread.id,
     title: thread.title,
-    format: thread.format,
     issues_remaining: thread.issues_remaining ?? 0,
     queue_position: thread.queue_position ?? 0,
     total_issues: thread.total_issues ?? null,
@@ -43,7 +42,6 @@ export function buildRatingThread(
     return {
       id: metadata.id ?? metadata.thread_id ?? Number(threadId),
       title: metadata.title,
-      format: metadata.format ?? sessionThread?.format ?? '',
       issues_remaining: metadata.issues_remaining ?? sessionThread?.issues_remaining ?? 0,
       queue_position: metadata.queue_position ?? sessionThread?.queue_position ?? 0,
       issue_id: metadata.issue_id ?? null,

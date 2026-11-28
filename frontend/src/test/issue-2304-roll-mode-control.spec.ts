@@ -75,7 +75,7 @@ test.describe('Roll-mode control state grammar at phone width (#2304)', () => {
     authenticatedPage,
   }) => {
     const page = authenticatedPage
-    await createThread(page, { title: 'Mode Grammar Thread', format: 'Issue', issues_remaining: 2, total_issues: 2 })
+    await createThread(page, { title: 'Mode Grammar Thread',issues_remaining: 2, total_issues: 2 })
 
     await page.setViewportSize(PHONE_VIEWPORT)
     await page.goto('/', { waitUntil: 'domcontentloaded' })
@@ -100,7 +100,7 @@ test.describe('Roll-mode control state grammar at phone width (#2304)', () => {
     authenticatedPage,
   }) => {
     const page = authenticatedPage
-    await createThread(page, { title: 'Override Dialog Thread', format: 'Issue', issues_remaining: 2, total_issues: 2 })
+    await createThread(page, { title: 'Override Dialog Thread',issues_remaining: 2, total_issues: 2 })
 
     await page.setViewportSize(PHONE_VIEWPORT)
     await page.goto('/', { waitUntil: 'domcontentloaded' })

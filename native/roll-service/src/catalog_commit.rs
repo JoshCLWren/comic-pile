@@ -2164,11 +2164,8 @@ mod tests {
                 r#"INSERT INTO users (id, username, created_at, is_admin)
                  VALUES (1, 'catalog-commit-test', now(), false);
                  INSERT INTO threads
-                     (id, user_id, title, format, issues_remaining, queue_position, status,
-                      total_issues, created_at, is_blocked, is_test, manual_creator_credits,
-                      queue_position_is_manual)
-                 VALUES (10, 1, 'Test Series', 'Comic', 1, 1, 'active', 1, now(), false, false,
-                         '[]', false);
+                     (id, user_id, title, issues_remaining, queue_position, status, total_issues, created_at, is_blocked, is_test, manual_creator_credits, queue_position_is_manual)
+                 VALUES (10, 1, 'Test Series', 1, 1, 'active', 1, now(), false, false, '[]', false);
                  INSERT INTO issues
                      (id, thread_id, issue_number, status, created_at, position)
                  VALUES (100, 10, '1', 'unread', now(), 1);
@@ -2373,11 +2370,8 @@ mod tests {
             .batch_execute(
                 "INSERT INTO users (id, username, created_at, is_admin)
              VALUES (1, 'catalog-concurrent-test', now(), false);
-             INSERT INTO threads (id, user_id, title, format, issues_remaining,
-               queue_position, status, total_issues, created_at, is_blocked,
-               is_test, manual_creator_credits, queue_position_is_manual)
-             VALUES (10, 1, 'Test Series', 'Comic', 1, 1, 'active', 1,
-               now(), false, false, '[]', false);
+             INSERT INTO threads (id, user_id, title, issues_remaining, queue_position, status, total_issues, created_at, is_blocked, is_test, manual_creator_credits, queue_position_is_manual)
+             VALUES (10, 1, 'Test Series', 1, 1, 'active', 1, now(), false, false, '[]', false);
              INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
              VALUES (100, 10, '1', 'unread', now(), 1);",
             )
@@ -2671,11 +2665,8 @@ mod tests {
                 r#"INSERT INTO users (id, username, created_at, is_admin)
                  VALUES (1, 'ntt-commit-test', now(), false);
                  INSERT INTO threads
-                     (id, user_id, title, format, issues_remaining, queue_position, status,
-                      total_issues, created_at, is_blocked, is_test, manual_creator_credits,
-                      queue_position_is_manual)
-                 VALUES (77, 1, 'New Teen Titans', 'Comic', 0, 1, 'active', 33, now(), false,
-                         false, '[]', false);"#,
+                     (id, user_id, title, issues_remaining, queue_position, status, total_issues, created_at, is_blocked, is_test, manual_creator_credits, queue_position_is_manual)
+                 VALUES (77, 1, 'New Teen Titans', 0, 1, 'active', 33, now(), false, false, '[]', false);"#,
             )
             .await
             .expect("seed teen titans thread");

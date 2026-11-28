@@ -17,21 +17,6 @@ vi.mock('../components/DependencyBuilder', () => ({ default: () => null }))
 vi.mock('../components/MigrationDialog', () => ({ default: () => null }))
 vi.mock('../components/AddSeriesFromComicVineDialog', () => ({ default: () => null }))
 vi.mock('../pages/QueuePage/IssueToggleList', () => ({ IssueToggleList: () => null }))
-vi.mock('../pages/QueuePage/FormatSelect', () => ({
-  FormatSelect: ({
-    id,
-    value,
-    onChange,
-  }: {
-    id: string
-    value: string
-    onChange: (value: string) => void
-  }) => (
-    <select id={id} value={value} onChange={(event) => onChange(event.target.value)}>
-      <option value="Comic">Comic</option>
-    </select>
-  ),
-}))
 vi.mock('../services/api-threads', () => ({
   threadsApi: { checkPotentialDuplicates: vi.fn() },
 }))
@@ -41,7 +26,7 @@ const CHECK = vi.mocked(threadsApi.checkPotentialDuplicates)
 const CONFIRMED_MATCH: PotentialDuplicateMatch = {
   thread_id: 42,
   title: 'Spider-Man (2018)',
-  format: 'Comic',
+
   status: 'active',
   issues_remaining: 2,
   total_issues: null,
@@ -53,7 +38,7 @@ const CONFIRMED_MATCH: PotentialDuplicateMatch = {
 const UNCERTAIN_MATCH: PotentialDuplicateMatch = {
   thread_id: 9,
   title: 'Saga',
-  format: 'Comic',
+
   status: 'active',
   issues_remaining: 0,
   total_issues: null,
@@ -65,7 +50,6 @@ const UNCERTAIN_MATCH: PotentialDuplicateMatch = {
 const EDITING_THREAD: Thread = {
   id: 7,
   title: 'Saga',
-  format: 'Comic',
   status: 'active',
   queue_position: 1,
   issues_remaining: 4,
@@ -195,7 +179,7 @@ describe('Add Series duplicate advisory (#3612)', () => {
 
     await waitFor(() =>
       expect(CHECK).toHaveBeenCalledWith(
-        expect.objectContaining({ title: 'Spider-Man (2018)', format: 'Comic' }),
+        expect.objectContaining({ title: 'Spider-Man (2018)' }),
       ),
     )
 
@@ -280,7 +264,7 @@ describe('Edit/Rename duplicate advisory (#3612)', () => {
       '/thread/9',
     )
     expect(CHECK).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Saga', format: 'Comic', exclude_thread_id: 7 }),
+      expect.objectContaining({ title: 'Saga', exclude_thread_id: 7 }),
     )
     expect(screen.getByRole('button', { name: 'Save Changes' })).toBeEnabled()
 

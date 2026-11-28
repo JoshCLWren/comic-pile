@@ -15,7 +15,6 @@ test.describe('P0 #5525: Queue manual issue reading', () => {
     const title = 'Direct Issue Target'
     await createThread(page, {
       title,
-      format: 'Comic',
       issues_remaining: 4,
       total_issues: 4,
     })
@@ -85,7 +84,6 @@ test.describe('P0 #5525: Queue manual issue reading', () => {
     const title = 'Unavailable Direct Issue'
     const thread = await createThread(page, {
       title,
-      format: 'Comic',
       issues_remaining: 2,
       total_issues: 2,
     })
