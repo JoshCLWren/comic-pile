@@ -1326,7 +1326,7 @@ mod tests {
 
             INSERT INTO dependencies
                 (id, created_at, source_issue_id, target_issue_id, origin, classification, provenance)
-            VALUES (9901, NOW(), 9201, 9202, 'reader', 'A', 'rehearsal-authored'),
+            VALUES (9901, NOW(), 9202, 9204, 'reader', 'A', 'rehearsal-authored'),
                    (9902, NOW(), 9401, 9402, 'reader', 'B', 'rehearsal-authored');
 
             INSERT INTO collection_exclusions
@@ -1392,7 +1392,7 @@ mod tests {
                 "strict",
                 "after_previous",
                 "4050-1000",
-                (9201, 9202),
+                (9202, 9204),
             ),
             (
                 9102,
@@ -1538,8 +1538,14 @@ mod tests {
         let a_validated = validated_contained(a_inputs).expect("A validated");
         let a_edges = a_validated.unsatisfied_edges().expect("A edges");
         assert!(
-            a_edges.iter().all(|e| e.origin != "reader" || e.source_issue_id == 9201),
+            a_edges.iter().all(|e| e.source_issue_id >= 9201 && e.source_issue_id <= 9204),
             "A's authored prerequisite must stay inside A: {a_edges:?}"
+        );
+        assert!(
+            a_edges.iter().any(|e| e.origin == "reader"
+                && e.source_issue_id == 9202
+                && e.target_issue_id == 9204),
+            "A's authored prerequisite must be live: {a_edges:?}"
         );
         let a_blockers = a_validated.frontier_blockers().expect("A blockers");
         assert_eq!(
