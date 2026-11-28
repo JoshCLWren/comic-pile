@@ -8,6 +8,9 @@ the idempotency/deployment invariants required by the issue contract.
 from __future__ import annotations
 
 import json
+import socket
+import urllib.error
+import urllib.request
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -295,3 +298,161 @@ def test_load_candidate_rejects_oversized_files(tmp_path: Path) -> None:
     valid = tmp_path / "valid.json"
     valid.write_text(json.dumps(_candidate()), encoding="utf-8")
     assert recovery._load_candidate(valid)["source_pr_number"] == 9
+
+
+class _Response:
+    """Minimal urlopen context manager carrying a decoded JSON payload."""
+
+    def __init__(self, payload: object) -> None:
+        """Store the payload that ``read`` will return."""
+        self._body = json.dumps(payload).encode("utf-8")
+
+    def __enter__(self) -> "_Response":
+        """Enter the context manager."""
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        """Leave the context manager without suppressing errors."""
+        return None
+
+    def read(self) -> bytes:
+        """Return the encoded JSON body."""
+        return self._body
+
+
+def test_github_request_accepts_absolute_api_url_without_double_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GitHub requests built by discovery are not prefixed twice (issue #5693)."""
+    seen: list[str] = []
+
+    def fake_urlopen(
+        request: urllib.request.Request, timeout: int = 30
+    ) -> _Response:
+        seen.append(request.full_url)
+        return _Response({"number": 12})
+
+    monkeypatch.setattr(recovery.urllib.request, "urlopen", fake_urlopen)
+    payload = recovery._github_request(
+        f"{recovery.GITHUB_API_BASE}/repos/JoshCLWren/comic-pile/pulls/12"
+    )
+    assert payload == {"number": 12}
+    assert seen == [
+        f"{recovery.GITHUB_API_BASE}/repos/JoshCLWren/comic-pile/pulls/12"
+    ]
+    assert "api.github.comhttps" not in seen[0]
+
+
+def test_github_request_rejects_malformed_url_without_leaking_secret() -> None:
+    """A double-prefixed or secret-bearing URL fails before any request."""
+    secret = "ghp_supersecretvalue1234567890"
+    bad_url = (
+        f"{recovery.GITHUB_API_BASE}https://api.github.com/repos/x/y/pulls/1"
+        f"?token={secret}"
+    )
+    with pytest.raises(recovery.RecoveryError) as exc_info:
+        recovery._github_request(bad_url)
+    message = str(exc_info.value)
+    assert message == "GitHub API URL is invalid"
+    assert secret not in message
+    assert bad_url not in message
+    assert "api.github.comhttps" not in message
+
+
+def test_read_json_names_url_kind_on_dns_failure_without_leaking_secret(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """DNS failures name the URL kind but never the credentialed URL."""
+    secret = "token-should-not-appear"
+
+    def fake_urlopen(
+        request: urllib.request.Request, timeout: int = 30
+    ) -> object:
+        raise urllib.error.URLError(
+            socket.gaierror(-2, "Name or service not known")
+        )
+
+    monkeypatch.setattr(recovery.urllib.request, "urlopen", fake_urlopen)
+    for url, kind in (
+        (
+            f"{recovery.GITHUB_API_BASE}/repos/x/y/pulls/1?access={secret}",
+            recovery.GITHUB_API_URL_KIND,
+        ),
+        (
+            f"{recovery.PRODUCTION_HEALTH_URL}?access={secret}",
+            recovery.PRODUCTION_HEALTH_URL_KIND,
+        ),
+    ):
+        with pytest.raises(recovery.RecoveryError) as exc_info:
+            recovery._read_url_json(url)
+        message = str(exc_info.value)
+        assert kind in message
+        assert "Name or service not known" in message
+        assert secret not in message
+        assert url not in message
+
+
+def test_read_url_json_rejects_bad_url_before_network(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An invalid absolute URL is rejected without issuing a request."""
+    secret = "super-secret"
+
+    def forbidden_urlopen(
+        request: urllib.request.Request, timeout: int = 30
+    ) -> object:
+        raise AssertionError("network must not be used for a malformed URL")
+
+    monkeypatch.setattr(recovery.urllib.request, "urlopen", forbidden_urlopen)
+    with pytest.raises(recovery.RecoveryError) as exc_info:
+        recovery._read_url_json(f"notaurl://example.invalid/{secret}")
+    message = str(exc_info.value)
+    assert message == f"{recovery.PRODUCTION_HEALTH_URL_KIND} URL is invalid"
+    assert secret not in message
+
+
+def test_select_sources_uses_real_github_request_without_double_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The default selector exercises a correctly formed GitHub API URL."""
+    seen: list[str] = []
+
+    def fake_urlopen(
+        request: urllib.request.Request, timeout: int = 30
+    ) -> _Response:
+        url = request.full_url
+        seen.append(url)
+        if url == recovery.PRODUCTION_HEALTH_URL:
+            return _Response(_health())
+        assert url.startswith(
+            f"{recovery.GITHUB_API_BASE}/repos/JoshCLWren/comic-pile/pulls"
+        )
+        assert "api.github.comhttps" not in url
+        return _Response([_pull(11, DEPLOYED_SHA)])
+
+    monkeypatch.setattr(recovery.urllib.request, "urlopen", fake_urlopen)
+    summary = recovery.select_sources(
+        "JoshCLWren/comic-pile",
+        lookup=lambda repository, numbers, shas: [],
+        is_ancestor=lambda sha, live: sha == DEPLOYED_SHA,
+    )
+    assert summary["needed"] is True
+    assert summary["pr_number"] == 11
+    assert summary["missing_pr_numbers"] == [11]
+    assert seen[0] == recovery.PRODUCTION_HEALTH_URL
+    assert len(seen) == 2
+    assert seen[1].startswith(recovery.GITHUB_API_BASE)
+
+
+def test_select_sources_reports_all_missing_pr_numbers() -> None:
+    """The selector emits the full still-missing list for recovery summaries."""
+    pulls = [_pull(4, OLDER_SHA, hours_ago=3), _pull(5, DEPLOYED_SHA, hours_ago=2)]
+    summary = recovery.select_sources(
+        "JoshCLWren/comic-pile",
+        request_json=_pull_pages(pulls),
+        fetch_revision=lambda: DEPLOYED_SHA,
+        is_ancestor=lambda sha, live: True,
+        lookup=lambda repository, numbers, shas: [(4, OLDER_SHA)],
+    )
+    assert summary["missing_count"] == 1
+    assert summary["missing_pr_numbers"] == [5]

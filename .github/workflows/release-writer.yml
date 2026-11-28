@@ -116,17 +116,34 @@ jobs:
             --header "Authorization: Bearer ${NEON_API_KEY}" | jq -r '.uri')"
           [[ -n "$uri" && "$uri" != "null" ]] || exit 1
           echo "::add-mask::$uri"
+          # Keep the selector output for the always-run summary. pipefail keeps
+          # a failed selection a failed step even though tee succeeds.
           RELEASE_NEON_DATABASE_URL="$uri" python scripts/release_recovery.py select \
             --repository "$GITHUB_REPOSITORY" \
-            --lookback-hours 72
+            --lookback-hours 72 2>&1 | tee "$RUNNER_TEMP/release-recovery-select.log"
+      - name: Report failed recovery selection
+        if: failure() && steps.select.outcome == 'failure'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo '::error::Release recovery selection failed; no release note was dispatched.'
+          if [[ -f "$RUNNER_TEMP/release-recovery-select.log" ]]; then
+            grep -E 'release recovery failed:|URL is invalid|request failed for' \
+              "$RUNNER_TEMP/release-recovery-select.log" >&2 || true
+          fi
       - name: Dispatch exact-PR writer for the selected source
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          SELECT_OUTCOME: ${{ steps.select.outcome }}
           NEEDED: ${{ steps.select.outputs.needed }}
           INPUT_PR: ${{ steps.select.outputs.pr_number }}
         run: |
           set -Eeuo pipefail
+          if [[ "${SELECT_OUTCOME:-}" != "success" ]]; then
+            echo '::error::Release recovery selection failed; cannot dispatch a writer' >&2
+            exit 1
+          fi
           if [[ "$NEEDED" != "true" ]]; then
             echo "No deployed source is missing a release note"
             exit 0
@@ -141,17 +158,52 @@ jobs:
             -f "pr_number=${INPUT_PR}"
       - name: Write recovery summary
         if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SELECT_OUTCOME: ${{ steps.select.outcome }}
+          NEEDED: ${{ steps.select.outputs.needed }}
+          PR_NUMBER: ${{ steps.select.outputs.pr_number }}
+          MERGE_SHA: ${{ steps.select.outputs.merge_sha }}
+          DEPLOYED_REVISION: ${{ steps.select.outputs.deployed_revision }}
+          CANDIDATES: ${{ steps.select.outputs.candidates }}
+          DEPLOYED_CANDIDATES: ${{ steps.select.outputs.deployed_candidates }}
+          MISSING_COUNT: ${{ steps.select.outputs.missing_count }}
+          MISSING_PRS: ${{ steps.select.outputs.missing_pr_numbers }}
+          SELECTION_ERROR: ${{ steps.select.outputs.selection_error }}
         run: |
+          set -Eeuo pipefail
+          missing_prs="${MISSING_PRS:-}"
+          if [[ -z "$missing_prs" && "${SELECT_OUTCOME:-}" != "success" ]]; then
+            # Bounded diagnostic when selection failed before it could classify
+            # sources. These candidates are NOT deployment-verified; they show
+            # which merged PRs still need a release-note check.
+            recent="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=closed&base=main&sort=updated&direction=desc&per_page=20" \
+              --jq '.[] | select(.merged_at != null) | "#\(.number)"' \
+              | paste -sd, - || true)"
+            if [[ -n "$recent" ]]; then
+              missing_prs="unverified candidates: $recent"
+            fi
+          fi
           {
             echo '## Release recovery discovery'
             echo
-            echo '- Needed: ${{ steps.select.outputs.needed }}'
-            echo '- PR: ${{ steps.select.outputs.pr_number }}'
-            echo '- Merge SHA: ${{ steps.select.outputs.merge_sha }}'
-            echo '- Deployed revision: ${{ steps.select.outputs.deployed_revision }}'
-            echo '- Candidates: ${{ steps.select.outputs.candidates }}'
-            echo '- Deployed candidates: ${{ steps.select.outputs.deployed_candidates }}'
-            echo '- Still missing: ${{ steps.select.outputs.missing_count }}'
+            echo "- Outcome: ${SELECT_OUTCOME:-unknown}"
+            echo "- Needed: ${NEEDED:-unknown}"
+            echo "- PR: ${PR_NUMBER:-}"
+            echo "- Merge SHA: ${MERGE_SHA:-}"
+            echo "- Deployed revision: ${DEPLOYED_REVISION:-}"
+            echo "- Candidates: ${CANDIDATES:-}"
+            echo "- Deployed candidates: ${DEPLOYED_CANDIDATES:-}"
+            echo "- Still missing: ${MISSING_COUNT:-unknown}"
+            echo "- Still-missing PRs: ${missing_prs:-unknown}"
+            if [[ -n "${SELECTION_ERROR:-}" ]]; then
+              echo "- Selection error: ${SELECTION_ERROR}"
+            fi
+            if [[ "${SELECT_OUTCOME:-}" != "success" ]]; then
+              echo
+              echo 'Selection did not complete; no release note was dispatched.'
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
   generate:
