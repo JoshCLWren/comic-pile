@@ -997,6 +997,13 @@ async fn confirmed_identity_for_issue(
     Ok(Some((id, external_id, metadata)))
 }
 
+/// A missing row is a normal `Ok(None)`; a failing query is a persistence
+/// failure, never "no confirmed identity". Keep the two cases distinguishable
+/// all the way to the caller so a database error is reported truthfully.
+fn classify_lookup<T, E>(result: Result<Option<T>, E>) -> Result<Option<T>, ProviderFailure> {
+    result.map_err(|_| ProviderFailure::PersistFailed)
+}
+
 /// Synchronous, bounded creator-credit hydration for identity confirm/replace
 /// and explicit Retry.
 ///
@@ -1024,20 +1031,17 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
             Ok(c) => c,
             Err(_) => return None,
         };
-        let (identity_id, external_id, cached) =
-            match confirmed_identity_for_issue(&conn, user_id, issue_id).await {
-                Ok(Some(found)) => found,
-                Ok(None) => return None,
-                Err(err) => {
-                    // A database error is not "no confirmed identity".
-                    log_provider_failure("inline_identity_lookup", ProviderFailure::PersistFailed);
-                    tracing::debug!(
-                        error_kind = crate::error_kind(&err),
-                        "confirmed identity lookup failed"
-                    );
-                    return None;
-                }
-            };
+        let (identity_id, external_id, cached) = match classify_lookup(
+            confirmed_identity_for_issue(&conn, user_id, issue_id).await,
+        ) {
+            Ok(Some(found)) => found,
+            Ok(None) => return None,
+            Err(failure) => {
+                // A database error is not "no confirmed identity".
+                log_provider_failure("inline_identity_lookup", failure);
+                return None;
+            }
+        };
         // A confirm/remap can reuse already-complete same-identity metadata;
         // an explicit Retry (`force`) always performs a fresh bounded attempt.
         if !force {
@@ -1102,18 +1106,14 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
                  FOR UPDATE OF e",
                 &[&identity_id, &issue_id],
             )
-            .await
-        {
+            .await,
+        ) {
             Ok(Some(row)) => row
                 .get::<_, Option<String>>(0)
                 .and_then(|text| serde_json::from_str::<Value>(&text).ok()),
             Ok(None) => return None,
-            Err(err) => {
-                log_provider_failure("inline_identity_lookup", ProviderFailure::PersistFailed);
-                tracing::debug!(
-                    error_kind = crate::error_kind(&err),
-                    "confirmed identity write-time lookup failed"
-                );
+            Err(failure) => {
+                log_provider_failure("inline_identity_lookup", failure);
                 return None;
             }
         };
