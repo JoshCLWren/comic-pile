@@ -329,6 +329,13 @@ behaviors:
     status: covered
     specs: ["custom-cbl-delete-confirm.spec.ts", "custom-cbl-delete-prerequisite-survival.spec.ts"]
 
+  - id: LIST-002
+    area: order
+    behavior: "CBL source adoption commits into a canonical owned Reading List, restores committed choices on reopen, preserves per-series graph decisions, and never writes on cancel"
+    priority: P1
+    status: covered
+    specs: ["cbl-add-update-owned-list.spec.ts"]
+
   # ---- Secondary features (P2) ----
   - id: CONT-001
     area: feature

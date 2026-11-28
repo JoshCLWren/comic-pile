@@ -53,7 +53,7 @@ describe('SEO HTML generation', () => {
     const route: RouteSeoEntryInput = {
       pattern: '/cbl-sources',
       title: 'CBL Sources — Comic Pile',
-      description: 'Browse trusted reading-order sources and add them as Reading Plans in ComicPile.',
+      description: 'Browse trusted reading-order sources and add them to Reading Lists you own in ComicPile.',
       canonicalPath: null,
       visibility: 'private',
     }
@@ -61,10 +61,10 @@ describe('SEO HTML generation', () => {
     const html = generateRouteHtml(route, BUILT_INDEX_HTML)
 
     expect(html).toContain('<title>CBL Sources — Comic Pile</title>')
-    expect(html).toContain('Browse trusted reading-order sources and add them as Reading Plans in ComicPile.')
+    expect(html).toContain('Browse trusted reading-order sources and add them to Reading Lists you own in ComicPile.')
     expect(html).toContain('<meta name="robots" content="noindex, nofollow" />')
     expect(html).toContain('<meta property="og:title" content="CBL Sources — Comic Pile" />')
-    expect(html).toContain('<meta property="og:description" content="Browse trusted reading-order sources and add them as Reading Plans in ComicPile." />')
+    expect(html).toContain('<meta property="og:description" content="Browse trusted reading-order sources and add them to Reading Lists you own in ComicPile." />')
     expect(html).toContain('<meta property="og:url" content="https://comic-pile.vercel.app/cbl-sources" />')
     // Private routes carry neither a canonical link nor JSON-LD, including the
     // default landing metadata inherited from the built page.

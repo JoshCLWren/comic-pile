@@ -65,6 +65,7 @@ pub mod reading_eligibility;
 pub mod reading_graph;
 pub mod reading_inputs;
 pub mod reading_list;
+pub mod reading_list_replacement;
 pub mod reading_mode;
 pub mod reading_orders;
 pub mod reading_plan_reader;
@@ -610,6 +611,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         apply_custom_cbl, delete_overlap_decision, export_custom_cbl, get_overlap_decisions,
         save_overlap_decision, search_custom_cbl_issues,
     };
+    use reading_list_replacement::{commit_replacement, preview_replacement, undo_replacement};
     Router::new()
         .route(
             "/health",
@@ -1002,6 +1004,21 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v2/reading-lists/{list_id}/overlap-decisions/{decision_id}",
             delete(delete_overlap_decision),
+        )
+        // #4026: explicit-target, source-aware replacement with a reversible
+        // list-only snapshot. Custom-method spellings follow AIP-136; the
+        // existing `reading-lists` collection spelling is retained for callers.
+        .route(
+            "/api/v2/reading-lists/{list_id}/replacements:preview",
+            post(preview_replacement),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}/replacements",
+            post(commit_replacement),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}/replacements:undo",
+            post(undo_replacement),
         )
         .route(
             "/api/v2/continuity-plans/{plan_id}/reader",

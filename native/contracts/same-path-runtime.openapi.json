@@ -7792,6 +7792,177 @@
         ]
       }
     },
+    "/api/v2/reading-lists/{list_id}/replacements": {
+      "post": {
+        "tags": [
+          "reading-lists"
+        ],
+        "summary": "`POST /api/v2/reading-lists/{list_id}/replacements`",
+        "description": "Commits one owner-scoped transaction. A stale list version, stale source\nhash/revision, or an unapproved removal of a saved manual entry fails before\nany row is touched. On success a list-only snapshot is retained for Undo.",
+        "operationId": "replacement_commit",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "description": "Explicit owned Reading List id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplacementCommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Replacement committed with a reversible snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplacementCommitResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Reading List or CBL source not found"
+          },
+          "409": {
+            "description": "Stale source/list version or unapproved manual removal; nothing changed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/reading-lists/{list_id}/replacements:preview": {
+      "post": {
+        "tags": [
+          "reading-lists"
+        ],
+        "summary": "`POST /api/v2/reading-lists/{list_id}/replacements:preview`",
+        "description": "Read-only. Shows the exact owned list, the source-evaluated after state,\nmanual extras that would be dropped, and overlap choices. No rows are\nwritten, so canceling the review cannot change the list.",
+        "operationId": "replacement_preview",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "description": "Explicit owned Reading List id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplacementPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Read-only before/after replacement review",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplacementPreviewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Reading List or CBL source not found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/reading-lists/{list_id}/replacements:undo": {
+      "post": {
+        "tags": [
+          "reading-lists"
+        ],
+        "summary": "`POST /api/v2/reading-lists/{list_id}/replacements:undo`",
+        "description": "Restores only list membership, ordering, gating intents and overlap choices\nfrom the retained snapshot. Read events, ratings, collections, other lists\nand all physical Issues are untouched. A changed list version fails closed.",
+        "operationId": "replacement_undo",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "description": "Explicit owned Reading List id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplacementUndoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "List-only snapshot restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplacementUndoResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Reading List or snapshot not found"
+          },
+          "409": {
+            "description": "List changed after replacement; nothing changed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/reading-mode": {
       "get": {
         "tags": [
@@ -24168,6 +24339,377 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "ReplacementCommitRequest": {
+        "type": "object",
+        "description": "Transactional replacement commit. The target is the URL path list ID; this\nbody carries only source provenance and the reader's reviewed choices.",
+        "required": [
+          "source_list_id",
+          "content_hash",
+          "revision_sha",
+          "expected_updated_at",
+          "issue_ids"
+        ],
+        "properties": {
+          "confirm_manual_removals": {
+            "type": "boolean",
+            "description": "Reader-approved removal of saved manual entries. Without this, omitting\na saved manual entry is rejected so nothing is silently discarded."
+          },
+          "content_hash": {
+            "type": "string"
+          },
+          "entry_decisions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "entry_intents": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Per-entry gating intents. Retained entries keep their current intent when\nan intent is not supplied.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ReplacementEntryIntent"
+            },
+            "propertyNames": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "expected_updated_at": {
+            "type": "string",
+            "description": "Version token read from the preview; a changed list is a 409 with no writes."
+          },
+          "idempotency_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Replaying an identical request returns its original snapshot."
+          },
+          "issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "Exact reviewed membership in the intended final order."
+          },
+          "overlap_decisions": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Value",
+                "description": "Approved overlap decisions (same shape as the overlap-decisions API)."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "revision_sha": {
+            "type": "string"
+          },
+          "series_decisions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "source_list_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ReplacementCommitResponse": {
+        "type": "object",
+        "required": [
+          "target_list_id",
+          "snapshot_id",
+          "updated_at",
+          "applied_issue_ids",
+          "preserved_manual_issue_ids"
+        ],
+        "properties": {
+          "applied_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "preserved_manual_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "replayed": {
+            "type": "boolean"
+          },
+          "snapshot_id": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Snapshot ID to pass to Undo (the latest un-undone snapshot is used when\nno snapshot ID is supplied)."
+          },
+          "target_list_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
+      "ReplacementEntryIntent": {
+        "type": "object",
+        "properties": {
+          "checkpoint_target_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "gate": {
+            "type": "string"
+          },
+          "is_checkpoint": {
+            "type": "boolean"
+          },
+          "skipped": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ReplacementEntryView": {
+        "type": "object",
+        "description": "One projected list entry. `gate`/`skipped`/checkpoint intents are carried so\nan Undo restores the exact stored list rather than just issue membership.",
+        "required": [
+          "issue_id",
+          "position",
+          "series_name",
+          "issue_number",
+          "is_checkpoint",
+          "gate",
+          "skipped"
+        ],
+        "properties": {
+          "checkpoint_target_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "gate": {
+            "type": "string"
+          },
+          "is_checkpoint": {
+            "type": "boolean"
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "manual": {
+            "type": "boolean",
+            "description": "True when the entry is a reader-added comic absent from the source CBL."
+          },
+          "position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "saved": {
+            "type": "boolean",
+            "description": "True when the entry was on the list before the reviewed replacement."
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "skipped": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ReplacementPreviewRequest": {
+        "type": "object",
+        "description": "Read-only, explicit-target preview request.",
+        "required": [
+          "source_list_id"
+        ],
+        "properties": {
+          "entry_decisions": {
+            "type": "object",
+            "description": "Per-occurrence include/exclude overrides keyed by `cbl_entry_id`.",
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "series_decisions": {
+            "type": "object",
+            "description": "Series-level include/exclude overrides keyed by series group ID.",
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "source_list_id": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Stable `cbl_source_lists` ID of the globally shared CBL."
+          }
+        }
+      },
+      "ReplacementPreviewResponse": {
+        "type": "object",
+        "required": [
+          "target_list_id",
+          "target_list_name",
+          "source_list_id",
+          "content_hash",
+          "revision_sha",
+          "expected_updated_at",
+          "before",
+          "after",
+          "omitted_manual_issue_ids",
+          "unresolved_count",
+          "adoption_entries",
+          "overlap_decisions"
+        ],
+        "properties": {
+          "adoption_entries": {
+            "type": "object",
+            "description": "Exact source/overlap choices projected from the canonical evaluator."
+          },
+          "after": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReplacementEntryView"
+            }
+          },
+          "before": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReplacementEntryView"
+            }
+          },
+          "content_hash": {
+            "type": "string"
+          },
+          "expected_updated_at": {
+            "type": "string",
+            "description": "Send this exact token back as `expected_updated_at` on commit."
+          },
+          "omitted_manual_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "Saved entries absent from the source that would be dropped unless the\nreader explicitly approves their removal on commit."
+          },
+          "overlap_decisions": {
+            "type": "object",
+            "description": "Overlap choices already saved for this list; restored on Undo."
+          },
+          "revision_sha": {
+            "type": "string"
+          },
+          "source_list_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "target_list_id": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The exact owned list this preview targets (never inferred by name)."
+          },
+          "target_list_name": {
+            "type": "string"
+          },
+          "unresolved_count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Source rows that could not be resolved to a canonical owned Issue."
+          }
+        }
+      },
+      "ReplacementUndoRequest": {
+        "type": "object",
+        "required": [
+          "expected_updated_at"
+        ],
+        "properties": {
+          "expected_updated_at": {
+            "type": "string",
+            "description": "Version token from the replacement commit; a later edit makes Undo a\n409 so a snapshot can never overwrite newer reader work."
+          },
+          "idempotency_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "snapshot_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Optional exact snapshot; defaults to the latest un-undone snapshot."
+          }
+        }
+      },
+      "ReplacementUndoResponse": {
+        "type": "object",
+        "required": [
+          "target_list_id",
+          "snapshot_id",
+          "updated_at",
+          "restored_issue_ids"
+        ],
+        "properties": {
+          "replayed": {
+            "type": "boolean",
+            "description": "True when an exact retry returned the original Undo response."
+          },
+          "restored_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "snapshot_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "target_list_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "updated_at": {
+            "type": "string"
           }
         }
       },
