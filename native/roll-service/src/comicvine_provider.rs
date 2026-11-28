@@ -342,11 +342,8 @@ fn normalized_metadata(
     // A null/absent cover must leave a previously stored cover alone. The
     // persistence merge is a jsonb `||`, so emitting `"primary_image": null`
     // would erase the stored artwork; omit the field entirely instead.
-    if let Some(cover) = cover {
-        patch
-            .as_object_mut()
-            .expect("normalized patch is an object")
-            .insert("primary_image".to_owned(), Value::String(cover.to_owned()));
+    if let (Some(cover), Some(object)) = (cover, patch.as_object_mut()) {
+        object.insert("primary_image".to_owned(), Value::String(cover.to_owned()));
     }
     let url = result["site_detail_url"]
         .as_str()
@@ -1058,9 +1055,7 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
         }
         // The provider call must not hold a pooled connection while it waits.
         drop(conn);
-        let Some(comicvine_id) = issue_id_from_external(&external_id) else {
-            return None;
-        };
+        let comicvine_id = issue_id_from_external(&external_id)?;
         let provider_data = match provider_issue(&state.outbound, comicvine_id, api_key).await {
             Ok(value) => value,
             Err(failure) => {
