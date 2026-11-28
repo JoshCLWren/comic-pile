@@ -7,6 +7,7 @@
  */
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { IssueCard } from '../services/issueCardsApi'
 import type { RollBootstrapThread } from '../types/rollBootstrap'
 import { CoverFlight, type CoverFlightState } from '../pages/RollPage/components/CoverFlight'
 import { CoverBoard } from '../pages/RollPage/components/CoverBoard'
@@ -26,6 +27,17 @@ const pool: RollBootstrapThread[] = [
   { id: 3, title: 'Gamma', format: 'Comic' },
   { id: 4, title: 'Delta', format: 'Comic' },
 ]
+
+/** Fully typed card fixture: presentation guards only read status/title/number. */
+const issueCardFixture: IssueCard = {
+  has_confirmed_identity: true,
+  issue_id: 100,
+  issue_number: '1',
+  mapping_state: 'confirmed',
+  status: 'unread',
+  thread_id: 1,
+  thread_title: 'Alpha',
+}
 
 const workspaceRect: DOMRect = {
   x: 0,
@@ -395,7 +407,7 @@ describe('MobileGallery additional guard branches (#5981)', () => {
     const issuePool: RollBootstrapThread[] = [
       { id: 1, title: 'Alpha', format: 'Comic', issue_id: 100 },
     ]
-    const cardMap = new Map([[100, { status: 'unread' } as never]])
+    const cardMap = new Map([[100, { ...issueCardFixture, status: 'unread' }]])
     render(
       <MobileGallery
         pool={issuePool}
@@ -495,7 +507,7 @@ describe('RollCover guard branches (#5981)', () => {
       <RollCover
         thread={{ id: 2, title: 'Beta', format: 'Comic', issue_id: 2 }}
         face={2}
-        card={{ status: 'read' } as never}
+        card={{ ...issueCardFixture, status: 'read' }}
         winner={true}
         onOpen={vi.fn()}
       />,
@@ -506,7 +518,7 @@ describe('RollCover guard branches (#5981)', () => {
       <RollCover
         thread={{ id: 3, title: 'Gamma', format: 'Comic', issue_id: 3 }}
         face={3}
-        card={{ status: 'unread' } as never}
+        card={{ ...issueCardFixture, status: 'unread' }}
         winner={false}
         onOpen={vi.fn()}
       />,
@@ -544,7 +556,7 @@ describe('CoverBoard issue and selection branches (#5981)', () => {
       const issuePool: RollBootstrapThread[] = [
         { id: 1, title: 'Alpha', format: 'Comic', issue_id: 100 },
       ]
-      const cardMap = new Map([[100, { status: 'read' } as never]])
+      const cardMap = new Map([[100, { ...issueCardFixture, status: 'read' }]])
       render(
         <CoverBoard
           pool={issuePool}
