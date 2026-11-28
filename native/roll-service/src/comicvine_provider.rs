@@ -245,7 +245,10 @@ pub(crate) fn normalize_roster_issue_metadata(result: &Value) -> Value {
     let creator_credits = compact_creator_credits(&result["person_credits"])
         .unwrap_or_else(|_| Value::Array(Vec::new()));
     let mut metadata = Map::new();
-    metadata.insert("name".to_owned(), result.get("name").cloned().unwrap_or(Value::Null));
+    metadata.insert(
+        "name".to_owned(),
+        result.get("name").cloned().unwrap_or(Value::Null),
+    );
     metadata.insert(
         "issue_number".to_owned(),
         result.get("issue_number").cloned().unwrap_or(Value::Null),
@@ -269,7 +272,10 @@ pub(crate) fn normalize_roster_issue_metadata(result: &Value) -> Value {
         compact_refs(&result["character_credits"]),
     );
     metadata.insert("teams".to_owned(), compact_refs(&result["team_credits"]));
-    metadata.insert("story_arcs".to_owned(), compact_refs(&result["story_arc_credits"]));
+    metadata.insert(
+        "story_arcs".to_owned(),
+        compact_refs(&result["story_arc_credits"]),
+    );
     metadata.insert("raw_provider_payload".to_owned(), result.clone());
     Value::Object(metadata)
 }
@@ -1031,17 +1037,16 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
             Ok(c) => c,
             Err(_) => return None,
         };
-        let (identity_id, external_id, cached) = match classify_lookup(
-            confirmed_identity_for_issue(&conn, user_id, issue_id).await,
-        ) {
-            Ok(Some(found)) => found,
-            Ok(None) => return None,
-            Err(failure) => {
-                // A database error is not "no confirmed identity".
-                log_provider_failure("inline_identity_lookup", failure);
-                return None;
-            }
-        };
+        let (identity_id, external_id, cached) =
+            match classify_lookup(confirmed_identity_for_issue(&conn, user_id, issue_id).await) {
+                Ok(Some(found)) => found,
+                Ok(None) => return None,
+                Err(failure) => {
+                    // A database error is not "no confirmed identity".
+                    log_provider_failure("inline_identity_lookup", failure);
+                    return None;
+                }
+            };
         // A confirm/remap can reuse already-complete same-identity metadata;
         // an explicit Retry (`force`) always performs a fresh bounded attempt.
         if !force {
@@ -1674,6 +1679,169 @@ mod tests {
         drop(Object::take(connection));
     }
 
+    /// A sparse provider answer with a null cover and no credits must keep
+    /// both the stored cover and the stored credits, and report those credits
+    /// as retained rather than as "no credits".
+    #[tokio::test]
+    async fn inline_hydration_sparse_response_keeps_stored_cover_and_credits() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_confirmed_identity(
+            &state,
+            "4000-29319",
+            &json!({
+                "primary_image": "https://stored.example/cover.jpg",
+                "creator_credits": [{"id": 9, "name": "Cached Writer", "role": "writer"}],
+                "raw_provider_payload": {"person_credits": []}
+            }),
+        )
+        .await;
+        let mut sparse = deep_provider_result(29319, "2026-11-01 17:33:53");
+        sparse["person_credits"] = json!([]);
+        sparse["image"] = json!({});
+        let body = json!({"status_code": 1, "results": sparse}).to_string();
+        state.recording_fake().expect("recording provider").push_ok(
+            StatusCode::OK,
+            HeaderMap::new(),
+            Bytes::from(body),
+        );
+
+        let retained = hydrate_confirmed_identity_inline(
+            &state,
+            1,
+            1,
+            Duration::from_secs(5),
+            "TESTKEY123",
+            true,
+        )
+        .await;
+
+        assert_eq!(
+            retained,
+            Some(RetainedCredits::Present),
+            "valid stored credits must not be reported as no credits"
+        );
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let metadata: Value = serde_json::from_str(
+            connection
+                .query_one(
+                    "SELECT metadata_json::text FROM external_identities WHERE id = $1",
+                    &[&identity_id],
+                )
+                .await
+                .expect("read metadata")
+                .get(0),
+        )
+        .expect("metadata JSON");
+        assert_eq!(
+            metadata["primary_image"],
+            json!("https://stored.example/cover.jpg"),
+            "a null fresh cover must not overwrite the stored cover"
+        );
+        assert_eq!(metadata["creator_credits"][0]["name"], "Cached Writer");
+        drop(Object::take(connection));
+    }
+
+    /// Outbound fake that stores credits *after* the pre-flight lookup and
+    /// before returning a sparse provider answer. Only a write-time read of
+    /// the row's current metadata can retain them.
+    struct WriteTimeCreditOutbound {
+        db_state: Arc<AppState>,
+        identity_id: i32,
+    }
+
+    impl OutboundHttp for WriteTimeCreditOutbound {
+        fn send(&self, _host: &str, _request: OutboundRequest) -> OutboundFuture {
+            let state = self.db_state.clone();
+            let identity_id = self.identity_id;
+            let mut sparse = deep_provider_result(29319, "2026-11-01 17:33:53");
+            sparse["person_credits"] = json!([]);
+            let body = json!({"status_code": 1, "results": sparse}).to_string();
+            Box::pin(async move {
+                let conn = db::checkout(&state).await.expect("late-write connection");
+                conn.execute(
+                    "UPDATE external_identities
+                     SET metadata_json = jsonb_build_object(
+                         'raw_provider_payload',
+                         jsonb_build_object(
+                             'person_credits',
+                             jsonb_build_array(jsonb_build_object('id', 99, 'name', 'Late Writer'))
+                         )
+                     )::json
+                     WHERE id = $1",
+                    &[&identity_id],
+                )
+                .await
+                .expect("late stored credits");
+                Ok(OutboundResponse {
+                    status: StatusCode::OK,
+                    headers: HeaderMap::new(),
+                    body: Body::from(body),
+                })
+            })
+        }
+
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+    }
+
+    #[tokio::test]
+    async fn inline_hydration_preserves_credits_written_at_write_time() {
+        let Some(canonical) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&canonical).await;
+        let identity_id = seed_confirmed_identity(&canonical, "4000-29319", &json!({})).await;
+        let url = std::env::var("RUST_ROLL_TEST_DATABASE_URL").expect("test database URL");
+        let config = crate::config::Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
+            "RUST_ROLL_JWT_SECRET" => Some(crate::test_support::TEST_JWT_SECRET.to_owned()),
+            "RUST_ROLL_POOL_SIZE" => Some("2".to_owned()),
+            _ => None,
+        })
+        .expect("canonical test config");
+        let fake = Arc::new(WriteTimeCreditOutbound {
+            db_state: canonical.clone(),
+            identity_id,
+        });
+        let state = Arc::new(
+            AppState::with_outbound(config, fake).expect("state with write-time provider fake"),
+        );
+
+        let retained = hydrate_confirmed_identity_inline(
+            &state,
+            1,
+            1,
+            Duration::from_secs(5),
+            "TESTKEY123",
+            true,
+        )
+        .await;
+
+        assert_eq!(
+            retained,
+            Some(RetainedCredits::Present),
+            "credits stored during the provider call must be retained at write time"
+        );
+        let connection = db::checkout(&canonical).await.expect("assert connection");
+        let metadata: Value = serde_json::from_str(
+            connection
+                .query_one(
+                    "SELECT metadata_json::text FROM external_identities WHERE id = $1",
+                    &[&identity_id],
+                )
+                .await
+                .expect("read metadata")
+                .get(0),
+        )
+        .expect("metadata JSON");
+        assert_eq!(metadata["creator_credits"][0]["name"], "Late Writer");
+        drop(Object::take(connection));
+    }
+
     #[test]
     fn only_verified_singular_issue_payload_completes() {
         let result = json!({"id": 29319, "name":"Going For It", "issue_number":"3",
@@ -1814,7 +1982,10 @@ mod tests {
             "raw_provider_payload": {"person_credits": []}
         });
         assert!(!cached_has_credits(&empty));
-        assert_eq!(RetainedCredits::from_metadata(&empty), RetainedCredits::Empty);
+        assert_eq!(
+            RetainedCredits::from_metadata(&empty),
+            RetainedCredits::Empty
+        );
 
         let mut patch = json!({"creator_credits": []});
         let retained = preserve_cached_credits(&mut patch, Some(&raw_only));
