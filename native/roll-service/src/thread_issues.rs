@@ -31,9 +31,7 @@
 
 #![forbid(unsafe_code)]
 
-use crate::{
-    auth::AuthenticatedUser, db, queue, thread_ordering, ApiError, AppState,
-};
+use crate::{auth::AuthenticatedUser, db, queue, thread_ordering, ApiError, AppState};
 use axum::{
     body::Bytes,
     extract::{rejection::PathRejection, Path, State},
