@@ -140,4 +140,47 @@ describe('useRollPendingSelection', () => {
       fetchSpy.mockRestore()
     }
   })
+
+  it('ignores an offer that does not name an exact issue and owning thread', () => {
+    const { result } = renderHook(() => useRollPendingSelection())
+    act(() => result.current.seedFromOffer({
+      ...OFFER,
+      thread_id: null as unknown as number,
+    }))
+    expect(result.current.pending).toBeNull()
+
+    act(() => result.current.seedFromOffer({ ...OFFER, issue_id: null }))
+    expect(result.current.pending).toBeNull()
+  })
+
+  it('omits optional display fields when the offer has none', () => {
+    const { result } = renderHook(() => useRollPendingSelection())
+    act(() => result.current.seedFromOffer({
+      thread_id: 7,
+      issue_id: 43,
+      issue_number: null,
+      result: 0,
+    }))
+    expect(result.current.pending).toEqual({
+      thread_id: 7,
+      issue_id: 43,
+      selected_at: expect.any(Number),
+    })
+  })
+
+  it('persists an explicit selection through the select action', () => {
+    const { result } = renderHook(() => useRollPendingSelection())
+    act(() => result.current.select({
+      thread_id: 8,
+      issue_id: 44,
+      issue_number: '44',
+      result: 12,
+    }))
+    expect(result.current.pending).toMatchObject({
+      thread_id: 8,
+      issue_id: 44,
+      issue_number: '44',
+      result: 12,
+    })
+  })
 })

@@ -216,4 +216,66 @@ describe('browser-owned roll pending selection', () => {
     expect(listener).not.toHaveBeenCalled()
     unsubscribe()
   })
+
+  it('mirrors a selection in-process when BroadcastChannel is not defined', () => {
+    vi.stubGlobal('BroadcastChannel', undefined)
+    const listener = vi.fn()
+    const unsubscribe = subscribePendingSelection(51, listener)
+    writePendingSelection(51, SELECTION)
+    expect(listener).toHaveBeenCalled()
+    expect(readPendingSelection(51)).toEqual(SELECTION)
+    unsubscribe()
+  })
+
+  it('uses the client clock when a persisted selection has no usable timestamp', () => {
+    writePendingSelection(52, { ...SELECTION, selected_at: 0 })
+    expect(readPendingSelection(52)?.selected_at).toBeGreaterThan(0)
+  })
+
+  it('ignores storage events for other keys but applies a remote clear', () => {
+    const listener = vi.fn()
+    const unsubscribe = subscribePendingSelection(53, listener)
+    writePendingSelection(53, SELECTION)
+
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: 'comic-pile:some:other:key',
+      newValue: JSON.stringify({ ...SELECTION, issue_id: 999 }),
+    }))
+    expect(readPendingSelection(53)?.issue_id).toBe(42)
+
+    window.dispatchEvent(new StorageEvent('storage', {
+      key: pendingSelectionStorageKey(53),
+      newValue: null,
+    }))
+    expect(readPendingSelection(53)).toBeNull()
+    expect(listener).toHaveBeenCalled()
+    unsubscribe()
+  })
+
+  it('subscribes when the window has no addEventListener function', () => {
+    const original = window.addEventListener
+    Object.defineProperty(window, 'addEventListener', { configurable: true, value: undefined })
+    try {
+      const listener = vi.fn()
+      const unsubscribe = subscribePendingSelection(54, listener)
+      writePendingSelection(54, SELECTION)
+      expect(listener).toHaveBeenCalledTimes(1)
+      unsubscribe()
+    } finally {
+      Object.defineProperty(window, 'addEventListener', { configurable: true, value: original })
+    }
+  })
+
+  it('does not clear an empty selection for an issue-scoped clear', () => {
+    expect(readPendingSelection(55)).toBeNull()
+    clearPendingSelection(55, SELECTION.issue_id)
+    expect(readPendingSelection(55)).toBeNull()
+  })
+
+  it('partitions anonymous and empty users away from signed-in readers', () => {
+    expect(pendingSelectionStorageKey(null)).toBe(pendingSelectionStorageKey(''))
+    expect(pendingSelectionStorageKey(undefined)).toBe(pendingSelectionStorageKey(null))
+    expect(pendingSelectionStorageKey(null)).not.toBe(pendingSelectionStorageKey(11))
+    expect(pendingSelectionStorageKey('reader/a')).toContain('reader%2Fa')
+  })
 })

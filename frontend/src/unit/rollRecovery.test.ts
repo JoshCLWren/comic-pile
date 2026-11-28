@@ -129,4 +129,121 @@ describe('scoped Roll recovery view model', () => {
       graph: null,
     })).toBeNull()
   })
+
+  it('caps readable prerequisites at 20 and de-duplicates repeated source ids', () => {
+    const edges = Array.from({ length: 24 }, (_, index) => ({
+      dependency_id: 100 + index,
+      source_issue_id: 200 + index,
+      source_issue_number: String(index),
+      source_thread_id: 7,
+      source_thread_title: 'Earlier Series',
+    }))
+    // A second edge naming an already-seen source must not create another chain.
+    edges.push({ ...edges[0], dependency_id: 999 })
+
+    const recovery = buildRollRecovery({
+      pending: PENDING,
+      eligibleIssueIds: edges.map((edge) => edge.source_issue_id),
+      dependencies: { issue_id: 10, incoming: edges, outgoing: [] },
+      prerequisiteCards: edges.map((edge) => card(edge.source_issue_id, 'unread')),
+      graph: null,
+    })
+
+    expect(recovery?.direct_blockers).toHaveLength(edges.length)
+    expect(recovery?.readable_prerequisites).toHaveLength(20)
+    expect(recovery?.chains).toHaveLength(20)
+  })
+
+  it('marks an unread prerequisite outside the eligible pool as not readable', () => {
+    const recovery = buildRollRecovery({
+      pending: PENDING,
+      eligibleIssueIds: [10],
+      dependencies: dependencies(),
+      prerequisiteCards: [card(9, 'unread')],
+      graph: null,
+    })
+    expect(recovery?.readable_prerequisites[0]?.is_readable).toBe(false)
+    expect(recovery?.chains[0]?.[0]?.is_readable).toBe(false)
+  })
+
+  it('treats a prerequisite with no loaded card as an unmet blocker', () => {
+    const recovery = buildRollRecovery({
+      pending: PENDING,
+      eligibleIssueIds: [9, 10],
+      dependencies: dependencies(),
+      prerequisiteCards: [],
+      graph: null,
+    })
+    expect(recovery?.direct_blockers[0]?.source_id).toBe(9)
+    expect(recovery?.readable_prerequisites).toHaveLength(1)
+  })
+
+  it('ignores dependency edges that belong to a different pending issue', () => {
+    expect(buildRollRecovery({
+      pending: PENDING,
+      eligibleIssueIds: [9, 10],
+      dependencies: { ...dependencies(), issue_id: 11 },
+      prerequisiteCards: [card(9, 'unread')],
+      graph: null,
+    })).toBeNull()
+  })
+
+  it('ignores canonical cycles that do not touch the pending issue', () => {
+    const cycle: ReadingGraphCycle = {
+      message: 'cycle',
+      edges: [{
+        kind: 'prerequisite',
+        origin: 'reading_list',
+        source: { issue_id: 7, issue_number: '7', series_title: 'Other', thread_id: 2 },
+        target: { issue_id: 8, issue_number: '8', series_title: 'Other', thread_id: 2 },
+      }],
+    }
+    const graph: ReadingGraphResponse = {
+      affected_lists: [],
+      affected_threads: [],
+      cycles: [cycle],
+      cyclic_issue_ids: [7, 8],
+      repairs: [],
+      status: 'cycle',
+      unresolved_reference_count: 0,
+    }
+    expect(buildRollRecovery({
+      pending: PENDING,
+      eligibleIssueIds: [10],
+      dependencies: null,
+      prerequisiteCards: [],
+      graph,
+    })).toBeNull()
+  })
+
+  it('falls back to the pending issue number or id when no card title is present', () => {
+    const withNumber = buildRollRecovery({
+      pending: PENDING,
+      eligibleIssueIds: [10],
+      dependencies: dependencies(),
+      prerequisiteCards: [card(9, 'unread')],
+      graph: null,
+    })
+    expect(withNumber?.original_thread_title).toBe('Issue 10')
+
+    const withoutNumber = buildRollRecovery({
+      pending: { ...PENDING, issue_number: null },
+      eligibleIssueIds: [10],
+      dependencies: dependencies(),
+      prerequisiteCards: [card(9, 'unread')],
+      graph: null,
+    })
+    expect(withoutNumber?.original_thread_title).toBe('Issue 10')
+  })
+
+  it('returns null for a cached graph that reports no cycles', () => {
+    const graph = graphWithCycle()
+    expect(buildRollRecovery({
+      pending: PENDING,
+      eligibleIssueIds: [10],
+      dependencies: null,
+      prerequisiteCards: [],
+      graph: { ...graph, cycles: [] },
+    })).toBeNull()
+  })
 })
