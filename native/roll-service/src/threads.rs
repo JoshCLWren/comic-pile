@@ -367,7 +367,14 @@ pub async fn list_threads(
     if !matches!(sort, "position" | "title" | "created") {
         return Err(bad_request("sort must be one of: position, title, created"));
     }
-    let page_size = query.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
+    let exact_ids = query.ids.as_deref().map(parse_exact_ids).transpose()?;
+    if exact_ids.is_some() && (query.search.is_some() || query.page_token.is_some()) {
+        return Err(bad_request("ids cannot be combined with search or page_token"));
+    }
+    let page_size = exact_ids
+        .as_ref()
+        .map(|ids| ids.len() as i64)
+        .unwrap_or_else(|| query.page_size.unwrap_or(DEFAULT_PAGE_SIZE));
     if !(1..=MAX_PAGE_SIZE).contains(&page_size) {
         return Err(unprocessable("page_size must be between 1 and 200"));
     }
@@ -683,6 +690,7 @@ pub(crate) async fn list_excluded_page(
         sort,
         page_size,
         cursor.as_ref(),
+        None,
         "excluded",
     )
     .await?;
@@ -1611,7 +1619,8 @@ impl utoipa::Modify for ThreadsSecurityAddon {
         ("search" = Option<String>, Query, description = "Case-insensitive title search"),
         ("sort" = Option<String>, Query, description = "position, title, or created"),
         ("page_size" = Option<i64>, Query, description = "1-200 rows per page (default 50)"),
-        ("page_token" = Option<String>, Query, description = "Opaque continuation cursor")
+        ("page_token" = Option<String>, Query, description = "Opaque continuation cursor"),
+        ("ids" = Option<String>, Query, description = "Comma-separated exact thread ids (1-200) for bounded display summaries")
     ),
     responses(
         (status = 200, description = "Owner-scoped active threads page", body = ThreadListResponse),
