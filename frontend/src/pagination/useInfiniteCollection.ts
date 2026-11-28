@@ -135,18 +135,25 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
     initialPageParam: spec.initialPageParam,
     getNextPageParam: (lastPage, allPages, _lastPageParam, allPageParams) =>
       resolveNextToken(lastPage, allPages as TPage[], allPageParams),
-    enabled: spec.enabled,
-    retry: spec.retry,
-    placeholderData: spec.placeholderData,
-    refetchOnWindowFocus: spec.refetchOnWindowFocus,
-    staleTime: spec.staleTime,
-    gcTime: spec.gcTime,
+    // Never pass an explicit `undefined`: TanStack treats that as "use the
+    // global default" for retry, which silently re-enables retries when a
+    // caller relied on a QueryClient with retry disabled.
+    ...(spec.enabled !== undefined ? { enabled: spec.enabled } : {}),
+    ...(spec.retry !== undefined ? { retry: spec.retry } : {}),
+    ...(spec.placeholderData !== undefined ? { placeholderData: spec.placeholderData } : {}),
+    ...(spec.refetchOnWindowFocus !== undefined
+      ? { refetchOnWindowFocus: spec.refetchOnWindowFocus }
+      : {}),
+    ...(spec.staleTime !== undefined ? { staleTime: spec.staleTime } : {}),
+    ...(spec.gcTime !== undefined ? { gcTime: spec.gcTime } : {}),
   })
 
   const pages = query.data?.pages ?? []
   const lastPage = pages[pages.length - 1] ?? null
 
-  const selectedItems = pages.flatMap(spec.selectPage)
+  // A failed next-page fetch can leave an empty slot in TanStack's page array;
+  // never hand an undefined page to a consumer's selector.
+  const selectedItems = pages.flatMap((page) => (page ? spec.selectPage(page) : []))
   let items = selectedItems
   if (spec.selectId) {
     const seen = new Set<string | number>()
@@ -163,16 +170,24 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
     ? (resolveNextToken(lastPage, pages, (query.data as InfiniteData<TPage, TToken> | undefined)?.pageParams ?? []) ?? null)
     : null
 
+  // Depend on the stable query actions, not the whole result object, so a
+  // consumer with an auto-paging effect does not re-run on every render.
+  const {
+    hasNextPage: queryHasNextPage,
+    isFetchingNextPage: queryFetchingNextPage,
+    fetchNextPage: fetchPage,
+    refetch: refetchQuery,
+  } = query
   const fetchNextPage = useCallback(async (): Promise<void> => {
-    if (!query.hasNextPage || query.isFetchingNextPage) {
+    if (!queryHasNextPage || queryFetchingNextPage) {
       return
     }
-    await query.fetchNextPage()
-  }, [query])
+    await fetchPage()
+  }, [queryHasNextPage, queryFetchingNextPage, fetchPage])
 
   const refetch = useCallback(async (): Promise<void> => {
-    await query.refetch()
-  }, [query])
+    await refetchQuery()
+  }, [refetchQuery])
 
   const isInitialLoading = query.isPending
   const isNextPageLoading = query.isFetchingNextPage
