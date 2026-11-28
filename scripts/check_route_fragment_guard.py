@@ -21,6 +21,11 @@ file is present. ``AGENTS.md`` changes outside the generated block are
 allowed. The ``route-fragment-guard`` workflow runs this helper on every
 pull request; the unit tests in ``tests/test_route_fragment_guard.py``
 pin the classifier behavior.
+
+Ordinary pull requests also compare changed source fragments with their merge
+base. Newly introduced action-shaped v2 operations—including colon custom
+methods and verb-suffixed paths—must have a route-specific, owner-approved
+``action-shaped-subpath`` entry in ``docs/api/v2-aip-shapes-baseline.json``.
 """
 
 from __future__ import annotations
