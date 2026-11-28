@@ -175,6 +175,37 @@ fn compact_refs(value: &Value) -> Value {
     )
 }
 
+/// Validate a provider creator roster before it is compacted into metadata.
+///
+/// A roster must be an array: `null`, a scalar or an object is a malformed
+/// provider answer, while `[]` is a genuine "this issue has no credits" answer.
+/// Every entry must be an object that can actually identify a creator, by a
+/// positive numeric `id` or a non-blank `name`. Empty objects and objects with
+/// neither identifier used to survive `compact_refs` and turn a broken payload
+/// into a false `Complete` credit list; they are now `invalid_response`.
+fn compact_creator_credits(value: &Value) -> Result<Value, ProviderFailure> {
+    let Some(entries) = value.as_array() else {
+        return Err(ProviderFailure::InvalidResponse);
+    };
+    for entry in entries {
+        let Some(object) = entry.as_object() else {
+            return Err(ProviderFailure::InvalidResponse);
+        };
+        let identifiable = object
+            .get("id")
+            .and_then(Value::as_u64)
+            .is_some_and(|id| id > 0)
+            || object
+                .get("name")
+                .and_then(Value::as_str)
+                .is_some_and(|name| !name.trim().is_empty());
+        if !identifiable {
+            return Err(ProviderFailure::InvalidResponse);
+        }
+    }
+    Ok(compact_refs(value))
+}
+
 /// Normalize a roster row for catalog commit without claiming a deep refresh.
 pub(crate) fn normalize_roster_issue_metadata(result: &Value) -> Value {
     let volume = result
@@ -208,19 +239,45 @@ pub(crate) fn normalize_roster_issue_metadata(result: &Value) -> Value {
             .filter_map(|key| image.get(*key).and_then(Value::as_str))
             .find(|value| !value.is_empty())
         });
-    json!({
-        "name": result.get("name"),
-        "issue_number": result.get("issue_number"),
-        "cover_date": result.get("cover_date"),
-        "store_date": result.get("store_date"),
-        "volume": volume,
-        "primary_image": primary_image,
-        "creator_credits": compact_refs(&result["person_credits"]),
-        "characters": compact_refs(&result["character_credits"]),
-        "teams": compact_refs(&result["team_credits"]),
-        "story_arcs": compact_refs(&result["story_arc_credits"]),
-        "raw_provider_payload": result,
-    })
+    // This preview path has no typed outcome channel: fail closed to an empty
+    // roster rather than compacting a malformed one into apparent credits. The
+    // deep hydration path below rejects the same payload as `invalid_response`.
+    let creator_credits = compact_creator_credits(&result["person_credits"])
+        .unwrap_or_else(|_| Value::Array(Vec::new()));
+    let mut metadata = Map::new();
+    metadata.insert(
+        "name".to_owned(),
+        result.get("name").cloned().unwrap_or(Value::Null),
+    );
+    metadata.insert(
+        "issue_number".to_owned(),
+        result.get("issue_number").cloned().unwrap_or(Value::Null),
+    );
+    metadata.insert(
+        "cover_date".to_owned(),
+        result.get("cover_date").cloned().unwrap_or(Value::Null),
+    );
+    metadata.insert(
+        "store_date".to_owned(),
+        result.get("store_date").cloned().unwrap_or(Value::Null),
+    );
+    metadata.insert("volume".to_owned(), volume.unwrap_or(Value::Null));
+    // Never emit a null cover: a later merge must not erase stored artwork.
+    if let Some(cover) = primary_image {
+        metadata.insert("primary_image".to_owned(), Value::String(cover.to_owned()));
+    }
+    metadata.insert("creator_credits".to_owned(), creator_credits);
+    metadata.insert(
+        "characters".to_owned(),
+        compact_refs(&result["character_credits"]),
+    );
+    metadata.insert("teams".to_owned(), compact_refs(&result["team_credits"]));
+    metadata.insert(
+        "story_arcs".to_owned(),
+        compact_refs(&result["story_arc_credits"]),
+    );
+    metadata.insert("raw_provider_payload".to_owned(), result.clone());
+    Value::Object(metadata)
 }
 
 fn normalized_metadata(
@@ -265,15 +322,16 @@ fn normalized_metadata(
         .filter_map(|k| v.get(*k).and_then(Value::as_str))
         .find(|s| !s.is_empty())
     });
-    let person = compact_refs(&result["person_credits"]);
+    // A malformed roster is not "no credits": reject it so the caller reports
+    // invalid_response instead of persisting a fabricated complete result.
+    let person = compact_creator_credits(&result["person_credits"])?;
     let present = person.as_array().is_some_and(|v| !v.is_empty());
-    let patch = json!({
+    let mut patch = json!({
         "name": result["name"],
         "issue_number": result["issue_number"],
         "cover_date": result["cover_date"],
         "store_date": result["store_date"],
         "volume": compact_refs(&json!([result["volume"]])).as_array().and_then(|v|v.first()).cloned(),
-        "primary_image": cover,
         "creator_credits": person,
         "characters": compact_refs(&result["character_credits"]),
         "teams": compact_refs(&result["team_credits"]),
@@ -281,6 +339,12 @@ fn normalized_metadata(
         "raw_provider_payload": result,
         "deep_metadata_refreshed_at": chrono::Utc::now().to_rfc3339(),
     });
+    // A null/absent cover must leave a previously stored cover alone. The
+    // persistence merge is a jsonb `||`, so emitting `"primary_image": null`
+    // would erase the stored artwork; omit the field entirely instead.
+    if let (Some(cover), Some(object)) = (cover, patch.as_object_mut()) {
+        object.insert("primary_image".to_owned(), Value::String(cover.to_owned()));
+    }
     let url = result["site_detail_url"]
         .as_str()
         .filter(|s| s.starts_with("https://comicvine.gamespot.com/"))
@@ -679,16 +743,53 @@ fn has_complete_provider_payload(metadata: &Value) -> bool {
 }
 
 fn cached_has_credits(metadata: &Value) -> bool {
-    let creator = metadata
+    retained_creator_credits(metadata)
+        .as_array()
+        .is_some_and(|credits| !credits.is_empty())
+}
+
+/// Creator credits actually usable from a metadata object: the normalized
+/// list first, falling back to the provider's raw `person_credits`. Both
+/// representations are honoured so valid stored credits are never reported as
+/// missing just because an older row only kept one of the two sources.
+fn retained_creator_credits(metadata: &Value) -> Value {
+    if let Some(credits) = metadata
         .get("creator_credits")
-        .and_then(|v| v.as_array())
-        .is_some_and(|v| !v.is_empty());
-    let raw = metadata
+        .and_then(Value::as_array)
+        .filter(|credits| !credits.is_empty())
+    {
+        return Value::Array(credits.clone());
+    }
+    metadata
         .get("raw_provider_payload")
-        .and_then(|v| v.get("person_credits"))
-        .and_then(|v| v.as_array())
-        .is_some_and(|v| !v.is_empty());
-    creator || raw
+        .and_then(|raw| raw.get("person_credits"))
+        .and_then(Value::as_array)
+        .filter(|credits| !credits.is_empty())
+        .and_then(|credits| compact_creator_credits(&Value::Array(credits.clone())).ok())
+        .unwrap_or_else(|| Value::Array(Vec::new()))
+}
+
+/// Credit state of metadata that was actually persisted by an inline write.
+/// Callers use this to report `no credits` only when nothing was retained.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RetainedCredits {
+    /// At least one identifiable creator credit is stored.
+    Present,
+    /// The provider answered with a genuinely empty roster and no credit was kept.
+    Empty,
+}
+
+impl RetainedCredits {
+    fn from_metadata(metadata: &Value) -> Self {
+        if retained_creator_credits(metadata)
+            .as_array()
+            .is_some_and(|credits| !credits.is_empty())
+        {
+            Self::Present
+        } else {
+            Self::Empty
+        }
+    }
 }
 
 fn provider_newer_than_deep_fetch(metadata: &Value) -> bool {
@@ -854,14 +955,16 @@ async fn hydrate_catalog_commit_with_key(
 /// Evidence provenance is not part of eligibility: imported
 /// (`comicvine_issue_adoption`) and user-confirmed identities are both
 /// recoverable through the explicit synchronous Retry path. One set-based
-/// query: no per-row round trips and no N+1. Returns the identity id, its
-/// external id and the already-cached metadata used to preserve credits when
-/// the fresh roster is empty.
+/// query: no per-row round trips and no N+1.
+///
+/// A query failure is *not* "no matching row". The caller maps `Err` to
+/// `persist_failed` and `Ok(None)` to `not_confirmed`, so a broken database is
+/// never reported as a user with no confirmed identity.
 async fn confirmed_identity_for_issue(
     conn: &deadpool_postgres::Object,
     user_id: i32,
     issue_id: i32,
-) -> Option<(i32, String, Option<Value>)> {
+) -> Result<Option<(i32, String, Option<Value>)>, tokio_postgres::Error> {
     let row = conn
         .query_opt(
             "SELECT e.id, e.external_id, e.metadata_json::text
@@ -878,15 +981,23 @@ async fn confirmed_identity_for_issue(
              LIMIT 1",
             &[&issue_id, &user_id],
         )
-        .await
-        .ok()
-        .flatten()?;
+        .await?;
+    let Some(row) = row else {
+        return Ok(None);
+    };
     let id: i32 = row.get(0);
     let external_id: String = row.get(1);
     let metadata = row
         .get::<_, Option<String>>(2)
         .and_then(|text| serde_json::from_str::<Value>(&text).ok());
-    Some((id, external_id, metadata))
+    Ok(Some((id, external_id, metadata)))
+}
+
+/// A missing row is a normal `Ok(None)`; a failing query is a persistence
+/// failure, never "no confirmed identity". Keep the two cases distinguishable
+/// all the way to the caller so a database error is reported truthfully.
+fn classify_lookup<T, E>(result: Result<Option<T>, E>) -> Result<Option<T>, ProviderFailure> {
+    result.map_err(|_| ProviderFailure::PersistFailed)
 }
 
 /// Synchronous, bounded creator-credit hydration for identity confirm/replace
@@ -907,37 +1018,46 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
     budget: Duration,
     api_key: &str,
     force: bool,
-) {
+) -> Option<RetainedCredits> {
     if budget.is_zero() || api_key.is_empty() {
-        return;
+        return None;
     }
     let run = async {
         let conn = match db::checkout(state).await {
             Ok(c) => c,
-            Err(_) => return,
+            Err(_) => return None,
         };
-        let Some((identity_id, external_id, cached)) =
-            confirmed_identity_for_issue(&conn, user_id, issue_id).await
-        else {
-            return;
-        };
+        let (identity_id, external_id, cached) =
+            match classify_lookup(confirmed_identity_for_issue(&conn, user_id, issue_id).await) {
+                Ok(Some(found)) => found,
+                Ok(None) => return None,
+                Err(failure) => {
+                    // A database error is not "no confirmed identity".
+                    log_provider_failure("inline_identity_lookup", failure);
+                    return None;
+                }
+            };
         // A confirm/remap can reuse already-complete same-identity metadata;
         // an explicit Retry (`force`) always performs a fresh bounded attempt.
         if !force {
             if let Some(metadata) = &cached {
                 if !needs_provider_fetch(metadata, chrono::Utc::now()) {
-                    return;
+                    return Some(RetainedCredits::from_metadata(metadata));
                 }
             }
         }
-        let Some(comicvine_id) = issue_id_from_external(&external_id) else {
-            return;
-        };
+        // The provider call must not hold a pooled connection while it waits.
+        drop(conn);
+        let comicvine_id = issue_id_from_external(&external_id)?;
         let provider_data = match provider_issue(&state.outbound, comicvine_id, api_key).await {
             Ok(value) => value,
             Err(failure) => {
                 log_provider_failure("inline_identity_hydration", failure);
+<<<<<<< HEAD
                 return;
+=======
+                return None;
+>>>>>>> origin/main
             }
         };
         let (mut patch, has, url, updated) = match normalized_metadata(&provider_data, comicvine_id)
@@ -945,6 +1065,7 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
             Ok(ok) => ok,
             Err(failure) => {
                 log_provider_failure("inline_identity_hydration_normalize", failure);
+<<<<<<< HEAD
                 return;
             }
         };
@@ -958,8 +1079,73 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
                 ProviderFailure::InvalidResponse,
             );
             return;
+=======
+                return None;
+            }
         };
-        if let Err(err) = conn
+        let mut write_conn = match db::checkout(state).await {
+            Ok(c) => c,
+            Err(_) => return None,
+>>>>>>> origin/main
+        };
+        let tx = match write_conn.transaction().await {
+            Ok(tx) => tx,
+            Err(err) => {
+                log_provider_failure("inline_identity_persist", ProviderFailure::PersistFailed);
+                tracing::debug!(
+                    error_kind = crate::error_kind(&err),
+                    "inline identity persist transaction failed"
+                );
+                return None;
+            }
+        };
+        // Read the row's *current* metadata at write time, under its row lock,
+        // and recheck the still-confirmed mapping. A late result for identity A
+        // cannot be written after a remap to B, and a concurrent metadata write
+        // cannot be clobbered by the snapshot captured before the provider call.
+        let current_metadata = match classify_lookup(
+            tx.query_opt(
+                "SELECT e.metadata_json::text
+                 FROM external_identities e
+                 WHERE e.id = $1
+                   AND e.provider = 'comicvine'
+                   AND e.entity_type = 'issue'
+                   AND EXISTS (
+                       SELECT 1 FROM issue_external_identity_mappings m
+                       WHERE m.issue_id = $2
+                         AND m.external_identity_id = e.id
+                         AND m.status = 'confirmed'
+                   )
+                 FOR UPDATE OF e",
+                &[&identity_id, &issue_id],
+            )
+            .await,
+        ) {
+            Ok(Some(row)) => row
+                .get::<_, Option<String>>(0)
+                .and_then(|text| serde_json::from_str::<Value>(&text).ok()),
+            Ok(None) => return None,
+            Err(failure) => {
+                log_provider_failure("inline_identity_lookup", failure);
+                return None;
+            }
+        };
+        // A sparser fresh roster must never erase credits that are in the row
+        // right now, whether they are normalized or only in the raw payload.
+        let retained = if has {
+            RetainedCredits::from_metadata(&patch)
+        } else {
+            preserve_cached_credits(&mut patch, current_metadata.as_ref());
+            RetainedCredits::from_metadata(&patch)
+        };
+        let Ok(json_patch) = serde_json::to_string(&patch) else {
+            log_provider_failure(
+                "inline_identity_hydration_serialize",
+                ProviderFailure::InvalidResponse,
+            );
+            return None;
+        };
+        let updated_rows = match tx
             .execute(
                 "UPDATE external_identities
                  SET metadata_json = (COALESCE(metadata_json::jsonb, '{}'::jsonb)
@@ -972,15 +1158,39 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
             )
             .await
         {
+<<<<<<< HEAD
             log_provider_failure("inline_identity_persist", ProviderFailure::PersistFailed);
             tracing::debug!(
                 error_kind = crate::error_kind(&err),
                 "inline identity persist error classified"
+=======
+            Ok(rows) => rows,
+            Err(err) => {
+                log_provider_failure("inline_identity_persist", ProviderFailure::PersistFailed);
+                tracing::debug!(
+                    error_kind = crate::error_kind(&err),
+                    "inline identity persist error classified"
+                );
+                return None;
+            }
+        };
+        if let Err(err) = tx.commit().await {
+            log_provider_failure("inline_identity_persist", ProviderFailure::PersistFailed);
+            tracing::debug!(
+                error_kind = crate::error_kind(&err),
+                "inline identity persist commit failed"
+>>>>>>> origin/main
             );
+            return None;
         }
+        (updated_rows > 0).then_some(retained)
     };
-    if tokio::time::timeout(budget, run).await.is_err() {
-        tracing::info!("inline identity creator-credit hydration budget exhausted");
+    match tokio::time::timeout(budget, run).await {
+        Ok(retained) => retained,
+        Err(_) => {
+            tracing::info!("inline identity creator-credit hydration budget exhausted");
+            None
+        }
     }
 }
 
@@ -989,32 +1199,25 @@ fn issue_id_from_external(external_id: &str) -> Option<u32> {
     issue_id(external_id)
 }
 
-/// Keep cached creator credits when a fresh fetch did not include a roster.
-fn preserve_cached_credits(patch: &mut Value, cached: Option<&Value>) {
-    let Some(existing) = cached else {
-        return;
+/// Keep creator credits from the row's *current* metadata when a fresh fetch
+/// did not include a roster. `current` must come from a read at write time,
+/// not from the snapshot taken before the provider call, or a concurrent
+/// metadata write would be lost. Returns the credits retained in the patch so
+/// the caller can derive its outcome from what was actually stored.
+fn preserve_cached_credits(patch: &mut Value, current: Option<&Value>) -> Value {
+    let Some(existing) = current else {
+        return retained_creator_credits(patch);
     };
-    if existing["creator_credits"]
+    let credits = retained_creator_credits(existing);
+    let patch_has_no_credits = patch["creator_credits"]
         .as_array()
-        .is_some_and(|v| !v.is_empty())
-    {
+        .is_none_or(|credits| credits.is_empty());
+    if patch_has_no_credits && credits.as_array().is_some_and(|v| !v.is_empty()) {
         if let Some(obj) = patch.as_object_mut() {
-            obj.insert(
-                "creator_credits".to_owned(),
-                existing["creator_credits"].clone(),
-            );
-        }
-    } else if existing["raw_provider_payload"]["person_credits"]
-        .as_array()
-        .is_some_and(|v| !v.is_empty())
-    {
-        if let Some(obj) = patch.as_object_mut() {
-            obj.insert(
-                "creator_credits".to_owned(),
-                compact_refs(&existing["raw_provider_payload"]["person_credits"]),
-            );
+            obj.insert("creator_credits".to_owned(), credits);
         }
     }
+    retained_creator_credits(patch)
 }
 
 #[cfg(test)]
@@ -1491,6 +1694,169 @@ mod tests {
         drop(Object::take(connection));
     }
 
+    /// A sparse provider answer with a null cover and no credits must keep
+    /// both the stored cover and the stored credits, and report those credits
+    /// as retained rather than as "no credits".
+    #[tokio::test]
+    async fn inline_hydration_sparse_response_keeps_stored_cover_and_credits() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_confirmed_identity(
+            &state,
+            "4000-29319",
+            &json!({
+                "primary_image": "https://stored.example/cover.jpg",
+                "creator_credits": [{"id": 9, "name": "Cached Writer", "role": "writer"}],
+                "raw_provider_payload": {"person_credits": []}
+            }),
+        )
+        .await;
+        let mut sparse = deep_provider_result(29319, "2026-11-01 17:33:53");
+        sparse["person_credits"] = json!([]);
+        sparse["image"] = json!({});
+        let body = json!({"status_code": 1, "results": sparse}).to_string();
+        state.recording_fake().expect("recording provider").push_ok(
+            StatusCode::OK,
+            HeaderMap::new(),
+            Bytes::from(body),
+        );
+
+        let retained = hydrate_confirmed_identity_inline(
+            &state,
+            1,
+            1,
+            Duration::from_secs(5),
+            "TESTKEY123",
+            true,
+        )
+        .await;
+
+        assert_eq!(
+            retained,
+            Some(RetainedCredits::Present),
+            "valid stored credits must not be reported as no credits"
+        );
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let metadata: Value = serde_json::from_str(
+            connection
+                .query_one(
+                    "SELECT metadata_json::text FROM external_identities WHERE id = $1",
+                    &[&identity_id],
+                )
+                .await
+                .expect("read metadata")
+                .get(0),
+        )
+        .expect("metadata JSON");
+        assert_eq!(
+            metadata["primary_image"],
+            json!("https://stored.example/cover.jpg"),
+            "a null fresh cover must not overwrite the stored cover"
+        );
+        assert_eq!(metadata["creator_credits"][0]["name"], "Cached Writer");
+        drop(Object::take(connection));
+    }
+
+    /// Outbound fake that stores credits *after* the pre-flight lookup and
+    /// before returning a sparse provider answer. Only a write-time read of
+    /// the row's current metadata can retain them.
+    struct WriteTimeCreditOutbound {
+        db_state: Arc<AppState>,
+        identity_id: i32,
+    }
+
+    impl OutboundHttp for WriteTimeCreditOutbound {
+        fn send(&self, _host: &str, _request: OutboundRequest) -> OutboundFuture {
+            let state = self.db_state.clone();
+            let identity_id = self.identity_id;
+            let mut sparse = deep_provider_result(29319, "2026-11-01 17:33:53");
+            sparse["person_credits"] = json!([]);
+            let body = json!({"status_code": 1, "results": sparse}).to_string();
+            Box::pin(async move {
+                let conn = db::checkout(&state).await.expect("late-write connection");
+                conn.execute(
+                    "UPDATE external_identities
+                     SET metadata_json = jsonb_build_object(
+                         'raw_provider_payload',
+                         jsonb_build_object(
+                             'person_credits',
+                             jsonb_build_array(jsonb_build_object('id', 99, 'name', 'Late Writer'))
+                         )
+                     )::json
+                     WHERE id = $1",
+                    &[&identity_id],
+                )
+                .await
+                .expect("late stored credits");
+                Ok(OutboundResponse {
+                    status: StatusCode::OK,
+                    headers: HeaderMap::new(),
+                    body: Body::from(body),
+                })
+            })
+        }
+
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+    }
+
+    #[tokio::test]
+    async fn inline_hydration_preserves_credits_written_at_write_time() {
+        let Some(canonical) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&canonical).await;
+        let identity_id = seed_confirmed_identity(&canonical, "4000-29319", &json!({})).await;
+        let url = std::env::var("RUST_ROLL_TEST_DATABASE_URL").expect("test database URL");
+        let config = crate::config::Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
+            "RUST_ROLL_JWT_SECRET" => Some(crate::test_support::TEST_JWT_SECRET.to_owned()),
+            "RUST_ROLL_POOL_SIZE" => Some("2".to_owned()),
+            _ => None,
+        })
+        .expect("canonical test config");
+        let fake = Arc::new(WriteTimeCreditOutbound {
+            db_state: canonical.clone(),
+            identity_id,
+        });
+        let state = Arc::new(
+            AppState::with_outbound(config, fake).expect("state with write-time provider fake"),
+        );
+
+        let retained = hydrate_confirmed_identity_inline(
+            &state,
+            1,
+            1,
+            Duration::from_secs(5),
+            "TESTKEY123",
+            true,
+        )
+        .await;
+
+        assert_eq!(
+            retained,
+            Some(RetainedCredits::Present),
+            "credits stored during the provider call must be retained at write time"
+        );
+        let connection = db::checkout(&canonical).await.expect("assert connection");
+        let metadata: Value = serde_json::from_str(
+            connection
+                .query_one(
+                    "SELECT metadata_json::text FROM external_identities WHERE id = $1",
+                    &[&identity_id],
+                )
+                .await
+                .expect("read metadata")
+                .get(0),
+        )
+        .expect("metadata JSON");
+        assert_eq!(metadata["creator_credits"][0]["name"], "Late Writer");
+        drop(Object::take(connection));
+    }
+
     #[test]
     fn only_verified_singular_issue_payload_completes() {
         let result = json!({"id": 29319, "name":"Going For It", "issue_number":"3",
@@ -1507,6 +1873,162 @@ mod tests {
         incomplete.as_object_mut().unwrap().remove("person_credits");
         assert!(normalized_metadata(&incomplete, 29319).is_err());
     }
+
+    /// Malformed rosters and unidentifiable entries must fail as
+    /// `invalid_response`, never compact into a truthful-looking credit list.
+    #[test]
+    fn compact_creator_credits_rejects_malformed_rosters() {
+        assert_eq!(compact_creator_credits(&json!([])), Ok(json!([])));
+        let valid = json!([
+            {"id": 7},
+            {"name": "Writer"},
+            {"id": 8, "name": "Penciler", "role": "penciler"}
+        ]);
+        let compacted = compact_creator_credits(&valid).expect("identifiable credits");
+        assert_eq!(compacted.as_array().map(Vec::len), Some(3));
+        assert_eq!(compacted[2]["role"], json!("penciler"));
+
+        for malformed in [
+            json!(null),
+            json!({}),
+            json!("writer"),
+            json!([{}]),
+            json!([{"role": "writer"}]),
+            json!([{"id": 0, "name": "   "}]),
+            json!([{"id": -1}]),
+            json!(["writer"]),
+            json!([null]),
+            json!([{"id": 1}, {}]),
+        ] {
+            assert_eq!(
+                compact_creator_credits(&malformed),
+                Err(ProviderFailure::InvalidResponse),
+                "malformed roster must be invalid_response: {malformed}"
+            );
+        }
+    }
+
+    #[test]
+    fn normalized_metadata_rejects_broken_rosters_but_accepts_empty() {
+        let mut result = deep_provider_result(29319, "2026-11-01 17:33:53");
+        for malformed in [
+            json!(null),
+            json!([{}]),
+            json!([{"role": "writer"}]),
+            json!([{"name": "  "}]),
+        ] {
+            result["person_credits"] = malformed.clone();
+            assert_eq!(
+                normalized_metadata(&result, 29319).unwrap_err(),
+                ProviderFailure::InvalidResponse,
+                "{malformed}"
+            );
+        }
+        // A genuine empty roster is a valid "no credits" answer.
+        result["person_credits"] = json!([]);
+        let (patch, present, _, _) =
+            normalized_metadata(&result, 29319).expect("a genuine empty roster is valid");
+        assert!(!present);
+        assert_eq!(patch["creator_credits"], json!([]));
+        result["person_credits"] = json!([{"id": 1, "name": "Writer"}]);
+        let (patch, present, _, _) = normalized_metadata(&result, 29319).expect("valid roster");
+        assert!(present);
+        assert_eq!(patch["creator_credits"][0]["name"], "Writer");
+    }
+
+    /// A null/absent cover must be omitted so the jsonb merge cannot erase a
+    /// cover already stored for the identity.
+    #[test]
+    fn normalized_metadata_omits_cover_when_provider_has_none() {
+        let mut result = deep_provider_result(29319, "2026-11-01 17:33:53");
+        result["image"] = json!({});
+        let (patch, _, _, _) = normalized_metadata(&result, 29319).expect("empty image object");
+        assert!(patch.get("primary_image").is_none(), "{patch}");
+
+        let mut blank_urls = deep_provider_result(29319, "2026-11-01 17:33:53");
+        blank_urls["image"] = json!({"original_url": null, "medium_url": ""});
+        let (patch, _, _, _) = normalized_metadata(&blank_urls, 29319).expect("blank cover URLs");
+        assert!(patch.get("primary_image").is_none(), "{patch}");
+
+        let with_cover = deep_provider_result(29319, "2026-11-01 17:33:53");
+        let (patch, _, _, _) = normalized_metadata(&with_cover, 29319).expect("cover present");
+        assert_eq!(
+            patch["primary_image"],
+            json!("https://img.example/medium.jpg")
+        );
+    }
+
+    #[test]
+    fn roster_metadata_omits_null_cover_and_broken_credits() {
+        let mut row = deep_provider_result(29319, "2026-11-01 17:33:53");
+        row["image"] = json!({});
+        row["person_credits"] = json!([{}]);
+        let metadata = normalize_roster_issue_metadata(&row);
+        assert!(metadata.get("primary_image").is_none(), "{metadata}");
+        assert_eq!(metadata["creator_credits"], json!([]));
+        row["person_credits"] = json!([{"id": 3, "name": "Writer", "role": "writer"}]);
+        let metadata = normalize_roster_issue_metadata(&row);
+        assert_eq!(metadata["creator_credits"][0]["name"], "Writer");
+        assert!(metadata.get("primary_image").is_none());
+    }
+
+    #[test]
+    fn retained_credits_check_both_normalized_and_raw_sources() {
+        let normalized = json!({"creator_credits": [{"id": 1, "name": "One"}]});
+        assert_eq!(
+            retained_creator_credits(&normalized),
+            json!([{"id": 1, "name": "One"}])
+        );
+        let raw_only = json!({
+            "creator_credits": [],
+            "raw_provider_payload": {"person_credits": [{"id": 2, "name": "Two"}]}
+        });
+        assert!(cached_has_credits(&raw_only));
+        assert_eq!(
+            retained_creator_credits(&raw_only),
+            json!([{"id": 2, "name": "Two"}])
+        );
+        assert_eq!(
+            RetainedCredits::from_metadata(&raw_only),
+            RetainedCredits::Present
+        );
+        let empty = json!({
+            "creator_credits": [],
+            "raw_provider_payload": {"person_credits": []}
+        });
+        assert!(!cached_has_credits(&empty));
+        assert_eq!(
+            RetainedCredits::from_metadata(&empty),
+            RetainedCredits::Empty
+        );
+        // A malformed stored roster is not evidence of credits either.
+        let malformed_raw = json!({
+            "raw_provider_payload": {"person_credits": [{}, {"role": "writer"}]}
+        });
+        assert!(!cached_has_credits(&malformed_raw));
+        assert_eq!(
+            RetainedCredits::from_metadata(&malformed_raw),
+            RetainedCredits::Empty
+        );
+
+        let mut patch = json!({"creator_credits": []});
+        let retained = preserve_cached_credits(&mut patch, Some(&raw_only));
+        assert_eq!(retained, json!([{"id": 2, "name": "Two"}]));
+        assert_eq!(patch["creator_credits"], retained);
+    }
+
+    /// A failed lookup is `persist_failed`; only an absent row means
+    /// `not_confirmed`.
+    #[test]
+    fn lookup_failure_is_distinct_from_no_matching_row() {
+        assert_eq!(classify_lookup::<(), &str>(Ok(None)), Ok(None));
+        assert_eq!(
+            classify_lookup::<(), &str>(Err("database disconnected")),
+            Err(ProviderFailure::PersistFailed)
+        );
+        assert_eq!(classify_lookup::<i32, &str>(Ok(Some(7))), Ok(Some(7)));
+    }
+
     #[test]
     fn provider_timestamp_accepts_rfc3339_and_comicvine_space_format() {
         assert_eq!(

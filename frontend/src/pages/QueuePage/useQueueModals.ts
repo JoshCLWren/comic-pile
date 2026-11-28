@@ -41,6 +41,8 @@ interface UseQueueModalsResult {
   editForm: QueueFormState
   /** Failure feedback rendered inside the open Add Series dialog. */
   createError: string | null
+  /** Failure feedback rendered inside the open Edit Series dialog. */
+  editError: string | null
   issuePreview: number | null
   issueParseError: string | null
   issueParseWarnings: string[]
@@ -124,6 +126,7 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
   const [createForm, setCreateForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
   const [createError, setCreateError] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
+  const [editError, setEditError] = useState<string | null>(null)
   const [editingThread, setEditingThread] = useState<Thread | ThreadListItem | null>(null)
   // Set by QueueModals after it flushes the deferred issue list. While true,
   // Save keeps the dialog open so the post-commit Undo bar stays reachable.
@@ -172,6 +175,7 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
       // clears this flag. Unmigrated threads never enter the loading state.
       const issuesLoadRequired = thread.total_issues != null
       editUndoAvailableRef.current = false
+      setEditError(null)
       setEditingThread(thread)
       setEditForm({
         title: thread.title,
@@ -206,6 +210,7 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
     editUndoAvailableRef.current = false
     setEditingThread(null)
     setIsIssuesLoading(false)
+    setEditError(null)
     setOpenModal(null)
     clearRestoreAction()
     clearQueueModalState()
@@ -437,6 +442,7 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
     async (event: FormEvent) => {
       event.preventDefault()
       if (!editingThread) return
+      setEditError(null)
       try {
         const data: EditThreadData = {
           title: editForm.title,
@@ -463,8 +469,9 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
           closeEditModal()
         }
         await onUpdated()
-      } catch {
-        console.error('Failed to update thread')
+      } catch (error) {
+        console.error('Failed to update thread', error)
+        setEditError(`Failed to save series: ${getApiErrorDetail(error)}`)
       }
     },
     [editingThread, editForm, closeEditModal, onUpdated, submitEdit],
@@ -522,6 +529,7 @@ export function useQueueModals(params: QueueModalsParams, deps: UseQueueModalsDe
     createForm,
     createError,
     editForm,
+    editError,
     issuePreview,
     issueParseError,
     issueParseWarnings,

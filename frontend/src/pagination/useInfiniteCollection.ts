@@ -26,7 +26,7 @@ export interface InfiniteCollectionSpec<TItem, TPage, TToken = PageToken> {
   /** First-page cursor value (usually `null`). */
   initialPageParam: TToken
   /** Reads the opaque next-page cursor from a page; `null`/`undefined` means no more pages. */
-  getNextPageParam: (lastPage: TPage) => TToken | null | undefined
+  getNextPageParam: (lastPage: TPage, allPages: TPage[]) => TToken | null | undefined
   /** Maps a page payload to its flat list of items. */
   selectPage: (page: TPage) => TItem[]
   /** Optional item identity used to deduplicate rows that repeat across page boundaries. */
@@ -39,20 +39,36 @@ export interface InfiniteCollectionSpec<TItem, TPage, TToken = PageToken> {
   placeholderData?: InfiniteData<TPage, TToken> | PlaceholderDataFunction<InfiniteData<TPage, TToken>, Error, InfiniteData<TPage, TToken>, readonly unknown[]> | typeof keepPreviousData
   /** Refetch on window focus policy (mirrors `useInfiniteQuery`). */
   refetchOnWindowFocus?: boolean | 'always'
+  /** Freshness window (mirrors `useInfiniteQuery`). */
+  staleTime?: number
+  /** Garbage-collection window (mirrors `useInfiniteQuery`). */
+  gcTime?: number
 }
 
 /** Semantic state exposed by the canonical paginator. */
 export interface InfiniteCollectionState<TItem, TPage, TToken = PageToken> {
   /** All items across every loaded page, in server order. */
   items: TItem[]
+  /** The raw infinite cache entry, for consumers that expose page payloads. */
+  data: InfiniteData<TPage, TToken> | undefined
   /** The raw pages currently cached. */
   pages: TPage[]
   /** True while the first page is loading and no data is available yet. */
   isInitialLoading: boolean
   /** True while an additional cursor page is being appended. */
   isNextPageLoading: boolean
+  /** Alias for `isNextPageLoading` for TanStack-shaped call sites. */
+  isFetchingNextPage: boolean
   /** True while any fetch is in flight (initial, refetch, or next page). */
   isLoading: boolean
+  /** Alias for `isLoading` used by callers that render a fetching affordance. */
+  isFetching: boolean
+  /** Consecutive failure count, used by callers that latch a first-load error. */
+  failureCount: number
+  /** True once the current query key has a successful response. */
+  isSuccess: boolean
+  /** TanStack fetch status (`idle`, `fetching`, or `paused`). */
+  fetchStatus: 'idle' | 'fetching' | 'paused'
   /**
    * True when the rendered pages are placeholder data kept from the previous
    * query key by `keepPreviousData` while the new key's first page loads.
@@ -81,7 +97,7 @@ export interface InfiniteCollectionState<TItem, TPage, TToken = PageToken> {
    */
   isFetchNextPageError: boolean
   isError: boolean
-  error: unknown
+  error: Error | null
 }
 
 /**
@@ -95,21 +111,63 @@ export interface InfiniteCollectionState<TItem, TPage, TToken = PageToken> {
 export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
   spec: InfiniteCollectionSpec<TItem, TPage, TToken>,
 ): InfiniteCollectionState<TItem, TPage, TToken> {
-  const query = useInfiniteQuery({
+  // Repeated or stale tokens are a shared-paginator concern: a consumer must
+  // never re-request a cursor that was already used to fetch an earlier page.
+  // Compare against the actual page params (not recomputed cursors) so the
+  // guard works for both opaque tokens and documented offset cursors.
+  const resolveNextToken = (
+    lastPage: TPage | undefined,
+    allPages: TPage[],
+    usedParams: TToken[],
+  ): TToken | undefined => {
+    if (!lastPage) return undefined
+    const next = spec.getNextPageParam(lastPage, allPages)
+    if (next == null) return undefined
+    for (const used of usedParams) {
+      if (used != null && Object.is(used, next)) return undefined
+    }
+    return next
+  }
+
+  const queryOptions: UseInfiniteQueryOptions<
+    TPage,
+    Error,
+    InfiniteData<TPage, TToken>,
+    QueryKey,
+    TToken
+  > = {
     queryKey: spec.queryKey,
     queryFn: spec.queryFn,
     initialPageParam: spec.initialPageParam,
-    getNextPageParam: spec.getNextPageParam,
-    enabled: spec.enabled,
-    retry: spec.retry,
-    placeholderData: spec.placeholderData,
-    refetchOnWindowFocus: spec.refetchOnWindowFocus,
-  })
+    getNextPageParam: (lastPage, allPages, _lastPageParam, allPageParams) =>
+      resolveNextToken(lastPage, allPages, allPageParams),
+  }
+  // Omitted options must stay omitted: TanStack treats an explicit `undefined`
+  // as "use the global default", which silently re-enables retries when a
+  // caller relied on a QueryClient with retry disabled.
+  if (spec.enabled !== undefined) queryOptions.enabled = spec.enabled
+  if (spec.retry !== undefined) queryOptions.retry = spec.retry
+  if (spec.placeholderData !== undefined) queryOptions.placeholderData = spec.placeholderData
+  if (spec.refetchOnWindowFocus !== undefined) {
+    queryOptions.refetchOnWindowFocus = spec.refetchOnWindowFocus
+  }
+  if (spec.staleTime !== undefined) queryOptions.staleTime = spec.staleTime
+  if (spec.gcTime !== undefined) queryOptions.gcTime = spec.gcTime
+
+  const query = useInfiniteQuery<
+    TPage,
+    Error,
+    InfiniteData<TPage, TToken>,
+    QueryKey,
+    TToken
+  >(queryOptions)
 
   const pages = query.data?.pages ?? []
   const lastPage = pages[pages.length - 1] ?? null
 
-  const selectedItems = pages.flatMap(spec.selectPage)
+  // A failed next-page fetch can leave an empty slot in TanStack's page array;
+  // never hand an undefined page to a consumer's selector.
+  const selectedItems = pages.flatMap((page) => (page ? spec.selectPage(page) : []))
   let items = selectedItems
   if (spec.selectId) {
     const seen = new Set<string | number>()
@@ -122,29 +180,44 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
   }
 
   const hasNextPage = !!query.hasNextPage
-  const nextPageToken: TToken | null =
-    hasNextPage && lastPage ? (spec.getNextPageParam(lastPage) ?? null) : null
+  const nextPageToken: TToken | null = hasNextPage && lastPage
+    ? (resolveNextToken(lastPage, pages, query.data?.pageParams ?? []) ?? null)
+    : null
 
+  // Depend on the stable query actions, not the whole result object, so a
+  // consumer with an auto-paging effect does not re-run on every render.
+  const {
+    hasNextPage: queryHasNextPage,
+    isFetchingNextPage: queryFetchingNextPage,
+    fetchNextPage: fetchPage,
+    refetch: refetchQuery,
+  } = query
   const fetchNextPage = useCallback(async (): Promise<void> => {
-    if (!query.hasNextPage || query.isFetchingNextPage) {
+    if (!queryHasNextPage || queryFetchingNextPage) {
       return
     }
-    await query.fetchNextPage()
-  }, [query])
+    await fetchPage()
+  }, [queryHasNextPage, queryFetchingNextPage, fetchPage])
 
   const refetch = useCallback(async (): Promise<void> => {
-    await query.refetch()
-  }, [query])
+    await refetchQuery()
+  }, [refetchQuery])
 
   const isInitialLoading = query.isPending
   const isNextPageLoading = query.isFetchingNextPage
 
   return {
     items,
+    data: query.data,
     pages,
     isInitialLoading,
     isNextPageLoading,
+    isFetchingNextPage: query.isFetchingNextPage,
     isLoading: query.isFetching,
+    isFetching: query.isFetching,
+    failureCount: query.failureCount,
+    isSuccess: query.isSuccess,
+    fetchStatus: query.fetchStatus,
     isPlaceholderData: query.isPlaceholderData,
     isPending: isInitialLoading || isNextPageLoading,
     hasNextPage,
