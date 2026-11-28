@@ -247,6 +247,7 @@ describe('CblBrowserPage adoption', () => {
       contentHash: 'hash-1',
       revisionSha: 'abcdef1234567890',
     })
+    mockBrowse.mockResolvedValue(browsePage({ items: [source], total: 1, total_pages: 1 }))
     mockGetOwnedList.mockResolvedValue({
       id: 900,
       name: 'My Ultimate List',
@@ -619,7 +620,7 @@ describe('CblBrowserPage adoption', () => {
       expect(mockCommitNew).toHaveBeenCalledTimes(1)
     })
     const [, , choices] = mockCommitNew.mock.calls[0]
-    expect(choices.entry_decisions).toEqual({ '101': 'exclude' })
+    expect(choices.entry_decisions).toEqual({ '101': false })
   })
 
   it('a 409 on commit surfaces the stale-review message and refresh recovers', async () => {
