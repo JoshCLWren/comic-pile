@@ -1946,7 +1946,6 @@ pub fn creator_credits_documentation() {}
 #[allow(dead_code)]
 pub fn reorder_documentation() {}
 
-
 /// OpenAPI document for the native same-path thread issue-management surface.
 #[derive(utoipa::OpenApi)]
 #[openapi(
