@@ -139,9 +139,10 @@ The ingester and catalog regressions are DB-backed and run against the
 canonical disposable schema:
 
 ```bash
-cargo test -p comicpile-roll-service --lib cbl_ingest
-cargo test -p comicpile-roll-service --test cbl_ingest
-cargo test -p comicpile-roll-service --test cbl_catalog
+cd "$COMIC_PILE_ROOT"
+cargo test --locked -p comicpile-roll-service --lib cbl_ingest
+cargo test --locked -p comicpile-roll-service --test cbl_ingest
+cargo test --locked -p comicpile-roll-service --test cbl_catalog
 ```
 
 They cover repeatable/idempotent reruns, changed revisions, removal as

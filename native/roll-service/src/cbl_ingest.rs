@@ -1479,10 +1479,11 @@ mod tests {
         let unknown_entity = b"<ReadingList><Name>Batman &bogus;</Name><Books /></ReadingList>";
         assert!(parse_cbl_bytes(unknown_entity, "DC/Entity.cbl").is_err());
         for reference in ["&#0;", "&#x0;", "&#+1;", "&#x+1;", "&#xD800;", "&#x110000;"] {
-            let xml = format!(
-                "<ReadingList><Name>Bad {reference}</Name><Books /></ReadingList>"
+            let xml = format!("<ReadingList><Name>Bad {reference}</Name><Books /></ReadingList>");
+            assert!(
+                parse_cbl_bytes(xml.as_bytes(), "DC/Entity.cbl").is_err(),
+                "{reference}"
             );
-            assert!(parse_cbl_bytes(xml.as_bytes(), "DC/Entity.cbl").is_err(), "{reference}");
         }
 
         let long_series = "X".repeat(MAX_SERIES_NAME_LENGTH + 1);
