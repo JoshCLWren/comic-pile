@@ -329,6 +329,9 @@ it('opens the retained thread action sheet from a bootstrap pool item', async ()
   expect(screen.getByText('Move to Back')).toBeInTheDocument()
   expect(screen.getByText('Snooze')).toBeInTheDocument()
   expect(screen.getByText('Edit Series')).toBeInTheDocument()
+  // The server-authoritative current-issue action was retired with #5707;
+  #4405 keeps pending selection browser-owned.
+  expect(screen.queryByText('Set Current Issue')).not.toBeInTheDocument()
 })
 
 it('loads every active override page only after the modal opens', async () => {

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { createThreadsApi } from '../services/api-threads'
 import { createHttpClientStub } from './httpClientStub'
@@ -87,6 +89,19 @@ describe('threadsApi.checkExcludedStatus', () => {
     const result = await api.checkExcludedStatus([7, 8])
 
     expect(result).toEqual({ excluded_thread_ids: [7], active_thread_ids: [] })
+  })
+})
+
+describe('retired v1 Thread custom actions (#5707)', () => {
+  it('ships no server-authoritative current-issue or one-shot migration call', () => {
+    const threadsSource = readFileSync(resolve(__dirname, '../services/api-threads.ts'), 'utf-8')
+    const migrationSource = readFileSync(resolve(__dirname, '../services/api-migration.ts'), 'utf-8')
+    const typesSource = readFileSync(resolve(__dirname, '../types/index.ts'), 'utf-8')
+
+    expect(threadsSource).not.toContain(':setCurrentIssue')
+    expect(threadsSource).not.toContain('SetCurrentIssueResponse')
+    expect(migrationSource).not.toContain(':migrateToIssues')
+    expect(typesSource).not.toContain('SetCurrentIssueResponse')
   })
 })
 
