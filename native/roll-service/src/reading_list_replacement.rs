@@ -416,9 +416,13 @@ async fn write_entries(
     ids: &[i32],
     intents: &JsonValue,
 ) -> Result<(), ApiError> {
+    // Rebuild the whole ordered membership in one statement pair. A partial
+    // delete would leave retained entries at their old positions and collide
+    // with the unique (list_id, position) constraint when the reviewed order
+    // changes; intents for retained issues are carried in `intents`.
     tx.execute(
-        "DELETE FROM custom_cbl_entries WHERE list_id = $1 AND NOT (issue_id = ANY($2::int[]))",
-        &[&list_id, &ids],
+        "DELETE FROM custom_cbl_entries WHERE list_id = $1",
+        &[&list_id],
     )
     .await
     .map_err(db::query_error)?;
@@ -672,7 +676,7 @@ pub async fn preview_replacement(
         .map(|entry| entry.issue_id)
         .collect::<Vec<_>>();
     let kept_manual = omitted_manual_issue_ids.clone();
-    let after = project_after(&source_ids, &old, &kept_manual, &None, &series_names);
+    let after = project_after(source_ids, &old, &kept_manual, &None, series_names);
     let before = old
         .iter()
         .map(|entry| entry.view(true, !source_set.contains(&entry.issue_id)))
