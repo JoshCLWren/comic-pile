@@ -16,7 +16,7 @@ export interface ThreadQueueExclusionGroup {
  * last_rating, or is_test to reduce payload
  * size for large lists.
  */
-export type ThreadListItem = components['schemas']['QueueThreadListItem'] & {
+export type ThreadListItem = Omit<components['schemas']['QueueThreadListItem'], 'format'> & {
   queue_exclusion_group?: ThreadQueueExclusionGroup | null
   /**
    * Derived series cover from the native `/api/v2/threads` projection (#5433):
@@ -55,7 +55,7 @@ export interface BulkQueueRestoreResponse {
 /**
  * Represents a comic thread/series
  */
-export type Thread = components['schemas']['ThreadResponse']
+export type Thread = Omit<components['schemas']['ThreadResponse'], 'format'>
 
 /**
  * Thread response with roll reconciliation (formerly from POST /v1/rate/ #2720,
