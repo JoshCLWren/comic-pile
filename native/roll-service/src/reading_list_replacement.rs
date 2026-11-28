@@ -168,6 +168,9 @@ pub struct ReplacementUndoResponse {
     pub snapshot_id: i32,
     pub updated_at: String,
     pub restored_issue_ids: Vec<i32>,
+    /// True when an exact retry returned the original Undo response.
+    #[serde(default)]
+    pub replayed: bool,
 }
 
 fn structured(status: axum::http::StatusCode, code: &str, message: impl Into<String>) -> ApiError {
@@ -1050,6 +1053,30 @@ pub async fn undo_replacement(
         .map_err(db::query_error)?
         .ok_or_else(|| ApiError::NotFound(format!("Reading List {list_id} not found")))?;
     let current_updated_at: String = row.get(0);
+    // A successful Undo advances `updated_at`, so the exact retry must replay
+    // before the stale-version guard just as the commit path does. The undo key
+    // is stored separately from the commit key: one request may undo two
+    // different replacements, and the commit replay index must not be reused.
+    if let Some(key) = request.idempotency_key.as_deref() {
+        let replay = tx
+            .query_opt(
+                "SELECT undo_response_json::text FROM custom_cbl_replacement_snapshots
+                 WHERE user_id = $1 AND list_id = $2 AND undo_idempotency_key = $3
+                   AND undone_at IS NOT NULL",
+                &[&user.id(), &list_id, &key],
+            )
+            .await
+            .map_err(db::query_error)?;
+        if let Some(row) = replay {
+            let mut response: ReplacementUndoResponse = serde_json::from_str(
+                &row.get::<_, String>(0),
+            )
+            .map_err(|error| ApiError::Internal(error.to_string()))?;
+            response.replayed = true;
+            tx.commit().await.map_err(db::query_error)?;
+            return Ok(Json(response));
+        }
+    }
     if current_updated_at != request.expected_updated_at {
         return Err(structured(
             axum::http::StatusCode::CONFLICT,
@@ -1059,43 +1086,6 @@ pub async fn undo_replacement(
                 request.expected_updated_at, current_updated_at
             ),
         ));
-    }
-
-    if let Some(key) = request.idempotency_key.as_deref() {
-        let replay = tx
-            .query_opt(
-                "SELECT id, before_state_json::text FROM custom_cbl_replacement_snapshots
-                 WHERE user_id = $1 AND list_id = $2 AND idempotency_key = $3
-                   AND undone_at IS NOT NULL",
-                &[&user.id(), &list_id, &key],
-            )
-            .await
-            .map_err(db::query_error)?;
-        if let Some(row) = replay {
-            let before: JsonValue = serde_json::from_str(&row.get::<_, String>(1))
-                .map_err(|error| ApiError::Internal(error.to_string()))?;
-            let ids = before
-                .get("entries")
-                .and_then(|value| value.as_array())
-                .map(|items| {
-                    items
-                        .iter()
-                        .filter_map(|item| {
-                            item.get("issue_id")
-                                .and_then(|id| id.as_i64())
-                                .map(|id| id as i32)
-                        })
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
-            tx.commit().await.map_err(db::query_error)?;
-            return Ok(Json(ReplacementUndoResponse {
-                target_list_id: list_id,
-                snapshot_id: row.get(0),
-                updated_at: current_updated_at,
-                restored_issue_ids: ids,
-            }));
-        }
     }
 
     let snapshot = tx
@@ -1174,20 +1164,28 @@ pub async fn undo_replacement(
         .await
         .map_err(db::query_error)?
         .get(0);
+    let response = ReplacementUndoResponse {
+        target_list_id: list_id,
+        snapshot_id,
+        updated_at: updated_at.clone(),
+        restored_issue_ids: ids,
+        replayed: false,
+    };
     tx.execute(
-        "UPDATE custom_cbl_replacement_snapshots SET undone_at = NOW() WHERE id = $1",
-        &[&snapshot_id],
+        "UPDATE custom_cbl_replacement_snapshots
+         SET undone_at = NOW(), undo_idempotency_key = $2, undo_response_json = $3::jsonb
+         WHERE id = $1",
+        &[
+            &snapshot_id,
+            &request.idempotency_key,
+            &tokio_postgres::types::Json(&response),
+        ],
     )
     .await
     .map_err(db::query_error)?;
     tx.commit().await.map_err(db::query_error)?;
 
-    Ok(Json(ReplacementUndoResponse {
-        target_list_id: list_id,
-        snapshot_id,
-        updated_at,
-        restored_issue_ids: ids,
-    }))
+    Ok(Json(response))
 }
 
 /// OpenAPI document for this resource family.

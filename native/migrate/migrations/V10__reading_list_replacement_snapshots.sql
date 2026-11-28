@@ -18,6 +18,10 @@ CREATE TABLE IF NOT EXISTS public.custom_cbl_replacement_snapshots (
     before_state_json jsonb NOT NULL,
     after_state_json jsonb NOT NULL,
     response_json jsonb,
+    -- Undo has its own key/response: reusing the commit key would collide with
+    -- the commit replay constraint and could never represent an undo retry.
+    undo_idempotency_key character varying(200),
+    undo_response_json jsonb,
     undone_at timestamp with time zone,
     created_at timestamp with time zone NOT NULL,
     CONSTRAINT custom_cbl_replacement_snapshots_pkey PRIMARY KEY (id)
@@ -43,6 +47,12 @@ ALTER TABLE ONLY public.custom_cbl_replacement_snapshots
 CREATE UNIQUE INDEX IF NOT EXISTS uq_cbl_replacement_idempotency
     ON public.custom_cbl_replacement_snapshots (user_id, list_id, idempotency_key)
     WHERE idempotency_key IS NOT NULL;
+
+-- A retried Undo replays its stored response after the list version has already
+-- advanced, instead of failing the stale-version guard.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_cbl_replacement_undo_idempotency
+    ON public.custom_cbl_replacement_snapshots (user_id, list_id, undo_idempotency_key)
+    WHERE undo_idempotency_key IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS ix_cbl_replacement_snapshot_lookup
     ON public.custom_cbl_replacement_snapshots (user_id, list_id, id DESC);
