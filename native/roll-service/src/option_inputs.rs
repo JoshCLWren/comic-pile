@@ -1278,8 +1278,8 @@ mod tests {
             VALUES
                 (9201, 9101, 'A catalog thread', 'comic', 2, 1, 'active', NOW(), NULL,
                     'A private notes', 4.0, 'reading'),
-                (9401, 9102, 'B confirmed thread', 'comic', 2, 1, 'active', NOW(), 1001,
-                    'B private notes', 3.0, 'reading');
+                (9401, 9102, 'B confirmed thread', 'comic', 2, 2, 'active', NOW(), 1001,
+                    'B private notes', 3.0, 'in_progress');
             INSERT INTO issues
                 (id, thread_id, issue_number, status, created_at, position, catalog_issue_id)
             VALUES
@@ -1387,13 +1387,27 @@ mod tests {
             vec![9101, 9102]
         );
 
-        for (user_id, ids, notes, rating, queue, mode, gate, exclusion, dependency) in [
+        for (
+            user_id,
+            ids,
+            notes,
+            rating,
+            queue,
+            progress,
+            event,
+            mode,
+            gate,
+            exclusion,
+            dependency,
+        ) in [
             (
                 9101,
                 vec![9201, 9202, 9203, 9204],
                 "A private notes",
                 4.0,
                 1,
+                "reading",
+                ("rate", 4.0, 9201),
                 "strict",
                 "after_previous",
                 "4050-1000",
@@ -1404,7 +1418,9 @@ mod tests {
                 vec![9401, 9402, 9403],
                 "B private notes",
                 3.0,
-                1,
+                2,
+                "in_progress",
+                ("roll", 3.0, 9402),
                 "loose",
                 "hold",
                 "4050-2000",
@@ -1424,19 +1440,37 @@ mod tests {
                 ids,
                 "reader {user_id} issue IDs must stay private"
             );
-            let private: (String, f64, i32) = {
+            let private: (String, f64, i32, String) = {
                 let row = conn
                     .query_one(
-                        "SELECT notes, last_rating, queue_position FROM threads WHERE user_id = $1",
+                        "SELECT notes, last_rating, queue_position, reading_progress \
+                         FROM threads WHERE user_id = $1",
                         &[&user_id],
                     )
                     .await
                     .expect("reader thread private state");
-                (row.get(0), row.get(1), row.get(2))
+                (row.get(0), row.get(1), row.get(2), row.get(3))
             };
             assert_eq!(private.0, notes);
             assert_eq!(private.1, rating);
             assert_eq!(private.2, queue);
+            assert_eq!(private.3, progress, "read progress must stay reader-private");
+            let reader_event: (String, f64, Option<i32>) = {
+                let row = conn
+                    .query_one(
+                        "SELECT type, rating, issue_id FROM events \
+                         WHERE user_id = $1 ORDER BY id",
+                        &[&user_id],
+                    )
+                    .await
+                    .expect("reader rating/roll event");
+                (row.get(0), row.get(1), row.get(2))
+            };
+            assert_eq!(
+                reader_event,
+                (event.0.to_string(), event.1, Some(event.2)),
+                "reader {user_id} event must stay private"
+            );
             let list: (String, String) = {
                 let row = conn
                     .query_one(

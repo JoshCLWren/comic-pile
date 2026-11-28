@@ -26,7 +26,7 @@ owning different issue rows. Reader-specific state is deliberately disjoint:
 | Reader-private state | Reader A | Reader B |
 | --- | --- | --- |
 | Issue IDs | 9201–9204 | 9401–9403 |
-| Thread notes / last rating / queue position | `A private notes`, 4.0, 1 | `B private notes`, 3.0, 1 |
+| Thread notes / last rating / queue position / read progress | `A private notes`, 4.0, 1, `reading` | `B private notes`, 3.0, 2, `in_progress` |
 | Rating / roll events | 9801 (`rate` 4.0) | 9802 (`roll` 3.0) |
 | Reading List mode and gate | `strict`, `after_previous` | `loose`, `hold` |
 | Collection exclusion | `comicvine:4050-1000` | `comicvine:4050-2000` |
@@ -55,13 +55,16 @@ Result: **6 passed; 0 failed; 0 ignored** (668 other tests filtered out).
 | `issue_identity::guard_db_tests::rehearsal_rollback_restores_exclusion_state` | Adding a reader-B exclusion changes the guard decision to `collection_volume_excluded`; rolling the transaction back restores the original unexcluded decision. |
 | `issue_duplicate_reconciliation::tests::rehearsal_same_owner_duplicate_is_not_a_cross_owner_shared_reference` | Same-owner duplicate pairs are detected exactly as `([9201,9202], "cv-issue:4050-0001")`; reader B's shared reference produces no pair and never appears in A's pairs. |
 
-### Existing equivalent tests (reused, unchanged)
+### Existing and new equivalent tests (exact pass counts)
 
-| Command | Result |
-| --- | --- |
-| `cargo test -p comicpile-roll-service --lib two_reader_parity` | 1 passed (`catalog_only_volume_evidence_survives_two_reader_parity`). |
-| `cargo test -p comicpile-roll-service --lib cross_reader_evidence` | 1 passed (`guard_state_preserves_confirmed_catalog_and_cross_reader_evidence`). |
-| `cargo test -p comicpile-roll-service --test creators_v2_http two_reader_shared_identity_creator_projection_is_owner_isolated` | 1 passed. |
+Two of these tests are reused unchanged from `main`; the creator HTTP test is added by this PR in
+`native/roll-service/tests/creators_v2_http.rs`.
+
+| Command | Result | Provenance |
+| --- | --- | --- |
+| `cargo test -p comicpile-roll-service --lib two_reader_parity` | 1 passed (`catalog_only_volume_evidence_survives_two_reader_parity`). | Reused unchanged |
+| `cargo test -p comicpile-roll-service --lib cross_reader_evidence` | 1 passed (`guard_state_preserves_confirmed_catalog_and_cross_reader_evidence`). | Reused unchanged |
+| `cargo test -p comicpile-roll-service --test creators_v2_http two_reader_shared_identity_creator_projection_is_owner_isolated` | 1 passed. | New in this PR |
 
 The new creator HTTP test registers two users, maps both readers' issues to one external identity
 carrying `creator_credits`, gives each a private rating, and adds a distinct edition for reader B.
