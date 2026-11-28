@@ -42,8 +42,7 @@ use crate::{
     dice_api::Pending,
     option_inputs, queue,
     reading_constraints::ValidatedReadingInputs,
-    reading_session,
-    roll_exclusions,
+    reading_session, roll_exclusions,
     thread_validation::{
         coerce_bool, int_field, parse_body, path_int, query_pairs, query_value, require_object,
         str_field, Bounds, Check, IntOutcome, LifecycleError, StrRules,
