@@ -821,6 +821,7 @@ export function validate(census, allowlist, dispositions, callers, aipBaseline =
   }
   for (const caller of callers) {
     if (!caller.drift_checked) continue;
+    if (staleCallerPaths.has(caller.path)) continue;
     const isV1OrBare = caller.path.startsWith('/api/v1/')
       || /^\/api\/[^v/]/.test(caller.path) || /^\/api\/v[^12]/.test(caller.path);
     if (!isV1OrBare) continue;

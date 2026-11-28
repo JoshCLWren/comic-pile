@@ -635,5 +635,17 @@
       "rollout_status": "awaiting-caller-migration-4350",
       "notes": "#4299 owns server deletion after #4350 moves every caller to scoped Roll resources."
     }
-  }
+  },
+  "known_stale_callers": [
+    {
+      "method": "POST",
+      "path": "/api/v1/threads/{param}:migrateToIssues",
+      "owner_issue": 5707
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/threads/{param}:setCurrentIssue",
+      "owner_issue": 5707
+    }
+  ]
 }
