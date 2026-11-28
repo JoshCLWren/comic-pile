@@ -64,3 +64,46 @@ describe('Night Shift mobile gallery (#5981)', () => {
     expect(onThreadClick).not.toHaveBeenCalled()
   })
 })
+
+describe('Night Shift mobile gallery extra branches (#5981)', () => {
+  it('rotates while rolling and settles on the winner', async () => {
+    const { rerender } = render(
+      <MobileGallery
+        pool={pool}
+        cardByIssueId={new Map()}
+        isRolling={true}
+        winningThreadId={null}
+        dieSlot={null}
+        onThreadClick={vi.fn()}
+      />,
+    )
+    expect(screen.getByText(/Gallery rotating/i)).toBeInTheDocument()
+
+    rerender(
+      <MobileGallery
+        pool={pool}
+        cardByIssueId={new Map()}
+        isRolling={false}
+        winningThreadId={2}
+        dieSlot={null}
+        onThreadClick={vi.fn()}
+      />,
+    )
+    expect(screen.getByText('2 / 3')).toBeInTheDocument()
+  })
+
+  it('renders an empty pool without crashing', () => {
+    render(
+      <MobileGallery
+        pool={[]}
+        cardByIssueId={new Map()}
+        isRolling={false}
+        winningThreadId={null}
+        dieSlot={null}
+        onThreadClick={vi.fn()}
+      />,
+    )
+    expect(screen.getByTestId('roll-mobile-gallery')).toBeInTheDocument()
+  })
+
+})
