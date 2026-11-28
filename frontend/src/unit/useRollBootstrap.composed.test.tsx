@@ -25,12 +25,17 @@ vi.mock('../services/rollResourcesApi', () => ({
 vi.mock('../services/api-dependencies', () => ({
   dependenciesApi: { getIssueDependencies: vi.fn() },
 }))
-vi.mock('../services/api-roll', () => ({ readRollSnoozes: vi.fn(() => []) }))
+vi.mock('../services/api-roll', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/api-roll')>()
+  return { ...actual, readRollSnoozes: vi.fn(() => []) }
+})
 vi.mock('../services/api-threads', () => ({ threadsApi: { list: vi.fn() } }))
 
 const mockedPending = vi.mocked(useRollPendingSelection)
 const mockedResources = vi.mocked(rollResourcesApi)
 const mockedDependencies = vi.mocked(dependenciesApi.getIssueDependencies)
+const mockedSnoozes = vi.mocked(readRollSnoozes)
+const mockedThreadsList = vi.mocked(threadsApi.list)
 
 type IssueCard = IssueCardsResponse['items'][number]
 
@@ -78,6 +83,8 @@ describe('useRollBootstrap composed scoped view', () => {
     })
     mockedResources.issueCards.mockResolvedValue({ items: [card(10, 3, 'unread')] })
     mockedDependencies.mockResolvedValue({ issue_id: 10, incoming: [], outgoing: [] })
+    mockedSnoozes.mockReturnValue([])
+    mockedThreadsList.mockResolvedValue({ threads: [], active_count: 0, next_page_token: null })
   })
 
   it('includes the committed rate last-read record in the composed view model', async () => {
@@ -160,6 +167,35 @@ describe('useRollBootstrap composed scoped view', () => {
     expect(mockedDependencies).toHaveBeenCalledWith(10)
     expect(result.current.data?.roll_recovery?.direct_blockers[0].source_id).toBe(9)
     expect(result.current.data?.roll_recovery?.readable_prerequisites[0].node_id).toBe(9)
+  })
+
+  it('composes snoozed-series chips from one bounded scoped thread page', async () => {
+    mockedSnoozes.mockReturnValue([7])
+    mockedThreadsList.mockResolvedValue({
+      active_count: 1,
+      threads: [{
+        id: 7,
+        title: 'Snoozed Series',
+        format: 'Comic',
+        status: 'active',
+        blocking_reasons: [],
+        created_at: '2026-11-28T00:00:00Z',
+        is_blocked: false,
+        issues_remaining: 3,
+        last_activity_at: null,
+        queue_position: 1,
+      }],
+    })
+
+    const { result } = renderHook(() => useRollBootstrap(), { wrapper: Wrapper })
+    await waitFor(() => expect(result.current.data?.snoozed_threads).toHaveLength(1))
+
+    expect(mockedThreadsList).toHaveBeenCalledWith({ page_size: 200 })
+    expect(result.current.data?.snoozed_threads[0]).toMatchObject({
+      id: 7,
+      title: 'Snoozed Series',
+    })
+    expect(result.current.data?.snoozed_count).toBe(1)
   })
 
   it('stays empty while the scoped pool has no visible cards', async () => {
