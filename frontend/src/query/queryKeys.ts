@@ -1,3 +1,5 @@
+import { normalizeActivityFilters, type ActivityFilters } from '../utils/activityFilters'
+
 export type QueueSort = 'position' | 'alphabetical' | 'created'
 
 export interface QueuePageKeyOptions {
@@ -146,12 +148,14 @@ export const queryKeys = {
    *
    * The cursor lives in `pageParam`, not the key, so every activity page shares
    * one stable key and a refresh reloads the stream from its first page.
+   * Normalized filters are part of the key: changing a filter starts a fresh
+   * server-side stream instead of re-sorting cached pages in the browser.
    */
   activity: {
     all: ['activity'] as const,
     pages: () => ['activity', 'pages'] as const,
-    list: ({ pageSize }: { pageSize: number }) =>
-      ['activity', 'pages', { pageSize }] as const,
+    list: ({ pageSize, filters }: { pageSize: number; filters?: ActivityFilters }) =>
+      ['activity', 'pages', { pageSize, filters: normalizeActivityFilters(filters) }] as const,
   },
   roll: {
     all: ['roll'] as const,

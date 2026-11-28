@@ -1,9 +1,18 @@
 import { Link } from 'react-router-dom'
 import { useMemo, useState, useCallback } from 'react'
 import { useActivity } from '../hooks/useActivity'
+import { useDebounce } from '../hooks/useDebounce'
 import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 import CompactIssueCardTrigger from '../components/CompactIssueCardTrigger'
+import HistoryFilters from './HistoryFilters'
 import type { ActivityItem } from '../services/api-activity'
+import {
+  EMPTY_ACTIVITY_FILTERS,
+  hasActiveActivityFilters,
+  normalizeActivityFilters,
+  type ActivityFilters,
+} from '../utils/activityFilters'
+import { activityLabel } from '../utils/activityLabels'
 import { formatDate, formatTime } from '../utils/dateFormat'
 import { issuesApi } from '../services/api-issues'
 import { queryClient } from '../query/queryClient'
@@ -27,32 +36,6 @@ function RetryHistoryButton({ onRetry }: { onRetry: () => void }) {
       Retry
     </button>
   )
-}
-
-/** Reader-facing name for a logical action the activity resource emits. */
-function activityLabel(type: string): string {
-  switch (type) {
-    case 'roll':
-      return 'Rolled'
-    case 'snooze':
-      return 'Snoozed'
-    case 'unsnooze':
-      return 'Unsnoozed'
-    case 'rate':
-      return 'Rated'
-    case 'manual_die':
-      return 'Set die'
-    case 'reset_dice':
-      return 'Reset die'
-    case 'dismiss':
-      return 'Dismissed the roll'
-    case 'undo':
-      return 'Restored'
-    case 'rolled_but_skipped':
-      return 'Skipped'
-    default:
-      return type.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase())
-  }
 }
 
 /**
