@@ -202,7 +202,11 @@ calls the same `fetchNextPage`.
 surfaces and every remaining non-opaque backend cursor contract (creator
 detail, releases, CBL source detail, ComicVine provider search and identity
 inbox offset paging). Those exceptions keep their cursor in `pageParam` and
-must not reintroduce client-side token loops. The conformance test
+must not reintroduce client-side token loops. The two ComicVine provider-search
+dialogs (`ComicVineSearchDialog.tsx` and `AddSeriesFromComicVineDialog.tsx`)
+keep `nextOffset`/`hasMore` in local state because their guarded, debounced
+provider requests span dialog steps; they are explicitly listed as documented
+exceptions rather than migrated surfaces. The conformance test
 `frontend/src/unit/paginationConformance.test.ts` enforces both rules.
 
 ## Routing, Code Splitting, and Route Prefetch
