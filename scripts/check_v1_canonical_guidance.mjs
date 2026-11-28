@@ -9,10 +9,12 @@
  *
  * Checks, all deterministic and database-free:
  *
- * 1. Every operation in `full_surface.v1_operations` of the live route inventory is
- *    served by native Rust. A retained v1 path is a compatibility operation, never a
- *    surviving Python handler, and the v2-only inventory count is not v1 retirement
- *    proof.
+ * 1. Every v1 operation in the all-version live route census is served by native
+ *    Rust. A retained v1 path is a compatibility operation, never a surviving Python
+ *    handler, and the v2-only inventory count is not v1 retirement proof. The census
+ *    is the authoritative source: the bot-owned v2 route inventory is regenerated
+ *    after merge, so a contributor PR changing the generator cannot be judged against
+ *    a stale generated artifact.
  * 2. `docs/API_V1_CANONICAL.md` states that same live v1 operation count.
  * 3. No active guidance document instructs new code to use v1. Files carrying the
  *    `docs-path-check: historical` marker are archival and are not scanned; the
@@ -26,7 +28,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-export const INVENTORY_PATH = 'docs/api/v2-route-inventory.json';
+export const CENSUS_PATH = 'docs/api/live-route-census.json';
 export const CANONICAL_DOC_PATH = 'docs/API_V1_CANONICAL.md';
 export const HISTORICAL_MARKER = '<!-- docs-path-check: historical -->';
 
@@ -53,14 +55,13 @@ export const NEW_CONSUMER_PATTERNS = [
 
 const COUNT_STATEMENT = /There are (\d+) retained `\/api\/v1` operations/;
 
-/** Return the retained v1 operations recorded by the live route inventory. */
-export function liveV1Operations(inventory) {
-  const fullSurface = inventory?.full_surface;
-  const operations = fullSurface?.v1_operations;
-  if (!Array.isArray(operations)) {
-    throw new Error(`${INVENTORY_PATH}: full_surface.v1_operations is missing`);
+/** Return the retained v1 operations recorded by the all-version live census. */
+export function liveV1Operations(census) {
+  const routes = census?.routes;
+  if (!Array.isArray(routes)) {
+    throw new Error(`${CENSUS_PATH}: routes is missing`);
   }
-  return operations;
+  return routes.filter(route => route?.version === 'v1');
 }
 
 /** Return whether a value parsed from JSON is a string, without runtime typeof narrowing. */
@@ -90,14 +91,14 @@ export function findV1Instructions(text) {
 
 export function checkRepository(root = ROOT) {
   const failures = [];
-  const inventory = JSON.parse(fs.readFileSync(path.join(root, INVENTORY_PATH), 'utf8'));
-  const operations = liveV1Operations(inventory);
+  const census = JSON.parse(fs.readFileSync(path.join(root, CENSUS_PATH), 'utf8'));
+  const operations = liveV1Operations(census);
 
   for (const operation of operations) {
     const runtime = operationRuntime(operation);
     if (runtime !== 'native-rust') {
       failures.push(
-        `${INVENTORY_PATH}: ${operation?.method ?? '?'} ${operation?.path ?? '?'} is attributed to `
+        `${CENSUS_PATH}: ${operation?.method ?? '?'} ${operation?.path ?? '?'} is attributed to `
         + `runtime "${runtime || 'unknown'}"; every retained v1 operation must be native-rust`,
       );
     }
