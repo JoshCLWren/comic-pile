@@ -56,6 +56,14 @@ a correct entry.
 No Vercel invocation or ComicPile HTTP API is needed to check/write releases.
 The public What's New read API continues to read the releases table.
 
+Recovery reads accept both REST paths and absolute GitHub API URLs: discovery
+builds absolute URLs and must never prefix `GITHUB_API_BASE` a second time. A
+double prefix produced the unresolvable host `api.github.comhttps` and silently
+stranded release notes (issue #5693). Request failures name only a coarse URL
+kind (`GitHub API URL`, `production health URL`), never the raw URL or token,
+and a failed selection emits an `::error::` annotation plus a step summary that
+lists the still-missing PRs.
+
 ## Secrets and scope
 
 The existing production migration configuration NEON_API_KEY (repository secret)

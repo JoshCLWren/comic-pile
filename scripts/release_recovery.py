@@ -222,7 +222,9 @@ def _read_json(
         raise RecoveryError(f"{kind} returned invalid JSON") from exc
 
 
-def _read_url_json(url: str, source_name: str | None = None) -> object:
+def _read_url_json(
+    url: str, source_name: str = PRODUCTION_HEALTH_URL_KIND
+) -> object:
     """Read one JSON document from an absolute URL.
 
     Args:

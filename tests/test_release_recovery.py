@@ -307,7 +307,7 @@ class _Response:
         """Store the payload that ``read`` will return."""
         self._body = json.dumps(payload).encode("utf-8")
 
-    def __enter__(self) -> "_Response":
+    def __enter__(self) -> _Response:
         """Enter the context manager."""
         return self
 
@@ -384,7 +384,7 @@ def test_read_json_names_url_kind_on_dns_failure_without_leaking_secret(
         ),
     ):
         with pytest.raises(recovery.RecoveryError) as exc_info:
-            recovery._read_url_json(url)
+            recovery._read_url_json(url, source_name=kind)
         message = str(exc_info.value)
         assert kind in message
         assert "Name or service not known" in message

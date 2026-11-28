@@ -151,3 +151,36 @@ def test_persist_grounds_complete_test_only_candidates() -> None:
         for step in workflow["jobs"]["persist"].get("steps") or []
     )
     assert "release_recovery.py ground-candidate" in run_scripts
+
+
+def test_recovery_select_output_is_captured_for_failure_report() -> None:
+    """A failed selection still leaves a bounded log for the summary (issue #5693)."""
+    workflow = _release_writer()
+    steps = workflow["jobs"]["recover"].get("steps") or []
+    select_step = next(step for step in steps if step.get("id") == "select")
+    script = str(select_step.get("run", ""))
+    assert "release_recovery.py select" in script
+    assert "tee" in script
+    assert "RUNNER_TEMP" in script
+
+
+def test_recovery_failure_is_visible_as_check_and_summary() -> None:
+    """Failed recovery emits an error annotation and a still-missing PR list."""
+    workflow = _release_writer()
+    steps = workflow["jobs"]["recover"].get("steps") or []
+    report_steps = [
+        step
+        for step in steps
+        if "failure()" in str(step.get("if", ""))
+        and "::error::" in str(step.get("run", ""))
+    ]
+    assert report_steps, "a failed recovery selection must produce a check error"
+    summary_scripts = "\n".join(
+        str(step.get("run", ""))
+        for step in steps
+        if "GITHUB_STEP_SUMMARY" in str(step.get("run", ""))
+    )
+    assert "Still-missing PRs" in summary_scripts
+    assert "MISSING_PRS" in summary_scripts
+    assert "SELECT_OUTCOME" in summary_scripts
+    assert "Selection did not complete" in summary_scripts
