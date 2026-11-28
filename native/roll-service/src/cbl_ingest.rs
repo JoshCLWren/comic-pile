@@ -21,17 +21,22 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     fmt, fs,
     path::{Path, PathBuf},
+    process::Command,
+    sync::atomic::{AtomicUsize, Ordering},
 };
 use tokio_postgres::{Client, Config as PostgresConfig, GenericClient};
 
 const DEFAULT_REPOSITORY: &str = "JoshCLWren/CBL-ReadingLists";
 const MAX_MIRROR_FILES: usize = 50_000;
+const MAX_CBL_FILE_BYTES: usize = 64 * 1024 * 1024;
 const MAX_BOOKS_PER_LIST: usize = 20_000;
 const MAX_SOURCE_PATH_LENGTH: usize = 1000;
 const MAX_LIST_NAME_LENGTH: usize = 500;
+const MAX_SERIES_NAME_LENGTH: usize = 500;
+const MAX_ISSUE_NUMBER_LENGTH: usize = 100;
 const MAX_EXTERNAL_ID_LENGTH: usize = 100;
-const MAX_REVISION_LENGTH: usize = 64;
 const BATCH_SIZE: usize = 500;
+const CBL_INGEST_LOCK_ID: i64 = 0x4342_4c5f_494e_4745;
 
 /// A path-specific or argument-level ingestion failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -127,6 +132,7 @@ pub struct SyncSummary {
     pub inserted_lists: usize,
     pub updated_lists: usize,
     pub deactivated_lists: usize,
+    pub protected_lists: usize,
     pub unchanged_lists: usize,
     pub entries_written: usize,
     pub identities_upserted: usize,
@@ -217,16 +223,84 @@ fn validate_repository(value: &str) -> Result<(), IngestError> {
 }
 
 fn validate_revision(value: &str) -> Result<(), IngestError> {
-    if value.is_empty()
-        || value.len() > MAX_REVISION_LENGTH
-        || !value.bytes().all(|byte| byte.is_ascii_alphanumeric())
-    {
+    if !matches!(value.len(), 40 | 64) || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         Err(IngestError::new(
-            "--revision-sha must be a 1-64 character alphanumeric revision",
+            "--revision-sha must be a full 40- or 64-character hexadecimal Git SHA",
         ))
     } else {
         Ok(())
     }
+}
+
+/// Verify that the supplied directory is the clean, exact Git checkout it claims to be.
+///
+/// The ingester never fetches or mutates the mirror. This preflight prevents a dirty,
+/// untracked-contaminated, wrong-revision, or wrong-repository tree from being recorded as
+/// trusted provenance and from deactivating paths that are absent only because of local state.
+pub fn verify_pinned_checkout(
+    mirror_path: &Path,
+    revision_sha: &str,
+    repository: &str,
+) -> Result<(), IngestError> {
+    validate_revision(revision_sha)?;
+    validate_repository(repository)?;
+    let mirror = fs::canonicalize(mirror_path)
+        .map_err(|error| IngestError::new(format!("cannot resolve mirror path: {error}")))?;
+    let top_level = git_output(&mirror, &["rev-parse", "--show-toplevel"])?;
+    let top_level = fs::canonicalize(Path::new(top_level.trim()))
+        .map_err(|error| IngestError::new(format!("cannot resolve Git worktree: {error}")))?;
+    if top_level != mirror {
+        return Err(IngestError::new(
+            "mirror_path must be the root of the pinned Git worktree",
+        ));
+    }
+    let head = git_output(&mirror, &["rev-parse", "HEAD"])?;
+    if !head.trim().eq_ignore_ascii_case(revision_sha) {
+        return Err(IngestError::new(
+            "mirror worktree HEAD does not match --revision-sha",
+        ));
+    }
+    let status = git_output(&mirror, &["status", "--porcelain", "--untracked-files=all"])?;
+    if !status.trim().is_empty() {
+        return Err(IngestError::new(
+            "mirror worktree must be clean with no untracked files",
+        ));
+    }
+    let origin = git_output(&mirror, &["remote", "get-url", "origin"])?;
+    if normalize_git_remote(origin.trim()).as_deref() != Some(repository.trim()) {
+        return Err(IngestError::new(
+            "mirror origin must match the canonical GitHub repository",
+        ));
+    }
+    Ok(())
+}
+
+fn git_output(mirror_path: &Path, arguments: &[&str]) -> Result<String, IngestError> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(mirror_path)
+        .args(arguments)
+        .output()
+        .map_err(|error| IngestError::new(format!("cannot run local Git: {error}")))?;
+    if !output.status.success() {
+        return Err(IngestError::new(format!(
+            "local Git {} failed",
+            arguments.first().copied().unwrap_or("command")
+        )));
+    }
+    String::from_utf8(output.stdout)
+        .map_err(|_| IngestError::new("local Git returned non-UTF-8 output"))
+}
+
+fn normalize_git_remote(remote: &str) -> Option<String> {
+    let remote = remote.trim().trim_end_matches('/');
+    let remote = remote.strip_suffix(".git").unwrap_or(remote);
+    let path = remote
+        .strip_prefix("https://github.com/")
+        .or_else(|| remote.strip_prefix("http://github.com/"))
+        .or_else(|| remote.strip_prefix("ssh://git@github.com/"))
+        .or_else(|| remote.strip_prefix("git@github.com:"))?;
+    Some(path.to_string())
 }
 
 /// Return every `.cbl` file beneath a mirror in deterministic relative-path order.
@@ -280,6 +354,12 @@ fn relative_source_path(path: &Path, mirror_path: &Path) -> String {
 
 /// Parse one file from disk, isolating read and XML failures for the inventory.
 pub fn parse_cbl_file(path: &Path, mirror_path: &Path) -> Result<CBLList, IngestError> {
+    let size = fs::metadata(path)
+        .map_err(|error| IngestError::new(format!("cannot stat CBL: {error}")))?
+        .len();
+    if size > MAX_CBL_FILE_BYTES as u64 {
+        return Err(IngestError::new("CBL file exceeds the 64 MiB size limit"));
+    }
     let raw =
         fs::read(path).map_err(|error| IngestError::new(format!("cannot read CBL: {error}")))?;
     parse_cbl_bytes(&raw, &relative_source_path(path, mirror_path))
