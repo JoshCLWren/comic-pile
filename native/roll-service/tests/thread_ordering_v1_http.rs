@@ -224,8 +224,6 @@ async fn every_operation_requires_authentication() {
         ("POST", "/api/v1/threads:getBlockingInfo"),
         ("GET", "/api/v1/threads/1/connected"),
         ("GET", "/api/v1/threads/1/dependency-order-check"),
-        ("GET", "/api/v1/threads/1/issues:validateOrder"),
-        ("GET", "/api/v2/threads/1/readingOrders"),
         ("GET", "/api/v2/threads/1/readingOrders"),
     ] {
         let (status, body) = send(
@@ -550,7 +548,7 @@ async fn connected_threads_report_direction_and_issue_level_cycles() {
 }
 
 #[tokio::test]
-async fn order_check_and_validate_order_report_position_conflicts() {
+async fn order_check_reports_position_conflicts() {
     let (state, token, csrf, user_id, _guard) = setup_user("tord-order").await;
     let (token2, csrf2, user2) = register_extra_user(&state, "tord-order2").await;
     let conn = state.pool.get().await.unwrap();
@@ -586,22 +584,9 @@ async fn order_check_and_validate_order_report_position_conflicts() {
         })
     );
 
-    let (status, body) = send(
-        &state,
-        get(
-            &format!("/api/v1/threads/{t}/issues:validateOrder"),
-            &token,
-            &csrf,
-        ),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK, "{body:?}");
-    assert_eq!(
-        body,
-        json!({"warnings": ["In thread \"Ordered\", issue #2 (position 2) blocks issue #1 (position 1). Position is canonical for in-thread order."]})
-    );
-
-    for path in ["dependency-order-check", "issues:validateOrder"] {
+    // #5958: the v1 `issues:validateOrder` preview was retired without a v2
+    // successor; only the still-owned dependency-order-check remains.
+    for path in ["dependency-order-check"] {
         for (who, who_csrf, id) in [
             (&token, &csrf, 999_999),
             (&token, &csrf, foreign),

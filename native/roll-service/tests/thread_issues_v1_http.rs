@@ -543,7 +543,7 @@ async fn reorder_rewrites_positions_and_validates() {
 
     let (status, _) = send(
         &state,
-        authed("PUT",
+        authed(
             "PUT",
             &path,
             &token,
@@ -609,7 +609,7 @@ async fn reorder_rewrites_positions_and_validates() {
     assert_eq!(status, StatusCode::NOT_FOUND);
     let (status, _) = send(
         &state,
-        authed("PUT",
+        authed(
             "PUT",
             &path,
             &other_token,
