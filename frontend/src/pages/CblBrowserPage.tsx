@@ -809,12 +809,12 @@ export default function CblBrowserPage() {
             : ownedLink && ownedListQuery.isError
               ? 'Check the linked Reading List before updating it.'
               : graphCycleErrors.length > 0
-                  ? 'Resolve the reading-order loop before adding this source.'
-                  : graphLoading
-                    ? 'Checking the reading graph…'
-                    : (summary?.final_adopted_count ?? 0) === 0
-                      ? 'Nothing is selected to add.'
-                      : null
+                ? 'Resolve the reading-order loop before adding this source.'
+                : graphLoading
+                  ? 'Checking the reading graph…'
+                  : (summary?.final_adopted_count ?? 0) === 0
+                    ? 'Nothing is selected to add.'
+                    : null
   const commitBlocked = commitBlockedReason !== null || isCommitting || !preview
   const consequenceLine =
     preview && summary
@@ -849,10 +849,15 @@ export default function CblBrowserPage() {
     if (!selectedSource || !preview || commitBlocked || pendingOverlaps.length > 0) return
     setConfirmOpen(false)
     setCommitSourceId(selectedSource.id)
+    const key =
+      idempotencyKeys.current[selectedSource.id]
+      ?? `${selectedSource.id}:${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${preview.source.content_hash}`}`
+    idempotencyKeys.current[selectedSource.id] = key
     commitMutation.mutate({
       source: selectedSource,
       preview,
-      targetPlanId: selectedAdoptionTarget?.id ?? null,
+      idempotencyKey: key,
+      listVersion: ownedListQuery.data?.list_version ?? ownedLink?.listVersion ?? null,
     })
   }
 
@@ -864,7 +869,7 @@ export default function CblBrowserPage() {
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-[var(--theme-text-muted)]">
           Browse trusted reading-order sources. Selecting a source is the data entry — preview
-          what it would do, then add it as a Reading Plan in one step.
+          what it would do, then add or update a Reading List you own in one step.
         </p>
       </header>
 
@@ -954,6 +959,19 @@ export default function CblBrowserPage() {
             )}
           </div>
 
+          {ownedLink && (
+            <p
+              data-testid="cbl-owned-list"
+              role="status"
+              className="rounded-lg border border-[var(--theme-border)] px-3 py-2 text-xs text-[var(--theme-text-muted)]"
+            >
+              <span className="font-bold text-[var(--theme-text-primary)]">Previously added.</span>{' '}
+              Linked to Reading List #{ownedLink.listId}
+              {ownedListQuery.data?.name ? ` · ${ownedListQuery.data.name}` : ''}. Your saved
+              customize choices were restored from that list.
+            </p>
+          )}
+
           {isPreviewing && !preview && (
             <p role="status" className="text-sm text-[var(--theme-text-muted)]">
               Reconciling source…
@@ -995,7 +1013,7 @@ export default function CblBrowserPage() {
                 </dd>
               </div>
               <div>
-                <dt className="text-[var(--theme-text-dim)]">Final plan size</dt>
+                <dt className="text-[var(--theme-text-dim)]">Final list size</dt>
                 <dd className="font-bold text-[var(--theme-text-primary)]">
                   {summary.final_adopted_count}
                 </dd>
