@@ -1326,20 +1326,7 @@ async fn resolve_identity_ids<C: GenericClient>(
     client: &C,
     pending: &[&CBLList],
 ) -> Result<IdentityIds, IngestError> {
-    let mut series_ids = BTreeSet::new();
-    let mut issue_ids = BTreeSet::new();
-    for list in pending {
-        for book in &list.books {
-            if let Some(id) = &book.comicvine_series_id {
-                series_ids.insert(id.clone());
-            }
-            if let Some(id) = &book.comicvine_issue_id {
-                issue_ids.insert(id.clone());
-            }
-        }
-    }
-    let series_ids: Vec<String> = series_ids.into_iter().collect();
-    let issue_ids: Vec<String> = issue_ids.into_iter().collect();
+    let (series_ids, issue_ids) = collect_identity_ids(pending);
     let mut result = IdentityIds::default();
     for chunk in series_ids.chunks(BATCH_SIZE) {
         let rows = client
@@ -1376,7 +1363,6 @@ async fn resolve_identity_ids<C: GenericClient>(
     Ok(result)
 }
 
-#[allow(clippy::too_many_arguments)]
 async fn insert_entries<C: GenericClient>(
     client: &C,
     pending: &[&CBLList],
@@ -1384,14 +1370,15 @@ async fn insert_entries<C: GenericClient>(
     identity_ids: &IdentityIds,
     synced_at: DateTime<Utc>,
 ) -> Result<usize, IngestError> {
-    let mut list_ids_column = Vec::new();
-    let mut positions = Vec::new();
-    let mut series_names = Vec::new();
-    let mut issue_numbers = Vec::new();
-    let mut volume_years = Vec::new();
-    let mut publication_years = Vec::new();
-    let mut series_identity_ids = Vec::new();
-    let mut issue_identity_ids = Vec::new();
+    let mut list_ids_column = Vec::with_capacity(BATCH_SIZE);
+    let mut positions = Vec::with_capacity(BATCH_SIZE);
+    let mut series_names = Vec::with_capacity(BATCH_SIZE);
+    let mut issue_numbers = Vec::with_capacity(BATCH_SIZE);
+    let mut volume_years = Vec::with_capacity(BATCH_SIZE);
+    let mut publication_years = Vec::with_capacity(BATCH_SIZE);
+    let mut series_identity_ids = Vec::with_capacity(BATCH_SIZE);
+    let mut issue_identity_ids = Vec::with_capacity(BATCH_SIZE);
+    let mut written = 0;
     for list in pending {
         let Some(list_id) = list_ids.get(&list.source_path) else {
             return Err(IngestError::new("upserted CBL list has no id"));
@@ -1413,42 +1400,90 @@ async fn insert_entries<C: GenericClient>(
                     .as_ref()
                     .and_then(|id| identity_ids.issues.get(id).copied()),
             );
+            if list_ids_column.len() == BATCH_SIZE {
+                written += insert_entry_batch(
+                    client,
+                    &list_ids_column,
+                    &positions,
+                    &series_names,
+                    &issue_numbers,
+                    &volume_years,
+                    &publication_years,
+                    &series_identity_ids,
+                    &issue_identity_ids,
+                    synced_at,
+                )
+                .await?;
+                list_ids_column.clear();
+                positions.clear();
+                series_names.clear();
+                issue_numbers.clear();
+                volume_years.clear();
+                publication_years.clear();
+                series_identity_ids.clear();
+                issue_identity_ids.clear();
+            }
         }
     }
-    let mut written = 0;
-    let total = list_ids_column.len();
-    for start in (0..total).step_by(BATCH_SIZE) {
-        let end = start.saturating_add(BATCH_SIZE).min(total);
-        let count = client
-            .execute(
-                "INSERT INTO cbl_source_entries
-                    (list_id, position, series_name, issue_number, volume_year,
-                     publication_year, external_series_identity_id,
-                     external_issue_identity_id, created_at)
-                 SELECT input.list_id, input.position, input.series_name, input.issue_number,
-                        input.volume_year, input.publication_year,
-                        input.series_identity_id, input.issue_identity_id, $9::timestamptz
-                 FROM unnest($1::int[], $2::int[], $3::text[], $4::text[], $5::int[],
-                             $6::int[], $7::int[], $8::int[])
-                      AS input(list_id, position, series_name, issue_number, volume_year,
-                               publication_year, series_identity_id, issue_identity_id)",
-                &[
-                    &&list_ids_column[start..end],
-                    &&positions[start..end],
-                    &&series_names[start..end],
-                    &&issue_numbers[start..end],
-                    &&volume_years[start..end],
-                    &&publication_years[start..end],
-                    &&series_identity_ids[start..end],
-                    &&issue_identity_ids[start..end],
-                    &synced_at,
-                ],
-            )
-            .await
-            .map_err(|error| IngestError::new(format!("cbl entry insert failed: {error}")))?;
-        written += usize::try_from(count).unwrap_or(0);
+    if !list_ids_column.is_empty() {
+        written += insert_entry_batch(
+            client,
+            &list_ids_column,
+            &positions,
+            &series_names,
+            &issue_numbers,
+            &volume_years,
+            &publication_years,
+            &series_identity_ids,
+            &issue_identity_ids,
+            synced_at,
+        )
+        .await?;
     }
     Ok(written)
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn insert_entry_batch<C: GenericClient>(
+    client: &C,
+    list_ids: &[i32],
+    positions: &[i32],
+    series_names: &[String],
+    issue_numbers: &[String],
+    volume_years: &[Option<i32>],
+    publication_years: &[Option<i32>],
+    series_identity_ids: &[Option<i32>],
+    issue_identity_ids: &[Option<i32>],
+    synced_at: DateTime<Utc>,
+) -> Result<usize, IngestError> {
+    let count = client
+        .execute(
+            "INSERT INTO cbl_source_entries
+                (list_id, position, series_name, issue_number, volume_year,
+                 publication_year, external_series_identity_id,
+                 external_issue_identity_id, created_at)
+             SELECT input.list_id, input.position, input.series_name, input.issue_number,
+                    input.volume_year, input.publication_year,
+                    input.series_identity_id, input.issue_identity_id, $9::timestamptz
+             FROM unnest($1::int[], $2::int[], $3::text[], $4::text[], $5::int[],
+                         $6::int[], $7::int[], $8::int[])
+                  AS input(list_id, position, series_name, issue_number, volume_year,
+                           publication_year, series_identity_id, issue_identity_id)",
+            &[
+                list_ids,
+                positions,
+                series_names,
+                issue_numbers,
+                volume_years,
+                publication_years,
+                series_identity_ids,
+                issue_identity_ids,
+                &synced_at,
+            ],
+        )
+        .await
+        .map_err(|error| IngestError::new(format!("cbl entry insert failed: {error}")))?;
+    Ok(usize::try_from(count).unwrap_or(0))
 }
 
 #[cfg(test)]
