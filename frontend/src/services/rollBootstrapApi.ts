@@ -1,6 +1,7 @@
 import {
   createNativeV2Client,
   type IssueCardsResponse,
+  type RollRecovery,
 } from '../generated/nativeV2Client'
 import { defaultHttpClient, type HttpClient } from './httpClient'
 import { readRollSnoozes } from './api-roll'
@@ -79,7 +80,7 @@ export function createRollBootstrapApi(client: HttpClient) {
       const blockedIssueId = pending != null && !issueIds.includes(pending.issue_id)
         ? pending.issue_id
         : null
-      let recovery = null
+      let recovery: RollRecovery | null = null
       if (blockedIssueId != null) {
         const query: { issue_id: number; snoozed?: string } = { issue_id: blockedIssueId }
         if (snoozes.length > 0) query.snoozed = snoozes.join(',')

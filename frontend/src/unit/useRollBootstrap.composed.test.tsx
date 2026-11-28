@@ -6,7 +6,6 @@ import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { useRollPendingSelection } from '../hooks/useRollPendingSelection'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
-import { dependenciesApi } from '../services/api-dependencies'
 import { readRollSnoozes } from '../services/api-roll'
 import { threadsApi } from '../services/api-threads'
 import { rollResourcesApi } from '../services/rollResourcesApi'
@@ -21,10 +20,8 @@ vi.mock('../services/rollResourcesApi', () => ({
     lastRead: vi.fn(),
     eligibleIssueIds: vi.fn(),
     issueCards: vi.fn(),
+    recovery: vi.fn(),
   },
-}))
-vi.mock('../services/api-dependencies', () => ({
-  dependenciesApi: { getIssueDependencies: vi.fn() },
 }))
 vi.mock('../services/api-roll', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api-roll')>()
@@ -34,7 +31,6 @@ vi.mock('../services/api-threads', () => ({ threadsApi: { list: vi.fn() } }))
 
 const mockedPending = vi.mocked(useRollPendingSelection)
 const mockedResources = vi.mocked(rollResourcesApi)
-const mockedDependencies = vi.mocked(dependenciesApi.getIssueDependencies)
 const mockedSnoozes = vi.mocked(readRollSnoozes)
 const mockedThreadsList = vi.mocked(threadsApi.list)
 
@@ -84,7 +80,7 @@ describe('useRollBootstrap composed scoped view', () => {
       pool_reason: 'ready',
     })
     mockedResources.issueCards.mockResolvedValue({ items: [card(10, 3, 'unread')] })
-    mockedDependencies.mockResolvedValue({ issue_id: 10, incoming: [], outgoing: [] })
+    mockedResources.recovery.mockResolvedValue(null)
     mockedSnoozes.mockReturnValue([])
     mockedThreadsList.mockResolvedValue({ threads: [], active_count: 0, next_page_token: null })
   })
@@ -163,25 +159,39 @@ describe('useRollBootstrap composed scoped view', () => {
       thread_ids: [4],
       pool_reason: 'ready',
     })
-    mockedResources.issueCards.mockImplementation(async (ids: readonly number[]) => ({
-      items: ids.includes(9) ? [card(9, 7, 'unread')] : [card(20, 4, 'unread')],
-    }))
-    mockedDependencies.mockResolvedValue({
-      issue_id: 10,
-      incoming: [{
-        dependency_id: 55,
-        source_issue_id: 9,
-        source_issue_number: '3',
-        source_thread_id: 7,
-        source_thread_title: 'Earlier Series',
+    mockedResources.issueCards.mockImplementation(async (ids: readonly number[]) => {
+      if (ids.includes(10)) return { items: [card(10, 3, 'unread')] }
+      if (ids.includes(9)) return { items: [card(9, 7, 'unread')] }
+      return { items: [card(20, 4, 'unread')] }
+    })
+    mockedResources.recovery.mockResolvedValue({
+      original_thread_id: 3,
+      original_thread_title: 'Current Series',
+      direct_blockers: [{
+        rule_id: null,
+        source_type: 'issue',
+        source_id: 9,
+        source_label: 'Earlier Series #9',
+        satisfaction_type: 'item_read',
+        satisfied: false,
+        causing_issue_ids: [9],
+        causing_member_issue_ids: [],
+        note: 'reader',
       }],
-      outgoing: [],
+      readable_prerequisites: [
+        { node_type: 'issue', node_id: 9, label: 'Earlier Series #9', is_readable: true },
+      ],
+      chains: [[
+        { node_type: 'issue', node_id: 3, label: 'Current Series #10', is_readable: false },
+        { node_type: 'issue', node_id: 9, label: 'Earlier Series #9', is_readable: true },
+      ]],
+      diagnostics: [],
     })
 
     const { result } = renderHook(() => useRollBootstrap(), { wrapper: Wrapper })
     await waitFor(() => expect(result.current.data?.roll_recovery).not.toBeNull())
 
-    expect(mockedDependencies).toHaveBeenCalledWith(10)
+    expect(mockedResources.recovery).toHaveBeenCalledWith(10, [])
     expect(result.current.data?.roll_recovery?.direct_blockers[0].source_id).toBe(9)
     expect(result.current.data?.roll_recovery?.readable_prerequisites[0].node_id).toBe(9)
   })
