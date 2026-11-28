@@ -1040,10 +1040,8 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(comicvine_issue::issue_intelligence),
         )
         .route("/api/v2/issues/{issue_id}", get(issue_read::get_issue))
-        .route(
-            "/api/v1/issues/{issue_id}/comicvine",
-            get(comicvine_issue::issue_intelligence),
-        )
+        // #5958: the v1 issue-comicvine and import-status aliases are retired;
+        // the v2 scoped reads above are the only live ComicVine surface.
         .route(
             "/api/v1/issue-identity/cbl-sources/browse",
             get(cbl_catalog::browse_cbl_source_catalog),
@@ -1051,10 +1049,6 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/issue-identity/cbl-sources/folders",
             get(cbl_catalog::list_cbl_source_folders),
-        )
-        .route(
-            "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
-            get(comicvine_resolution::series_import_status),
         )
         // Canonical native v2 ComicVine read routes (#4835, split chunk A).
         .route(
@@ -1190,9 +1184,8 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/threads/{thread_id}/issue-order",
             put(issue_mutation::reorder_issues),
         )
-        .route("/api/v1/creators", get(creators::list_creators))
-        .route("/api/v1/creators/", get(creators::list_creators))
-        .route("/api/v1/creators/summaries", get(creators::get_summaries))
+        // #5958: the three v1 creator aliases are retired; the v2 creator
+        // resource family below is the only live surface.
         .route("/api/v2/creators", get(creators_v2::list_creators))
         .route(
             "/api/v2/creators/summaries",
@@ -1231,16 +1224,8 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}",
             get(creators_v2::get_series_drilldown),
         )
-        .route(
-            "/api/v1/continuity-rules/",
-            get(continuity_rules::list).post(continuity_rules::create),
-        )
-        .route(
-            "/api/v1/continuity-rules/{rule_id}",
-            get(continuity_rules::get)
-                .put(continuity_rules::update)
-                .delete(continuity_rules::delete),
-        )
+        // #5958: the legacy continuity-rule family has no v2 successor and is
+        // retired; continuity plans and their dependencies remain on v2.
         // Continuity plans v1 routes (cutover from Python)
         .route(
             "/api/v2/continuity-plans/",
@@ -1312,14 +1297,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route("/api/bug-reports/", post(bug_reports::create))
         .route("/api/v1/bug-reports/", post(bug_reports::create))
-        .route("/api/v1/releases/", put(releases::publish))
+        // #5958: the release-writer v1 endpoints are retired; the canonical
+        // v2 releases list is the only live release read. Release writing is
+        // performed by the dedicated release-writer workflow, not an alias.
         .route("/api/v2/releases", get(releases::list))
-        .route("/api/v1/releases/source", get(releases::reconcile))
-        .route("/api/v1/releases/{release_id}", get(releases::get))
-        .route(
-            "/api/v1/releases/{release_id}/retract",
-            post(releases::retract),
-        )
         .route("/api/v2/tags", get(tags::list_tags))
         .route("/api/v2/tags", post(tags::create_tag))
         .route(
@@ -1388,10 +1369,8 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/readingOrderGroups/{group_id}",
             delete(dependency_groups::delete_group_v2),
         )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}/order",
-            put(dependency_groups::set_group_order),
-        )
+        // #5958: the v1 group-order writer is retired; v2 membership/range
+        // resources are the only live group-authority surface.
         .route(
             "/api/v2/reading-order-groups:resolveMemberships",
             post(thread_lifecycle::resolve_memberships),
