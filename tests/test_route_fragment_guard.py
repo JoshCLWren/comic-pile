@@ -28,10 +28,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_generated_paths_are_bot_owned() -> None:
-    """All three generated artifacts are classified as bot-owned."""
+    """All generated artifacts are classified as bot-owned."""
     assert is_generated_path("vercel.json")
     assert is_generated_path("docs/api/v2-route-inventory.json")
     assert is_generated_path("docs/api/route-fragments/vercel-rewrites.json")
+    assert is_generated_path("docs/API_V1_CANONICAL.md")
+    assert is_generated_path("docs/api/live-route-census.json")
+    assert is_generated_path("docs/api/LIVE_ROUTE_CENSUS.md")
 
 
 def test_vercel_rewrites_is_generated_despite_fragment_directory() -> None:
@@ -190,6 +193,9 @@ def test_standalone_guard_workflow_is_gone() -> None:
         "vercel.json",
         "docs/api/v2-route-inventory.json",
         "docs/api/route-fragments/vercel-rewrites.json",
+        "docs/API_V1_CANONICAL.md",
+        "docs/api/live-route-census.json",
+        "docs/api/LIVE_ROUTE_CENSUS.md",
     ],
 )
 def test_generated_paths_list_matches_guard_contract(path: str) -> None:

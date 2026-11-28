@@ -13,6 +13,9 @@ in a pull request:
 * ``docs/api/route-fragments/vercel-rewrites.json`` — generated
   family-scoped rewrite artifact (despite living under the fragments
   directory, it is generated, not source).
+* ``docs/API_V1_CANONICAL.md`` — generated v1 surface count and table.
+* ``docs/api/live-route-census.json`` — generated all-version route census.
+* ``docs/api/LIVE_ROUTE_CENSUS.md`` — generated human-readable report.
 * The ``<!-- route-burndown:begin -->`` ... ``<!-- route-burndown:end -->``
   section of ``AGENTS.md`` — generated runtime summary.
 
@@ -34,6 +37,9 @@ GENERATED_PATHS: Final = frozenset(
         "vercel.json",
         "docs/api/v2-route-inventory.json",
         "docs/api/route-fragments/vercel-rewrites.json",
+        "docs/API_V1_CANONICAL.md",
+        "docs/api/live-route-census.json",
+        "docs/api/LIVE_ROUTE_CENSUS.md",
     }
 )
 SOURCE_FRAGMENT_PREFIX: Final = "docs/api/route-fragments/"
@@ -67,10 +73,10 @@ def is_generated_path(path: str) -> bool:
         path: Repository-relative path.
 
     Returns:
-        True for ``vercel.json``, the inventory, and the generated
-        rewrite artifact. ``AGENTS.md`` is only generated inside the
-        burndown markers, so the bare path is not unconditionally
-        generated; see :func:`agents_block_changed`.
+        True for ``vercel.json``, the inventory, the v1-canonical guide,
+        the live route census, and the generated rewrite artifact.
+        ``AGENTS.md`` is only generated inside the burndown markers, so the
+        bare path is not unconditionally generated; see :func:`agents_block_changed`.
     """
     return path in GENERATED_PATHS
 
