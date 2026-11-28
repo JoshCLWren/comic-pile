@@ -1,11 +1,6 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { PropsWithChildren } from 'react'
-<<<<<<< HEAD
-import { describe, expect, it, vi } from 'vitest'
-import { useAllThreads, useCrossoverIssuesForRange } from '../hooks/useCrossovers'
-import { useThreadIssuesForDependency } from '../hooks/useDependencies'
-=======
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAllThreads, useCrossoverIssuesForRange } from '../hooks/useCrossovers'
 import { useThreadIssuesForDependency } from '../hooks/useDependencies'
@@ -16,7 +11,6 @@ import {
 import { useThreadIssuePages } from '../hooks/useThreadIssues'
 import { issuesApi } from '../services/api-issues'
 import { threadsApi } from '../services/api-threads'
->>>>>>> origin/main
 import { COLLECT_ALL_DEFAULT_MAX_PAGES } from '../pagination/collectAllPages'
 import type { Issue, IssueListResponse, ThreadListItem } from '../types'
 
@@ -56,11 +50,8 @@ function issuePage(
 }
 
 describe('canonical hook pagination', () => {
-<<<<<<< HEAD
-=======
   afterEach(() => vi.restoreAllMocks())
 
->>>>>>> origin/main
   it('drains unread dependency issues using the same filter and opaque cursor on every page', async () => {
     const list = vi.fn()
       .mockResolvedValueOnce(issuePage([firstIssue], 'opaque-next'))
@@ -199,8 +190,6 @@ describe('canonical hook pagination', () => {
     expect(list).toHaveBeenNthCalledWith(1, { page_size: 100 }, null)
     expect(list).toHaveBeenNthCalledWith(2, { page_size: 100 }, '1')
   })
-<<<<<<< HEAD
-=======
 
   it('drains planner threads through the shared collector with the original first-call shape', async () => {
     const list = vi.spyOn(threadsApi, 'list')
@@ -255,5 +244,4 @@ describe('canonical hook pagination', () => {
     await result.current.fetchNextPage()
     expect(list).toHaveBeenCalledTimes(2)
   })
->>>>>>> origin/main
 })

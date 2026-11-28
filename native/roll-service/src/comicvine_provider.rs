@@ -1053,11 +1053,7 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
             Ok(value) => value,
             Err(failure) => {
                 log_provider_failure("inline_identity_hydration", failure);
-<<<<<<< HEAD
-                return;
-=======
                 return None;
->>>>>>> origin/main
             }
         };
         let (mut patch, has, url, updated) = match normalized_metadata(&provider_data, comicvine_id)
@@ -1065,28 +1061,12 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
             Ok(ok) => ok,
             Err(failure) => {
                 log_provider_failure("inline_identity_hydration_normalize", failure);
-<<<<<<< HEAD
-                return;
-            }
-        };
-        // A sparser fresh roster must never erase cached creator credits.
-        if !has {
-            preserve_cached_credits(&mut patch, cached.as_ref());
-        }
-        let Ok(json_patch) = serde_json::to_string(&patch) else {
-            log_provider_failure(
-                "inline_identity_hydration_serialize",
-                ProviderFailure::InvalidResponse,
-            );
-            return;
-=======
                 return None;
             }
         };
         let mut write_conn = match db::checkout(state).await {
             Ok(c) => c,
             Err(_) => return None,
->>>>>>> origin/main
         };
         let tx = match write_conn.transaction().await {
             Ok(tx) => tx,
@@ -1158,12 +1138,6 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
             )
             .await
         {
-<<<<<<< HEAD
-            log_provider_failure("inline_identity_persist", ProviderFailure::PersistFailed);
-            tracing::debug!(
-                error_kind = crate::error_kind(&err),
-                "inline identity persist error classified"
-=======
             Ok(rows) => rows,
             Err(err) => {
                 log_provider_failure("inline_identity_persist", ProviderFailure::PersistFailed);
@@ -1179,7 +1153,6 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
             tracing::debug!(
                 error_kind = crate::error_kind(&err),
                 "inline identity persist commit failed"
->>>>>>> origin/main
             );
             return None;
         }
