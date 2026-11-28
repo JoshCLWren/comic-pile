@@ -521,7 +521,6 @@ describe('RollDiceButton guard branches (#5981)', () => {
     const { rerender } = render(
       <RollDiceButton sides={3} value={0} isRolling={false} hasRolled={false} onRoll={onRoll} />,
     )
-    const die = screen.getByTestId('main-die-3d')
     // keydown while disabled
     rerender(
       <RollDiceButton sides={3} value={0} isRolling={false} hasRolled={false} disabled onRoll={onRoll} />,
