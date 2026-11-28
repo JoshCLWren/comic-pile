@@ -168,6 +168,7 @@ pub fn parse_options(arguments: &[String]) -> Result<IngestOptions, IngestError>
                 index += 1;
                 let value = arguments
                     .get(index)
+                    .filter(|value| !value.starts_with('-'))
                     .ok_or_else(|| IngestError::new(format!("{argument} requires a value")))?;
                 match argument.as_str() {
                     "--revision-sha" => revision_sha = Some(value.clone()),
@@ -459,6 +460,11 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
                 }
             }
             Event::Text(ref text) => {
+                if elements.is_empty() && !text.as_ref().trim().is_empty() {
+                    return Err(IngestError::new(
+                        "CBL character data must stay inside ReadingList",
+                    ));
+                }
                 if capture.is_some() {
                     let value = unescape(text.as_ref()).map_err(|error| {
                         IngestError::new(format!("invalid XML entity: {error}"))
@@ -467,11 +473,21 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
                 }
             }
             Event::CData(ref text) => {
+                if elements.is_empty() {
+                    return Err(IngestError::new(
+                        "CBL CDATA must stay inside ReadingList",
+                    ));
+                }
                 if capture.is_some() {
                     captured_text.push_str(text.as_ref());
                 }
             }
             Event::GeneralRef(reference) => {
+                if elements.is_empty() {
+                    return Err(IngestError::new(
+                        "CBL character references must stay inside ReadingList",
+                    ));
+                }
                 let value = decode_reference(reference.as_ref())?;
                 if capture.is_some() {
                     captured_text.push_str(&value);
@@ -935,6 +951,10 @@ pub async fn sync_cbl_lists<C: GenericClient>(
         if alias != repository && !aliases.contains(&alias) {
             aliases.push(alias);
         }
+    }
+
+    if !dry_run {
+        lock_repository(client, &repository).await?;
     }
 
     let (mut source_id, existing_revision) = lookup_source(client, &repository, dry_run).await?;
