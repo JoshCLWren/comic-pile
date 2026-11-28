@@ -503,6 +503,41 @@ it('renders migrated progress, paginated issues, and saves edits', async () => {
   await waitFor(() => expect(mutate).toHaveBeenCalled())
 })
 
+it('shows a visible save error and keeps the Edit Series draft when PATCH fails (#5951)', async () => {
+  // SAFETY: the stubbed thread supplies only the fields this view reads
+  mockedThreadsApiGet.mockResolvedValue({
+    id: 1, title: 'Saga', format: 'Comics', issues_remaining: 2, queue_position: 1,
+    status: 'active', total_issues: 10, next_unread_issue_number: '3', notes: 'Keep reading',
+  } as never)
+  mockedIssuesApiList.mockResolvedValue({
+    issues: [
+      { id: 1, thread_id: 1, issue_number: '1', status: 'read', read_at: 'now', created_at: 'now' },
+    ],
+    next_page_token: null, total_count: 1, page_size: 100,
+  })
+  const mutate = vi.fn().mockRejectedValue({
+    response: { status: 409, data: { detail: 'Thread snapshot is stale; reload and retry' } },
+  })
+  // SAFETY: the hook mock returns only the fields the component under test reads
+  mockedUseUpdateThread.mockReturnValue({ mutate, isPending: false } as never)
+  renderPage()
+  await waitFor(() => expect(screen.getByText('80%')).toBeInTheDocument())
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Edit' }))
+  await user.clear(screen.getByDisplayValue('Saga'))
+  await user.type(screen.getByDisplayValue(''), 'Renamed Saga')
+  await user.click(screen.getByRole('button', { name: 'Save Changes' }))
+
+  await waitFor(() =>
+    expect(screen.getByTestId('thread-edit-error')).toHaveTextContent(
+      'Failed to save series: Thread snapshot is stale; reload and retry',
+    ),
+  )
+  expect(screen.getByRole('heading', { name: 'Edit Series' })).toBeInTheDocument()
+  expect(screen.getByDisplayValue('Renamed Saga')).toBeInTheDocument()
+  expect(mutate).toHaveBeenCalledTimes(1)
+})
+
 it('replaces an impossible negative progress percentage with an inconsistent-counter warning (#3595)', async () => {
   // The reported thread: one total issue with 36 still to read. The page used
   // to render "-3500%" and "-35 of 1 issues read" for these counters.

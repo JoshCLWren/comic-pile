@@ -380,7 +380,11 @@ async fn delete_v2_removes_thread_and_subsequent_operations_return_404() {
     assert_eq!(remaining.get::<_, i64>(0), 0, "thread event removed");
     assert_eq!(remaining.get::<_, i64>(1), 0, "dependent snapshot removed");
     assert_eq!(remaining.get::<_, i64>(2), 0, "reading-order item removed");
-    assert_eq!(remaining.get::<_, i64>(3), 0, "reading-list membership removed");
+    assert_eq!(
+        remaining.get::<_, i64>(3),
+        0,
+        "reading-list membership removed"
+    );
     drop(conn);
 
     let (status, body) = call(&ctx, "DELETE", &uri, None).await;
