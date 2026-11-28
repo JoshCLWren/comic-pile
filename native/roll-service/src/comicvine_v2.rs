@@ -708,7 +708,7 @@ fn roster_page(payload: &Value, volume_id: i32) -> Result<RosterPage, ProviderFa
     let results = payload
         .get("results")
         .and_then(Value::as_array)
-        .ok_or(ProviderFailure::InvalidPayload)?;
+        .ok_or(ProviderFailure::InvalidResponse)?;
     let rows: Vec<Value> = results
         .iter()
         .filter(|row| row.is_object())
@@ -722,7 +722,7 @@ fn roster_page(payload: &Value, volume_id: i32) -> Result<RosterPage, ProviderFa
             })
     });
     if foreign_row {
-        return Err(ProviderFailure::InvalidPayload);
+        return Err(ProviderFailure::InvalidResponse);
     }
     // Python keeps the total only when it is an `int`.
     let total = match payload.get("number_of_total_results") {
@@ -778,7 +778,7 @@ async fn provider_roster(
         let mut pages = 1usize;
         while last_len >= ROSTER_PAGE_SIZE {
             if pages >= MAX_ROSTER_PAGES {
-                return Err(ProviderFailure::InvalidPayload);
+                return Err(ProviderFailure::InvalidResponse);
             }
             let page = fetch_roster_page(state, volume_id, key, rows.len(), fresh).await?;
             pages += 1;
@@ -792,7 +792,7 @@ async fn provider_roster(
     }
     let pages_needed = total.div_ceil(ROSTER_PAGE_SIZE);
     if pages_needed > MAX_ROSTER_PAGES {
-        return Err(ProviderFailure::InvalidPayload);
+        return Err(ProviderFailure::InvalidResponse);
     }
     let offsets: Vec<usize> = (1..pages_needed)
         .map(|page| page * ROSTER_PAGE_SIZE)
@@ -816,12 +816,12 @@ async fn provider_roster(
         let Some(joined) = in_flight.join_next().await else {
             break;
         };
-        let (index, page) = joined.map_err(|_| ProviderFailure::Unavailable)?;
+        let (index, page) = joined.map_err(|_| ProviderFailure::InvalidResponse)?;
         pages[index] = Some(page?.rows);
     }
     let mut rows = first.rows;
     for page in pages {
-        rows.extend(page.ok_or(ProviderFailure::Unavailable)?);
+        rows.extend(page.ok_or(ProviderFailure::InvalidResponse)?);
     }
     Ok(rows)
 }
@@ -3124,19 +3124,19 @@ mod tests {
     fn roster_pages_are_validated_like_python() {
         assert!(matches!(
             roster_page(&json!({"number_of_total_results": 5}), 9),
-            Err(ProviderFailure::InvalidPayload)
+            Err(ProviderFailure::InvalidResponse)
         ));
         assert!(matches!(
             roster_page(&json!({"results": {}}), 9),
-            Err(ProviderFailure::InvalidPayload)
+            Err(ProviderFailure::InvalidResponse)
         ));
         assert!(matches!(
             roster_page(&json!({"results": [{"id": 1, "volume": {"id": 10}}]}), 9),
-            Err(ProviderFailure::InvalidPayload)
+            Err(ProviderFailure::InvalidResponse)
         ));
         assert!(matches!(
             roster_page(&json!({"results": [{"id": 1, "volume": {"id": "9"}}]}), 9),
-            Err(ProviderFailure::InvalidPayload)
+            Err(ProviderFailure::InvalidResponse)
         ));
         let page = roster_page(
             &json!({"number_of_total_results": 3, "results": [

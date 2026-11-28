@@ -4236,7 +4236,7 @@
             "type": "array"
           },
           "rated_population_scope": {
-            "type": "string"
+            "$ref": "#/components/schemas/CreatorRatedPopulationScope"
           },
           "rating_distribution": {
             "oneOf": [
@@ -4294,7 +4294,10 @@
           "rated_population_scope",
           "headline_roles",
           "read_unrated_issues",
-          "upcoming_issues"
+          "upcoming_issues",
+          "next_cursor",
+          "rating_distribution",
+          "insights"
         ],
         "type": "object"
       },
@@ -4623,9 +4626,13 @@
         "required": [
           "min_series_sample",
           "series_sample_met",
+          "series_message",
           "excluded_incomplete_series_count",
           "individual_issue_limit",
           "individual_issues_combined",
+          "strongest_series",
+          "weakest_series",
+          "most_rated_series",
           "highest_rated_issues",
           "lowest_rated_issues"
         ],
@@ -4721,6 +4728,8 @@
           "thread_title",
           "status",
           "roles",
+          "effective_rating",
+          "rating_timestamp",
           "sort_key"
         ],
         "type": "object"
@@ -4755,6 +4764,7 @@
           "canonical_creator_key",
           "display_name",
           "normalized_roles",
+          "average_rating",
           "ratings_count"
         ],
         "type": "object"
@@ -5038,6 +5048,13 @@
         ],
         "type": "object"
       },
+      "CreatorRatedPopulationScope": {
+        "description": "Only headline roles contribute to the headline rated list.",
+        "enum": [
+          "headline_roles_only"
+        ],
+        "type": "string"
+      },
       "CreatorRatingBucket": {
         "properties": {
           "count": {
@@ -5118,7 +5135,8 @@
         "required": [
           "role",
           "issue_count",
-          "rated_issue_count"
+          "rated_issue_count",
+          "average_rating"
         ],
         "type": "object"
       },
@@ -5149,7 +5167,7 @@
             "type": "boolean"
           },
           "population_scope": {
-            "type": "string"
+            "$ref": "#/components/schemas/CreatorSeriesPopulationScope"
           },
           "rated_issue_count": {
             "format": "int64",
@@ -5188,6 +5206,9 @@
           "thread_id",
           "thread_title",
           "rated_issue_count",
+          "average_rating",
+          "lowest_rating",
+          "highest_rating",
           "roles",
           "unread_issue_count",
           "read_unrated_issue_count",
@@ -5299,7 +5320,7 @@
             "type": "integer"
           },
           "population_scope": {
-            "type": "string"
+            "$ref": "#/components/schemas/CreatorSeriesPopulationScope"
           },
           "rated_issue_count": {
             "format": "int64",
@@ -5332,14 +5353,25 @@
           "thread_title",
           "roles",
           "rated_issue_count",
+          "average_rating",
+          "lowest_rating",
+          "highest_rating",
           "metadata_complete",
           "population_scope",
           "issues",
           "total",
           "limit",
-          "offset"
+          "offset",
+          "next_cursor"
         ],
         "type": "object"
+      },
+      "CreatorSeriesPopulationScope": {
+        "description": "Every verified credited role contributes to the series aggregate.",
+        "enum": [
+          "all_verified_credits"
+        ],
+        "type": "string"
       },
       "CreatorSummariesResponse": {
         "properties": {
@@ -5449,6 +5481,7 @@
           "canonical_creator_key",
           "display_name",
           "normalized_roles",
+          "average_rating",
           "ratings_count",
           "read_unrated_count",
           "upcoming_count"
@@ -19262,300 +19295,6 @@
         "summary": "OpenAPI documentation for the legacy metrics endpoints.",
         "tags": [
           "metrics"
-        ]
-      }
-    },
-    "/api/v1/auth/csrf": {
-      "get": {
-        "operationId": "csrf_documentation___api_v1_auth_csrf",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CsrfResponse"
-                }
-              }
-            },
-            "description": "Double-submit CSRF token"
-          }
-        },
-        "summary": "Documentation-only operation for the mounted v2 CSRF handler.",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/forgot-password": {
-      "post": {
-        "operationId": "forgot_password_documentation___api_v1_auth_forgot_password",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ForgotPasswordRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PasswordResetResponse"
-                }
-              }
-            },
-            "description": "Enumeration-safe acknowledgement"
-          },
-          "422": {
-            "description": "Request payload failed validation"
-          },
-          "429": {
-            "description": "Password-recovery rate limit exceeded"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "summary": "Documentation-only operation for the mounted v2 forgot-password handler.",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/login": {
-      "post": {
-        "operationId": "login_documentation___api_v1_auth_login",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LoginRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TokenResponse"
-                }
-              }
-            },
-            "description": "Credentials accepted and bearer tokens issued"
-          },
-          "400": {
-            "description": "Username field contained an email address"
-          },
-          "401": {
-            "description": "Incorrect username or password"
-          },
-          "422": {
-            "description": "Request payload failed validation"
-          },
-          "429": {
-            "description": "Login rate limit exceeded"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "summary": "Documentation-only operation for the mounted v2 login handler.",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/logout": {
-      "post": {
-        "operationId": "logout_documentation___api_v1_auth_logout",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Bearer token revoked and refresh cookie cleared"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "summary": "Documentation-only operation for the mounted v2 logout handler.",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/me": {
-      "get": {
-        "operationId": "me_documentation___api_v1_auth_me",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserResponse"
-                }
-              }
-            },
-            "description": "Authenticated account profile"
-          },
-          "401": {
-            "description": "Not authenticated or token invalid"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Documentation-only operation for the mounted v2 current-user handler.",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/refresh": {
-      "post": {
-        "description": "The refresh cookie is an alternative to the optional JSON body token.",
-        "operationId": "refresh_documentation___api_v1_auth_refresh",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/RefreshTokenRequest"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TokenResponse"
-                }
-              }
-            },
-            "description": "Refreshed bearer tokens issued"
-          },
-          "401": {
-            "description": "Missing, invalid, revoked or stale refresh token"
-          },
-          "429": {
-            "description": "Refresh rate limit exceeded"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "summary": "Documentation-only operation for the mounted v2 refresh handler.",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/register": {
-      "post": {
-        "operationId": "register_documentation___api_v1_auth_register",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RegisterRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TokenResponse"
-                }
-              }
-            },
-            "description": "Account created and bearer tokens issued"
-          },
-          "400": {
-            "description": "Username or email is already registered"
-          },
-          "422": {
-            "description": "Request payload failed validation"
-          },
-          "429": {
-            "description": "Registration rate limit exceeded"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "summary": "Documentation-only operation for the mounted v2 registration handler.",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/reset-password": {
-      "post": {
-        "operationId": "reset_password_documentation___api_v1_auth_reset_password",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ResetPasswordRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PasswordResetResponse"
-                }
-              }
-            },
-            "description": "Password reset completed"
-          },
-          "400": {
-            "description": "Invalid or expired reset request"
-          },
-          "422": {
-            "description": "Request payload failed validation"
-          },
-          "429": {
-            "description": "Password-recovery rate limit exceeded"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "summary": "Documentation-only operation for the mounted v2 reset-password handler.",
-        "tags": [
-          "auth"
         ]
       }
     },

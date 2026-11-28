@@ -60,145 +60,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/csrf": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Documentation-only operation for the mounted v2 CSRF handler. */
-        get: operations["csrf_documentation___api_v1_auth_csrf"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/forgot-password": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Documentation-only operation for the mounted v2 forgot-password handler. */
-        post: operations["forgot_password_documentation___api_v1_auth_forgot_password"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Documentation-only operation for the mounted v2 login handler. */
-        post: operations["login_documentation___api_v1_auth_login"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/logout": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Documentation-only operation for the mounted v2 logout handler. */
-        post: operations["logout_documentation___api_v1_auth_logout"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Documentation-only operation for the mounted v2 current-user handler. */
-        get: operations["me_documentation___api_v1_auth_me"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/refresh": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Documentation-only operation for the mounted v2 refresh handler.
-         * @description The refresh cookie is an alternative to the optional JSON body token.
-         */
-        post: operations["refresh_documentation___api_v1_auth_refresh"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/register": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Documentation-only operation for the mounted v2 registration handler. */
-        post: operations["register_documentation___api_v1_auth_register"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/reset-password": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Documentation-only operation for the mounted v2 reset-password handler. */
-        post: operations["reset_password_documentation___api_v1_auth_reset_password"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/bug-reports/": {
         parameters: {
             query?: never;
@@ -5148,11 +5009,11 @@ export interface components {
         CreatorDetailResponse: {
             coverage: components["schemas"]["CreatorSummaryCoverage"];
             headline_roles: string[];
-            insights?: components["schemas"]["CreatorInsights"] | null;
-            next_cursor?: string | null;
+            insights: components["schemas"]["CreatorInsights"] | null;
+            next_cursor: string | null;
             rated_issues: components["schemas"]["CreatorIssueRow"][];
-            rated_population_scope: string;
-            rating_distribution?: components["schemas"]["CreatorRatingDistribution"] | null;
+            rated_population_scope: components["schemas"]["CreatorRatedPopulationScope"];
+            rating_distribution: components["schemas"]["CreatorRatingDistribution"] | null;
             read_unrated_issues: components["schemas"]["CreatorIssueRow"][];
             role_stats: components["schemas"]["CreatorRoleStat"][];
             series_groups: components["schemas"]["CreatorSeriesGroup"][];
@@ -5246,11 +5107,11 @@ export interface components {
             lowest_rated_issues: components["schemas"]["CreatorIssueInsight"][];
             /** Format: int64 */
             min_series_sample: number;
-            most_rated_series?: components["schemas"]["CreatorSeriesInsight"] | null;
-            series_message?: string | null;
+            most_rated_series: components["schemas"]["CreatorSeriesInsight"] | null;
+            series_message: string | null;
             series_sample_met: boolean;
-            strongest_series?: components["schemas"]["CreatorSeriesInsight"] | null;
-            weakest_series?: components["schemas"]["CreatorSeriesInsight"] | null;
+            strongest_series: components["schemas"]["CreatorSeriesInsight"] | null;
+            weakest_series: components["schemas"]["CreatorSeriesInsight"] | null;
         };
         CreatorIssueInsight: {
             /** Format: double */
@@ -5266,11 +5127,11 @@ export interface components {
         };
         CreatorIssueRow: {
             /** Format: double */
-            effective_rating?: number | null;
+            effective_rating: number | null;
             /** Format: int64 */
             issue_id: number;
             issue_number: string;
-            rating_timestamp?: string | null;
+            rating_timestamp: string | null;
             roles: string[];
             sort_key: string;
             status: string;
@@ -5280,7 +5141,7 @@ export interface components {
         };
         CreatorListItem: {
             /** Format: double */
-            average_rating?: number | null;
+            average_rating: number | null;
             canonical_creator_key: string;
             display_name: string;
             normalized_roles: string[];
@@ -5360,6 +5221,11 @@ export interface components {
             /** Format: int64 */
             total_pages: number;
         };
+        /**
+         * @description Only headline roles contribute to the headline rated list.
+         * @enum {string}
+         */
+        CreatorRatedPopulationScope: "headline_roles_only";
         CreatorRatingBucket: {
             /** Format: int64 */
             count: number;
@@ -5381,7 +5247,7 @@ export interface components {
         };
         CreatorRoleStat: {
             /** Format: double */
-            average_rating?: number | null;
+            average_rating: number | null;
             /** Format: int64 */
             issue_count: number;
             /** Format: int64 */
@@ -5390,13 +5256,13 @@ export interface components {
         };
         CreatorSeriesGroup: {
             /** Format: double */
-            average_rating?: number | null;
+            average_rating: number | null;
             /** Format: double */
-            highest_rating?: number | null;
+            highest_rating: number | null;
             /** Format: double */
-            lowest_rating?: number | null;
+            lowest_rating: number | null;
             metadata_complete: boolean;
-            population_scope: string;
+            population_scope: components["schemas"]["CreatorSeriesPopulationScope"];
             /** Format: int64 */
             rated_issue_count: number;
             /** Format: int64 */
@@ -5429,19 +5295,19 @@ export interface components {
         };
         CreatorSeriesIssueListResponse: {
             /** Format: double */
-            average_rating?: number | null;
+            average_rating: number | null;
             /** Format: double */
-            highest_rating?: number | null;
+            highest_rating: number | null;
             issues: components["schemas"]["CreatorIssueRow"][];
             /** Format: int64 */
             limit: number;
             /** Format: double */
-            lowest_rating?: number | null;
+            lowest_rating: number | null;
             metadata_complete: boolean;
-            next_cursor?: string | null;
+            next_cursor: string | null;
             /** Format: int64 */
             offset: number;
-            population_scope: string;
+            population_scope: components["schemas"]["CreatorSeriesPopulationScope"];
             /** Format: int64 */
             rated_issue_count: number;
             roles: string[];
@@ -5452,6 +5318,11 @@ export interface components {
             /** Format: int64 */
             total: number;
         };
+        /**
+         * @description Every verified credited role contributes to the series aggregate.
+         * @enum {string}
+         */
+        CreatorSeriesPopulationScope: "all_verified_credits";
         CreatorSummariesResponse: {
             coverage: components["schemas"]["CreatorSummaryCoverage"];
             summaries: {
@@ -5477,7 +5348,7 @@ export interface components {
         };
         CreatorSummaryItem: {
             /** Format: double */
-            average_rating?: number | null;
+            average_rating: number | null;
             canonical_creator_key: string;
             display_name: string;
             normalized_roles: string[];
@@ -10019,340 +9890,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["StartupMetricsResponse"];
                 };
-            };
-        };
-    };
-    csrf_documentation___api_v1_auth_csrf: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Double-submit CSRF token */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CsrfResponse"];
-                };
-            };
-        };
-    };
-    forgot_password_documentation___api_v1_auth_forgot_password: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ForgotPasswordRequest"];
-            };
-        };
-        responses: {
-            /** @description Enumeration-safe acknowledgement */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PasswordResetResponse"];
-                };
-            };
-            /** @description Request payload failed validation */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Password-recovery rate limit exceeded */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    login_documentation___api_v1_auth_login: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LoginRequest"];
-            };
-        };
-        responses: {
-            /** @description Credentials accepted and bearer tokens issued */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TokenResponse"];
-                };
-            };
-            /** @description Username field contained an email address */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Incorrect username or password */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request payload failed validation */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Login rate limit exceeded */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    logout_documentation___api_v1_auth_logout: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Bearer token revoked and refresh cookie cleared */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    me_documentation___api_v1_auth_me: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Authenticated account profile */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UserResponse"];
-                };
-            };
-            /** @description Not authenticated or token invalid */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    refresh_documentation___api_v1_auth_refresh: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["RefreshTokenRequest"] | null;
-            };
-        };
-        responses: {
-            /** @description Refreshed bearer tokens issued */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TokenResponse"];
-                };
-            };
-            /** @description Missing, invalid, revoked or stale refresh token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Refresh rate limit exceeded */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    register_documentation___api_v1_auth_register: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegisterRequest"];
-            };
-        };
-        responses: {
-            /** @description Account created and bearer tokens issued */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TokenResponse"];
-                };
-            };
-            /** @description Username or email is already registered */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request payload failed validation */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Registration rate limit exceeded */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    reset_password_documentation___api_v1_auth_reset_password: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ResetPasswordRequest"];
-            };
-        };
-        responses: {
-            /** @description Password reset completed */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PasswordResetResponse"];
-                };
-            };
-            /** @description Invalid or expired reset request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request payload failed validation */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Password-recovery rate limit exceeded */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };

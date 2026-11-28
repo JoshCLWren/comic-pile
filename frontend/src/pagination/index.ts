@@ -1,5 +1,6 @@
 export {
   COLLECT_ALL_DEFAULT_MAX_PAGES,
+  MAX_ISSUE_COLLECTION_PAGES,
   collectAllPages,
 } from './collectAllPages'
 export type {

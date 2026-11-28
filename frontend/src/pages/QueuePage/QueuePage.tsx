@@ -59,8 +59,7 @@ export default function QueuePage() {
   } = queueLoader
 
   // Series that show the per-row `Map series` repair action (everything except
-  // fully mapped or non-issue-tracked rows) are the bulk action's scope, and an
-  // open run keeps reading the cursor so the batch covers the whole queue.
+  // fully mapped or non-issue-tracked rows) are the bulk action's scope; an open run keeps reading the cursor.
   const bulkMapping = useQueueBulkMapping(queueLoader)
   const { data: rollBootstrap } = useRollBootstrap()
   const createMutation = useCreateThread()
@@ -270,6 +269,7 @@ export default function QueuePage() {
           createForm={modals.createForm}
           editForm={modals.editForm}
           createError={modals.createError}
+          editError={modals.editError}
           setCreateForm={modals.setCreateForm}
           setEditForm={modals.setEditForm}
           issuePreview={modals.issuePreview}

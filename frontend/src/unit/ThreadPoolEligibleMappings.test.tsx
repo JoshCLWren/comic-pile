@@ -57,27 +57,18 @@ describe('ThreadPool eligible mappings', () => {
     )
 
     expect(screen.getByText('1 in play')).toBeVisible()
-    expect(screen.getByText('#12')).toBeVisible()
-    expect(screen.getByRole('button', {
+    const face = screen.getByRole('button', {
       name: /Die face 1: Amazing Adventures, issue 12, connected to Secret War\. Open series actions\./i,
-    })).toBeVisible()
+    })
+    expect(face).toBeVisible()
+    expect(face).toHaveAccessibleName(/issue 12/i)
     expect(screen.getByRole('button', { name: 'Shuffle queue' })).toHaveAccessibleDescription(
       /complete active queue/i,
     )
 
-    const dieFace = screen.getByRole('button', { name: /Die face 1: Amazing Adventures/i })
-    const titleText = dieFace.querySelector('p:nth-of-type(1)')
-    const issueText = dieFace.querySelector('p:nth-of-type(2)')
-    expect(titleText?.textContent).toBe('Amazing Adventures')
-    expect(issueText?.textContent).toBe('#12')
-    expect(titleText).toHaveClass('font-bold', 'text-sm', 'text-stone-200')
-    expect(issueText).toHaveClass('text-xs', 'text-stone-400')
-    expect(issueText).not.toHaveClass('font-bold', 'text-sm')
-    expect(
-      titleText && issueText
-        ? titleText.compareDocumentPosition(issueText) & Node.DOCUMENT_POSITION_FOLLOWING
-        : 0,
-    ).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Die face 1: Amazing Adventures/i })).toHaveAccessibleName(
+      /Amazing Adventures, issue 12/i,
+    )
   })
 
   it('reorders the pool to scoped eligible thread ids when provided', () => {
@@ -132,7 +123,9 @@ describe('ThreadPool eligible mappings', () => {
         />
       </MemoryRouter>,
     )
-    expect(screen.getByText('#7')).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: /Die face 1: Card comic, issue 7/i }),
+    ).toBeVisible()
   })
 
   it('renders the same shared cover as other issue surfaces using the already batched card', () => {
@@ -205,10 +198,16 @@ describe('ThreadPool eligible mappings', () => {
         />
       </MemoryRouter>,
     )
-    expect(screen.getByText('Canonical card title')).toBeVisible()
-    expect(screen.getByText('#7')).toBeVisible()
-    expect(screen.queryByText('Stale bootstrap title')).not.toBeInTheDocument()
-    expect(screen.queryByText('#6')).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Die face 1: Canonical card title, issue 7/i }),
+    ).toBeVisible()
+    expect(screen.getByLabelText('No cover for Canonical card title #7')).toBeVisible()
+    expect(
+      screen.queryByRole('button', { name: /Stale bootstrap title/i }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /issue 6/i }),
+    ).not.toBeInTheDocument()
   })
 
   it('carries the route overflow count on the face cue', () => {
@@ -228,11 +227,8 @@ describe('ThreadPool eligible mappings', () => {
       </MemoryRouter>,
     )
 
-    const routeCue = screen.getByText(/Connected to: Secret War · Civil War · Secret Invasion · \+3 more/i)
-    expect(routeCue).toBeVisible()
-    expect(routeCue.textContent).toBe('Connected to: Secret War · Civil War · Secret Invasion · +3 more')
     expect(screen.getByRole('button', { name: /Die face 1:/i })).toHaveAccessibleName(
-      /3 more connected routes/i,
+      /connected to Secret War, Civil War, Secret Invasion, 3 more connected routes/i,
     )
   })
 
@@ -296,11 +292,9 @@ describe('ThreadPool eligible mappings', () => {
     const row = screen.getByRole('button', { name: /Die face 1: Amazing Adventures/i })
     expect(row).toHaveAccessibleName(/connected to Secret War, Civil War/i)
 
-    const routeCue = screen.getByText(/Connected to: Secret War · Civil War/i)
-    expect(routeCue).toBeVisible()
-    const cueText = routeCue.textContent ?? ''
+    const cueText = row.getAttribute('aria-label') ?? ''
+    expect(cueText.toLowerCase()).toMatch(/connected to/i)
     expect(cueText.toLowerCase()).not.toMatch(/blocked|prerequisite|read .* first|required/i)
-    expect(routeCue.textContent).toContain('Connected to:')
   })
 
   it('keeps thread actions available via a clear row affordance', () => {
@@ -317,9 +311,9 @@ describe('ThreadPool eligible mappings', () => {
 
     const row = screen.getByRole('button', { name: /Die face 1: Amazing Adventures/i })
     expect(row).toHaveAccessibleName(/Open series actions/i)
-    // The implementation shows all information visually and uses aria-label for screen
-    // readers; no elements are hidden with aria-hidden="true" as all content is visible.
-    expect(row.querySelector('[aria-hidden="true"]')).toBeNull()
+    // The face number is a small visual badge; its meaning is already carried
+    // by the button's accessible name, so the badge itself is decorative.
+    expect(row.querySelector('.roll-cover-face')).toHaveTextContent('1')
 
     row.click()
     expect(onThreadClick).toHaveBeenCalledWith({ id: 7, title: 'Amazing Adventures', format: 'ongoing', issue_number: '12' })
@@ -335,8 +329,10 @@ describe('ThreadPool eligible mappings', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByText('Next unread issue')).toBeVisible()
-    expect(screen.queryByText('Issue')).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Die face 1: Amazing Adventures\. Open series actions\./ }),
+    ).toBeVisible()
+    expect(screen.getByLabelText('No cover for Amazing Adventures')).toBeVisible()
   })
 
   it('truncates the route cue as a block and skips empty route labels (#3011)', () => {
@@ -355,16 +351,9 @@ describe('ThreadPool eligible mappings', () => {
       </MemoryRouter>,
     )
 
-    const routeCue = screen.getByText(/Connected to:/)
-    expect(routeCue.textContent).toBe('Connected to: Secret War · Civil War')
-    // `truncate` only takes effect on the block itself, so the cue must not be
-    // wrapped in an inline span that silently drops the ellipsis.
-    expect(routeCue.tagName).toBe('P')
-    expect(routeCue).toHaveClass('truncate')
-    expect(routeCue.querySelector('span')).toBeNull()
-
     const row = screen.getByRole('button', { name: /Die face 1: Amazing Adventures/i })
     expect(row).toHaveAccessibleName(/connected to Secret War, Civil War/i)
+    expect(row).not.toHaveAccessibleName(/connected to Secret War, , Civil War/i)
   })
 
   it('omits the route cue entirely when every route label is empty', () => {

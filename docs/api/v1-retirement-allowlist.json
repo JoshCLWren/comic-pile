@@ -8,100 +8,12 @@
   "require_runtime": "native-rust",
   "known_unowned_baseline": [],
   "summary": {
-    "total_entries": 175,
-    "with_owner": 175,
+    "total_entries": 159,
+    "with_owner": 159,
     "baseline_debt": 0,
     "nonconforming_v2": 98
   },
   "entries": [
-    {
-      "method": "GET",
-      "path": "/api/auth/csrf",
-      "version": "unversioned",
-      "owner_issue": 4549,
-      "disposition": "POST|GET /api/v2/auth/*",
-      "rollout_status": "caller-migration-open",
-      "needs_owner_issue": false,
-      "runtime": "native-rust",
-      "consumers": []
-    },
-    {
-      "method": "POST",
-      "path": "/api/auth/forgot-password",
-      "version": "unversioned",
-      "owner_issue": 4549,
-      "disposition": "POST|GET /api/v2/auth/*",
-      "rollout_status": "caller-migration-open",
-      "needs_owner_issue": false,
-      "runtime": "native-rust",
-      "consumers": []
-    },
-    {
-      "method": "POST",
-      "path": "/api/auth/login",
-      "version": "unversioned",
-      "owner_issue": 4549,
-      "disposition": "POST|GET /api/v2/auth/*",
-      "rollout_status": "caller-migration-open",
-      "needs_owner_issue": false,
-      "runtime": "native-rust",
-      "consumers": []
-    },
-    {
-      "method": "POST",
-      "path": "/api/auth/logout",
-      "version": "unversioned",
-      "owner_issue": 4549,
-      "disposition": "POST|GET /api/v2/auth/*",
-      "rollout_status": "caller-migration-open",
-      "needs_owner_issue": false,
-      "runtime": "native-rust",
-      "consumers": []
-    },
-    {
-      "method": "GET",
-      "path": "/api/auth/me",
-      "version": "unversioned",
-      "owner_issue": 4549,
-      "disposition": "POST|GET /api/v2/auth/*",
-      "rollout_status": "caller-migration-open",
-      "needs_owner_issue": false,
-      "runtime": "native-rust",
-      "consumers": []
-    },
-    {
-      "method": "POST",
-      "path": "/api/auth/refresh",
-      "version": "unversioned",
-      "owner_issue": 4549,
-      "disposition": "POST|GET /api/v2/auth/*",
-      "rollout_status": "caller-migration-open",
-      "needs_owner_issue": false,
-      "runtime": "native-rust",
-      "consumers": []
-    },
-    {
-      "method": "POST",
-      "path": "/api/auth/register",
-      "version": "unversioned",
-      "owner_issue": 4549,
-      "disposition": "POST|GET /api/v2/auth/*",
-      "rollout_status": "caller-migration-open",
-      "needs_owner_issue": false,
-      "runtime": "native-rust",
-      "consumers": []
-    },
-    {
-      "method": "POST",
-      "path": "/api/auth/reset-password",
-      "version": "unversioned",
-      "owner_issue": 4549,
-      "disposition": "POST|GET /api/v2/auth/*",
-      "rollout_status": "caller-migration-open",
-      "needs_owner_issue": false,
-      "runtime": "native-rust",
-      "consumers": []
-    },
     {
       "method": "POST",
       "path": "/api/bug-reports/",
@@ -142,94 +54,6 @@
       "owner_issue": 5701,
       "disposition": "GET /api/v2/threads/{thread_id}",
       "rollout_status": "compatibility-alias-debt",
-      "needs_owner_issue": false,
-      "runtime": "native-rust",
-      "consumers": []
-    },
-    {
-      "method": "GET",
-      "path": "/api/v1/auth/csrf",
-      "version": "v1",
-      "owner_issue": 4549,
-      "disposition": "POST|GET /api/v2/auth/*",
-      "rollout_status": "caller-migration-open",
-      "needs_owner_issue": false,
-      "runtime": "native-rust",
-      "consumers": []
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/auth/forgot-password",
-      "version": "v1",
-      "owner_issue": 4549,
-      "disposition": "POST|GET /api/v2/auth/*",
-      "rollout_status": "caller-migration-open",
-      "needs_owner_issue": false,
-      "runtime": "native-rust",
-      "consumers": []
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/auth/login",
-      "version": "v1",
-      "owner_issue": 4549,
-      "disposition": "POST|GET /api/v2/auth/*",
-      "rollout_status": "caller-migration-open",
-      "needs_owner_issue": false,
-      "runtime": "native-rust",
-      "consumers": []
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/auth/logout",
-      "version": "v1",
-      "owner_issue": 4549,
-      "disposition": "POST|GET /api/v2/auth/*",
-      "rollout_status": "caller-migration-open",
-      "needs_owner_issue": false,
-      "runtime": "native-rust",
-      "consumers": []
-    },
-    {
-      "method": "GET",
-      "path": "/api/v1/auth/me",
-      "version": "v1",
-      "owner_issue": 4549,
-      "disposition": "POST|GET /api/v2/auth/*",
-      "rollout_status": "caller-migration-open",
-      "needs_owner_issue": false,
-      "runtime": "native-rust",
-      "consumers": []
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/auth/refresh",
-      "version": "v1",
-      "owner_issue": 4549,
-      "disposition": "POST|GET /api/v2/auth/*",
-      "rollout_status": "caller-migration-open",
-      "needs_owner_issue": false,
-      "runtime": "native-rust",
-      "consumers": []
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/auth/register",
-      "version": "v1",
-      "owner_issue": 4549,
-      "disposition": "POST|GET /api/v2/auth/*",
-      "rollout_status": "caller-migration-open",
-      "needs_owner_issue": false,
-      "runtime": "native-rust",
-      "consumers": []
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/auth/reset-password",
-      "version": "v1",
-      "owner_issue": 4549,
-      "disposition": "POST|GET /api/v2/auth/*",
-      "rollout_status": "caller-migration-open",
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": []
@@ -1435,8 +1259,12 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
+        "frontend/src/services/api-creators.ts",
+        "frontend/src/services/creatorComparisonApi.ts",
+        "frontend/src/services/creatorDiscoveryApi.ts",
         "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/unit/creatorMetricDrilldownApi.test.ts"
+        "frontend/src/services/creatorTeamChemistryApi.ts",
+        "frontend/src/services/creatorsApi.ts"
       ]
     },
     {
@@ -1449,8 +1277,12 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
+        "frontend/src/services/api-creators.ts",
+        "frontend/src/services/creatorComparisonApi.ts",
+        "frontend/src/services/creatorDiscoveryApi.ts",
         "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/unit/creatorMetricDrilldownApi.test.ts"
+        "frontend/src/services/creatorTeamChemistryApi.ts",
+        "frontend/src/services/creatorsApi.ts"
       ]
     },
     {
@@ -1463,8 +1295,12 @@
       "needs_owner_issue": false,
       "runtime": "native-rust",
       "consumers": [
+        "frontend/src/services/api-creators.ts",
+        "frontend/src/services/creatorComparisonApi.ts",
+        "frontend/src/services/creatorDiscoveryApi.ts",
         "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/unit/creatorMetricDrilldownApi.test.ts"
+        "frontend/src/services/creatorTeamChemistryApi.ts",
+        "frontend/src/services/creatorsApi.ts"
       ]
     },
     {

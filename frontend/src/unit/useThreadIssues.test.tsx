@@ -7,10 +7,8 @@ import { cast } from '../utils/cast'
 import {
   flattenIssuePages,
   getIssueTotalCount,
-  useCreateIssues,
   useDeleteIssue,
   useReorderIssues,
-  useThreadAllIssues,
   useThreadDependencies,
   useThreadIssuePages,
   useToggleIssueStatus,
@@ -26,7 +24,6 @@ import { applyIssueReadSnapshotToCache } from '../query/cacheEffects'
 vi.mock('../services/api-issues', () => ({
   issuesApi: {
     list: vi.fn(),
-    create: vi.fn(),
     markRead: vi.fn(),
     markUnread: vi.fn(),
     delete: vi.fn(),
@@ -156,45 +153,6 @@ describe('useThreadIssuePages', () => {
   })
 })
 
-describe('useThreadAllIssues', () => {
-  it('drains all pages and dedupes tokens', async () => {
-    const a = makeIssue({ id: 30, issue_number: '30' })
-    const b = makeIssue({ id: 31, issue_number: '31' })
-    const c = makeIssue({ id: 32, issue_number: '32' })
-
-    mockedIssuesApi.list
-      .mockResolvedValueOnce({ issues: [a], total_count: 3, page_size: 100, next_page_token: 't1' })
-      .mockResolvedValueOnce({ issues: [b], total_count: 3, page_size: 100, next_page_token: 't2' })
-      .mockResolvedValueOnce({ issues: [c], total_count: 3, page_size: 100, next_page_token: null })
-
-    const wrapper = createWrapper()
-    const { result } = renderHook(() => useThreadAllIssues(5), { wrapper })
-
-    await waitFor(() => expect(result.current.data).toEqual([a, b, c]))
-    expect(mockedIssuesApi.list).toHaveBeenCalledTimes(3)
-  })
-
-  it('breaks on duplicate token loop', async () => {
-    const a = makeIssue({ id: 40, issue_number: '40' })
-    mockedIssuesApi.list
-      .mockResolvedValueOnce({ issues: [a], total_count: 1, page_size: 100, next_page_token: 'dup' })
-      .mockResolvedValueOnce({ issues: [a], total_count: 1, page_size: 100, next_page_token: 'dup' })
-
-    const wrapper = createWrapper()
-    const { result } = renderHook(() => useThreadAllIssues(6), { wrapper })
-
-    await waitFor(() => expect(result.current.data).toEqual([a, a]))
-  })
-
-  it('handles single page without token', async () => {
-    const a = makeIssue({ id: 41, issue_number: '41' })
-    mockedIssuesApi.list.mockResolvedValue({ issues: [a], total_count: 1, page_size: 100, next_page_token: null })
-    const wrapper = createWrapper()
-    const { result } = renderHook(() => useThreadAllIssues(7), { wrapper })
-    await waitFor(() => expect(result.current.data).toEqual([a]))
-  })
-})
-
 describe('useThreadDependencies', () => {
   it('maps dependencies with incoming or outgoing', async () => {
     // SAFETY: the stubbed dependency list supplies only the fields the hook returns
@@ -250,28 +208,6 @@ describe('mutations', () => {
     const before = queryClient.getQueryData<Issue[]>(queryKeys.thread.issuePagesAll(10))
     await expect(act(async () => result.current.mutateAsync({ issue, nextStatus: 'read' }))).rejects.toThrow()
     expect(queryClient.getQueryData<Issue[]>(queryKeys.thread.issuePagesAll(10))).toEqual(before)
-  })
-
-  it('creates issues from range', async () => {
-    // SAFETY: mock payload supplies only the fields this test asserts
-    mockedIssuesApi.create.mockResolvedValue({ issues: [], total_count: 0, page_size: 100, next_page_token: null } as never)
-    const wrapper = createWrapper()
-    const { result } = renderHook(() => useCreateIssues(11), { wrapper })
-    await act(async () => {
-      await result.current.mutateAsync({ issueRange: '1-3', insertAfterIssueId: 5 })
-    })
-    expect(mockedIssuesApi.create).toHaveBeenCalledWith(11, '1-3', { insert_after_issue_id: 5 })
-  })
-
-  it('creates issues without insertAfterIssueId', async () => {
-    // SAFETY: mock payload supplies only the fields this test asserts
-    mockedIssuesApi.create.mockResolvedValue({ issues: [], total_count: 0, page_size: 100, next_page_token: null } as never)
-    const wrapper = createWrapper()
-    const { result } = renderHook(() => useCreateIssues(12), { wrapper })
-    await act(async () => {
-      await result.current.mutateAsync({ issueRange: '4,5' })
-    })
-    expect(mockedIssuesApi.create).toHaveBeenCalledWith(12, '4,5', { insert_after_issue_id: undefined })
   })
 
   it('deletes issue with optimistic filter and rollback', async () => {

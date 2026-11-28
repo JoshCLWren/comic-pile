@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useInfiniteQuery } from '@tanstack/react-query'
+import { useQuery, useMutation } from '@tanstack/react-query'
 import type { InfiniteData } from '@tanstack/react-query'
 import { issuesApi } from '../services/api-issues'
 import { issueDependenciesApi } from '../services/api-dependencies'
@@ -6,6 +6,7 @@ import type { IssueListParams, IssueListResponse } from '../services/api-issues'
 import type { Issue, IssueDependenciesResponse } from '../types'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
+import { useInfiniteCollection } from '../pagination/useInfiniteCollection'
 import { invalidateAfterIssueEdit, optimisticallyUpdateIssueStatus, optimisticallyDeleteIssue, optimisticallyReorderIssues } from '../query/cacheEffects'
 
 export const THREAD_ISSUES_PAGE_SIZE = 100
@@ -39,7 +40,7 @@ export function useThreadIssuePages(
       : threadId != null
         ? queryKeys.thread.issuePages(threadId)
         : []
-  const query = useInfiniteQuery<IssueListResponse>({
+  const query = useInfiniteCollection<Issue, IssueListResponse>({
     queryKey: pageKey,
     queryFn: ({ pageParam }) => {
       const params: IssueListParams = { page_size: THREAD_ISSUES_PAGE_SIZE }
@@ -52,25 +53,23 @@ export function useThreadIssuePages(
       }
       return issuesApi.list(threadId!, params)
     },
-    // SAFETY: the first page has no cursor; the cast pins TPageParam so
-    // getNextPageParam may return the string cursor
+    // SAFETY: the first page has no cursor; the cast pins the cursor type so
+    // getNextPageParam may return the opaque string token.
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.next_page_token,
+    selectPage: (page) => page.issues,
     enabled: threadId != null && enabled,
     retry: false,
   })
 
-  const pages = query.data?.pages ?? []
-  const lastPage = pages[pages.length - 1] ?? null
-  const nextPageToken: string | null =
-    query.hasNextPage && lastPage ? (lastPage.next_page_token ?? null) : null
-
   return {
     ...query,
-    issues: flattenIssuePages(query.data),
+    issues: query.items,
     totalCount: getIssueTotalCount(query.data),
-    pages,
-    nextPageToken,
+    // Preserve the pre-migration meaning: a next-page append is not a new
+    // initial load, so it must not replace the rendered issue list with a
+    // full-screen loader (the inline "Loading more..." state covers it).
+    isPending: query.isInitialLoading,
   }
 }
 
@@ -91,37 +90,6 @@ export function getIssueTotalCount(
   data: InfiniteData<IssueListResponse> | undefined,
 ): number {
   return data?.pages?.[0]?.total_count ?? 0
-}
-
-/**
- * Query for all issues in a thread (all-pages drain, used by IssueToggleList).
- * Fetches all pages at once and returns the flattened list.
- */
-export function useThreadAllIssues(threadId: number) {
-  return useQuery<Issue[]>({
-    queryKey: queryKeys.thread.issuePagesAll(threadId),
-    queryFn: async () => {
-      const allIssues: Issue[] = []
-      const seenPageTokens = new Set<string>()
-      let nextPageToken: string | null = null
-
-      while (true) {
-        const params: IssueListParams = { page_size: 100 }
-        if (nextPageToken) {
-          params.page_token = nextPageToken
-        }
-        const data = await issuesApi.list(threadId, params)
-        allIssues.push(...data.issues)
-
-        if (!data.next_page_token || seenPageTokens.has(data.next_page_token)) {
-          return allIssues
-        }
-
-        seenPageTokens.add(data.next_page_token)
-        nextPageToken = data.next_page_token
-      }
-    },
-  })
 }
 
 /**
@@ -168,23 +136,6 @@ export function useToggleIssueStatus(threadId: number) {
     },
     onError: (_err, _vars, context) => {
       context?.rollback?.()
-    },
-    onSuccess: async () => {
-      await invalidateAfterIssueEdit(queryClient, threadId)
-    },
-  })
-}
-
-/**
- * Mutation to create issues from a range string.
- */
-export function useCreateIssues(threadId: number) {
-  return useMutation({
-    mutationFn: async ({
-      issueRange,
-      insertAfterIssueId,
-    }: { issueRange: string; insertAfterIssueId?: number | null }) => {
-      return issuesApi.create(threadId, issueRange, { insert_after_issue_id: insertAfterIssueId })
     },
     onSuccess: async () => {
       await invalidateAfterIssueEdit(queryClient, threadId)

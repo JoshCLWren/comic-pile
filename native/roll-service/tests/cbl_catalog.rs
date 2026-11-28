@@ -44,7 +44,7 @@ async fn setup() -> (Arc<AppState>, String, tokio::sync::MutexGuard<'static, ()>
         &state,
         Request::builder()
             .method("POST")
-            .uri("/api/v1/auth/register")
+            .uri("/api/v2/auth/register")
             .header(
                 "x-forwarded-for",
                 format!(
@@ -383,4 +383,132 @@ async fn browse_root_out_of_range_page_clamps_to_single_page() {
         vec!["Root Reading List"],
         "{body}"
     );
+}
+
+/// Add a synthetic 130-list corpus on top of the small canonical catalog so
+/// paging, totals and discovery parity are measured against more than 100
+/// active source lists (#4171). The insert is one set-based statement.
+async fn seed_large_corpus(state: &Arc<AppState>) {
+    let conn = state.pool.get().await.unwrap();
+    conn.execute(
+        "INSERT INTO cbl_source_lists
+            (source_id, source_path, name, declared_issue_count, content_hash,
+             revision_sha, active, created_at, updated_at)
+         SELECT 1,
+                'DC/Bulk/Bulk List ' || lpad(n::text, 3, '0') || '.cbl',
+                'Bulk List ' || lpad(n::text, 3, '0'),
+                1, 'bulk-hash-' || n, 'abc123', TRUE, NOW(), NOW()
+         FROM generate_series(1, 130) AS n",
+        &[],
+    )
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn large_corpus_has_stable_totals_and_a_real_second_page() {
+    let (state, token, _guard) = setup().await;
+    seed_large_corpus(&state).await;
+
+    let (status, root) = get(&state, &token, "/api/v1/issue-identity/cbl-sources/browse").await;
+    assert_eq!(status, StatusCode::OK, "{root}");
+    // 8 canonical active lists + 130 synthetic lists, independent of paging.
+    assert_eq!(root["catalog_total"], 138);
+    assert_eq!(root["total"], 1);
+
+    let (status, second) = get(
+        &state,
+        &token,
+        "/api/v1/issue-identity/cbl-sources/browse?folder=DC/Bulk&page=2&page_size=50",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{second}");
+    assert_eq!(second["scope"], "folder");
+    assert_eq!(second["folder"], "DC/Bulk");
+    assert_eq!(second["total"], 130);
+    assert_eq!(second["catalog_total"], 138);
+    assert_eq!(second["total_pages"], 3);
+    assert_eq!(second["page"], 2);
+    assert_eq!(second["has_next"], true);
+    assert_eq!(second["has_previous"], true);
+    assert_eq!(second["items"].as_array().unwrap().len(), 50);
+    assert_eq!(folder_item_names(&second)[0], "Bulk List 051");
+
+    let (_, third) = get(
+        &state,
+        &token,
+        "/api/v1/issue-identity/cbl-sources/browse?folder=DC/Bulk&page=3&page_size=50",
+    )
+    .await;
+    assert_eq!(third["total"], 130);
+    assert_eq!(third["catalog_total"], 138);
+    assert_eq!(third["page"], 3);
+    assert_eq!(third["has_next"], false);
+    assert_eq!(third["items"].as_array().unwrap().len(), 30);
+
+    let (status, folders) = get(
+        &state,
+        &token,
+        "/api/v1/issue-identity/cbl-sources/folders?folder=DC",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{folders}");
+    assert_eq!(folders["total_list_count"], 133);
+    let bulk = folders["folders"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|folder| folder["name"] == "Bulk")
+        .unwrap();
+    assert_eq!(bulk["direct_list_count"], 130);
+    assert_eq!(bulk["total_list_count"], 130);
+}
+
+#[tokio::test]
+async fn large_corpus_search_is_case_insensitive_and_matches_discovery() {
+    let (state, token, _guard) = setup().await;
+    seed_large_corpus(&state).await;
+
+    let (status, partial) = get(
+        &state,
+        &token,
+        "/api/v1/issue-identity/cbl-sources/browse?q=bulk%20list%20012",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{partial}");
+    assert_eq!(partial["scope"], "search");
+    assert_eq!(partial["total"], 1);
+    assert_eq!(partial["catalog_total"], 138);
+    assert_eq!(folder_item_names(&partial), vec!["Bulk List 012"]);
+
+    let (status, browse) = get(
+        &state,
+        &token,
+        "/api/v1/issue-identity/cbl-sources/browse?q=BULK%20LIST&page_size=25",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{browse}");
+    assert_eq!(browse["total"], 130);
+    assert_eq!(browse["catalog_total"], 138);
+    assert_eq!(browse["total_pages"], 6);
+    assert_eq!(browse["items"].as_array().unwrap().len(), 25);
+
+    let (status, discovered) = get(
+        &state,
+        &token,
+        "/api/v1/issue-identity/cbl-sources?q=BULK%20LIST&limit=25",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{discovered}");
+    let browse_items = browse["items"].as_array().unwrap();
+    let discovered_items = discovered.as_array().unwrap();
+    assert_eq!(discovered_items.len(), browse_items.len());
+    for (browse_item, discovered_item) in browse_items.iter().zip(discovered_items) {
+        for field in ["id", "name", "source_path", "content_hash", "revision_sha"] {
+            assert_eq!(
+                browse_item[field], discovered_item[field],
+                "discovery/browse parity failed for {field}: {browse_item} vs {discovered_item}"
+            );
+        }
+    }
 }

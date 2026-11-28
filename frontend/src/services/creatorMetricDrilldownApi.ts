@@ -1,10 +1,5 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
-import type {
-  CreatorMetricDrilldown,
-  CreatorRatingDistributionDrilldown,
-  CreatorRoleDrilldown,
-  CreatorSeriesDrilldown,
-} from '../types/index'
+import type { CreatorMetricDrilldown } from '../types/index'
 
 /**
  * Build the creator metric drilldown service bound to an HTTP client.
@@ -35,53 +30,6 @@ export function createCreatorMetricDrilldownApi(client: HttpClient) {
         },
       }),
 
-    getRatingDistributionDrilldown: (
-      creatorKey: string,
-      ratingValue: string,
-      params?: {
-        page?: number
-        pageSize?: number
-      }
-    ) =>
-      client.get<CreatorRatingDistributionDrilldown>(
-        `/v2/creators/${creatorKey}/metrics/rating-distribution/${ratingValue}`,
-        {
-          params: {
-            page: params?.page,
-            page_size: params?.pageSize,
-          },
-        }
-      ),
-
-    getRoleDrilldown: (
-      creatorKey: string,
-      role: string,
-      params?: {
-        page?: number
-        pageSize?: number
-      }
-    ) =>
-      client.get<CreatorRoleDrilldown>(`/v2/creators/${creatorKey}/metrics/role-stats/${role}`, {
-        params: {
-          page: params?.page,
-          page_size: params?.pageSize,
-        },
-      }),
-
-    getSeriesDrilldown: (
-      creatorKey: string,
-      seriesKey: string,
-      params?: {
-        page?: number
-        pageSize?: number
-      }
-    ) =>
-      client.get<CreatorSeriesDrilldown>(`/v2/creators/${creatorKey}/metrics/series-stats/${seriesKey}`, {
-        params: {
-          page: params?.page,
-          page_size: params?.pageSize,
-        },
-      }),
   }
 }
 

@@ -14,7 +14,7 @@ test.describe('Issue #3147: Focus management after Roll and Queue actions', () =
     })
     await page.goto('/')
 
-    const rollBtn = page.getByTestId('roll-primary-action')
+    const rollBtn = page.locator('#main-die-3d')
     await expect(rollBtn).toBeVisible()
     await rollBtn.click()
 
