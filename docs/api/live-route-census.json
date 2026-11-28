@@ -24,7 +24,7 @@
     "v1_with_owner": 65,
     "v1_needing_owner": 0,
     "unknown_ingress": 0,
-    "first_party_call_sites": 927,
+    "first_party_call_sites": 926,
     "stale_aip_baseline_entries": 4
   },
   "routes": [
@@ -1180,7 +1180,7 @@
         "frontend/src/unit/api-issues.test.ts",
         "frontend/src/unit/api.test.ts"
       ],
-      "caller_count": 24,
+      "caller_count": 25,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5701,
@@ -1208,7 +1208,7 @@
         "frontend/src/unit/api-issues.test.ts",
         "frontend/src/unit/api.test.ts"
       ],
-      "caller_count": 22,
+      "caller_count": 23,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4832,
@@ -1236,7 +1236,7 @@
         "frontend/src/unit/api-issues.test.ts",
         "frontend/src/unit/api.test.ts"
       ],
-      "caller_count": 22,
+      "caller_count": 23,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5703,
@@ -1264,7 +1264,7 @@
         "frontend/src/unit/api-issues.test.ts",
         "frontend/src/unit/api.test.ts"
       ],
-      "caller_count": 22,
+      "caller_count": 23,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 5703,
@@ -2807,10 +2807,14 @@
       "runtime": "native-rust",
       "runtime_source": "native-router",
       "consumers": [
+        "frontend/src/services/api-creators.ts",
+        "frontend/src/services/creatorComparisonApi.ts",
+        "frontend/src/services/creatorDiscoveryApi.ts",
         "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/unit/creatorMetricDrilldownApi.test.ts"
+        "frontend/src/services/creatorTeamChemistryApi.ts",
+        "frontend/src/services/creatorsApi.ts"
       ],
-      "caller_count": 2,
+      "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4836,
@@ -2829,10 +2833,14 @@
       "runtime": "native-rust",
       "runtime_source": "native-router",
       "consumers": [
+        "frontend/src/services/api-creators.ts",
+        "frontend/src/services/creatorComparisonApi.ts",
+        "frontend/src/services/creatorDiscoveryApi.ts",
         "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/unit/creatorMetricDrilldownApi.test.ts"
+        "frontend/src/services/creatorTeamChemistryApi.ts",
+        "frontend/src/services/creatorsApi.ts"
       ],
-      "caller_count": 2,
+      "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4836,
@@ -2851,10 +2859,14 @@
       "runtime": "native-rust",
       "runtime_source": "native-router",
       "consumers": [
+        "frontend/src/services/api-creators.ts",
+        "frontend/src/services/creatorComparisonApi.ts",
+        "frontend/src/services/creatorDiscoveryApi.ts",
         "frontend/src/services/creatorMetricDrilldownApi.ts",
-        "frontend/src/unit/creatorMetricDrilldownApi.test.ts"
+        "frontend/src/services/creatorTeamChemistryApi.ts",
+        "frontend/src/services/creatorsApi.ts"
       ],
-      "caller_count": 2,
+      "caller_count": 0,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4836,
@@ -3442,7 +3454,7 @@
         "frontend/src/services/api-issues.ts",
         "frontend/src/unit/api-issues.test.ts"
       ],
-      "caller_count": 6,
+      "caller_count": 7,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4335,
@@ -5583,7 +5595,7 @@
         "frontend/src/unit/api-issues-coverage.test.ts",
         "frontend/src/unit/api-issues.test.ts"
       ],
-      "caller_count": 13,
+      "caller_count": 15,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4684,
