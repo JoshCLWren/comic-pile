@@ -32,8 +32,7 @@
 #![forbid(unsafe_code)]
 
 use crate::{
-    auth::AuthenticatedUser,
-    db, option_inputs, queue, thread_ordering, ApiError, AppState,
+    auth::AuthenticatedUser, db, option_inputs, queue, thread_ordering, ApiError, AppState,
 };
 use axum::{
     body::Bytes,
@@ -1332,7 +1331,6 @@ pub async fn list_thread_creator_credits(
         next_page_token,
     }))
 }
-
 
 // ---------------------------------------------------------------------------
 // OpenAPI documentation
