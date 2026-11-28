@@ -69,6 +69,7 @@ function Harness({ submitEdit }: {
       refetchRollState: vi.fn(async () => undefined),
       submitCreate: vi.fn(async () => ({ id: 1 })),
       submitEdit,
+      // SAFETY: this edit-failure case never submits a reactivation, so the stub's return value is unused
       submitReactivate: vi.fn(async () => undefined as never),
       isPendingCreate: false,
       isPendingEdit: false,
@@ -85,7 +86,10 @@ function Harness({ submitEdit }: {
       <button
         type="button"
         data-testid="save-edit"
-        onClick={() => { void modals.handleEditSubmit({ preventDefault: vi.fn() } as never) }}
+        onClick={() => {
+          // SAFETY: handleEditSubmit only calls event.preventDefault(), which this stub implements
+          void modals.handleEditSubmit({ preventDefault: vi.fn() } as never)
+        }}
       >
         Save edit
       </button>
