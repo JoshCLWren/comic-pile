@@ -159,4 +159,47 @@ describe('Night Shift mobile gallery swipe (#5981)', () => {
   })
 })
 
+
+describe('Night Shift mobile gallery far covers (#5981)', () => {
+  it('renders far covers as hidden and resolves issue cards', () => {
+    const bigPool = Array.from({ length: 8 }, (_, i) => ({
+      id: i + 1,
+      title: `Book ${i + 1}`,
+      format: 'Comic',
+      issue_id: i + 10,
+    }))
+    render(
+      <MobileGallery
+        pool={bigPool}
+        cardByIssueId={new Map([[10, { issue_id: 10 } as never]])}
+        isRolling={false}
+        winningThreadId={3}
+        dieSlot={null}
+        onThreadClick={vi.fn()}
+      />,
+    )
+    expect(screen.getByTestId('roll-mobile-gallery')).toBeInTheDocument()
+    expect(screen.getByText(/3 \/ 8/)).toBeInTheDocument()
+  })
+
+  it('taps a non-active cover to bring it to center', async () => {
+    const user = userEvent.setup()
+    const onThreadClick = vi.fn()
+    render(
+      <MobileGallery
+        pool={[{ id: 1, title: 'Alpha', format: 'Comic' }, { id: 2, title: 'Beta', format: 'Comic' }, { id: 3, title: 'Gamma', format: 'Comic' }]}
+        cardByIssueId={new Map()}
+        isRolling={false}
+        winningThreadId={null}
+        dieSlot={null}
+        onThreadClick={onThreadClick}
+      />,
+    )
+    const cover = screen.getByRole('button', { name: /Die face 2: Beta/i })
+    await user.click(cover)
+    // first tap brings to center, does not open actions
+    expect(onThreadClick).not.toHaveBeenCalled()
+  })
+})
+
 })
