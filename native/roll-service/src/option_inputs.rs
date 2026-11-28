@@ -1343,7 +1343,7 @@ mod tests {
         let conn = db::checkout(&state).await.expect("rehearsal verification connection");
 
         // The shared external series identity is confirmed for both readers.
-        let shared: Vec<i32> = conn
+        let shared: Vec<tokio_postgres::Row> = conn
             .query(
                 "SELECT t.user_id FROM thread_external_series_mappings m \
                  JOIN threads t ON t.id = m.thread_id \
@@ -1359,7 +1359,7 @@ mod tests {
         );
         // The same catalog issue is referenced by both readers; the issue rows
         // themselves stay private.
-        let shared_catalog: Vec<i32> = conn
+        let shared_catalog: Vec<tokio_postgres::Row> = conn
             .query(
                 "SELECT user_id FROM ( \
                     SELECT t.user_id, i.catalog_issue_id FROM issues i \
@@ -1401,7 +1401,7 @@ mod tests {
                 (9401, 9402),
             ),
         ] {
-            let owned: Vec<i32> = conn
+            let owned: Vec<tokio_postgres::Row> = conn
                 .query(
                     "SELECT i.id FROM issues i JOIN threads t ON t.id = i.thread_id \
                      WHERE t.user_id = $1 ORDER BY i.id",
