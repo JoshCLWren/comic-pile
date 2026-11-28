@@ -2682,7 +2682,7 @@ pub async fn check_potential_duplicates(
         .filter(|thread| !strong_ids.contains(&thread.id))
         .filter_map(|thread| {
             let similarity = title_similarity(&title, &thread.title);
-            (similarity >= MIN_TITLE_SIMILARITY).then(|| (similarity, thread))
+            (similarity >= MIN_TITLE_SIMILARITY).then_some((similarity, thread))
         })
         .collect();
     considered.sort_by(|left, right| {
