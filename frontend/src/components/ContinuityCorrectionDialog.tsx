@@ -183,8 +183,8 @@ export default function ContinuityCorrectionDialog({
       </section>
 
       {connectedThreads.length > 0 ? (
-        <section aria-labelledby="continuity-connections-heading" className="rounded-2xl border border-blue-800/30 bg-blue-950/15 p-3">
-          <h3 id="continuity-connections-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-400">
+        <section aria-labelledby="continuity-connections-heading" className="rounded-2xl border border-[var(--theme-continuity-accent)]/30 bg-[var(--theme-continuity-accent)]/15 p-3">
+          <h3 id="continuity-connections-heading" className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--theme-continuity-accent)]">
             Verified connections
           </h3>
           {isResolvingConnected ? (
@@ -200,7 +200,7 @@ export default function ContinuityCorrectionDialog({
               {resolvedConnectedData?.map((connected) => (
                 <li
                   key={connected.id}
-                  className="rounded-full border border-blue-800/40 bg-blue-900/20 px-2.5 py-1 text-[10px] font-bold text-blue-200"
+                  className="rounded-full border border-[var(--theme-continuity-accent)]/40 bg-[var(--theme-continuity-accent)]/20 px-2.5 py-1 text-[10px] font-bold text-[var(--theme-continuity-accent)]"
                 >
                   {connected.title}
                 </li>
@@ -278,19 +278,19 @@ export default function ContinuityCorrectionDialog({
       </fieldset>
 
       {(groupsError || connectedError) && (
-        <p className="text-[11px] text-rose-300" role="alert">
+        <p className="text-[11px] text-[var(--theme-error)]" role="alert">
           {groupsError
             ? getApiErrorDetail(groupsError)
             : getApiErrorDetail(connectedError)}
         </p>
       )}
       {error ? (
-        <p className="text-[11px] text-rose-300" role="alert">
+        <p className="text-[11px] text-[var(--theme-error)]" role="alert">
           {error}
         </p>
       ) : null}
       {result ? (
-        <p className="text-[11px] text-emerald-300" role="status">
+        <p className="text-[11px] text-[var(--theme-success)]" role="status">
           {result}
         </p>
       ) : null}

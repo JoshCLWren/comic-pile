@@ -227,9 +227,9 @@ export default function WhatsNewPage() {
       )}
 
       {error && (
-        <div role="alert" className="mb-4 rounded-xl border border-red-900/60 bg-red-950/30 p-6">
-          <h2 className="text-lg font-bold text-red-200">Release notes unavailable</h2>
-          <p className="mt-2 text-sm text-red-100/80">{error}</p>
+        <div role="alert" className="mb-4 rounded-xl border border-[var(--theme-error)]/60 bg-[var(--theme-error)]/30 p-6">
+          <h2 className="text-lg font-bold text-[var(--theme-error)]">Release notes unavailable</h2>
+          <p className="mt-2 text-sm text-[var(--theme-error)]/80">{error}</p>
           <button
             type="button"
             onClick={() => void retry()}

@@ -502,7 +502,7 @@ export default function AddSeriesFromComicVineDialog({
             className={
               unknownOutcome
                 ? 'p-3 rounded-lg bg-[var(--theme-comic-accent)]/10 border border-[var(--theme-comic-accent)]/30 text-sm text-[var(--theme-comic-accent)]'
-                : 'p-3 rounded-lg bg-rose-900/30 border border-rose-700/40 text-sm text-rose-300'
+                : 'p-3 rounded-lg bg-[var(--theme-error)]/30 border border-[var(--theme-error)]/40 text-sm text-[var(--theme-error)]'
             }
           >
             {unknownOutcome ?? error}

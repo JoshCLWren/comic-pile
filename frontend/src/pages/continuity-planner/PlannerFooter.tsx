@@ -36,7 +36,7 @@ export default function PlannerFooter({ editor, planId }: PlannerFooterProps) {
           {editor.statusText && (
             <p
               role="status"
-              className={`text-xs font-bold ${editor.isDirty ? 'text-[var(--theme-text-muted)]' : 'text-emerald-300'}`}
+              className={`text-xs font-bold ${editor.isDirty ? 'text-[var(--theme-text-muted)]' : 'text-[var(--theme-success)]'}`}
               aria-live="polite"
             >
               {editor.statusText}

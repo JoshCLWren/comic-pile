@@ -135,14 +135,14 @@ export function CreatorInput({
               <button
                 type="button"
                 onClick={() => handleSaveEdit(index)}
-                className="text-xs px-2 py-1 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors"
+                className="text-xs px-2 py-1 rounded-lg bg-[var(--theme-success)]/20 text-[var(--theme-success)] hover:bg-[var(--theme-success)]/30 transition-colors"
               >
                 Save
               </button>
               <button
                 type="button"
                 onClick={handleCancelEdit}
-                className="text-xs px-2 py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                className="text-xs px-2 py-1 rounded-lg bg-[var(--theme-error)]/20 text-[var(--theme-error)] hover:bg-[var(--theme-error)]/30 transition-colors"
               >
                 Cancel
               </button>
@@ -171,7 +171,7 @@ export function CreatorInput({
               <button
                 type="button"
                 onClick={() => handleRemove(index)}
-                className="text-xs px-2 py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                className="text-xs px-2 py-1 rounded-lg bg-[var(--theme-error)]/20 text-[var(--theme-error)] hover:bg-[var(--theme-error)]/30 transition-colors"
               >
                 Remove
               </button>

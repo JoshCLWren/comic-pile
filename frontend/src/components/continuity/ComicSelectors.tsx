@@ -114,7 +114,7 @@ export function ContinuityThreadSelector({
       )}
 
       {isLoading && <p className="text-xs text-[var(--theme-text-dim)]">Loading comics…</p>}
-      {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
+      {error && <p role="alert" className="text-xs text-[var(--theme-error)]">{error}</p>}
       {!isLoading && !error && !disabled && isEmptyQuery && (
         <p className="text-xs text-[var(--theme-text-dim)]">Type to search comics</p>
       )}
@@ -200,7 +200,7 @@ export function ContinuityIssueSelector({
           Fetching all issues…
         </p>
       )}
-      {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
+      {error && <p role="alert" className="text-xs text-[var(--theme-error)]">{error}</p>}
     </div>
   )
 }
@@ -283,7 +283,7 @@ export function ContinuityIssueRangeSelector({
           Choose a valid issue range in reading order.
         </p>
       )}
-      {error && <p role="alert" className="text-xs text-red-400">{error}</p>}
+      {error && <p role="alert" className="text-xs text-[var(--theme-error)]">{error}</p>}
     </fieldset>
   )
 }

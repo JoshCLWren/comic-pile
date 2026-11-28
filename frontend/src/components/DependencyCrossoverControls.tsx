@@ -290,7 +290,7 @@ export default function DependencyCrossoverControls({
         </p>
       )}
       {result && (
-        <p className="mt-2 text-sm text-emerald-300" role="status">
+        <p className="mt-2 text-sm text-[var(--theme-success)]" role="status">
           {result}
         </p>
       )}

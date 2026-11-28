@@ -162,7 +162,7 @@ export default function PlanProjectionDialog({
         </button>
       </div>
 
-      {error && <p role="alert" className="mt-4 rounded-xl border border-red-800 bg-red-950/30 p-3 text-red-200">{error}</p>}
+      {error && <p role="alert" className="mt-4 rounded-xl border border-[var(--theme-error)] bg-[var(--theme-error)]/30 p-3 text-[var(--theme-error)]">{error}</p>}
 
       {preview && (
         <section aria-label="Projection preview" className="mt-4 space-y-3">
@@ -199,9 +199,9 @@ export default function PlanProjectionDialog({
       )}
 
       {result && (
-        <section aria-label="Projection result" className="mt-4 rounded-xl border border-emerald-800 bg-emerald-950/20 p-3">
-          <p className="font-bold text-emerald-300">Projection applied</p>
-          <p className="mt-1 text-sm text-emerald-100">
+        <section aria-label="Projection result" className="mt-4 rounded-xl border border-[var(--theme-success)] bg-[var(--theme-success)]/20 p-3">
+          <p className="font-bold text-[var(--theme-success)]">Projection applied</p>
+          <p className="mt-1 text-sm text-[var(--theme-success)]">
             {result.added_count} added, {result.updated_count} moved, {result.kept_count} kept · {result.total_positions} total positions.
           </p>
         </section>

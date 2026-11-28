@@ -410,7 +410,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
 
                   return (
                     <section key={arc.comicvine_arc_id} className="space-y-2">
-                      <h3 className="text-xs font-bold text-blue-300">{normalizeArcName(arc.name)}</h3>
+                      <h3 className="text-xs font-bold text-[var(--theme-continuity-accent)]">{normalizeArcName(arc.name)}</h3>
                       <p className="text-[9px] text-[var(--theme-text-dim)]">
                         {arc.related_issues.filter((issue) => issue.comicpile_matches.length > 0).length} in ComicPile ·{' '}
                         {arc.related_issues.filter((issue) => issue.comicpile_matches.length === 0).length} missing
@@ -484,7 +484,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                         href={arc.comicvine_url}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex min-h-8 items-center text-xs font-bold text-blue-400 hover:text-blue-300 mt-2"
+                        className="inline-flex min-h-8 items-center text-xs font-bold text-[var(--theme-continuity-accent)] hover:text-[var(--theme-continuity-accent)] mt-2"
                       >
                         View story arc on ComicVine
                       </a>

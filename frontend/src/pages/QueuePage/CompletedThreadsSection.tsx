@@ -103,7 +103,7 @@ export default function CompletedThreadsSection<T extends CompletedThread>({
       </header>
 
       {isError && (
-        <div role="alert" className="text-sm text-red-400 px-2">
+        <div role="alert" className="text-sm text-[var(--theme-error)] px-2">
           Couldn&apos;t load finished series.
           {onRetry && (
             <button

@@ -541,14 +541,14 @@ export default function ComicVineSearchDialog({
     >
       <div className="space-y-4">
         {error && (
-          <div className="p-3 rounded-lg bg-rose-900/30 border border-rose-700/40 text-sm text-rose-300 space-y-2" role="alert">
+          <div className="p-3 rounded-lg bg-[var(--theme-error)]/30 border border-[var(--theme-error)]/40 text-sm text-[var(--theme-error)] space-y-2" role="alert">
             <p>{error}</p>
             {showRetry && (
               <button
                 type="button"
                 onClick={handleRetry}
                 data-testid="comicvine-retry"
-                className="min-h-11 px-4 rounded-lg text-sm font-bold text-rose-100 bg-rose-800/60 border border-rose-600/50 hover:bg-rose-800 transition"
+                className="min-h-11 px-4 rounded-lg text-sm font-bold text-[var(--theme-error)] bg-[var(--theme-error)]/60 border border-[var(--theme-error)]/50 hover:bg-[var(--theme-danger)] transition"
               >
                 Retry
               </button>

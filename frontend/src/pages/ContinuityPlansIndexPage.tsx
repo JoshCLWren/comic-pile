@@ -196,7 +196,7 @@ export default function ContinuityPlansIndexPage() {
                 )}
                 {deleteTargetId === plan.id ? (
                   <div className="flex flex-col gap-2 border-t border-[var(--theme-border)] pt-3">
-                    <p className="text-xs text-red-300">Delete this plan? Associated rules will also be removed.</p>
+                    <p className="text-xs text-[var(--theme-error)]">Delete this plan? Associated rules will also be removed.</p>
                     <div className="flex gap-2">
                       <button
                         type="button"
@@ -210,7 +210,7 @@ export default function ContinuityPlansIndexPage() {
                         type="button"
                         onClick={confirmDelete}
                         disabled={isDeletingThis}
-                        className="min-h-11 flex-1 rounded-xl bg-red-500 font-black text-[var(--theme-text-primary)] disabled:opacity-50"
+                        className="min-h-11 flex-1 rounded-xl bg-[var(--theme-danger)] font-black text-[var(--theme-text-primary)] disabled:opacity-50"
                       >
                         {isDeletingThis ? 'Deleting…' : 'Delete'}
                       </button>
@@ -223,7 +223,7 @@ export default function ContinuityPlansIndexPage() {
                   <button
                     type="button"
                     onClick={() => { deletePlan.reset(); setDeleteTargetId(plan.id) }}
-                    className="min-h-9 self-end rounded-lg border border-red-900 px-3 text-xs font-bold text-red-300 hover:bg-red-900/30"
+                    className="min-h-9 self-end rounded-lg border border-[var(--theme-error)] px-3 text-xs font-bold text-[var(--theme-error)] hover:bg-[var(--theme-error)]/30"
                   >
                     Delete
                   </button>

@@ -63,7 +63,7 @@ function SetCurrentIssueModal({ onSubmit, onClose }: SetCurrentIssueModalProps) 
           disabled={isSubmitting}
         />
       </div>
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <p className="text-xs text-[var(--theme-error)]">{error}</p>}
       <div className="flex gap-2 pt-2">
         <button
           type="button"
@@ -250,7 +250,7 @@ export function RollModals({
               onChange={onOverrideThreadIdChange}
             />
           </div>
-          {overrideErrorMessage && <p className="text-xs text-red-400">{overrideErrorMessage}</p>}
+          {overrideErrorMessage && <p className="text-xs text-[var(--theme-error)]">{overrideErrorMessage}</p>}
           <button
             type="submit"
             disabled={!overrideThreadId}

@@ -358,7 +358,7 @@ export function ThreadPool({
                     type="button"
                     onClick={() => onUnsnooze(thread.id)}
                     disabled={unsnoozeIsPending}
-                    className="inline-flex min-h-7 min-w-7 items-center justify-center px-2 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors disabled:opacity-50 focus:ring-2 focus:ring-rose-500"
+                    className="inline-flex min-h-7 min-w-7 items-center justify-center px-2 text-xs text-[var(--theme-error)] hover:text-[var(--theme-error)] hover:bg-[var(--theme-error)]/10 rounded-lg transition-colors disabled:opacity-50 focus:ring-2 focus:ring-[var(--theme-focus-ring)]"
                     title="Unsnooze this comic"
                     aria-label="Unsnooze this comic"
                   >

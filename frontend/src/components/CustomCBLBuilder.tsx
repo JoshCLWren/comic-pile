@@ -1239,8 +1239,8 @@ export default function CustomCBLBuilder({
               <button type="button" onClick={() => { void detailQuery.refetch().then((result) => { if (result.isSuccess) { saveMutation.reset(); setLoadedListId(null) } }) }} className="min-h-10 rounded-lg border border-[var(--theme-border)] px-3 text-xs font-bold text-[var(--theme-text-primary)]">Refresh latest list</button>
             </div>
           )}
-          {message && <p role="status" className="text-sm text-emerald-300">{message}</p>}
-          {errorText && <p role="alert" className="text-sm text-red-300">{errorText}</p>}
+          {message && <p role="status" className="text-sm text-[var(--theme-success)]">{message}</p>}
+          {errorText && <p role="alert" className="text-sm text-[var(--theme-error)]">{errorText}</p>}
         </div>
       )}
 

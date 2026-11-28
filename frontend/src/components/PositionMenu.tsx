@@ -430,7 +430,7 @@ export default function PositionMenu({
                     item.disabled
                       ? 'text-[var(--theme-text-muted)] cursor-not-allowed'
                       : item.destructive
-                        ? 'text-red-400 hover:bg-red-500/10 hover:text-red-300 focus-visible:bg-red-500/10 focus-visible:text-red-300'
+                        ? 'text-[var(--theme-error)] hover:bg-[var(--theme-error)]/10 hover:text-[var(--theme-error)] focus-visible:bg-[var(--theme-error)]/10 focus-visible:text-[var(--theme-error)]'
                         : 'text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] hover:text-[var(--theme-text-primary)] focus-visible:bg-[var(--theme-bg-hover)] focus-visible:text-[var(--theme-text-primary)]'
                   }`}
                   role="menuitem"

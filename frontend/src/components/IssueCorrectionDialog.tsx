@@ -622,7 +622,7 @@ export default function IssueCorrectionDialog({
         )}
 
         {lastOperation && (
-          <div className="rounded-lg border border-green-600/30 bg-green-600/10 p-3 space-y-2" data-testid="bulk-read-review">
+          <div className="rounded-lg border border-[var(--theme-success)]/30 bg-[var(--theme-success)]/10 p-3 space-y-2" data-testid="bulk-read-review">
             <p className="text-sm font-bold text-[var(--theme-text-primary)]">Bulk read applied</p>
             <p className="text-xs text-[var(--theme-text-muted)]">
               Operation #{lastOperation.id} recorded {lastOperation.items.length} issue changes. You can review or undo this exact operation.
@@ -641,13 +641,13 @@ export default function IssueCorrectionDialog({
         )}
 
         {error && (
-          <div className="p-3 bg-red-800/20 border border-red-800/50 rounded-lg">
-            <p className="text-sm text-red-400 text-center mb-2">{error}</p>
+          <div className="p-3 bg-[var(--theme-error)]/20 border border-[var(--theme-error)]/50 rounded-lg">
+            <p className="text-sm text-[var(--theme-error)] text-center mb-2">{error}</p>
             {!isLoadingIssues && !hasLoadedOnce && (
               <button
                 type="button"
                 onClick={() => fetchIssues()}
-                className="w-full py-2 bg-red-800/40 hover:bg-red-800/60 border border-red-800/60 rounded text-xs font-bold uppercase tracking-wider transition-all"
+                className="w-full py-2 bg-[var(--theme-error)]/40 hover:bg-[var(--theme-error)]/60 border border-[var(--theme-error)]/60 rounded text-xs font-bold uppercase tracking-wider transition-all"
               >
                 Retry
               </button>

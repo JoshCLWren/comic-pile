@@ -51,14 +51,14 @@ const CONTROL_HELP: ControlHelpMap = {
 function ControlLabel({ label }: { label: string }) {
   const help = CONTROL_HELP[label]
   return (
-    <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest text-slate-300">
+    <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest text-[var(--theme-text-primary)]">
       <span>{label}</span>
       {help && (
         <Tooltip content={help}>
           <button
             type="button"
             aria-label={`${label} help`}
-            className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-500 text-[10px] text-slate-300 cursor-help"
+            className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[var(--theme-border)] text-[10px] text-[var(--theme-text-primary)] cursor-help"
           >
             ?
           </button>
@@ -99,9 +99,9 @@ function SliderControl({
   onInteractionEnd: () => void
 }) {
   return (
-    <label className="grid gap-2 rounded-lg border border-slate-700 bg-slate-900/70 p-3">
+    <label className="grid gap-2 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-page)]/70 p-3">
       <ControlLabel label={label} />
-      <div className="text-right text-xs font-mono text-slate-400">{Number(value).toFixed(3)}</div>
+      <div className="text-right text-xs font-mono text-[var(--theme-text-muted)]">{Number(value).toFixed(3)}</div>
       <input
         data-testid={testId}
         type="range"
@@ -136,7 +136,7 @@ function ToggleControl({
   onInteractionEnd: () => void
 }) {
   return (
-    <label className="rounded-lg border border-slate-700 bg-slate-900/70 p-3">
+    <label className="rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-page)]/70 p-3">
       <div className="flex items-center justify-between">
         <ControlLabel label={label} />
       </div>
@@ -172,7 +172,7 @@ function ColorControl({
   onInteractionEnd: () => void
 }) {
   return (
-    <label className="grid gap-2 rounded-lg border border-slate-700 bg-slate-900/70 p-3">
+    <label className="grid gap-2 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-page)]/70 p-3">
       <ControlLabel label={label} />
       <div className="flex items-center gap-2">
         <input
@@ -185,9 +185,9 @@ function ColorControl({
           onPointerCancel={onInteractionEnd}
           onFocus={onInteractionStart}
           onBlur={onInteractionEnd}
-          className="h-9 w-12 rounded border border-slate-600 bg-transparent p-0"
+          className="h-9 w-12 rounded border border-[var(--theme-border)] bg-transparent p-0"
         />
-        <code className="text-xs text-slate-300">{value}</code>
+        <code className="text-xs text-[var(--theme-text-primary)]">{value}</code>
       </div>
     </label>
   )
@@ -211,7 +211,7 @@ function SelectControl({
   onInteractionEnd: () => void
 }) {
   return (
-    <label className="grid gap-2 rounded-lg border border-slate-700 bg-slate-900/70 p-3">
+    <label className="grid gap-2 rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-page)]/70 p-3">
       <ControlLabel label={label} />
       <select
         data-testid={testId}
@@ -222,7 +222,7 @@ function SelectControl({
         onPointerCancel={onInteractionEnd}
         onFocus={onInteractionStart}
         onBlur={onInteractionEnd}
-        className="rounded border border-slate-600 bg-slate-950 px-2 py-2 text-sm text-slate-100"
+        className="rounded border border-[var(--theme-border)] bg-[var(--theme-bg-page)] px-2 py-2 text-sm text-[var(--theme-text-primary)]"
       >
         {options.map((option) => (
           <option key={option} value={option}>
@@ -373,20 +373,20 @@ export default function DicePlayground() {
   const sideOverride = renderConfig.perSides?.[sides] ?? {}
 
   return (
-    <main className="min-h-screen px-4 py-8 text-slate-100">
+    <main className="min-h-screen px-4 py-8 text-[var(--theme-text-primary)]">
       <div className="mx-auto grid max-w-7xl gap-6 xl:grid-cols-[420px_1fr] xl:items-start">
-        <section className="space-y-4 rounded-2xl border border-cyan-500/30 bg-slate-950/60 p-4 xl:sticky xl:top-4">
+        <section className="space-y-4 rounded-2xl border border-[var(--theme-comic-accent)]/30 bg-[var(--theme-bg-page)]/60 p-4 xl:sticky xl:top-4">
           <header>
             <h1 className="text-2xl font-black tracking-wide">Dice Playground</h1>
-            <p className="mt-2 text-sm text-slate-300">
+            <p className="mt-2 text-sm text-[var(--theme-text-primary)]">
               Tune numeral rendering, placement, and UV mapping live.
             </p>
-            <p className="mt-1 text-xs text-slate-400">Entry: /dice-playground.html</p>
+            <p className="mt-1 text-xs text-[var(--theme-text-muted)]">Entry: /dice-playground.html</p>
           </header>
 
           <div
             data-testid="dice-playground-canvas"
-            className="mx-auto flex h-56 w-56 items-center justify-center rounded-full bg-slate-900/80"
+            className="mx-auto flex h-56 w-56 items-center justify-center rounded-full bg-[var(--theme-bg-page)]/80"
           >
             <LazyDice3D
               sides={sides}
@@ -399,7 +399,7 @@ export default function DicePlayground() {
             />
           </div>
 
-          <div className="text-center text-sm font-semibold text-slate-200">
+          <div className="text-center text-sm font-semibold text-[var(--theme-text-primary)]">
             Inspecting <span data-testid="dice-label">d{sides}</span> face{' '}
             <span data-testid="value-label">{value}</span>
           </div>
@@ -410,7 +410,7 @@ export default function DicePlayground() {
               data-testid="toggle-roll"
               onClick={() => setIsRolling((prev) => !prev)}
               title="Starts/stops roll animation preview."
-              className="rounded-lg border border-indigo-400/60 px-3 py-2 text-xs font-black uppercase tracking-widest text-indigo-200 hover:bg-indigo-400/20"
+              className="rounded-lg border border-[var(--theme-continuity-accent)]/60 px-3 py-2 text-xs font-black uppercase tracking-widest text-[var(--theme-continuity-accent)] hover:bg-[var(--theme-continuity-accent)]/20"
             >
               {isRolling ? 'Stop Roll' : 'Start Roll'}
             </button>
@@ -419,18 +419,18 @@ export default function DicePlayground() {
               data-testid="toggle-freeze"
               onClick={() => setFreeze((prev) => !prev)}
               title="Freezes idle auto-spin when not rolling."
-              className="rounded-lg border border-teal-400/60 px-3 py-2 text-xs font-black uppercase tracking-widest text-teal-200 hover:bg-teal-400/20"
+              className="rounded-lg border border-[var(--theme-personal-accent)]/60 px-3 py-2 text-xs font-black uppercase tracking-widest text-[var(--theme-personal-accent)] hover:bg-[var(--theme-personal-accent)]/20"
             >
               {freeze ? 'Unfreeze Idle Spin' : 'Freeze Idle Spin'}
             </button>
           </div>
 
-          <p className="min-h-5 text-xs text-cyan-300">{statusMessage}</p>
+          <p className="min-h-5 text-xs text-[var(--theme-comic-accent)]">{statusMessage}</p>
         </section>
 
         <section className="space-y-6 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto xl:pr-2">
-          <section className="space-y-3 rounded-2xl border border-slate-700 bg-slate-950/60 p-4">
-            <h2 className="text-xs font-black uppercase tracking-[0.2em] text-cyan-300">Die size</h2>
+          <section className="space-y-3 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)]/60 p-4">
+            <h2 className="text-xs font-black uppercase tracking-[0.2em] text-[var(--theme-comic-accent)]">Die size</h2>
             <div className="flex flex-wrap gap-2">
               {DICE_LADDER.map((die) => (
                 <button
@@ -441,8 +441,8 @@ export default function DicePlayground() {
                   onClick={() => handleSidesClick(die as DiceSide)}
                   className={`rounded-lg border px-3 py-2 text-sm font-black transition-colors ${
                     die === sides
-                      ? 'border-cyan-300 bg-cyan-400/20 text-cyan-100'
-                      : 'border-slate-600 bg-slate-900 text-slate-300 hover:border-cyan-500 hover:text-cyan-200'
+                      ? 'border-[var(--theme-comic-accent)] bg-[var(--theme-comic-accent)]/20 text-[var(--theme-comic-accent)]'
+                      : 'border-[var(--theme-border)] bg-[var(--theme-bg-page)] text-[var(--theme-text-primary)] hover:border-[var(--theme-comic-accent)] hover:text-[var(--theme-comic-accent)]'
                   }`}
                 >
                   d{die}
@@ -451,9 +451,9 @@ export default function DicePlayground() {
             </div>
           </section>
 
-          <section className="space-y-3 rounded-2xl border border-slate-700 bg-slate-950/60 p-4">
-            <h2 className="text-xs font-black uppercase tracking-[0.2em] text-cyan-300">Face value</h2>
-            <div className="flex max-h-48 flex-wrap gap-2 overflow-auto rounded-xl border border-slate-700 bg-slate-900/50 p-3">
+          <section className="space-y-3 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)]/60 p-4">
+            <h2 className="text-xs font-black uppercase tracking-[0.2em] text-[var(--theme-comic-accent)]">Face value</h2>
+            <div className="flex max-h-48 flex-wrap gap-2 overflow-auto rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)]/50 p-3">
               {values.map((face) => (
                 <button
                   key={face}
@@ -462,8 +462,8 @@ export default function DicePlayground() {
                   onClick={() => setValue(face)}
                   className={`min-w-11 rounded-md border px-2 py-1 text-sm font-bold ${
                     face === value
-                      ? 'border-cyan-300 bg-cyan-400/20 text-cyan-100'
-                      : 'border-slate-600 text-slate-300 hover:border-cyan-500 hover:text-cyan-200'
+                      ? 'border-[var(--theme-comic-accent)] bg-[var(--theme-comic-accent)]/20 text-[var(--theme-comic-accent)]'
+                      : 'border-[var(--theme-border)] text-[var(--theme-text-primary)] hover:border-[var(--theme-comic-accent)] hover:text-[var(--theme-comic-accent)]'
                   }`}
                 >
                   {face}
@@ -472,8 +472,8 @@ export default function DicePlayground() {
             </div>
           </section>
 
-          <section className="space-y-3 rounded-2xl border border-slate-700 bg-slate-950/60 p-4">
-            <h2 className="text-xs font-black uppercase tracking-[0.2em] text-cyan-300">Global tuning</h2>
+          <section className="space-y-3 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)]/60 p-4">
+            <h2 className="text-xs font-black uppercase tracking-[0.2em] text-[var(--theme-comic-accent)]">Global tuning</h2>
             <div className="grid gap-3 md:grid-cols-2">
               <SliderControl label="UV Inset" value={renderConfig.global.uvInset} min={0} max={0.2} step={0.005} onChange={(next) => updateGlobal('uvInset', next)} testId="slider-global-uvInset" onInteractionStart={beginTuning} onInteractionEnd={endTuning} />
               <SliderControl label="Font Scale" value={renderConfig.global.fontScale} min={0.2} max={0.7} step={0.01} onChange={(next) => updateGlobal('fontScale', next)} testId="slider-global-fontScale" onInteractionStart={beginTuning} onInteractionEnd={endTuning} />
@@ -496,10 +496,10 @@ export default function DicePlayground() {
             </div>
           </section>
 
-          <section className="space-y-3 rounded-2xl border border-slate-700 bg-slate-950/60 p-4">
+          <section className="space-y-3 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)]/60 p-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-xs font-black uppercase tracking-[0.2em] text-cyan-300">d{sides} override</h2>
-              <button type="button" onClick={clearSideOverride} className="rounded-md border border-rose-400/60 px-2 py-1 text-xs font-bold text-rose-200 hover:bg-rose-500/20">Clear d{sides}</button>
+              <h2 className="text-xs font-black uppercase tracking-[0.2em] text-[var(--theme-comic-accent)]">d{sides} override</h2>
+              <button type="button" onClick={clearSideOverride} className="rounded-md border border-[var(--theme-error)]/60 px-2 py-1 text-xs font-bold text-[var(--theme-error)] hover:bg-[var(--theme-error)]/20">Clear d{sides}</button>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <SliderControl label="UV Inset" value={sideOverride.uvInset ?? effectiveConfig.uvInset} min={0} max={0.2} step={0.005} onChange={(next) => updateSideOverride('uvInset', next)} testId="slider-side-uvInset" onInteractionStart={beginTuning} onInteractionEnd={endTuning} />
@@ -521,15 +521,15 @@ export default function DicePlayground() {
             </div>
           </section>
 
-          <section className="space-y-3 rounded-2xl border border-slate-700 bg-slate-950/60 p-4">
-            <h2 className="text-xs font-black uppercase tracking-[0.2em] text-cyan-300">Preset JSON</h2>
+          <section className="space-y-3 rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)]/60 p-4">
+            <h2 className="text-xs font-black uppercase tracking-[0.2em] text-[var(--theme-comic-accent)]">Preset JSON</h2>
             <div className="grid gap-2 md:grid-cols-3">
-              <button type="button" title="Parses current JSON draft and applies it to live renderer." data-testid="btn-apply-json" onClick={applyDraftJson} className="rounded-md border border-cyan-400/60 px-2 py-2 text-xs font-bold text-cyan-200 hover:bg-cyan-500/20">Apply JSON</button>
-              <button type="button" title="Saves current JSON draft into browser localStorage for this origin." onClick={saveToLocalStorage} className="rounded-md border border-teal-400/60 px-2 py-2 text-xs font-bold text-teal-200 hover:bg-teal-500/20">Save Local</button>
-              <button type="button" title="Loads saved JSON draft from browser localStorage and applies it." onClick={loadFromLocalStorage} className="rounded-md border border-teal-400/60 px-2 py-2 text-xs font-bold text-teal-200 hover:bg-teal-500/20">Load Local</button>
-              <button type="button" title="Copies current JSON draft to clipboard." onClick={copyPreset} className="rounded-md border border-indigo-400/60 px-2 py-2 text-xs font-bold text-indigo-200 hover:bg-indigo-500/20">Copy JSON</button>
-              <button type="button" title="Downloads current JSON draft as a preset file." onClick={downloadPreset} className="rounded-md border border-indigo-400/60 px-2 py-2 text-xs font-bold text-indigo-200 hover:bg-indigo-500/20">Download JSON</button>
-              <button type="button" title="Resets live config back to committed defaults." onClick={resetDefaults} className="rounded-md border border-rose-400/60 px-2 py-2 text-xs font-bold text-rose-200 hover:bg-rose-500/20">Reset Defaults</button>
+              <button type="button" title="Parses current JSON draft and applies it to live renderer." data-testid="btn-apply-json" onClick={applyDraftJson} className="rounded-md border border-[var(--theme-comic-accent)]/60 px-2 py-2 text-xs font-bold text-[var(--theme-comic-accent)] hover:bg-[var(--theme-comic-accent)]/20">Apply JSON</button>
+              <button type="button" title="Saves current JSON draft into browser localStorage for this origin." onClick={saveToLocalStorage} className="rounded-md border border-[var(--theme-personal-accent)]/60 px-2 py-2 text-xs font-bold text-[var(--theme-personal-accent)] hover:bg-[var(--theme-personal-accent)]/20">Save Local</button>
+              <button type="button" title="Loads saved JSON draft from browser localStorage and applies it." onClick={loadFromLocalStorage} className="rounded-md border border-[var(--theme-personal-accent)]/60 px-2 py-2 text-xs font-bold text-[var(--theme-personal-accent)] hover:bg-[var(--theme-personal-accent)]/20">Load Local</button>
+              <button type="button" title="Copies current JSON draft to clipboard." onClick={copyPreset} className="rounded-md border border-[var(--theme-continuity-accent)]/60 px-2 py-2 text-xs font-bold text-[var(--theme-continuity-accent)] hover:bg-[var(--theme-continuity-accent)]/20">Copy JSON</button>
+              <button type="button" title="Downloads current JSON draft as a preset file." onClick={downloadPreset} className="rounded-md border border-[var(--theme-continuity-accent)]/60 px-2 py-2 text-xs font-bold text-[var(--theme-continuity-accent)] hover:bg-[var(--theme-continuity-accent)]/20">Download JSON</button>
+              <button type="button" title="Resets live config back to committed defaults." onClick={resetDefaults} className="rounded-md border border-[var(--theme-error)]/60 px-2 py-2 text-xs font-bold text-[var(--theme-error)] hover:bg-[var(--theme-error)]/20">Reset Defaults</button>
             </div>
             <textarea
               data-testid="preset-json"
@@ -537,7 +537,7 @@ export default function DicePlayground() {
               onChange={(event) => setJsonDraft(event.target.value)}
               onFocus={beginTuning}
               onBlur={endTuning}
-              className="min-h-60 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 font-mono text-xs text-slate-200"
+              className="min-h-60 w-full rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-page)] p-3 font-mono text-xs text-[var(--theme-text-primary)]"
             />
           </section>
         </section>

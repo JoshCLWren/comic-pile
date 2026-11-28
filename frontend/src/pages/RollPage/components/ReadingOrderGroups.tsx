@@ -67,7 +67,7 @@ export function ReadingOrderGroups({ threadId, className }: ReadingOrderGroupsPr
       <div className={className}>
         <>
           {recoveryCard}
-          <p className="text-center font-bold text-rose-400" style={readingContextType('bodyCopy')} role="alert">
+          <p className="text-center font-bold text-[var(--theme-error)]" style={readingContextType('bodyCopy')} role="alert">
             Unable to load crossovers.
           </p>
         </>

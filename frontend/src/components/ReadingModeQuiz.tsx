@@ -78,7 +78,7 @@ export default function ReadingModeQuiz({ isOpen, onClose, onComplete }: Reading
   return (
     <Modal isOpen={isOpen} title="Find my reading mode" onClose={onClose} data-testid="reading-mode-quiz">
       {error && (
-        <p role="alert" className="text-sm text-red-400" data-testid="reading-mode-quiz-error">
+        <p role="alert" className="text-sm text-[var(--theme-error)]" data-testid="reading-mode-quiz-error">
           {error}
         </p>
       )}

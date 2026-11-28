@@ -49,7 +49,7 @@ function EdgeEndpoint({
 function StepStateMark({ status }: { status: string | null }) {
   if (status === 'read') {
     return (
-      <span className="whitespace-nowrap font-bold text-emerald-400" style={readingContextType('metaLabel')}>
+      <span className="whitespace-nowrap font-bold text-[var(--theme-success)]" style={readingContextType('metaLabel')}>
         Already read
       </span>
     )

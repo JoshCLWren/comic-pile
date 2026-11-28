@@ -101,7 +101,7 @@ export default function AddToComicPileDialog({
     >
       <div className="space-y-4">
         {error && (
-          <div className="p-3 rounded-lg bg-rose-900/30 border border-rose-700/40 text-sm text-rose-300" role="alert">
+          <div className="p-3 rounded-lg bg-[var(--theme-error)]/30 border border-[var(--theme-error)]/40 text-sm text-[var(--theme-error)]" role="alert">
             {error}
           </div>
         )}

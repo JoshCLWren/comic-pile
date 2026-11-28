@@ -72,9 +72,9 @@ export function RollRecoveryCard({
       <section
         aria-label="Blocked roll recovery"
         role="alert"
-        className="mx-auto w-full max-w-xl rounded-2xl border border-red-500/30 bg-red-950/20 p-4 shadow-lg"
+        className="mx-auto w-full max-w-xl rounded-2xl border border-[var(--theme-error)]/30 bg-[var(--theme-error)]/20 p-4 shadow-lg"
       >
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-400">Recovery unavailable</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--theme-error)]">Recovery unavailable</p>
         <p className="mt-2 text-sm text-[var(--theme-text-primary)]">{errorMessage}</p>
         <p className="mt-2 text-xs text-[var(--theme-text-muted)]">Your original roll is still preserved.</p>
       </section>
@@ -128,7 +128,7 @@ export function RollRecoveryCard({
                       </span>
                     </span>
                     {node.is_readable && (
-                      <span className="shrink-0 text-[10px] font-black uppercase tracking-wider text-emerald-400">
+                      <span className="shrink-0 text-[10px] font-black uppercase tracking-wider text-[var(--theme-success)]">
                         Readable now
                       </span>
                     )}
@@ -141,8 +141,8 @@ export function RollRecoveryCard({
       )}
 
       {diagnostics.length > 0 && (
-        <div role="alert" className="mt-3 rounded-xl border border-red-500/30 bg-red-950/20 px-3 py-2">
-          <p className="text-[10px] font-black uppercase tracking-widest text-red-400">Continuity warning</p>
+        <div role="alert" className="mt-3 rounded-xl border border-[var(--theme-error)]/30 bg-[var(--theme-error)]/20 px-3 py-2">
+          <p className="text-[10px] font-black uppercase tracking-widest text-[var(--theme-error)]">Continuity warning</p>
           <ul className="mt-1 space-y-1 text-xs text-[var(--theme-text-primary)]">
             {diagnostics.map((diagnostic) => (
               <li key={`${diagnostic.code}-${diagnostic.node_type}-${diagnostic.node_id}`}>

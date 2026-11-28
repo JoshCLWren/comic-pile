@@ -82,8 +82,8 @@ export default function BugReportModal({
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-            <p className="text-sm text-red-400">{error}</p>
+          <div className="p-3 bg-[var(--theme-error)]/10 border border-[var(--theme-error)]/30 rounded-lg">
+            <p className="text-sm text-[var(--theme-error)]">{error}</p>
           </div>
         )}
 

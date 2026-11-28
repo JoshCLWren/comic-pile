@@ -343,7 +343,7 @@ export default function HistoryPage() {
 
       {error && !isLoadingMore && (
         <div className="text-center py-4">
-          <p className="text-sm font-bold text-red-400 mb-3">
+          <p className="text-sm font-bold text-[var(--theme-error)] mb-3">
             Failed to load more activity
           </p>
           <button

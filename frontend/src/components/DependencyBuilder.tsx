@@ -779,7 +779,7 @@ export default function DependencyBuilder({
          </div>
 
          {error && (
-           <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-3 py-2 rounded-xl text-xs">
+           <div className="bg-[var(--theme-error)]/10 border border-[var(--theme-error)]/30 text-[var(--theme-error)] px-3 py-2 rounded-xl text-xs">
              {error}
            </div>
          )}
@@ -827,7 +827,7 @@ function DependencyRow({
         <button
           type="button"
           onClick={() => onDelete(dependency.id)}
-          className="text-red-300 hover:text-red-200 text-xs font-black uppercase tracking-widest"
+          className="text-[var(--theme-error)] hover:text-[var(--theme-error)] text-xs font-black uppercase tracking-widest"
         >
           Remove
         </button>

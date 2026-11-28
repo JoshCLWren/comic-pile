@@ -20,12 +20,12 @@ const STATUS_STYLES: Record<GateStatus, { label: string; classes: string; descri
   blocked: {
     label: 'Blocked',
     description: 'Read prerequisite to continue',
-    classes: 'bg-red-500/10 text-red-300 border-red-500/40',
+    classes: 'bg-[var(--theme-error)]/10 text-[var(--theme-error)] border-[var(--theme-error)]/40',
   },
   satisfied: {
     label: 'Satisfied',
     description: 'Gate cleared',
-    classes: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/40',
+    classes: 'bg-[var(--theme-success)]/10 text-[var(--theme-success)] border-[var(--theme-success)]/40',
   },
   dormant: {
     label: 'Dormant',
@@ -121,7 +121,7 @@ function GateCard({ gate, card }: { gate: TimelineGateEntry; card?: IssueCard })
       </p>
       <p className="mt-1 text-[11px] uppercase tracking-widest text-[var(--theme-text-dim)]">{statusMeta.description}</p>
       {gate.isCurrent && (
-        <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[11px] font-black uppercase tracking-widest text-blue-300">
+        <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-[var(--theme-continuity-accent)]/10 px-2 py-0.5 text-[11px] font-black uppercase tracking-widest text-[var(--theme-continuity-accent)]">
           <span aria-hidden="true">📍</span>
           Current position
         </div>
@@ -139,7 +139,7 @@ function SpanCard({ span }: { span: TimelineSpanEntry }) {
           <p className="text-xs text-[var(--theme-text-muted)]">No dependency gates in this range</p>
         </div>
         {span.isCurrent && (
-          <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[11px] font-black uppercase tracking-widest text-blue-300">
+          <span className="rounded-full bg-[var(--theme-continuity-accent)]/10 px-2 py-0.5 text-[11px] font-black uppercase tracking-widest text-[var(--theme-continuity-accent)]">
             You are here
           </span>
         )}

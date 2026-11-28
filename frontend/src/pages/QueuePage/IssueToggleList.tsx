@@ -913,7 +913,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     return (
       <div className="space-y-2">
         <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">Issues</p>
-        <p className="text-xs text-red-400">Could not load issues: {loadError}</p>
+        <p className="text-xs text-[var(--theme-error)]">Could not load issues: {loadError}</p>
         {actionError && (
           <p
             className="text-xs text-[var(--theme-danger)]"
@@ -1151,7 +1151,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
                  disabled={deleting.has(issue.id)}
                  className={[
                    'min-h-[36px] md:min-h-[44px] min-w-[28px] md:min-w-[44px] flex items-center justify-center pr-2 text-[10px] font-black text-[var(--theme-text-dim)] transition-colors',
-                   'hover:text-red-300 disabled:opacity-50',
+                   'hover:text-[var(--theme-error)] disabled:opacity-50',
                  ].join(' ')}
                  aria-label={`Delete issue #${issue.issue_number}`}
                  data-testid={`issue-delete-${issue.id}`}

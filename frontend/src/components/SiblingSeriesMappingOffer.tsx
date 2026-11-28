@@ -266,7 +266,7 @@ export default function SiblingSeriesMappingOffer({
         )}
 
         {commitMessage && (
-          <p role="alert" className="rounded-lg bg-rose-900/30 border border-rose-700/40 p-3 text-sm text-rose-200">
+          <p role="alert" className="rounded-lg bg-[var(--theme-error)]/30 border border-[var(--theme-error)]/40 p-3 text-sm text-[var(--theme-error)]">
             {commitMessage}
           </p>
         )}

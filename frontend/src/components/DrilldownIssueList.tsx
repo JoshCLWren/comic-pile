@@ -32,7 +32,7 @@ export function DrilldownIssueList({ issues }: DrilldownIssueListProps) {
           <div className="flex-shrink-0">
             <div
               className={`w-2 h-2 rounded-full mt-2 ${
-                issue.status === 'read' ? 'bg-green-500' : 'bg-gray-400'
+                issue.status === 'read' ? 'bg-[var(--theme-success)]' : 'bg-[var(--theme-text-dim)]'
               }`}
             />
           </div>
@@ -56,7 +56,7 @@ export function DrilldownIssueList({ issues }: DrilldownIssueListProps) {
                 className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
                   issue.status === 'read'
                     ? 'bg-green-100 text-green-800'
-                    : 'bg-gray-100 text-gray-800'
+                    : 'bg-[var(--theme-bg-panel)] text-[var(--theme-text-muted)]'
                 }`}
               >
                 {issue.status === 'read' ? 'Read' : 'Unread'}

@@ -114,11 +114,11 @@ export function normalizeArcName(name: string): string {
 export function getStateColorClass(state: MemberState): string {
   switch (state) {
     case 'read':
-      return 'text-emerald-400'
+      return 'text-[var(--theme-success)]'
     case 'unread':
       return 'text-[var(--theme-comic-accent)]'
     case 'missing':
-      return 'text-rose-400'
+      return 'text-[var(--theme-error)]'
   }
 }
 

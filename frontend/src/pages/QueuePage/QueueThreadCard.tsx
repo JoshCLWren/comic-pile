@@ -313,7 +313,7 @@ export default function QueueThreadCard({
             {crossoverGroupsLoading ? (
               <p className="text-xs text-[var(--theme-text-dim)]">Loading crossovers…</p>
             ) : crossoverGroupsError ? (
-              <p className="text-xs text-red-300/80">Crossovers unavailable</p>
+              <p className="text-xs text-[var(--theme-error)]/80">Crossovers unavailable</p>
             ) : (
               <CrossoverTags groups={crossoverGroups} label={`Crossovers for ${thread.title}`} />
             )}

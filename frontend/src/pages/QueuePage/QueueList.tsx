@@ -174,7 +174,7 @@ export function QueueList({
     <>
       {reorderError && (
         <div
-          className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl text-sm font-medium"
+          className="bg-[var(--theme-error)]/10 border border-[var(--theme-error)]/30 text-[var(--theme-error)] px-4 py-3 rounded-xl text-sm font-medium"
           data-testid="queue-reorder-error"
         >
           {reorderError}

@@ -90,7 +90,7 @@ export default function ContinuityPlannerPage({
     return (
       <div
         role="alert"
-        className="rounded-2xl border border-red-800 bg-red-950/30 p-4 text-red-200"
+        className="rounded-2xl border border-[var(--theme-error)] bg-[var(--theme-error)]/30 p-4 text-[var(--theme-error)]"
       >
         Invalid continuity plan ID.
       </div>
@@ -122,7 +122,7 @@ export default function ContinuityPlannerPage({
     return (
       <div
         role="alert"
-        className="rounded-2xl border border-red-800 bg-red-950/30 p-4 text-red-200"
+        className="rounded-2xl border border-[var(--theme-error)] bg-[var(--theme-error)]/30 p-4 text-[var(--theme-error)]"
       >
         {loadError}
       </div>

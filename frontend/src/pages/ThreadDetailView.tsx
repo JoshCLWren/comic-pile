@@ -622,7 +622,7 @@ export default function ThreadDetailView() {
             Dependencies
           </span>
           {connectedError && (
-            <p className="text-xs text-red-400" role="alert">Unable to load dependencies.</p>
+            <p className="text-xs text-[var(--theme-error)]" role="alert">Unable to load dependencies.</p>
           )}
           {!connectedError && connectedPending && (
             <p className="text-xs text-[var(--theme-text-dim)]">Loading dependencies...</p>
@@ -731,7 +731,7 @@ export default function ThreadDetailView() {
           </span>
           {crossoversPending && <p className="text-xs text-[var(--theme-text-dim)]">Loading crossovers...</p>}
           {!crossoversPending && crossoversError && (
-            <p className="text-xs text-red-400">Unable to load crossover memberships.</p>
+            <p className="text-xs text-[var(--theme-error)]">Unable to load crossover memberships.</p>
           )}
           {!crossoversPending && !crossoversError && crossoverGroups.length === 0 && (
             <p className="text-xs text-[var(--theme-text-dim)]">No crossover memberships</p>
@@ -810,7 +810,7 @@ export default function ThreadDetailView() {
 
                 {issuesError && !issuesLoading && (
                   <div className="space-y-2">
-                    <p className="text-xs text-red-400">Failed to load issues</p>
+                    <p className="text-xs text-[var(--theme-error)]">Failed to load issues</p>
                     <button
                       type="button"
                       onClick={() => {
@@ -845,7 +845,7 @@ export default function ThreadDetailView() {
                           }
                           className={`space-y-1.5 p-2 rounded-lg border ${
                             issue.status === 'read'
-                              ? 'bg-green-500/10 border-green-500/20'
+                              ? 'bg-[var(--theme-success)]/10 border-[var(--theme-success)]/20'
                               : 'bg-[var(--theme-bg-hover)] border-[var(--theme-border)]'
                           }${deepLinkedIssueId === issue.id ? ' issue-deep-link-target' : ''}`}
                         >
@@ -892,7 +892,7 @@ export default function ThreadDetailView() {
                               </button>
                               <span className="text-xs font-black uppercase tracking-widest">
                                 {issue.status === 'read' ? (
-                                  <span className="text-green-400">Read</span>
+                                  <span className="text-[var(--theme-success)]">Read</span>
                                 ) : (
                                   <span className="text-[var(--theme-text-dim)]">Unread</span>
                                 )}

@@ -50,7 +50,7 @@ function statusLabel(entry: CBLAdoptionPreviewEntry): string {
 
 function statusClass(entry: CBLAdoptionPreviewEntry): string {
   if (entry.adoption_decision === 'included_existing') return 'text-[var(--theme-success)]'
-  if (entry.adoption_decision === 'would_create_missing') return 'text-sky-300'
+  if (entry.adoption_decision === 'would_create_missing') return 'text-[var(--theme-warning)]'
   if (entry.adoption_decision === 'unresolved') return 'text-[var(--theme-warning)]'
   return 'text-[var(--theme-text-muted)]'
 }
@@ -297,7 +297,7 @@ export default function ReadingPlanAddMaterial({
             </button>
           </form>
 
-          {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
+          {error && <p role="alert" className="text-sm text-[var(--theme-error)]">{error}</p>}
 
           {!isSearching && hasSearched && sources.length === 0 && !error && (
             <p className="text-sm text-[var(--theme-text-muted)]">No matching source lists found.</p>
@@ -484,7 +484,7 @@ export default function ReadingPlanAddMaterial({
           )}
 
           {result && (
-            <p role="status" className="text-sm text-emerald-300">
+            <p role="status" className="text-sm text-[var(--theme-success)]">
               Added material to this Reading Plan · created {result.created_positions.length} · reused {result.reused_positions.length}.
             </p>
           )}

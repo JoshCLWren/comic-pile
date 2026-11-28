@@ -43,7 +43,7 @@ export function ReadingContextStatusCard({ isLoading, error }: ReadingContextSta
       >
         <h3
           id="reader-context-unavailable-heading"
-          className="font-black text-rose-300"
+          className="font-black text-[var(--theme-error)]"
           style={readingContextType('sectionHeading')}
         >
           Local reading context unavailable
