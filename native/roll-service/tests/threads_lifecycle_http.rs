@@ -820,10 +820,10 @@ async fn update_applies_partial_fields_and_explicit_null_notes() {
         .execute("UPDATE threads SET notes = 'old' WHERE id = $1", &[&id])
         .await
         .unwrap();
-    let path = format!("/api/v1/threads/{id}");
+    let path = format!("/api/v2/threads/{id}");
     let (status, body) = call(
         &ctx,
-        "PUT",
+        "PATCH",
         &path,
         Some(
             json!({"title": "After", "format": "DIGITAL", "is_test": true,
@@ -841,9 +841,9 @@ async fn update_applies_partial_fields_and_explicit_null_notes() {
         json!([{"name": "Ed", "roles": []}])
     );
 
-    let (_, cleared) = call(&ctx, "PUT", &path, Some(json!({"notes": null}))).await;
+    let (_, cleared) = call(&ctx, "PATCH", &path, Some(json!({"notes": null}))).await;
     assert_eq!(cleared["notes"], Value::Null, "explicit null clears notes");
-    let (_, blank) = call(&ctx, "PUT", &path, Some(json!({"notes": "   "}))).await;
+    let (_, blank) = call(&ctx, "PATCH", &path, Some(json!({"notes": "   "}))).await;
     assert_eq!(
         blank["notes"],
         Value::Null,
@@ -871,8 +871,8 @@ async fn update_issues_remaining_zero_completes_and_positive_requeues_at_the_end
 
     let (status, body) = call(
         &ctx,
-        "PUT",
-        &format!("/api/v1/threads/{b}"),
+        "PATCH",
+        &format!("/api/v2/threads/{b}"),
         Some(json!({"issues_remaining": 0})),
     )
     .await;
@@ -891,8 +891,8 @@ async fn update_issues_remaining_zero_completes_and_positive_requeues_at_the_end
 
     let (status, body) = call(
         &ctx,
-        "PUT",
-        &format!("/api/v1/threads/{b}"),
+        "PATCH",
+        &format!("/api/v2/threads/{b}"),
         Some(json!({"issues_remaining": 2})),
     )
     .await;
@@ -911,8 +911,8 @@ async fn update_leaves_excluded_status_and_tracked_counters_alone() {
     let excluded = seed_thread(&ctx, ctx.user_id, "Gone", "excluded", 0, 4).await;
     let (_, body) = call(
         &ctx,
-        "PUT",
-        &format!("/api/v1/threads/{excluded}"),
+        "PATCH",
+        &format!("/api/v2/threads/{excluded}"),
         Some(json!({"issues_remaining": 0})),
     )
     .await;
@@ -926,8 +926,8 @@ async fn update_leaves_excluded_status_and_tracked_counters_alone() {
     track(&ctx, tracked, &["read", "unread", "unread"]).await;
     let (_, body) = call(
         &ctx,
-        "PUT",
-        &format!("/api/v1/threads/{tracked}"),
+        "PATCH",
+        &format!("/api/v2/threads/{tracked}"),
         Some(json!({"issues_remaining": 99})),
     )
     .await;
@@ -950,14 +950,14 @@ async fn update_partial_put_preserves_untouched_fields_under_concurrency() {
         .execute("UPDATE threads SET notes = 'keep-me' WHERE id = $1", &[&id])
         .await
         .unwrap();
-    let path = format!("/api/v1/threads/{id}");
+    let path = format!("/api/v2/threads/{id}");
     let (a, b) = tokio::join!(
-        call(&ctx, "PUT", &path, Some(json!({"title": "Renamed"}))),
-        call(&ctx, "PUT", &path, Some(json!({"notes": "changed"}))),
+        call(&ctx, "PATCH", &path, Some(json!({"title": "Renamed"}))),
+        call(&ctx, "PATCH", &path, Some(json!({"notes": "changed"}))),
     );
     assert_eq!(a.0, StatusCode::OK, "{:?}", a.1);
     assert_eq!(b.0, StatusCode::OK, "{:?}", b.1);
-    let (_, body) = call(&ctx, "PUT", &path, Some(json!({}))).await;
+    let (_, body) = call(&ctx, "PATCH", &path, Some(json!({}))).await;
     assert_eq!(body["title"], "Renamed");
     assert_eq!(body["notes"], "changed");
     assert_eq!(body["status"], "active");
@@ -979,8 +979,8 @@ async fn update_and_exclude_do_not_deadlock() {
                 send(
                     &state,
                     authed(
-                        "PUT",
-                        &format!("/api/v1/threads/{id}"),
+                        "PATCH",
+                        &format!("/api/v2/threads/{id}"),
                         &token,
                         &csrf,
                         Some(json!({"issues_remaining": 3})),
@@ -1038,8 +1038,8 @@ async fn update_validation_and_isolation() {
     let theirs = seed_thread(&ctx, other_id, "Theirs", "active", 1, 2).await;
     let (status, body) = call(
         &ctx,
-        "PUT",
-        &format!("/api/v1/threads/{theirs}"),
+        "PATCH",
+        &format!("/api/v2/threads/{theirs}"),
         Some(json!({"title": "stolen"})),
     )
     .await;
@@ -1048,8 +1048,8 @@ async fn update_validation_and_isolation() {
     let (_, unchanged) = send(
         &ctx.state,
         authed(
-            "PUT",
-            &format!("/api/v1/threads/{theirs}"),
+            "PATCH",
+            &format!("/api/v2/threads/{theirs}"),
             &other_token,
             &other_csrf,
             Some(json!({})),
@@ -1061,8 +1061,8 @@ async fn update_validation_and_isolation() {
     let mine = seed_thread(&ctx, ctx.user_id, "Mine", "active", 1, 2).await;
     let (status, body) = call(
         &ctx,
-        "PUT",
-        "/api/v1/threads/not-a-number",
+        "PATCH",
+        "/api/v2/threads/not-a-number",
         Some(json!({"title": "x".repeat(201), "issues_remaining": -4})),
     )
     .await;
@@ -1079,8 +1079,8 @@ async fn update_validation_and_isolation() {
     );
     let (_, still) = call(
         &ctx,
-        "PUT",
-        &format!("/api/v1/threads/{mine}"),
+        "PATCH",
+        &format!("/api/v2/threads/{mine}"),
         Some(json!({})),
     )
     .await;
@@ -1166,7 +1166,7 @@ async fn delete_prunes_dependent_state_and_renumbers_the_queue() {
     }
     drop(pool);
 
-    let (status, body) = call(&ctx, "DELETE", &format!("/api/v1/threads/{doomed}"), None).await;
+    let (status, body) = call(&ctx, "DELETE", &format!("/api/v2/threads/{doomed}"), None).await;
     assert_eq!(status, StatusCode::NO_CONTENT, "{body:?}");
     assert!(thread_row(&ctx, doomed).await.is_none());
     assert_eq!(
@@ -1265,7 +1265,7 @@ async fn delete_refused_by_the_database_is_a_400_and_changes_nothing() {
     .await
     .unwrap();
     drop(pool);
-    let (status, body) = call(&ctx, "DELETE", &format!("/api/v1/threads/{thread}"), None).await;
+    let (status, body) = call(&ctx, "DELETE", &format!("/api/v2/threads/{thread}"), None).await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
     assert!(body["detail"]
         .as_str()
@@ -1317,7 +1317,7 @@ async fn delete_database_integrity_failure_is_a_400_and_changes_nothing() {
     .unwrap();
     drop(pool);
 
-    let (status, body) = call(&ctx, "DELETE", &format!("/api/v1/threads/{thread}"), None).await;
+    let (status, body) = call(&ctx, "DELETE", &format!("/api/v2/threads/{thread}"), None).await;
     assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
     assert!(
         body["detail"]
@@ -1345,13 +1345,13 @@ async fn delete_is_owner_scoped() {
     let ctx = setup("lcdeliso").await;
     let (_, _, other_id) = second_user(&ctx).await;
     let theirs = seed_thread(&ctx, other_id, "Theirs", "active", 1, 2).await;
-    let (status, body) = call(&ctx, "DELETE", &format!("/api/v1/threads/{theirs}"), None).await;
+    let (status, body) = call(&ctx, "DELETE", &format!("/api/v2/threads/{theirs}"), None).await;
     assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
     assert_eq!(body["detail"], format!("Thread {theirs} not found"));
     assert!(thread_row(&ctx, theirs).await.is_some());
-    let (status, _) = call(&ctx, "DELETE", "/api/v1/threads/999999", None).await;
+    let (status, _) = call(&ctx, "DELETE", "/api/v2/threads/999999", None).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
-    let (status, body) = call(&ctx, "DELETE", "/api/v1/threads/abc", None).await;
+    let (status, body) = call(&ctx, "DELETE", "/api/v2/threads/abc", None).await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(body["errors"][0]["field"], "path.thread_id");
 }
@@ -2566,7 +2566,7 @@ async fn excluded_list_rejects_invalid_parameters() {
 }
 
 // ---------------------------------------------------------------------------
-// check-duplicates
+// check-duplicates (canonical v2 advisory custom method)
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -2603,7 +2603,7 @@ async fn check_duplicates_reports_volume_and_title_matches_for_the_owner_only() 
     let (status, body) = call(
         &ctx,
         "POST",
-        "/api/v1/threads/check-duplicates",
+        "/api/v2/threads:checkDuplicates",
         Some(json!({"title": "Spider-Man", "format": "comics", "comicvine_volume_id": 4050})),
     )
     .await;
@@ -2648,7 +2648,7 @@ async fn check_duplicates_reports_volume_and_title_matches_for_the_owner_only() 
     let (_, excluded) = call(
         &ctx,
         "POST",
-        "/api/v1/threads/check-duplicates",
+        "/api/v2/threads:checkDuplicates",
         Some(json!({"title": "Spider-Man", "format": "Comic", "exclude_thread_id": exact})),
     )
     .await;
@@ -2663,7 +2663,7 @@ async fn check_duplicates_reports_volume_and_title_matches_for_the_owner_only() 
     let (status, invalid) = call(
         &ctx,
         "POST",
-        "/api/v1/threads/check-duplicates",
+        "/api/v2/threads:checkDuplicates",
         Some(json!({"title": "", "format": "x".repeat(51), "comicvine_volume_id": 0})),
     )
     .await;
@@ -3068,7 +3068,7 @@ async fn groups_batch_maps_threads_to_groups_in_request_order() {
 }
 
 // ---------------------------------------------------------------------------
-// PUT /api/v1/threads/{thread_id}/test-backdate
+// retired test-backdate endpoint / shared TEST_ENVIRONMENT helpers
 // ---------------------------------------------------------------------------
 
 static TEST_ENV_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -3085,14 +3085,12 @@ impl Drop for EnvRestore {
 }
 
 #[tokio::test]
-async fn test_backdate_thread_for_testing_updates_activity_and_returns_thread() {
-    let _env_guard = TEST_ENV_LOCK.lock().await;
-    let _restore = EnvRestore(std::env::var_os("TEST_ENVIRONMENT"));
-    std::env::set_var("TEST_ENVIRONMENT", "true");
-    let ctx = setup("lcbackdate").await;
+async fn test_backdate_route_is_retired_without_a_v2_successor() {
+    // #5958: the test-only backdate endpoint was retired; no product v2
+    // successor exists and no shipped caller uses it. The URL must fall through
+    // to the same Rust JSON 404 as every other unregistered legacy path.
+    let ctx = setup("lcbackdateretired").await;
     let thread = seed_thread(&ctx, ctx.user_id, "Test", "active", 1, 2).await;
-
-    let before = chrono::Utc::now();
     let (status, body) = call(
         &ctx,
         "PUT",
@@ -3100,244 +3098,6 @@ async fn test_backdate_thread_for_testing_updates_activity_and_returns_thread() 
         None,
     )
     .await;
-
-    assert_eq!(status, StatusCode::OK, "{body:?}");
-    // Golden success body measured from the frozen Python route
-    // (`app/services/thread_service.py::backdate_thread_for_testing` ->
-    // `thread_to_response`, schema `app/schemas/thread.py::ThreadResponse`).
-    // Python always emits all 18 fields, including explicit null/[]/false
-    // values; a changed response shape must fail here.
-    assert_eq!(
-        keys(&body),
-        vec![
-            "blocking_reasons",
-            "created_at",
-            "format",
-            "id",
-            "is_blocked",
-            "is_test",
-            "issues_remaining",
-            "last_activity_at",
-            "last_rating",
-            "manual_creator_credits",
-            "next_unread_issue_id",
-            "next_unread_issue_number",
-            "notes",
-            "queue_position",
-            "reading_progress",
-            "status",
-            "title",
-            "total_issues"
-        ]
-    );
-    assert_eq!(body["id"], thread);
-    assert_eq!(body["title"], "Test");
-    assert_eq!(body["format"], "Comic");
-    assert_eq!(body["status"], "active");
-    assert_eq!(body["queue_position"], 1);
-    assert_eq!(body["issues_remaining"], 2);
-    assert_eq!(body["is_blocked"], false);
-    assert_eq!(body["is_test"], false);
-    assert_eq!(body["last_rating"], Value::Null);
-    assert_eq!(body["notes"], Value::Null);
-    assert_eq!(body["manual_creator_credits"], json!([]));
-    assert_eq!(body["blocking_reasons"], json!([]));
-    assert!(body["created_at"].as_str().unwrap().ends_with('Z'));
-    assert!(body["last_activity_at"].is_string(), "{body:?}");
-
-    let activity: chrono::DateTime<chrono::Utc> = ctx
-        .state
-        .pool
-        .get()
-        .await
-        .unwrap()
-        .query_one(
-            "SELECT last_activity_at FROM threads WHERE id = $1",
-            &[&thread],
-        )
-        .await
-        .unwrap()
-        .get(0);
-    let expected = before - chrono::Duration::days(5);
-    let delta = (activity - expected).num_seconds().abs();
-    assert!(
-        delta <= 30,
-        "expected last_activity_at near {expected}, got {activity}"
-    );
-}
-
-#[tokio::test]
-async fn test_backdate_thread_for_testing_forbidden_without_test_environment() {
-    let _env_guard = TEST_ENV_LOCK.lock().await;
-    let _restore = EnvRestore(std::env::var_os("TEST_ENVIRONMENT"));
-    std::env::remove_var("TEST_ENVIRONMENT");
-    let ctx = setup("lcbackdateforbid").await;
-    let thread = seed_thread(&ctx, ctx.user_id, "Test", "active", 1, 2).await;
-
-    let (status, body) = call(
-        &ctx,
-        "PUT",
-        &format!("/api/v1/threads/{thread}/test-backdate?days_ago=5"),
-        None,
-    )
-    .await;
-
-    assert_eq!(status, StatusCode::FORBIDDEN, "{body:?}");
-    assert_eq!(
-        body["detail"],
-        "This endpoint is only available in test environment"
-    );
-}
-
-#[tokio::test]
-async fn test_backdate_thread_for_testing_not_found_for_other_user() {
-    let _env_guard = TEST_ENV_LOCK.lock().await;
-    let _restore = EnvRestore(std::env::var_os("TEST_ENVIRONMENT"));
-    std::env::set_var("TEST_ENVIRONMENT", "true");
-    let ctx = setup("lcbackdatenotfound").await;
-    let (_, _, other_id) = second_user(&ctx).await;
-    let thread = seed_thread(&ctx, other_id, "Theirs", "active", 1, 2).await;
-
-    let (status, body) = call(
-        &ctx,
-        "PUT",
-        &format!("/api/v1/threads/{thread}/test-backdate?days_ago=5"),
-        None,
-    )
-    .await;
-
     assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
-    assert_eq!(body["detail"], format!("Thread {thread} not found"));
-}
-
-#[tokio::test]
-async fn test_backdate_thread_for_testing_validates_days_ago() {
-    let _env_guard = TEST_ENV_LOCK.lock().await;
-    let _restore = EnvRestore(std::env::var_os("TEST_ENVIRONMENT"));
-    std::env::set_var("TEST_ENVIRONMENT", "true");
-    let ctx = setup("lcbackdatevalidate").await;
-    let thread = seed_thread(&ctx, ctx.user_id, "Test", "active", 1, 2).await;
-
-    // Golden 422 responses measured from the frozen Python route. FastAPI
-    // raises RequestValidationError for `days_ago: int = Query(..., ge=1,
-    // le=3650)` and `app/exception_handlers.py::validation_exception_handler`
-    // returns `{"detail": "Validation failed"}` in production (the stable
-    // contract), adding `errors`/`body` in dev/test. Assert both so a changed
-    // error envelope cannot pass on status code alone.
-    let production = std::env::var("ENVIRONMENT").as_deref() == Ok("production");
-    let assert_rejection = |status: StatusCode, body: &Value, error: Value| {
-        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body:?}");
-        assert_eq!(body["detail"], "Validation failed", "{body:?}");
-        if !production {
-            assert_eq!(
-                body["errors"],
-                json!([error]),
-                "Python-measured validation errors"
-            );
-            assert_eq!(body["body"], Value::Null, "Python-measured request body");
-        }
-    };
-    let path = format!("/api/v1/threads/{thread}/test-backdate");
-
-    let (status, body) = call(&ctx, "PUT", &path, None).await;
-    assert_rejection(
-        status,
-        &body,
-        json!({"field": "query.days_ago", "message": "Field required", "type": "missing"}),
-    );
-
-    let (status, body) = call(&ctx, "PUT", &format!("{path}?days_ago=0"), None).await;
-    assert_rejection(
-        status,
-        &body,
-        json!({"field": "query.days_ago", "message": "Input should be greater than or equal to 1", "type": "greater_than_equal"}),
-    );
-
-    let (status, body) = call(&ctx, "PUT", &format!("{path}?days_ago=3651"), None).await;
-    assert_rejection(
-        status,
-        &body,
-        json!({"field": "query.days_ago", "message": "Input should be less than or equal to 3650", "type": "less_than_equal"}),
-    );
-}
-
-/// A changed writer must serialize on the per-reader queue advisory lock
-/// before touching the thread row. Force a deterministic interleaving with the
-/// sibling `exclude` writer: a holder keeps the queue lock, both requests park
-/// on it, then it is released. Without the queue lock, backdate would grab the
-/// thread row first and either deadlock (40P01) or never queue, so this test
-/// fails rather than passing on a lucky serial schedule.
-#[tokio::test]
-async fn test_backdate_and_exclude_do_not_deadlock() {
-    let _env_guard = TEST_ENV_LOCK.lock().await;
-    let _restore = EnvRestore(std::env::var_os("TEST_ENVIRONMENT"));
-    std::env::set_var("TEST_ENVIRONMENT", "true");
-    let ctx = setup_with_pool("lcbackdateexdead", "8").await;
-    let mut holder = ctx.state.pool.get().await.unwrap();
-    let conn = ctx.state.pool.get().await.unwrap();
-    let id = seed_thread(&ctx, ctx.user_id, "Contended", "active", 1, 5).await;
-
-    let hold = holder.transaction().await.unwrap();
-    hold.execute(
-        "SELECT pg_advisory_xact_lock($1, $2)",
-        &[&QUEUE_LOCK_NAMESPACE, &ctx.user_id],
-    )
-    .await
-    .unwrap();
-
-    let backdate = {
-        let state = ctx.state.clone();
-        let token = ctx.token.clone();
-        let csrf = ctx.csrf.clone();
-        tokio::spawn(async move {
-            send(
-                &state,
-                authed(
-                    "PUT",
-                    &format!("/api/v1/threads/{id}/test-backdate?days_ago=5"),
-                    &token,
-                    &csrf,
-                    None,
-                ),
-            )
-            .await
-        })
-    };
-    wait_for_queue_lock_waiters(&conn, ctx.user_id, 1).await;
-    let exclude = {
-        let state = ctx.state.clone();
-        let token = ctx.token.clone();
-        let csrf = ctx.csrf.clone();
-        tokio::spawn(async move {
-            send(
-                &state,
-                authed(
-                    "POST",
-                    &format!("/api/v1/threads/{id}/exclude"),
-                    &token,
-                    &csrf,
-                    None,
-                ),
-            )
-            .await
-        })
-    };
-    wait_for_queue_lock_waiters(&conn, ctx.user_id, 2).await;
-    hold.commit().await.unwrap();
-
-    let (b, e) = tokio::join!(backdate, exclude);
-    let (b_status, b_body) = b.expect("backdate task");
-    let (e_status, e_body) = e.expect("exclude task");
-    assert_ne!(
-        b_status,
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "backdate deadlocked or errored: {b_status} {b_body:?}"
-    );
-    assert_eq!(b_status, StatusCode::OK, "backdate: {b_status} {b_body:?}");
-    assert_ne!(
-        e_status,
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "exclude deadlocked or errored: {e_status} {e_body:?}"
-    );
-    assert_eq!(e_status, StatusCode::OK, "exclude: {e_status} {e_body:?}");
+    assert_eq!(body["detail"], "Not Found");
 }
