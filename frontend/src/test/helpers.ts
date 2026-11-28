@@ -653,6 +653,10 @@ export async function navigateToRatePage(page: Page): Promise<void> {
   // Seed a pending offer through the supported Roll command. The direct
   // thread-selection route is retired; the browser hydrates the rating view
   // from the pending offer in bootstrap.
+  await page.request.post('/api/v2/readingSessions', {
+    headers: await authHeaders(page),
+    data: {},
+  })
   const offer = await page.request.post('/api/v2/roll/offer', {
     headers: await authHeaders(page),
     data: {
