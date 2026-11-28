@@ -2163,7 +2163,6 @@ async fn set_pending_once(
         Ok(RollResponse {
             thread_id: selection.thread_id,
             title: selection.title,
-            format: selection.format,
             issues_remaining: selection.issues_remaining,
             queue_position: selection.queue_position,
             die_size: active.current_die,
@@ -2535,7 +2534,6 @@ fn publication_year_from_metadata(metadata: &serde_json::Map<String, Value>) -> 
 struct Candidate {
     id: i32,
     title: String,
-    format: String,
     status: String,
     issues_remaining: i32,
     total_issues: Option<i32>,
@@ -2545,15 +2543,13 @@ fn candidate(row: &tokio_postgres::Row) -> Candidate {
     Candidate {
         id: row.get(0),
         title: row.get(1),
-        format: row.get(2),
-        status: row.get(3),
-        issues_remaining: row.get(4),
-        total_issues: row.get(5),
+        status: row.get(2),
+        issues_remaining: row.get(3),
+        total_issues: row.get(4),
     }
 }
 
-const CANDIDATE_COLUMNS: &str =
-    "t.id, t.title, t.format, t.status, t.issues_remaining, t.total_issues";
+const CANDIDATE_COLUMNS: &str = "t.id, t.title, t.status, t.issues_remaining, t.total_issues";
 
 /// `POST /api/v1/threads/check-duplicates`
 pub async fn check_potential_duplicates(
@@ -2571,17 +2567,6 @@ pub async fn check_potential_duplicates(
         StrRules {
             min: Some(1),
             max: Some(200),
-        },
-        false,
-        true,
-    );
-    let format_value = str_field(
-        &mut check,
-        &["body", "format"],
-        map.get("format"),
-        StrRules {
-            min: Some(1),
-            max: Some(50),
         },
         false,
         true,
@@ -2611,7 +2596,6 @@ pub async fn check_potential_duplicates(
     let exclude = to_i32(&mut check, &["body", "exclude_thread_id"], exclude);
     check.finish(raw_body)?;
     let title = title.unwrap_or_default();
-    let format_value = format_value.unwrap_or_default();
     let user_id = user.id();
 
     let connection = db::checkout(&state).await?;
@@ -2648,7 +2632,6 @@ pub async fn check_potential_duplicates(
         strong = rows.iter().map(candidate).collect();
     }
 
-    let normalized_format = normalize_format_value(&format_value);
     let strong_ids: HashSet<i32> = strong.iter().map(|thread| thread.id).collect();
     let normalized_title = normalize_title(&title);
     let mut similar: Vec<Candidate> = Vec::new();
@@ -2694,15 +2677,12 @@ pub async fn check_potential_duplicates(
         similar.extend(complete);
         similar.extend(fuzzy.iter().map(candidate));
     }
-    let mut considered: Vec<(f64, bool, Candidate)> = similar
+    let mut considered: Vec<(f64, Candidate)> = similar
         .into_iter()
         .filter(|thread| !strong_ids.contains(&thread.id))
         .filter_map(|thread| {
             let similarity = title_similarity(&title, &thread.title);
-            (similarity >= MIN_TITLE_SIMILARITY).then(|| {
-                let same_format = normalize_format_value(&thread.format) == normalized_format;
-                (similarity, same_format, thread)
-            })
+            (similarity >= MIN_TITLE_SIMILARITY).then(|| (similarity, thread))
         })
         .collect();
     considered.sort_by(|left, right| {
@@ -2710,8 +2690,7 @@ pub async fn check_potential_duplicates(
             .0
             .partial_cmp(&left.0)
             .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| (!left.1).cmp(&(!right.1)))
-            .then_with(|| left.2.id.cmp(&right.2.id))
+            .then_with(|| left.1.id.cmp(&right.1.id))
     });
     let remaining_slots = MAX_POTENTIAL_DUPLICATE_MATCHES.saturating_sub(strong.len());
     let mut candidates: Vec<(Candidate, &'static str)> = strong
