@@ -1,21 +1,19 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
-import type { components } from '../generated/openapi'
+import type {
+  IssueCardsRequest,
+  IssueCardsResponse,
+  IssueReadRateRequest,
+  IssueReadRateResponse as NativeIssueReadRateResponse,
+} from '../generated/nativeV2Client'
 import { clearPendingSelectionForIssue } from './rollPendingSelection'
 import type { Tag } from './api-tags'
 
-export type IssueCard = components['schemas']['IssueCard'] & {
-  /** Alternate overall/story number for the same physical comic (#4652). */
-  issue_number_alias?: string | null
-  /** Authored number with alias when distinct, e.g. "23 (#2)". */
-  display_issue_number?: string
-  /** Provider's issue number from the confirmed identity, when known. */
-  provider_issue_number?: string | null
-}
-export type IssueReadRateResponse = components['schemas']['IssueReadRateResponse']
+export type IssueCard = IssueCardsResponse['items'][number]
+export type IssueReadRateResponse = NativeIssueReadRateResponse
 
 /** Validate card tags at the generated-wire boundary before UI consumers use them. */
 export function parseIssueCardTags(
-  tags: components['schemas']['IssueCard']['tags'],
+  tags: IssueCard['tags'],
 ): Tag[] {
   if (!tags) return []
   return tags.flatMap((tag) => {
@@ -89,8 +87,8 @@ export function createIssueCardsApi(client: HttpClient) {
       const cards: IssueCard[] = []
       for (let offset = 0; offset < unique.length; offset += MAX_CARD_ISSUES) {
         const chunk = unique.slice(offset, offset + MAX_CARD_ISSUES)
-        const body: components['schemas']['IssueCardsRequest'] = { issue_ids: chunk }
-        const response = await client.post<components['schemas']['IssueCardsResponse'], typeof body>(
+        const body: IssueCardsRequest['body'] = { issue_ids: chunk }
+        const response = await client.post<IssueCardsResponse, typeof body>(
           '/v2/issues/cards',
           body,
         )
@@ -105,7 +103,7 @@ export function createIssueCardsApi(client: HttpClient) {
      * out-of-Roll issues remain writable by their owner.
      */
     patchIssue: async (issueId: number, mutation: DirectIssueMutation): Promise<IssueReadRateResponse> => {
-      const body: components['schemas']['IssueReadRateRequest'] & { issue_number_alias?: string | null } = {
+      const body: IssueReadRateRequest['body'] & { issue_number_alias?: string | null } = {
         idempotency_key: mutation.idempotencyKey,
         source: 'direct',
       }

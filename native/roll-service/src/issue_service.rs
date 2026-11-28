@@ -244,7 +244,7 @@ fn card_from_row(row: &tokio_postgres::Row) -> Result<IssueCard, ApiError> {
     let raw_tags: Option<String> = row.get(13);
     let tags = raw_tags
         .as_deref()
-        .map(|raw| serde_json::from_str::<Vec<BootstrapTag>>(raw))
+        .map(serde_json::from_str::<Vec<BootstrapTag>>)
         .transpose()
         .map_err(|error| {
             tracing::debug!(%error, "Invalid native Roll issue-card tags");
