@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import { skipToken, useQuery } from '@tanstack/react-query'
 import type { RollBootstrapResponse, RollBootstrapThread } from '../types/rollBootstrap'
-import type { RateResponsePayload, SessionMode } from '../types'
+import type { RateResponsePayload, SessionMode, SessionThread } from '../types'
 import type { ReadingGraphResponse } from '../generated/nativeV2Client'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
@@ -74,6 +74,12 @@ export function useRollBootstrap(): UseRollBootstrapResult {
   const blockedIssueId = pending != null && !issueIds.includes(pending.issue_id)
     ? pending.issue_id
     : null
+  // A restored exact selection may have been removed from the eligible pool by
+  // the offer that created it. Its card is no longer in the visible batch, so
+  // the owning thread summary is the bounded source for the rating metadata the
+  // hydration path needs after a reload.
+  const pendingThreadId = pending?.thread_id ?? null
+  const needsPendingThread = blockedIssueId != null && pendingThreadId != null
   const dependencyQuery = useQuery({
     queryKey: queryKeys.dependencies.issueEdges(blockedIssueId ?? -1),
     queryFn: () => dependenciesApi.getIssueDependencies(blockedIssueId ?? 0),
@@ -85,12 +91,12 @@ export function useRollBootstrap(): UseRollBootstrapResult {
   )
   const prerequisiteCards = useRollIssueCards(prerequisiteIds)
 
-  // The snooze shelf is the only consumer of these summaries. One bounded page
-  // replaces the snoozed section of the retired aggregate; no per-series fetch.
+  // One bounded page feeds the snooze shelf and supplies metadata for a blocked
+  // pending issue; there is no per-series fetch and no request on a cold idle load.
   const snoozedSummaries = useQuery({
     queryKey: queryKeys.roll.snoozedSummaries(),
     queryFn: () => threadsApi.list({ page_size: 200 }),
-    enabled: snoozedIds.length > 0,
+    enabled: snoozedIds.length > 0 || needsPendingThread,
     staleTime: 60_000,
   })
 
@@ -122,14 +128,29 @@ export function useRollBootstrap(): UseRollBootstrapResult {
       }]
     })
 
-    const activeThread: RollBootstrapThread | null = pending
-      ? rollPool.find((thread) => thread.issue_id === pending.issue_id) ?? {
-          id: pending.thread_id,
-          title: '',
-          format: '',
-          issue_id: pending.issue_id,
-          issue_number: pending.issue_number ?? null,
-        }
+    const pendingThreadSummary = needsPendingThread
+      ? snoozedSummaries.data?.threads.find((candidate) => candidate.id === pendingThreadId)
+      : undefined
+    const activeThread: SessionThread | null = pending
+      ? pendingThreadSummary
+        ? {
+            id: pendingThreadSummary.id,
+            title: pendingThreadSummary.title,
+            format: pendingThreadSummary.format,
+            issues_remaining: pendingThreadSummary.issues_remaining,
+            queue_position: pendingThreadSummary.queue_position,
+            total_issues: pendingThreadSummary.total_issues ?? null,
+            issue_id: pending.issue_id,
+            issue_number: pending.issue_number ?? null,
+            last_rolled_result: pending.result ?? null,
+          }
+        : rollPool.find((thread) => thread.issue_id === pending.issue_id) ?? {
+            id: pending.thread_id,
+            title: '',
+            format: '',
+            issue_id: pending.issue_id,
+            issue_number: pending.issue_number ?? null,
+          }
       : null
 
     const snoozedThreads: RollBootstrapThread[] = snoozedIds.flatMap((id) => {
