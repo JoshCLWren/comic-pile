@@ -151,7 +151,7 @@ vi.mock('../pages/RollPage/components/RatingView', () => ({ RatingView: (props: 
   return <div>
     <span data-testid="rating-thread-metadata">{thread?.title ?? 'missing'}:{thread?.issue_number ?? 'none'}</span>
     {data?.errorMessage ? <span>{data.errorMessage}</span> : null}
-    <button onClick={() => { data?.onUpdateRating('5') }}>update rating</button><button onClick={() => { data?.onUpdateRating('4') }}>threshold rating</button><button onClick={() => { data?.onUpdateRating('1') }}>update low rating</button><button onClick={() => { data?.onSubmitRating() }}>save rating</button><button onClick={() => { data?.onSubmitRating(true) }}>finish rating</button><button onClick={() => { data?.onSnooze() }}>snooze rating</button><button onClick={() => { data?.onCancel() }}>cancel rating</button><button onClick={() => { data?.onRefreshThread() }}>refresh rating</button>
+    <button onClick={() => { data?.onUpdateRating('5') }}>update rating</button><button onClick={() => { data?.onUpdateRating('4') }}>threshold rating</button><button onClick={() => { data?.onUpdateRating('1') }}>update low rating</button><button onClick={() => { data?.onSubmitRating() }}>save rating</button><button onClick={() => { data?.onSnooze() }}>snooze rating</button><button onClick={() => { data?.onCancel() }}>cancel rating</button><button onClick={() => { data?.onRefreshThread() }}>refresh rating</button>
   </div>
 } }))
 
@@ -615,7 +615,7 @@ describe('RollPage parent handlers', () => {
     sessionData.snoozed_threads = []
   })
 
-  it('covers low ratings, finish-session ratings, unsnooze, and snooze failure', async () => {
+  it('covers low ratings, snooze, unsnooze, and snooze failure', async () => {
     const user = userEvent.setup()
     render(<RollPage />)
 
@@ -625,6 +625,7 @@ describe('RollPage parent handlers', () => {
     // A successful server snooze retires the pending offer in the refreshed
     // bootstrap. The previous inert mock incorrectly kept it pending forever.
     spies.snooze.mockImplementationOnce(async () => {
+      clearPendingSelection(null)
       bootstrapData.pending_thread_id = null
       bootstrapData.active_thread = null
       return { refreshed: true }
@@ -776,10 +777,10 @@ describe('RollPage parent handlers', () => {
     const user = userEvent.setup()
     render(<RollPage />)
     enterPendingRollRating()
-    await waitFor(() => expect(screen.getByRole('button', { name: 'finish rating' })).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
     spies.rate.mockResolvedValueOnce({ rate: { thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 }, bootstrap: null })
-    await user.click(screen.getByRole('button', { name: 'finish rating' }))
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'finish rating' })).not.toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'save rating' }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'save rating' })).not.toBeInTheDocument())
     expect(spies.rate).toHaveBeenCalledTimes(1)
     expect(screen.queryByText(/failed to refresh/i)).not.toBeInTheDocument()
   })
@@ -1063,6 +1064,7 @@ describe('RollPage parent handlers', () => {
     // bootstrap. Without this response transition the pending-session hook
     // correctly reopens the supposedly dismissed rating view.
     spies.snooze.mockImplementationOnce(async () => {
+      clearPendingSelection(null)
       bootstrapData.pending_thread_id = null
       bootstrapData.active_thread = null
       return { refreshed: true }
