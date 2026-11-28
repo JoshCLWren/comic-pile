@@ -45,7 +45,23 @@ function makeRoot(t) {
     path.join(root, FRAGMENT_DIR, 'creators.json'),
     JSON.stringify({family: 'creators', operations: []}),
   );
+  writeFileSync(
+    path.join(root, 'vercel.json'),
+    JSON.stringify({routes: [
+      {src: '/api/v2/creators', methods: ['GET'], dest: '/api/native_roll.rs'},
+      {src: '/api(?:/.*)?', dest: '/api/native_roll.rs'},
+      {src: '/(.*)', dest: 'static/404.html'},
+    ]}),
+  );
   return root;
+}
+
+/** Insert a legacy rewrite into the fixture's checked-in Vercel document. */
+function addLegacyIngress(root, src = '/api/v1/roll/dismiss-pending') {
+  const file = path.join(root, 'vercel.json');
+  const config = JSON.parse(readFileSync(file, 'utf8'));
+  config.routes.splice(1, 0, {src, methods: ['POST'], dest: '/api/native_roll.rs'});
+  writeFileSync(file, JSON.stringify(config));
 }
 
 test('path classification separates legacy aliases from v2 and metrics', () => {
@@ -128,6 +144,36 @@ test('a retired rewrite src that is still registered fails', t => {
     violations.some(v => v.includes('retired rewrite src') && v.includes('still registered')),
     JSON.stringify(violations),
   );
+});
+
+test('a legacy src surviving Vercel regeneration fails', t => {
+  const root = makeRoot(t);
+  addLegacyIngress(root);
+  const violations = collectViolations(root);
+  assert.ok(
+    violations.some(v => v.includes('registered legacy ingress')
+      && v.includes('/api/v1/roll/dismiss-pending')),
+    JSON.stringify(violations),
+  );
+  // The bare-domain alias is rejected identically.
+  addLegacyIngress(root, '/api/roll/dismiss-pending');
+  assert.ok(
+    collectViolations(root).some(v => v.includes('registered legacy ingress')
+      && v.includes('/api/roll/dismiss-pending')),
+    JSON.stringify(collectViolations(root)),
+  );
+});
+
+test('a declared retired rewrite src is absent from regenerated Vercel ingress', t => {
+  const root = makeRoot(t);
+  addLegacyIngress(root);
+  const fragment = path.join(root, FRAGMENT_DIR, 'creators.json');
+  const config = JSON.parse(readFileSync(fragment, 'utf8'));
+  config.vercel_generation = {
+    retired_rewrite_srcs: ['/api/v1/roll/dismiss-pending'],
+  };
+  writeFileSync(fragment, JSON.stringify(config));
+  assert.deepEqual(collectViolations(root), []);
 });
 
 test('when scoped owners land an emptied allowlist rejects remaining v1 routes', t => {

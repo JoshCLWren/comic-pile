@@ -48,5 +48,11 @@
         "frontend/src/services/rollBootstrapApi.ts"
       ]
     }
-  ]
+  ],
+  "vercel_generation": {
+    "retired_rewrite_srcs": [
+      "/api/v1/roll/dismiss-pending",
+      "/api/roll/dismiss-pending"
+    ]
+  }
 }

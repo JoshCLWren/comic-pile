@@ -14,9 +14,11 @@
  * Usage:
  *   node scripts/check_final_legacy_route_guard.mjs [--root DIR]
  */
-import {readFileSync, readdirSync} from 'node:fs';
+import {existsSync, readFileSync, readdirSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+
+import {generateVercel, loadFragmentFiles} from './generate_vercel_routes.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_ROOT = path.resolve(HERE, '..');
@@ -45,6 +47,21 @@ export function registeredPathMatches(pattern, pathname) {
       : part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   )).join('');
   return new RegExp(`^${source}$`).test(pathname);
+}
+
+/**
+ * Normalize a generated Vercel `src` regex into a concrete pathname so the
+ * legacy classifier and the retirement allowlist can reason about it. Vercel
+ * anchors and escaped punctuation are removed, and regex parameter groups
+ * collapse to one concrete segment (`/api/v1/thing/([^/]+)` -> `/api/v1/thing/1`).
+ */
+export function ingressSrcToPath(src) {
+  const normalized = String(src ?? '')
+    .replace(/^\^/, '')
+    .replace(/\$$/, '')
+    .replace(/\\([^dwsDWS])/g, '$1')
+    .replace(/\([^)]*\)/g, '1');
+  return normalized.startsWith('/') ? normalized : `/${normalized}`;
 }
 
 /** Extract registered METHOD/path pairs from an axum router's source text. */
@@ -167,6 +184,27 @@ export function collectViolations(root = DEFAULT_ROOT) {
     }
     if (allRouterPaths.some(pathname => regex.test(pathname.replace(/\{[^}]+\}/g, '1')))) {
       violations.push(`${FRAGMENT_DIR}/${fragment}: retired rewrite src ${src} is still registered`);
+    }
+  }
+
+  // Vercel ingress is the deployed API surface. Generate it in memory from the
+  // contributor-owned fragments (the checked-in vercel.json is bot-owned and
+  // may lag a fragment-only PR), then reject every legacy application src that
+  // survives into the routes Vercel will actually serve. A src declared in
+  // `retired_rewrite_srcs` is dropped during regeneration, so retirement is
+  // expressed in the fragments rather than by editing the generated artifact.
+  const vercelFile = path.join(root, 'vercel.json');
+  if (existsSync(vercelFile)) {
+    const previous = JSON.parse(readFileSync(vercelFile, 'utf8'));
+    const generated = generateVercel(previous, loadFragmentFiles(fragmentDir));
+    for (const route of Array.isArray(generated.routes) ? generated.routes : []) {
+      const pathname = ingressSrcToPath(route?.src);
+      if (!isLegacyPath(pathname)) continue;
+      const methods = Array.isArray(route.methods) && route.methods.length
+        ? route.methods.map(method => String(method).toUpperCase())
+        : ['GET'];
+      if (methods.every(method => allowed.has(routeKey(method, pathname)))) continue;
+      violations.push(`vercel.json: registered legacy ingress ${methods[0]} ${pathname}`);
     }
   }
   return violations.sort();
