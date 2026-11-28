@@ -996,10 +996,82 @@ fn preserve_cached_credits(patch: &mut Value, cached: Option<&Value>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::outbound::{OutboundFuture, OutboundResponse};
+    use crate::outbound::{OutboundError, OutboundFuture, OutboundResponse};
     use axum::{body::Body, http::HeaderMap};
     use deadpool_postgres::Object;
     use std::{any::Any, sync::Mutex};
+    use tracing_subscriber::fmt::MakeWriter;
+
+    /// Thread-local log capture. `set_default` plus a current-thread runtime
+    /// keeps every event emitted by the call under test in this buffer so
+    /// redaction can be asserted on the actual emitted lines.
+    #[derive(Clone, Default)]
+    struct LogBuffer(Arc<Mutex<Vec<u8>>>);
+
+    impl LogBuffer {
+        fn text(&self) -> String {
+            let bytes = self.0.lock().unwrap_or_else(|p| p.into_inner()).clone();
+            String::from_utf8(bytes).expect("log lines are utf8")
+        }
+    }
+
+    impl std::io::Write for LogBuffer {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl<'a> MakeWriter<'a> for LogBuffer {
+        type Writer = Self;
+
+        fn make_writer(&'a self) -> Self::Writer {
+            self.clone()
+        }
+    }
+
+    fn capture_logs() -> (LogBuffer, tracing::subscriber::DefaultGuard) {
+        let buffer = LogBuffer::default();
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(buffer.clone())
+            .with_ansi(false)
+            .with_max_level(tracing::Level::DEBUG)
+            .finish();
+        (buffer.clone(), tracing::subscriber::set_default(subscriber))
+    }
+
+    /// No emitted line may contain a credential, token, cookie, query string
+    /// or credential-bearing URL, even when the provider body echoes one.
+    fn assert_redacted(logs: &str) {
+        for line in logs.lines() {
+            assert!(!line.contains("TESTKEY123"), "credential leaked: {line}");
+            assert!(!line.contains("api_key="), "credential URL leaked: {line}");
+            assert!(!line.contains("format=json"), "query string leaked: {line}");
+            assert!(!line.contains("SECRET_TOKEN"), "token leaked: {line}");
+            assert!(!line.contains("session="), "cookie leaked: {line}");
+        }
+    }
+
+    /// A transport that never resolves: used with a tiny injected deadline so
+    /// the timeout class is exercised without sleeping or opening a socket.
+    struct PendingOutbound;
+
+    impl OutboundHttp for PendingOutbound {
+        fn send(&self, _host: &str, _request: OutboundRequest) -> OutboundFuture {
+            Box::pin(std::future::pending())
+        }
+
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+    }
 
     fn deep_provider_result(issue_id: u32, date_last_updated: &str) -> Value {
         json!({
@@ -1085,13 +1157,13 @@ mod tests {
         let error = provider_exchange(&outbound, "issue/4000-1", "", " \n\t")
             .await
             .expect_err("blank credential must be unconfigured");
-        assert!(matches!(error, ProviderFailure::Unavailable));
+        assert!(matches!(error, ProviderFailure::ProviderNotConfigured));
         assert!(fake.calls().is_empty());
 
         let error = provider_exchange(&outbound, "issue/4000-1", "", "TEST KEY123")
             .await
             .expect_err("internal whitespace must remain malformed");
-        assert!(matches!(error, ProviderFailure::Unavailable));
+        assert!(matches!(error, ProviderFailure::ProviderNotConfigured));
         assert!(fake.calls().is_empty());
     }
 
@@ -1597,19 +1669,35 @@ mod tests {
         let err = provider_response(&outbound, "issue/4000-1", "", "TESTKEY123")
             .await
             .expect_err("420 must be rate limited");
-        assert!(matches!(err, ProviderFailure::RateLimited(120)));
+        assert_eq!(
+            err,
+            ProviderFailure::RateLimited {
+                retry_after_seconds: 120
+            }
+        );
     }
 
     /// #5592: 403 is a plain provider error (Python parity), not a throttle.
+    /// #5919: it is now classified by its safe HTTP-status category instead of
+    /// being collapsed into a generic unavailable result.
     #[tokio::test]
     async fn provider_response_treats_403_as_unavailable() {
         let fake = Arc::new(crate::outbound::RecordingFakeOutbound::new());
-        fake.push_ok(StatusCode::FORBIDDEN, HeaderMap::new(), Bytes::new());
+        fake.push_ok(
+            StatusCode::FORBIDDEN,
+            HeaderMap::new(),
+            Bytes::from_static(br#"{"status_code":100,"error":{"message":"forbidden"}}"#),
+        );
         let outbound: Arc<dyn crate::outbound::OutboundHttp> = fake;
         let err = provider_response(&outbound, "issue/4000-1", "", "TESTKEY123")
             .await
             .expect_err("403 must be unavailable");
-        assert!(matches!(err, ProviderFailure::Unavailable));
+        assert_eq!(
+            err,
+            ProviderFailure::ProviderUnavailable(ProviderUnavailableCategory::HttpStatus {
+                status: 403
+            })
+        );
     }
 
     /// Minimal ComicVine stand-in: a missing trailing slash on any resource
