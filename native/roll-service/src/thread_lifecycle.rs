@@ -495,27 +495,24 @@ async fn load_views(
         .map_err(db::query_error)?;
     rows.iter()
         .map(|row| -> Result<ThreadResponse, ApiError> {
-            let credits: Value = row.try_get(16).map_err(db::query_error)?;
+            let credits: Value = row.try_get(15).map_err(db::query_error)?;
             Ok(ThreadResponse {
                 id: row.try_get(0).map_err(db::query_error)?,
                 title: row.try_get(1).map_err(db::query_error)?,
-                format: normalize_format_value(
-                    &row.try_get::<_, String>(2).map_err(db::query_error)?,
-                ),
-                issues_remaining: row.try_get(3).map_err(db::query_error)?,
-                queue_position: row.try_get(4).map_err(db::query_error)?,
-                status: row.try_get(5).map_err(db::query_error)?,
-                last_rating: row.try_get(6).map_err(db::query_error)?,
-                last_activity_at: row.try_get(7).map_err(db::query_error)?,
-                notes: row.try_get(8).map_err(db::query_error)?,
-                is_test: row.try_get(9).map_err(db::query_error)?,
-                is_blocked: row.try_get(10).map_err(db::query_error)?,
+                issues_remaining: row.try_get(2).map_err(db::query_error)?,
+                queue_position: row.try_get(3).map_err(db::query_error)?,
+                status: row.try_get(4).map_err(db::query_error)?,
+                last_rating: row.try_get(5).map_err(db::query_error)?,
+                last_activity_at: row.try_get(6).map_err(db::query_error)?,
+                notes: row.try_get(7).map_err(db::query_error)?,
+                is_test: row.try_get(8).map_err(db::query_error)?,
+                is_blocked: row.try_get(9).map_err(db::query_error)?,
                 blocking_reasons: Vec::new(),
-                created_at: row.try_get(11).map_err(db::query_error)?,
-                total_issues: row.try_get(12).map_err(db::query_error)?,
-                reading_progress: row.try_get(13).map_err(db::query_error)?,
-                next_unread_issue_id: row.try_get(14).map_err(db::query_error)?,
-                next_unread_issue_number: row.try_get(15).map_err(db::query_error)?,
+                created_at: row.try_get(10).map_err(db::query_error)?,
+                total_issues: row.try_get(11).map_err(db::query_error)?,
+                reading_progress: row.try_get(12).map_err(db::query_error)?,
+                next_unread_issue_id: row.try_get(13).map_err(db::query_error)?,
+                next_unread_issue_number: row.try_get(14).map_err(db::query_error)?,
                 manual_creator_credits: if credits.is_array() {
                     credits
                 } else {
@@ -616,7 +613,6 @@ macro_rules! with_tx {
 struct OwnedThread {
     id: i32,
     title: String,
-    format: String,
     issues_remaining: i32,
     total_issues: Option<i32>,
     reading_progress: Option<String>,
@@ -635,7 +631,7 @@ async fn find_owned(
 ) -> Result<OwnedThread, ApiError> {
     let id = i32::try_from(thread_id).map_err(|_| not_found(thread_id))?;
     let sql = format!(
-        "SELECT id, title, format, issues_remaining, total_issues, reading_progress,
+        "SELECT id, title, issues_remaining, total_issues, reading_progress,
                 status, queue_position, notes, manual_creator_credits
          FROM threads WHERE id = $1 AND user_id = $2{}",
         if for_update { " FOR UPDATE" } else { "" }
@@ -648,14 +644,13 @@ async fn find_owned(
     Ok(OwnedThread {
         id: row.get(0),
         title: row.get(1),
-        format: row.get(2),
-        issues_remaining: row.get(3),
-        total_issues: row.get(4),
-        reading_progress: row.get(5),
-        status: row.get(6),
-        queue_position: row.get(7),
-        notes: row.get(8),
-        manual_creator_credits: row.get(9),
+        issues_remaining: row.get(2),
+        total_issues: row.get(3),
+        reading_progress: row.get(4),
+        status: row.get(5),
+        queue_position: row.get(6),
+        notes: row.get(7),
+        manual_creator_credits: row.get(8),
     })
 }
 
@@ -681,7 +676,6 @@ macro_rules! retry_deadlock {
 
 struct CreateInput {
     title: String,
-    format: String,
     issues_remaining: i32,
     total_issues: Option<i32>,
     notes: Option<String>,
@@ -755,17 +749,6 @@ fn parse_create(body: Option<Value>) -> Result<CreateInput, LifecycleError> {
         true,
     );
     validate_title(&mut check, &["body", "title"], &title);
-    let format = str_field(
-        &mut check,
-        &["body", "format"],
-        map.get("format"),
-        StrRules {
-            min: Some(1),
-            max: None,
-        },
-        false,
-        true,
-    );
     let issues_remaining = int_field(
         &mut check,
         &["body", "issues_remaining"],
@@ -816,7 +799,6 @@ fn parse_create(body: Option<Value>) -> Result<CreateInput, LifecycleError> {
     check.finish(raw_body)?;
     Ok(CreateInput {
         title: title.unwrap_or_default(),
-        format: format.unwrap_or_default(),
         issues_remaining: issues_remaining.unwrap_or_default(),
         total_issues,
         notes,
