@@ -151,9 +151,13 @@ async fn setup() -> Fixture {
           (id, list_id, issue_id, position, created_at, is_checkpoint,
            checkpoint_target_issue_ids, gate, skipped)
         VALUES
-          (4026400, {TARGET_LIST_ID}, {ISSUE_MANUAL}, 0, NOW(), false, '[]'::json, 'none', false),
+          (4026400, {TARGET_LIST_ID}, {ISSUE_MANUAL}, 0, NOW(), true, '[]'::json, 'hold', true),
           (4026401, {TARGET_LIST_ID}, {ISSUE_B}, 1, NOW(), false, '[]'::json, 'none', false),
           (4026402, {OTHER_LIST_ID}, {ISSUE_A}, 0, NOW(), false, '[]'::json, 'none', false);
+        INSERT INTO custom_cbl_overlap_decisions
+          (id, user_id, list_id, continuing_external_identity_id,
+           waiting_external_identity_id, created_at, updated_at)
+        VALUES (4026410, {user_id}, {TARGET_LIST_ID}, 4026110, 4026111, NOW(), NOW());
         "#
     ))
     .await
@@ -411,12 +415,27 @@ async fn undo_restores_only_list_membership_and_keeps_later_read_event() {
             "revision_sha": REVISION,
             "expected_updated_at": token,
             "issue_ids": [ISSUE_A, ISSUE_B, ISSUE_MANUAL],
+            "overlap_decisions": [
+                {"continuing_external_identity_id": 4026111, "waiting_external_identity_id": 4026110}
+            ],
             "idempotency_key": "undo-flow",
         }),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{status} {body}");
     let snapshot_id = body["snapshot_id"].as_i64().unwrap();
+
+    let conn = fixture.state.pool.get().await.unwrap();
+    let committed_overlap: i32 = conn
+        .query_one(
+            "SELECT continuing_external_identity_id FROM custom_cbl_overlap_decisions WHERE list_id = $1",
+            &[&TARGET_LIST_ID],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(committed_overlap, 4026111, "approved overlap must be committed");
+    drop(conn);
 
     // A read event that happens after the replacement is independent history.
     let conn = fixture.state.pool.get().await.unwrap();
