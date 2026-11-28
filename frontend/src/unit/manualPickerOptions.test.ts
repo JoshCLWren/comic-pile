@@ -302,8 +302,8 @@ describe('buildManualPickerOptions (#3704)', () => {
   })
 
   it('identifies the bare row when a same-name pair differs only by parenthetical metadata', () => {
-    // The QA case from #4228: "Mister Miracle (Comic)" beside
-    // "Mister Miracle (1989–1991) (Comic)", where only the first has no
+    // The QA case from #4228: "Mister Miracle" beside
+    // "Mister Miracle (1989–1991)", where only the first has no
     // identity context at all.
     const result = buildManualPickerOptions({
       activeThreads: [

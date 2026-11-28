@@ -381,7 +381,7 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('button', { name: /^Pick manually$/ }))
     const picker = screen.getAllByRole('combobox').at(-1)!
     await user.click(picker)
-    await user.click(screen.getByRole('option', { name: 'Saga (Comic)' }))
+    await user.click(screen.getByRole('option', { name: 'Saga' }))
     await user.click(screen.getByRole('button', { name: 'Open issue card' }))
     expect(screen.getByTestId('direct-read-issue-panel')).toHaveTextContent('Saga')
     expect(spies.setPending).not.toHaveBeenCalled()
@@ -524,7 +524,7 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('button', { name: /^Pick manually$/ }))
     const picker = screen.getAllByRole('combobox').at(-1)!
     await user.click(picker)
-    await user.click(screen.getByRole('option', { name: 'Saga (Comic)' }))
+    await user.click(screen.getByRole('option', { name: 'Saga' }))
     await user.click(screen.getByRole('button', { name: 'Open issue card' }))
     expect(screen.getByTestId('direct-read-issue-panel')).toBeInTheDocument()
     expect(spies.setPending).not.toHaveBeenCalled()
