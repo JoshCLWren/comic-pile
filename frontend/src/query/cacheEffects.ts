@@ -369,7 +369,7 @@ export async function invalidateAfterQueueMutation(client: QueryClient): Promise
  *
  * The checks live under one `queryKeys.thread.duplicateChecks()` prefix with the
  * app's 30s `staleTime`, so a form could otherwise keep serving an answer from
- * before a rename, re-format, create, or delete. For example, an empty result
+ * before a rename, create, or delete. For example, an empty result
  * cached just before the same title was created would hide the new duplicate.
  */
 export async function invalidatePotentialDuplicates(
@@ -401,7 +401,7 @@ export async function invalidateComicVineImportStatus(
 }
 
 /**
- * Refresh open views after a thread rename or format edit (#5264).
+ * Refresh open views after a thread rename (#5264).
  *
  * Queue rows and thread detail/summary are patched in place by the caller, so
  * this only reconciles surfaces that render thread metadata from other caches:
@@ -515,7 +515,7 @@ export async function invalidateReadingPlansAfterCrossTabChange(
 }
 
 /**
- * Refresh Reading List surfaces after another tab renames or re-formats a
+ * Refresh Reading List surfaces after another tab renames a
  * Thread (#5862).
  *
  * The editor seeds its draft from `customCBLs.detail` and the guide reader
@@ -719,7 +719,7 @@ export function applyComicVineCorrectionOptimistically(
 
 /**
  * Update a single thread's metadata in every loaded Queue infinite-query page
- * in-place. Use this for mutations that change thread metadata (title, format,
+ * in-place. Use this for mutations that change thread metadata (title,
  * notes, issues_remaining, rating) without changing queue ordering or membership.
  *
  * Returns immediately — no network refetch is triggered for the Queue list.
@@ -746,7 +746,7 @@ export function applyEditedThreadToQueuePages(
     patchLoadedPages,
   )
   // Finished Series has a separate cursor/cache from the active Queue.
-  // Renames and format edits must update already-loaded completed rows too.
+  // Renames must update already-loaded completed rows too.
   client.setQueriesData<InfiniteData<ThreadListResponse>>(
     { queryKey: queryKeys.completed.pages() },
     patchLoadedPages,

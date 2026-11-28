@@ -34,9 +34,8 @@ export default function LandingPage() {
               <CubeIcon className="h-8 w-8 text-[var(--theme-comic-accent)]" aria-hidden="true" />
               <h3 className="text-base font-bold text-[var(--theme-text-primary)]">1. Build your queue</h3>
               <p className="text-sm text-[var(--theme-text-muted)] leading-relaxed">
-                Add each series you want to read and pick its format — comic, manga, trade
-                paperback, graphic novel, digital, or your own. Set how many issues remain and
-                leave yourself notes. Every thread keeps its own position, ratings, and progress.
+                Add each series you want to read. Set how many issues remain and leave
+                yourself notes. Every thread keeps its own position, ratings, and progress.
               </p>
             </article>
             <article className="bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl p-6 space-y-3">

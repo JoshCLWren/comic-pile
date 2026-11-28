@@ -7,7 +7,7 @@ import { subscribeToCrossTabChanges } from '../query/crossTabDataSync'
  * Keep an open Reading List in sync with Thread metadata edits made in another
  * tab (#5862).
  *
- * A committed Thread title/format edit announces itself on the cross-tab data
+ * A committed Thread title edit announces itself on the cross-tab data
  * channel, so the receiving tab cancels and refetches its Reading List queries
  * instead of waiting out the 30s `staleTime` or requiring a manual reload.
  * Re-focusing the tab also refreshes, covering browsers without
