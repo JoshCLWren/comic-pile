@@ -6,6 +6,7 @@ import type { ReadingGraphResponse } from '../generated/nativeV2Client'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
 import { readRollSnoozes } from '../services/api-roll'
+import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api-dependencies'
 import { buildRollRecovery } from '../services/rollRecovery'
 import { useRollDieState, useRollEligibleIssueIds, useRollIssueCards } from './useRollResources'
@@ -80,6 +81,15 @@ export function useRollBootstrap(): UseRollBootstrapResult {
     [dependencyQuery.data],
   )
   const prerequisiteCards = useRollIssueCards(prerequisiteIds)
+
+  // The snooze shelf is the only consumer of these summaries. One bounded page
+  // replaces the snoozed section of the retired aggregate; no per-series fetch.
+  const snoozedSummaries = useQuery({
+    queryKey: queryKeys.roll.snoozedSummaries(),
+    queryFn: () => threadsApi.list({ page_size: 200 }),
+    enabled: snoozedIds.length > 0,
+    staleTime: 60_000,
+  })
 
   // Both queries are cache-only: the rate mutation and ReadingGraphProblemCard
   // already own the live fetches on this page.
