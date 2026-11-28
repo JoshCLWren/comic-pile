@@ -578,17 +578,15 @@ pub async fn last_read(
     let expected_epoch = claims.expected_epoch()?;
     let username = claims.username().to_string();
     let jti = claims.jti().to_string();
-    let bindings: [&(dyn tokio_postgres::types::ToSql + Sync); 3] = [
-        &username,
-        &jti,
-        &expected_epoch,
-    ];
+    let bindings: [&(dyn tokio_postgres::types::ToSql + Sync); 3] =
+        [&username, &jti, &expected_epoch];
     let connection = db::checkout(&state).await?;
-    let encoded: String = db::query_one_optional(&state, connection, last_read_statement(), &bindings)
-        .await?
-        .ok_or_else(invalid_projection)?
-        .try_get(0)
-        .map_err(db::query_error)?;
+    let encoded: String =
+        db::query_one_optional(&state, connection, last_read_statement(), &bindings)
+            .await?
+            .ok_or_else(invalid_projection)?
+            .try_get(0)
+            .map_err(db::query_error)?;
     let payload: LastReadPayload = serde_json::from_str(&encoded).map_err(|error| {
         tracing::error!(%error, "Invalid native Roll last-read projection");
         invalid_projection()
@@ -652,12 +650,8 @@ pub async fn recovery(
     // server pending pointer when explaining it.
     let die = dice_state::projected_die(payload.die_after);
     let pool = offer_frontiers(&candidates, &snoozed, die);
-    let recovery = crate::bootstrap::pending_issue_recovery(
-        &validated,
-        query.issue_id,
-        &snoozed,
-        &pool,
-    )?;
+    let recovery =
+        crate::bootstrap::pending_issue_recovery(&validated, query.issue_id, &snoozed, &pool)?;
     Ok(Json(recovery.map(scoped_recovery).transpose()?))
 }
 

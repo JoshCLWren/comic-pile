@@ -53,9 +53,7 @@
       "path": "/api/v2/roll/dismiss-pending",
       "dest": "/api/native_api.rs",
       "src": "^/api/v2/roll/dismiss\\-pending$",
-      "consumers": [
-        "frontend/src/services/api-roll.ts"
-      ]
+      "consumers": []
     },
     {
       "bucket": "operations",

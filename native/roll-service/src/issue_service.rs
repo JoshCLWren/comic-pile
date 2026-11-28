@@ -4,9 +4,10 @@
 //! Uses the canonical issues/events schema and the shared PostgreSQL pool.
 use crate::{
     auth::AuthenticatedUser,
+    bootstrap::BootstrapTag,
     db,
     dice_mutation::{self, DiceCommand},
-    bootstrap::BootstrapTag, dice_state, option_inputs, queue, roll_exclusions, ApiError,
+    dice_state, option_inputs, queue, roll_exclusions, ApiError,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};

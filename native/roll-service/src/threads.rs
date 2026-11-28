@@ -188,7 +188,9 @@ fn parse_exact_ids(raw: &str) -> Result<Vec<i32>, ApiError> {
         if part.is_empty() {
             return Err(unprocessable("ids must contain positive thread ids"));
         }
-        let id: i32 = part.parse().map_err(|_| unprocessable("ids must contain positive thread ids"))?;
+        let id: i32 = part
+            .parse()
+            .map_err(|_| unprocessable("ids must contain positive thread ids"))?;
         if id <= 0 {
             return Err(unprocessable("ids must contain positive thread ids"));
         }
@@ -369,7 +371,9 @@ pub async fn list_threads(
     }
     let exact_ids = query.ids.as_deref().map(parse_exact_ids).transpose()?;
     if exact_ids.is_some() && (query.search.is_some() || query.page_token.is_some()) {
-        return Err(bad_request("ids cannot be combined with search or page_token"));
+        return Err(bad_request(
+            "ids cannot be combined with search or page_token",
+        ));
     }
     let page_size = exact_ids
         .as_ref()
@@ -475,7 +479,11 @@ pub async fn list_threads(
         threads,
         next_page_token,
         active_count,
-        filtered_count: Some(exact_ids.as_ref().map_or(filtered_count, |ids| ids.len() as i32)),
+        filtered_count: Some(
+            exact_ids
+                .as_ref()
+                .map_or(filtered_count, |ids| ids.len() as i32),
+        ),
     }))
 }
 
