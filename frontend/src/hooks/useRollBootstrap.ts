@@ -197,6 +197,8 @@ export function useRollBootstrap(): UseRollBootstrapResult {
     issueIds,
     threadIds,
     blockedIssueId,
+    needsPendingThread,
+    pendingThreadId,
     dependencyQuery.data,
     prerequisiteCards.data,
     graphQuery.data,
@@ -211,6 +213,7 @@ export function useRollBootstrap(): UseRollBootstrapResult {
     || eligible.isPending
     || (composed.roll_pool.length > 0 && cards.isPending)
     || (blockedIssueId != null && dependencyQuery.isPending)
+    || (needsPendingThread && snoozedSummaries.isPending)
 
   const refetch = useCallback(async (): Promise<RollBootstrapResponse> => {
     // A reconciled mutation publishes its already-fetched scoped snapshot on
@@ -228,8 +231,10 @@ export function useRollBootstrap(): UseRollBootstrapResult {
   return {
     data,
     isPending,
-    isError: die.isError || eligible.isError || cards.isError || dependencyQuery.isError,
-    error: die.error ?? eligible.error ?? cards.error ?? dependencyQuery.error ?? null,
+    isError: die.isError || eligible.isError || cards.isError || dependencyQuery.isError
+      || (needsPendingThread && snoozedSummaries.isError),
+    error: die.error ?? eligible.error ?? cards.error ?? dependencyQuery.error
+      ?? (needsPendingThread ? snoozedSummaries.error : null) ?? null,
     failureCount: 0,
     isRetrying: false,
     refetch,

@@ -169,6 +169,54 @@ describe('useRollBootstrap composed scoped view', () => {
     expect(result.current.data?.roll_recovery?.readable_prerequisites[0].node_id).toBe(9)
   })
 
+  it('restores rating metadata for a blocked pending issue from one bounded thread page', async () => {
+    const pending: RollPendingSelection = {
+      issue_id: 10,
+      thread_id: 3,
+      issue_number: '10',
+      result: 6,
+      selected_at: 1_700_000_000_000,
+    }
+    mockedPending.mockReturnValue({
+      pending,
+      seedFromOffer: vi.fn(),
+      select: vi.fn(),
+      clear: vi.fn(),
+      clearAll: vi.fn(),
+    })
+    mockedResources.eligibleIssueIds.mockResolvedValue({
+      die: 6,
+      issue_ids: [20],
+      thread_ids: [4],
+      pool_reason: 'ready',
+    })
+    mockedThreadsList.mockResolvedValue({
+      active_count: 1,
+      threads: [{
+        id: 3,
+        title: 'Current Series',
+        format: 'Comic',
+        status: 'active',
+        blocking_reasons: [],
+        created_at: '2026-11-28T00:00:00Z',
+        is_blocked: false,
+        issues_remaining: 3,
+        last_activity_at: null,
+        queue_position: 1,
+        total_issues: 4,
+      }],
+    })
+
+    const { result } = renderHook(() => useRollBootstrap(), { wrapper: Wrapper })
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+
+    expect(mockedThreadsList).toHaveBeenCalledWith({ page_size: 200 })
+    expect(result.current.data?.active_thread?.title).toBe('Current Series')
+    expect(result.current.data?.active_thread?.total_issues).toBe(4)
+    expect(result.current.data?.active_thread?.issue_id).toBe(10)
+    expect(result.current.data?.active_thread?.last_rolled_result).toBe(6)
+  })
+
   it('composes snoozed-series chips from one bounded scoped thread page', async () => {
     mockedSnoozes.mockReturnValue([7])
     mockedThreadsList.mockResolvedValue({
