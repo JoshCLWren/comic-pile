@@ -1,4 +1,5 @@
 import { defaultHttpClient, type ApiRequestConfig, type HttpClient } from './httpClient'
+import type { components } from '../generated/openapi'
 
 const RECOVERY_CONFIG = { skipAuthRedirect: true }
 
@@ -14,17 +15,7 @@ export interface CreatorSummaryItem {
 }
 
 /** Library-wide metadata coverage state distinguishing complete from lower-bound stats. */
-export interface CreatorSummaryCoverage {
-  rated_issues_total: number
-  rated_issues_with_creator_metadata: number
-  ratings_complete: boolean
-  read_unrated_issues_total: number
-  read_unrated_issues_with_creator_metadata: number
-  read_unrated_complete: boolean
-  unread_issues_total: number
-  unread_issues_with_creator_metadata: number
-  upcoming_complete: boolean
-}
+export type CreatorSummaryCoverage = components['schemas']['CreatorSummaryCoverage']
 
 export interface CreatorRoleStat {
   role: string
@@ -46,20 +37,10 @@ export interface CreatorIssueRow {
 }
 
 /** One half-star bucket in a creator's rating distribution (issue #3087). */
-export interface CreatorRatingBucket {
-  rating: number
-  count: number
-}
+export type CreatorRatingBucket = components['schemas']['CreatorRatingBucket']
 
 /** Rating distribution, median, range, mean, and sample strength (issue #3087). */
-export interface CreatorRatingDistribution {
-  buckets: CreatorRatingBucket[]
-  sample_count: number
-  mean_rating: number
-  median_rating: number
-  min_rating: number
-  max_rating: number
-}
+export type CreatorRatingDistribution = components['schemas']['CreatorRatingDistribution']
 
 /** Series/run-level aggregate of one creator's attributed rated work (issue #3099). */
 export interface CreatorSeriesGroup {
@@ -102,29 +83,10 @@ export interface CreatorSeriesIssueListResponse {
 }
 
 /** One individual issue extreme behind a creator highlight (issue #3092). */
-export interface CreatorIssueInsight {
-  issue_id: number
-  issue_number: string
-  thread_id: number
-  thread_title: string
-  effective_rating: number
-  roles: string[]
-  sort_key: string
-}
+export type CreatorIssueInsight = components['schemas']['CreatorIssueInsight']
 
 /** One series/run extreme backed by a minimum rated-issue sample (issue #3092). */
-export interface CreatorSeriesInsight {
-  series_key: string
-  thread_id: number
-  thread_title: string
-  rated_issue_count: number
-  average_rating: number
-  lowest_rating: number
-  highest_rating: number
-  roles: string[]
-  metadata_complete: boolean
-  sort_key: string
-}
+export type CreatorSeriesInsight = components['schemas']['CreatorSeriesInsight']
 
 /** Evidence-backed strongest/weakest/most-read highlights (issue #3092). */
 export interface CreatorInsights {
