@@ -3209,7 +3209,14 @@ async fn series_mapping_v2_safe_preview_commits_reloads_and_replays() {
     fixture.seed(&state, user_id).await;
 
     // Real v2 preview: stateless, all 33 safe rows selected by default.
-    let (status, preview) = post_json(&state, &token, &csrf, PREVIEW_URI, fixture.preview_request()).await;
+    let (status, preview) = post_json(
+        &state,
+        &token,
+        &csrf,
+        PREVIEW_URI,
+        fixture.preview_request(),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK, "{preview}");
     assert_eq!(preview["scope"]["status"], "available", "{preview}");
     assert_eq!(preview["counts"]["safe_exact_match"], 33, "{preview}");
@@ -3228,8 +3235,16 @@ async fn series_mapping_v2_safe_preview_commits_reloads_and_replays() {
     for row in previewed_safe_rows {
         assert!(approved.contains(&row["row_id"].as_str().unwrap().to_string()));
     }
-    assert_eq!(fixture.mapping_count(&state).await, 0, "preview must not write");
-    assert_eq!(fixture.receipt_count(&state).await, 0, "preview must not write");
+    assert_eq!(
+        fixture.mapping_count(&state).await,
+        0,
+        "preview must not write"
+    );
+    assert_eq!(
+        fixture.receipt_count(&state).await,
+        0,
+        "preview must not write"
+    );
 
     // Real v2 commit with every safe row approved.
     let key = "qa-5170-safe-ntt";
@@ -3252,10 +3267,12 @@ async fn series_mapping_v2_safe_preview_commits_reloads_and_replays() {
         json!([fixture.unsafe_issue_id()]),
         "the excluded special issue stays for review: {committed}"
     );
-    assert_eq!(committed["series_mapping"]["status"], "confirmed", "{committed}");
     assert_eq!(
-        committed["series_mapping"]["evidence_source"],
-        "user_series_confirmation",
+        committed["series_mapping"]["status"], "confirmed",
+        "{committed}"
+    );
+    assert_eq!(
+        committed["series_mapping"]["evidence_source"], "user_series_confirmation",
         "{committed}"
     );
     assert_eq!(fixture.mapping_count(&state).await, 33);
@@ -3263,7 +3280,14 @@ async fn series_mapping_v2_safe_preview_commits_reloads_and_replays() {
 
     // Reload: a fresh preview request and direct reads both see 33 confirmations,
     // while the unsafe row is still unmapped and the series link survives.
-    let (status, reloaded) = post_json(&state, &token, &csrf, PREVIEW_URI, fixture.preview_request()).await;
+    let (status, reloaded) = post_json(
+        &state,
+        &token,
+        &csrf,
+        PREVIEW_URI,
+        fixture.preview_request(),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK, "{reloaded}");
     assert_eq!(reloaded["counts"]["already_confirmed"], 33, "{reloaded}");
     assert_eq!(reloaded["counts"]["safe_exact_match"], 0, "{reloaded}");
@@ -3301,7 +3325,10 @@ async fn series_mapping_v2_safe_preview_commits_reloads_and_replays() {
         .await
         .unwrap()
         .get(0);
-    assert!(series_link, "the confirmed thread-series link survives reload");
+    assert!(
+        series_link,
+        "the confirmed thread-series link survives reload"
+    );
 
     // Same key and same selection replays the receipt: no extra rows.
     let (status, replay) = post_json(
@@ -3338,7 +3365,11 @@ async fn series_mapping_v2_safe_preview_commits_reloads_and_replays() {
         &token,
         &csrf,
         COMMIT_URI,
-        fixture.commit_request(&preview_token, "qa-5170-stale-after-commit", approved.clone()),
+        fixture.commit_request(
+            &preview_token,
+            "qa-5170-stale-after-commit",
+            approved.clone(),
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::CONFLICT, "{body}");
@@ -3357,7 +3388,14 @@ async fn series_mapping_v2_commit_rejects_unsafe_stale_and_foreign_requests_with
     fixture.install();
     fixture.seed(&state, user_id).await;
 
-    let (status, preview) = post_json(&state, &token, &csrf, PREVIEW_URI, fixture.preview_request()).await;
+    let (status, preview) = post_json(
+        &state,
+        &token,
+        &csrf,
+        PREVIEW_URI,
+        fixture.preview_request(),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK, "{preview}");
     let preview_token = preview["preview_token"]
         .as_str()
@@ -3386,7 +3424,11 @@ async fn series_mapping_v2_commit_rejects_unsafe_stale_and_foreign_requests_with
         &token,
         &csrf,
         COMMIT_URI,
-        fixture.commit_request(&preview_token, "qa-5170-inventory", vec!["roster:600034".to_string()]),
+        fixture.commit_request(
+            &preview_token,
+            "qa-5170-inventory",
+            vec!["roster:600034".to_string()],
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
@@ -3417,10 +3459,19 @@ async fn series_mapping_v2_commit_rejects_unsafe_stale_and_foreign_requests_with
     .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
     assert_eq!(body["detail"], "invalid_preview_token", "{body}");
-    let (status, other_preview) =
-        post_json(&state, &other_token, &other_csrf, PREVIEW_URI, fixture.preview_request()).await;
+    let (status, other_preview) = post_json(
+        &state,
+        &other_token,
+        &other_csrf,
+        PREVIEW_URI,
+        fixture.preview_request(),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK, "{other_preview}");
-    assert_eq!(other_preview["scope"]["status"], "unavailable", "{other_preview}");
+    assert_eq!(
+        other_preview["scope"]["status"], "unavailable",
+        "{other_preview}"
+    );
     assert!(other_preview["preview_token"].is_null(), "{other_preview}");
 
     // Changing the underlying plan after preview makes the token stale. The
@@ -3444,8 +3495,16 @@ async fn series_mapping_v2_commit_rejects_unsafe_stale_and_foreign_requests_with
     assert_eq!(status, StatusCode::CONFLICT, "{body}");
     assert_eq!(body["detail"], "preview_stale", "{body}");
 
-    assert_eq!(fixture.mapping_count(&state).await, 0, "no partial mutation");
-    assert_eq!(fixture.receipt_count(&state).await, 0, "no receipt on refusal");
+    assert_eq!(
+        fixture.mapping_count(&state).await,
+        0,
+        "no partial mutation"
+    );
+    assert_eq!(
+        fixture.receipt_count(&state).await,
+        0,
+        "no receipt on refusal"
+    );
     fixture.clear();
 }
 
