@@ -372,9 +372,15 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
             "CBL source path must be non-empty and at most 1000 characters",
         ));
     }
+    if raw.len() > MAX_CBL_FILE_BYTES {
+        return Err(IngestError::new("CBL file exceeds the 64 MiB size limit"));
+    }
     let mut reader = Reader::from_reader(raw);
     let mut buffer = Vec::new();
+    let mut depth = 0usize;
     let mut root_seen = false;
+    let mut books_seen = false;
+    let mut books_depth = None;
     let mut capture = None;
     let mut captured_text = String::new();
     let mut name = None;
@@ -388,17 +394,34 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
             .map_err(|error| IngestError::new(format!("malformed CBL XML: {error}")))?;
         match event {
             Event::Start(ref element) => {
-                root_seen = true;
+                if !root_seen {
+                    if element.name().as_ref() != b"ReadingList" {
+                        return Err(IngestError::new("CBL root element must be ReadingList"));
+                    }
+                    root_seen = true;
+                } else if depth == 0 {
+                    return Err(IngestError::new("CBL document has multiple root elements"));
+                }
+                let element_depth = depth;
+                depth += 1;
                 match element.name().as_ref() {
-                    "Name" if current_book.is_none() => {
+                    "Books" if element_depth == 1 => {
+                        books_seen = true;
+                        books_depth = Some(depth);
+                    }
+                    "Name" if current_book.is_none() && element_depth == 1 => {
                         capture = Some(CapturedField::Name);
                         captured_text.clear();
                     }
-                    "NumIssues" if current_book.is_none() => {
+                    "NumIssues" if current_book.is_none() && element_depth == 1 => {
                         capture = Some(CapturedField::NumIssues);
                         captured_text.clear();
                     }
                     "Book" => {
+                        if books_depth != Some(element_depth) {
+                            return Err(IngestError::new("Book element must be inside Books"));
+                        }
+                        ensure_book_capacity(books.len())?;
                         let mut book = parse_book(element)?;
                         book.position = i32::try_from(books.len() + 1)
                             .map_err(|_| IngestError::new("too many ordered book entries"))?;
@@ -413,9 +436,22 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
                 }
             }
             Event::Empty(ref element) => {
-                root_seen = true;
+                if !root_seen {
+                    if element.name().as_ref() != b"ReadingList" {
+                        return Err(IngestError::new("CBL root element must be ReadingList"));
+                    }
+                    root_seen = true;
+                } else if depth == 0 {
+                    return Err(IngestError::new("CBL document has multiple root elements"));
+                }
+                let element_depth = depth;
                 match element.name().as_ref() {
+                    "Books" if element_depth == 1 => books_seen = true,
                     "Book" => {
+                        if books_depth != Some(element_depth) {
+                            return Err(IngestError::new("Book element must be inside Books"));
+                        }
+                        ensure_book_capacity(books.len())?;
                         let mut book = parse_book(element)?;
                         book.position = i32::try_from(books.len() + 1)
                             .map_err(|_| IngestError::new("too many ordered book entries"))?;
@@ -447,27 +483,32 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
                     captured_text.push_str(&decode_reference(reference.as_ref()));
                 }
             }
-            Event::End(ref element) => match element.name().as_ref() {
-                "Name" if capture == Some(CapturedField::Name) => {
-                    capture = None;
-                    name = Some(captured_text.trim().to_string());
+            Event::End(ref element) => {
+                match element.name().as_ref() {
+                    "Name" if capture == Some(CapturedField::Name) => {
+                        capture = None;
+                        name = Some(captured_text.trim().to_string());
+                    }
+                    "NumIssues" if capture == Some(CapturedField::NumIssues) => {
+                        capture = None;
+                        declared_issue_count = if captured_text.trim().is_empty() {
+                            None
+                        } else {
+                            Some(parse_optional_int(&captured_text)?)
+                        };
+                    }
+                    "Book" => {
+                        ensure_book_capacity(books.len())?;
+                        let book = current_book
+                            .take()
+                            .ok_or_else(|| IngestError::new("unexpected closing Book tag"))?;
+                        books.push(book);
+                    }
+                    "Books" if books_depth == Some(depth) => books_depth = None,
+                    _ => {}
                 }
-                "NumIssues" if capture == Some(CapturedField::NumIssues) => {
-                    capture = None;
-                    declared_issue_count = if captured_text.trim().is_empty() {
-                        None
-                    } else {
-                        Some(parse_optional_int(&captured_text)?)
-                    };
-                }
-                "Book" => {
-                    let book = current_book
-                        .take()
-                        .ok_or_else(|| IngestError::new("unexpected closing Book tag"))?;
-                    books.push(book);
-                }
-                _ => {}
-            },
+                depth = depth.saturating_sub(1);
+            }
             Event::Eof => break,
             _ => {}
         }
@@ -476,10 +517,11 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
     if !root_seen {
         return Err(IngestError::new("CBL document has no root element"));
     }
-    if books.len() > MAX_BOOKS_PER_LIST {
-        return Err(IngestError::new(
-            "CBL list exceeds the supported entry limit",
-        ));
+    if depth != 0 {
+        return Err(IngestError::new("CBL document has an unclosed element"));
+    }
+    if !books_seen {
+        return Err(IngestError::new("CBL ReadingList is missing its Books element"));
     }
     let name = name.filter(|value| !value.is_empty()).unwrap_or_else(|| {
         Path::new(source_path).file_stem().map_or_else(
@@ -504,6 +546,16 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
         declared_issue_count,
         books,
     })
+}
+
+fn ensure_book_capacity(current: usize) -> Result<(), IngestError> {
+    if current >= MAX_BOOKS_PER_LIST {
+        Err(IngestError::new(
+            "CBL list exceeds the supported entry limit",
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -597,6 +649,12 @@ fn parse_book(element: &quick_xml::events::BytesStart<'_>) -> Result<CBLBook, In
     let issue_number = attribute(element, b"Number")?
         .filter(|value| !value.is_empty())
         .ok_or_else(|| IngestError::new("book is missing required Number"))?;
+    if series.chars().count() > MAX_SERIES_NAME_LENGTH {
+        return Err(IngestError::new("book Series exceeds 500 characters"));
+    }
+    if issue_number.chars().count() > MAX_ISSUE_NUMBER_LENGTH {
+        return Err(IngestError::new("book Number exceeds 100 characters"));
+    }
     let volume_year = parse_optional_year(attribute(element, b"Volume")?)?;
     let publication_year = parse_optional_year(attribute(element, b"Year")?)?;
     let comicvine_series_id = first_attribute(
@@ -604,16 +662,7 @@ fn parse_book(element: &quick_xml::events::BytesStart<'_>) -> Result<CBLBook, In
         &[b"SeriesID", b"SeriesId", b"VolumeID", b"VolumeId"],
     )?;
     let comicvine_issue_id = first_attribute(element, &[b"IssueID", b"IssueId"])?;
-    if let Some(id) = comicvine_series_id
-        .as_ref()
-        .or(comicvine_issue_id.as_ref())
-        .filter(|id| id.chars().count() > MAX_EXTERNAL_ID_LENGTH)
-    {
-        let _ = id;
-        return Err(IngestError::new(
-            "Comic Vine external id exceeds 100 characters",
-        ));
-    }
+    validate_external_ids(&comicvine_series_id, &comicvine_issue_id)?;
     Ok(CBLBook {
         position: 0,
         series,
@@ -641,6 +690,22 @@ fn apply_database(
     }
     if book.comicvine_issue_id.is_none() {
         book.comicvine_issue_id = first_attribute(element, &[b"Issue", b"IssueID"])?;
+    }
+    validate_external_ids(&book.comicvine_series_id, &book.comicvine_issue_id)
+}
+
+fn validate_external_ids(
+    series_id: &Option<String>,
+    issue_id: &Option<String>,
+) -> Result<(), IngestError> {
+    if series_id
+        .iter()
+        .chain(issue_id)
+        .any(|id| id.chars().count() > MAX_EXTERNAL_ID_LENGTH)
+    {
+        return Err(IngestError::new(
+            "Comic Vine external id exceeds 100 characters",
+        ));
     }
     Ok(())
 }
