@@ -4,8 +4,9 @@
  *
  * The live route census guards new first-party callers and inner-router
  * registrations. This guard covers the remaining deployment surfaces it does
- * not inspect: the separate Vercel ingress router, route-fragment operations,
- * fragment-declared crons and retired rewrite sources. A legacy METHOD/path
+ * not inspect: the separate Vercel ingress router (regenerated in memory from
+ * the owned fragments), route-fragment operations, fragment-declared crons and
+ * retired rewrite sources. A legacy METHOD/path
  * may exist only while it is still owned by an open migration in the generated
  * retirement allowlist (`GET /api/metrics` is the documented infrastructure
  * exemption). When the last owner lands, the allowlist empties and this guard
