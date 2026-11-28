@@ -8525,7 +8525,7 @@
             "description": "Not authenticated"
           },
           "422": {
-            "description": "Unknown theme id"
+            "description": "Invalid request body"
           },
           "503": {
             "description": "Database temporarily unavailable"
@@ -22172,27 +22172,15 @@
       },
       "UserPreferencesPatchRequest": {
         "type": "object",
-        "description": "Partial update of the authenticated user's preferences.\n\n`theme` is optional: when omitted or explicit JSON null the current\npreference is left unchanged and a missing row is seeded with the\ndefault, exactly like the Python `UserPreferencesPatchRequest`.",
-        "properties": {
-          "theme": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
+        "description": "Partial update of the authenticated user's preferences.\n\nThe request is intentionally empty. Serde ignores legacy unknown fields, so\nan older client that still sends `theme` cannot restore or persist a retired\nappearance preference."
       },
       "UserPreferencesResponse": {
         "type": "object",
-        "description": "Current preference values for the authenticated user.",
+        "description": "Current preference values for the authenticated user.\n\nNight Shift is fixed, so no appearance field is exposed. The user id keeps\nthe existing endpoint shape available for unrelated preference fields.",
         "required": [
-          "theme",
           "user_id"
         ],
         "properties": {
-          "theme": {
-            "type": "string"
-          },
           "user_id": {
             "type": "integer",
             "format": "int32"
