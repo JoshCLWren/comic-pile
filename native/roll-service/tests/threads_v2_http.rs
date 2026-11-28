@@ -360,3 +360,66 @@ async fn delete_v2_removes_thread_and_subsequent_operations_return_404() {
     let (status, body) = call(&ctx, "PATCH", &uri, Some(json!({"title": "No"}))).await;
     assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
 }
+
+#[tokio::test]
+async fn delete_v2_removes_thread_with_reading_list_membership_dependencies() {
+    // #5950: a confirmed delete must also succeed when the thread's issues are
+    // referenced by Reading List membership rows. Those entries carry an
+    // `issue_id` FK (not a `thread_id` FK), so they are cleaned up only by the
+    // cascading issue delete. Prove the whole chain resolves to 204 and leaves
+    // no orphaned membership or removed list behind.
+    let ctx = setup("v2deletelist").await;
+    let thread = seed_thread(&ctx, ctx.user_id, "Listed series").await;
+    let conn = ctx.state.pool.get().await.unwrap();
+    let issue_id: i32 = conn
+        .query_one(
+            "INSERT INTO issues (thread_id, issue_number, status, position, created_at)
+             VALUES ($1, '1', 'unread', 1, NOW()) RETURNING id",
+            &[&thread],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let list_id: i32 = conn
+        .query_one(
+            "INSERT INTO custom_cbl_lists (user_id, name, created_at, updated_at)
+             VALUES ($1, 'Delete fixture list', NOW(), NOW()) RETURNING id",
+            &[&ctx.user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    conn.execute(
+        "INSERT INTO custom_cbl_entries (list_id, issue_id, position, created_at)
+         VALUES ($1, $2, 1, NOW())",
+        &[&list_id, &issue_id],
+    )
+    .await
+    .unwrap();
+    drop(conn);
+
+    let uri = format!("/api/v2/threads/{thread}");
+    let (status, body) = call(&ctx, "DELETE", &uri, None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT, "{body:?}");
+
+    let conn = ctx.state.pool.get().await.unwrap();
+    let counts = conn
+        .query_one(
+            "SELECT (SELECT count(*) FROM threads WHERE id = $1),
+                    (SELECT count(*) FROM issues WHERE thread_id = $1),
+                    (SELECT count(*) FROM custom_cbl_entries WHERE issue_id = $2),
+                    (SELECT count(*) FROM custom_cbl_lists WHERE id = $3)",
+            &[&thread, &issue_id, &list_id],
+        )
+        .await
+        .unwrap();
+    assert_eq!(counts.get::<_, i64>(0), 0, "thread removed");
+    assert_eq!(counts.get::<_, i64>(1), 0, "thread issues removed");
+    assert_eq!(
+        counts.get::<_, i64>(2),
+        0,
+        "reading-list membership removed"
+    );
+    assert_eq!(counts.get::<_, i64>(3), 1, "reading list itself retained");
+    drop(conn);
+}
