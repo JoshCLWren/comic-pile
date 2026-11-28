@@ -342,23 +342,21 @@ fn keys(value: &Value) -> Vec<&str> {
 async fn every_lifecycle_route_requires_auth() {
     let ctx = setup("lcauth").await;
     let routes = [
-        ("POST", "/api/v1/threads/"),
+        // #5958: retired v1 lifecycle writes were replaced by their canonical
+        // v2 resources. An anonymous request must hit the auth extractor (401),
+        // never the inner router's JSON 404 fallback.
         ("POST", "/api/v2/threads"),
-        ("POST", "/api/v1/threads/check-duplicates"),
+        ("POST", "/api/v2/threads:checkDuplicates"),
         ("GET", "/api/v1/threads/excluded/threads"),
         ("POST", "/api/v2/reading-order-groups:resolveMemberships"),
         ("POST", "/api/v1/threads/reactivate"),
         ("GET", "/api/v1/threads/stale"),
-        ("DELETE", "/api/v1/threads/1"),
-        ("PUT", "/api/v1/threads/1"),
+        ("PATCH", "/api/v2/threads/1"),
+        ("DELETE", "/api/v2/threads/1"),
         ("POST", "/api/v1/threads/1/exclude"),
         ("POST", "/api/v1/threads/1/restore"),
         ("POST", "/api/v1/threads/1/set-pending"),
-        // Same-path Rust replacements must be mounted in the production
-        // router: an anonymous request must hit the auth extractor (401),
-        // never the inner router's JSON 404 fallback.
-        ("PUT", "/api/v1/threads/1/test-backdate"),
-        ("GET", "/api/v1/threads/1/issues/creators"),
+        ("GET", "/api/v2/threads/1/creatorCredits"),
     ];
     for (method, path) in routes {
         let (status, body) = send(
@@ -381,9 +379,8 @@ async fn every_lifecycle_route_requires_auth() {
 
 #[tokio::test]
 async fn mutations_require_a_csrf_token() {
-    // csrf_middleware skips all checks when TEST_ENVIRONMENT=true. Serialize
-    // with the backdate tests (which set that process-global flag) and pin it
-    // off for this test so a concurrent backdate case cannot flip it mid-flight.
+    // csrf_middleware skips all checks when TEST_ENVIRONMENT=true, so pin the
+    // process-global flag off for this assertion.
     let _env_guard = TEST_ENV_LOCK.lock().await;
     let _restore = EnvRestore(std::env::var_os("TEST_ENVIRONMENT"));
     std::env::remove_var("TEST_ENVIRONMENT");
@@ -393,7 +390,7 @@ async fn mutations_require_a_csrf_token() {
         &ctx.state,
         Request::builder()
             .method("DELETE")
-            .uri(format!("/api/v1/threads/{thread}"))
+            .uri(format!("/api/v2/threads/{thread}"))
             .header(header::AUTHORIZATION, format!("Bearer {}", ctx.token))
             .body(Body::empty())
             .unwrap(),
@@ -414,7 +411,7 @@ async fn create_returns_201_in_python_field_order_at_queue_end() {
     let (status, body) = call(
         &ctx,
         "POST",
-        "/api/v1/threads/",
+        "/api/v2/threads",
         Some(json!({
             "title": "Saga",
             "format": "comics",
@@ -476,11 +473,11 @@ async fn create_returns_201_in_python_field_order_at_queue_end() {
 async fn create_merges_a_double_submit_into_the_first_thread() {
     let ctx = setup("lcdupe").await;
     let payload = json!({"title": "Double Click", "format": "Comic", "issues_remaining": 3});
-    let (first_status, first) = call(&ctx, "POST", "/api/v1/threads/", Some(payload.clone())).await;
+    let (first_status, first) = call(&ctx, "POST", "/api/v2/threads", Some(payload.clone())).await;
     let (second_status, second) = call(
         &ctx,
         "POST",
-        "/api/v1/threads/",
+        "/api/v2/threads",
         Some(json!({"title": "double click", "format": "comics", "issues_remaining": 3})),
     )
     .await;
@@ -509,7 +506,7 @@ async fn create_with_total_issues_reports_the_unread_issue_count() {
     let (status, body) = call(
         &ctx,
         "POST",
-        "/api/v1/threads/",
+        "/api/v2/threads",
         Some(
             json!({"title": "Tracked", "format": "Digital", "issues_remaining": 5,
                     "total_issues": 5, "is_test": true}),
@@ -529,7 +526,7 @@ async fn create_validation_matches_the_fastapi_422_envelope() {
     let (status, body) = call(
         &ctx,
         "POST",
-        "/api/v1/threads/",
+        "/api/v2/threads",
         Some(
             json!({"title": "   ", "format": "", "issues_remaining": -1, "total_issues": 0,
                     "is_test": "perhaps", "manual_creator_credits": ["x"]}),
@@ -586,7 +583,7 @@ async fn create_validation_matches_the_fastapi_422_envelope() {
     );
     assert_eq!(body["body"]["title"], "   ");
 
-    let (missing_status, missing) = call(&ctx, "POST", "/api/v1/threads/", None).await;
+    let (missing_status, missing) = call(&ctx, "POST", "/api/v2/threads", None).await;
     assert_eq!(missing_status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(missing["errors"][0]["field"], "body");
     assert_eq!(missing["errors"][0]["type"], "missing");
