@@ -103,7 +103,6 @@ export function useSnooze(deps: RollMutationDeps = {}) {
       try {
         const result = await protectedRollApi.snooze()
         if (result) seedFromOffer(result)
-        await invalidateSessionCache(queryClient)
         const refresh = await refreshAuthoritativeState()
         return { response: result, refreshed: refresh.refreshed, refreshError: refresh.error }
       } catch (error: unknown) {

@@ -27,12 +27,7 @@ function makeBootstrapApi() {
 const snoozeApi = makeSnoozeApi()
 const protectedRollMutationApi = makeProtectedApi()
 const rollStateApi = makeBootstrapApi()
-const invalidateCurrentSessionAfterSnooze = vi.fn()
-const cacheEffects = {
-  applyRatedThreadCache: vi.fn(),
-  invalidateCurrentSessionAfterSnooze,
-}
-const deps = { snoozeApi, protectedApi: protectedRollMutationApi, stateApi: rollStateApi, cacheEffects }
+const deps = { snoozeApi, protectedApi: protectedRollMutationApi, stateApi: rollStateApi }
 
 function renderSnooze() {
   return renderHook(() => useSnooze(deps), { wrapper })
@@ -53,7 +48,6 @@ describe('snooze hooks', () => {
   beforeEach(() => {
     client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
     vi.clearAllMocks()
-    invalidateCurrentSessionAfterSnooze.mockReset()
     protectedRollMutationApi.snooze.mockResolvedValue(undefined)
     rollStateApi.get.mockResolvedValue(bootstrapState(null))
   })
@@ -69,7 +63,6 @@ describe('snooze hooks', () => {
       expect(protectedRollMutationApi.snooze).toHaveBeenCalledTimes(1)
       expect(rollStateApi.get).toHaveBeenCalledTimes(1)
       expect(reconciled).toHaveBeenCalledTimes(1)
-      expect(invalidateCurrentSessionAfterSnooze).toHaveBeenCalledWith(client)
       expect(snooze.result.current.isError).toBe(false)
     } finally {
       window.removeEventListener(ROLL_STATE_RECONCILED_EVENT, reconciled)
@@ -252,7 +245,6 @@ describe('snooze hooks', () => {
     await act(async () => await expect(snooze.result.current.mutate(7)).rejects.toThrow('snooze failed'))
     await waitFor(() => expect(snooze.result.current.isError).toBe(true))
 
-    expect(invalidateCurrentSessionAfterSnooze).not.toHaveBeenCalled()
   })
 
   it('handles "No pending thread to snooze" error like other errors', async () => {
