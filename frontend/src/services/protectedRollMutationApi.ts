@@ -53,7 +53,7 @@ export function createProtectedRollMutationApi(client: HttpClient) {
      * touched even when the ordinary auth redirect is suppressed. The view is
      * built lazily so transports can be injected in focused tests.
      */
-    bootstrap: async (userId?: RollPendingUserId): Promise<RollState> =>
+    rollState: async (userId?: RollPendingUserId): Promise<RollState> =>
       createRollStateApi(withRollRecoveryConfig(client)).get(userId),
   }
 }

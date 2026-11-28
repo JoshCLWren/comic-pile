@@ -78,10 +78,10 @@ export function publishRollState(state: RollState): void {
 }
 
 export async function fetchAndPublishRollState(
-  bootstrapApi: RollStateApi = rollStateApi,
+  stateApi: RollStateApi = rollStateApi,
   userId?: RollPendingUserId,
 ): Promise<RollState> {
-  const state = await bootstrapApi.get(userId)
+  const state = await stateApi.get(userId)
   publishRollState(state)
   return state
 }
@@ -94,10 +94,10 @@ export interface AmbiguousRollMutationReconciliation {
 
 export async function reconcileAmbiguousRollMutation(
   expectedPendingThreadId?: number,
-  bootstrapApi: RollStateApi = rollStateApi,
+  stateApi: RollStateApi = rollStateApi,
   userId?: RollPendingUserId,
 ): Promise<AmbiguousRollMutationReconciliation> {
-  const state = await fetchAndPublishRollState(bootstrapApi, userId)
+  const state = await fetchAndPublishRollState(stateApi, userId)
   const pendingThreadId = normalizePendingThreadId(state.pending_thread_id)
 
   const committed = expectedPendingThreadId === undefined
@@ -128,7 +128,7 @@ export async function recoverProtectedRollMutation<T>(
 
     let state: RollState
     try {
-      state = await mutationApi.bootstrap(userId)
+      state = await mutationApi.rollState(userId)
     } catch (error: unknown) {
       if (isRetryableRollRecoveryFailure(error) && attempt < AUTH_RECOVERY_DELAYS_MS.length) {
         continue

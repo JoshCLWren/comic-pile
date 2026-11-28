@@ -140,11 +140,11 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
     // server's authoritative pending ID to target whichever one the die chose.
     const token = await getAuthToken(page)
     if (!token) throw new Error('Authenticated fixture token was unavailable')
-    const rollBootstrapResponse = await page.request.get('/api/v2/roll/bootstrap', {
+    const rollStateResponse = await page.request.get('/api/v2/roll/bootstrap', {
       headers: { Authorization: `Bearer ${token}` },
     })
-    expect(rollBootstrapResponse.ok()).toBe(true)
-    const sessionData: unknown = await rollBootstrapResponse.json()
+    expect(rollStateResponse.ok()).toBe(true)
+    const sessionData: unknown = await rollStateResponse.json()
     if (
       !isObject(sessionData) ||
       !hasProperty(sessionData, 'pending_thread_id') ||

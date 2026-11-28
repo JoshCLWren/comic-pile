@@ -15,7 +15,7 @@ import type { RollState } from '../types/rollState'
 // observer. The existing useRate.test.tsx mocks it and can only assert the
 // option was passed, not that a second GET was actually avoided.
 vi.mock('../services/protectedRollMutationApi', () => ({
-  protectedRollMutationApi: { rate: vi.fn(), snooze: vi.fn(), bootstrap: vi.fn() },
+  protectedRollMutationApi: { rate: vi.fn(), snooze: vi.fn(), rollState: vi.fn() },
 }))
 vi.mock('../services/rollStateApi', () => ({ rollStateApi: { get: vi.fn() } }))
 

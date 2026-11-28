@@ -41,9 +41,9 @@ interface RefreshOutcome {
 const SNOOZE_REFRESH_ATTEMPTS = 2
 
 export function useSnooze(deps: RollMutationDeps = {}) {
-  const { protectedApi, bootstrapApi, cacheEffects } = deps
+  const { protectedApi, stateApi, cacheEffects } = deps
   const protectedRollApi = protectedApi ?? protectedRollMutationApi
-  const rollBootstrap = bootstrapApi
+  const rollState = stateApi
   const invalidateSessionCache = cacheEffects?.invalidateCurrentSessionAfterSnooze ?? invalidateCurrentSessionAfterSnooze
   const queryClient = useQueryClient()
   // Keep the recovery read in the signed-in reader's browser partition.
@@ -61,7 +61,7 @@ export function useSnooze(deps: RollMutationDeps = {}) {
     const request = (async (): Promise<RefreshOutcome> => {
       for (let attempt = 1; attempt <= SNOOZE_REFRESH_ATTEMPTS; attempt += 1) {
         try {
-          await fetchAndPublishRollState(rollBootstrap, userId)
+          await fetchAndPublishRollState(rollState, userId)
           setRefreshError(null)
           return { refreshed: true, error: null }
         } catch (error: unknown) {
@@ -80,7 +80,7 @@ export function useSnooze(deps: RollMutationDeps = {}) {
     } finally {
       refreshRequest.current = null
     }
-  }, [rollBootstrap, userId])
+  }, [rollState, userId])
 
   const retryRefresh = useCallback(async (): Promise<boolean> => {
     setIsPending(true)
@@ -142,7 +142,7 @@ export function useSnooze(deps: RollMutationDeps = {}) {
           try {
             const { committed } = await reconcileAmbiguousRollMutation(
               expectedPendingThreadId,
-              rollBootstrap,
+              rollState,
               userId,
             )
             if (committed) {

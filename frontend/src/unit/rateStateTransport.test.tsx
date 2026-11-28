@@ -17,7 +17,7 @@ import { useRollRating } from '../pages/RollPage/useRollRating'
 import type { ThreadMetadata } from '../pages/RollPage/types'
 
 vi.mock('../services/protectedRollMutationApi', () => ({
-  protectedRollMutationApi: { rate: vi.fn(), snooze: vi.fn(), skip: vi.fn(), bootstrap: vi.fn() },
+  protectedRollMutationApi: { rate: vi.fn(), snooze: vi.fn(), skip: vi.fn(), rollState: vi.fn() },
 }))
 vi.mock('../services/rollStateApi', () => ({
   rollStateApi: { get: vi.fn(), switchPrerequisite: vi.fn() },

@@ -16,10 +16,7 @@ vi.mock('../services/rollStateApi', () => ({
 }))
 
 const mockedBootstrap = vi.mocked(rollStateApi.get)
-const bootstrapState = (
-  sessionId: number,
-  pendingThreadId: number | null,
-): RollState => ({
+const bootstrapState = (pendingThreadId: number | null): RollState => ({
   pending_thread_id: pendingThreadId,
   last_rolled_result: pendingThreadId === null ? null : 1,
   active_thread: null,
@@ -47,12 +44,12 @@ describe('Roll mutation reconciliation', () => {
 
   it('distinguishes committed and still-pending mutations with and without an expected thread', async () => {
     mockedBootstrap
-      .mockResolvedValueOnce(bootstrapState(12, null))
-      .mockResolvedValueOnce(bootstrapState(12, 7))
-      .mockResolvedValueOnce(bootstrapState(12, 7))
-      .mockResolvedValueOnce(bootstrapState(12, 9))
+      .mockResolvedValueOnce(bootstrapState(null))
+      .mockResolvedValueOnce(bootstrapState(7))
+      .mockResolvedValueOnce(bootstrapState(7))
+      .mockResolvedValueOnce(bootstrapState(9))
       .mockResolvedValueOnce({
-        ...bootstrapState(12, null),
+        ...bootstrapState(null),
         pending_thread_id: cast<number>('invalid'),
       })
 
@@ -70,7 +67,7 @@ describe('Roll mutation reconciliation', () => {
     vi.stubGlobal('CustomEvent', undefined)
 
     try {
-      publishRollState(bootstrapState(8, null))
+      publishRollState(bootstrapState(null))
       expect(reconciled).not.toHaveBeenCalled()
     } finally {
       vi.unstubAllGlobals()

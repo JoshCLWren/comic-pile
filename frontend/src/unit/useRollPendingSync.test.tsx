@@ -19,10 +19,10 @@ function bootstrap(overrides: Partial<RollState> = {}): RollState {
 describe('useRollPendingSync', () => {
   it('has no Roll state until the bootstrap resolves', () => {
     const { result: absent } = renderHook(() =>
-      useRollPendingSync({ rollBootstrap: null, refetchQueue: vi.fn() }),
+      useRollPendingSync({ rollState: null, refetchQueue: vi.fn() }),
     )
     const { result: undef } = renderHook(() =>
-      useRollPendingSync({ rollBootstrap: undefined, refetchQueue: vi.fn() }),
+      useRollPendingSync({ rollState: undefined, refetchQueue: vi.fn() }),
     )
 
     expect(absent.current.rollState).toBeUndefined()
@@ -32,7 +32,7 @@ describe('useRollPendingSync', () => {
   it('derives the pending thread and snoozed series from the Roll bootstrap', () => {
     const { result } = renderHook(() =>
       useRollPendingSync({
-        rollBootstrap: bootstrap({
+        rollState: bootstrap({
           pending_thread_id: 99,
           snoozed_threads: [{ id: 5, title: 'Saga', format: 'Comic' }],
         }),
@@ -53,7 +53,7 @@ describe('useRollPendingSync', () => {
     const allIds = Array.from({ length: 25 }, (_, index) => index + 1)
     const { result } = renderHook(() =>
       useRollPendingSync({
-        rollBootstrap: bootstrap({ snoozed_threads: displayed, snoozed_thread_ids: allIds, snoozed_count: 25 }),
+        rollState: bootstrap({ snoozed_threads: displayed, snoozed_thread_ids: allIds, snoozed_count: 25 }),
         refetchQueue: vi.fn(),
       }),
     )
@@ -64,7 +64,7 @@ describe('useRollPendingSync', () => {
   it('treats a null pending_thread_id as authoritative (post-dismiss scenario)', () => {
     const { result } = renderHook(() =>
       useRollPendingSync({
-        rollBootstrap: bootstrap({ pending_thread_id: null }),
+        rollState: bootstrap({ pending_thread_id: null }),
         refetchQueue: vi.fn(),
       }),
     )
@@ -75,7 +75,7 @@ describe('useRollPendingSync', () => {
   it('refetches the queue on update without any session call', async () => {
     const refetchQueue = vi.fn().mockResolvedValue(undefined)
     const { result } = renderHook(() =>
-      useRollPendingSync({ rollBootstrap: bootstrap(), refetchQueue }),
+      useRollPendingSync({ rollState: bootstrap(), refetchQueue }),
     )
 
     await result.current.onUpdated()

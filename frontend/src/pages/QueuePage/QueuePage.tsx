@@ -62,7 +62,7 @@ export default function QueuePage() {
   // open run keeps reading the cursor so the batch covers the whole queue.
   const bulkMapping = useQueueBulkMapping(queueLoader)
   const { pending } = useRollPendingSelection()
-  const rollBootstrap = { pending_thread_id: pending?.thread_id ?? null, snoozed_thread_ids: readRollSnoozes(), snoozed_threads: [] }
+  const rollState = { pending_thread_id: pending?.thread_id ?? null, snoozed_thread_ids: readRollSnoozes(), snoozed_threads: [] }
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
   const reactivateMutation = useReactivateThread()
@@ -104,7 +104,7 @@ export default function QueuePage() {
   )
 
   const rollNudge = useRollNudge()
-  const rollPendingSync = useRollPendingSync({ rollBootstrap, refetchQueue: queueLoader.refetch })
+  const rollPendingSync = useRollPendingSync({ rollState, refetchQueue: queueLoader.refetch })
   const modals = useQueueModalsHook({
     threads,
     onCreated: rollNudge.onCreated,

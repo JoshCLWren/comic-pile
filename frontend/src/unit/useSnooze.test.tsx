@@ -17,7 +17,7 @@ function makeSnoozeApi() {
 }
 
 function makeProtectedApi() {
-  return { rate: vi.fn(), snooze: vi.fn(), skip: vi.fn(), bootstrap: vi.fn() }
+  return { rate: vi.fn(), snooze: vi.fn(), skip: vi.fn(), rollState: vi.fn() }
 }
 
 function makeBootstrapApi() {
@@ -32,16 +32,13 @@ const cacheEffects = {
   applyRatedThreadCache: vi.fn(),
   invalidateCurrentSessionAfterSnooze,
 }
-const deps = { snoozeApi, protectedApi: protectedRollMutationApi, bootstrapApi: rollStateApi, cacheEffects }
+const deps = { snoozeApi, protectedApi: protectedRollMutationApi, stateApi: rollStateApi, cacheEffects }
 
 function renderSnooze() {
   return renderHook(() => useSnooze(deps), { wrapper })
 }
 
-const bootstrapState = (
-  pendingThreadId: number | null,
-  sessionId = 1,
-): RollState => ({
+const bootstrapState = (pendingThreadId: number | null): RollState => ({
   pending_thread_id: pendingThreadId,
   last_rolled_result: pendingThreadId === null ? null : 1,
   active_thread: null,
@@ -111,7 +108,7 @@ describe('snooze hooks', () => {
     const refreshFailure = new Error('bootstrap unavailable')
     rollStateApi.get
       .mockRejectedValueOnce(refreshFailure)
-      .mockResolvedValueOnce(bootstrapState(null, 20))
+      .mockResolvedValueOnce(bootstrapState(null))
     const reconciled = vi.fn()
     window.addEventListener(ROLL_STATE_RECONCILED_EVENT, reconciled)
 
@@ -142,7 +139,7 @@ describe('snooze hooks', () => {
     expect(snooze.result.current.hasRefreshError).toBe(true)
     expect(snooze.result.current.refreshError).toBe(refreshFailure)
 
-    rollStateApi.get.mockResolvedValue(bootstrapState(null, 20))
+    rollStateApi.get.mockResolvedValue(bootstrapState(null))
     await act(async () => {
       await expect(snooze.result.current.retryRefresh()).resolves.toBe(true)
     })
@@ -176,7 +173,7 @@ describe('snooze hooks', () => {
     expect(snooze.result.current.isPending).toBe(true)
 
     await act(async () => {
-      resolveRefresh?.(bootstrapState(null, 20))
+      resolveRefresh?.(bootstrapState(null))
       await Promise.all([retryRequest, duplicateRequest])
     })
 
@@ -193,7 +190,7 @@ describe('snooze hooks', () => {
     protectedRollMutationApi.snooze.mockImplementation(() => new Promise((_, reject) => {
       setTimeout(() => reject(timeout), 10_000)
     }))
-    rollStateApi.get.mockResolvedValue(bootstrapState(null, 20))
+    rollStateApi.get.mockResolvedValue(bootstrapState(null))
 
     try {
       const snooze = renderSnooze()
@@ -225,7 +222,7 @@ describe('snooze hooks', () => {
     protectedRollMutationApi.snooze.mockImplementation(() => new Promise((_, reject) => {
       setTimeout(() => reject(timeout), 10_000)
     }))
-    rollStateApi.get.mockResolvedValue(bootstrapState(7, 10))
+    rollStateApi.get.mockResolvedValue(bootstrapState(7))
 
     try {
       const snooze = renderSnooze()

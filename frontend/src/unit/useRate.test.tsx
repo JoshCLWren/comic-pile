@@ -17,7 +17,7 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>
 }
 
-vi.mock('../services/protectedRollMutationApi', () => ({ protectedRollMutationApi: { rate: vi.fn(), snooze: vi.fn(), bootstrap: vi.fn() } }))
+vi.mock('../services/protectedRollMutationApi', () => ({ protectedRollMutationApi: { rate: vi.fn(), snooze: vi.fn(), rollState: vi.fn() } }))
 vi.mock('../services/rollStateApi', () => ({ rollStateApi: { get: vi.fn() } }))
 vi.mock('../query/cacheEffects', () => ({ applyRatedThreadCache: vi.fn() }))
 
@@ -70,7 +70,7 @@ it('shares one in-flight request across repeated submissions', async () => {
 })
 
 it('reconciles a committed rating after the delayed response crosses the client timeout', async () => {
-  vi.useFakeTimers(); const timeout = Object.assign(new Error('timeout of 10000ms exceeded'), { code: 'ECONNABORTED' }); mockedProtectedApi.rate.mockImplementation(() => new Promise((_, reject) => { setTimeout(() => reject(timeout), 10_000) })); mockedRollStateApi.get.mockResolvedValue(bootstrapState(null, 10));
+  vi.useFakeTimers(); const timeout = Object.assign(new Error('timeout of 10000ms exceeded'), { code: 'ECONNABORTED' }); mockedProtectedApi.rate.mockImplementation(() => new Promise((_, reject) => { setTimeout(() => reject(timeout), 10_000) })); mockedRollStateApi.get.mockResolvedValue(bootstrapState(null));
   // SAFETY: fake timers only; the hook's delayed reconciliation is awaited below.
   try { const { result } = renderHook(() => useRate(), { wrapper }); const payload: RatePayload = { thread_id: 1, rating: 3, issue_id: 1, source: 'roll_offer' }; let firstRequest: Promise<unknown> | undefined; let secondRequest: Promise<unknown> | undefined; act(() => { firstRequest = result.current.mutate(payload); secondRequest = result.current.mutate(payload) }); expect(mockedProtectedApi.rate).toHaveBeenCalledTimes(1); expect(result.current.isPending).toBe(true); await act(async () => { await vi.advanceTimersByTimeAsync(10_000); await Promise.all([firstRequest, secondRequest]) }); expect(mockedApplyRatedThreadCache).not.toHaveBeenCalled(); expect(mockedRollStateApi.get).toHaveBeenCalledTimes(2); expect(globalThis.document.cookie).toContain('%5B1%5D'); expect(result.current.isError).toBe(false); expect(result.current.isPending).toBe(false) } finally { vi.useRealTimers() }
 })

@@ -60,15 +60,15 @@ export interface RateMutationOutcome {
 
 export interface RateDeps {
   protectedApi?: ProtectedRollMutationApi
-  bootstrapApi?: RollStateApi
+  stateApi?: RollStateApi
   cacheEffects?: CacheEffectsApi
   queryClientInstance?: typeof queryClient
 }
 
 export function useRate(deps: RateDeps = {}) {
-  const { protectedApi, bootstrapApi, cacheEffects, queryClientInstance } = deps
+  const { protectedApi, stateApi, cacheEffects, queryClientInstance } = deps
   const protectedRollApi = protectedApi ?? protectedRollMutationApi
-  const rollBootstrap = bootstrapApi
+  const rollState = stateApi
   const applyCache = cacheEffects?.applyRatedThreadCache ?? applyRatedThreadCache
   const client = queryClientInstance ?? queryClient
   // Recovery must read the same browser partition the rating view writes. The
@@ -99,7 +99,7 @@ export function useRate(deps: RateDeps = {}) {
 
         let bootstrap: RollState | null = null
         try {
-          bootstrap = await fetchAndPublishRollState(rollBootstrap, userId)
+          bootstrap = await fetchAndPublishRollState(rollState, userId)
         } catch (reconciliationError: unknown) {
           console.error(
             'Rating saved but authoritative Roll state failed to refresh:',
@@ -126,7 +126,7 @@ export function useRate(deps: RateDeps = {}) {
               }
               let bootstrap: RollState | null = null
               try {
-                bootstrap = await fetchAndPublishRollState(rollBootstrap, userId)
+                bootstrap = await fetchAndPublishRollState(rollState, userId)
               } catch (reconciliationError: unknown) {
                 console.error(
                   'Rating saved but authoritative Roll state failed to refresh:',
@@ -147,7 +147,7 @@ export function useRate(deps: RateDeps = {}) {
           try {
             const reconciliation = await reconcileAmbiguousRollMutation(
               data.thread_id,
-              rollBootstrap,
+              rollState,
               userId,
             )
             if (reconciliation.committed) {
@@ -156,7 +156,7 @@ export function useRate(deps: RateDeps = {}) {
                 // The reconciling bootstrap was fetched before the snooze was
                 // recorded; refetch so the published pool excludes the comic.
                 addRollSnooze(data.thread_id)
-                const bootstrap = await fetchAndPublishRollState(rollBootstrap, userId)
+                const bootstrap = await fetchAndPublishRollState(rollState, userId)
                 return { rate: undefined, bootstrap }
               }
               return { rate: undefined, bootstrap: reconciliation.bootstrap }

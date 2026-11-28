@@ -7,7 +7,7 @@ import type { ProtectedRollMutationApi } from '../services/apiTypes'
 import type { RollState } from '../types/rollState'
 
 function makeProtectedApi(): ProtectedRollMutationApi {
-  return { rate: vi.fn(), snooze: vi.fn(), bootstrap: vi.fn() }
+  return { rate: vi.fn(), snooze: vi.fn(), rollState: vi.fn() }
 }
 
 const protectedRollMutationApi = makeProtectedApi()
@@ -41,7 +41,7 @@ describe('protected Roll mutation recovery', () => {
   })
 
   it('waits through recoverable auth failures then retries the same pending mutation once', async () => {
-    mockedProtectedApi.bootstrap
+    mockedProtectedApi.rollState
       .mockRejectedValueOnce(authFailure)
       .mockRejectedValueOnce(authFailure)
       .mockResolvedValueOnce(bootstrapState(7))
@@ -53,13 +53,13 @@ describe('protected Roll mutation recovery', () => {
       value: undefined,
     })
 
-    expect(mockedProtectedApi.bootstrap).toHaveBeenCalledTimes(3)
+    expect(mockedProtectedApi.rollState).toHaveBeenCalledTimes(3)
     expect(wait).toHaveBeenCalledTimes(2)
     expect(retry).toHaveBeenCalledTimes(1)
   })
 
   it('refuses to replay after authoritative pending state advances', async () => {
-    mockedProtectedApi.bootstrap.mockResolvedValueOnce(bootstrapState(9))
+    mockedProtectedApi.rollState.mockResolvedValueOnce(bootstrapState(9))
     const retry = vi.fn()
 
     await expect(recoverProtectedRollMutation(7, retry, vi.fn(), protectedRollMutationApi)).resolves.toEqual({
@@ -71,7 +71,7 @@ describe('protected Roll mutation recovery', () => {
 
   it('waits through a 503 recovery failure then retries the same pending mutation', async () => {
     const unavailable = { response: { status: 503 } }
-    mockedProtectedApi.bootstrap
+    mockedProtectedApi.rollState
       .mockRejectedValueOnce(unavailable)
       .mockResolvedValueOnce(bootstrapState(7))
     const retry = vi.fn().mockResolvedValue('committed')
@@ -87,7 +87,7 @@ describe('protected Roll mutation recovery', () => {
   })
 
   it('reads recovery from the signed-in reader browser partition', async () => {
-    mockedProtectedApi.bootstrap.mockResolvedValueOnce(bootstrapState(7))
+    mockedProtectedApi.rollState.mockResolvedValueOnce(bootstrapState(7))
     const retry = vi.fn().mockResolvedValue('committed')
 
     await expect(recoverProtectedRollMutation(
@@ -100,12 +100,12 @@ describe('protected Roll mutation recovery', () => {
 
     // Without the id the API would read the anonymous partition and report a
     // stale pending pointer, so recovery could never retry the mutation.
-    expect(mockedProtectedApi.bootstrap).toHaveBeenCalledWith(42)
+    expect(mockedProtectedApi.rollState).toHaveBeenCalledWith(42)
   })
 
   it('surfaces a definitive recovery failure without replaying', async () => {
     const revoked = { response: { status: 403, data: { detail: 'Revoked token' } } }
-    mockedProtectedApi.bootstrap.mockRejectedValueOnce(revoked)
+    mockedProtectedApi.rollState.mockRejectedValueOnce(revoked)
     const retry = vi.fn()
 
     await expect(recoverProtectedRollMutation(7, retry, vi.fn(), protectedRollMutationApi)).rejects.toBe(revoked)

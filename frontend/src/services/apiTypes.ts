@@ -23,7 +23,7 @@ export type RollPendingUserId = number | string | null | undefined
 export interface ProtectedRollMutationApi {
   rate: (data: RatePayload) => Promise<RateResponsePayload>
   snooze: () => Promise<RollResponse>
-  bootstrap: (userId?: RollPendingUserId) => Promise<RollState>
+  rollState: (userId?: RollPendingUserId) => Promise<RollState>
 }
 
 export interface RollStateApi {
@@ -45,7 +45,7 @@ export interface CacheEffectsApi {
 /** Injectable dependencies for the Roll mutation hooks (snooze/rate). */
 export interface RollMutationDeps {
   protectedApi?: ProtectedRollMutationApi
-  bootstrapApi?: RollStateApi
+  stateApi?: RollStateApi
   cacheEffects?: CacheEffectsApi
 }
 

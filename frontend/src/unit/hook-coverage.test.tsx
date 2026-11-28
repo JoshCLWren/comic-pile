@@ -26,8 +26,8 @@ const api = vi.hoisted(() => ({
   migrationApi: { migrateThread: vi.fn() },
   bugReportsApi: { create: vi.fn() },
 }))
-const protectedApi = vi.hoisted(() => ({ rate: vi.fn(), snooze: vi.fn(), bootstrap: vi.fn() }))
-const bootstrapApi = vi.hoisted(() => ({ get: vi.fn() }))
+const protectedApi = vi.hoisted(() => ({ rate: vi.fn(), snooze: vi.fn(), rollState: vi.fn() }))
+const stateApi = vi.hoisted(() => ({ get: vi.fn() }))
 vi.mock('../services/api-migration', () => ({ migrationApi: api.migrationApi }))
 vi.mock('../services/api-bug-reports', () => ({ bugReportsApi: api.bugReportsApi }))
 vi.mock('../services/api-threads', () => ({ threadsApi: api.threadsApi }))
@@ -41,7 +41,7 @@ vi.mock('../services/api-undo', () => ({ undoApi: api.undoApi }))
 vi.mock('../services/api-sessions', () => ({ sessionApi: api.sessionApi }))
 vi.mock('../services/api-issues', () => ({ issuesApi: { list: vi.fn(), create: vi.fn(), get: vi.fn(), markRead: vi.fn(), markUnread: vi.fn(), bulkMarkRead: vi.fn(), bulkMarkUnread: vi.fn(), move: vi.fn(), reorder: vi.fn(), delete: vi.fn(), migrateThread: vi.fn(), setCurrentIssue: vi.fn(), getReaderContext: vi.fn() } }))
 vi.mock('../services/protectedRollMutationApi', () => ({ protectedRollMutationApi: protectedApi }))
-vi.mock('../services/rollStateApi', () => ({ rollStateApi: bootstrapApi }))
+vi.mock('../services/rollStateApi', () => ({ rollStateApi: stateApi }))
 const toast = createToastSpy()
 
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
@@ -66,7 +66,7 @@ beforeEach(() => {
     blocking_reasons: [],
     created_at: '2026-08-09T00:00:00Z',
   })
-  bootstrapApi.get.mockResolvedValue({})
+  stateApi.get.mockResolvedValue({})
   api.rollApi.roll.mockResolvedValue({ result: 4 })
 })
 
