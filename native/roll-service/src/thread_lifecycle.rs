@@ -2701,7 +2701,7 @@ pub async fn check_potential_duplicates(
         considered
             .into_iter()
             .take(remaining_slots)
-            .map(|(_, _, thread)| (thread, "similar_title")),
+            .map(|(_, thread)| (thread, "similar_title")),
     );
 
     let ids: Vec<i32> = candidates.iter().map(|(thread, _)| thread.id).collect();
@@ -2769,7 +2769,6 @@ pub async fn check_potential_duplicates(
             PotentialDuplicateMatch {
                 thread_id: thread.id,
                 title: thread.title.clone(),
-                format: normalize_format_value(&thread.format),
                 status: thread.status.clone(),
                 issues_remaining: if thread.total_issues.is_some() {
                     unread.get(&thread.id).copied().unwrap_or(0)
@@ -3232,13 +3231,6 @@ mod tests {
     }
 
     #[test]
-    fn format_normalization_mirrors_python() {
-        assert_eq!(normalize_format_value(" comics "), "Comic");
-        assert_eq!(normalize_format_value("DIGITAL"), "Digital");
-        assert_eq!(normalize_format_value(" Trade "), "Trade");
-    }
-
-    #[test]
     fn publication_year_prefers_start_year_then_dates() {
         assert_eq!(coerce_publication_year(Some(&json!("1999"))), Some(1999));
         assert_eq!(coerce_publication_year(Some(&json!(true))), None);
@@ -3272,14 +3264,12 @@ mod tests {
         let mut check = Check::default();
         let body = json!({
             "title": "A newer title",
-            "format": "Comic",
             "update_mask": ["notes"]
         });
         let (input, expected) = parse_patch(&mut check, Some(body)).unwrap();
         assert!(check.is_clean());
         assert!(expected.is_none());
         assert_eq!(input.title, None);
-        assert_eq!(input.format, None);
         assert!(input.notes_present);
         assert_eq!(input.notes, None);
 
@@ -3302,7 +3292,6 @@ mod tests {
         assert_eq!(input.title.as_deref(), Some("Renamed"));
         assert!(input.notes_present);
         assert_eq!(input.notes, None);
-        assert_eq!(input.format, None);
         assert_eq!(input.credits, None);
     }
 
@@ -3324,7 +3313,6 @@ mod tests {
         OwnedThread {
             id: 7,
             title: "Committed title".to_owned(),
-            format: "Comic".to_owned(),
             issues_remaining: 3,
             total_issues: None,
             reading_progress: None,
@@ -3339,7 +3327,6 @@ mod tests {
     fn patch_precondition_accepts_the_committed_snapshot() {
         let expected = PatchPrecondition {
             title: Some("Committed title".to_owned()),
-            format: Some("comics".to_owned()),
             notes_present: true,
             notes: Some("committed notes".to_owned()),
             credits: Some(vec![json!({"name": "  Jane   Doe ", "roles": ["Writer"]})]),
