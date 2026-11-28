@@ -112,7 +112,6 @@ const rating = {
 const snooze = { handleSnooze: vi.fn() }
 const rateMutation = { isPending: false }
 const snoozeMutation = { isPending: false }
-const dismissPendingMutation = { isPending: false }
 const ratingViewTopRef = { current: null }
 
 interface ScopeOverrides {
@@ -145,8 +144,7 @@ function renderRatingView(initialScopes: ScopeOverrides = {}) {
     snooze,
     rateMutation,
     snoozeMutation,
-    dismissPendingMutation,
-    ratingViewTopRef,
+      ratingViewTopRef,
     ...initialScopes,
   }
   const { result, rerender } = renderHook((props: typeof params) => useRatingView(props), {
@@ -255,8 +253,7 @@ it('a failed reader-context request stays out of the shared rating error channel
         snooze,
         rateMutation,
         snoozeMutation,
-        dismissPendingMutation,
-        ratingViewTopRef,
+              ratingViewTopRef,
       }),
     { wrapper: createWrapper() },
   )
@@ -269,5 +266,4 @@ it('a failed reader-context request stays out of the shared rating error channel
   expect(result.current.errorMessage).toBe('')
   expect(setErrorMessage).not.toHaveBeenCalled()
   expect(result.current.rateIsPending).toBe(false)
-  expect(result.current.dismissIsPending).toBe(false)
 })

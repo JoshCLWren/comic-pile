@@ -26,8 +26,7 @@ function makeDecisionCardProps(overrides: Partial<DecisionCardProps> = {}) {
     errorMessage: '',
     rateIsPending: false,
     rerollIsPending: false,
-    dismissIsPending: false,
-    onUpdateRating: vi.fn(),
+      onUpdateRating: vi.fn(),
     onSubmitRating: vi.fn(),
     onReroll: vi.fn().mockResolvedValue(undefined),
     onCancel: vi.fn(),
@@ -43,9 +42,8 @@ interface DecisionCardProps {
   errorMessage: string
   rateIsPending: boolean
   rerollIsPending?: boolean
-  dismissIsPending: boolean
   onUpdateRating: (value: string) => void
-  onSubmitRating: (finishSession: boolean) => void
+  onSubmitRating: () => void
   onReroll?: () => Promise<void>
   onResetDice?: () => void
   onCancel: () => void

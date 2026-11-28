@@ -92,8 +92,7 @@ describe('rating exit without server-owned pending', () => {
       state: state(),
       bootstrap: null,
       rateMutation,
-      dismissPendingMutation,
-      refetchRollState,
+          refetchRollState,
       clearPending,
     }))
   }

@@ -154,7 +154,7 @@ describe('Rate publishes one authoritative Roll bootstrap', () => {
 
     await enterRating(result)
     await act(async () => {
-      await result.current.rating.handleSubmitRating(false)
+      await result.current.rating.handleSubmitRating()
     })
 
     expect(mockedProtectedApi.rate).toHaveBeenCalledTimes(1)
@@ -175,7 +175,7 @@ describe('Rate publishes one authoritative Roll bootstrap', () => {
 
     await enterRating(result)
     await act(async () => {
-      await result.current.rating.handleSubmitRating(false)
+      await result.current.rating.handleSubmitRating()
     })
     // The page no longer depends on the zero-delay reconciliation window: drain
     // every scheduled callback and assert no late follow-up request appears.
@@ -205,7 +205,7 @@ describe('Rate publishes one authoritative Roll bootstrap', () => {
       })
     })
     await act(async () => {
-      await result.current.rating.handleSubmitRating(false)
+      await result.current.rating.handleSubmitRating()
     })
     expect(result.current.state.showSimpleMigration).toBe(true)
     expect(mockedProtectedApi.rate).not.toHaveBeenCalled()
@@ -232,7 +232,7 @@ describe('Rate publishes one authoritative Roll bootstrap', () => {
 
     await enterRating(result)
     await act(async () => {
-      await result.current.rating.handleSubmitRating(false)
+      await result.current.rating.handleSubmitRating()
       await new Promise((resolve) => setTimeout(resolve, 25))
     })
 
@@ -286,7 +286,7 @@ describe('useRollRating consumes the published authoritative snapshot', () => {
     })
 
     await act(async () => {
-      await result.current.rating.handleSubmitRating(false)
+      await result.current.rating.handleSubmitRating()
     })
 
     expect(mockedProtectedApi.rate).not.toHaveBeenCalled()
@@ -317,7 +317,7 @@ describe('useRollRating consumes the published authoritative snapshot', () => {
       })
     })
     await act(async () => {
-      await result.current.rating.handleSubmitRating(false)
+      await result.current.rating.handleSubmitRating()
     })
     expect(result.current.state.showSimpleMigration).toBe(true)
 

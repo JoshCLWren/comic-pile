@@ -11,7 +11,6 @@ import {
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 import { ToastProvider } from '../contexts/ToastProvider'
 import {
-  useDismissPending,
   useRoll,
   useSetDie,
 } from '../hooks/useRoll'
@@ -54,7 +53,6 @@ vi.mock('../hooks/useRoll', () => ({
   useSetDie: vi.fn(),
   useResetDice: vi.fn(() => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false })),
   useRoll: vi.fn(),
-  useDismissPending: vi.fn(),
 }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn() }))
 vi.mock('../hooks/useQueue', () => ({

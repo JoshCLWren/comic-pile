@@ -10,7 +10,7 @@ const spies = vi.hoisted(() => ({
   refetch: vi.fn().mockResolvedValue({}),
   invalidateRollStateOnNavigation: vi.fn().mockResolvedValue({}),
   setDie: vi.fn().mockResolvedValue({}),
-  roll: vi.fn().mockResolvedValue({}), dismissPending: vi.fn().mockResolvedValue({}),
+  roll: vi.fn().mockResolvedValue({}),
   snooze: vi.fn().mockResolvedValue({}),
   unsnooze: vi.fn().mockResolvedValue({}), unsnoozeNative: vi.fn().mockResolvedValue({}), moveFront: vi.fn().mockResolvedValue({}),
   moveBack: vi.fn().mockResolvedValue({}), shuffle: vi.fn().mockResolvedValue({}),
@@ -80,7 +80,7 @@ vi.mock('../hooks/useRoll', () => ({
   useUnsnooze: () => ({ mutate: spies.unsnoozeNative, isPending: false }),
   useSetDie: () => ({ mutate: spies.setDie, isPending: false }),
   useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
-  useRoll: () => ({ mutate: spies.roll, isPending: false }), useDismissPending: () => ({ mutate: spies.dismissPending, isPending: false }),
+  useRoll: () => ({ mutate: spies.roll, isPending: false }),
 }))
 vi.mock('../hooks/useSnooze', () => ({ useSnooze: () => ({ mutate: spies.snooze, isPending: false }), useUnsnooze: () => ({ mutate: spies.unsnooze, isPending: false }) }))
 vi.mock('../hooks/useQueue', () => ({ useMoveToFront: () => ({ mutate: spies.moveFront, isPending: false }), useMoveToBack: () => ({ mutate: spies.moveBack, isPending: false }), useShuffleQueue: () => ({ mutate: spies.shuffle, isPending: false }), useActiveSeriesCount: () => null, useRestoreExclusionGroup: () => ({ mutate: vi.fn(), isPending: false, isError: false }) }))
@@ -134,7 +134,7 @@ interface RatingViewMockData {
   activeRatingThread: { title?: string; issue_number?: string | null } | null
   errorMessage: string
   onUpdateRating: (value: string) => void
-  onSubmitRating: (finishSession: boolean) => void
+  onSubmitRating: () => void
   onSnooze: () => void
   onCancel: () => void
   onRefreshThread: () => void
@@ -146,7 +146,7 @@ vi.mock('../pages/RollPage/components/RatingView', () => ({ RatingView: (props: 
   return <div>
     <span data-testid="rating-thread-metadata">{thread?.title ?? 'missing'}:{thread?.issue_number ?? 'none'}</span>
     {data?.errorMessage ? <span>{data.errorMessage}</span> : null}
-    <button onClick={() => { data?.onUpdateRating('5') }}>update rating</button><button onClick={() => { data?.onUpdateRating('4') }}>threshold rating</button><button onClick={() => { data?.onUpdateRating('1') }}>update low rating</button><button onClick={() => { data?.onSubmitRating(false) }}>save rating</button><button onClick={() => { data?.onSubmitRating(true) }}>finish rating</button><button onClick={() => { data?.onSnooze() }}>snooze rating</button><button onClick={() => { data?.onCancel() }}>cancel rating</button><button onClick={() => { data?.onRefreshThread() }}>refresh rating</button>
+    <button onClick={() => { data?.onUpdateRating('5') }}>update rating</button><button onClick={() => { data?.onUpdateRating('4') }}>threshold rating</button><button onClick={() => { data?.onUpdateRating('1') }}>update low rating</button><button onClick={() => { data?.onSubmitRating() }}>save rating</button><button onClick={() => { data?.onSubmitRating(true) }}>finish rating</button><button onClick={() => { data?.onSnooze() }}>snooze rating</button><button onClick={() => { data?.onCancel() }}>cancel rating</button><button onClick={() => { data?.onRefreshThread() }}>refresh rating</button>
   </div>
 } }))
 
@@ -203,7 +203,7 @@ describe('RollPage parent handlers', () => {
     bootstrapData.snoozed_threads = sessionData.snoozed_threads
     bootstrapData.snoozed_count = 0
     bootstrapData.pool_reason = 'ready'
-    for (const mutation of [spies.setDie, spies.roll, spies.dismissPending, spies.snooze, spies.unsnooze, spies.moveFront, spies.moveBack, spies.shuffle]) mutation.mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 })
+    for (const mutation of [spies.setDie, spies.roll, spies.snooze, spies.unsnooze, spies.moveFront, spies.moveBack, spies.shuffle]) mutation.mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 })
     // Rate publishes its authoritative bootstrap snapshot to the page; the mock
     // mirrors that contract so no page-level bootstrap refetch is expected.
     spies.rate.mockImplementation(async () => ({
@@ -404,7 +404,6 @@ describe('RollPage parent handlers', () => {
     // the bootstrap cache stale instead of eagerly refetching, which avoids
     // an extra HTTP request on navigation while preserving the no-stale-pending
     // guarantee (issue #4140). The reader still lands on /queue (issue #3107).
-    expect(spies.dismissPending).not.toHaveBeenCalled()
     await waitFor(() => expect(spies.invalidateRollStateOnNavigation).toHaveBeenCalled())
     await waitFor(() => expect(spies.navigate).toHaveBeenCalledWith('/queue'))
 
@@ -422,7 +421,6 @@ describe('RollPage parent handlers', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
 
     await user.click(screen.getByTestId('roll-back-to-queue'))
-    expect(spies.dismissPending).not.toHaveBeenCalled()
     await waitFor(() => expect(spies.navigate).toHaveBeenCalledWith('/queue'))
 
     // Returning to Roll remounts the page and hydrates from bootstrap. Because

@@ -221,7 +221,7 @@ it('a failed reading-orders request stays local and leaves rating actions usable
   expect(setErrorMessage).not.toHaveBeenCalled()
 
   // Rating and completion actions remain callable after the optional failure.
-  await act(async () => { await result.current.handleSubmitRating(false) })
+  await act(async () => { await result.current.handleSubmitRating() })
   await act(async () => { await result.current.handleCancelRating() })
   expect(mockRateMutation.mutate).toHaveBeenCalled()
   // Cancel clears only the browser-owned selection; no server call is made.

@@ -19,7 +19,6 @@ vi.mock('../hooks/useRoll', () => ({
   useSetDie: () => ({ mutate: vi.fn(), isPending: false }),
   useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
   useRoll: () => ({ mutate: vi.fn(), isPending: false }),
-  useDismissPending: () => ({ mutate: vi.fn(), isPending: false }),
 }))
 vi.mock('../hooks/useSnooze', () => ({
   useSnooze: () => ({ mutate: vi.fn(), isPending: false }),
