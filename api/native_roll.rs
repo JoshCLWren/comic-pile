@@ -1007,7 +1007,7 @@ mod tests {
     async fn v2_issue_read_ingress_reaches_rust_and_requires_auth() {
         for uri in [
             "/api/v2/issues/7",
-            "/api/v1/issues/7/comicvine",
+            "/api/v2/issues/7/comicvine",
             "/api/v2/issues/7/dependencies",
         ] {
             let mut router = app();
@@ -1269,13 +1269,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_backdate_ingress_reaches_rust_and_never_hits_json_404() {
-        // The threads route fragment points this method/path at this Vercel
-        // entry. Without a matching outer route the regenerated ingress falls
-        // through to native_not_found before the inner router ever sees the
-        // handler (same failure class as #5484). No DB state is needed here:
-        // an anonymous mutation must reach the dispatched handler's 401 (or
-        // the 503 cold-start response), never the Rust JSON 404.
+    async fn retired_test_backdate_ingress_returns_json_404() {
+        // #5958: the test-only backdate writer has no v2 successor. The Vercel
+        // entry must no longer dispatch it; the Rust JSON 404 is the contract.
         let mut router = app();
         let response = router
             .call(
@@ -1287,28 +1283,17 @@ mod tests {
             )
             .await
             .expect("router response");
-        assert!(
-            response.status() == StatusCode::UNAUTHORIZED
-                || response.status() == StatusCode::SERVICE_UNAVAILABLE,
-            "test-backdate must reach Rust dispatch, not the 404 fallback, got {}",
-            response.status()
-        );
-        assert_eq!(
-            response.headers().get("x-comicpile-api-runtime").unwrap(),
-            "rust"
-        );
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
         let bytes = to_bytes(response.into_body(), 8192)
             .await
             .expect("body bytes");
-        let text = String::from_utf8_lossy(&bytes);
-        assert_ne!(
-            text, r#"{"detail":"Not Found"}"#,
-            "test-backdate must not hit native_not_found: {text}"
-        );
+        assert_eq!(String::from_utf8_lossy(&bytes), r#"{"detail":"Not Found"}"#);
     }
 
     #[tokio::test]
-    async fn comicvine_import_status_ingress_preserves_same_path_and_requires_auth() {
+    async fn retired_v1_import_status_ingress_returns_json_404() {
+        // #5958: the v1 alias is retired while the v2 import-status read stays
+        // mounted and is covered by `comicvine_v2_ingress_*` below.
         let mut router = app();
         let response = router
             .call(
@@ -1320,16 +1305,11 @@ mod tests {
             )
             .await
             .expect("router response");
-        assert!(
-            response.status() == StatusCode::UNAUTHORIZED
-                || response.status() == StatusCode::SERVICE_UNAVAILABLE,
-            "ComicVine import status must require auth and reach Rust, got {}",
-            response.status()
-        );
-        assert_eq!(
-            response.headers().get("x-comicpile-api-runtime").unwrap(),
-            "rust"
-        );
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        let bytes = to_bytes(response.into_body(), 8192)
+            .await
+            .expect("body bytes");
+        assert_eq!(String::from_utf8_lossy(&bytes), r#"{"detail":"Not Found"}"#);
     }
 
     #[tokio::test]
@@ -2520,7 +2500,7 @@ mod tests {
                         .expect("thread issues request")
                 };
                 let (status, first, _, text) = call_app(request(
-                    "/api/v1/threads/21/issues?page_size=2".into(),
+                    "/api/v2/threads/21/issues?page_size=2".into(),
                     &access,
                 ))
                 .await;
@@ -2536,7 +2516,7 @@ mod tests {
                 assert_eq!(cursor, "2,102");
 
                 let (status, next, _, text) = call_app(request(
-                    format!("/api/v1/threads/21/issues?page_size=2&page_token={cursor}"),
+                    format!("/api/v2/threads/21/issues?page_size=2&page_token={cursor}"),
                     &access,
                 ))
                 .await;
@@ -2547,7 +2527,7 @@ mod tests {
                 assert!(next["next_page_token"].is_null());
 
                 let (status, unread, _, text) = call_app(request(
-                    "/api/v1/threads/21/issues?status=unread&page_size=100".into(),
+                    "/api/v2/threads/21/issues?status=unread&page_size=100".into(),
                     &access,
                 ))
                 .await;
@@ -2563,7 +2543,7 @@ mod tests {
                 let other_name = format!("thread-issues-foreign-{}", std::process::id());
                 let (other_access, _, _) = register_session(&other_name).await;
                 let (status, _, _, _) =
-                    call_app(request("/api/v1/threads/21/issues".into(), &other_access)).await;
+                    call_app(request("/api/v2/threads/21/issues".into(), &other_access)).await;
                 assert_eq!(status, StatusCode::NOT_FOUND);
             })
             .await;
@@ -2599,11 +2579,11 @@ mod tests {
                 let mut router = app();
                 for uri in [
                     "/api/v1/threads/not-an-int/issues",
-                    "/api/v1/threads/21/issues?page_size=abc",
-                    "/api/v1/threads/21/issues?page_size=99999999999999999999",
-                    "/api/v1/threads/21/issues?page_size=0",
-                    "/api/v1/threads/21/issues?page_size=101",
-                    "/api/v1/threads/21/issues?status=invalid",
+                    "/api/v2/threads/21/issues?page_size=abc",
+                    "/api/v2/threads/21/issues?page_size=99999999999999999999",
+                    "/api/v2/threads/21/issues?page_size=0",
+                    "/api/v2/threads/21/issues?page_size=101",
+                    "/api/v2/threads/21/issues?status=invalid",
                     // Invalid-UTF-8 path extraction must also use the 422 envelope.
                     "/api/v1/threads/%FF/issues",
                 ] {
@@ -2626,7 +2606,7 @@ mod tests {
                 let (status, body, _, text) = call_app(
                     Request::builder()
                         .method("GET")
-                        .uri("/api/v1/threads/21/issues?page_token=bad")
+                        .uri("/api/v2/threads/21/issues?page_token=bad")
                         .header(header::AUTHORIZATION, format!("Bearer {access}"))
                         .body(Body::empty())
                         .expect("bad token request"),
@@ -2639,8 +2619,8 @@ mod tests {
                 // validation: `2%2C102` is the cursor `2,102` and `%72ead`
                 // is `read`. Neither may fall into the 400/422 paths (#5318).
                 for uri in [
-                    "/api/v1/threads/21/issues?page_token=2%2C102",
-                    "/api/v1/threads/21/issues?status=%72ead",
+                    "/api/v2/threads/21/issues?page_token=2%2C102",
+                    "/api/v2/threads/21/issues?status=%72ead",
                 ] {
                     let (status, body, _, text) = call_app(
                         Request::builder()
