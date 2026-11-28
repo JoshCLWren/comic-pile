@@ -281,331 +281,26 @@ async fn load_overlap_decisions(
         .collect::<Vec<_>>()))
 }
 
-/// Resolve adopted canonical issue IDs from the shared evaluator without
-/// inventing a second resolution or exclusion engine.
-async fn adopted_issue_ids(
-    state: &Arc<AppState>,
-    user_id: i32,
-    source_list_id: i32,
-    series_decisions: &HashMap<String, bool>,
-    entry_decisions: &HashMap<String, bool>,
-) -> Result<(CblSourceFingerprint, Vec<i32>, i32), ApiError> {
-    let preview = adoption_preview_for(
-        state,
-        user_id,
-        source_list_id,
-        series_decisions,
-        entry_decisions,
-    )
-    .await
-    .map_err(identity_error)?;
-    let mut ids = Vec::new();
-    let mut seen = HashSet::new();
-    let mut unresolved = 0;
-    for entry in &preview.entries {
-        if entry.adopted {
-            if let Some(issue_id) = entry.resolved_issue_id {
-                if seen.insert(issue_id) {
-                    ids.push(issue_id);
-                }
-            } else {
-                unresolved += 1;
-            }
-        } else {
-            unresolved += 1;
-        }
-    }
-    Ok((
-        CblSourceFingerprint {
-            source_list_id: preview.source.source_list_id,
-            content_hash: preview.source.content_hash,
-            revision_sha: preview.source.revision_sha,
-        },
-        ids,
-        unresolved,
-    ))
-}
-
-#[derive(Debug, Clone)]
-struct CblSourceFingerprint {
+/// One canonical evaluator pass. Reuse of `adoption_preview_for` keeps source
+/// identity, resolution, checkbox selection and collection exclusions in the
+/// adoption engine; this service only projects the result onto an owned list.
+struct AdoptionProjection {
     source_list_id: i32,
     content_hash: String,
     revision_sha: String,
+    adopted_ids: Vec<i32>,
+    unresolved_count: i32,
+    series_names: HashMap<i32, (String, String)>,
+    adoption_entries: Vec<JsonValue>,
 }
 
-fn intent_json(
-    old: &[EntryRow],
-    requested: &Option<BTreeMap<i32, ReplacementEntryIntent>>,
-) -> JsonValue {
-    let mut map = serde_json::Map::new();
-    for entry in old {
-        map.insert(
-            entry.issue_id.to_string(),
-            json!({
-                "is_checkpoint": entry.is_checkpoint,
-                "checkpoint_target_issue_ids": entry.checkpoint_target_issue_ids,
-                "gate": entry.gate,
-                "skipped": entry.skipped,
-            }),
-        );
-    }
-    if let Some(intents) = requested {
-        for (issue_id, intent) in intents {
-            map.insert(
-                issue_id.to_string(),
-                json!({
-                    "is_checkpoint": intent.is_checkpoint,
-                    "checkpoint_target_issue_ids": intent.checkpoint_target_issue_ids,
-                    "gate": intent.gate,
-                    "skipped": intent.skipped,
-                }),
-            );
-        }
-    }
-    JsonValue::Object(map)
-}
-
-fn state_json(
-    name: &str,
-    description: Option<&str>,
-    mode: &str,
-    entries: &[EntryRow],
-    overlaps: &JsonValue,
-) -> JsonValue {
-    json!({
-        "name": name,
-        "description": description,
-        "mode": mode,
-        "entries": entries.iter().map(|entry| {
-            json!({
-                "issue_id": entry.issue_id,
-                "position": entry.position,
-                "series_name": entry.series_name,
-                "issue_number": entry.issue_number,
-                "is_checkpoint": entry.is_checkpoint,
-                "checkpoint_target_issue_ids": entry.checkpoint_target_issue_ids,
-                "gate": entry.gate,
-                "skipped": entry.skipped,
-            })
-        }).collect::<Vec<_>>(),
-        "overlap_decisions": overlaps,
-    })
-}
-
-fn entries_from_state(state: &JsonValue) -> Result<Vec<EntryRow>, ApiError> {
-    let entries = state
-        .get("entries")
-        .and_then(|value| value.as_array())
-        .ok_or_else(|| {
-            structured(
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                "replacement_snapshot_invalid",
-                "Replacement snapshot has no entries",
-            )
-        })?;
-    entries
-        .iter()
-        .map(|entry| {
-            let targets = entry
-                .get("checkpoint_target_issue_ids")
-                .and_then(|value| value.as_array())
-                .map(|items| {
-                    items
-                        .iter()
-                        .filter_map(|value| value.as_i64().map(|id| id as i32))
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
-            Ok(EntryRow {
-                issue_id: entry
-                    .get("issue_id")
-                    .and_then(|value| value.as_i64())
-                    .ok_or_else(|| {
-                        structured(
-                            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                            "replacement_snapshot_invalid",
-                            "Replacement snapshot entry has no issue_id",
-                        )
-                    })? as i32,
-                position: entry
-                    .get("position")
-                    .and_then(|value| value.as_i64())
-                    .unwrap_or(0) as i32,
-                series_name: entry
-                    .get("series_name")
-                    .and_then(|value| value.as_str())
-                    .unwrap_or_default()
-                    .to_string(),
-                issue_number: entry
-                    .get("issue_number")
-                    .and_then(|value| value.as_str())
-                    .unwrap_or_default()
-                    .to_string(),
-                is_checkpoint: entry
-                    .get("is_checkpoint")
-                    .and_then(|value| value.as_bool())
-                    .unwrap_or(false),
-                checkpoint_target_issue_ids: targets,
-                gate: entry
-                    .get("gate")
-                    .and_then(|value| value.as_str())
-                    .unwrap_or("none")
-                    .to_string(),
-                skipped: entry
-                    .get("skipped")
-                    .and_then(|value| value.as_bool())
-                    .unwrap_or(false),
-            })
-        })
-        .collect()
-}
-
-/// Set-based membership write. Intents for retained entries are merged in SQL
-/// from a single JSONB parameter; no per-issue round trip is issued.
-async fn write_entries(
-    tx: &tokio_postgres::Transaction<'_>,
-    list_id: i32,
-    ids: &[i32],
-    intents: &JsonValue,
-) -> Result<(), ApiError> {
-    // Rebuild the whole ordered membership in one statement pair. A partial
-    // delete would leave retained entries at their old positions and collide
-    // with the unique (list_id, position) constraint when the reviewed order
-    // changes; intents for retained issues are carried in `intents`.
-    tx.execute(
-        "DELETE FROM custom_cbl_entries WHERE list_id = $1",
-        &[&list_id],
-    )
-    .await
-    .map_err(db::query_error)?;
-    if ids.is_empty() {
-        return Ok(());
-    }
-    tx.execute(
-        r#"
-        INSERT INTO custom_cbl_entries
-          (list_id, issue_id, position, created_at, is_checkpoint,
-           checkpoint_target_issue_ids, gate, skipped)
-        SELECT $1, ids.issue_id, (ids.ord - 1)::int, NOW(),
-               COALESCE((intent ->> 'is_checkpoint')::bool, false),
-               COALESCE(intent -> 'checkpoint_target_issue_ids', '[]'::jsonb)::json,
-               COALESCE(intent ->> 'gate', 'none'),
-               COALESCE((intent ->> 'skipped')::bool, false)
-        FROM unnest($2::int[]) WITH ORDINALITY AS ids(issue_id, ord)
-        CROSS JOIN LATERAL (SELECT $3::jsonb -> ids.issue_id::text AS intent) AS chosen
-        ON CONFLICT (list_id, issue_id) DO UPDATE SET
-          position = EXCLUDED.position,
-          is_checkpoint = EXCLUDED.is_checkpoint,
-          checkpoint_target_issue_ids = EXCLUDED.checkpoint_target_issue_ids,
-          gate = EXCLUDED.gate,
-          skipped = EXCLUDED.skipped
-        "#,
-        &[&list_id, &ids, &tokio_postgres::types::Json(intents)],
-    )
-    .await
-    .map_err(db::query_error)?;
-    Ok(())
-}
-
-async fn write_overlap_decisions(
-    tx: &tokio_postgres::Transaction<'_>,
-    user_id: i32,
-    list_id: i32,
-    decisions: &JsonValue,
-) -> Result<(), ApiError> {
-    tx.execute(
-        "DELETE FROM custom_cbl_overlap_decisions WHERE user_id = $1 AND list_id = $2",
-        &[&user_id, &list_id],
-    )
-    .await
-    .map_err(db::query_error)?;
-    let items = decisions.as_array().cloned().unwrap_or_default();
-    if items.is_empty() {
-        return Ok(());
-    }
-    tx.execute(
-        r#"
-        INSERT INTO custom_cbl_overlap_decisions
-          (user_id, list_id, continuing_external_identity_id,
-           waiting_external_identity_id, created_at, updated_at)
-        SELECT $1, $2, (d ->> 'continuing_external_identity_id')::int,
-               (d ->> 'waiting_external_identity_id')::int, NOW(), NOW()
-        FROM jsonb_array_elements($3::jsonb) AS d
-        WHERE (d ->> 'continuing_external_identity_id') IS NOT NULL
-          AND (d ->> 'waiting_external_identity_id') IS NOT NULL
-          AND (d ->> 'continuing_external_identity_id')::int
-              <> (d ->> 'waiting_external_identity_id')::int
-        "#,
-        &[&user_id, &list_id, &tokio_postgres::types::Json(decisions)],
-    )
-    .await
-    .map_err(db::query_error)?;
-    Ok(())
-}
-
-fn project_after(
-    source_ids: &[i32],
-    old: &[EntryRow],
-    kept_manual: &[i32],
-    requested_intents: &Option<BTreeMap<i32, ReplacementEntryIntent>>,
-    series_names: &HashMap<i32, (String, String)>,
-) -> Vec<EntryRow> {
-    let mut ordered = source_ids.to_vec();
-    for id in kept_manual {
-        if !ordered.contains(id) {
-            ordered.push(*id);
-        }
-    }
-    let old_by_id: BTreeMap<i32, &EntryRow> =
-        old.iter().map(|entry| (entry.issue_id, entry)).collect();
-    ordered
-        .into_iter()
-        .enumerate()
-        .map(|(index, issue_id)| {
-            let old_entry = old_by_id.get(&issue_id).copied();
-            let intent = requested_intents
-                .as_ref()
-                .and_then(|intents| intents.get(&issue_id));
-            let (series_name, issue_number) = series_names
-                .get(&issue_id)
-                .cloned()
-                .or_else(|| {
-                    old_entry.map(|entry| (entry.series_name.clone(), entry.issue_number.clone()))
-                })
-                .unwrap_or_else(|| (format!("Issue {issue_id}"), String::new()));
-            EntryRow {
-                issue_id,
-                position: index as i32,
-                series_name,
-                issue_number,
-                is_checkpoint: intent
-                    .map(|value| value.is_checkpoint)
-                    .or_else(|| old_entry.map(|entry| entry.is_checkpoint))
-                    .unwrap_or(false),
-                checkpoint_target_issue_ids: intent
-                    .map(|value| value.checkpoint_target_issue_ids.clone())
-                    .or_else(|| old_entry.map(|entry| entry.checkpoint_target_issue_ids.clone()))
-                    .unwrap_or_default(),
-                gate: intent
-                    .map(|value| value.gate.clone())
-                    .or_else(|| old_entry.map(|entry| entry.gate.clone()))
-                    .unwrap_or_else(default_gate),
-                skipped: intent
-                    .map(|value| value.skipped)
-                    .or_else(|| old_entry.map(|entry| entry.skipped))
-                    .unwrap_or(false),
-            }
-        })
-        .collect()
-}
-
-async fn source_series_names(
+async fn adoption_projection(
     state: &Arc<AppState>,
-    source_list_id: i32,
     user_id: i32,
+    source_list_id: i32,
     series_decisions: &HashMap<String, bool>,
     entry_decisions: &HashMap<String, bool>,
-) -> Result<HashMap<i32, (String, String)>, ApiError> {
+) -> Result<AdoptionProjection, ApiError> {
     let preview = adoption_preview_for(
         state,
         user_id,
@@ -615,14 +310,39 @@ async fn source_series_names(
     )
     .await
     .map_err(identity_error)?;
-    Ok(preview
-        .entries
-        .into_iter()
-        .filter_map(|entry| {
-            let issue_id = entry.resolved_issue_id?;
-            Some((issue_id, (entry.series_name, entry.issue_number)))
-        })
-        .collect())
+    let mut adopted_ids = Vec::new();
+    let mut seen = HashSet::new();
+    let mut unresolved_count = 0;
+    let mut series_names = HashMap::new();
+    let mut adoption_entries = Vec::with_capacity(preview.entries.len());
+    for entry in preview.entries {
+        if let Some(issue_id) = entry.resolved_issue_id {
+            series_names
+                .entry(issue_id)
+                .or_insert_with(|| (entry.series_name.clone(), entry.issue_number.clone()));
+        }
+        if entry.adopted {
+            if let Some(issue_id) = entry.resolved_issue_id {
+                if seen.insert(issue_id) {
+                    adopted_ids.push(issue_id);
+                }
+            } else {
+                unresolved_count += 1;
+            }
+        } else {
+            unresolved_count += 1;
+        }
+        adoption_entries.push(serde_json::to_value(&entry).unwrap_or(JsonValue::Null));
+    }
+    Ok(AdoptionProjection {
+        source_list_id: preview.source.source_list_id,
+        content_hash: preview.source.content_hash,
+        revision_sha: preview.source.revision_sha,
+        adopted_ids,
+        unresolved_count,
+        series_names,
+        adoption_entries,
+    })
 }
 
 /// `POST /api/v2/reading-lists/{list_id}/replacements:preview`
@@ -673,7 +393,7 @@ pub async fn preview_replacement(
     tx.rollback().await.map_err(db::query_error)?;
     drop(conn);
 
-    let (fingerprint, source_ids, unresolved_count) = adopted_issue_ids(
+    let projection = adoption_projection(
         &state,
         user.id(),
         request.source_list_id,
@@ -681,14 +401,8 @@ pub async fn preview_replacement(
         &request.entry_decisions,
     )
     .await?;
-    let series_names = source_series_names(
-        &state,
-        request.source_list_id,
-        user.id(),
-        &request.series_decisions,
-        &request.entry_decisions,
-    )
-    .await?;
+    let source_ids = &projection.adopted_ids;
+    let series_names = &projection.series_names;
     let source_set: HashSet<i32> = source_ids.iter().copied().collect();
     let omitted_manual_issue_ids = old
         .iter()
@@ -710,32 +424,18 @@ pub async fn preview_replacement(
             )
         })
         .collect();
-    let adoption_entries = adoption_preview_for(
-        &state,
-        user.id(),
-        request.source_list_id,
-        &request.series_decisions,
-        &request.entry_decisions,
-    )
-    .await
-    .map_err(identity_error)?
-    .entries
-    .into_iter()
-    .map(|entry| serde_json::to_value(entry).unwrap_or(JsonValue::Null))
-    .collect();
-
     Ok(Json(ReplacementPreviewResponse {
         target_list_id: list_id,
         target_list_name: name,
-        source_list_id: fingerprint.source_list_id,
-        content_hash: fingerprint.content_hash,
-        revision_sha: fingerprint.revision_sha,
+        source_list_id: projection.source_list_id,
+        content_hash: projection.content_hash,
+        revision_sha: projection.revision_sha,
         expected_updated_at,
         before,
         after: after_views,
         omitted_manual_issue_ids,
-        unresolved_count,
-        adoption_entries,
+        unresolved_count: projection.unresolved_count,
+        adoption_entries: projection.adoption_entries,
         overlap_decisions: overlaps,
     }))
 }
@@ -769,7 +469,7 @@ pub async fn commit_replacement(
     // Reuse the canonical evaluator before opening the write transaction. The
     // source hash/revision and list version are re-checked inside it, so a
     // concurrent source refresh cannot leak into a committed replacement.
-    let (fingerprint, source_ids, _) = adopted_issue_ids(
+    let projection = adoption_projection(
         &state,
         user.id(),
         request.source_list_id,
@@ -777,14 +477,8 @@ pub async fn commit_replacement(
         &request.entry_decisions,
     )
     .await?;
-    let series_names = source_series_names(
-        &state,
-        request.source_list_id,
-        user.id(),
-        &request.series_decisions,
-        &request.entry_decisions,
-    )
-    .await?;
+    let source_ids = projection.adopted_ids.clone();
+    let series_names = projection.series_names.clone();
 
     let mut conn = db::checkout(&state).await?;
     let tx = conn
