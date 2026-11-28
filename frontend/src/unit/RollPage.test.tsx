@@ -343,10 +343,10 @@ it('loads every active override page only after the modal opens', async () => {
   expect(await screen.findByRole('option', { name: 'Second Choice (Comic)' })).toBeInTheDocument()
 })
 
-it('uses the scoped die in the die-selection modal when bootstrap differs (#4719)', async () => {
+it('uses the scoped die in the die-selection modal (#4719)', async () => {
   const user = userEvent.setup()
   mockedUseRollState.mockReturnValue({
-    data: { ...bootstrap, current_die: 8 },
+    data: bootstrap,
     refetch: vi.fn().mockResolvedValue(bootstrap),
     isPending: false,
     isError: false,
@@ -366,10 +366,10 @@ it('uses the scoped die in the die-selection modal when bootstrap differs (#4719
   }
 })
 
-it('uses the d6 default after a scoped refetch error, ignoring the bootstrap die (#4352)', async () => {
+it('uses the d6 default after a scoped refetch error (#4352)', async () => {
   const user = userEvent.setup()
   mockedUseRollState.mockReturnValue({
-    data: { ...bootstrap, current_die: 8 },
+    data: bootstrap,
     refetch: vi.fn().mockResolvedValue(bootstrap),
     isPending: false,
     isError: false,

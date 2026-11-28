@@ -5,6 +5,7 @@ import { useRollPageState } from '../pages/RollPage/useRollPageState'
 import type { SnoozeMutationOutcome } from '../hooks/useSnooze'
 import type { RatingThread } from '../pages/RollPage/types'
 import type { RollResponse } from '../types'
+import type { RollOfferSeed } from '../hooks/useRollPendingSelection'
 
 function ratingThread(id: number): RatingThread {
   return {
@@ -45,12 +46,7 @@ function nextOffer(): RollResponse {
 
 function committedOutcome(): SnoozeMutationOutcome {
   return {
-    response: {
-      current_die: 12,
-      pending_thread_id: null,
-      reading_mode_suggested: false,
-      correction: null,
-    },
+    response: nextOffer(),
     refreshed: true,
     refreshError: null,
   }
@@ -58,9 +54,13 @@ function committedOutcome(): SnoozeMutationOutcome {
 
 function renderRollSnooze(
   mutate: (expectedPendingThreadId?: number) => Promise<SnoozeMutationOutcome>,
-  options: { threadId?: number; onRefreshFailed?: (refreshError: unknown) => void } = {},
+  options: {
+    threadId?: number
+    onRefreshFailed?: (refreshError: unknown) => void
+    seedPending?: (offer: RollOfferSeed) => void
+  } = {},
 ) {
-  const { threadId = 7, onRefreshFailed } = options
+  const { threadId = 7, onRefreshFailed, seedPending } = options
   const refetchRollState = vi.fn().mockResolvedValue(undefined)
 
   const { result } = renderHook(() => {
@@ -71,6 +71,7 @@ function renderRollSnooze(
       snoozeMutation: { mutate },
       unsnoozeMutation: { mutate: vi.fn().mockResolvedValue({}) },
       refetchRollState,
+      seedPending,
       onRefreshFailed,
     })
 
@@ -87,7 +88,7 @@ function renderRollSnooze(
 }
 
 describe('useRollSnooze', () => {
-  it('does not refetch bootstrap after a successful snooze', async () => {
+  it('does not refetch Roll state after a successful snooze', async () => {
     const mutate = vi.fn().mockResolvedValue(committedOutcome())
     const { result, refetchRollState } = renderRollSnooze(mutate)
 
@@ -134,12 +135,7 @@ describe('useRollSnooze', () => {
   it('reports an exhausted authoritative refresh instead of closing silently', async () => {
     const refreshFailure = new Error('bootstrap unavailable')
     const mutate = vi.fn().mockResolvedValue({
-      response: {
-        current_die: 12,
-        pending_thread_id: null,
-        reading_mode_suggested: false,
-        correction: null,
-      },
+      response: nextOffer(),
       refreshed: false,
       refreshError: refreshFailure,
     } satisfies SnoozeMutationOutcome)
@@ -209,6 +205,7 @@ describe('useRollSnooze', () => {
     const response = nextOffer()
     const reroll = vi.fn().mockResolvedValue(response)
     const enterRatingView = vi.fn().mockResolvedValue(undefined)
+    const seedPending = vi.fn()
     const refetchRollState = vi.fn()
     const { result } = renderHook(() => {
       const state = useRollPageState()
@@ -218,6 +215,7 @@ describe('useRollSnooze', () => {
         unsnoozeMutation: { mutate: vi.fn().mockResolvedValue({}) },
         rerollMutation: { mutate: reroll },
         enterRatingView,
+        seedPending,
         refetchRollState,
       })
       return { state, snooze }
@@ -233,6 +231,7 @@ describe('useRollSnooze', () => {
     })
 
     expect(reroll).toHaveBeenCalledTimes(1)
+    expect(seedPending).toHaveBeenCalledWith(response)
     expect(enterRatingView).toHaveBeenCalledWith(
       response.thread_id,
       response.result,
