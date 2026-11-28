@@ -539,7 +539,10 @@ pub async fn list_activity(
             ],
         )
         .await
-        .map_err(db::query_error)?;
+        .map_err(|error| {
+            eprintln!("ACTIVITY SQL ERROR: {error:?}");
+            db::query_error(error)
+        })?;
 
     let items: Vec<(StreamKey, ActivityItem)> = rows.iter().flat_map(logical_items).collect();
     let (items, next_page_token) = paginate(items, after, limit as usize);
