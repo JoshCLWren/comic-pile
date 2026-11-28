@@ -1974,6 +1974,15 @@ mod tests {
             RetainedCredits::from_metadata(&empty),
             RetainedCredits::Empty
         );
+        // A malformed stored roster is not evidence of credits either.
+        let malformed_raw = json!({
+            "raw_provider_payload": {"person_credits": [{}, {"role": "writer"}]}
+        });
+        assert!(!cached_has_credits(&malformed_raw));
+        assert_eq!(
+            RetainedCredits::from_metadata(&malformed_raw),
+            RetainedCredits::Empty
+        );
 
         let mut patch = json!({"creator_credits": []});
         let retained = preserve_cached_credits(&mut patch, Some(&raw_only));
