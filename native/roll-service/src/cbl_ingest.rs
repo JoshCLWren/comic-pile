@@ -328,7 +328,7 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
             .map_err(|error| IngestError::new(format!("malformed CBL XML: {error}")))?;
         match event {
             Event::Start(ref element) => {
-                let tag = element.name();
+                let tag = element.name().0;
                 if elements.is_empty() {
                     if root_seen || tag != "ReadingList" {
                         return Err(IngestError::new(
@@ -398,7 +398,7 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
                 elements.push(tag.to_string());
             }
             Event::Empty(ref element) => {
-                let tag = element.name();
+                let tag = element.name().0;
                 if elements.is_empty() {
                     if root_seen || tag != "ReadingList" {
                         return Err(IngestError::new(
@@ -471,7 +471,7 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
                 }
             }
             Event::End(ref element) => {
-                let tag = element.name();
+                let tag = element.name().0;
                 let open_tag = elements
                     .pop()
                     .ok_or_else(|| IngestError::new("unexpected closing CBL tag"))?;
