@@ -172,6 +172,59 @@ describe('useInfiniteCollection', () => {
     expect(result.current.error).toBeInstanceOf(Error)
   })
 
+  it('honors the QueryClient retry policy when no retry option is supplied', async () => {
+    const queryFn = vi.fn().mockRejectedValue(new Error('Fetch failed'))
+
+    const { result } = renderHook(
+      () => useInfiniteCollection({
+        queryKey: ['default-retry-policy'],
+        queryFn,
+        initialPageParam: null,
+        getNextPageParam: (_p: { items: never[] }) => null,
+        selectPage: (_p: { items: never[] }) => [],
+      }),
+      { wrapper: createWrapper() }
+    )
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    // An omitted option must not re-enable retries through an explicit
+    // `retry: undefined` override (the QueryClient above disables retries).
+    expect(queryFn).toHaveBeenCalledTimes(1)
+  })
+
+  it('restarts the cursor chain when a filter query key changes', async () => {
+    interface FilterPage {
+      items: string[]
+      nextToken: string | null
+    }
+    let search = 'first'
+    const queryFn = vi.fn(async ({ pageParam }): Promise<FilterPage> => ({
+      items: [`${search}-${pageParam ?? 'first'}`],
+      nextToken: pageParam == null ? 't1' : null,
+    }))
+    const { result, rerender } = renderHook(
+      () => useInfiniteCollection<string, FilterPage, string | null>({
+        queryKey: ['filtered', search],
+        queryFn,
+        initialPageParam: null,
+        getNextPageParam: (p) => p.nextToken,
+        selectPage: (p) => p.items,
+        retry: false,
+      }),
+      { wrapper: createWrapper() }
+    )
+
+    await waitFor(() => expect(result.current.items).toEqual(['first-first']))
+    await result.current.fetchNextPage()
+    await waitFor(() => expect(result.current.items).toEqual(['first-first', 'first-t1']))
+
+    search = 'second'
+    rerender()
+    await waitFor(() => expect(result.current.items).toEqual(['second-first']))
+    expect(queryFn).toHaveBeenLastCalledWith(expect.objectContaining({ pageParam: null }))
+    expect(result.current.hasNextPage).toBe(true)
+  })
+
   it('stops advancing when the server repeats a cursor', async () => {
     const queryFn = vi.fn()
       .mockResolvedValueOnce({ items: [1], nextToken: 'same' })
