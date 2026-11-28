@@ -67,6 +67,27 @@ async function settle(page: import('@playwright/test').Page): Promise<void> {
   })
 }
 
+async function controlContrast(
+  locator: import('@playwright/test').Locator,
+): Promise<number> {
+  return locator.evaluate((element) => {
+    const luminance = (color: string) => {
+      const channels = color.match(/[\d.]+/g)?.slice(0, 3).map(Number) ?? []
+      const linear = channels.map((channel) => {
+        const value = channel / 255
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+      })
+      return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+    }
+    const style = getComputedStyle(element)
+    const foreground = luminance(style.color)
+    const background = luminance(style.backgroundColor)
+    const light = Math.max(foreground, background)
+    const dark = Math.min(foreground, background)
+    return (light + 0.05) / (dark + 0.05)
+  })
+}
+
 test.describe('Night Shift single visual identity (#5980)', () => {
   test.beforeAll(async () => {
     await rm(OUTPUT_DIRECTORY, { recursive: true, force: true })
