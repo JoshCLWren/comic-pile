@@ -272,13 +272,6 @@ mod tests {
             ("/api/v1/threads/{thread_id}/issues", "post", "201"),
             ("/api/v1/threads/{thread_id}/issues/creators", "get", "200"),
             ("/api/v1/threads/{thread_id}/issues:reorder", "post", "204"),
-            ("/api/v1/threads/{thread_id}:migrateToIssues", "post", "200"),
-            (
-                "/api/v1/threads/{thread_id}:migrateToIssuesSimple",
-                "post",
-                "200",
-            ),
-            ("/api/v1/threads/{thread_id}:setCurrentIssue", "post", "200"),
         ] {
             let operation = &paths[path][method];
             assert!(

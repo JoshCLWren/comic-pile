@@ -1946,68 +1946,6 @@ pub fn creator_credits_documentation() {}
 #[allow(dead_code)]
 pub fn reorder_documentation() {}
 
-/// Documentation-only operation for the explicit migration.
-#[utoipa::path(
-    post,
-    path = "/api/v1/threads/{thread_id}:migrateToIssues",
-    tag = "threads",
-    operation_id = "thread_issues_migrate",
-    params(("thread_id" = i32, Path, description = "Owned Thread identifier")),
-    request_body = MigrateToIssuesRequest,
-    responses(
-        (status = 200, description = "Migrated thread", body = ThreadResponse),
-        (status = 400, description = "Already migrated or inconsistent range"),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Thread not found"),
-        (status = 422, description = "Request validation failed"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn migrate_documentation() {}
-
-/// Documentation-only operation for the simplified migration.
-#[utoipa::path(
-    post,
-    path = "/api/v1/threads/{thread_id}:migrateToIssuesSimple",
-    tag = "threads",
-    operation_id = "thread_issues_migrate_simple",
-    params(("thread_id" = i32, Path, description = "Owned Thread identifier")),
-    request_body = MigrateToIssuesSimpleRequest,
-    responses(
-        (status = 200, description = "Migrated thread", body = ThreadResponse),
-        (status = 400, description = "Already migrated or issue cannot be created"),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Thread not found"),
-        (status = 422, description = "Request validation failed"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn migrate_simple_documentation() {}
-
-/// Documentation-only operation for correcting the current issue.
-#[utoipa::path(
-    post,
-    path = "/api/v1/threads/{thread_id}:setCurrentIssue",
-    tag = "threads",
-    operation_id = "thread_issues_set_current",
-    params(("thread_id" = i32, Path, description = "Owned Thread identifier")),
-    request_body = SetCurrentIssueRequest,
-    responses(
-        (status = 200, description = "Corrected current issue", body = SetCurrentIssueResponse),
-        (status = 400, description = "Thread inactive, untracked or issue unavailable"),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Thread or issue not found"),
-        (status = 422, description = "Request validation failed"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn set_current_documentation() {}
 
 /// OpenAPI document for the native same-path thread issue-management surface.
 #[derive(utoipa::OpenApi)]
@@ -2020,10 +1958,7 @@ pub fn set_current_documentation() {}
     paths(
         create_issues_documentation,
         creators_documentation,
-        reorder_documentation,
-        migrate_documentation,
-        migrate_simple_documentation,
-        set_current_documentation
+        reorder_documentation
     ),
     components(schemas(
         IssueResponse,
@@ -2032,12 +1967,8 @@ pub fn set_current_documentation() {}
         IssueCreatorsEntry,
         ThreadIssueCreatorsResponse,
         ThreadResponse,
-        SetCurrentIssueResponse,
         IssueCreateRange,
-        IssueReorderRequest,
-        MigrateToIssuesRequest,
-        MigrateToIssuesSimpleRequest,
-        SetCurrentIssueRequest
+        IssueReorderRequest
     )),
     modifiers(&ThreadIssuesSecurityAddon)
 )]
