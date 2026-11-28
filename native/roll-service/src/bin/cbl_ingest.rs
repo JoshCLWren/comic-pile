@@ -10,9 +10,10 @@
 use chrono::Utc;
 use comicpile_roll_service::cbl_ingest::{
     build_inventory, connect, discover_cbl_files, parse_cbl_file, parse_options, sync_cbl_lists,
-    CBLParseFailure,
+    verify_pinned_checkout, CBLParseFailure,
 };
 use std::process::ExitCode;
+use tokio_postgres::IsolationLevel;
 
 fn database_url() -> Option<String> {
     [
@@ -38,6 +39,12 @@ fn print_payload(payload: &serde_json::Value) {
 async fn run() -> Result<(bool, serde_json::Value), String> {
     let arguments: Vec<String> = std::env::args().skip(1).collect();
     let options = parse_options(&arguments).map_err(|error| error.to_string())?;
+    verify_pinned_checkout(
+        &options.mirror_path,
+        &options.revision_sha,
+        &options.repository,
+    )
+    .map_err(|error| error.to_string())?;
 
     let files = discover_cbl_files(&options.mirror_path).map_err(|error| error.to_string())?;
     let mut parsed_lists = Vec::with_capacity(files.len());
@@ -95,8 +102,15 @@ async fn run() -> Result<(bool, serde_json::Value), String> {
         .map(|failure| failure.source_path.clone())
         .collect();
     let summary = if options.dry_run {
-        sync_cbl_lists(
-            &client,
+        let transaction = client
+            .build_transaction()
+            .isolation_level(IsolationLevel::RepeatableRead)
+            .read_only(true)
+            .start()
+            .await
+            .map_err(|error| format!("dry-run transaction start failed: {error}"))?;
+        let summary = sync_cbl_lists(
+            &transaction,
             &repository,
             &revision,
             &parsed_lists,
@@ -106,7 +120,12 @@ async fn run() -> Result<(bool, serde_json::Value), String> {
             synced_at,
         )
         .await
-        .map_err(|error| error.to_string())?
+        .map_err(|error| error.to_string())?;
+        transaction
+            .commit()
+            .await
+            .map_err(|error| format!("dry-run transaction commit failed: {error}"))?;
+        summary
     } else {
         let transaction = client
             .transaction()
@@ -148,7 +167,7 @@ async fn run() -> Result<(bool, serde_json::Value), String> {
             object.insert(key.clone(), value.clone());
         }
     }
-    Ok((true, payload))
+    Ok((failures.is_empty(), payload))
 }
 
 #[tokio::main]

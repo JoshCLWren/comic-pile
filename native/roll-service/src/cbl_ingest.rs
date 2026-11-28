@@ -1490,6 +1490,64 @@ async fn insert_entry_batch<C: GenericClient>(
 mod tests {
     use super::*;
 
+    static NEXT_GIT_FIXTURE: AtomicUsize = AtomicUsize::new(1);
+
+    struct GitFixture {
+        root: PathBuf,
+        revision: String,
+    }
+
+    impl GitFixture {
+        fn new(repository: &str) -> Self {
+            let root = std::env::temp_dir().join(format!(
+                "comicpile-cbl-git-{}-{}",
+                std::process::id(),
+                NEXT_GIT_FIXTURE.fetch_add(1, Ordering::Relaxed)
+            ));
+            fs::create_dir_all(&root).unwrap();
+            git(&root, &["init", "--quiet"]);
+            git(
+                &root,
+                &["remote", "add", "origin", &format!("https://github.com/{repository}.git")],
+            );
+            fs::write(root.join("DC.cbl"), minimal_cbl("<Book Series=\"X\" Number=\"1\" />"))
+                .unwrap();
+            git(&root, &["add", "."]);
+            git(
+                &root,
+                &[
+                    "-c",
+                    "user.name=CBL Test",
+                    "-c",
+                    "user.email=cbl-test@example.invalid",
+                    "commit",
+                    "--quiet",
+                    "-m",
+                    "fixture",
+                ],
+            );
+            let revision = git(&root, &["rev-parse", "HEAD"]).trim().to_string();
+            Self { root, revision }
+        }
+    }
+
+    impl Drop for GitFixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
+    fn git(root: &Path, arguments: &[&str]) -> String {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(arguments)
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "git {arguments:?} failed");
+        String::from_utf8(output.stdout).unwrap()
+    }
+
     fn minimal_cbl(extra: &str) -> Vec<u8> {
         format!(
             "<ReadingList><Name>Batman &amp; Robin</Name><NumIssues>2</NumIssues><Books>{extra}</Books></ReadingList>"
