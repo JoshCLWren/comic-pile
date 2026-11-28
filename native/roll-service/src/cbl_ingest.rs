@@ -266,9 +266,7 @@ pub fn discover_cbl_files(mirror_path: &Path) -> Result<Vec<PathBuf>, IngestErro
                     .is_some_and(|extension| extension.eq_ignore_ascii_case("cbl"))
             {
                 if discovered.len() >= MAX_MIRROR_FILES {
-                    return Err(IngestError::new(
-                        "mirror exceeds the supported file limit",
-                    ));
+                    return Err(IngestError::new("mirror exceeds the supported file limit"));
                 }
                 discovered.push(path);
             }
@@ -291,8 +289,8 @@ fn relative_source_path(path: &Path, mirror_path: &Path) -> String {
 
 /// Parse one file from disk, isolating read and XML failures for the inventory.
 pub fn parse_cbl_file(path: &Path, mirror_path: &Path) -> Result<CBLList, IngestError> {
-    let mut file =
-        fs::File::open(path).map_err(|error| IngestError::new(format!("cannot read CBL: {error}")))?;
+    let mut file = fs::File::open(path)
+        .map_err(|error| IngestError::new(format!("cannot read CBL: {error}")))?;
     let mut raw = Vec::new();
     (&mut file)
         .take(MAX_CBL_FILE_BYTES.saturating_add(1))
@@ -365,11 +363,7 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
                             "CBL Books must be directly inside ReadingList",
                         ));
                     }
-                    "Book"
-                        if elements
-                            .last()
-                            .is_some_and(|parent| parent == "Books") =>
-                    {
+                    "Book" if elements.last().is_some_and(|parent| parent == "Books") => {
                         if books.len() >= MAX_BOOKS_PER_LIST {
                             return Err(IngestError::new(
                                 "CBL list exceeds the supported entry limit",
@@ -381,15 +375,11 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
                         current_book = Some(book);
                     }
                     "Book" => {
-                        return Err(IngestError::new(
-                            "CBL Book must be directly inside Books",
-                        ));
+                        return Err(IngestError::new("CBL Book must be directly inside Books"));
                     }
                     "Database"
                         if current_book.is_some()
-                            && elements
-                                .last()
-                                .is_some_and(|parent| parent == "Book") =>
+                            && elements.last().is_some_and(|parent| parent == "Book") =>
                     {
                         apply_database(
                             current_book
@@ -427,11 +417,7 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
                             "CBL Books must be directly inside ReadingList",
                         ));
                     }
-                    "Book"
-                        if elements
-                            .last()
-                            .is_some_and(|parent| parent == "Books") =>
-                    {
+                    "Book" if elements.last().is_some_and(|parent| parent == "Books") => {
                         if books.len() >= MAX_BOOKS_PER_LIST {
                             return Err(IngestError::new(
                                 "CBL list exceeds the supported entry limit",
@@ -444,15 +430,11 @@ pub fn parse_cbl_bytes(raw: &[u8], source_path: &str) -> Result<CBLList, IngestE
                         books.push(book);
                     }
                     "Book" => {
-                        return Err(IngestError::new(
-                            "CBL Book must be directly inside Books",
-                        ));
+                        return Err(IngestError::new("CBL Book must be directly inside Books"));
                     }
                     "Database"
                         if current_book.is_some()
-                            && elements
-                                .last()
-                                .is_some_and(|parent| parent == "Book") =>
+                            && elements.last().is_some_and(|parent| parent == "Book") =>
                     {
                         apply_database(
                             current_book
@@ -588,7 +570,9 @@ fn decode_reference(raw: &str) -> Result<String, IngestError> {
             .and_then(char::from_u32)
             .map(|value| value.to_string())
             .ok_or_else(|| IngestError::new(format!("invalid XML entity: &{entity};"))),
-        other => Err(IngestError::new(format!("unresolved XML entity: &{other};"))),
+        other => Err(IngestError::new(format!(
+            "unresolved XML entity: &{other};"
+        ))),
     }
 }
 
@@ -673,14 +657,10 @@ fn parse_book(element: &quick_xml::events::BytesStart<'_>) -> Result<CBLBook, In
 
 fn validate_book(book: &CBLBook) -> Result<(), IngestError> {
     if book.series.chars().count() > MAX_SERIES_NAME_LENGTH {
-        return Err(IngestError::new(
-            "book Series exceeds 500 characters",
-        ));
+        return Err(IngestError::new("book Series exceeds 500 characters"));
     }
     if book.issue_number.chars().count() > MAX_ISSUE_NUMBER_LENGTH {
-        return Err(IngestError::new(
-            "book Number exceeds 100 characters",
-        ));
+        return Err(IngestError::new("book Number exceeds 100 characters"));
     }
     if book
         .comicvine_series_id
@@ -1499,9 +1479,7 @@ mod tests {
         let root = std::env::temp_dir().join(format!(
             "comicpile-cbl-oversize-{}-{}",
             std::process::id(),
-            chrono::Utc::now()
-                .timestamp_nanos_opt()
-                .unwrap_or_default()
+            chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
         ));
         fs::create_dir_all(&root).expect("temp directory");
         let path = root.join("Large.cbl");

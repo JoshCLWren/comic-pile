@@ -216,6 +216,7 @@ async fn dry_run_reports_counts_without_writing_any_rows() {
     assert!(summary.source_created);
     assert_eq!(summary.inserted_lists, 2);
     assert_eq!(summary.entries_written, 2);
+    assert_eq!(summary.identities_upserted, 3);
     let sources: i64 = scalar(&state, "SELECT COUNT(*) FROM cbl_sources").await;
     let lists: i64 = scalar(&state, "SELECT COUNT(*) FROM cbl_source_lists").await;
     assert_eq!((sources, lists), (0, 0));
@@ -346,6 +347,53 @@ async fn changed_revision_deactivates_removed_paths_without_deleting_rows() {
     assert_eq!(current, 2);
     let revision: String = scalar(&state, "SELECT revision_sha FROM cbl_sources").await;
     assert_eq!(revision, "bbb2222");
+}
+
+#[tokio::test]
+async fn unchanged_reappearing_list_reactivates_without_replacing_entry_ids() {
+    let (state, _guard) = setup().await;
+    let body = cbl("Batman 001", &[("Batman", "1", Some("4059"), Some("9001"))]);
+    let original = MirrorFixture::new(&[("DC/Batman/Batman.cbl", &body)]);
+    let (parsed, failures) = original.parse();
+    apply(&state, &parsed, &failures, "aaa1111", None).await;
+    let entry_id: i32 = scalar(
+        &state,
+        "SELECT e.id FROM cbl_source_entries e
+         JOIN cbl_source_lists l ON l.id = e.list_id
+         WHERE l.source_path = 'DC/Batman/Batman.cbl'",
+    )
+    .await;
+
+    let removed = MirrorFixture::new(&[]);
+    let (empty, failures) = removed.parse();
+    let removal = apply(&state, &empty, &failures, "bbb2222", None).await;
+    assert_eq!(removal.deactivated_lists, 1);
+
+    let restored = MirrorFixture::new(&[("DC/Batman/Batman.cbl", &body)]);
+    let (parsed, failures) = restored.parse();
+    let summary = apply(&state, &parsed, &failures, "ccc3333", None).await;
+    assert_eq!(summary.updated_lists, 1);
+    assert_eq!(summary.entries_written, 0);
+    let restored_entry_id: i32 = scalar(
+        &state,
+        "SELECT e.id FROM cbl_source_entries e
+         JOIN cbl_source_lists l ON l.id = e.list_id
+         WHERE l.source_path = 'DC/Batman/Batman.cbl'",
+    )
+    .await;
+    assert_eq!(restored_entry_id, entry_id);
+    let active: bool = scalar(
+        &state,
+        "SELECT active FROM cbl_source_lists WHERE source_path = 'DC/Batman/Batman.cbl'",
+    )
+    .await;
+    assert!(active);
+    let revision: String = scalar(
+        &state,
+        "SELECT revision_sha FROM cbl_source_lists WHERE source_path = 'DC/Batman/Batman.cbl'",
+    )
+    .await;
+    assert_eq!(revision, "ccc3333");
 }
 
 #[tokio::test]

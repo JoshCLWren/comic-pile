@@ -144,5 +144,6 @@ cargo test -p comicpile-roll-service --test cbl_catalog
 ```
 
 They cover repeatable/idempotent reruns, changed revisions, removal as
-deactivation, parse-failure protection, repository-alias reconciliation, and
+deactivation, unchanged reactivation with stable entry IDs, parse-failure and
+malformed-structure protection, repository-alias reconciliation, and
 browse/search/discovery parity on a synthetic corpus of more than 100 lists.
