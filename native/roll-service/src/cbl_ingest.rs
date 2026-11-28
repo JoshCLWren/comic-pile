@@ -27,7 +27,7 @@ use tokio_postgres::{Client, Config as PostgresConfig, GenericClient};
 
 const DEFAULT_REPOSITORY: &str = "JoshCLWren/CBL-ReadingLists";
 const MAX_MIRROR_FILES: usize = 50_000;
-const MAX_CBL_FILE_BYTES: u64 = 16 * 1024 * 1024;
+const MAX_CBL_FILE_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_BOOKS_PER_LIST: usize = 20_000;
 const MAX_SOURCE_PATH_LENGTH: usize = 1000;
 const MAX_LIST_NAME_LENGTH: usize = 500;
@@ -289,6 +289,13 @@ fn relative_source_path(path: &Path, mirror_path: &Path) -> String {
 
 /// Parse one file from disk, isolating read and XML failures for the inventory.
 pub fn parse_cbl_file(path: &Path, mirror_path: &Path) -> Result<CBLList, IngestError> {
+    let metadata = fs::metadata(path)
+        .map_err(|error| IngestError::new(format!("cannot read CBL: {error}")))?;
+    if metadata.len() > MAX_CBL_FILE_BYTES {
+        return Err(IngestError::new(format!(
+            "CBL file exceeds the supported {MAX_CBL_FILE_BYTES}-byte limit"
+        )));
+    }
     let mut file = fs::File::open(path)
         .map_err(|error| IngestError::new(format!("cannot read CBL: {error}")))?;
     let mut raw = Vec::new();
