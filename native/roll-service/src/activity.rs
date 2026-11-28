@@ -165,7 +165,9 @@ impl ActivityFilters {
                         .chars()
                         .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '_' | '+' | '-'))
                 {
-                    return Err(ApiError::BadRequest("Invalid activity timezone".to_string()));
+                    return Err(ApiError::BadRequest(
+                        "Invalid activity timezone".to_string(),
+                    ));
                 }
                 raw.to_string()
             }
@@ -498,12 +500,9 @@ pub async fn list_activity(
     Query(query): Query<ActivityQuery>,
 ) -> Result<Json<ActivityResponse>, ApiError> {
     let limit = query.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
-    let after = query
-        .page_token
-        .or(query.cursor)
-        .as_deref()
-        .map(parse_cursor)
-        .transpose()?;
+    let filters = ActivityFilters::parse(&query)?;
+    let token = query.page_token.as_deref().or(query.cursor.as_deref());
+    let after = token.map(parse_cursor).transpose()?;
     // Each primary yields at least one item and the cursor's own primary yields
     // at most two already-returned items, so `limit + 2` primaries always prove
     // whether another item follows the page.
@@ -512,7 +511,6 @@ pub async fn list_activity(
         .map(|key| DateTime::<Utc>::from_timestamp_micros(key.micros).ok_or_else(bad_cursor))
         .transpose()?;
     let after_id: Option<i32> = after.map(|key| key.id);
-    let filters = ActivityFilters::parse(&query)?;
 
     let connection = db::checkout(&state).await?;
     // PostgreSQL is the authority on IANA zone names and DST rules. Validate
@@ -661,11 +659,137 @@ mod tests {
     }
 
     #[test]
-    fn activity_openapi_declares_json_response_and_cursor_rejection() {
+    fn activity_openapi_declares_json_response_cursor_rejection_and_filters() {
         let schema = serde_json::to_value(crate::openapi::canonical_openapi()).unwrap();
-        let responses = &schema["paths"]["/api/v2/activity"]["get"]["responses"];
+        let operation = &schema["paths"]["/api/v2/activity"]["get"];
+        let responses = &operation["responses"];
         assert!(responses["200"]["content"]["application/json"]["schema"].is_object());
         assert!(responses["400"].is_object());
+        let params = operation["parameters"]
+            .as_array()
+            .expect("activity query parameters");
+        let names: Vec<&str> = params
+            .iter()
+            .filter_map(|param| param["name"].as_str())
+            .collect();
+        for name in [
+            "limit",
+            "page_token",
+            "q",
+            "series",
+            "type",
+            "date_from",
+            "date_to",
+            "timezone",
+        ] {
+            assert!(names.contains(&name), "OpenAPI must declare {name}");
+        }
+    }
+
+    #[test]
+    fn activity_filters_normalize_and_reject_bad_input() {
+        let filters = ActivityFilters::parse(&ActivityQuery {
+            limit: None,
+            page_token: None,
+            cursor: None,
+            q: Some("  Saga  ".into()),
+            series: Some(" astro ".into()),
+            event_type: Some(" RATE ".into()),
+            date_from: Some(" 2026-11-08 ".into()),
+            date_to: Some("2026-11-09".into()),
+            timezone: Some(" America/Chicago ".into()),
+        })
+        .unwrap();
+        assert_eq!(
+            filters,
+            ActivityFilters {
+                search: Some("Saga".into()),
+                series: Some("astro".into()),
+                event_type: Some("rate".into()),
+                date_from: Some("2026-11-08".into()),
+                date_to: Some("2026-11-09".into()),
+                timezone: "America/Chicago".into(),
+            }
+        );
+
+        let defaults = ActivityFilters::parse(&ActivityQuery {
+            limit: None,
+            page_token: None,
+            cursor: None,
+            q: None,
+            series: None,
+            event_type: None,
+            date_from: None,
+            date_to: None,
+            timezone: None,
+        })
+        .unwrap();
+        assert_eq!(defaults, ActivityFilters::default());
+
+        let bad = [
+            ActivityQuery {
+                event_type: Some("not_a_type".into()),
+                ..defaults_query()
+            },
+            ActivityQuery {
+                q: Some("x".repeat(MAX_FILTER_LENGTH + 1)),
+                ..defaults_query()
+            },
+            ActivityQuery {
+                date_from: Some("11/08/2026".into()),
+                ..defaults_query()
+            },
+            ActivityQuery {
+                date_from: Some("2026-11-10".into()),
+                date_to: Some("2026-11-09".into()),
+                ..defaults_query()
+            },
+            ActivityQuery {
+                timezone: Some("Bad;Zone".into()),
+                ..defaults_query()
+            },
+        ];
+        for query in bad {
+            assert!(
+                matches!(ActivityFilters::parse(&query), Err(ApiError::BadRequest(_))),
+                "{query:?} must be rejected"
+            );
+        }
+    }
+
+    fn defaults_query() -> ActivityQuery {
+        ActivityQuery {
+            limit: None,
+            page_token: None,
+            cursor: None,
+            q: None,
+            series: None,
+            event_type: None,
+            date_from: None,
+            date_to: None,
+            timezone: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn invalid_activity_filters_reject_before_database_access() {
+        use crate::{config::Config, AppState};
+
+        let config = Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
+            _ => None,
+        })
+        .unwrap();
+        let state = Arc::new(AppState::new(config).unwrap());
+        let query = ActivityQuery {
+            event_type: Some("bogus".into()),
+            ..defaults_query()
+        };
+        assert!(matches!(
+            list_activity(State(state), AuthenticatedUser::for_test(1), Query(query)).await,
+            Err(ApiError::BadRequest(_))
+        ));
     }
 
     #[tokio::test]
@@ -799,7 +923,14 @@ mod tests {
         limit: i64,
         page_token: Option<String>,
     ) -> Result<ActivityResponse, ApiError> {
-        page_with_filters(state, user_id, limit, page_token, ActivityFilters::default()).await
+        page_with_filters(
+            state,
+            user_id,
+            limit,
+            page_token,
+            ActivityFilters::default(),
+        )
+        .await
     }
 
     async fn page_with_filters(
@@ -1157,5 +1288,154 @@ mod tests {
                 Err(ApiError::BadRequest(_))
             ));
         }
+    }
+
+    fn ids(items: &[ActivityItem]) -> Vec<i32> {
+        items.iter().map(|item| item.event_id).collect()
+    }
+
+    #[tokio::test]
+    async fn history_filters_combine_and_keep_stable_chronology() {
+        let (state, _db) = seeded_state(PRODUCTION_SEQUENCE).await;
+
+        // Literal text matches the primary action's series title. The roll
+        // companion of the Paper Girls snooze stays with its primary action.
+        let search = ActivityFilters {
+            search: Some("PAPER GIRLS".into()),
+            ..ActivityFilters::default()
+        };
+        for limit in [1, 2, 10] {
+            assert_eq!(
+                ids(&all_pages_with_filters(&state, 1, limit, search.clone()).await),
+                vec![1050514, 1050515],
+                "search limit={limit}"
+            );
+        }
+
+        // Series narrows independently of free text.
+        let series = ActivityFilters {
+            series: Some("astro city".into()),
+            ..ActivityFilters::default()
+        };
+        assert_eq!(
+            ids(&all_pages_with_filters(&state, 1, 3, series).await),
+            vec![1050517]
+        );
+
+        // A coalesced rating is reader-visible `rate` although one durable row
+        // is a dice step; a snooze's linked roll is reader-visible `roll`.
+        let rate = ActivityFilters {
+            event_type: Some("rate".into()),
+            ..ActivityFilters::default()
+        };
+        assert_eq!(
+            ids(&all_pages_with_filters(&state, 1, 1, rate).await),
+            vec![1050517]
+        );
+        let rolls = ActivityFilters {
+            event_type: Some("roll".into()),
+            ..ActivityFilters::default()
+        };
+        for limit in [1, 2, 10] {
+            assert_eq!(
+                ids(&all_pages_with_filters(&state, 1, limit, rolls.clone()).await),
+                vec![1050511, 1050513, 1050515],
+                "roll limit={limit}"
+            );
+        }
+        let snoozes = ActivityFilters {
+            event_type: Some("snooze".into()),
+            ..ActivityFilters::default()
+        };
+        assert_eq!(
+            ids(&all_pages_with_filters(&state, 1, 2, snoozes).await),
+            vec![1050512, 1050514]
+        );
+
+        // Combined filters intersect, and clear/reset is the unfiltered stream.
+        let combined = ActivityFilters {
+            series: Some("Saga".into()),
+            event_type: Some("snooze".into()),
+            ..ActivityFilters::default()
+        };
+        assert_eq!(
+            ids(&all_pages_with_filters(&state, 1, 10, combined).await),
+            vec![1050512]
+        );
+        assert_eq!(
+            ids(&all_pages(&state, 1, 50).await),
+            vec![1050511, 1050512, 1050513, 1050514, 1050515, 1050517]
+        );
+    }
+
+    #[tokio::test]
+    async fn reader_local_date_filters_resolve_midnight_and_validate_timezone() {
+        let (state, _db) = seeded_state(
+            r#"
+            INSERT INTO users (id, username) VALUES (1, 'reader');
+            INSERT INTO events (id, type, timestamp, user_id, issue_number, context)
+            VALUES (1, 'roll', '2026-11-08 05:30:00+00', 1, '1', '{}'),
+                   (2, 'rate', '2026-11-08 06:30:00+00', 1, '2', '{}');
+            "#,
+        )
+        .await;
+
+        // 05:30 UTC is 2026-11-07 23:30 in Chicago; 06:30 UTC is already the
+        // reader's 2026-11-08. A UTC-bound filter would include both.
+        let chicago_day = ActivityFilters {
+            date_from: Some("2026-11-08".into()),
+            date_to: Some("2026-11-08".into()),
+            timezone: "America/Chicago".into(),
+            ..ActivityFilters::default()
+        };
+        assert_eq!(
+            ids(&all_pages_with_filters(&state, 1, 10, chicago_day).await),
+            vec![2]
+        );
+        let utc_day = ActivityFilters {
+            date_from: Some("2026-11-08".into()),
+            date_to: Some("2026-11-08".into()),
+            ..ActivityFilters::default()
+        };
+        assert_eq!(
+            ids(&all_pages_with_filters(&state, 1, 10, utc_day).await),
+            vec![1, 2]
+        );
+        let chicago_range = ActivityFilters {
+            date_from: Some("2026-11-07".into()),
+            date_to: Some("2026-11-08".into()),
+            timezone: "America/Chicago".into(),
+            ..ActivityFilters::default()
+        };
+        assert_eq!(
+            ids(&all_pages_with_filters(&state, 1, 10, chicago_range).await),
+            vec![1, 2]
+        );
+
+        let bad_zone = ActivityFilters {
+            date_from: Some("2026-11-08".into()),
+            timezone: "Not/AZone".into(),
+            ..ActivityFilters::default()
+        };
+        assert!(matches!(
+            page_with_filters(&state, 1, 10, None, bad_zone).await,
+            Err(ApiError::BadRequest(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn filtered_activity_stays_owner_scoped() {
+        let (state, _db) = seeded_state(PRODUCTION_SEQUENCE).await;
+        let other_series = ActivityFilters {
+            search: Some("Other Reader Series".into()),
+            ..ActivityFilters::default()
+        };
+        assert!(all_pages_with_filters(&state, 1, 10, other_series.clone())
+            .await
+            .is_empty());
+        assert_eq!(
+            ids(&all_pages_with_filters(&state, 2, 1, other_series).await),
+            vec![1050519, 1050518]
+        );
     }
 }
