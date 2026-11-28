@@ -111,6 +111,23 @@ describe('useRollSnooze', () => {
     expect(result.current.state.activeRatingThread).toBeNull()
   })
 
+  it('seeds browser-owned pending with the replacement offer after snooze', async () => {
+    const seedPending = vi.fn()
+    const mutate = vi.fn().mockResolvedValue(committedOutcome(101))
+    const { result } = renderRollSnooze(mutate, { seedPending })
+
+    await act(async () => {
+      await result.current.snooze.handleSnooze()
+    })
+
+    expect(seedPending).toHaveBeenCalledWith({
+      thread_id: 9,
+      issue_id: 101,
+      issue_number: 'Issue 101',
+      result: 1,
+    })
+  })
+
   it('clears the rating view only after the mutation resolves', async () => {
     let resolveMutate: (outcome: SnoozeMutationOutcome) => void = () => {}
     const mutate = vi.fn(
@@ -143,6 +160,7 @@ describe('useRollSnooze', () => {
     const refreshFailure = new Error('bootstrap unavailable')
     const mutate = vi.fn().mockResolvedValue({
       response: {
+        ...nextOffer(),
         current_die: 12,
         pending_thread_id: null,
         reading_mode_suggested: false,
@@ -214,9 +232,10 @@ describe('useRollSnooze', () => {
   })
 
   it('enters the next offer from the response instead of refetching', async () => {
-    const response = nextOffer()
+    const response = nextOffer(102)
     const reroll = vi.fn().mockResolvedValue(response)
     const enterRatingView = vi.fn().mockResolvedValue(undefined)
+    const seedPending = vi.fn()
     const refetchBootstrap = vi.fn()
     const { result } = renderHook(() => {
       const state = useRollPageState()
@@ -227,6 +246,7 @@ describe('useRollSnooze', () => {
         rerollMutation: { mutate: reroll },
         enterRatingView,
         refetchBootstrap,
+        seedPending,
       })
       return { state, snooze }
     })
@@ -246,6 +266,7 @@ describe('useRollSnooze', () => {
       response.result,
       response,
     )
+    expect(seedPending).toHaveBeenCalledWith(response)
     expect(refetchBootstrap).not.toHaveBeenCalled()
   })
 
