@@ -150,9 +150,9 @@ describe('cblAdoptionOwnership', () => {
   })
 
   it('uses only the canonical list ID, never the compatibility plan ID', () => {
-    expect(canonicalListId({ id: 42, custom_cbl_list_id: 900 } as never)).toBe(900)
-    expect(canonicalListId({ id: 42 } as never)).toBeNull()
-    expect(canonicalListId({ id: 42, custom_cbl_list_id: 0 } as never)).toBeNull()
+    expect(canonicalListId(commitResult({ id: 42, custom_cbl_list_id: 900 }))).toBe(900)
+    expect(canonicalListId(commitResult({ id: 42 }))).toBeNull()
+    expect(canonicalListId(commitResult({ id: 42, custom_cbl_list_id: 0 }))).toBeNull()
   })
 
   it('stores a committed pointer by source and removes it on stale revision', () => {
