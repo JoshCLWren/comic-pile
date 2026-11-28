@@ -522,7 +522,8 @@ mod tests {
         let (_state, client, _db) = db_fixture().await;
         client
             .execute(
-                "INSERT INTO user_preferences (user_id, theme) VALUES (1, 'ink-gold')",
+                "INSERT INTO user_preferences (user_id, theme, created_at, updated_at) \
+                 VALUES (1, 'ink-gold', NOW(), NOW())",
                 &[],
             )
             .await
