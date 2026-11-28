@@ -2909,24 +2909,6 @@
           "frontend/src/services/api-reading-orders.ts",
           "frontend/src/services/api-threads.ts"
         ],
-        "method": "POST",
-        "path": "/api/v1/threads/{thread_id}/set-pending",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4832,
-        "consumers": [
-          "frontend/src/services/api-dependencies.ts",
-          "frontend/src/services/api-dependency-groups.ts",
-          "frontend/src/services/api-issues.ts",
-          "frontend/src/services/api-migration.ts",
-          "frontend/src/services/api-reading-orders.ts",
-          "frontend/src/services/api-threads.ts"
-        ],
         "method": "PUT",
         "path": "/api/v1/threads/{thread_id}/test-backdate",
         "ingress_destination": "/api/native_roll.rs",
