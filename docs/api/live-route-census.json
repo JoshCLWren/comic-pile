@@ -15,26 +15,16 @@
     "aip_baseline": "docs/api/v2-aip-shapes-baseline.json"
   },
   "summary": {
-<<<<<<< HEAD
-    "total_routes": 252,
-    "by_version": {
-      "v1": 64,
-=======
     "total_routes": 253,
     "by_version": {
       "v1": 65,
->>>>>>> origin/main
       "v2": 176,
       "unversioned": 12
     },
     "v1_with_owner": 64,
     "v1_needing_owner": 0,
     "unknown_ingress": 0,
-<<<<<<< HEAD
-    "first_party_call_sites": 922,
-=======
     "first_party_call_sites": 923,
->>>>>>> origin/main
     "stale_aip_baseline_entries": 4
   },
   "routes": [
@@ -195,11 +185,7 @@
       "path": "/api/bug-reports/",
       "handler": "bug_reports::create",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1396,
-=======
       "router_line": 1400,
->>>>>>> origin/main
       "version": "unversioned",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -427,11 +413,7 @@
       "path": "/api/v1/bug-reports/",
       "handler": "bug_reports::create",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1397,
-=======
       "router_line": 1401,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -474,11 +456,7 @@
       "path": "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
       "handler": "comicvine_resolution::series_import_status",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1138,
-=======
       "router_line": 1142,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -521,11 +499,7 @@
       "path": "/api/v1/continuity-rules/",
       "handler": "continuity_rules::list",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1317,
-=======
       "router_line": 1321,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -544,11 +518,7 @@
       "path": "/api/v1/continuity-rules/{rule_id}",
       "handler": "continuity_rules::get",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1321,
-=======
       "router_line": 1325,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -567,11 +537,7 @@
       "path": "/api/v1/creators",
       "handler": "creators::list_creators",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1276,
-=======
       "router_line": 1280,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -590,11 +556,7 @@
       "path": "/api/v1/creators/",
       "handler": "creators::list_creators",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1277,
-=======
       "router_line": 1281,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -613,11 +575,7 @@
       "path": "/api/v1/creators/summaries",
       "handler": "creators::get_summaries",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1278,
-=======
       "router_line": 1282,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -655,11 +613,7 @@
       "path": "/api/v1/issue-identity/cbl-sources",
       "handler": "issue_identity::discover_cbl_source_lists",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1089,
-=======
       "router_line": 1093,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -680,11 +634,7 @@
       "path": "/api/v1/issue-identity/cbl-sources/browse",
       "handler": "cbl_catalog::browse_cbl_source_catalog",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1130,
-=======
       "router_line": 1134,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -705,11 +655,7 @@
       "path": "/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}",
       "handler": "issue_identity::find_cbl_sources_by_comicvine_issue",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1097,
-=======
       "router_line": 1101,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -730,11 +676,7 @@
       "path": "/api/v1/issue-identity/cbl-sources/compare",
       "handler": "issue_identity::compare_cbl_sources",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1101,
-=======
       "router_line": 1105,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -755,11 +697,7 @@
       "path": "/api/v1/issue-identity/cbl-sources/folders",
       "handler": "cbl_catalog::list_cbl_source_folders",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1134,
-=======
       "router_line": 1138,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -780,11 +718,7 @@
       "path": "/api/v1/issue-identity/cbl-sources/{list_id}",
       "handler": "issue_identity::get_cbl_source_list",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1093,
-=======
       "router_line": 1097,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -805,11 +739,7 @@
       "path": "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
       "handler": "issue_identity::cbl_adoption_plan",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1109,
-=======
       "router_line": 1113,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -872,11 +802,7 @@
       "path": "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates",
       "handler": "issue_identity::find_cbl_candidates_for_reading_list",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1105,
-=======
       "router_line": 1109,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -897,11 +823,7 @@
       "path": "/api/v1/issues/{issue_id}/comicvine",
       "handler": "comicvine_issue::issue_intelligence",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1126,
-=======
       "router_line": 1130,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -920,11 +842,7 @@
       "path": "/api/v1/reading-order-groups/{group_id}/order",
       "handler": "dependency_groups::set_group_order",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1474,
-=======
       "router_line": 1478,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -945,11 +863,7 @@
       "path": "/api/v1/releases/",
       "handler": "releases::publish",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1398,
-=======
       "router_line": 1402,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -968,11 +882,7 @@
       "path": "/api/v1/releases/source",
       "handler": "releases::reconcile",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1400,
-=======
       "router_line": 1404,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -991,11 +901,7 @@
       "path": "/api/v1/releases/{release_id}",
       "handler": "releases::get",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1401,
-=======
       "router_line": 1405,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -1014,11 +920,7 @@
       "path": "/api/v1/releases/{release_id}/retract",
       "handler": "releases::retract",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1402,
-=======
       "router_line": 1406,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -1056,11 +958,7 @@
       "path": "/api/v1/taste/discoveries",
       "handler": "taste_discoveries::list_taste_discoveries",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1388,
-=======
       "router_line": 1392,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -1083,11 +981,7 @@
       "path": "/api/v1/taste/discoveries/{signal_id}/dismiss",
       "handler": "taste_discoveries::dismiss_taste_discovery",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1392,
-=======
       "router_line": 1396,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -1407,11 +1301,7 @@
       "path": "/api/v1/threads/{thread_id}/dependencies",
       "handler": "dependencies::get_thread_dependencies",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1207,
-=======
       "router_line": 1211,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -1475,11 +1365,7 @@
       "path": "/api/v1/threads/{thread_id}/issue-dependencies",
       "handler": "issue_read::get_thread_issue_dependencies",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1203,
-=======
       "router_line": 1207,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -1654,42 +1540,7 @@
       "notes": ""
     },
     {
-<<<<<<< HEAD
-=======
-      "method": "POST",
-      "path": "/api/v1/threads/{thread_id}/set-pending",
-      "handler": "thread_lifecycle::set_pending_thread",
-      "handler_kind": "function",
-      "router_line": 972,
-      "version": "v1",
-      "runtime": "native-rust",
-      "runtime_source": "native-router",
-      "consumers": [
-        "frontend/src/services/api-threads.ts",
-        "frontend/src/test/cbl-replace-review.spec.ts",
-        "frontend/src/test/helpers.ts",
-        "frontend/src/test/issue-1885-roll-target-sizes.spec.ts"
-      ],
-      "caller_count": 4,
-      "ingress_destination": "/api/native_roll.rs",
-      "ingress_source": "vercel-route",
-      "owner_issue": 4344,
-      "needs_owner_issue": false,
-      "disposition": "retire-without-replacement",
-      "rollout_status": "owner-issue-open",
-      "notes": "Census regression: Rust implementation does not make this v1 surface complete or retired. Direct v2 issue actions supersede it (#5525)."
-    },
-    {
->>>>>>> origin/main
-      "method": "PUT",
-      "path": "/api/v1/threads/{thread_id}/test-backdate",
-      "handler": "thread_lifecycle::backdate_thread_for_testing",
-      "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 972,
-=======
       "router_line": 976,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -1738,11 +1589,7 @@
       "path": "/api/v1/users/me/taste-signals",
       "handler": "preferences::list_taste_signals",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1223,
-=======
       "router_line": 1227,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -1761,11 +1608,7 @@
       "path": "/api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict",
       "handler": "preferences::set_taste_signal_verdict",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1227,
-=======
       "router_line": 1231,
->>>>>>> origin/main
       "version": "v1",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -1787,11 +1630,7 @@
       "path": "/api/v2/activity",
       "handler": "activity::list_activity",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1062,
-=======
       "router_line": 1066,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2076,11 +1915,7 @@
       "path": "/api/v2/comicvine/issues/{issue_id}/identity",
       "handler": "comicvine_v2::get_issue_identity",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1156,
-=======
       "router_line": 1160,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2101,11 +1936,7 @@
       "path": "/api/v2/comicvine/issues/{issue_id}/identity:confirm",
       "handler": "comicvine_v2::confirm_identity",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1165,
-=======
       "router_line": 1169,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2126,11 +1957,7 @@
       "path": "/api/v2/comicvine/issues/{issue_id}/identity:replace",
       "handler": "comicvine_v2::replace_identity",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1169,
-=======
       "router_line": 1173,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2151,11 +1978,7 @@
       "path": "/api/v2/comicvine/issues/{issue_id}/metadata:correct",
       "handler": "comicvine_v2::apply_correction",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1173,
-=======
       "router_line": 1177,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2176,11 +1999,7 @@
       "path": "/api/v2/comicvine/issues/{issue_id}/metadata:corrections",
       "handler": "comicvine_v2::list_corrections",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1160,
-=======
       "router_line": 1164,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2201,11 +2020,7 @@
       "path": "/api/v2/comicvine/issues/{issue_id}/metadata:refresh",
       "handler": "comicvine_v2::refresh_metadata",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1181,
-=======
       "router_line": 1185,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2226,11 +2041,7 @@
       "path": "/api/v2/comicvine/issues/{issue_id}/metadata:revert",
       "handler": "comicvine_v2::revert_correction",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1177,
-=======
       "router_line": 1181,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2251,11 +2062,7 @@
       "path": "/api/v2/comicvine/issues:import",
       "handler": "comicvine_v2::import_issue",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1186,
-=======
       "router_line": 1190,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2277,11 +2084,7 @@
       "path": "/api/v2/comicvine/resolve",
       "handler": "comicvine_v2::resolve_input",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1147,
-=======
       "router_line": 1151,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2303,11 +2106,7 @@
       "path": "/api/v2/comicvine/search/series",
       "handler": "comicvine_v2::search_series",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1143,
-=======
       "router_line": 1147,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2329,11 +2128,7 @@
       "path": "/api/v2/comicvine/series/{comicvine_volume_id}/import-status",
       "handler": "comicvine_v2::series_import_status",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1195,
-=======
       "router_line": 1199,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2356,11 +2151,7 @@
       "path": "/api/v2/comicvine/series/{comicvine_volume_id}/issues",
       "handler": "comicvine_v2::series_issues",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1151,
-=======
       "router_line": 1155,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2382,11 +2173,7 @@
       "path": "/api/v2/comicvine/series:import",
       "handler": "comicvine_v2::import_series",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1191,
-=======
       "router_line": 1195,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2409,11 +2196,7 @@
       "path": "/api/v2/continuity-plans/",
       "handler": "continuity_plans::list_continuity_plans",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1328,
-=======
       "router_line": 1332,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2437,11 +2220,7 @@
       "path": "/api/v2/continuity-plans/",
       "handler": "continuity_plans::create_continuity_plan",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1332,
-=======
       "router_line": 1336,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2471,11 +2250,7 @@
       "path": "/api/v2/continuity-plans/from-reading-order",
       "handler": "continuity_plans::adopt_reading_order",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1384,
-=======
       "router_line": 1388,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2498,11 +2273,7 @@
       "path": "/api/v2/continuity-plans/release-sources/",
       "handler": "continuity_plans::create_release_source",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1372,
-=======
       "router_line": 1376,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2524,11 +2295,7 @@
       "path": "/api/v2/continuity-plans/release-sources/{source_id}",
       "handler": "continuity_plans::update_release_source",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1376,
-=======
       "router_line": 1380,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2549,11 +2316,7 @@
       "path": "/api/v2/continuity-plans/release-sources/{source_id}",
       "handler": "continuity_plans::delete_release_source",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1380,
-=======
       "router_line": 1384,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2574,11 +2337,7 @@
       "path": "/api/v2/continuity-plans/{plan_id}",
       "handler": "continuity_plans::get_continuity_plan",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1336,
-=======
       "router_line": 1340,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2602,11 +2361,7 @@
       "path": "/api/v2/continuity-plans/{plan_id}",
       "handler": "continuity_plans::update_continuity_plan",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1340,
-=======
       "router_line": 1344,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2630,11 +2385,7 @@
       "path": "/api/v2/continuity-plans/{plan_id}",
       "handler": "continuity_plans::delete_continuity_plan",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1344,
-=======
       "router_line": 1348,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2658,11 +2409,7 @@
       "path": "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
       "handler": "continuity_plans::link_plan_dependency_edge",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1352,
-=======
       "router_line": 1356,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2684,11 +2431,7 @@
       "path": "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
       "handler": "continuity_plans::unlink_plan_dependency_edge",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1356,
-=======
       "router_line": 1360,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2710,11 +2453,7 @@
       "path": "/api/v2/continuity-plans/{plan_id}/membership",
       "handler": "continuity_plans::get_continuity_plan_membership",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1348,
-=======
       "router_line": 1352,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2736,11 +2475,7 @@
       "path": "/api/v2/continuity-plans/{plan_id}/reader",
       "handler": "reading_plan_reader::read",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1028,
-=======
       "router_line": 1032,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2765,11 +2500,7 @@
       "path": "/api/v2/continuity-plans/{plan_id}/reading-orders/project",
       "handler": "continuity_plans::confirm_plan_projection",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1360,
-=======
       "router_line": 1364,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2791,11 +2522,7 @@
       "path": "/api/v2/continuity-plans/{plan_id}/recovery",
       "handler": "reading_plan_recovery::preview",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1032,
-=======
       "router_line": 1036,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2816,11 +2543,7 @@
       "path": "/api/v2/continuity-plans/{plan_id}/recovery",
       "handler": "reading_plan_recovery::relink",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1036,
-=======
       "router_line": 1040,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2841,11 +2564,7 @@
       "path": "/api/v2/continuity-plans/{plan_id}/release-sources/",
       "handler": "continuity_plans::list_release_sources",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1364,
-=======
       "router_line": 1368,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2867,11 +2586,7 @@
       "path": "/api/v2/continuity-plans/{plan_id}/release-sources/reader",
       "handler": "continuity_plans::list_release_sources_for_reader",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1368,
-=======
       "router_line": 1372,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2914,11 +2629,7 @@
       "path": "/api/v2/creators",
       "handler": "creators_v2::list_creators",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1279,
-=======
       "router_line": 1283,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2942,11 +2653,7 @@
       "path": "/api/v2/creators/compare",
       "handler": "creators_v2::get_comparison",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1284,
-=======
       "router_line": 1288,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2970,11 +2677,7 @@
       "path": "/api/v2/creators/discoveries",
       "handler": "creators_v2::get_discoveries",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1285,
-=======
       "router_line": 1289,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -2996,11 +2699,7 @@
       "path": "/api/v2/creators/summaries",
       "handler": "creators_v2::get_summaries",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1280,
-=======
       "router_line": 1284,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3023,11 +2722,7 @@
       "path": "/api/v2/creators/team-chemistry",
       "handler": "creators_v2::get_team_chemistry",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1289,
-=======
       "router_line": 1293,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3050,11 +2745,7 @@
       "path": "/api/v2/creators/{creator_key}",
       "handler": "creators_v2::get_detail",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1293,
-=======
       "router_line": 1297,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3084,11 +2775,7 @@
       "path": "/api/v2/creators/{creator_key}/metrics/rating-distribution/{rating_value}",
       "handler": "creators_v2::get_rating_distribution_drilldown",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1305,
-=======
       "router_line": 1309,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3110,11 +2797,7 @@
       "path": "/api/v2/creators/{creator_key}/metrics/role-stats/{role}",
       "handler": "creators_v2::get_role_drilldown",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1309,
-=======
       "router_line": 1313,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3136,11 +2819,7 @@
       "path": "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}",
       "handler": "creators_v2::get_series_drilldown",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1313,
-=======
       "router_line": 1317,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3162,11 +2841,7 @@
       "path": "/api/v2/creators/{creator_key}/metrics/{metric_type}",
       "handler": "creators_v2::get_metric_drilldown",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1301,
-=======
       "router_line": 1305,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3188,11 +2863,7 @@
       "path": "/api/v2/creators/{creator_key}/series/{series_key}/issues",
       "handler": "creators_v2::get_series_issues",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1297,
-=======
       "router_line": 1301,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3235,11 +2906,7 @@
       "path": "/api/v2/dependencies/",
       "handler": "dependencies::create_dependency",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1042,
-=======
       "router_line": 1046,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3266,11 +2933,7 @@
       "path": "/api/v2/dependencies/blocked",
       "handler": "legacy_dependencies::blocked",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1050,
-=======
       "router_line": 1054,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3293,11 +2956,7 @@
       "path": "/api/v2/dependencies/{dependency_id}",
       "handler": "legacy_dependencies::get",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1054,
-=======
       "router_line": 1058,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3320,11 +2979,7 @@
       "path": "/api/v2/dependencies/{dependency_id}",
       "handler": "legacy_dependencies::update",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1058,
-=======
       "router_line": 1062,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3347,11 +3002,7 @@
       "path": "/api/v2/dependencies/{dependency_id}",
       "handler": "dependencies::delete_dependency",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1046,
-=======
       "router_line": 1050,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3489,11 +3140,7 @@
       "path": "/api/v2/identity-inbox",
       "handler": "identity_inbox::list_inbox",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1063,
-=======
       "router_line": 1067,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3518,11 +3165,7 @@
       "path": "/api/v2/identity-inbox/issue-matches",
       "handler": "identity_inbox::search_issues",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1064,
-=======
       "router_line": 1068,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3544,11 +3187,7 @@
       "path": "/api/v2/identity-inbox/{mapping_id}",
       "handler": "identity_inbox::get_inbox_item",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1068,
-=======
       "router_line": 1072,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3570,11 +3209,7 @@
       "path": "/api/v2/identity-inbox/{mapping_id}/confirmations",
       "handler": "identity_inbox::confirm",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1072,
-=======
       "router_line": 1076,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3597,11 +3232,7 @@
       "path": "/api/v2/identity-inbox/{mapping_id}/deferrals",
       "handler": "identity_inbox::defer",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1076,
-=======
       "router_line": 1080,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3623,11 +3254,7 @@
       "path": "/api/v2/identity-inbox/{mapping_id}/rejections",
       "handler": "identity_inbox::reject",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1080,
-=======
       "router_line": 1084,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3649,11 +3276,7 @@
       "path": "/api/v2/identity-inbox/{mapping_id}/skips",
       "handler": "identity_inbox::skip",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1084,
-=======
       "router_line": 1088,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3675,11 +3298,7 @@
       "path": "/api/v2/issue-duplicate-reconciliation/apply",
       "handler": "issue_duplicate_reconciliation::apply_reconciliation",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1248,
-=======
       "router_line": 1252,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3701,11 +3320,7 @@
       "path": "/api/v2/issue-duplicate-reconciliation/detect",
       "handler": "issue_duplicate_reconciliation::detect_duplicates",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1240,
-=======
       "router_line": 1244,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3727,11 +3342,7 @@
       "path": "/api/v2/issue-duplicate-reconciliation/preview",
       "handler": "issue_duplicate_reconciliation::preview_reconciliation",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1244,
-=======
       "router_line": 1248,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3753,11 +3364,7 @@
       "path": "/api/v2/issue-duplicate-reconciliation/undo",
       "handler": "issue_duplicate_reconciliation::undo_reconciliation",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1252,
-=======
       "router_line": 1256,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3863,11 +3470,7 @@
       "path": "/api/v2/issues/cards",
       "handler": "issue_handler::issue_cards",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1239,
-=======
       "router_line": 1243,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3899,11 +3502,7 @@
       "path": "/api/v2/issues/{issue_id}",
       "handler": "issue_read::get_issue",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1125,
-=======
       "router_line": 1129,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3934,11 +3533,7 @@
       "path": "/api/v2/issues/{issue_id}",
       "handler": "issue_handler::read_rate_issue",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1231,
-=======
       "router_line": 1235,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -3971,11 +3566,7 @@
       "path": "/api/v2/issues/{issue_id}",
       "handler": "issue_mutation::delete_issue",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1235,
-=======
       "router_line": 1239,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4006,11 +3597,7 @@
       "path": "/api/v2/issues/{issue_id}/comicvine",
       "handler": "comicvine_issue::issue_intelligence",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1121,
-=======
       "router_line": 1125,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4031,11 +3618,7 @@
       "path": "/api/v2/issues/{issue_id}/dependencies",
       "handler": "issue_read::get_issue_dependencies",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1199,
-=======
       "router_line": 1203,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4307,11 +3890,7 @@
       "path": "/api/v2/reading-graph",
       "handler": "reading_graph::reading_graph",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1040,
-=======
       "router_line": 1044,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4336,11 +3915,7 @@
       "path": "/api/v2/reading-graph/repairs",
       "handler": "reading_graph::repair",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1041,
-=======
       "router_line": 1045,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4361,11 +3936,7 @@
       "path": "/api/v2/reading-lists",
       "handler": "reading_list::list_reading_lists",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 976,
-=======
       "router_line": 980,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4390,11 +3961,7 @@
       "path": "/api/v2/reading-lists",
       "handler": "reading_list::create_reading_list",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 980,
-=======
       "router_line": 984,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4422,11 +3989,7 @@
       "path": "/api/v2/reading-lists/issue-candidates",
       "handler": "search_custom_cbl_issues",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1004,
-=======
       "router_line": 1008,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4452,11 +4015,7 @@
       "path": "/api/v2/reading-lists/memberships:check",
       "handler": "reading_list::check_thread_memberships",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 984,
-=======
       "router_line": 988,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4478,11 +4037,7 @@
       "path": "/api/v2/reading-lists/{list_id}",
       "handler": "reading_list::get_reading_list",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 988,
-=======
       "router_line": 992,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4509,11 +4064,7 @@
       "path": "/api/v2/reading-lists/{list_id}",
       "handler": "reading_list::update_reading_list",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 992,
-=======
       "router_line": 996,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4538,11 +4089,7 @@
       "path": "/api/v2/reading-lists/{list_id}",
       "handler": "reading_list::delete_reading_list",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 996,
-=======
       "router_line": 1000,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4566,11 +4113,7 @@
       "path": "/api/v2/reading-lists/{list_id}/adoption-commits",
       "handler": "issue_identity::cbl_adoption_commit",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1113,
-=======
       "router_line": 1117,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4592,11 +4135,7 @@
       "path": "/api/v2/reading-lists/{list_id}/export",
       "handler": "export_custom_cbl",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1008,
-=======
       "router_line": 1012,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4618,11 +4157,7 @@
       "path": "/api/v2/reading-lists/{list_id}/overlap-decisions",
       "handler": "get_overlap_decisions",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1016,
-=======
       "router_line": 1020,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4643,11 +4178,7 @@
       "path": "/api/v2/reading-lists/{list_id}/overlap-decisions",
       "handler": "save_overlap_decision",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1020,
-=======
       "router_line": 1024,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4668,11 +4199,7 @@
       "path": "/api/v2/reading-lists/{list_id}/overlap-decisions/{decision_id}",
       "handler": "delete_overlap_decision",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1024,
-=======
       "router_line": 1028,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4693,11 +4220,7 @@
       "path": "/api/v2/reading-lists/{list_id}/reader",
       "handler": "reading_list::read_reading_list",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1000,
-=======
       "router_line": 1004,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4720,11 +4243,7 @@
       "path": "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/adoption-commits",
       "handler": "issue_identity::cbl_targeted_adoption_commit",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1117,
-=======
       "router_line": 1121,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4746,11 +4265,7 @@
       "path": "/api/v2/reading-lists/{list_id}/reading-plans/{plan_id}/applications",
       "handler": "apply_custom_cbl",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1012,
-=======
       "router_line": 1016,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4773,11 +4288,7 @@
       "path": "/api/v2/reading-mode",
       "handler": "reading_mode::get_reading_mode",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1441,
-=======
       "router_line": 1445,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4802,11 +4313,7 @@
       "path": "/api/v2/reading-mode",
       "handler": "reading_mode::set_reading_mode",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1442,
-=======
       "router_line": 1446,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4831,11 +4338,7 @@
       "path": "/api/v2/reading-mode/suggestion-dismissals",
       "handler": "reading_mode::dismiss_reading_mode_suggestion",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1443,
-=======
       "router_line": 1447,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4858,11 +4361,7 @@
       "path": "/api/v2/reading-mode/suggestions",
       "handler": "reading_mode::suggest_reading_mode",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1447,
-=======
       "router_line": 1451,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4885,11 +4384,7 @@
       "path": "/api/v2/reading-order-groups/{group_id}/issue-ranges",
       "handler": "dependency_groups::add_issue_range",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1490,
-=======
       "router_line": 1494,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4912,11 +4407,7 @@
       "path": "/api/v2/reading-order-groups/{group_id}/members",
       "handler": "dependency_groups::add_member",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1486,
-=======
       "router_line": 1490,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4941,11 +4432,7 @@
       "path": "/api/v2/reading-order-groups/{group_id}/members/{member_id}",
       "handler": "dependency_groups::remove_member",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1494,
-=======
       "router_line": 1498,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4967,11 +4454,7 @@
       "path": "/api/v2/reading-order-groups/{group_id}/reading-plans",
       "handler": "dependency_groups::list_crossover_plans",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1482,
-=======
       "router_line": 1486,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -4992,11 +4475,7 @@
       "path": "/api/v2/reading-order-groups:resolveMemberships",
       "handler": "thread_lifecycle::resolve_memberships",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1478,
-=======
       "router_line": 1482,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -5106,11 +4585,7 @@
       "path": "/api/v2/readingOrderGroups",
       "handler": "dependency_groups::list_groups_v2",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1454,
-=======
       "router_line": 1458,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -5135,11 +4610,7 @@
       "path": "/api/v2/readingOrderGroups",
       "handler": "dependency_groups::create_group_v2",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1458,
-=======
       "router_line": 1462,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -5167,11 +4638,7 @@
       "path": "/api/v2/readingOrderGroups/{group_id}",
       "handler": "dependency_groups::get_group_v2",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1462,
-=======
       "router_line": 1466,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -5193,11 +4660,7 @@
       "path": "/api/v2/readingOrderGroups/{group_id}",
       "handler": "dependency_groups::update_group_v2",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1466,
-=======
       "router_line": 1470,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -5219,11 +4682,7 @@
       "path": "/api/v2/readingOrderGroups/{group_id}",
       "handler": "dependency_groups::delete_group_v2",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1470,
-=======
       "router_line": 1474,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -5367,11 +4826,7 @@
       "path": "/api/v2/releases",
       "handler": "releases::list",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1399,
-=======
       "router_line": 1403,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -5476,11 +4931,7 @@
       "path": "/api/v2/roll/dismiss-pending",
       "handler": "dismiss_pending::dismiss_pending",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1211,
-=======
       "router_line": 1215,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -5662,11 +5113,7 @@
       "path": "/api/v2/tags",
       "handler": "tags::list_tags",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1406,
-=======
       "router_line": 1410,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -5693,11 +5140,7 @@
       "path": "/api/v2/tags",
       "handler": "tags::create_tag",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1407,
-=======
       "router_line": 1411,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -5724,11 +5167,7 @@
       "path": "/api/v2/tags/effective/issues/{issue_id}",
       "handler": "tags::effective_for_issue",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1408,
-=======
       "router_line": 1412,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -5751,11 +5190,7 @@
       "path": "/api/v2/tags/effective/plans/{plan_id}",
       "handler": "tags::effective_for_plan",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1412,
-=======
       "router_line": 1416,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -5780,11 +5215,7 @@
       "path": "/api/v2/tags/effective/threads/{thread_id}",
       "handler": "tags::effective_for_thread",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1416,
-=======
       "router_line": 1420,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -5809,11 +5240,7 @@
       "path": "/api/v2/tags/effective/threads/{thread_id}/issues",
       "handler": "tags::thread_issues_effective",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1420,
-=======
       "router_line": 1424,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -5837,11 +5264,7 @@
       "path": "/api/v2/tags/{tag_id}",
       "handler": "tags::get_tag",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1424,
-=======
       "router_line": 1428,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -5864,11 +5287,7 @@
       "path": "/api/v2/tags/{tag_id}",
       "handler": "tags::update_tag",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1425,
-=======
       "router_line": 1429,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -5891,11 +5310,7 @@
       "path": "/api/v2/tags/{tag_id}",
       "handler": "tags::delete_tag",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1426,
-=======
       "router_line": 1430,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -5918,11 +5333,7 @@
       "path": "/api/v2/tags/{tag_id}/assignment-batches",
       "handler": "tags::bulk_assign_tag",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1433,
-=======
       "router_line": 1437,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -5945,11 +5356,7 @@
       "path": "/api/v2/tags/{tag_id}/assignments",
       "handler": "tags::assign_tag",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1428,
-=======
       "router_line": 1432,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -5972,11 +5379,7 @@
       "path": "/api/v2/tags/{tag_id}/assignments/{target_type}/{target_id}",
       "handler": "tags::unassign_tag",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1429,
-=======
       "router_line": 1433,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -5999,11 +5402,7 @@
       "path": "/api/v2/tags/{tag_id}/unassignment-batches",
       "handler": "tags::bulk_unassign_tag",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1437,
-=======
       "router_line": 1441,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -6026,11 +5425,7 @@
       "path": "/api/v2/tags/{tag_id}/usage",
       "handler": "tags::get_tag_usage",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1427,
-=======
       "router_line": 1431,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -6108,11 +5503,7 @@
       "path": "/api/v2/threads/{thread_id}/creatorCredits",
       "handler": "thread_issues::list_thread_creator_credits",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1260,
-=======
       "router_line": 1264,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -6135,11 +5526,7 @@
       "path": "/api/v2/threads/{thread_id}/issue-order",
       "handler": "issue_mutation::reorder_issues",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1272,
-=======
       "router_line": 1276,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -6161,11 +5548,7 @@
       "path": "/api/v2/threads/{thread_id}/issues",
       "handler": "issue_mutation::create_issues",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1256,
-=======
       "router_line": 1260,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -6188,11 +5571,7 @@
       "path": "/api/v2/threads/{thread_id}/issues/preview",
       "handler": "issue_mutation::preview_issue_create",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1264,
-=======
       "router_line": 1268,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -6214,11 +5593,7 @@
       "path": "/api/v2/threads/{thread_id}/issues/structure-preview",
       "handler": "issue_mutation::preview_issue_structure",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1268,
-=======
       "router_line": 1272,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -6352,11 +5727,7 @@
       "path": "/api/v2/users/me/preferences",
       "handler": "preferences::get_user_preferences",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1215,
-=======
       "router_line": 1219,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
@@ -6386,11 +5757,7 @@
       "path": "/api/v2/users/me/preferences",
       "handler": "preferences::patch_user_preferences",
       "handler_kind": "function",
-<<<<<<< HEAD
-      "router_line": 1219,
-=======
       "router_line": 1223,
->>>>>>> origin/main
       "version": "v2",
       "runtime": "native-rust",
       "runtime_source": "native-router",
