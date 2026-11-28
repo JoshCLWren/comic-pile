@@ -100,7 +100,7 @@ describe('History page contracts', () => {
     const list = await screen.findByRole('list', { name: 'Activity history' })
     expect(list).toBeInTheDocument()
     expect(list.querySelectorAll('[role="listitem"]')).toHaveLength(2)
-    expect(screen.getByText('Snoozed')).toBeInTheDocument()
+    expect(list).toHaveTextContent('Snoozed')
     expectNoExportSummary()
   })
 
