@@ -25,7 +25,14 @@ const mockedProtectedApi = vi.mocked(protectedRollMutationApi)
 const mockedRollStateApi = vi.mocked(rollStateApi)
 const mockedApplyRatedThreadCache = vi.mocked(applyRatedThreadCache)
 const thread: Thread = { id: 1, title: 'Saga', format: 'issue', issues_remaining: 3, total_issues: 10, queue_position: 2, status: 'active', is_blocked: false, blocking_reasons: [], last_activity_at: null, last_rating: null, notes: null, is_test: false, created_at: '2026-08-03T00:00:00Z' }
-const bootstrapState = (pendingThreadId: number | null, sessionId = 1): RollState => ({ session_id: sessionId, user_id: 1, pending_thread_id: pendingThreadId, last_rolled_result: pendingThreadId === null ? null : 1, session_mode: { active_bandwidth: null, predicted_bandwidth: null, bandwidth_confidence: null, bandwidth_source: null, bandwidth_version: null, active_intent: null, predicted_intent: null, intent_confidence: null, intent_source: null, intent_version: null, session_mode_correction_guidance: null }, active_thread: null, roll_pool: [], snoozed_threads: [], snoozed_count: 0, skipped_thread_ids: [], skipped_threads: [] })
+const bootstrapState = (pendingThreadId: number | null): RollState => ({
+  pending_thread_id: pendingThreadId,
+  last_rolled_result: pendingThreadId === null ? null : 1,
+  active_thread: null,
+  roll_pool: [],
+  snoozed_threads: [],
+  snoozed_count: 0,
+})
 
 beforeEach(() => { vi.clearAllMocks(); mockedProtectedApi.rate.mockResolvedValue(thread); mockedRollStateApi.get.mockResolvedValue(bootstrapState(null)); mockedApplyRatedThreadCache.mockResolvedValue(); globalThis.document.cookie = 'comicpile_roll_snoozes=; expires=Thu, 01 Jan 1970 00:00:00 GMT' })
 

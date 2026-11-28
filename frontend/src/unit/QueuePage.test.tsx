@@ -192,7 +192,7 @@ beforeEach(() => {
   mockedUseMoveToPosition.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseRollState.mockReturnValue({
-    data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [] },
+    data: { snoozed_threads: [] },
     refetch: vi.fn(),
   })
   mockedUseSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })

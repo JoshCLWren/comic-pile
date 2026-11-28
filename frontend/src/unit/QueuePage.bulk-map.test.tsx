@@ -168,7 +168,7 @@ describe('QueuePage bulk mapping wiring', () => {
     mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
     // SAFETY: QueuePage only reads data.snoozed_threads, data.skipped_thread_ids, data.skipped_threads, and refetch; the full return type is irrelevant.
     mockedUseRollState.mockReturnValue({
-      data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [] },
+      data: { snoozed_threads: [] },
       refetch: vi.fn(),
     } as never)
   })
