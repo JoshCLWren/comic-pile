@@ -11,7 +11,7 @@ function Harness() {
   const { mainDieRef, ratingViewTopRef } = useRollViewport({ isRatingView })
   return (
     <div>
-      <div data-testid="die-anchor" ref={mainDieRef} />
+      <button type="button" data-testid="die-anchor" ref={mainDieRef} />
       <div data-testid="rating-top-anchor" ref={ratingViewTopRef} />
       <button type="button" onClick={() => setIsRatingView((value) => !value)}>
         toggle rating
