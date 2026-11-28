@@ -1,10 +1,20 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createIssueCardsApi, newDirectIssueKey } from '../services/issueCardsApi'
+import {
+  readPendingSelection,
+  resetRollPendingSelectionMemory,
+  writePendingSelection,
+} from '../services/rollPendingSelection'
 import { createHttpClientStub } from './httpClientStub'
 
 const client = createHttpClientStub()
 const api = createIssueCardsApi(client)
-beforeEach(() => { client.post.mockReset(); client.patch.mockReset() })
+beforeEach(() => {
+  client.post.mockReset()
+  client.patch.mockReset()
+  localStorage.clear()
+  resetRollPendingSelectionMemory()
+})
 
 describe('bounded exact-issue card transport', () => {
   it('deduplicates valid owned identifiers and avoids empty network requests', async () => {

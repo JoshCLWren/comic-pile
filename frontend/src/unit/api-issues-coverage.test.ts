@@ -2,6 +2,11 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createIssuesApi } from '../services/api-issues'
+import {
+  readPendingSelection,
+  resetRollPendingSelectionMemory,
+  writePendingSelection,
+} from '../services/rollPendingSelection'
 import { createHttpClientStub } from './httpClientStub'
 
 const client = createHttpClientStub()

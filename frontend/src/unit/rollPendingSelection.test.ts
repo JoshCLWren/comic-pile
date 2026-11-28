@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearAllPendingSelections,
   clearPendingSelection,
+  clearPendingSelectionForIssue,
   parsePendingSelection,
   pendingSelectionStorageKey,
   readPendingSelection,

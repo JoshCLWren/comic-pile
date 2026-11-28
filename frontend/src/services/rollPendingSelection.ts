@@ -148,13 +148,7 @@ export function writePendingSelection(
  * Passing an issue id makes success paths safe against races: a newer offer
  * cannot be cleared by the response of an older rate.
  */
-export function clearPendingSelection(
-  userId: number | string | null | undefined,
-  issueId?: number,
-): void {
-  const key = pendingSelectionStorageKey(userId)
-  const current = readPendingSelection(userId)
-  if (issueId !== undefined && (current == null || current.issue_id !== issueId)) return
+function clearKey(key: string): void {
   try {
     globalThis.localStorage?.removeItem(key)
   } catch {
@@ -163,9 +157,54 @@ export function clearPendingSelection(
   publish(key, null, 'local')
 }
 
+export function clearPendingSelection(
+  userId: number | string | null | undefined,
+  issueId?: number,
+): void {
+  const current = readPendingSelection(userId)
+  if (issueId !== undefined && (current == null || current.issue_id !== issueId)) return
+  clearKey(pendingSelectionStorageKey(userId))
+}
+
 /** Clear every browser-owned selection for this reader (logout / Reset). */
 export function clearAllPendingSelections(userId: number | string | null | undefined): void {
   clearPendingSelection(userId)
+}
+
+/**
+ * Clear a committed read/rating for one exact issue in every browser partition.
+ *
+ * Issue ids are globally unique and every write is owner-scoped, so another
+ * reader cannot legitimately own the same issue. This lets shared direct/bulk
+ * write services clear the matching selection without guessing an auth user id,
+ * while unrelated issues and every other reader's selection remain untouched.
+ */
+export function clearPendingSelectionForIssue(issueId: number): void {
+  const normalized = positiveInteger(issueId)
+  if (normalized === null) return
+  const keys = new Set(snapshots.keys())
+  try {
+    const storage = globalThis.localStorage
+    if (storage) {
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index)
+        if (key?.startsWith(STORAGE_KEY_PREFIX)) keys.add(key)
+      }
+    }
+  } catch {
+    // Cached partitions still clear when storage enumeration is blocked.
+  }
+  for (const key of keys) {
+    let selection = snapshots.get(key)
+    if (selection === undefined) {
+      try {
+        selection = parsePendingSelection(globalThis.localStorage?.getItem(key))
+      } catch {
+        selection = null
+      }
+    }
+    if (selection?.issue_id === normalized) clearKey(key)
+  }
 }
 
 /**

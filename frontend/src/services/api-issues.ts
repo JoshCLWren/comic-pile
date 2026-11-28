@@ -6,6 +6,7 @@ import type {
   ReaderContextResponse,
   Thread,
 } from '../types'
+import { clearPendingSelectionForIssue } from './rollPendingSelection'
 
 export type { IssueListResponse }
 
@@ -275,6 +276,7 @@ export function createIssuesApi(client: HttpClient) {
      */
     markRead: async (issueId: number): Promise<void> => {
       await client.post(`/v2/issues/${issueId}/read-markers`)
+      clearPendingSelectionForIssue(issueId)
     },
 
     /**
@@ -287,7 +289,12 @@ export function createIssuesApi(client: HttpClient) {
     },
 
     bulkMarkRead: async (issueIds: number[]): Promise<IssueReadOperationResponse> => {
-      return client.post(`/v2/issue-read-markers`, { issue_ids: issueIds })
+      const response = await client.post<IssueReadOperationResponse>(
+        `/v2/issue-read-markers`,
+        { issue_ids: issueIds },
+      )
+      for (const issueId of issueIds) clearPendingSelectionForIssue(issueId)
+      return response
     },
 
     bulkMarkUnread: async (issueIds: number[]): Promise<IssueReadOperationResponse> => {

@@ -1,5 +1,6 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
 import type { components } from '../generated/openapi'
+import { clearPendingSelectionForIssue } from './rollPendingSelection'
 
 export type IssueCard = components['schemas']['IssueCard'] & {
   /** Alternate overall/story number for the same physical comic (#4652). */
@@ -90,10 +91,14 @@ export function createIssueCardsApi(client: HttpClient) {
       if (mutation.status != null) body.status = mutation.status
       if (mutation.rating != null) body.rating = mutation.rating
       if (mutation.issueNumberAliasProvided) body.issue_number_alias = mutation.issueNumberAlias ?? null
-      return client.patch<IssueReadRateResponse, typeof body>(
+      const response = await client.patch<IssueReadRateResponse, typeof body>(
         `/v2/issues/${encodeURIComponent(String(issueId))}`,
         body,
       )
+      if (mutation.status === 'read' || mutation.rating != null) {
+        clearPendingSelectionForIssue(issueId)
+      }
+      return response
     },
   }
 }
