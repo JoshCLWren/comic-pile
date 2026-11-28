@@ -1015,37 +1015,48 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
     budget: Duration,
     api_key: &str,
     force: bool,
-) {
+) -> Option<RetainedCredits> {
     if budget.is_zero() || api_key.is_empty() {
-        return;
+        return None;
     }
     let run = async {
         let conn = match db::checkout(state).await {
             Ok(c) => c,
-            Err(_) => return,
+            Err(_) => return None,
         };
-        let Some((identity_id, external_id, cached)) =
-            confirmed_identity_for_issue(&conn, user_id, issue_id).await
-        else {
-            return;
-        };
+        let (identity_id, external_id, cached) =
+            match confirmed_identity_for_issue(&conn, user_id, issue_id).await {
+                Ok(Some(found)) => found,
+                Ok(None) => return None,
+                Err(err) => {
+                    // A database error is not "no confirmed identity".
+                    log_provider_failure("inline_identity_lookup", ProviderFailure::PersistFailed);
+                    tracing::debug!(
+                        error_kind = crate::error_kind(&err),
+                        "confirmed identity lookup failed"
+                    );
+                    return None;
+                }
+            };
         // A confirm/remap can reuse already-complete same-identity metadata;
         // an explicit Retry (`force`) always performs a fresh bounded attempt.
         if !force {
             if let Some(metadata) = &cached {
                 if !needs_provider_fetch(metadata, chrono::Utc::now()) {
-                    return;
+                    return Some(RetainedCredits::from_metadata(metadata));
                 }
             }
         }
+        // The provider call must not hold a pooled connection while it waits.
+        drop(conn);
         let Some(comicvine_id) = issue_id_from_external(&external_id) else {
-            return;
+            return None;
         };
         let provider_data = match provider_issue(&state.outbound, comicvine_id, api_key).await {
             Ok(value) => value,
             Err(failure) => {
                 log_provider_failure("inline_identity_hydration", failure);
-                return;
+                return None;
             }
         };
         let (mut patch, has, url, updated) = match normalized_metadata(&provider_data, comicvine_id)
@@ -1053,21 +1064,75 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
             Ok(ok) => ok,
             Err(failure) => {
                 log_provider_failure("inline_identity_hydration_normalize", failure);
-                return;
+                return None;
             }
         };
-        // A sparser fresh roster must never erase cached creator credits.
-        if !has {
-            preserve_cached_credits(&mut patch, cached.as_ref());
-        }
+        let mut write_conn = match db::checkout(state).await {
+            Ok(c) => c,
+            Err(_) => return None,
+        };
+        let tx = match write_conn.transaction().await {
+            Ok(tx) => tx,
+            Err(err) => {
+                log_provider_failure("inline_identity_persist", ProviderFailure::PersistFailed);
+                tracing::debug!(
+                    error_kind = crate::error_kind(&err),
+                    "inline identity persist transaction failed"
+                );
+                return None;
+            }
+        };
+        // Read the row's *current* metadata at write time, under its row lock,
+        // and recheck the still-confirmed mapping. A late result for identity A
+        // cannot be written after a remap to B, and a concurrent metadata write
+        // cannot be clobbered by the snapshot captured before the provider call.
+        let current_metadata = match tx
+            .query_opt(
+                "SELECT e.metadata_json::text
+                 FROM external_identities e
+                 WHERE e.id = $1
+                   AND e.provider = 'comicvine'
+                   AND e.entity_type = 'issue'
+                   AND EXISTS (
+                       SELECT 1 FROM issue_external_identity_mappings m
+                       WHERE m.issue_id = $2
+                         AND m.external_identity_id = e.id
+                         AND m.status = 'confirmed'
+                   )
+                 FOR UPDATE OF e",
+                &[&identity_id, &issue_id],
+            )
+            .await
+        {
+            Ok(Some(row)) => row
+                .get::<_, Option<String>>(0)
+                .and_then(|text| serde_json::from_str::<Value>(&text).ok()),
+            Ok(None) => return None,
+            Err(err) => {
+                log_provider_failure("inline_identity_lookup", ProviderFailure::PersistFailed);
+                tracing::debug!(
+                    error_kind = crate::error_kind(&err),
+                    "confirmed identity write-time lookup failed"
+                );
+                return None;
+            }
+        };
+        // A sparser fresh roster must never erase credits that are in the row
+        // right now, whether they are normalized or only in the raw payload.
+        let retained = if has {
+            RetainedCredits::from_metadata(&patch)
+        } else {
+            preserve_cached_credits(&mut patch, current_metadata.as_ref());
+            RetainedCredits::from_metadata(&patch)
+        };
         let Ok(json_patch) = serde_json::to_string(&patch) else {
             log_provider_failure(
                 "inline_identity_hydration_serialize",
                 ProviderFailure::InvalidResponse,
             );
-            return;
+            return None;
         };
-        if let Err(err) = conn
+        let updated_rows = match tx
             .execute(
                 "UPDATE external_identities
                  SET metadata_json = (COALESCE(metadata_json::jsonb, '{}'::jsonb)
@@ -1080,15 +1145,32 @@ pub(crate) async fn hydrate_confirmed_identity_inline(
             )
             .await
         {
+            Ok(rows) => rows,
+            Err(err) => {
+                log_provider_failure("inline_identity_persist", ProviderFailure::PersistFailed);
+                tracing::debug!(
+                    error_kind = crate::error_kind(&err),
+                    "inline identity persist error classified"
+                );
+                return None;
+            }
+        };
+        if let Err(err) = tx.commit().await {
             log_provider_failure("inline_identity_persist", ProviderFailure::PersistFailed);
             tracing::debug!(
                 error_kind = crate::error_kind(&err),
-                "inline identity persist error classified"
+                "inline identity persist commit failed"
             );
+            return None;
         }
+        (updated_rows > 0).then_some(retained)
     };
-    if tokio::time::timeout(budget, run).await.is_err() {
-        tracing::info!("inline identity creator-credit hydration budget exhausted");
+    match tokio::time::timeout(budget, run).await {
+        Ok(retained) => retained,
+        Err(_) => {
+            tracing::info!("inline identity creator-credit hydration budget exhausted");
+            None
+        }
     }
 }
 
