@@ -9,6 +9,7 @@ generated rewrite artifact). These tests pin the classifier, the
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
