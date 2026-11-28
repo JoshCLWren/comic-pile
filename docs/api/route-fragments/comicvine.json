@@ -1,13 +1,12 @@
 {
   "family": "comicvine",
   "owned_path_patterns": [
-    "^/api/v1/comicvine(?:/.*)?$",
     "^/api/v2/comicvine(?:/.*)?$"
   ],
   "vercel_generation": {
     "crons": [
       {
-        "path": "/api/v1/cron/release-sync",
+        "path": "/api/v2/cron/release-sync",
         "schedule": "0 9 * * *"
       }
     ],
@@ -24,14 +23,6 @@
     ]
   },
   "operations": [
-    {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/comicvine/series/[^/]+/import\\-status$",
-      "exclude_from_inventory": true
-    },
     {
       "bucket": "operations",
       "method": "DELETE",

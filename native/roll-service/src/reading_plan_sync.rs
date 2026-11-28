@@ -1624,6 +1624,23 @@ async fn sync_released_issues_for_user_with_rosters(
     Ok(report)
 }
 
+/// Documentation-only operation for the secret-gated scheduled cron moved to
+/// canonical v2 by #5958. The handler and `CRON_SECRET` gate are unchanged.
+#[utoipa::path(
+    get,
+    path = "/api/v2/cron/release-sync",
+    tag = "reading-plan-sync",
+    operation_id = "scheduled_release_sync_cron",
+    responses(
+        (status = 200, description = "Multi-owner release sync report"),
+        (status = 401, description = "Missing or invalid CRON_SECRET bearer"),
+        (status = 503, description = "Cron secret not configured or database unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn scheduled_release_sync_documentation() {}
+
 #[utoipa::path(
     post,
     path = "/api/v2/reading-plan-sync/runs",
@@ -1658,7 +1675,11 @@ pub fn get_sync_status_documentation() {}
 
 #[derive(utoipa::OpenApi)]
 #[openapi(
-    paths(sync_released_issues_documentation, get_sync_status_documentation),
+    paths(
+        scheduled_release_sync_documentation,
+        sync_released_issues_documentation,
+        get_sync_status_documentation
+    ),
     components(schemas(SyncRequest, SyncResponse, SyncReport, SourceSyncFailure, SyncStatusSource, SyncStatusResponse)),
     modifiers(&ReadingPlanSyncSecurityAddon)
 )]
@@ -1824,7 +1845,7 @@ fn scheduled_response(payload: ScheduledSyncResponse) -> Response {
 }
 
 /// Multi-owner Rust path for the daily Vercel Cron release sync
-/// (`GET /api/v1/cron/release-sync`). Every owner with an enabled release
+/// (`GET /api/v2/cron/release-sync`, #5958). Every owner with an enabled release
 /// source is synced through the same per-user core as the authenticated HTTP
 /// endpoint, with independent per-owner failure isolation, a transaction-scoped
 /// advisory lock against overlapping invocations, and a wall-clock budget.

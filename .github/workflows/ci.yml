@@ -191,7 +191,9 @@ jobs:
         run: node scripts/check_v2_aip_shapes.mjs
       - name: Verify the all-version live route census and retirement allowlist
         run: node scripts/generate_live_route_census.mjs --check
-      - run: node --test scripts/generate_route_burndown.test.mjs scripts/generate_openapi_types.test.mjs scripts/generate_vercel_routes.test.mjs scripts/vercel_slim_routes.test.mjs scripts/no_background_metadata_repair.test.mjs scripts/check_v2_aip_shapes.test.mjs scripts/generate_live_route_census.test.mjs
+      - name: Final legacy route guard (inner router, ingress, fragments and redirects)
+        run: node scripts/check_final_legacy_route_guard.mjs
+      - run: node --test scripts/generate_route_burndown.test.mjs scripts/generate_openapi_types.test.mjs scripts/generate_vercel_routes.test.mjs scripts/vercel_slim_routes.test.mjs scripts/no_background_metadata_repair.test.mjs scripts/check_v2_aip_shapes.test.mjs scripts/generate_live_route_census.test.mjs scripts/check_final_legacy_route_guard.test.mjs
 
   build:
     needs: [factory-scope]

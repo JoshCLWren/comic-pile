@@ -166,26 +166,6 @@
     },
     {
       "bucket": "v1_operations",
-      "method": "POST",
-      "path": "/api/v1/threads/",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/threads/$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "POST",
-      "path": "/api/v1/threads/check-duplicates",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/threads/check\\-duplicates$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832
-    },
-    {
-      "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/threads/excluded/threads",
       "dest": "/api/native_api.rs",
@@ -216,31 +196,11 @@
     },
     {
       "bucket": "v1_operations",
-      "method": "DELETE",
-      "path": "/api/v1/threads/{thread_id}",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/threads/[^/]+$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832
-    },
-    {
-      "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/threads/{thread_id}",
       "dest": "/api/native_api.rs",
       "src": "^/api/v1/threads/[0-9]+$",
       "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "PUT",
-      "path": "/api/v1/threads/{thread_id}",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/threads/[^/]+$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832
     },
     {
       "bucket": "v1_operations",
@@ -276,14 +236,6 @@
     },
     {
       "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/threads/{thread_id}/issues",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/threads/[^/]+/issues$",
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/threads/{thread_id}/restore",
       "dest": "/api/native_api.rs",
@@ -304,60 +256,6 @@
     },
     {
       "bucket": "v1_operations",
-      "method": "PUT",
-      "path": "/api/v1/threads/{thread_id}/test-backdate",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/threads/[^/]+/test\\-backdate$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "POST",
-      "path": "/api/v1/threads/{thread_id}:getBlockingInfo",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/threads/[^/]+:getBlockingInfo$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "POST",
-      "path": "/api/v1/threads/{thread_id}:migrateToIssues",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/threads/[^/]+:migrateToIssues$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "POST",
-      "path": "/api/v1/threads/{thread_id}:migrateToIssuesSimple",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/threads/[^/]+:migrateToIssuesSimple$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "POST",
-      "path": "/api/v1/threads/{thread_id}:setCurrentIssue",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/threads/[^/]+:setCurrentIssue$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/threads:getBlockingInfo",
       "dest": "/api/native_api.rs",
@@ -368,6 +266,94 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4832,
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/check-duplicates",
+      "dest": "/api/native_api.rs",
+      "src": "^/api/v1/threads/check\\\\-duplicates$",
+      "runtime": "native-rust",
+      "status": "retired-404-tombstone",
+      "owning_issue": 5958,
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/groups:batch",
+      "dest": "/api/native_api.rs",
+      "src": "^/api/v1/threads/groups:batch$",
+      "runtime": "native-rust",
+      "status": "retired-404-tombstone",
+      "owning_issue": 5958,
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "PUT",
+      "path": "/api/v1/threads/{thread_id}",
+      "dest": "/api/native_api.rs",
+      "src": "^/api/v1/threads/[^/]+$",
+      "runtime": "native-rust",
+      "status": "retired-404-tombstone",
+      "owning_issue": 5958,
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "DELETE",
+      "path": "/api/v1/threads/{thread_id}",
+      "dest": "/api/native_api.rs",
+      "src": "^/api/v1/threads/[^/]+$",
+      "runtime": "native-rust",
+      "status": "retired-404-tombstone",
+      "owning_issue": 5958,
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}:getBlockingInfo",
+      "dest": "/api/native_api.rs",
+      "src": "^/api/v1/threads/[^/]+:getBlockingInfo$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5709,
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}:migrateToIssues",
+      "dest": "/api/native_api.rs",
+      "src": "^/api/v1/threads/[^/]+:migrateToIssues$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5707,
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}:migrateToIssuesSimple",
+      "dest": "/api/native_api.rs",
+      "src": "^/api/v1/threads/[^/]+:migrateToIssuesSimple$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5707,
+      "exclude_from_inventory": true
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}:setCurrentIssue",
+      "dest": "/api/native_api.rs",
+      "src": "^/api/v1/threads/[^/]+:setCurrentIssue$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5707,
       "exclude_from_inventory": true
     }
   ]

@@ -61,5 +61,16 @@
       "dest": "/api/native_api.rs",
       "src": "^/api/v2/identity\\-inbox/[^/]+/skips$"
     }
-  ]
+  ],
+  "vercel_generation": {
+    "retired_rewrite_srcs": [
+      "^/api/v1/identity\\-inbox$",
+      "^/api/v1/identity\\-inbox/search/issues$",
+      "^/api/v1/identity\\-inbox/[^/]+$",
+      "^/api/v1/identity\\-inbox/[^/]+/confirm$",
+      "^/api/v1/identity\\-inbox/[^/]+/defer$",
+      "^/api/v1/identity\\-inbox/[^/]+/reject$",
+      "^/api/v1/identity\\-inbox/[^/]+/skip$"
+    ]
+  }
 }

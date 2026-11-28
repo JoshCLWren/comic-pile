@@ -19,23 +19,6 @@
   },
   "operations": [
     {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/roll/events/{event_id}/recommendation-explanation",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/roll/events/[^/]+/recommendation\\-explanation$",
-      "exclude_from_inventory": true
-    },
-    {
-      "bucket": "unversioned_operations",
-      "method": "GET",
-      "path": "/api/roll/events/{event_id}/recommendation-explanation",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/roll/events/[^/]+/recommendation\\-explanation$",
-      "consumers": [],
-      "exclude_from_inventory": true
-    },
-    {
       "bucket": "operations",
       "method": "POST",
       "path": "/api/v2/roll/unsnooze",
@@ -65,5 +48,11 @@
         "frontend/src/services/rollBootstrapApi.ts"
       ]
     }
-  ]
+  ],
+  "vercel_generation": {
+    "retired_rewrite_srcs": [
+      "/api/v1/roll/dismiss-pending",
+      "/api/roll/dismiss-pending"
+    ]
+  }
 }

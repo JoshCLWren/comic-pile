@@ -464,7 +464,7 @@ export async function createThread(
         let issueSuccess = false;
         let issueAttempts = 0;
         while (!issueSuccess && issueAttempts < 3) {
-          const issuesResponse = await page.request.post(`/api/v1/threads/${threadId}/issues`, {
+          const issuesResponse = await page.request.post(`/api/v2/threads/${threadId}/issues`, {
             data: { issue_range: issueRange },
             headers: jsonHeaders,
           });
@@ -474,7 +474,7 @@ export async function createThread(
             
             // If issues_remaining is 0, mark all issues as read
             if (threadData.issues_remaining === 0 && threadId) {
-              const issuesListResponse = await page.request.get(`/api/v1/threads/${threadId}/issues`, {
+              const issuesListResponse = await page.request.get(`/api/v2/threads/${threadId}/issues`, {
                 headers: authHeaders,
               });
               
@@ -669,7 +669,7 @@ export async function navigateToRatePage(page: Page): Promise<void> {
 
 export async function getFirstIssueId(page: Page, threadId: number): Promise<number> {
   const headers = await authHeaders(page)
-  const response = await page.request.get(`/api/v1/threads/${threadId}/issues`, {
+  const response = await page.request.get(`/api/v2/threads/${threadId}/issues`, {
     headers,
   })
   expect(response.ok(), await response.text()).toBeTruthy()

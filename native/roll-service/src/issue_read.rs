@@ -742,12 +742,11 @@ mod tests {
         })
         .unwrap();
         let app = router(Arc::new(AppState::new(config).unwrap()));
+        // Live issue reads still authenticate through the service router.
         for uri in [
             "/api/v2/issues/7",
-            "/api/v1/issues/7/comicvine",
             "/api/v2/issues/7/dependencies",
             "/api/v1/threads/7/issue-dependencies",
-            "/api/v1/threads/7/issues",
         ] {
             let response = app
                 .clone()
@@ -764,6 +763,27 @@ mod tests {
                 response.status(),
                 StatusCode::UNAUTHORIZED,
                 "{uri} must require auth through the service router"
+            );
+        }
+        // #5958: the issue-ComicVine and v1 thread-issue aliases are retired.
+        // They are no longer registered, so an unauthenticated request must
+        // get the same 404 as every other unowned legacy path.
+        for uri in ["/api/v1/issues/7/comicvine", "/api/v1/threads/7/issues"] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("GET")
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(
+                response.status(),
+                StatusCode::NOT_FOUND,
+                "{uri} must no longer be registered"
             );
         }
     }

@@ -221,7 +221,7 @@ async fn send_router(router: Router, request: Request<Body>) -> (StatusCode, Val
 fn creators_test_router(state: &Arc<AppState>) -> Router {
     Router::new()
         .route(
-            "/api/v1/threads/{thread_id}/issues/creators",
+            "/api/v2/threads/{thread_id}/creatorCredits",
             route_get(comicpile_roll_service::thread_issues::list_thread_issue_creators),
         )
         .with_state(state.clone())
@@ -260,8 +260,8 @@ async fn positions(conn: &Conn, thread_id: i32) -> Vec<(String, i32, String)> {
 async fn every_operation_requires_authentication() {
     let (state, _token, _csrf, _user_id, _guard) = setup_user("tiss-auth").await;
     for (method, path) in [
-        ("POST", "/api/v1/threads/1/issues"),
-        ("POST", "/api/v1/threads/1/issues:reorder"),
+        ("POST", "/api/v2/threads/1/issues"),
+        ("PUT", "/api/v2/threads/1/issue-order"),
         ("POST", "/api/v1/threads/1:migrateToIssues"),
         ("POST", "/api/v1/threads/1:migrateToIssuesSimple"),
         ("POST", "/api/v1/threads/1:setCurrentIssue"),
@@ -288,14 +288,14 @@ async fn every_operation_requires_authentication() {
         creators_test_router(&state),
         Request::builder()
             .method("GET")
-            .uri("/api/v1/threads/1/issues/creators")
+            .uri("/api/v2/threads/1/creatorCredits")
             .body(Body::empty())
             .unwrap(),
     )
     .await;
     assert!(
         status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN,
-        "GET /api/v1/threads/1/issues/creators -> {status}"
+        "GET /api/v2/threads/1/creatorCredits -> {status}"
     );
 }
 
@@ -310,7 +310,7 @@ async fn create_issues_places_naturally_appends_and_anchors() {
     let (status, body) = send(
         &state,
         post(
-            &format!("/api/v1/threads/{thread}/issues"),
+            &format!("/api/v2/threads/{thread}/issues"),
             &token,
             &csrf,
             Some(json!({"issue_range": "33-35"})),
@@ -323,17 +323,16 @@ async fn create_issues_places_naturally_appends_and_anchors() {
     assert!(body["next_page_token"].is_null());
     assert_eq!(body["issues"][0]["issue_number"], "33");
     assert_eq!(body["issues"][0]["status"], "unread");
-    assert!(body["issues"][0]["read_at"].is_null());
-    assert!(body["issues"][0]["created_at"]
-        .as_str()
-        .unwrap()
-        .ends_with('Z'));
+    // The v2 issue-create item carries identity/state fields; the v1
+    // read_at/created_at wire fields are not part of this resource.
+    assert!(body["issues"][0]["id"].as_i64().unwrap() > 0);
+    assert_eq!(body["issues"][0]["thread_id"], thread);
 
     // Natural placement seats #2 ahead of #33 and shifts the rest.
     let (status, body) = send(
         &state,
         post(
-            &format!("/api/v1/threads/{thread}/issues"),
+            &format!("/api/v2/threads/{thread}/issues"),
             &token,
             &csrf,
             Some(json!({"issue_range": "2"})),
@@ -343,7 +342,7 @@ async fn create_issues_places_naturally_appends_and_anchors() {
     assert_eq!(status, StatusCode::CREATED, "{body}");
     assert_eq!(body["total_count"], 4);
     assert_eq!(body["issues"].as_array().unwrap().len(), 1);
-    assert_eq!(body["issues"][0]["position"], 1);
+    assert_eq!(body["issues"][0]["issue_number"], "2");
     let rows = positions(&conn, thread).await;
     assert_eq!(
         rows.iter().map(|r| r.0.as_str()).collect::<Vec<_>>(),
@@ -380,10 +379,10 @@ async fn create_issues_places_naturally_appends_and_anchors() {
     let (status, _) = send(
         &state,
         post(
-            &format!("/api/v1/threads/{thread}/issues"),
+            &format!("/api/v2/threads/{thread}/issues"),
             &token,
             &csrf,
-            Some(json!({"issue_range": "3", "insert_after_issue_id": null})),
+            Some(json!({"issue_range": "3", "insert_after_issue_id": null, "append_to_end": true})),
         ),
     )
     .await;
@@ -394,7 +393,7 @@ async fn create_issues_places_naturally_appends_and_anchors() {
     let (status, body) = send(
         &state,
         post(
-            &format!("/api/v1/threads/{thread}/issues"),
+            &format!("/api/v2/threads/{thread}/issues"),
             &token,
             &csrf,
             Some(json!({"issue_range": "Annual 1", "insert_after_issue_id": first})),
@@ -402,7 +401,7 @@ async fn create_issues_places_naturally_appends_and_anchors() {
     )
     .await;
     assert_eq!(status, StatusCode::CREATED, "{body}");
-    assert_eq!(body["issues"][0]["position"], 2);
+    assert_eq!(body["issues"][0]["issue_number"], "Annual 1");
     let numbers: Vec<String> = positions(&conn, thread)
         .await
         .into_iter()
@@ -414,7 +413,7 @@ async fn create_issues_places_naturally_appends_and_anchors() {
     let (status, body) = send(
         &state,
         post(
-            &format!("/api/v1/threads/{thread}/issues"),
+            &format!("/api/v2/threads/{thread}/issues"),
             &token,
             &csrf,
             Some(json!({"issue_range": "33-34"})),
@@ -426,7 +425,7 @@ async fn create_issues_places_naturally_appends_and_anchors() {
     let (status, body) = send(
         &state,
         post(
-            &format!("/api/v1/threads/{thread}/issues"),
+            &format!("/api/v2/threads/{thread}/issues"),
             &token,
             &csrf,
             Some(json!({"issue_range": "5-3"})),
@@ -434,11 +433,11 @@ async fn create_issues_places_naturally_appends_and_anchors() {
     )
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert_eq!(body["detail"], "Range start (5) cannot exceed end (3)");
+    assert_eq!(body["detail"], "Invalid issue range: 5-3");
     let (status, body) = send(
         &state,
         post(
-            &format!("/api/v1/threads/{thread}/issues"),
+            &format!("/api/v2/threads/{thread}/issues"),
             &token,
             &csrf,
             Some(json!({"issue_range": "9", "insert_after_issue_id": 99999999})),
@@ -471,41 +470,65 @@ async fn create_issues_validation_isolation_and_not_found() {
         register_extra_user(&state, "tiss-create-other").await;
     let conn = state.pool.get().await.unwrap();
     let thread = plain_thread(&conn, user_id, "Mine", 0, 1).await;
-    for body in [
-        json!({}),
-        json!({"issue_range": ""}),
-        json!({"issue_range": 5}),
-        json!({"issue_range": "1", "insert_after_issue_id": 0}),
-        json!({"issue_range": "1", "insert_after_issue_id": "x"}),
+    // v2 validates with typed serde extraction plus handler checks: malformed
+    // bodies get axum's 422 rejection (a plain-text body, so no JSON `detail`),
+    // an empty range is a 400 and an unknown anchor is a 404. Every case must
+    // be rejected without writing an issue (asserted at the end of this test).
+    for (body, expected_status, expected_detail) in [
+        (json!({}), StatusCode::UNPROCESSABLE_ENTITY, None),
+        (
+            json!({"issue_range": ""}),
+            StatusCode::BAD_REQUEST,
+            Some("Issue range cannot be empty"),
+        ),
+        (
+            json!({"issue_range": 5}),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            None,
+        ),
+        (
+            json!({"issue_range": "1", "insert_after_issue_id": 0}),
+            StatusCode::NOT_FOUND,
+            Some("Issue 0 not found"),
+        ),
+        (
+            json!({"issue_range": "1", "insert_after_issue_id": "x"}),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            None,
+        ),
     ] {
         let (status, payload) = send(
             &state,
             post(
-                &format!("/api/v1/threads/{thread}/issues"),
+                &format!("/api/v2/threads/{thread}/issues"),
                 &token,
                 &csrf,
                 Some(body),
             ),
         )
         .await;
-        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-        assert_eq!(payload["detail"], "Validation failed");
+        assert_eq!(status, expected_status, "{payload}");
+        match expected_detail {
+            Some(detail) => assert_eq!(payload["detail"], detail),
+            None => assert!(payload.is_null(), "unexpected JSON body {payload}"),
+        }
     }
     let (status, _) = send(
         &state,
         post(
-            "/api/v1/threads/not-an-int/issues",
+            "/api/v2/threads/not-an-int/issues",
             &token,
             &csrf,
             Some(json!({"issue_range": "1"})),
         ),
     )
     .await;
-    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    // v2 uses a typed Path<i32>; axum rejects a non-numeric id with 400.
+    assert_eq!(status, StatusCode::BAD_REQUEST);
     let (status, body) = send(
         &state,
         post(
-            "/api/v1/threads/987654/issues",
+            "/api/v2/threads/987654/issues",
             &token,
             &csrf,
             Some(json!({"issue_range": "1"})),
@@ -513,12 +536,12 @@ async fn create_issues_validation_isolation_and_not_found() {
     )
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
-    assert_eq!(body["detail"], "Thread 987654 not found");
+    assert_eq!(body["detail"], "Thread not found");
     // Cross-user: same 404 as a missing thread, and nothing is written.
     let (status, body) = send(
         &state,
         post(
-            &format!("/api/v1/threads/{thread}/issues"),
+            &format!("/api/v2/threads/{thread}/issues"),
             &other_token,
             &other_csrf,
             Some(json!({"issue_range": "1"})),
@@ -526,7 +549,7 @@ async fn create_issues_validation_isolation_and_not_found() {
     )
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
-    assert_eq!(body["detail"], format!("Thread {thread} not found"));
+    assert_eq!(body["detail"], "Thread not found");
     assert!(positions(&conn, thread).await.is_empty());
 }
 
@@ -539,11 +562,20 @@ async fn reorder_rewrites_positions_and_validates() {
     let thread = plain_thread(&conn, user_id, "Reorder", 3, 1).await;
     let ids = seed_issues(&conn, thread, &["1", "2", "3"], "unread").await;
     frontier(&conn, thread, ids[0]).await;
-    let path = format!("/api/v1/threads/{thread}/issues:reorder");
+    // v2 issue-order refreshes counts/frontier but leaves reading progress to
+    // the reading-session resource; the seeded value must survive the reorder.
+    conn.execute(
+        "UPDATE threads SET reading_progress = 'not_started' WHERE id = $1",
+        &[&thread],
+    )
+    .await
+    .unwrap();
+    let path = format!("/api/v2/threads/{thread}/issue-order");
 
     let (status, _) = send(
         &state,
-        post(
+        authed(
+            "PUT",
             &path,
             &token,
             &csrf,
@@ -578,26 +610,40 @@ async fn reorder_rewrites_positions_and_validates() {
         json!({"issue_ids": [ids[0], ids[0], ids[1]]}),
         json!({"issue_ids": [ids[0], ids[1], 424242]}),
     ] {
-        let (status, body) = send(&state, post(&path, &token, &csrf, Some(bad))).await;
+        let (status, body) = send(&state, authed("PUT", &path, &token, &csrf, Some(bad))).await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert_eq!(
             body["detail"],
             "issue_ids must contain every issue in the thread exactly once"
         );
     }
-    for bad in [
-        json!({"issue_ids": []}),
-        json!({}),
-        json!({"issue_ids": ["x"]}),
+    // v2 uses typed serde extraction: a well-formed but wrong id set is a
+    // handler-level 400; malformed bodies get axum's plain-text 422 rejection.
+    for (bad, expected_status, expected_detail) in [
+        (
+            json!({"issue_ids": []}),
+            StatusCode::BAD_REQUEST,
+            Some("issue_ids must contain every issue in the thread exactly once"),
+        ),
+        (json!({}), StatusCode::UNPROCESSABLE_ENTITY, None),
+        (
+            json!({"issue_ids": ["x"]}),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            None,
+        ),
     ] {
-        let (status, body) = send(&state, post(&path, &token, &csrf, Some(bad))).await;
-        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
-        assert_eq!(body["detail"], "Validation failed");
+        let (status, body) = send(&state, authed("PUT", &path, &token, &csrf, Some(bad))).await;
+        assert_eq!(status, expected_status, "{body}");
+        match expected_detail {
+            Some(detail) => assert_eq!(body["detail"], detail),
+            None => assert!(body.is_null(), "unexpected JSON body {body}"),
+        }
     }
     let (status, _) = send(
         &state,
-        post(
-            "/api/v1/threads/987654/issues:reorder",
+        authed(
+            "PUT",
+            "/api/v2/threads/987654/issue-order",
             &token,
             &csrf,
             Some(json!({"issue_ids": [1]})),
@@ -607,7 +653,8 @@ async fn reorder_rewrites_positions_and_validates() {
     assert_eq!(status, StatusCode::NOT_FOUND);
     let (status, _) = send(
         &state,
-        post(
+        authed(
+            "PUT",
             &path,
             &other_token,
             &other_csrf,
@@ -653,7 +700,7 @@ async fn creators_are_bulk_read_merged_and_owner_scoped() {
     )
     .await
     .unwrap();
-    let path = format!("/api/v1/threads/{thread}/issues/creators");
+    let path = format!("/api/v2/threads/{thread}/creatorCredits");
     let router = creators_test_router(&state);
     let (status, body) = send_router(router.clone(), get(&path, &token, &csrf)).await;
     assert_eq!(status, StatusCode::OK, "{body}");
@@ -672,13 +719,13 @@ async fn creators_are_bulk_read_merged_and_owner_scoped() {
     assert_eq!(body["detail"], format!("Thread {thread} not found"));
     let (status, _) = send_router(
         router.clone(),
-        get("/api/v1/threads/987654/issues/creators", &token, &csrf),
+        get("/api/v2/threads/987654/creatorCredits", &token, &csrf),
     )
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     let (status, body) = send_router(
         router,
-        get("/api/v1/threads/abc/issues/creators", &token, &csrf),
+        get("/api/v2/threads/abc/creatorCredits", &token, &csrf),
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
@@ -1538,8 +1585,9 @@ async fn reorder_and_set_current_issue_on_same_thread_do_not_deadlock() {
         tokio::spawn(async move {
             send(
                 &state,
-                post(
-                    &format!("/api/v1/threads/{thread}/issues:reorder"),
+                authed(
+                    "PUT",
+                    &format!("/api/v2/threads/{thread}/issue-order"),
                     &token,
                     &csrf,
                     Some(json!({"issue_ids": reversed})),

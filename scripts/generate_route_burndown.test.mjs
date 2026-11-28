@@ -204,7 +204,12 @@ test('real creator source retains all eleven native v2 browser routes', () => {
   ]) {
     liveOperation(fragment, 'GET', route);
   }
-  assert.equal(liveOperation(fragment, 'GET', '/api/v1/threads/{thread_id}/issues/creators').dest, '/api/native_api.rs');
+  // #5958: the v1 thread-issues/creators alias is retired with the closed
+  // #5706 slice; the canonical v2 creatorCredits route remains.
+  assert.equal(
+    liveOperation(fragment, 'GET', '/api/v2/threads/{thread_id}/creatorCredits').dest,
+    '/api/native_api.rs',
+  );
 });
 
 test('real custom CBL source retains native reading-list route ownership', () => {
@@ -313,14 +318,12 @@ test('real session and undo fragments retain native-only supported operations', 
   ));
 });
 
-test('real releases and dependency fragments retain declared browser routes', () => {
+test('real releases and dependency fragments retain only canonical v2 browser routes', () => {
   const releases = liveFragment('releases');
+  // #5958 retired the four release-writer v1 aliases; the v2 list is the only
+  // live release surface in the source fragment.
   const expectedReleases = [
     ['GET', '/api/v2/releases'],
-    ['PUT', '/api/v1/releases/'],
-    ['GET', '/api/v1/releases/source'],
-    ['GET', '/api/v1/releases/{release_id}'],
-    ['POST', '/api/v1/releases/{release_id}/retract'],
   ];
   assert.equal(releases.operations.length, expectedReleases.length);
   for (const [method, route] of expectedReleases) {

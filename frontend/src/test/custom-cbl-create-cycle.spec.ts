@@ -14,7 +14,7 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
     const headers = { Authorization: `Bearer ${token}`, 'X-CSRF-Token': csrf.csrf_token }
     const threadTitle = `X-Force ${suffix}`
     const thread = await createThread(page, { title: threadTitle, format: 'comic', total_issues: 2, issues_remaining: 2 })
-    const issuesResponse = await page.request.get(`/api/v1/threads/${thread.id}/issues`, { headers })
+    const issuesResponse = await page.request.get(`/api/v2/threads/${thread.id}/issues`, { headers })
     expect(issuesResponse.ok(), await issuesResponse.text()).toBeTruthy()
     // SAFETY: the real issue endpoint supplies the numeric IDs used in the error fixture.
     const issues = await issuesResponse.json() as { issues: Array<{ id: number }> }

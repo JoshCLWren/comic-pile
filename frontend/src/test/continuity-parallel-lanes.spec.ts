@@ -22,7 +22,7 @@ async function getFirstIssueId(page: Page, token: string | null, threadId: numbe
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
   }
-  const response = await page.request.get(`/api/v1/threads/${threadId}/issues`, {
+  const response = await page.request.get(`/api/v2/threads/${threadId}/issues`, {
     headers,
   })
   expect(response.ok(), `issue list failed: ${await response.text()}`).toBeTruthy()
@@ -67,7 +67,7 @@ test.describe('Continuity plan parallel lanes', () => {
       issueListHeaders['Authorization'] = `Bearer ${token}`
     }
     // SAFETY: the test reads only the issue ids the lane-order assertion compares
-    const issueB = (await page.request.get(`/api/v1/threads/${thread.id}/issues`, {
+    const issueB = (await page.request.get(`/api/v2/threads/${thread.id}/issues`, {
       headers: issueListHeaders,
     }).then((r) => r.json()) as { issues: Array<{ id: number }> }).issues[1].id
 
@@ -114,7 +114,7 @@ test.describe('Continuity plan parallel lanes', () => {
       issueListHeaders['Authorization'] = `Bearer ${token}`
     }
     // SAFETY: the test reads only the issue ids the convergence assertion compares
-    const issues = (await page.request.get(`/api/v1/threads/${thread.id}/issues`, {
+    const issues = (await page.request.get(`/api/v2/threads/${thread.id}/issues`, {
       headers: issueListHeaders,
     }).then((r) => r.json()) as { issues: Array<{ id: number }> }).issues
     const issueA = issues[0].id

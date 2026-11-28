@@ -223,7 +223,8 @@ fn app() -> Router {
     Router::new()
         .route("/api/v2/health", get(native_health))
         .route("/api/metrics", get(native_metrics))
-        .route("/api/v1/metrics", get(native_metrics))
+        // #5958: /api/v1/metrics was an unregistered legacy alias; the
+        // documented operational exemption is the bare /api/metrics only.
         .route("/api/v2/factory/github/start", get(native_dispatch))
         .route("/api/v2/factory/github/callback", get(native_dispatch))
         .route(
@@ -281,18 +282,8 @@ fn app() -> Router {
         // service. Without the matching route a deployed v2 preview falls
         // through to native_not_found instead of reaching the Rust handler.
         .route("/api/v2/seriesMappings:preview", post(native_dispatch))
-        .route(
-            "/api/v1/catalog/series-mappings/commit",
-            post(native_dispatch),
-        )
-        .route(
-            "/api/v1/catalog/series-mappings/preview",
-            post(native_dispatch),
-        )
-        .route(
-            "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
-            post(native_dispatch),
-        )
+        // #5958: the v1 mapping preview/commit and plan-projection aliases are
+        // retired; only the AIP-136 v2 custom methods remain mounted.
         // #5715: the Vercel entry has its own route table. Without a matching
         // catch-all the canonical custom method falls through to
         // native_not_found; axum requires a capture to own its whole segment.
@@ -320,7 +311,8 @@ fn app() -> Router {
             "/api/v2/reading-orders/{reading_order_id}/items",
             post(native_dispatch),
         )
-        .route("/api/v1/cron/release-sync", get(native_dispatch))
+        // #5958: the real Vercel Cron now targets the canonical v2 path.
+        .route("/api/v2/cron/release-sync", get(native_dispatch))
         .route("/api/v2/reading-plan-sync/status", get(native_dispatch))
         .route("/api/v2/reading-plan-sync/runs", post(native_dispatch))
         .route("/api/v2/queue-entries/{thread_id}", get(native_dispatch))
@@ -373,6 +365,8 @@ fn app() -> Router {
             post(native_dispatch),
         )
         .route("/api/v1/threads/{thread_id}", get(native_dispatch))
+        // #5958: retain the action dispatcher for the still-open #5707/#5709
+        // migrations; closed-owner actions no longer dispatch.
         .route("/api/v1/threads/{thread_id}", post(native_dispatch))
         .route("/api/v1/threads:getBlockingInfo", post(native_dispatch))
         .route(
@@ -383,52 +377,32 @@ fn app() -> Router {
             "/api/v1/threads/{thread_id}/dependency-order-check",
             get(native_dispatch),
         )
-        .route(
-            "/api/v1/threads/{thread_id}/issues:validateOrder",
-            get(native_dispatch),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}/reading-orders",
-            get(native_dispatch),
-        )
+        // #5958: closed-owner v1 issue/read/reorder/reading-order slices and
+        // the test-only backdate writer are retired. The v2 resources below
+        // are the only live surface for those behaviors.
         // #5715: canonical v2 spelling of the same owner-scoped read.
         .route(
             "/api/v2/threads/{thread_id}/readingOrders",
             get(native_dispatch),
         )
-        .route("/api/v1/threads/{thread_id}/issues", get(native_dispatch))
-        .route("/api/v1/threads/{thread_id}/issues", post(native_dispatch))
-        .route(
-            "/api/v1/threads/{thread_id}/issues/creators",
-            get(native_dispatch),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}/issues:reorder",
-            post(native_dispatch),
-        )
         .route("/api/threads/{thread_id}", get(native_dispatch))
         .route("/api/v1/threads/completed/threads", get(native_dispatch))
-        .route("/api/v1/threads/", post(native_dispatch))
-        .route("/api/v1/threads/check-duplicates", post(native_dispatch))
         .route("/api/v1/threads/excluded/threads", get(native_dispatch))
-        // #5711: the retired membership batch alias must not be swallowed by
-        // the generic `/api/v1/threads/{thread_id}` POST action route. A static
-        // segment wins in axum and terminates at the Rust JSON 404 fallback.
-        .route("/api/v1/threads/groups:batch", post(native_not_found))
         .route("/api/v1/threads/reactivate", post(native_dispatch))
         .route("/api/v1/threads/stale", get(native_dispatch))
-        .route("/api/v1/threads/{thread_id}", put(native_dispatch))
-        .route("/api/v1/threads/{thread_id}", delete(native_dispatch))
         .route("/api/v1/threads/{thread_id}/exclude", post(native_dispatch))
         .route("/api/v1/threads/{thread_id}/restore", post(native_dispatch))
         .route(
             "/api/v1/threads/{thread_id}/set-pending",
             post(native_dispatch),
         )
-        .route(
-            "/api/v1/threads/{thread_id}/test-backdate",
-            put(native_dispatch),
-        )
+        // #5958: retired method pins matching the inner router. They overlap
+        // the still-owned GET /api/v1/threads/{thread_id} alias, so an explicit
+        // native_not_found is required for a 404 rather than a 405.
+        .route("/api/v1/threads/check-duplicates", post(native_not_found))
+        .route("/api/v1/threads/groups:batch", post(native_not_found))
+        .route("/api/v1/threads/{thread_id}", put(native_not_found))
+        .route("/api/v1/threads/{thread_id}", delete(native_not_found))
         .route("/api/v2/reading-graph", get(native_dispatch))
         .route("/api/v2/reading-graph/repairs", post(native_dispatch))
         .route("/api/v2/dependencies/", post(native_dispatch))
@@ -569,7 +543,8 @@ fn app() -> Router {
             "/api/v2/issues/{issue_id}/reader-context",
             get(native_dispatch),
         )
-        .route("/api/v1/issues/{issue_id}/comicvine", get(native_dispatch))
+        // #5958: the v1 issue-comicvine alias is retired; the v2 scoped read
+        // is registered above.
         .route("/api/v1/issue-identity/cbl-sources", get(native_dispatch))
         .route(
             "/api/v1/issue-identity/cbl-sources/browse",
@@ -606,10 +581,8 @@ fn app() -> Router {
             "/api/v1/issue-identity/cbl/{list_id}/adoption-plan",
             post(native_dispatch),
         )
-        .route(
-            "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
-            get(native_dispatch),
-        )
+        // #5958: the v1 import-status alias is retired; the v2 route below is
+        // the only live import-status surface.
         // Canonical native v2 ComicVine read routes (#4835, split chunk A).
         .route("/api/v2/comicvine/search/series", get(native_dispatch))
         .route("/api/v2/comicvine/resolve", get(native_dispatch))
@@ -663,14 +636,8 @@ fn app() -> Router {
             "/api/v1/threads/{thread_id}/dependencies",
             get(native_dispatch),
         )
-        .route("/api/v1/continuity-rules/", get(native_dispatch))
-        .route("/api/v1/continuity-rules/", post(native_dispatch))
-        .route("/api/v1/continuity-rules/{rule_id}", get(native_dispatch))
-        .route("/api/v1/continuity-rules/{rule_id}", put(native_dispatch))
-        .route(
-            "/api/v1/continuity-rules/{rule_id}",
-            delete(native_dispatch),
-        )
+        // #5958: the legacy continuity-rule family has no v2 successor and is
+        // retired at both routers.
         .route(
             "/api/v2/continuity-plans/",
             get(native_dispatch).post(native_dispatch),
@@ -714,13 +681,8 @@ fn app() -> Router {
             get(native_dispatch),
         )
         .route("/api/v2/releases", get(native_dispatch))
-        .route("/api/v1/releases/", put(native_dispatch))
-        .route("/api/v1/releases/source", get(native_dispatch))
-        .route("/api/v1/releases/{release_id}", get(native_dispatch))
-        .route(
-            "/api/v1/releases/{release_id}/retract",
-            post(native_dispatch),
-        )
+        // #5958: the release-writer v1 aliases are retired; release writing is
+        // owned by the release-writer workflow, not a public API alias.
         .route(
             "/api/v1/threads/{thread_id}/issue-dependencies",
             get(native_dispatch),
@@ -761,14 +723,8 @@ fn app() -> Router {
             post(native_dispatch),
         )
         .route("/api/v2/roll/dismiss-pending", post(native_dispatch))
-        .route(
-            "/api/v1/roll/events/{event_id}/recommendation-explanation",
-            get(native_dispatch),
-        )
-        .route(
-            "/api/roll/events/{event_id}/recommendation-explanation",
-            get(native_dispatch),
-        )
+        // #5958: recommendation-explanation v1 and bare aliases are retired;
+        // the explanation belongs to the scoped v2 Roll resources.
         .route("/api/v2/roll/switch-prerequisite", post(native_dispatch))
         .route("/api/v2/users/me/preferences", get(native_dispatch))
         .route("/api/v2/users/me/preferences", patch(native_dispatch))
@@ -794,9 +750,8 @@ fn app() -> Router {
         .route("/api/v2/auth/reset-password", post(native_dispatch))
         // #4549: /api/v1/auth/* and /api/auth/* are retired. Do not register
         // them here: the Vercel fallback must answer 404 for those aliases.
-        .route("/api/v1/creators", get(native_dispatch))
-        .route("/api/v1/creators/", get(native_dispatch))
-        .route("/api/v1/creators/summaries", get(native_dispatch))
+        // #5958: the three v1 creator aliases are retired; the v2 creator
+        // resource family below is the only live surface.
         .route("/api/v2/creators", get(native_dispatch))
         .route("/api/v2/creators/summaries", get(native_dispatch))
         .route("/api/v2/creators/compare", get(native_dispatch))
@@ -847,10 +802,8 @@ fn app() -> Router {
             "/api/v2/readingOrderGroups/{group_id}",
             delete(native_dispatch),
         )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}/order",
-            put(native_dispatch),
-        )
+        // #5958: the v1 group-order writer is retired; v2 membership/range
+        // resources are the only live group-authority surface.
         // #5711: the v2 crossover-membership surface is the single authority.
         // The Vercel entry needs its own route registrations; without them the
         // native_not_found fallback returns a JSON 404 before dispatch.
@@ -1077,7 +1030,7 @@ mod tests {
     async fn v2_issue_read_ingress_reaches_rust_and_requires_auth() {
         for uri in [
             "/api/v2/issues/7",
-            "/api/v1/issues/7/comicvine",
+            "/api/v2/issues/7/comicvine",
             "/api/v2/issues/7/dependencies",
         ] {
             let mut router = app();
@@ -1339,13 +1292,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_backdate_ingress_reaches_rust_and_never_hits_json_404() {
-        // The threads route fragment points this method/path at this Vercel
-        // entry. Without a matching outer route the regenerated ingress falls
-        // through to native_not_found before the inner router ever sees the
-        // handler (same failure class as #5484). No DB state is needed here:
-        // an anonymous mutation must reach the dispatched handler's 401 (or
-        // the 503 cold-start response), never the Rust JSON 404.
+    async fn retired_test_backdate_ingress_returns_json_404() {
+        // #5958: the test-only backdate writer has no v2 successor. The Vercel
+        // entry must no longer dispatch it; the Rust JSON 404 is the contract.
         let mut router = app();
         let response = router
             .call(
@@ -1357,28 +1306,17 @@ mod tests {
             )
             .await
             .expect("router response");
-        assert!(
-            response.status() == StatusCode::UNAUTHORIZED
-                || response.status() == StatusCode::SERVICE_UNAVAILABLE,
-            "test-backdate must reach Rust dispatch, not the 404 fallback, got {}",
-            response.status()
-        );
-        assert_eq!(
-            response.headers().get("x-comicpile-api-runtime").unwrap(),
-            "rust"
-        );
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
         let bytes = to_bytes(response.into_body(), 8192)
             .await
             .expect("body bytes");
-        let text = String::from_utf8_lossy(&bytes);
-        assert_ne!(
-            text, r#"{"detail":"Not Found"}"#,
-            "test-backdate must not hit native_not_found: {text}"
-        );
+        assert_eq!(String::from_utf8_lossy(&bytes), r#"{"detail":"Not Found"}"#);
     }
 
     #[tokio::test]
-    async fn comicvine_import_status_ingress_preserves_same_path_and_requires_auth() {
+    async fn retired_v1_import_status_ingress_returns_json_404() {
+        // #5958: the v1 alias is retired while the v2 import-status read stays
+        // mounted and is covered by `comicvine_v2_ingress_*` below.
         let mut router = app();
         let response = router
             .call(
@@ -1390,10 +1328,91 @@ mod tests {
             )
             .await
             .expect("router response");
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        let bytes = to_bytes(response.into_body(), 8192)
+            .await
+            .expect("body bytes");
+        assert_eq!(String::from_utf8_lossy(&bytes), r#"{"detail":"Not Found"}"#);
+    }
+
+    #[tokio::test]
+    async fn retired_unowned_legacy_aliases_return_json_404_at_ingress() {
+        // #5958: every route in this table was unowned residue whose owning
+        // migration has closed. Inner router and Vercel ingress must agree that
+        // they are gone; the fallback is the Rust JSON 404.
+        let retired: &[(&str, &str)] = &[
+            ("GET", "/api/v1/creators"),
+            ("GET", "/api/v1/creators/"),
+            ("GET", "/api/v1/creators/summaries"),
+            ("PUT", "/api/v1/releases/"),
+            ("GET", "/api/v1/releases/source"),
+            ("GET", "/api/v1/releases/7"),
+            ("POST", "/api/v1/releases/7/retract"),
+            ("GET", "/api/v1/continuity-rules/"),
+            ("GET", "/api/v1/continuity-rules/3"),
+            ("POST", "/api/v1/continuity-rules/"),
+            ("PUT", "/api/v1/continuity-rules/3"),
+            ("DELETE", "/api/v1/continuity-rules/3"),
+            ("GET", "/api/v1/roll/events/9/recommendation-explanation"),
+            ("GET", "/api/roll/events/9/recommendation-explanation"),
+            ("POST", "/api/v1/threads/"),
+            ("POST", "/api/v1/threads/check-duplicates"),
+            ("POST", "/api/v1/threads/groups:batch"),
+            ("PUT", "/api/v1/threads/21"),
+            ("DELETE", "/api/v1/threads/21"),
+            ("GET", "/api/v1/threads/21/issues"),
+            ("POST", "/api/v1/threads/21/issues"),
+            ("GET", "/api/v1/threads/21/issues/creators"),
+            ("POST", "/api/v1/threads/21/issues:reorder"),
+            ("GET", "/api/v1/threads/21/issues:validateOrder"),
+            ("GET", "/api/v1/threads/21/reading-orders"),
+            ("PUT", "/api/v1/reading-order-groups/7/order"),
+            ("GET", "/api/v1/metrics"),
+        ];
+        for (method, uri) in retired {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method(*method)
+                        .uri(*uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{method} {uri}");
+            let bytes = to_bytes(response.into_body(), 8192)
+                .await
+                .expect("body bytes");
+            assert_eq!(
+                String::from_utf8_lossy(&bytes),
+                r#"{"detail":"Not Found"}"#,
+                "{method} {uri}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn release_sync_cron_v2_path_reaches_the_secret_gate() {
+        // #5958: the real Vercel Cron now calls the v2 path. Without a matching
+        // ingress route it would fall through to the JSON 404 rather than the
+        // CRON_SECRET gate, so proving "not 404" here is the parity assertion.
+        let mut router = app();
+        let response = router
+            .call(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v2/cron/release-sync")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("router response");
         assert!(
             response.status() == StatusCode::UNAUTHORIZED
                 || response.status() == StatusCode::SERVICE_UNAVAILABLE,
-            "ComicVine import status must require auth and reach Rust, got {}",
+            "v2 cron must reach the secret gate, got {}",
             response.status()
         );
         assert_eq!(
@@ -2590,7 +2609,7 @@ mod tests {
                         .expect("thread issues request")
                 };
                 let (status, first, _, text) = call_app(request(
-                    "/api/v1/threads/21/issues?page_size=2".into(),
+                    "/api/v2/threads/21/issues?page_size=2".into(),
                     &access,
                 ))
                 .await;
@@ -2606,7 +2625,7 @@ mod tests {
                 assert_eq!(cursor, "2,102");
 
                 let (status, next, _, text) = call_app(request(
-                    format!("/api/v1/threads/21/issues?page_size=2&page_token={cursor}"),
+                    format!("/api/v2/threads/21/issues?page_size=2&page_token={cursor}"),
                     &access,
                 ))
                 .await;
@@ -2617,7 +2636,7 @@ mod tests {
                 assert!(next["next_page_token"].is_null());
 
                 let (status, unread, _, text) = call_app(request(
-                    "/api/v1/threads/21/issues?status=unread&page_size=100".into(),
+                    "/api/v2/threads/21/issues?status=unread&page_size=100".into(),
                     &access,
                 ))
                 .await;
@@ -2626,14 +2645,14 @@ mod tests {
                 assert_eq!(unread["issues"].as_array().expect("filtered").len(), 2);
 
                 let (status, missing, _, _) =
-                    call_app(request("/api/v1/threads/999/issues".into(), &access)).await;
+                    call_app(request("/api/v2/threads/999/issues".into(), &access)).await;
                 assert_eq!(status, StatusCode::NOT_FOUND);
                 assert_eq!(missing["detail"], "Thread 999 not found");
 
                 let other_name = format!("thread-issues-foreign-{}", std::process::id());
                 let (other_access, _, _) = register_session(&other_name).await;
                 let (status, _, _, _) =
-                    call_app(request("/api/v1/threads/21/issues".into(), &other_access)).await;
+                    call_app(request("/api/v2/threads/21/issues".into(), &other_access)).await;
                 assert_eq!(status, StatusCode::NOT_FOUND);
             })
             .await;
@@ -2668,14 +2687,14 @@ mod tests {
 
                 let mut router = app();
                 for uri in [
-                    "/api/v1/threads/not-an-int/issues",
-                    "/api/v1/threads/21/issues?page_size=abc",
-                    "/api/v1/threads/21/issues?page_size=99999999999999999999",
-                    "/api/v1/threads/21/issues?page_size=0",
-                    "/api/v1/threads/21/issues?page_size=101",
-                    "/api/v1/threads/21/issues?status=invalid",
+                    "/api/v2/threads/not-an-int/issues",
+                    "/api/v2/threads/21/issues?page_size=abc",
+                    "/api/v2/threads/21/issues?page_size=99999999999999999999",
+                    "/api/v2/threads/21/issues?page_size=0",
+                    "/api/v2/threads/21/issues?page_size=101",
+                    "/api/v2/threads/21/issues?status=invalid",
                     // Invalid-UTF-8 path extraction must also use the 422 envelope.
-                    "/api/v1/threads/%FF/issues",
+                    "/api/v2/threads/%FF/issues",
                 ] {
                     let request = Request::builder()
                         .method("GET")
@@ -2696,7 +2715,7 @@ mod tests {
                 let (status, body, _, text) = call_app(
                     Request::builder()
                         .method("GET")
-                        .uri("/api/v1/threads/21/issues?page_token=bad")
+                        .uri("/api/v2/threads/21/issues?page_token=bad")
                         .header(header::AUTHORIZATION, format!("Bearer {access}"))
                         .body(Body::empty())
                         .expect("bad token request"),
@@ -2709,8 +2728,8 @@ mod tests {
                 // validation: `2%2C102` is the cursor `2,102` and `%72ead`
                 // is `read`. Neither may fall into the 400/422 paths (#5318).
                 for uri in [
-                    "/api/v1/threads/21/issues?page_token=2%2C102",
-                    "/api/v1/threads/21/issues?status=%72ead",
+                    "/api/v2/threads/21/issues?page_token=2%2C102",
+                    "/api/v2/threads/21/issues?status=%72ead",
                 ] {
                     let (status, body, _, text) = call_app(
                         Request::builder()

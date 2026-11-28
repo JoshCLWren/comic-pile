@@ -221,6 +221,33 @@ test('CI gate rejects unresolved ingress and stale baseline debt', t => {
   assert.ok(failures.some(failure => failure.includes('known baseline debt')), JSON.stringify(failures));
 });
 
+test('declared stale callers owned by an open migration are not new v1 drift', t => {
+  const tmp = mkdtempSync(path.join(os.tmpdir(), 'live-census-stale-caller-'));
+  t.after(() => rmSync(tmp, {recursive: true, force: true}));
+  stage(tmp);
+  const callerPath = path.join(tmp, 'frontend/src/services/api-threads.ts');
+  const source = readFileSync(callerPath, 'utf8');
+  writeFileSync(
+    callerPath,
+    `${source}\nclient.post('/v1/threads/\${threadId}:migrateToIssues', {issues: []})\n`,
+  );
+  const drift = generate(tmp).failures.filter(failure => failure.includes('migrateToIssues'));
+  assert.ok(drift.length > 0, 'an undeclared stale caller must still fail the drift gate');
+
+  const dispositionsPath = path.join(tmp, 'docs/api/v1-route-dispositions.json');
+  const dispositions = JSON.parse(readFileSync(dispositionsPath, 'utf8'));
+  dispositions.known_stale_callers = [
+    {
+      method: 'POST',
+      path: '/api/v1/threads/{param}:migrateToIssues',
+      owner_issue: 5707,
+    },
+  ];
+  writeFileSync(dispositionsPath, `${JSON.stringify(dispositions, null, 2)}\n`);
+  const after = generate(tmp).failures.filter(failure => failure.includes('migrateToIssues'));
+  assert.deepEqual(after, [], 'the declared stale caller must be exempt from drift');
+});
+
 test('fixture artifacts are complete and checked-in outputs are current', () => {
   for (const artifact of ARTIFACTS) {
     assert.ok(existsSync(path.join(goldenRoot, path.basename(artifact))));

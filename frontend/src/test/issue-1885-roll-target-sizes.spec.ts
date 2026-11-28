@@ -193,7 +193,7 @@ test.describe('Roll pointer target sizes (#1885)', () => {
 
     // Reader-context edges are built from issue-level dependencies.
     const firstIssueId = async (threadId: number): Promise<number> => {
-      const response = await page.request.get(`/api/v1/threads/${threadId}/issues`, {
+      const response = await page.request.get(`/api/v2/threads/${threadId}/issues`, {
         headers: { Authorization: `Bearer ${await getAuthToken(page)}` },
       })
       expect(response.ok(), `issue list failed: ${response.status()}`).toBeTruthy()

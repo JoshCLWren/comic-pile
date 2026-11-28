@@ -2,7 +2,6 @@
   "family": "reading-order-groups",
   "owned_path_patterns": [
     "^/api/v2/readingOrderGroups(?::.*|/.*)?$",
-    "^/api/v1/reading\\-order\\-groups(?::.*|/.*)?$",
     "^/api/v2/reading\\-order\\-groups(?::.*|/.*)?$"
   ],
   "defaults": {
@@ -63,13 +62,6 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 5710
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "PUT",
-      "path": "/api/v1/reading-order-groups/{group_id}/order",
-      "dest": "/api/native_api.rs",
-      "src": "^/api/v1/reading\\-order\\-groups/[^/]+/order$"
     },
     {
       "bucket": "operations",

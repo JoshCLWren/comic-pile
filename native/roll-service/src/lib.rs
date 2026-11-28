@@ -508,7 +508,7 @@ impl IntoResponse for ApiError {
 /// (Python parity: `ScheduledSyncResponse{truncated: true}`) instead of a 503.
 fn request_timeout_for(path: &str, default_timeout: Duration) -> Duration {
     match path {
-        "/api/v1/cron/release-sync" => {
+        "/api/v2/cron/release-sync" => {
             reading_plan_sync::CRON_MAX_DURATION + Duration::from_secs(10)
         }
         // Series import fetches the volume and its full roster, then adopts
@@ -662,24 +662,13 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/series-mapping-commits",
             post(catalog_commit::commit_series_mapping_handler),
         )
-        // #5716: AIP-136 stateless collection custom method. The v1 preview
-        // alias stays mounted only until production proof retires it; no new
-        // caller may use it.
+        // #5716/#5715: AIP-136 stateless collection custom methods are the
+        // only live preview surfaces; #5958 retired their v1 aliases.
         .route(
             "/api/v2/seriesMappings:preview",
             post(catalog_series_mapping_preview::preview_series_mappings_v2),
         )
-        .route(
-            "/api/v1/catalog/series-mappings/preview",
-            post(catalog_series_mapping_preview::preview_series_mapping_handler),
-        )
-        .route(
-            "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
-            post(continuity_plans_project_preview::preview_plan_projection_handler),
-        )
-        // #5715: canonical AIP-136 stateless resource custom method. The v1
-        // preview alias stays mounted only until production proof retires it;
-        // no new caller may use it. matchit (axum 0.8) requires a capture to own
+        // #5715: matchit (axum 0.8) requires a capture to own
         // its whole segment, so the mounted pattern captures the final segment
         // and the handler dispatches on the exact `:previewReadingOrderProjection`
         // suffix. The wire URL and published contract stay canonical.
@@ -703,14 +692,8 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/roll/eligible-issue-ids",
             get(roll_resources::eligible_issue_ids),
         )
-        .route(
-            "/api/v1/roll/events/{event_id}/recommendation-explanation",
-            get(recommendation_explanation::get_recommendation_explanation),
-        )
-        .route(
-            "/api/roll/events/{event_id}/recommendation-explanation",
-            get(recommendation_explanation::get_recommendation_explanation),
-        )
+        // #5958: the v1 and bare /api recommendation-explanation aliases are
+        // retired. The explanation is part of the scoped v2 Roll resources.
         .route(
             "/api/v2/roll/switch-prerequisite",
             post(roll_switch_prerequisite::switch_prerequisite),
@@ -763,8 +746,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/reading-orders/{reading_order_id}/items",
             post(reading_orders::insert_reading_order_item),
         )
+        // #5958: the scheduled release-sync cron now targets a canonical v2
+        // path. The handler, CRON_SECRET gate and wire response are unchanged.
         .route(
-            "/api/v1/cron/release-sync",
+            "/api/v2/cron/release-sync",
             get(reading_plan_sync::scheduled_release_sync_cron),
         )
         .route(
@@ -820,13 +805,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(threads::get_thread_detail),
         )
         .route("/api/threads/{thread_id}", get(threads::get_thread_detail))
-        .route(
-            "/api/v1/threads/{thread_id}/issues",
-            get(issue_read::list_thread_issues),
-        )
-        // axum/matchit rejects a parameter followed by literal text, so the
-        // `{thread_id}:action` operation family is routed through the single
-        // `{thread_id}` segment and dispatched on the action suffix.
+        // #5958: the `{thread_id}:action` dispatcher stays mounted only for
+        // the still-open #5707 (migrate/current-issue) and #5709
+        // (blocking-info) migrations. Closed-owner actions were retired; no
+        // new caller may use these v1 custom methods.
         .route(
             "/api/v1/threads/{thread_id}",
             post(thread_ordering::post_thread_action),
@@ -871,28 +853,9 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/threads/{thread_id}/dependency-order-check",
             get(thread_ordering::check_thread_dependency_order),
         )
-        .route(
-            "/api/v1/threads/{thread_id}/issues",
-            post(thread_issues::create_thread_issues),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}/issues/creators",
-            get(thread_issues::list_thread_issue_creators),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}/issues:reorder",
-            post(thread_issues::reorder_thread_issues),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}/issues:validateOrder",
-            get(thread_ordering::validate_issue_order),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}/reading-orders",
-            get(thread_ordering::get_thread_reading_orders),
-        )
-        // #5715: canonical AIP-122 collection spelling for the same
-        // owner-scoped read. The v1 alias remains only for legacy callers.
+        // #5958: all v1 issue-list, creator, reorder, validation and
+        // reading-order Thread slices are retired; their v2 resources are the
+        // only live surface.
         .route(
             "/api/v2/threads/{thread_id}/readingOrders",
             get(thread_ordering::get_thread_reading_orders_v2),
@@ -901,22 +864,13 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/threads/completed/threads",
             get(threads::list_completed_threads),
         )
-        .route("/api/v1/threads/", post(thread_lifecycle::create_thread))
-        .route(
-            "/api/v1/threads/check-duplicates",
-            post(thread_lifecycle::check_potential_duplicates),
-        )
         .route(
             "/api/v1/threads/excluded/threads",
             get(thread_lifecycle::list_excluded_threads),
         )
-        // The retired batch URL would otherwise be captured as a
-        // `/api/v1/threads/{thread_id}` action. Pin it to an explicit 404 so
-        // v2 is the only membership batch authority (#5711).
-        .route(
-            "/api/v1/threads/groups:batch",
-            post(|| async { ApiError::NotFound("Not Found".to_string()) }),
-        )
+        // #5958: the retired `groups:batch` URL is pinned to an explicit 404
+        // with the other retired method pins below. It dispatches no
+        // application logic; v2 is the membership authority.
         .route(
             "/api/v2/threads/{thread_id}/reading-order-group-memberships",
             get(dependency_groups::list_thread_groups),
@@ -930,14 +884,6 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(thread_lifecycle::list_stale_threads),
         )
         .route(
-            "/api/v1/threads/{thread_id}",
-            put(thread_lifecycle::update_thread),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}",
-            delete(thread_lifecycle::delete_thread),
-        )
-        .route(
             "/api/v1/threads/{thread_id}/exclude",
             post(thread_lifecycle::exclude_thread),
         )
@@ -949,10 +895,28 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/threads/{thread_id}/set-pending",
             post(thread_lifecycle::set_pending_thread),
         )
+        // #5958: retired method pins. These paths overlap the still-owned
+        // GET /api/v1/threads/{thread_id} catch-all; without explicit pins
+        // axum's method fallback would answer 405 instead of the 404 the
+        // retirement contract requires. They dispatch no application logic.
         .route(
-            "/api/v1/threads/{thread_id}/test-backdate",
-            put(thread_lifecycle::backdate_thread_for_testing),
+            "/api/v1/threads/check-duplicates",
+            post(|| async { ApiError::NotFound("Not Found".to_string()) }),
         )
+        .route(
+            "/api/v1/threads/groups:batch",
+            post(|| async { ApiError::NotFound("Not Found".to_string()) }),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}",
+            put(|| async { ApiError::NotFound("Not Found".to_string()) }),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}",
+            delete(|| async { ApiError::NotFound("Not Found".to_string()) }),
+        )
+        // #5958: the test-only backdate route is retired; no product v2
+        // successor exists and no shipped caller uses it.
         .route(
             "/api/v2/reading-lists",
             get(reading_list::list_reading_lists),
@@ -1118,10 +1082,8 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(comicvine_issue::issue_intelligence),
         )
         .route("/api/v2/issues/{issue_id}", get(issue_read::get_issue))
-        .route(
-            "/api/v1/issues/{issue_id}/comicvine",
-            get(comicvine_issue::issue_intelligence),
-        )
+        // #5958: the v1 issue-comicvine and import-status aliases are retired;
+        // the v2 scoped reads above are the only live ComicVine surface.
         .route(
             "/api/v1/issue-identity/cbl-sources/browse",
             get(cbl_catalog::browse_cbl_source_catalog),
@@ -1129,10 +1091,6 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/issue-identity/cbl-sources/folders",
             get(cbl_catalog::list_cbl_source_folders),
-        )
-        .route(
-            "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
-            get(comicvine_resolution::series_import_status),
         )
         // Canonical native v2 ComicVine read routes (#4835, split chunk A).
         .route(
@@ -1268,9 +1226,8 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/threads/{thread_id}/issue-order",
             put(issue_mutation::reorder_issues),
         )
-        .route("/api/v1/creators", get(creators::list_creators))
-        .route("/api/v1/creators/", get(creators::list_creators))
-        .route("/api/v1/creators/summaries", get(creators::get_summaries))
+        // #5958: the three v1 creator aliases are retired; the v2 creator
+        // resource family below is the only live surface.
         .route("/api/v2/creators", get(creators_v2::list_creators))
         .route(
             "/api/v2/creators/summaries",
@@ -1309,16 +1266,8 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}",
             get(creators_v2::get_series_drilldown),
         )
-        .route(
-            "/api/v1/continuity-rules/",
-            get(continuity_rules::list).post(continuity_rules::create),
-        )
-        .route(
-            "/api/v1/continuity-rules/{rule_id}",
-            get(continuity_rules::get)
-                .put(continuity_rules::update)
-                .delete(continuity_rules::delete),
-        )
+        // #5958: the legacy continuity-rule family has no v2 successor and is
+        // retired; continuity plans and their dependencies remain on v2.
         // Continuity plans v1 routes (cutover from Python)
         .route(
             "/api/v2/continuity-plans/",
@@ -1390,14 +1339,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route("/api/bug-reports/", post(bug_reports::create))
         .route("/api/v1/bug-reports/", post(bug_reports::create))
-        .route("/api/v1/releases/", put(releases::publish))
+        // #5958: the release-writer v1 endpoints are retired; the canonical
+        // v2 releases list is the only live release read. Release writing is
+        // performed by the dedicated release-writer workflow, not an alias.
         .route("/api/v2/releases", get(releases::list))
-        .route("/api/v1/releases/source", get(releases::reconcile))
-        .route("/api/v1/releases/{release_id}", get(releases::get))
-        .route(
-            "/api/v1/releases/{release_id}/retract",
-            post(releases::retract),
-        )
         .route("/api/v2/tags", get(tags::list_tags))
         .route("/api/v2/tags", post(tags::create_tag))
         .route(
@@ -1466,10 +1411,8 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/readingOrderGroups/{group_id}",
             delete(dependency_groups::delete_group_v2),
         )
-        .route(
-            "/api/v1/reading-order-groups/{group_id}/order",
-            put(dependency_groups::set_group_order),
-        )
+        // #5958: the v1 group-order writer is retired; v2 membership/range
+        // resources are the only live group-authority surface.
         .route(
             "/api/v2/reading-order-groups:resolveMemberships",
             post(thread_lifecycle::resolve_memberships),
@@ -1510,7 +1453,7 @@ mod tests {
     #[test]
     fn release_sync_ingress_deadline_exceeds_handler_budget() {
         let default = Duration::from_secs(3);
-        let bound = request_timeout_for("/api/v1/cron/release-sync", default);
+        let bound = request_timeout_for("/api/v2/cron/release-sync", default);
         assert!(
             bound > reading_plan_sync::CRON_MAX_DURATION,
             "the release-sync ingress deadline must be reachable after the handler budget"
@@ -1599,6 +1542,73 @@ mod tests {
                     Request::builder()
                         .method(method)
                         .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{method} {uri}");
+            let bytes = to_bytes(response.into_body(), 1024).await.unwrap();
+            assert_eq!(
+                String::from_utf8_lossy(&bytes),
+                r#"{"detail":"Not Found"}"#,
+                "{method} {uri}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn retired_unowned_legacy_routes_return_404_in_inner_router() {
+        // #5958: inner-router parity with the Vercel ingress negative probes.
+        let config = Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
+            _ => None,
+        })
+        .unwrap();
+        let state = Arc::new(AppState::new(config).unwrap());
+        let retired: &[(&str, &str)] = &[
+            ("GET", "/api/v1/creators"),
+            ("GET", "/api/v1/creators/"),
+            ("GET", "/api/v1/creators/summaries"),
+            ("PUT", "/api/v1/releases/"),
+            ("GET", "/api/v1/releases/source"),
+            ("GET", "/api/v1/releases/7"),
+            ("POST", "/api/v1/releases/7/retract"),
+            ("GET", "/api/v1/continuity-rules/"),
+            ("POST", "/api/v1/continuity-rules/"),
+            ("GET", "/api/v1/continuity-rules/3"),
+            ("PUT", "/api/v1/continuity-rules/3"),
+            ("DELETE", "/api/v1/continuity-rules/3"),
+            ("GET", "/api/v1/issues/7/comicvine"),
+            ("GET", "/api/v1/comicvine/series/42/import-status"),
+            ("GET", "/api/v1/roll/events/9/recommendation-explanation"),
+            ("GET", "/api/roll/events/9/recommendation-explanation"),
+            ("GET", "/api/v1/cron/release-sync"),
+            ("POST", "/api/v1/threads/"),
+            ("POST", "/api/v1/threads/check-duplicates"),
+            ("PUT", "/api/v1/threads/21"),
+            ("DELETE", "/api/v1/threads/21"),
+            ("GET", "/api/v1/threads/21/issues"),
+            ("POST", "/api/v1/threads/21/issues"),
+            ("GET", "/api/v1/threads/21/issues/creators"),
+            ("POST", "/api/v1/threads/21/issues:reorder"),
+            ("GET", "/api/v1/threads/21/issues:validateOrder"),
+            ("GET", "/api/v1/threads/21/reading-orders"),
+            ("PUT", "/api/v1/threads/21/test-backdate"),
+            ("PUT", "/api/v1/reading-order-groups/7/order"),
+            ("POST", "/api/v1/catalog/series-mappings/preview"),
+            (
+                "POST",
+                "/api/v1/continuity-plans/7/reading-orders/project-preview",
+            ),
+        ];
+        for (method, uri) in retired {
+            let response = router(Arc::clone(&state))
+                .oneshot(
+                    Request::builder()
+                        .method(*method)
+                        .uri(*uri)
                         .body(Body::empty())
                         .unwrap(),
                 )

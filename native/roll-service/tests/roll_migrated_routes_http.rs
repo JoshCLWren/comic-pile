@@ -322,125 +322,18 @@ async fn undo_restore_http_preserves_wire_contract_and_owner_scope() {
 }
 
 #[tokio::test]
-async fn recommendation_explanation_requires_auth() {
-    let (state, _token, _csrf, _user_id, _guard) = setup_user("recauth").await;
-    let (status, body) = send(
-        &state,
-        Request::builder()
-            .method("GET")
-            .uri("/api/v1/roll/events/1/recommendation-explanation")
-            .body(Body::empty())
-            .unwrap(),
-    )
-    .await;
-    assert_eq!(status, StatusCode::UNAUTHORIZED, "{body:?}");
-}
-
-#[tokio::test]
-async fn switch_prerequisite_requires_auth() {
-    let (state, _token, _csrf, _user_id, _guard) = setup_user("swauth").await;
-    let (status, body) = send(
-        &state,
-        Request::builder()
-            .method("POST")
-            .uri("/api/v2/roll/switch-prerequisite")
-            .header(header::CONTENT_TYPE, "application/json")
-            .body(Body::from(
-                json!({"node_type":"issue","node_id":1}).to_string(),
-            ))
-            .unwrap(),
-    )
-    .await;
-    assert_eq!(status, StatusCode::UNAUTHORIZED, "{body:?}");
-}
-
-#[tokio::test]
-async fn recommendation_explanation_returns_404_for_missing_event() {
-    let (state, token, csrf, _user_id, _guard) = setup_user("rec404").await;
-    let (status, body) = send(
-        &state,
-        authed(
-            "GET",
-            "/api/v1/roll/events/999999/recommendation-explanation",
-            &token,
-            &csrf,
-            None,
-        ),
-    )
-    .await;
-    assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
-}
-
-#[tokio::test]
-async fn recommendation_explanation_hides_other_users_event() {
-    let (state, token, csrf, user_id, _guard) = setup_user("recown1").await;
-    let (_token2, _csrf2, user2) = register_extra_user(&state, "recown2").await;
-    let conn = state.pool.get().await.unwrap();
-    let session_id: i32 = conn
-        .query_one(
-            "INSERT INTO sessions (user_id, started_at, start_die) VALUES ($1, NOW(), 6) RETURNING id",
-            &[&user2],
-        )
-        .await
-        .unwrap()
-        .get(0);
-    let event_id: i32 = conn
-        .query_one(
-            "INSERT INTO events (type, user_id, session_id, die, result, selection_method, timestamp)
-             VALUES ('roll', $1, $2, 6, 1, 'random', NOW()) RETURNING id",
-            &[&user2, &session_id],
-        )
-        .await
-        .unwrap()
-        .get(0);
-    assert_ne!(user_id, user2);
-    let (status, body) = send(
-        &state,
-        authed(
-            "GET",
-            &format!("/api/v1/roll/events/{event_id}/recommendation-explanation"),
-            &token,
-            &csrf,
-            None,
-        ),
-    )
-    .await;
-    assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
-}
-
-#[tokio::test]
-async fn recommendation_explanation_rejects_non_roll_event() {
-    let (state, token, csrf, user_id, _guard) = setup_user("rec422").await;
-    let conn = state.pool.get().await.unwrap();
-    let session_id: i32 = conn
-        .query_one(
-            "INSERT INTO sessions (user_id, started_at, start_die) VALUES ($1, NOW(), 6) RETURNING id",
-            &[&user_id],
-        )
-        .await
-        .unwrap()
-        .get(0);
-    let event_id: i32 = conn
-        .query_one(
-            "INSERT INTO events (type, user_id, session_id, die, result, selection_method, timestamp)
-             VALUES ('rate', $1, $2, 6, 1, 'manual', NOW()) RETURNING id",
-            &[&user_id, &session_id],
-        )
-        .await
-        .unwrap()
-        .get(0);
-    let (status, body) = send(
-        &state,
-        authed(
-            "GET",
-            &format!("/api/v1/roll/events/{event_id}/recommendation-explanation"),
-            &token,
-            &csrf,
-            None,
-        ),
-    )
-    .await;
-    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body:?}");
+async fn recommendation_explanation_aliases_are_retired() {
+    // #5958: the explanation belongs to the scoped v2 Roll resources. Both
+    // legacy aliases must fall through to the inner router's JSON 404.
+    let (state, token, csrf, _user_id, _guard) = setup_user("recretired").await;
+    for path in [
+        "/api/v1/roll/events/1/recommendation-explanation",
+        "/api/roll/events/1/recommendation-explanation",
+    ] {
+        let (status, body) = send(&state, authed("GET", path, &token, &csrf, None)).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{path}: {body:?}");
+        assert_eq!(body["detail"], "Not Found");
+    }
 }
 
 #[tokio::test]

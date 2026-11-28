@@ -22,7 +22,7 @@ async function getIssueIds(page: Page, token: string | null, threadId: number): 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
   }
-  const response = await page.request.get(`/api/v1/threads/${threadId}/issues`, {
+  const response = await page.request.get(`/api/v2/threads/${threadId}/issues`, {
     headers,
   })
   expect(response.ok(), `issue list failed: ${await response.text()}`).toBeTruthy()

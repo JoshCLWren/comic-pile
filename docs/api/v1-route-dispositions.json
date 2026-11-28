@@ -5,6 +5,331 @@
   "known_unowned_baseline": [],
   "retired_cross_references": [
     {
+      "issue": 4549,
+      "method": "GET",
+      "path": "/api/auth/csrf",
+      "status": "not-live",
+      "disposition": "GET /api/v2/auth/csrf",
+      "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "POST",
+      "path": "/api/auth/forgot-password",
+      "status": "not-live",
+      "disposition": "POST /api/v2/auth/forgot-password",
+      "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "POST",
+      "path": "/api/auth/login",
+      "status": "not-live",
+      "disposition": "POST /api/v2/auth/login",
+      "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "status": "not-live",
+      "disposition": "POST /api/v2/auth/logout",
+      "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "GET",
+      "path": "/api/auth/me",
+      "status": "not-live",
+      "disposition": "GET /api/v2/auth/me",
+      "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "POST",
+      "path": "/api/auth/refresh",
+      "status": "not-live",
+      "disposition": "POST /api/v2/auth/refresh",
+      "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "POST",
+      "path": "/api/auth/register",
+      "status": "not-live",
+      "disposition": "POST /api/v2/auth/register",
+      "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "POST",
+      "path": "/api/auth/reset-password",
+      "status": "not-live",
+      "disposition": "POST /api/v2/auth/reset-password",
+      "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4595,
+      "method": "GET",
+      "path": "/api/roll/events/{event_id}/recommendation-explanation",
+      "status": "not-live",
+      "disposition": "retire-without-replacement",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
+    },
+    {
+      "issue": 4549,
+      "method": "GET",
+      "path": "/api/v1/auth/csrf",
+      "status": "not-live",
+      "disposition": "GET /api/v2/auth/csrf",
+      "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "POST",
+      "path": "/api/v1/auth/forgot-password",
+      "status": "not-live",
+      "disposition": "POST /api/v2/auth/forgot-password",
+      "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "status": "not-live",
+      "disposition": "POST /api/v2/auth/login",
+      "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "POST",
+      "path": "/api/v1/auth/logout",
+      "status": "not-live",
+      "disposition": "POST /api/v2/auth/logout",
+      "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "GET",
+      "path": "/api/v1/auth/me",
+      "status": "not-live",
+      "disposition": "GET /api/v2/auth/me",
+      "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "POST",
+      "path": "/api/v1/auth/refresh",
+      "status": "not-live",
+      "disposition": "POST /api/v2/auth/refresh",
+      "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "POST",
+      "path": "/api/v1/auth/register",
+      "status": "not-live",
+      "disposition": "POST /api/v2/auth/register",
+      "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 4549,
+      "method": "POST",
+      "path": "/api/v1/auth/reset-password",
+      "status": "not-live",
+      "disposition": "POST /api/v2/auth/reset-password",
+      "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
+    },
+    {
+      "issue": 5716,
+      "method": "POST",
+      "path": "/api/v1/catalog/series-mappings/preview",
+      "status": "not-live",
+      "disposition": "POST /api/v2/seriesMappings:preview",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
+    },
+    {
+      "issue": 4835,
+      "method": "GET",
+      "path": "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
+      "status": "not-live",
+      "disposition": "GET /api/v2/comicvine/series/{comicvine_volume_id}/import-status",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
+    },
+    {
+      "issue": 5715,
+      "method": "POST",
+      "path": "/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview",
+      "status": "not-live",
+      "disposition": "POST /api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
+    },
+    {
+      "issue": 5958,
+      "method": "GET",
+      "path": "/api/v1/continuity-rules/",
+      "status": "not-live",
+      "disposition": "retire-without-replacement",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
+    },
+    {
+      "issue": 5958,
+      "method": "POST",
+      "path": "/api/v1/continuity-rules/",
+      "status": "not-live",
+      "disposition": "retire-without-replacement",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
+    },
+    {
+      "issue": 5958,
+      "method": "DELETE",
+      "path": "/api/v1/continuity-rules/{rule_id}",
+      "status": "not-live",
+      "disposition": "retire-without-replacement",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
+    },
+    {
+      "issue": 5958,
+      "method": "GET",
+      "path": "/api/v1/continuity-rules/{rule_id}",
+      "status": "not-live",
+      "disposition": "retire-without-replacement",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
+    },
+    {
+      "issue": 5958,
+      "method": "PUT",
+      "path": "/api/v1/continuity-rules/{rule_id}",
+      "status": "not-live",
+      "disposition": "retire-without-replacement",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
+    },
+    {
+      "issue": 4836,
+      "method": "GET",
+      "path": "/api/v1/creators",
+      "status": "not-live",
+      "disposition": "GET /api/v2/creators",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
+    },
+    {
+      "issue": 4836,
+      "method": "GET",
+      "path": "/api/v1/creators/",
+      "status": "not-live",
+      "disposition": "GET /api/v2/creators",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
+    },
+    {
+      "issue": 4836,
+      "method": "GET",
+      "path": "/api/v1/creators/summaries",
+      "status": "not-live",
+      "disposition": "GET /api/v2/creators/summaries",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
+    },
+    {
+      "issue": 5276,
+      "method": "GET",
+      "path": "/api/v1/cron/release-sync",
+      "status": "not-live",
+      "disposition": "GET /api/v2/cron/release-sync",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
+    },
+    {
+      "issue": 4623,
+      "method": "GET",
+      "path": "/api/v1/issues/{issue_id}/comicvine",
+      "status": "not-live",
+      "disposition": "GET /api/v2/issues/{issue_id}/comicvine",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
+    },
+    {
+      "issue": 5958,
+      "method": "GET",
+      "path": "/api/v1/metrics",
+      "status": "not-live",
+      "disposition": "retain-infrastructure (bare /api/metrics only)",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
+    },
+    {
+      "issue": 5710,
+      "method": "GET",
+      "path": "/api/v1/reading-order-groups/",
+      "status": "not-live",
+      "disposition": "GET|POST|PATCH|DELETE /api/v2/readingOrderGroups[/{group_id}]",
+      "notes": "Collection CRUD and /detail are absent from the live Rust router; memberships, ranges and /order remain with #5711."
+    },
+    {
+      "issue": 5711,
+      "method": "PUT",
+      "path": "/api/v1/reading-order-groups/{group_id}/order",
+      "status": "not-live",
+      "disposition": "v2 membership/range resources",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
+    },
+    {
+      "issue": 4849,
+      "method": "PUT",
+      "path": "/api/v1/releases/",
+      "status": "not-live",
+      "disposition": "retire-without-replacement",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
+    },
+    {
+      "issue": 4849,
+      "method": "GET",
+      "path": "/api/v1/releases/source",
+      "status": "not-live",
+      "disposition": "retire-without-replacement",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
+    },
+    {
+      "issue": 4849,
+      "method": "GET",
+      "path": "/api/v1/releases/{release_id}",
+      "status": "not-live",
+      "disposition": "GET /api/v2/releases",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
+    },
+    {
+      "issue": 4849,
+      "method": "POST",
+      "path": "/api/v1/releases/{release_id}/retract",
+      "status": "not-live",
+      "disposition": "retire-without-replacement",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
+    },
+    {
+      "issue": 4595,
+      "method": "GET",
+      "path": "/api/v1/roll/events/{event_id}/recommendation-explanation",
+      "status": "not-live",
+      "disposition": "retire-without-replacement",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
+    },
+    {
       "issue": 4341,
       "method": "POST",
       "path": "/api/v1/roll/override",
@@ -21,22 +346,6 @@
       "notes": "Event-derived v2 state supersedes the legacy current-session resource."
     },
     {
-      "issue": 5525,
-      "method": "POST",
-      "path": "/api/v1/threads/{thread_id}/set-pending",
-      "status": "live-p0-evidence",
-      "disposition": "retire-without-replacement",
-      "notes": "P0 production 503 evidence for the still-live v1 set-pending method owned by #4344."
-    },
-    {
-      "issue": 5707,
-      "method": "POST",
-      "path": "/api/v1/threads/{thread_id}:setCurrentIssue",
-      "status": "not-live",
-      "disposition": "POST /api/v2/threads/{thread_id}/issues | PATCH /api/v2/issues/{issue_id}",
-      "notes": "Both :setCurrentIssue and :migrateToIssues are absent from the live Rust router; no v1 registration remains. Existing v2 issue creation/patch is the destination."
-    },
-    {
       "issue": 5708,
       "method": "GET",
       "path": "/api/v1/sessions/{session_id}",
@@ -45,140 +354,120 @@
       "notes": "Legacy sessions list/detail are absent from the live Rust router; #4343 separately owns the retired sessions/current/ route."
     },
     {
-      "issue": 5710,
+      "issue": 5702,
+      "method": "POST",
+      "path": "/api/v1/threads/",
+      "status": "not-live",
+      "disposition": "POST /api/v2/threads",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
+    },
+    {
+      "issue": 5705,
+      "method": "POST",
+      "path": "/api/v1/threads/check-duplicates",
+      "status": "not-live",
+      "disposition": "retire-without-replacement",
+      "retired_by_issue": 5958,
+      "notes": "#5958: retired; retained only as an explicit 404 tombstone because it overlaps a still-owned v1 catch-all."
+    },
+    {
+      "issue": 5711,
+      "method": "POST",
+      "path": "/api/v1/threads/groups:batch",
+      "status": "not-live",
+      "disposition": "retire-without-replacement",
+      "retired_by_issue": 5958,
+      "notes": "#5958: retired; retained only as an explicit 404 tombstone because it overlaps a still-owned v1 catch-all."
+    },
+    {
+      "issue": 5703,
+      "method": "DELETE",
+      "path": "/api/v1/threads/{thread_id}",
+      "status": "not-live",
+      "disposition": "retire-without-replacement",
+      "retired_by_issue": 5958,
+      "notes": "#5958: retired; retained only as an explicit 404 tombstone because it overlaps a still-owned v1 catch-all."
+    },
+    {
+      "issue": 5703,
+      "method": "PUT",
+      "path": "/api/v1/threads/{thread_id}",
+      "status": "not-live",
+      "disposition": "retire-without-replacement",
+      "retired_by_issue": 5958,
+      "notes": "#5958: retired; retained only as an explicit 404 tombstone because it overlaps a still-owned v1 catch-all."
+    },
+    {
+      "issue": 5706,
       "method": "GET",
-      "path": "/api/v1/reading-order-groups/",
+      "path": "/api/v1/threads/{thread_id}/issues",
       "status": "not-live",
-      "disposition": "GET|POST|PATCH|DELETE /api/v2/readingOrderGroups[/{group_id}]",
-      "notes": "Collection CRUD and /detail are absent from the live Rust router; memberships, ranges and /order remain with #5711."
+      "disposition": "GET|POST /api/v2/threads/{thread_id}/issues",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 4549,
+      "issue": 5706,
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}/issues",
+      "status": "not-live",
+      "disposition": "GET|POST /api/v2/threads/{thread_id}/issues",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
+    },
+    {
+      "issue": 5706,
       "method": "GET",
-      "path": "/api/v1/auth/csrf",
+      "path": "/api/v1/threads/{thread_id}/issues/creators",
       "status": "not-live",
-      "disposition": "GET /api/v2/auth/csrf",
-      "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
+      "disposition": "GET /api/v2/threads/{thread_id}/creatorCredits",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 4549,
+      "issue": 5706,
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}/issues:reorder",
+      "status": "not-live",
+      "disposition": "PUT /api/v2/threads/{thread_id}/issue-order",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
+    },
+    {
+      "issue": 5958,
       "method": "GET",
-      "path": "/api/v1/auth/me",
+      "path": "/api/v1/threads/{thread_id}/issues:validateOrder",
       "status": "not-live",
-      "disposition": "GET /api/v2/auth/me",
-      "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
+      "disposition": "retire-without-replacement",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 4549,
-      "method": "POST",
-      "path": "/api/v1/auth/register",
-      "status": "not-live",
-      "disposition": "POST /api/v2/auth/register",
-      "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
-    },
-    {
-      "issue": 4549,
-      "method": "POST",
-      "path": "/api/v1/auth/login",
-      "status": "not-live",
-      "disposition": "POST /api/v2/auth/login",
-      "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
-    },
-    {
-      "issue": 4549,
-      "method": "POST",
-      "path": "/api/v1/auth/refresh",
-      "status": "not-live",
-      "disposition": "POST /api/v2/auth/refresh",
-      "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
-    },
-    {
-      "issue": 4549,
-      "method": "POST",
-      "path": "/api/v1/auth/logout",
-      "status": "not-live",
-      "disposition": "POST /api/v2/auth/logout",
-      "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
-    },
-    {
-      "issue": 4549,
-      "method": "POST",
-      "path": "/api/v1/auth/forgot-password",
-      "status": "not-live",
-      "disposition": "POST /api/v2/auth/forgot-password",
-      "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
-    },
-    {
-      "issue": 4549,
-      "method": "POST",
-      "path": "/api/v1/auth/reset-password",
-      "status": "not-live",
-      "disposition": "POST /api/v2/auth/reset-password",
-      "notes": "#4549: retired v1 auth alias; absent from the Rust router and generated ingress."
-    },
-    {
-      "issue": 4549,
+      "issue": 5715,
       "method": "GET",
-      "path": "/api/auth/csrf",
+      "path": "/api/v1/threads/{thread_id}/reading-orders",
       "status": "not-live",
-      "disposition": "GET /api/v2/auth/csrf",
-      "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
+      "disposition": "GET /api/v2/threads/{thread_id}/readingOrders",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     },
     {
-      "issue": 4549,
-      "method": "GET",
-      "path": "/api/auth/me",
-      "status": "not-live",
-      "disposition": "GET /api/v2/auth/me",
-      "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
-    },
-    {
-      "issue": 4549,
+      "issue": 5525,
       "method": "POST",
-      "path": "/api/auth/register",
-      "status": "not-live",
-      "disposition": "POST /api/v2/auth/register",
-      "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
+      "path": "/api/v1/threads/{thread_id}/set-pending",
+      "status": "live-p0-evidence",
+      "disposition": "retire-without-replacement",
+      "notes": "P0 production 503 evidence for the still-live v1 set-pending method owned by #4344."
     },
     {
-      "issue": 4549,
-      "method": "POST",
-      "path": "/api/auth/login",
+      "issue": 4335,
+      "method": "PUT",
+      "path": "/api/v1/threads/{thread_id}/test-backdate",
       "status": "not-live",
-      "disposition": "POST /api/v2/auth/login",
-      "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
-    },
-    {
-      "issue": 4549,
-      "method": "POST",
-      "path": "/api/auth/refresh",
-      "status": "not-live",
-      "disposition": "POST /api/v2/auth/refresh",
-      "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
-    },
-    {
-      "issue": 4549,
-      "method": "POST",
-      "path": "/api/auth/logout",
-      "status": "not-live",
-      "disposition": "POST /api/v2/auth/logout",
-      "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
-    },
-    {
-      "issue": 4549,
-      "method": "POST",
-      "path": "/api/auth/forgot-password",
-      "status": "not-live",
-      "disposition": "POST /api/v2/auth/forgot-password",
-      "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
-    },
-    {
-      "issue": 4549,
-      "method": "POST",
-      "path": "/api/auth/reset-password",
-      "status": "not-live",
-      "disposition": "POST /api/v2/auth/reset-password",
-      "notes": "#4549: retired bare auth alias; absent from the Rust router and generated ingress."
+      "disposition": "retire-without-replacement",
+      "notes": "#5958: unowned legacy residue retired after its owning migration closed; no v1 shim remains.",
+      "retired_by_issue": 5958
     }
   ],
   "families": [
@@ -208,12 +497,6 @@
       "replacement": "POST /api/v2/threads/{thread_id}:reactivate",
       "rollout_status": "slice-open",
       "notes": "AIP-136 custom method for reactivation with added issues."
-    },
-    {
-      "prefix": "/api/v1/threads/{thread_id}/issues",
-      "owner_issue": 5706,
-      "replacement": "GET /api/v2/threads/{thread_id}/issues | POST /api/v2/threads/{thread_id}/issues",
-      "rollout_status": "slice-open"
     },
     {
       "prefix": "/api/v1/threads/{thread_id}/dependency-order-check",
@@ -246,43 +529,11 @@
       "rollout_status": "slice-open"
     },
     {
-      "prefix": "/api/v1/threads/{thread_id}/reading-orders",
-      "owner_issue": 5715,
-      "replacement": "GET /api/v2/threads/{thread_id}/readingOrders",
-      "rollout_status": "slice-open"
-    },
-    {
-      "prefix": "/api/v1/threads/check-duplicates",
-      "owner_issue": 5705,
-      "replacement": "POST /api/v2/threads:checkDuplicates",
-      "rollout_status": "slice-open"
-    },
-    {
-      "prefix": "/api/v1/threads/groups:batch",
-      "owner_issue": 5711,
-      "replacement": "retire-without-replacement",
-      "rollout_status": "pinned-404",
-      "notes": "Retired batch URL pinned to an explicit 404 so v2 is the only membership batch authority (#5711)."
-    },
-    {
-      "prefix": "/api/v1/threads/{thread_id}/test-backdate",
-      "owner_issue": 4335,
-      "replacement": "retire-without-replacement",
-      "rollout_status": "test-helper-debt",
-      "notes": "Test helper route; no product v2 equivalent. Remove with the v1 surface."
-    },
-    {
       "prefix": "/api/v1/threads",
       "owner_issue": 4832,
       "replacement": "GET|POST|PATCH|DELETE /api/v2/threads[/{thread_id}]",
       "rollout_status": "slices-5701-5707",
       "notes": "Thread family umbrella owner; exact overrides above point at the narrow slice. Custom :migrateToIssues/:setCurrentIssue actions belong to #5707."
-    },
-    {
-      "prefix": "/api/v1/reading-order-groups",
-      "owner_issue": 5711,
-      "replacement": "POST /api/v2/reading-order-groups/{group_id}/members | /issue-ranges",
-      "rollout_status": "slice-open"
     },
     {
       "prefix": "/api/v1/issue-identity/cbl-sources",
@@ -317,31 +568,6 @@
       "notes": "Stateless preview; no server-side projection mutation."
     },
     {
-      "prefix": "/api/v1/comicvine/series/",
-      "owner_issue": 4835,
-      "replacement": "GET /api/v2/comicvine/series/{comicvine_volume_id}/import-status",
-      "rollout_status": "slice-open"
-    },
-    {
-      "prefix": "/api/v1/issues/",
-      "owner_issue": 4623,
-      "replacement": "GET /api/v2/issues/{issue_id}/comicvine",
-      "rollout_status": "migrated-awaiting-retirement"
-    },
-    {
-      "prefix": "/api/v1/creators",
-      "owner_issue": 4836,
-      "replacement": "GET /api/v2/creators | GET /api/v2/creators/summaries",
-      "rollout_status": "migrated-awaiting-retirement"
-    },
-    {
-      "prefix": "/api/v1/continuity-rules",
-      "owner_issue": 4335,
-      "replacement": "retire-without-replacement",
-      "rollout_status": "legacy-family-debt",
-      "notes": "Legacy rule family; no canonical v2 successor declared."
-    },
-    {
       "prefix": "/api/v1/taste/discoveries",
       "owner_issue": 5717,
       "replacement": "GET /api/v2/users/me/tasteDiscoveries | POST /api/v2/users/me/tasteDiscoveries/{id}:dismiss",
@@ -360,36 +586,10 @@
       "rollout_status": "slice-open"
     },
     {
-      "prefix": "/api/v1/releases",
-      "owner_issue": 4849,
-      "replacement": "GET /api/v2/releases",
-      "rollout_status": "migrated-awaiting-retirement"
-    },
-    {
-      "prefix": "/api/v1/roll/events/",
-      "owner_issue": 4595,
-      "replacement": "retire-without-replacement",
-      "rollout_status": "legacy-family-debt",
-      "notes": "Recommendation explanation is embedded in the scoped v2 Roll resources; no v1 successor."
-    },
-    {
-      "prefix": "/api/v1/cron/release-sync",
-      "owner_issue": 5276,
-      "replacement": "POST /api/v2/reading-plan-sync/runs",
-      "rollout_status": "background-caller-migration",
-      "notes": "Webhook/background task caller, not a browser caller."
-    },
-    {
       "prefix": "/api/threads",
       "owner_issue": 5701,
       "replacement": "GET /api/v2/threads/{thread_id}",
       "rollout_status": "compatibility-alias-debt"
-    },
-    {
-      "prefix": "/api/roll/events/",
-      "owner_issue": 4595,
-      "replacement": "retire-without-replacement",
-      "rollout_status": "legacy-family-debt"
     },
     {
       "prefix": "/api/bug-reports/",
@@ -410,26 +610,6 @@
       "owner_issue": 5701,
       "replacement": "GET /api/v2/threads/{thread_id}",
       "rollout_status": "slice-open"
-    },
-    "POST /api/v1/threads/": {
-      "owner_issue": 5702,
-      "replacement": "POST /api/v2/threads",
-      "rollout_status": "slice-merged"
-    },
-    "POST /api/v1/threads/check-duplicates": {
-      "owner_issue": 5705,
-      "replacement": "POST /api/v2/threads:checkDuplicates",
-      "rollout_status": "slice-merged"
-    },
-    "PUT /api/v1/threads/{thread_id}": {
-      "owner_issue": 5703,
-      "replacement": "PATCH /api/v2/threads/{thread_id}",
-      "rollout_status": "slice-merged"
-    },
-    "DELETE /api/v1/threads/{thread_id}": {
-      "owner_issue": 5703,
-      "replacement": "DELETE /api/v2/threads/{thread_id}",
-      "rollout_status": "slice-merged"
     },
     "GET /api/v1/threads/completed/threads": {
       "owner_issue": 5701,
@@ -479,6 +659,48 @@
       "replacement": "retire-without-replacement",
       "rollout_status": "awaiting-caller-migration-4350",
       "notes": "#4299 owns server deletion after #4350 moves every caller to scoped Roll resources."
+    },
+    "POST /api/v1/threads/groups:batch": {
+      "owner_issue": 5958,
+      "replacement": "retire-without-replacement",
+      "rollout_status": "pinned-404",
+      "notes": "#5958: explicit 404 tombstone; overlaps the still-owned GET /api/v1/threads/{thread_id} alias and must not answer 405."
+    },
+    "PUT /api/v1/threads/{thread_id}": {
+      "owner_issue": 5958,
+      "replacement": "retire-without-replacement",
+      "rollout_status": "pinned-404",
+      "notes": "#5958: explicit 404 tombstone; overlaps the still-owned GET /api/v1/threads/{thread_id} alias and must not answer 405."
+    },
+    "POST /api/v1/threads/check-duplicates": {
+      "owner_issue": 5958,
+      "replacement": "retire-without-replacement",
+      "rollout_status": "pinned-404",
+      "notes": "#5958: explicit 404 tombstone; overlaps the still-owned GET /api/v1/threads/{thread_id} alias and must not answer 405."
+    },
+    "DELETE /api/v1/threads/{thread_id}": {
+      "owner_issue": 5958,
+      "replacement": "retire-without-replacement",
+      "rollout_status": "pinned-404",
+      "notes": "#5958: explicit 404 tombstone; overlaps the still-owned GET /api/v1/threads/{thread_id} alias and must not answer 405."
+    },
+    "POST /api/v1/threads/{thread_id}": {
+      "owner_issue": 5707,
+      "replacement": "POST /api/v2/threads/{thread_id}/issues | PATCH /api/v2/issues/{issue_id}",
+      "rollout_status": "slice-open",
+      "notes": "#5958: retained only for the still-open #5707/#5707 custom actions; the closed-owner slices are gone."
     }
-  }
+  },
+  "known_stale_callers": [
+    {
+      "method": "POST",
+      "path": "/api/v1/threads/{param}:migrateToIssues",
+      "owner_issue": 5707
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/threads/{param}:setCurrentIssue",
+      "owner_issue": 5707
+    }
+  ]
 }

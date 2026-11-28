@@ -29,8 +29,8 @@ async function listIssues(page: Page, threadId: number): Promise<IssueRow[]> {
   let pageToken: string | null = null
   while (true) {
     const url = pageToken
-      ? `/api/v1/threads/${threadId}/issues?page_size=100&page_token=${encodeURIComponent(pageToken)}`
-      : `/api/v1/threads/${threadId}/issues?page_size=100`
+      ? `/api/v2/threads/${threadId}/issues?page_size=100&page_token=${encodeURIComponent(pageToken)}`
+      : `/api/v2/threads/${threadId}/issues?page_size=100`
     const response = await page.request.get(url, { headers })
     expect(response.ok()).toBeTruthy()
     // SAFETY: the response body matches the thread issues list contract.

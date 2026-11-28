@@ -162,7 +162,7 @@ test('current fragments regenerate their own artifact byte-for-byte with canonic
 
 test('fragment config derives active crons and drops retired rewrites', () => {
   const repairCron = {path: '/api/v2/maintenance/comicvine-metadata-repairs', schedule: '0 10 * * *'};
-  const releaseCron = {path: '/api/v1/cron/release-sync', schedule: '0 9 * * *'};
+  const releaseCron = {path: '/api/v2/cron/release-sync', schedule: '0 9 * * *'};
   const config = {
     crons: [releaseCron, repairCron],
     routes: [

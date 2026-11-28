@@ -13,13 +13,13 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 
 ## Coverage summary
 
-- Live API routes: 240 (v1 57, v2 179, unversioned 4).
-- v1 routes with a named retirement owner: 57.
+- Live API routes: 216 (v1 33, v2 180, unversioned 3).
+- v1 routes with a named retirement owner: 33.
 - v1 routes needing an owner issue: 0 (visible baseline debt, not a pass).
 - Routes with unresolved production ingress: 0.
 - Scanned first-party call sites: 920.
 - Stale AIP baseline entries (no live route): 4.
-- Allowlist entries: 159 (owner 159, baseline debt 0, nonconforming v2 98).
+- Allowlist entries: 135 (owner 135, baseline debt 0, nonconforming v2 99).
 
 ## Ownership matrix
 
@@ -27,18 +27,8 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | POST | `/api/bug-reports/` | `bug_reports::create` | unversioned | none | /api/native_roll.rs | #5718 | POST /api/v2/bugReports | compatibility-alias-debt |
 | GET | `/api/metrics` | `metrics::get_metrics` | unversioned | none | /api/native_roll.rs | #4335 | retain-infrastructure | active-infrastructure |
-| GET | `/api/roll/events/{event_id}/recommendation-explanation` | `recommendation_explanation::get_recommendation_explanation` | unversioned | none | /api/native_roll.rs | #4595 | retire-without-replacement | legacy-family-debt |
 | GET | `/api/threads/{thread_id}` | `threads::get_thread_detail` | unversioned | none | /api/native_roll.rs | #5701 | GET /api/v2/threads/{thread_id} | compatibility-alias-debt |
 | POST | `/api/v1/bug-reports/` | `bug_reports::create` | v1 | frontend/src/services/api-bug-reports.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #5718 | POST /api/v2/bugReports | slice-open |
-| POST | `/api/v1/catalog/series-mappings/preview` | `catalog_series_mapping_preview::preview_series_mapping_handler` | v1 | frontend/src/services/api-series-mapping.ts | /api/native_roll.rs | #5716 | POST /api/v2/seriesMappings:preview | slice-open |
-| GET | `/api/v1/comicvine/series/{comicvine_volume_id}/import-status` | `comicvine_resolution::series_import_status` | v1 | none | /api/native_roll.rs | #4835 | GET /api/v2/comicvine/series/{comicvine_volume_id}/import-status | slice-open |
-| POST | `/api/v1/continuity-plans/{plan_id}/reading-orders/project-preview` | `continuity_plans_project_preview::preview_plan_projection_handler` | v1 | frontend/src/services/api-cbl-sources.ts, frontend/src/services/api-continuity-plans.ts, frontend/src/services/api-reading-graph.ts, frontend/src/services/api-reading-orders.ts | /api/native_roll.rs | #5715 | POST /api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection | slice-open |
-| GET | `/api/v1/continuity-rules/` | `continuity_rules::list` | v1 | none | /api/native_roll.rs | #4335 | retire-without-replacement | legacy-family-debt |
-| GET | `/api/v1/continuity-rules/{rule_id}` | `continuity_rules::get` | v1 | none | /api/native_roll.rs | #4335 | retire-without-replacement | legacy-family-debt |
-| GET | `/api/v1/creators` | `creators::list_creators` | v1 | none | /api/native_roll.rs | #4836 | GET /api/v2/creators \| GET /api/v2/creators/summaries | migrated-awaiting-retirement |
-| GET | `/api/v1/creators/` | `creators::list_creators` | v1 | none | /api/native_roll.rs | #4836 | GET /api/v2/creators \| GET /api/v2/creators/summaries | migrated-awaiting-retirement |
-| GET | `/api/v1/creators/summaries` | `creators::get_summaries` | v1 | none | /api/native_roll.rs | #4836 | GET /api/v2/creators \| GET /api/v2/creators/summaries | migrated-awaiting-retirement |
-| GET | `/api/v1/cron/release-sync` | `reading_plan_sync::scheduled_release_sync_cron` | v1 | none | /api/native_roll.rs | #5276 | POST /api/v2/reading-plan-sync/runs | background-caller-migration |
 | GET | `/api/v1/issue-identity/cbl-sources` | `issue_identity::discover_cbl_source_lists` | v1 | frontend/src/services/api-cbl-sources.ts | /api/native_roll.rs | #5712 | GET /api/v2/cblSources | slice-open |
 | GET | `/api/v1/issue-identity/cbl-sources/browse` | `cbl_catalog::browse_cbl_source_catalog` | v1 | frontend/src/services/api-cbl-sources.ts | /api/native_roll.rs | #5712 | GET /api/v2/cblSources | slice-open |
 | GET | `/api/v1/issue-identity/cbl-sources/by-comicvine-issue/{comicvine_issue_id}` | `issue_identity::find_cbl_sources_by_comicvine_issue` | v1 | frontend/src/services/api-cbl-sources.ts | /api/native_roll.rs | #5712 | GET /api/v2/cblSources | slice-open |
@@ -49,40 +39,25 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | GET | `/api/v1/issue-identity/cbl/{list_id}/adoption-preview` | `issue_identity_adoption_preview::api_cbl_adoption_preview_handler` | v1 | frontend/src/services/api-cbl-sources.ts | /api/native_roll.rs | #5714 | GET /api/v2/cblSources/{source_id}/adoptionPreview \| :planAdoption \| :previewReadingGraph | slice-open |
 | POST | `/api/v1/issue-identity/cbl/{list_id}/reading-graph-preview` | `issue_identity_cbl_reading_graph_preview::preview_cbl_reading_graph_handler` | v1 | frontend/src/services/api-reading-graph.ts | /api/native_roll.rs | #5714 | GET /api/v2/cblSources/{source_id}/adoptionPreview \| :planAdoption \| :previewReadingGraph | slice-open |
 | GET | `/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates` | `issue_identity::find_cbl_candidates_for_reading_list` | v1 | frontend/src/services/api-cbl-sources.ts | /api/native_roll.rs | #5713 | GET /api/v2/readingLists/{list_id}/cblCandidates | slice-open |
-| GET | `/api/v1/issues/{issue_id}/comicvine` | `comicvine_issue::issue_intelligence` | v1 | none | /api/native_roll.rs | #4623 | GET /api/v2/issues/{issue_id}/comicvine | migrated-awaiting-retirement |
-| PUT | `/api/v1/reading-order-groups/{group_id}/order` | `dependency_groups::set_group_order` | v1 | frontend/src/services/api-dependency-groups.ts | /api/native_roll.rs | #5711 | POST /api/v2/reading-order-groups/{group_id}/members \| /issue-ranges | slice-open |
-| PUT | `/api/v1/releases/` | `releases::publish` | v1 | none | /api/native_roll.rs | #4849 | GET /api/v2/releases | migrated-awaiting-retirement |
-| GET | `/api/v1/releases/source` | `releases::reconcile` | v1 | none | /api/native_roll.rs | #4849 | GET /api/v2/releases | migrated-awaiting-retirement |
-| GET | `/api/v1/releases/{release_id}` | `releases::get` | v1 | none | /api/native_roll.rs | #4849 | GET /api/v2/releases | migrated-awaiting-retirement |
-| POST | `/api/v1/releases/{release_id}/retract` | `releases::retract` | v1 | none | /api/native_roll.rs | #4849 | GET /api/v2/releases | migrated-awaiting-retirement |
-| GET | `/api/v1/roll/events/{event_id}/recommendation-explanation` | `recommendation_explanation::get_recommendation_explanation` | v1 | none | /api/native_roll.rs | #4595 | retire-without-replacement | legacy-family-debt |
 | GET | `/api/v1/taste/discoveries` | `taste_discoveries::list_taste_discoveries` | v1 | frontend/src/services/api-taste.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/unit/api-taste.test.ts | /api/native_roll.rs | #5717 | GET /api/v2/users/me/tasteDiscoveries \| POST /api/v2/users/me/tasteDiscoveries/{id}:dismiss | slice-open |
 | POST | `/api/v1/taste/discoveries/{signal_id}/dismiss` | `taste_discoveries::dismiss_taste_discovery` | v1 | frontend/src/services/api-taste.ts, frontend/src/unit/api-taste.test.ts | /api/native_roll.rs | #5717 | GET /api/v2/users/me/tasteDiscoveries \| POST /api/v2/users/me/tasteDiscoveries/{id}:dismiss | slice-open |
-| POST | `/api/v1/threads/` | `thread_lifecycle::create_thread` | v1 | frontend/src/test/core-views-request-budget.spec.ts, frontend/src/unit/api-auth-recovery.test.ts, frontend/src/unit/continuityIdentityRequestBudget.test.tsx, frontend/src/unit/httpClient.test.ts | /api/native_roll.rs | #5702 | POST /api/v2/threads | slice-merged |
-| POST | `/api/v1/threads/check-duplicates` | `thread_lifecycle::check_potential_duplicates` | v1 | frontend/src/services/api-threads.ts | /api/native_roll.rs | #5705 | POST /api/v2/threads:checkDuplicates | slice-merged |
+| POST | `/api/v1/threads/check-duplicates` | `<inline>` | v1 | frontend/src/services/api-threads.ts | /api/native_roll.rs | #5958 | retire-without-replacement | pinned-404 |
 | GET | `/api/v1/threads/completed/threads` | `threads::list_completed_threads` | v1 | frontend/src/services/api-threads.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/unit/api.test.ts, frontend/src/unit/coreRouteRequestBudget.test.tsx | /api/native_roll.rs | #5701 | GET /api/v2/threads?filter=status eq 'completed' | slice-open |
 | GET | `/api/v1/threads/excluded/threads` | `thread_lifecycle::list_excluded_threads` | v1 | frontend/src/services/api-threads.ts, frontend/src/test/p0-auth-outage-recovery.spec.ts, frontend/src/test/p0-snooze-unsnooze.spec.ts, frontend/src/unit/api.test.ts, frontend/src/unit/continuityIdentityRequestBudget.test.tsx, frontend/src/unit/coreRouteRequestBudget.test.tsx | /api/native_roll.rs | #5704 | GET /api/v2/threads?filter=excluded | slice-open |
-| POST | `/api/v1/threads/groups:batch` | `<inline>` | v1 | frontend/src/services/api-threads.ts | /api/native_roll.rs | #5711 | retire-without-replacement | pinned-404 |
+| POST | `/api/v1/threads/groups:batch` | `<inline>` | v1 | frontend/src/services/api-threads.ts | /api/native_roll.rs | #5958 | retire-without-replacement | pinned-404 |
 | POST | `/api/v1/threads/reactivate` | `thread_lifecycle::reactivate_thread` | v1 | frontend/src/services/api-threads.ts | /api/native_roll.rs | #5704 | POST /api/v2/threads/{thread_id}:reactivate | slice-open |
 | GET | `/api/v1/threads/stale` | `thread_lifecycle::list_stale_threads` | v1 | frontend/src/services/api-threads.ts, frontend/src/test/cbl-replace-review.spec.ts | /api/native_roll.rs | #5701 | GET /api/v2/threads?filter=stale | slice-open |
 | GET | `/api/v1/threads/{thread_id}` | `threads::get_thread_detail` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/services/api-migration.ts, frontend/src/services/api-threads.ts, frontend/src/test/cbl-replace-review.spec.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-auth-failure-isolation.test.ts, frontend/src/unit/api-issues-coverage.test.ts, frontend/src/unit/api-issues.test.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #5701 | GET /api/v2/threads/{thread_id} | slice-open |
-| POST | `/api/v1/threads/{thread_id}` | `thread_ordering::post_thread_action` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/services/api-issues.ts, frontend/src/services/api-migration.ts, frontend/src/services/api-threads.ts, frontend/src/test/cbl-replace-review.spec.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-auth-failure-isolation.test.ts, frontend/src/unit/api-issues-coverage.test.ts, frontend/src/unit/api-issues.test.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #4832 | GET\|POST\|PATCH\|DELETE /api/v2/threads[/{thread_id}] | slices-5701-5707 |
-| PUT | `/api/v1/threads/{thread_id}` | `thread_lifecycle::update_thread` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/services/api-migration.ts, frontend/src/services/api-threads.ts, frontend/src/test/cbl-replace-review.spec.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-auth-failure-isolation.test.ts, frontend/src/unit/api-issues-coverage.test.ts, frontend/src/unit/api-issues.test.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #5703 | PATCH /api/v2/threads/{thread_id} | slice-merged |
-| DELETE | `/api/v1/threads/{thread_id}` | `thread_lifecycle::delete_thread` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/services/api-migration.ts, frontend/src/services/api-threads.ts, frontend/src/test/cbl-replace-review.spec.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-auth-failure-isolation.test.ts, frontend/src/unit/api-issues-coverage.test.ts, frontend/src/unit/api-issues.test.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #5703 | DELETE /api/v2/threads/{thread_id} | slice-merged |
+| POST | `/api/v1/threads/{thread_id}` | `thread_ordering::post_thread_action` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/services/api-issues.ts, frontend/src/services/api-migration.ts, frontend/src/services/api-threads.ts, frontend/src/test/cbl-replace-review.spec.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-auth-failure-isolation.test.ts, frontend/src/unit/api-issues-coverage.test.ts, frontend/src/unit/api-issues.test.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #5707 | POST /api/v2/threads/{thread_id}/issues \| PATCH /api/v2/issues/{issue_id} | slice-open |
+| PUT | `/api/v1/threads/{thread_id}` | `<inline>` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/services/api-migration.ts, frontend/src/services/api-threads.ts, frontend/src/test/cbl-replace-review.spec.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-auth-failure-isolation.test.ts, frontend/src/unit/api-issues-coverage.test.ts, frontend/src/unit/api-issues.test.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #5958 | retire-without-replacement | pinned-404 |
+| DELETE | `/api/v1/threads/{thread_id}` | `<inline>` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/services/api-migration.ts, frontend/src/services/api-threads.ts, frontend/src/test/cbl-replace-review.spec.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-auth-failure-isolation.test.ts, frontend/src/unit/api-issues-coverage.test.ts, frontend/src/unit/api-issues.test.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #5958 | retire-without-replacement | pinned-404 |
 | GET | `/api/v1/threads/{thread_id}/connected` | `thread_ordering::get_thread_connected_threads` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx | /api/native_roll.rs | #5709 | GET /api/v2/dependencies/blocked | slice-open |
 | GET | `/api/v1/threads/{thread_id}/dependencies` | `dependencies::get_thread_dependencies` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/test/p0-dependencies-reading-order.spec.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #5709 | GET /api/v2/dependencies/blocked | slice-open |
 | GET | `/api/v1/threads/{thread_id}/dependency-order-check` | `thread_ordering::check_thread_dependency_order` | v1 | none | /api/native_roll.rs | #5709 | GET /api/v2/dependencies/blocked | slice-open |
 | POST | `/api/v1/threads/{thread_id}/exclude` | `thread_lifecycle::exclude_thread` | v1 | frontend/src/services/api-threads.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #5704 | POST /api/v2/queue-exclusions \| DELETE /api/v2/queue-exclusions/{exclusion_id} | slice-open |
 | GET | `/api/v1/threads/{thread_id}/issue-dependencies` | `issue_read::get_thread_issue_dependencies` | v1 | frontend/src/services/api-dependencies.ts | /api/native_roll.rs | #5709 | GET /api/v2/dependencies/blocked | slice-open |
-| GET | `/api/v1/threads/{thread_id}/issues` | `issue_read::list_thread_issues` | v1 | frontend/src/test/cbl-replace-review.spec.ts, frontend/src/test/continuity-checkpoint-convergence.spec.ts, frontend/src/test/continuity-parallel-lanes.spec.ts, frontend/src/test/custom-cbl-create-cycle.spec.ts, frontend/src/test/helpers.ts, frontend/src/test/issue-1883-roll-a11y-duplicates.spec.ts, frontend/src/test/issue-1885-roll-target-sizes.spec.ts, frontend/src/test/issue-2104-zero-readiness.spec.ts, frontend/src/test/issue-3626-creator-issue-deep-link.spec.ts, frontend/src/test/issue-5435-bulk-queue-exclusions.spec.ts, frontend/src/test/p0-dependencies-reading-order.spec.ts, frontend/src/test/reading-list-gate-authoring.spec.ts, frontend/src/test/reading-plan-reader.spec.ts, frontend/src/unit/api-issues-coverage.test.ts | /api/native_roll.rs | #5706 | GET /api/v2/threads/{thread_id}/issues \| POST /api/v2/threads/{thread_id}/issues | slice-open |
-| POST | `/api/v1/threads/{thread_id}/issues` | `thread_issues::create_thread_issues` | v1 | frontend/src/test/fixtures.ts, frontend/src/test/helpers.ts, frontend/src/test/issue-3626-creator-issue-deep-link.spec.ts, frontend/src/unit/api-issues-coverage.test.ts | /api/native_roll.rs | #5706 | GET /api/v2/threads/{thread_id}/issues \| POST /api/v2/threads/{thread_id}/issues | slice-open |
-| GET | `/api/v1/threads/{thread_id}/issues/creators` | `thread_issues::list_thread_issue_creators` | v1 | frontend/src/unit/api-issues-coverage.test.ts | /api/native_roll.rs | #5706 | GET /api/v2/threads/{thread_id}/issues \| POST /api/v2/threads/{thread_id}/issues | slice-open |
-| POST | `/api/v1/threads/{thread_id}/issues:reorder` | `thread_issues::reorder_thread_issues` | v1 | none | /api/native_roll.rs | #5706 | GET /api/v2/threads/{thread_id}/issues \| POST /api/v2/threads/{thread_id}/issues | slice-open |
-| GET | `/api/v1/threads/{thread_id}/issues:validateOrder` | `thread_ordering::validate_issue_order` | v1 | none | /api/native_roll.rs | #5706 | GET /api/v2/threads/{thread_id}/issues \| POST /api/v2/threads/{thread_id}/issues | slice-open |
-| GET | `/api/v1/threads/{thread_id}/reading-orders` | `thread_ordering::get_thread_reading_orders` | v1 | none | /api/native_roll.rs | #5715 | GET /api/v2/threads/{thread_id}/readingOrders | slice-open |
 | POST | `/api/v1/threads/{thread_id}/restore` | `thread_lifecycle::restore_thread` | v1 | frontend/src/services/api-threads.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #5704 | POST /api/v2/queue-exclusions/restore | slice-open |
 | POST | `/api/v1/threads/{thread_id}/set-pending` | `thread_lifecycle::set_pending_thread` | v1 | frontend/src/services/api-threads.ts, frontend/src/test/cbl-replace-review.spec.ts, frontend/src/test/helpers.ts, frontend/src/test/issue-1885-roll-target-sizes.spec.ts | /api/native_roll.rs | #4344 | retire-without-replacement | owner-issue-open |
-| PUT | `/api/v1/threads/{thread_id}/test-backdate` | `thread_lifecycle::backdate_thread_for_testing` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/services/api-dependency-groups.ts, frontend/src/services/api-issues.ts, frontend/src/services/api-migration.ts, frontend/src/services/api-reading-orders.ts, frontend/src/services/api-threads.ts | /api/native_roll.rs | #4335 | retire-without-replacement | test-helper-debt |
 | POST | `/api/v1/threads:getBlockingInfo` | `thread_ordering::get_threads_blocking_info` | v1 | frontend/src/services/api-dependencies.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/useReadingBoundaries.request-budget.test.tsx | /api/native_roll.rs | #5709 | GET /api/v2/dependencies/blocked | slice-open |
 | GET | `/api/v1/users/me/taste-signals` | `preferences::list_taste_signals` | v1 | none | /api/native_roll.rs | #5717 | PATCH /api/v2/users/me/tasteSignals/{signal_id} | slice-open |
 | PUT | `/api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict` | `preferences::set_taste_signal_verdict` | v1 | frontend/src/services/api-taste.ts, frontend/src/unit/api-taste.test.ts | /api/native_roll.rs | #5717 | PATCH /api/v2/users/me/tasteSignals/{signal_id} | slice-open |
@@ -138,6 +113,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | GET | `/api/v2/creators/{creator_key}/metrics/series-stats/{series_key}` | `creators_v2::get_series_drilldown` | v2 | frontend/src/services/api-creators.ts, frontend/src/services/creatorComparisonApi.ts, frontend/src/services/creatorDiscoveryApi.ts, frontend/src/services/creatorMetricDrilldownApi.ts, frontend/src/services/creatorTeamChemistryApi.ts, frontend/src/services/creatorsApi.ts | /api/native_roll.rs | #4836 | canonical-v2 | live-target |
 | GET | `/api/v2/creators/{creator_key}/metrics/{metric_type}` | `creators_v2::get_metric_drilldown` | v2 | frontend/src/services/creatorMetricDrilldownApi.ts, frontend/src/unit/creatorMetricDrilldownApi.test.ts | /api/native_roll.rs | #4836 | canonical-v2 | live-target |
 | GET | `/api/v2/creators/{creator_key}/series/{series_key}/issues` | `creators_v2::get_series_issues` | v2 | frontend/src/services/api-creators.ts, frontend/src/unit/api-creators.test.ts | /api/native_roll.rs | #4836 | canonical-v2 | live-target |
+| GET | `/api/v2/cron/release-sync` | `reading_plan_sync::scheduled_release_sync_cron` | v2 | none | /api/native_roll.rs | #5958 | canonical-v2 | live-target |
 | GET | `/api/v2/demo-roll` | `demo::read_demo_roll` | v2 | frontend/src/unit/api-demo.test.ts | /api/native_roll.rs | #4855 | canonical-v2 | live-target |
 | POST | `/api/v2/dependencies/` | `dependencies::create_dependency` | v2 | frontend/src/services/api-dependencies.ts, frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts, frontend/src/test/issue-1883-roll-a11y-duplicates.spec.ts, frontend/src/test/issue-1885-roll-target-sizes.spec.ts, frontend/src/test/p0-dependencies-reading-order.spec.ts, frontend/src/test/reading-plan-reader.spec.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #4684 | canonical-v2 | live-target |
 | GET | `/api/v2/dependencies/blocked` | `legacy_dependencies::blocked` | v2 | frontend/src/services/api-dependencies.ts, frontend/src/test/fixtures.ts, frontend/src/unit/api.test.ts | /api/native_roll.rs | #4838 | canonical-v2 | live-target |
@@ -255,7 +231,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 | PATCH | `/api/v2/threads/{thread_id}` | `thread_lifecycle::patch_thread` | v2 | frontend/src/services/api-threads.ts, frontend/src/unit/api-auth-v2.test.ts, frontend/src/unit/api-threads.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | GET | `/api/v2/threads/{thread_id}/creatorCredits` | `thread_issues::list_thread_creator_credits` | v2 | frontend/src/services/api-issues.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-issues-coverage.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | PUT | `/api/v2/threads/{thread_id}/issue-order` | `issue_mutation::reorder_issues` | v2 | frontend/src/services/api-issues.ts, frontend/src/unit/api-issues-coverage.test.ts | /api/native_roll.rs | #4684 | canonical-v2 | live-target |
-| POST | `/api/v2/threads/{thread_id}/issues` | `issue_mutation::create_issues` | v2 | frontend/src/services/api-issues.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-issues-coverage.test.ts | /api/native_roll.rs | #4684 | canonical-v2 | live-target |
+| POST | `/api/v2/threads/{thread_id}/issues` | `issue_mutation::create_issues` | v2 | frontend/src/services/api-issues.ts, frontend/src/test/fixtures.ts, frontend/src/test/helpers.ts, frontend/src/test/issue-3626-creator-issue-deep-link.spec.ts, frontend/src/unit/ThreadDetailView.request-budget.test.tsx, frontend/src/unit/api-issues-coverage.test.ts | /api/native_roll.rs | #4684 | canonical-v2 | live-target |
 | POST | `/api/v2/threads/{thread_id}/issues/preview` | `issue_mutation::preview_issue_create` | v2 | frontend/src/services/api-issues.ts, frontend/src/unit/api-issues-coverage.test.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | POST | `/api/v2/threads/{thread_id}/issues/structure-preview` | `issue_mutation::preview_issue_structure` | v2 | frontend/src/services/api-issues.ts | /api/native_roll.rs | baseline debt | canonical-v2 | live-target |
 | GET | `/api/v2/threads/{thread_id}/reading-order-group-memberships` | `dependency_groups::list_thread_groups` | v2 | frontend/src/services/api-dependency-groups.ts, frontend/src/unit/api-dependency-groups.test.ts | /api/native_roll.rs | #4841 | canonical-v2 | live-target |
@@ -268,7 +244,7 @@ node scripts/generate_live_route_census.mjs --check      # CI drift gate
 
 ## Owner issue cross-reference
 
-Existing owner/disposition issues resolved for this census: #4299, #4335, #4342, #4344, #4443, #4459, #4595, #4623, #4653, #4684, #4822, #4832, #4835, #4836, #4838, #4839, #4841, #4844, #4849, #4850, #4851, #4855, #5276, #5435, #5701, #5702, #5703, #5704, #5705, #5706, #5709, #5711, #5712, #5713, #5714, #5715, #5716, #5717, #5718.
+Existing owner/disposition issues resolved for this census: #4299, #4335, #4342, #4344, #4443, #4459, #4595, #4623, #4653, #4684, #4822, #4835, #4836, #4838, #4839, #4841, #4844, #4849, #4850, #4851, #4855, #5435, #5701, #5704, #5707, #5709, #5712, #5713, #5714, #5717, #5718, #5958.
 No new backlog issue is created by this tooling task: every current live v1 method resolves to an existing owner issue and an AIP destination or an explicit retire-without-replacement decision.
 
 Non-browser / helper / infrastructure surface included in the census:
@@ -276,34 +252,67 @@ Non-browser / helper / infrastructure surface included in the census:
 - `POST /api/bug-reports/` — compatibility-alias-debt (owner #5718).
 - `GET /api/metrics` — active-infrastructure (owner #4335).
 - `GET /api/threads/{thread_id}` — compatibility-alias-debt (owner #5701).
-- `GET /api/v1/cron/release-sync` — background-caller-migration (owner #5276).
-- `POST /api/v1/threads/groups:batch` — pinned-404 (owner #5711).
-- `PUT /api/v1/threads/{thread_id}/test-backdate` — test-helper-debt (owner #4335).
+- `POST /api/v1/threads/check-duplicates` — pinned-404 (owner #5958).
+- `POST /api/v1/threads/groups:batch` — pinned-404 (owner #5958).
+- `PUT /api/v1/threads/{thread_id}` — pinned-404 (owner #5958).
+- `DELETE /api/v1/threads/{thread_id}` — pinned-404 (owner #5958).
 
 ## Retired legacy issues cross-referenced (no live v1 registration)
 
+- #4549: `GET /api/auth/csrf` — not-live; GET /api/v2/auth/csrf.
+- #4549: `POST /api/auth/forgot-password` — not-live; POST /api/v2/auth/forgot-password.
+- #4549: `POST /api/auth/login` — not-live; POST /api/v2/auth/login.
+- #4549: `POST /api/auth/logout` — not-live; POST /api/v2/auth/logout.
+- #4549: `GET /api/auth/me` — not-live; GET /api/v2/auth/me.
+- #4549: `POST /api/auth/refresh` — not-live; POST /api/v2/auth/refresh.
+- #4549: `POST /api/auth/register` — not-live; POST /api/v2/auth/register.
+- #4549: `POST /api/auth/reset-password` — not-live; POST /api/v2/auth/reset-password.
+- #4595: `GET /api/roll/events/{event_id}/recommendation-explanation` — not-live; retire-without-replacement.
+- #4549: `GET /api/v1/auth/csrf` — not-live; GET /api/v2/auth/csrf.
+- #4549: `POST /api/v1/auth/forgot-password` — not-live; POST /api/v2/auth/forgot-password.
+- #4549: `POST /api/v1/auth/login` — not-live; POST /api/v2/auth/login.
+- #4549: `POST /api/v1/auth/logout` — not-live; POST /api/v2/auth/logout.
+- #4549: `GET /api/v1/auth/me` — not-live; GET /api/v2/auth/me.
+- #4549: `POST /api/v1/auth/refresh` — not-live; POST /api/v2/auth/refresh.
+- #4549: `POST /api/v1/auth/register` — not-live; POST /api/v2/auth/register.
+- #4549: `POST /api/v1/auth/reset-password` — not-live; POST /api/v2/auth/reset-password.
+- #5716: `POST /api/v1/catalog/series-mappings/preview` — not-live; POST /api/v2/seriesMappings:preview.
+- #4835: `GET /api/v1/comicvine/series/{comicvine_volume_id}/import-status` — not-live; GET /api/v2/comicvine/series/{comicvine_volume_id}/import-status.
+- #5715: `POST /api/v1/continuity-plans/{plan_id}/reading-orders/project-preview` — not-live; POST /api/v2/continuityPlans/{plan_id}:previewReadingOrderProjection.
+- #5958: `GET /api/v1/continuity-rules/` — not-live; retire-without-replacement.
+- #5958: `POST /api/v1/continuity-rules/` — not-live; retire-without-replacement.
+- #5958: `DELETE /api/v1/continuity-rules/{rule_id}` — not-live; retire-without-replacement.
+- #5958: `GET /api/v1/continuity-rules/{rule_id}` — not-live; retire-without-replacement.
+- #5958: `PUT /api/v1/continuity-rules/{rule_id}` — not-live; retire-without-replacement.
+- #4836: `GET /api/v1/creators` — not-live; GET /api/v2/creators.
+- #4836: `GET /api/v1/creators/` — not-live; GET /api/v2/creators.
+- #4836: `GET /api/v1/creators/summaries` — not-live; GET /api/v2/creators/summaries.
+- #5276: `GET /api/v1/cron/release-sync` — not-live; GET /api/v2/cron/release-sync.
+- #4623: `GET /api/v1/issues/{issue_id}/comicvine` — not-live; GET /api/v2/issues/{issue_id}/comicvine.
+- #5958: `GET /api/v1/metrics` — not-live; retain-infrastructure (bare /api/metrics only).
+- #5710: `GET /api/v1/reading-order-groups/` — not-live; GET|POST|PATCH|DELETE /api/v2/readingOrderGroups[/{group_id}].
+- #5711: `PUT /api/v1/reading-order-groups/{group_id}/order` — not-live; v2 membership/range resources.
+- #4849: `PUT /api/v1/releases/` — not-live; retire-without-replacement.
+- #4849: `GET /api/v1/releases/source` — not-live; retire-without-replacement.
+- #4849: `GET /api/v1/releases/{release_id}` — not-live; GET /api/v2/releases.
+- #4849: `POST /api/v1/releases/{release_id}/retract` — not-live; retire-without-replacement.
+- #4595: `GET /api/v1/roll/events/{event_id}/recommendation-explanation` — not-live; retire-without-replacement.
 - #4341: `POST /api/v1/roll/override` — not-live; retire-without-replacement.
 - #4343: `GET /api/v1/sessions/current/` — not-live; retire-without-replacement.
-- #5525: `POST /api/v1/threads/{thread_id}/set-pending` — live-p0-evidence; retire-without-replacement.
-- #5707: `POST /api/v1/threads/{thread_id}:setCurrentIssue` — not-live; POST /api/v2/threads/{thread_id}/issues | PATCH /api/v2/issues/{issue_id}.
 - #5708: `GET /api/v1/sessions/{session_id}` — not-live; GET /api/v2/readingSessions | GET /api/v2/readingSessions/{session_id}.
-- #5710: `GET /api/v1/reading-order-groups/` — not-live; GET|POST|PATCH|DELETE /api/v2/readingOrderGroups[/{group_id}].
-- #4549: `GET /api/v1/auth/csrf` — not-live; GET /api/v2/auth/csrf.
-- #4549: `GET /api/v1/auth/me` — not-live; GET /api/v2/auth/me.
-- #4549: `POST /api/v1/auth/register` — not-live; POST /api/v2/auth/register.
-- #4549: `POST /api/v1/auth/login` — not-live; POST /api/v2/auth/login.
-- #4549: `POST /api/v1/auth/refresh` — not-live; POST /api/v2/auth/refresh.
-- #4549: `POST /api/v1/auth/logout` — not-live; POST /api/v2/auth/logout.
-- #4549: `POST /api/v1/auth/forgot-password` — not-live; POST /api/v2/auth/forgot-password.
-- #4549: `POST /api/v1/auth/reset-password` — not-live; POST /api/v2/auth/reset-password.
-- #4549: `GET /api/auth/csrf` — not-live; GET /api/v2/auth/csrf.
-- #4549: `GET /api/auth/me` — not-live; GET /api/v2/auth/me.
-- #4549: `POST /api/auth/register` — not-live; POST /api/v2/auth/register.
-- #4549: `POST /api/auth/login` — not-live; POST /api/v2/auth/login.
-- #4549: `POST /api/auth/refresh` — not-live; POST /api/v2/auth/refresh.
-- #4549: `POST /api/auth/logout` — not-live; POST /api/v2/auth/logout.
-- #4549: `POST /api/auth/forgot-password` — not-live; POST /api/v2/auth/forgot-password.
-- #4549: `POST /api/auth/reset-password` — not-live; POST /api/v2/auth/reset-password.
+- #5702: `POST /api/v1/threads/` — not-live; POST /api/v2/threads.
+- #5705: `POST /api/v1/threads/check-duplicates` — not-live; retire-without-replacement.
+- #5711: `POST /api/v1/threads/groups:batch` — not-live; retire-without-replacement.
+- #5703: `DELETE /api/v1/threads/{thread_id}` — not-live; retire-without-replacement.
+- #5703: `PUT /api/v1/threads/{thread_id}` — not-live; retire-without-replacement.
+- #5706: `GET /api/v1/threads/{thread_id}/issues` — not-live; GET|POST /api/v2/threads/{thread_id}/issues.
+- #5706: `POST /api/v1/threads/{thread_id}/issues` — not-live; GET|POST /api/v2/threads/{thread_id}/issues.
+- #5706: `GET /api/v1/threads/{thread_id}/issues/creators` — not-live; GET /api/v2/threads/{thread_id}/creatorCredits.
+- #5706: `POST /api/v1/threads/{thread_id}/issues:reorder` — not-live; PUT /api/v2/threads/{thread_id}/issue-order.
+- #5958: `GET /api/v1/threads/{thread_id}/issues:validateOrder` — not-live; retire-without-replacement.
+- #5715: `GET /api/v1/threads/{thread_id}/reading-orders` — not-live; GET /api/v2/threads/{thread_id}/readingOrders.
+- #5525: `POST /api/v1/threads/{thread_id}/set-pending` — live-p0-evidence; retire-without-replacement.
+- #4335: `PUT /api/v1/threads/{thread_id}/test-backdate` — not-live; retire-without-replacement.
 
 ## Baseline debt requiring an owner issue
 

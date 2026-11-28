@@ -1,7 +1,7 @@
 {
   "family": "reading-plan-sync",
   "owned_path_patterns": [
-    "^/api/v1/cron/release-sync$",
+    "^/api/v2/cron/release\\-sync$",
     "^/api/v2/reading-plan-sync/status$",
     "^/api/v2/reading-plan-sync/runs$"
   ],
@@ -15,13 +15,15 @@
   },
   "operations": [
     {
-      "bucket": "v1_operations",
+      "bucket": "operations",
       "method": "GET",
-      "path": "/api/v1/cron/release-sync",
+      "path": "/api/v2/cron/release-sync",
       "dest": "/api/native_api.rs",
-      "src": "^/api/v1/cron/release-sync$",
-      "owning_issue": 5276,
-      "exclude_from_inventory": true
+      "src": "^/api/v2/cron/release\\-sync$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 5958,
+      "consumers": []
     },
     {
       "bucket": "operations",
