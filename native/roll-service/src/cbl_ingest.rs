@@ -1101,6 +1101,23 @@ pub async fn sync_cbl_lists<C: GenericClient>(
     })
 }
 
+/// Serialize applying runs before the first source lookup. A row lock cannot
+/// protect an absent source, so two initial ingesters could otherwise both
+/// classify the same lists as inserts and report untruthful counts.
+async fn lock_repository<C: GenericClient>(
+    client: &C,
+    repository: &str,
+) -> Result<(), IngestError> {
+    client
+        .query_one(
+            "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+            &[&repository],
+        )
+        .await
+        .map_err(|error| IngestError::new(format!("cbl repository lock failed: {error}")))?;
+    Ok(())
+}
+
 async fn source_query<C: GenericClient>(
     client: &C,
     sql: &str,
@@ -1493,6 +1510,19 @@ mod tests {
     }
 
     #[test]
+    fn rejects_character_data_outside_the_root_but_allows_whitespace() {
+        for xml in [
+            b"junk<ReadingList />".as_slice(),
+            b"<ReadingList />junk".as_slice(),
+            b"<ReadingList /><![CDATA[junk]]>".as_slice(),
+            b"<ReadingList />&amp;".as_slice(),
+        ] {
+            assert!(parse_cbl_bytes(xml, "DC/Broken.cbl").is_err(), "{xml:?}");
+        }
+        assert!(parse_cbl_bytes(b" \n<ReadingList />\t", "DC/Valid.cbl").is_ok());
+    }
+
+    #[test]
     fn rejects_unresolved_entities_and_oversized_persisted_fields() {
         let unknown_entity = b"<ReadingList><Name>Batman &bogus;</Name><Books /></ReadingList>";
         assert!(parse_cbl_bytes(unknown_entity, "DC/Entity.cbl").is_err());
@@ -1596,6 +1626,25 @@ mod tests {
             DEFAULT_REPOSITORY.to_string(),
         ];
         assert!(parse_options(&arguments).is_err());
+        for arguments in [
+            vec![
+                "/mirror".to_string(),
+                "--revision-sha".to_string(),
+                "abc1234".to_string(),
+                "--repository".to_string(),
+                "--dry-run".to_string(),
+            ],
+            vec![
+                "/mirror".to_string(),
+                "--revision-sha".to_string(),
+                "abc1234".to_string(),
+                "--reconcile-repository".to_string(),
+                "--inventory-only".to_string(),
+            ],
+        ] {
+            let error = parse_options(&arguments).expect_err("missing option value");
+            assert!(error.to_string().contains("requires a value"), "{error}");
+        }
         let options = parse_options(&[
             "/mirror".to_string(),
             "--revision-sha".to_string(),

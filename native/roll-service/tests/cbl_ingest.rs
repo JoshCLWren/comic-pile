@@ -26,6 +26,7 @@ use std::{
         Arc,
     },
 };
+use tokio::sync::Barrier;
 
 static NEXT_FIXTURE: AtomicUsize = AtomicUsize::new(1);
 
@@ -452,6 +453,39 @@ async fn a_parse_failure_protects_the_last_known_good_list() {
     assert!(row.get::<_, bool>(0));
     assert_eq!(row.get::<_, String>(1), parsed[0].content_hash);
     assert_eq!(row.get::<_, String>(2), "ccc3333");
+}
+
+#[tokio::test]
+async fn trailing_character_data_is_protected_as_a_parse_failure() {
+    let (state, _guard) = setup().await;
+    let fixture = MirrorFixture::new(&[(
+        "DC/Batman.cbl",
+        &cbl("Batman 001", &[("Batman", "1", None, None)]),
+    )]);
+    let (parsed, failures) = fixture.parse();
+    apply(&state, &parsed, &failures, "aaa1111", None).await;
+
+    let broken = MirrorFixture::new(&[(
+        "DC/Batman.cbl",
+        "<ReadingList><Name>Batman 001</Name><Books /></ReadingList>junk",
+    )]);
+    let (empty, failures) = broken.parse();
+    assert_eq!(failures.len(), 1);
+    let summary = apply(&state, &empty, &failures, "bbb2222", None).await;
+    assert_eq!(summary.deactivated_lists, 0);
+    let row = {
+        let conn = state.pool.get().await.unwrap();
+        conn.query_one(
+            "SELECT active, content_hash, revision_sha FROM cbl_source_lists \
+             WHERE source_path = 'DC/Batman.cbl'",
+            &[],
+        )
+        .await
+        .unwrap()
+    };
+    assert!(row.get::<_, bool>(0));
+    assert_eq!(row.get::<_, String>(1), parsed[0].content_hash);
+    assert_eq!(row.get::<_, String>(2), "aaa1111");
 }
 
 #[tokio::test]
