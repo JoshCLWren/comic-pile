@@ -113,6 +113,62 @@ test('node generator matches checked-in golden fixtures on hermetic inputs', (t)
 });
 
 
+test('native router reconciliation enumerates every API version and detects input drift', (t) => {
+  const tmp = mkdtempSync(path.join(os.tmpdir(), 'route-burndown-native-router-'));
+  t.after(() => rmSync(tmp, {recursive: true, force: true}));
+
+  const files = stageInputs(tmp);
+  cpSync(files.fragments, path.join(tmp, 'docs', 'api', 'route-fragments'), {recursive: true});
+  const router = path.join(tmp, 'native', 'roll-service', 'src', 'lib.rs');
+  mkdirSync(path.dirname(router), {recursive: true});
+  writeFileSync(router, `
+pub fn router() -> Router {
+    Router::new()
+        .route("/api/v2/threads/{thread_id}/issues", get(threads::list_issues))
+        .route("/api/v1/threads/{thread_id}/issues", get(threads::list_issues_v1))
+        .route("/api/threads/{thread_id}", get(threads::get_thread_legacy))
+}
+`);
+  const service = path.join(tmp, 'frontend', 'src', 'services', 'api-native.ts');
+  mkdirSync(path.dirname(service), {recursive: true});
+  writeFileSync(service, [
+    "client.get('/v2/threads/${id}/issues')",
+    "client.get('/v1/threads/${id}/issues')",
+    "client.get('/api/threads/${id}')",
+    '',
+  ].join('\n'));
+
+  const args = [...generatorArgs(files), '--router', router];
+  run([process.execPath, nodeScript], args, tmp);
+  const inventory = JSON.parse(readFileSync(files.inventory, 'utf8'));
+  const expected = [
+    ['operations', 'GET', '/api/v2/threads/{thread_id}/issues'],
+    ['v1_operations', 'GET', '/api/v1/threads/{thread_id}/issues'],
+    ['unversioned_operations', 'GET', '/api/threads/{thread_id}'],
+  ];
+  for (const [bucket, method, routePath] of expected) {
+    const operations = bucket === 'operations' ? inventory.operations : inventory.full_surface[bucket];
+    const operation = operations.find(item => item.method === method && item.path === routePath);
+    assert.ok(operation, `${method} ${routePath} must be enumerated from the real native router`);
+    assert.equal(operation.runtime, 'native-rust');
+    assert.equal(operation.ingress_destination, '/api/native_roll.rs');
+    assert.ok(operation.consumers.includes('frontend/src/services/api-native.ts'));
+  }
+  assert.ok(!inventory.operations.some(operation => operation.path === '/api/v2/unicode'),
+    'a stale native inventory entry without a router registration is not live');
+  run([process.execPath, nodeScript], [...args, '--check'], tmp);
+
+  writeFileSync(router, `${readFileSync(router, 'utf8').replace('\n}', `
+        .route("/api/v2/health", get(health))
+}`)}`);
+  assert.throws(
+    () => run([process.execPath, nodeScript], [...args, '--check'], tmp),
+    error => error.status === 1,
+    'changing the native router must make the committed inventory stale',
+  );
+});
+
+
 test('future native_api inputs still generate the current golden artifacts', (t) => {
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'route-burndown-alias-'));
   t.after(() => rmSync(tmp, {recursive: true, force: true}));
