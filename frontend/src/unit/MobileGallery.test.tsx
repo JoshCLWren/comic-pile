@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { act } from 'react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MobileGallery } from '../pages/RollPage/components/MobileGallery'
 import type { RollBootstrapThread } from '../types/rollBootstrap'
 
@@ -25,6 +25,15 @@ function renderGallery(onThreadClick = vi.fn()) {
   return { onThreadClick }
 }
 
+beforeEach(() => {
+  if (typeof globalThis.ResizeObserver === 'undefined') {
+    (globalThis as { ResizeObserver?: unknown }).ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  }
+})
 describe('Night Shift mobile gallery (#5981)', () => {
   it('wraps in both directions and reports the browsing position', async () => {
     const user = userEvent.setup()
@@ -79,6 +88,7 @@ describe('Night Shift mobile gallery extra branches (#5981)', () => {
       />,
     )
     expect(screen.getByText(/Gallery rotating/i)).toBeInTheDocument()
+    await new Promise((resolve) => setTimeout(resolve, 130))
 
     rerender(
       <MobileGallery
@@ -109,7 +119,7 @@ describe('Night Shift mobile gallery extra branches (#5981)', () => {
 
 
 describe('Night Shift mobile gallery swipe (#5981)', () => {
-  it('swipes left to advance', () => {
+  it('swipes left to advance', async () => {
     render(
       <MobileGallery
         pool={[{ id: 1, title: 'Alpha', format: 'Comic' }, { id: 2, title: 'Beta', format: 'Comic' }, { id: 3, title: 'Gamma', format: 'Comic' }]}
@@ -125,6 +135,7 @@ describe('Night Shift mobile gallery swipe (#5981)', () => {
       fireEvent.pointerDown(gallery, { clientX: 200 })
       fireEvent.pointerUp(gallery, { clientX: 100 })
     })
+    await new Promise((resolve) => setTimeout(resolve, 10))
     expect(screen.getByText(/2 \/ 3/)).toBeInTheDocument()
   })
 

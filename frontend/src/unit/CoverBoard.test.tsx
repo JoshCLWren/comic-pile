@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CoverBoard } from '../pages/RollPage/components/CoverBoard'
 import type { RollBootstrapThread } from '../types/rollBootstrap'
 
@@ -9,6 +9,16 @@ const pool: RollBootstrapThread[] = [
   { id: 3, title: 'Gamma', format: 'Comic' },
   { id: 4, title: 'Delta', format: 'Comic' },
 ]
+
+beforeEach(() => {
+  if (typeof globalThis.ResizeObserver === 'undefined') {
+    (globalThis as { ResizeObserver?: unknown }).ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  }
+})
 
 describe('CoverBoard (#5981)', () => {
   it('renders faces for a d4 pool with the die slot', () => {
