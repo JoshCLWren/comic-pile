@@ -377,10 +377,6 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('option', { name: 'Saga (Comic)' }))
     await user.click(screen.getByRole('button', { name: 'Open issue card' }))
     expect(screen.getByTestId('direct-read-issue-panel')).toHaveTextContent('Saga')
-<<<<<<< HEAD
-=======
-    expect(spies.setPending).not.toHaveBeenCalled()
->>>>>>> origin/main
     await user.click(screen.getByRole('button', { name: 'close modal' }))
     enterPendingRollRating()
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
