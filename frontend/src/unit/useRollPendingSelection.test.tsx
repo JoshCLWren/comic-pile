@@ -1,5 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { AuthContext, type AuthContextValue } from '../contexts/AuthContext'
 import { useRollPendingSelection } from '../hooks/useRollPendingSelection'
 import {
   parsePendingSelection,
@@ -12,6 +14,30 @@ const OFFER = {
   issue_id: 42,
   issue_number: '42',
   result: 6,
+}
+
+/** A resolved auth value so the hook reads the signed-in reader's partition. */
+function authValue(userId: number): AuthContextValue {
+  const user = { id: userId, username: `reader-${userId}` }
+  return {
+    authState: {
+      status: 'authenticated',
+      isLoading: false,
+      user,
+      error: null,
+      retryCount: 0,
+      lastRetryAt: null,
+    },
+    isAuthenticated: true,
+    isLoading: false,
+    user,
+    login: vi.fn(async () => undefined),
+    logout: vi.fn(),
+    revalidateSession: vi.fn(async () => undefined),
+    recoverSession: vi.fn(async () => undefined),
+    retryAuth: vi.fn(async () => undefined),
+    clearAuthError: vi.fn(),
+  }
 }
 
 describe('useRollPendingSelection', () => {
@@ -61,13 +87,35 @@ describe('useRollPendingSelection', () => {
     expect(result.current.pending).toBeNull()
   })
 
-  it('clears on Reset and keeps an unrelated direct read', () => {
+  it('keeps the pending selection on a direct read of an unrelated issue', () => {
     const { result } = renderHook(() => useRollPendingSelection())
     act(() => result.current.seedFromOffer(OFFER))
     act(() => result.current.clear(1234))
     expect(result.current.pending?.issue_id).toBe(42)
+  })
+
+  it('clears on Reset', () => {
+    const { result } = renderHook(() => useRollPendingSelection())
+    act(() => result.current.seedFromOffer(OFFER))
     act(() => result.current.clearAll())
     expect(result.current.pending).toBeNull()
+  })
+
+  it('does not leak a selection across an account switch', () => {
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <AuthContext.Provider value={authValue(11)}>{children}</AuthContext.Provider>
+    )
+    const first = renderHook(() => useRollPendingSelection(), { wrapper })
+    act(() => first.result.current.seedFromOffer(OFFER))
+    expect(first.result.current.pending?.issue_id).toBe(42)
+    first.unmount()
+
+    const switched = renderHook(() => useRollPendingSelection(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <AuthContext.Provider value={authValue(12)}>{children}</AuthContext.Provider>
+      ),
+    })
+    expect(switched.result.current.pending).toBeNull()
   })
 
   it('seeds the exact issue from an offer response', () => {

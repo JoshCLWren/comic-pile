@@ -111,4 +111,11 @@ describe('rating exit without server-owned pending', () => {
     await act(async () => { await result.current.handleSubmitRating() })
     expect(clearPending).toHaveBeenCalledWith(100)
   })
+
+  it('keeps the exact selected issue when the rate request fails', async () => {
+    const { result } = render()
+    rateMutation.mutate.mockRejectedValueOnce(new Error('rate failed'))
+    await act(async () => { await result.current.handleSubmitRating() })
+    expect(clearPending).not.toHaveBeenCalled()
+  })
 })
