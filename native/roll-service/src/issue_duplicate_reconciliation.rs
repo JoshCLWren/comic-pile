@@ -1754,7 +1754,9 @@ mod tests {
     #[tokio::test]
     async fn rehearsal_same_owner_duplicate_is_not_a_cross_owner_shared_reference() {
         let (state, _guard) = rehearsal_fixture().await;
-        let mut conn = db::checkout(&state).await.expect("rehearsal transaction connection");
+        let mut conn = db::checkout(&state)
+            .await
+            .expect("rehearsal transaction connection");
         let tx = conn
             .build_transaction()
             .read_only(true)

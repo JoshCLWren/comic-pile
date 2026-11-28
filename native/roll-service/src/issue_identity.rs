@@ -5569,8 +5569,7 @@ mod guard_db_tests {
         }
 
         fn count(&self) -> usize {
-            self.calls
-                .load(std::sync::atomic::Ordering::SeqCst)
+            self.calls.load(std::sync::atomic::Ordering::SeqCst)
         }
     }
 
@@ -5580,8 +5579,7 @@ mod guard_db_tests {
             sql: &str,
             params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
         ) -> Result<Vec<tokio_postgres::Row>, tokio_postgres::Error> {
-            self.calls
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             self.inner.query(sql, params).await
         }
 
@@ -5590,8 +5588,7 @@ mod guard_db_tests {
             sql: &str,
             params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
         ) -> Result<Option<tokio_postgres::Row>, tokio_postgres::Error> {
-            self.calls
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             self.inner.query_opt(sql, params).await
         }
 
@@ -5600,8 +5597,7 @@ mod guard_db_tests {
             sql: &str,
             params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
         ) -> Result<tokio_postgres::Row, tokio_postgres::Error> {
-            self.calls
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             self.inner.query_one(sql, params).await
         }
 
@@ -5610,8 +5606,7 @@ mod guard_db_tests {
             sql: &str,
             params: &[&(dyn tokio_postgres::types::ToSql + Sync)],
         ) -> Result<u64, tokio_postgres::Error> {
-            self.calls
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             self.inner.execute(sql, params).await
         }
     }
@@ -5657,9 +5652,7 @@ mod guard_db_tests {
         let _ = load_collection_guard_state(&single, 9101, &one)
             .await
             .expect("single fact guard state");
-        let repeated = (0..10)
-            .map(|_| fact(Some(9301), None))
-            .collect::<Vec<_>>();
+        let repeated = (0..10).map(|_| fact(Some(9301), None)).collect::<Vec<_>>();
         let many = CountingExec::new(&tx);
         let _ = load_collection_guard_state(&many, 9101, &repeated)
             .await

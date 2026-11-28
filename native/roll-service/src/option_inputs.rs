@@ -1344,7 +1344,9 @@ mod tests {
     #[tokio::test]
     async fn rehearsal_two_readers_keep_private_state_while_sharing_confirmed_identity() {
         let (state, _guard) = rehearsal_fixture().await;
-        let conn = db::checkout(&state).await.expect("rehearsal verification connection");
+        let conn = db::checkout(&state)
+            .await
+            .expect("rehearsal verification connection");
 
         // The same external issue identity is confirmed by both readers.
         let shared: Vec<tokio_postgres::Row> = conn
@@ -1359,7 +1361,10 @@ mod tests {
             .await
             .expect("shared confirmed identity");
         assert_eq!(
-            shared.iter().map(|r| r.get::<_, i32>(0)).collect::<Vec<_>>(),
+            shared
+                .iter()
+                .map(|r| r.get::<_, i32>(0))
+                .collect::<Vec<_>>(),
             vec![9101, 9102]
         );
         // The same catalog issue is referenced by both readers; the issue rows
@@ -1497,7 +1502,10 @@ mod tests {
             before
                 .entry(row.get(0))
                 .or_default()
-                .insert(normalize_volume(&row.get::<_, String>(1), &row.get::<_, String>(2)));
+                .insert(normalize_volume(
+                    &row.get::<_, String>(1),
+                    &row.get::<_, String>(2),
+                ));
         }
         assert_eq!(
             before.get(&9201),
@@ -1526,25 +1534,36 @@ mod tests {
             Some(&BTreeSet::from([("comicvine".into(), "1000".into())])),
             "confirmed evidence must not be invented: {a_after:?}"
         );
-        assert!(!a_after.contains_key(&9204), "unknown issue gained evidence");
+        assert!(
+            !a_after.contains_key(&9204),
+            "unknown issue gained evidence"
+        );
 
         let a_inputs = assemble_snapshot(a_snapshot).expect("A snapshot");
         a_inputs.require_resolved().expect("A resolved");
         assert_eq!(
-            a_inputs.excluded_issue_ids.iter().copied().collect::<Vec<_>>(),
+            a_inputs
+                .excluded_issue_ids
+                .iter()
+                .copied()
+                .collect::<Vec<_>>(),
             vec![9201, 9203],
             "A's volume exclusion covers its catalog-only and confirmed-volume issues only"
         );
         let a_validated = validated_contained(a_inputs).expect("A validated");
         let a_edges = a_validated.unsatisfied_edges().expect("A edges");
         assert!(
-            a_edges.iter().all(|e| e.source_issue_id >= 9201 && e.source_issue_id <= 9204),
+            a_edges
+                .iter()
+                .all(|e| e.source_issue_id >= 9201 && e.source_issue_id <= 9204),
             "A's authored prerequisite must stay inside A: {a_edges:?}"
         );
         assert!(
-            a_edges.iter().any(|e| e.prerequisite_origin.as_deref() == Some("reader")
-                && e.source_issue_id == 9202
-                && e.target_issue_id == 9204),
+            a_edges
+                .iter()
+                .any(|e| e.prerequisite_origin.as_deref() == Some("reader")
+                    && e.source_issue_id == 9202
+                    && e.target_issue_id == 9204),
             "A's authored prerequisite must be live: {a_edges:?}"
         );
         let a_blockers = a_validated.frontier_blockers().expect("A blockers");
@@ -1584,7 +1603,11 @@ mod tests {
         let b_inputs = assemble_snapshot(b_snapshot).expect("B snapshot");
         b_inputs.require_resolved().expect("B resolved");
         assert_eq!(
-            b_inputs.excluded_issue_ids.iter().copied().collect::<Vec<_>>(),
+            b_inputs
+                .excluded_issue_ids
+                .iter()
+                .copied()
+                .collect::<Vec<_>>(),
             vec![9403],
             "A's volume exclusion must not leak to B; B excludes its own edition"
         );
@@ -1618,7 +1641,9 @@ mod tests {
     #[tokio::test]
     async fn rehearsal_card_projection_is_owner_scoped_confirmed_only_and_bounded() {
         let (state, _guard) = rehearsal_fixture().await;
-        let conn = db::checkout(&state).await.expect("card projection connection");
+        let conn = db::checkout(&state)
+            .await
+            .expect("card projection connection");
 
         // One set-based call for a mixed batch: A's issues, B's issue and an
         // unknown id. The foreign and unknown ids are omitted, order preserved.
@@ -1630,7 +1655,11 @@ mod tests {
         .await
         .expect("A card projection");
         assert_eq!(
-            response.items.iter().map(|c| c.issue_id).collect::<Vec<_>>(),
+            response
+                .items
+                .iter()
+                .map(|c| c.issue_id)
+                .collect::<Vec<_>>(),
             vec![9201, 9202, 9204],
             "card projection must be owner-scoped and preserve first-request order"
         );
@@ -1639,7 +1668,11 @@ mod tests {
         assert_eq!(catalog_only.mapping_state, "unmapped");
         assert_eq!(catalog_only.comicvine_issue_id, None);
         assert_eq!(catalog_only.cover_image_url, None);
-        assert_eq!(catalog_only.rating, Some(4.0), "A's own rating must survive");
+        assert_eq!(
+            catalog_only.rating,
+            Some(4.0),
+            "A's own rating must survive"
+        );
         let missing_mapping = &response.items[2];
         assert_eq!(missing_mapping.mapping_state, "unmapped");
         assert!(!missing_mapping.has_confirmed_identity);
@@ -1652,7 +1685,11 @@ mod tests {
         .await
         .expect("B card projection");
         assert_eq!(
-            b_response.items.iter().map(|c| c.issue_id).collect::<Vec<_>>(),
+            b_response
+                .items
+                .iter()
+                .map(|c| c.issue_id)
+                .collect::<Vec<_>>(),
             vec![9401, 9402, 9403]
         );
         let confirmed = &b_response.items[1];

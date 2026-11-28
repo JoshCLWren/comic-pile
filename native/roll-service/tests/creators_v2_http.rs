@@ -461,8 +461,13 @@ async fn two_reader_shared_identity_creator_projection_is_owner_isolated() {
 
     // Reader B alone owns a distinct edition with a different creator.
     let b2 = issue(&conn, thread_b, "2", 2, "read").await;
-    credit_identity(&conn, b2, "cv-distinct-rehearsal", json!([writer(200, "Edition Writer")]))
-        .await;
+    credit_identity(
+        &conn,
+        b2,
+        "cv-distinct-rehearsal",
+        json!([writer(200, "Edition Writer")]),
+    )
+    .await;
     rate(&conn, user_b, thread_b, b2, 5.0).await;
 
     let (status, list_a) = send(&state, get("/api/v2/creators", &token_a, &csrf_a)).await;
@@ -482,8 +487,14 @@ async fn two_reader_shared_identity_creator_projection_is_owner_isolated() {
     let shared_b = find(items_b, "creator:100").expect("shared creator visible to B");
     assert_eq!(shared_a["ratings_count"], 1);
     assert_eq!(shared_b["ratings_count"], 1);
-    assert_eq!(shared_a["average_rating"], 4.0, "A's rating must stay private");
-    assert_eq!(shared_b["average_rating"], 2.0, "B's rating must stay private");
+    assert_eq!(
+        shared_a["average_rating"], 4.0,
+        "A's rating must stay private"
+    );
+    assert_eq!(
+        shared_b["average_rating"], 2.0,
+        "B's rating must stay private"
+    );
     assert!(
         find(items_a, "creator:200").is_none(),
         "B's distinct edition leaked to A: {list_a:?}"
