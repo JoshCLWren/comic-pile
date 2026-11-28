@@ -24,7 +24,7 @@
     "v1_with_owner": 57,
     "v1_needing_owner": 0,
     "unknown_ingress": 0,
-    "first_party_call_sites": 920,
+    "first_party_call_sites": 921,
     "stale_aip_baseline_entries": 4
   },
   "routes": [
@@ -3225,7 +3225,7 @@
         "frontend/src/unit/rollBootstrapScopedComposition.test.ts",
         "frontend/src/unit/rollResourcesApi.test.ts"
       ],
-      "caller_count": 19,
+      "caller_count": 20,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4443,
@@ -3257,7 +3257,7 @@
         "frontend/src/unit/rollBootstrapScopedComposition.test.ts",
         "frontend/src/unit/rollResourcesApi.test.ts"
       ],
-      "caller_count": 28,
+      "caller_count": 29,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4335,
@@ -3291,7 +3291,7 @@
         "frontend/src/unit/rollBootstrapScopedComposition.test.ts",
         "frontend/src/unit/rollResourcesApi.test.ts"
       ],
-      "caller_count": 31,
+      "caller_count": 32,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4443,
@@ -3323,7 +3323,7 @@
         "frontend/src/unit/rollBootstrapScopedComposition.test.ts",
         "frontend/src/unit/rollResourcesApi.test.ts"
       ],
-      "caller_count": 27,
+      "caller_count": 28,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4684,
