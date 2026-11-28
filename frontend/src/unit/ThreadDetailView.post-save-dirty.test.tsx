@@ -132,8 +132,10 @@ beforeEach(() => {
   serverThread = OPEN_THREAD
   mutateMock.mockReset()
   mutateMock.mockResolvedValue(SAVED_THREAD)
+  // SAFETY: useUpdateThread is vi.mock-ed above to return only mutate/isPending
   mockedUseUpdateThread.mockReturnValue({ mutate: mutateMock, isPending: false } as never)
   mockedThreadsApiGet.mockReset()
+  // SAFETY: this stub returns only the thread fields declared in OPEN_THREAD/SAVED_THREAD
   mockedThreadsApiGet.mockImplementation(async () => serverThread as never)
   mockedIssuesApiList.mockReset()
   mockedIssuesApiList.mockResolvedValue({
