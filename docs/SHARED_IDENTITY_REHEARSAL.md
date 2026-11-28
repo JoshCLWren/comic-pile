@@ -19,9 +19,11 @@ block this rehearsal.
 
 ## Two-reader fixture
 
-Two readers confirm the **same** external issue identity (`comicvine:issue 4050-0001`) and reader B
-also confirms a distinct edition (`4050-1001`); both reference the same catalog issue row while
-owning different issue rows. Reader-specific state is deliberately disjoint:
+Both readers confirm the **same** external issue identity (`comicvine:issue 4050-0003`, identity
+8103, on issues 9203/9402) and reader B also confirms a distinct edition (`4050-1001`); separately,
+both reference catalog issue 9001 (canonical identity `comicvine:issue 4050-0001`) through
+catalog-only links on issues 9201/9401 with no mapping row, while owning different issue rows.
+Reader-specific state is deliberately disjoint:
 
 | Reader-private state | Reader A | Reader B |
 | --- | --- | --- |
