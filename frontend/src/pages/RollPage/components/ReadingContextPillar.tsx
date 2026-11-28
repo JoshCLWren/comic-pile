@@ -263,7 +263,7 @@ export function ReadingContextPillar({
                         </span>
                         {isPrevious && issue.rating !== null && (
                           <span
-                            className="whitespace-nowrap text-[var(--theme-comic-accent)]"
+                            className="whitespace-nowrap text-[var(--theme-personal-accent)]"
                             style={readingContextType('metaLabel')}
                             aria-label={`Your rating: ${issue.rating} stars`}
                           >

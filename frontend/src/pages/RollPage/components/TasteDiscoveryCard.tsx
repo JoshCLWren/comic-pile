@@ -50,9 +50,9 @@ export function TasteDiscoveryCard({ discovery, onRespond, onDismiss }: TasteDis
       aria-label="ComicPile noticed something"
       aria-live="polite"
       data-testid="taste-discovery-card"
-      className="mx-auto w-full max-w-xl rounded-2xl border border-[var(--theme-comic-accent)]/30 bg-[var(--theme-comic-accent)]/20 p-4 shadow-lg"
+      className="mx-auto w-full max-w-xl rounded-2xl border border-[var(--theme-personal-accent)]/30 bg-[var(--theme-personal-accent)]/20 p-4 shadow-lg"
     >
-      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--theme-comic-accent)]">
+      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--theme-personal-accent)]">
         ComicPile noticed something
       </p>
       <p className="mt-2 text-sm text-[var(--theme-text-primary)]">{discovery.prompt}</p>
@@ -67,7 +67,7 @@ export function TasteDiscoveryCard({ discovery, onRespond, onDismiss }: TasteDis
             onClick={() => {
               void handleRespond(verdict)
             }}
-            className="rounded-lg border border-[var(--theme-comic-accent)]/50 bg-[var(--theme-comic-accent)]/20 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[var(--theme-comic-accent)] transition-colors hover:bg-[var(--theme-comic-accent)]/30 disabled:opacity-50"
+            className="rounded-lg border border-[var(--theme-personal-accent)]/50 bg-[var(--theme-personal-accent)]/20 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-[var(--theme-personal-accent)] transition-colors hover:bg-[var(--theme-personal-accent)]/30 disabled:opacity-50"
           >
             {label}
           </button>

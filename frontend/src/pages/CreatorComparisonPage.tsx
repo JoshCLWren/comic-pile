@@ -621,7 +621,7 @@ export default function CreatorComparisonPage() {
               <Link
                 to={creatorsReturnUrl}
                 className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-                style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
+                style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-primary-action-text)' }}
               >
                 Change selection
               </Link>
@@ -667,7 +667,7 @@ export default function CreatorComparisonPage() {
             type="button"
             onClick={() => window.location.reload()}
             className="mt-4 min-h-11 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-            style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
+            style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-primary-action-text)' }}
           >
             Try again
           </button>
@@ -684,7 +684,7 @@ export default function CreatorComparisonPage() {
             <Link
               to={creatorsReturnUrl}
               className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-              style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
+              style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-primary-action-text)' }}
             >
               Change selection
             </Link>
@@ -735,7 +735,7 @@ export default function CreatorComparisonPage() {
             <Link
               to={resolvedReturnUrl}
               className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-              style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
+              style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-primary-action-text)' }}
             >
               Change selection
             </Link>
@@ -833,7 +833,7 @@ export default function CreatorComparisonPage() {
               <Link
                 to={resolvedReturnUrl}
                 className="min-h-10 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-                style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
+                style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-primary-action-text)' }}
               >
                 Change selection
               </Link>

@@ -13,7 +13,7 @@ function StarRow({ rating }: { rating: number }) {
   for (let i = 0; i < full; i++) stars.push('\u2605')
   if (half) stars.push('\u00BD')
   return (
-    <span className="text-[var(--theme-comic-accent)] text-xs tabular-nums" aria-label={`${rating.toFixed(1)} out of 5 stars`}>
+    <span className="text-[var(--theme-personal-accent)] text-xs tabular-nums" aria-label={`${rating.toFixed(1)} out of 5 stars`}>
       {stars.join('')}
     </span>
   )
@@ -133,7 +133,7 @@ export function SeriesPanel({ series }: SeriesPanelProps) {
           {series.highest_rating !== null ? (
             <div>
               <span className="font-bold">High: </span>
-              <span className="tabular-nums text-[var(--theme-comic-accent)]">{series.highest_rating.toFixed(1)}</span>
+              <span className="tabular-nums text-[var(--theme-personal-accent)]">{series.highest_rating.toFixed(1)}</span>
             </div>
           ) : null}
           {series.lowest_rating !== null ? (

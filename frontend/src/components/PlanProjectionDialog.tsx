@@ -176,9 +176,9 @@ export default function PlanProjectionDialog({
             )}
           </div>
           {hasConflicts ? (
-            <div role="alert" className="rounded-xl border border-[var(--theme-comic-accent)] bg-[var(--theme-comic-accent)]/20 p-3">
-              <p className="font-bold text-[var(--theme-comic-accent)]">Resolve conflicts before projecting</p>
-              <ul className="mt-2 space-y-1 text-sm text-[var(--theme-comic-accent)]">
+            <div role="alert" className="rounded-xl border border-[var(--theme-warning)] bg-[var(--theme-warning)]/20 p-3">
+              <p className="font-bold text-[var(--theme-warning)]">Resolve conflicts before projecting</p>
+              <ul className="mt-2 space-y-1 text-sm text-[var(--theme-warning)]">
                 {preview.conflicts.map((conflict) => (
                   <li key={conflict.node_id}>{conflict.message}</li>
                 ))}

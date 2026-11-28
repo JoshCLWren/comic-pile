@@ -293,7 +293,7 @@ export default function CreatorDetailPage() {
         <Link
           to="/"
           className="mt-4 inline-block rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-          style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
+          style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-primary-action-text)' }}
         >
           Back to Roll
         </Link>
@@ -332,7 +332,7 @@ export default function CreatorDetailPage() {
             type="button"
             onClick={refetch}
             className="mt-4 min-h-11 rounded-lg px-4 py-2 text-sm font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-            style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-text-primary)' }}
+            style={{ backgroundColor: 'var(--theme-primary-action)', color: 'var(--theme-primary-action-text)' }}
           >
             Try again
           </button>

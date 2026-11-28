@@ -20,7 +20,7 @@ const STATUS_STYLES: Record<GateStatus, { label: string; classes: string; descri
   blocked: {
     label: 'Blocked',
     description: 'Read prerequisite to continue',
-    classes: 'bg-[var(--theme-error)]/10 text-[var(--theme-error)] border-[var(--theme-error)]/40',
+    classes: 'bg-[var(--theme-warning)]/10 text-[var(--theme-warning)] border-[var(--theme-warning)]/40',
   },
   satisfied: {
     label: 'Satisfied',
