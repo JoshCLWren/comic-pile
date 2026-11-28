@@ -397,7 +397,6 @@ export default function ThreadDetailView() {
 
       const updateData: EditThreadData = {
         title: editForm.title,
-        format: editForm.format,
         // Send the field verbatim so an emptied Notes field is sent as an
         // explicit clear. Only omitting `notes` leaves the saved value
         // unchanged (issue #3629).
@@ -407,7 +406,6 @@ export default function ThreadDetailView() {
         // compares these values under the row lock and returns 409 on mismatch.
         expected: {
           title: currentThread.title,
-          format: currentThread.format,
           notes: currentThread.notes ?? null,
           manual_creator_credits: getManualCreatorCreditList(currentThread),
         },
@@ -445,7 +443,6 @@ export default function ThreadDetailView() {
 
     setEditForm({
       title: currentThread.title,
-      format: currentThread.format,
       issuesRemaining: currentThread.issues_remaining,
       notes: currentThread.notes || '',
       issues: '',
@@ -462,7 +459,6 @@ export default function ThreadDetailView() {
   const editFormIsDirty =
     thread != null &&
     (editForm.title !== thread.title ||
-      editForm.format !== thread.format ||
       editForm.notes !== (thread.notes ?? '') ||
       editForm.issuesRemaining !== thread.issues_remaining ||
       JSON.stringify(editForm.manualCreatorCredits) !== JSON.stringify(initialCredits))
@@ -523,14 +519,13 @@ export default function ThreadDetailView() {
           <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow mb-1 uppercase truncate">
             {thread.title}
           </h1>
-          <p className="text-sm font-medium text-stone-500">
-            {thread.format}
-            {thread.last_rating != null && (
-              <span className="ml-2 text-[var(--theme-personal-accent)]">
+          {thread.last_rating != null && (
+            <p className="text-sm font-medium text-stone-500">
+              <span className="text-[var(--theme-personal-accent)]">
                 Last rating {thread.last_rating.toFixed(1)}/5
               </span>
-            )}
-          </p>
+            </p>
+          )}
         </div>
         <button
           type="button"
@@ -982,17 +977,6 @@ export default function ThreadDetailView() {
               />
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-stone-500">
-                Format
-              </label>
-              <FormatSelect
-                value={editForm.format}
-                onChange={(value) => setEditForm({ ...editForm, format: value })}
-                required
-              />
-            </div>
-
             {thread.total_issues === null && (
               <div className="space-y-2">
                 <label className="text-sm font-medium text-stone-500">
@@ -1064,7 +1048,7 @@ export default function ThreadDetailView() {
       >
         <div className="space-y-4">
           <p className="text-sm text-[var(--theme-text-muted)]">
-            Your unsaved title, format, notes, creator, or issue changes will be discarded.
+            Your unsaved title, notes, creator, or issue changes will be discarded.
           </p>
           <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
             <button

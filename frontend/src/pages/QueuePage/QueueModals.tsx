@@ -335,7 +335,6 @@ export function QueueModals({
   const editFormIsDirty =
     editingThread != null &&
     (editForm.title !== editingThread.title ||
-      editForm.format !== editingThread.format ||
       editForm.notes !== (editingThread.notes ?? '') ||
       editForm.issuesRemaining !== editingThread.issues_remaining ||
       JSON.stringify(editForm.manualCreatorCredits) !== JSON.stringify(initialCredits))
