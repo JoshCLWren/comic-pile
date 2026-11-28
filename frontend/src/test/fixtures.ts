@@ -234,7 +234,7 @@ async function createThreadsForUser(
     const maxIssueAttempts = 7;
 
     while (!success && issueAttempts < maxIssueAttempts) {
-      const issueResponse = await request.post(`/api/v1/threads/${threadId}/issues`, {
+      const issueResponse = await request.post(`/api/v2/threads/${threadId}/issues`, {
         headers,
         data: {
           issue_range: '1-10',
