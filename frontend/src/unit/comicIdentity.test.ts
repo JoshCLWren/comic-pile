@@ -239,8 +239,8 @@ describe('getStateLabel', () => {
 
 describe('getStateColorClass', () => {
   it('returns correct color classes', () => {
-    expect(getStateColorClass('read')).toBe('text-emerald-400')
-    expect(getStateColorClass('unread')).toBe('text-amber-400')
-    expect(getStateColorClass('missing')).toBe('text-rose-400')
+    expect(getStateColorClass('read')).toBe('text-[var(--theme-success)]')
+    expect(getStateColorClass('unread')).toBe('text-[var(--theme-comic-accent)]')
+    expect(getStateColorClass('missing')).toBe('text-[var(--theme-error)]')
   })
 })

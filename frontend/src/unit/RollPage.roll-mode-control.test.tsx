@@ -84,7 +84,7 @@ describe('roll-mode control group (issue #2304): visual state grammar', () => {
 
     const dieControl = screen.getByRole('button', { name: /^current die d4$/i })
     expect(dieControl.className).toContain(ACTIVE_FILL)
-    expect(dieControl.className).toContain('text-stone-900')
+    expect(dieControl.className).toContain('text-[var(--theme-primary-action-text)]')
 
     const pickManually = screen.getByRole('button', { name: /pick manually/i })
     expect(pickManually.className).not.toContain(ACTIVE_FILL)

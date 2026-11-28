@@ -146,7 +146,7 @@ it('renders tooltip for offset indicator when snoozed threads exist', async () =
    expect(offsetIndicator).toHaveClass('cursor-help')
    expect(offsetIndicator).toHaveClass('border-b')
    expect(offsetIndicator).toHaveClass('border-dashed')
-   expect(offsetIndicator).toHaveClass('border-stone-600')
+   expect(offsetIndicator).toHaveClass('border-[var(--theme-border)]')
 })
 
   it('renders tooltips for snoozed offset active text', async () => {
@@ -163,14 +163,14 @@ it('renders tooltip for offset indicator when snoozed threads exist', async () =
     expect(snoozedIndicator).toHaveClass('cursor-help')
     expect(snoozedIndicator).toHaveClass('border-b')
     expect(snoozedIndicator).toHaveClass('border-dashed')
-    expect(snoozedIndicator).toHaveClass('border-stone-600')
+    expect(snoozedIndicator).toHaveClass('border-[var(--theme-border)]')
 
     const offsetActiveText = screen.getByText('offset active')
     expect(offsetActiveText).toBeInTheDocument()
     expect(offsetActiveText).toHaveClass('cursor-help')
     expect(offsetActiveText).toHaveClass('border-b')
     expect(offsetActiveText).toHaveClass('border-dashed')
-    expect(offsetActiveText).toHaveClass('border-stone-600')
+    expect(offsetActiveText).toHaveClass('border-[var(--theme-border)]')
   })
 
 it('renders tooltip for die indicator', async () => {
@@ -190,7 +190,7 @@ it('renders tooltip for die indicator', async () => {
  expect(dieText).toHaveClass('cursor-help')
  expect(dieText).toHaveClass('border-b')
  expect(dieText).toHaveClass('border-dashed')
- expect(dieText).toHaveClass('border-stone-600')
+ expect(dieText).toHaveClass('border-[var(--theme-border)]')
 })
 
 it('does not render snoozed indicators when no snoozed threads', async () => {

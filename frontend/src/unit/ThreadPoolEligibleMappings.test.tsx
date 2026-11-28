@@ -70,8 +70,8 @@ describe('ThreadPool eligible mappings', () => {
     const issueText = dieFace.querySelector('p:nth-of-type(2)')
     expect(titleText?.textContent).toBe('Amazing Adventures')
     expect(issueText?.textContent).toBe('#12')
-    expect(titleText).toHaveClass('font-bold', 'text-sm', 'text-stone-200')
-    expect(issueText).toHaveClass('text-xs', 'text-stone-400')
+    expect(titleText).toHaveClass('font-bold', 'text-sm', 'text-[var(--theme-text-primary)]')
+    expect(issueText).toHaveClass('text-xs', 'text-[var(--theme-text-muted)]')
     expect(issueText).not.toHaveClass('font-bold', 'text-sm')
     expect(
       titleText && issueText

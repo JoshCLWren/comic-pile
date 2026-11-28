@@ -927,8 +927,8 @@ describe('ComicIdentity', () => {
       expect(loadingAspect).toBeCloseTo(2 / 3)
       expect(loadingCover.getAttribute('data-cover-height-cap-vh')).toBe('45')
       expect(loadingCover.className).toContain('animate-pulse')
-      expect(loadingCover.className).toContain('bg-white')
-      expect(loadingCover.className).not.toContain('bg-stone')
+      expect(loadingCover.className).toContain('bg-[var(--theme-bg-hover)]')
+      expect(loadingCover.className).not.toMatch(/bg-(?:white|stone)/)
 
       await act(async () => {
         resolveRequest?.({
@@ -953,8 +953,8 @@ describe('ComicIdentity', () => {
       const loadedAspect = Number(loadedCover.getAttribute('data-cover-aspect-ratio'))
       expect(loadedAspect).toBeCloseTo(2 / 3)
       expect(loadedCover.getAttribute('data-cover-height-cap-vh')).toBe('45')
-      expect(loadedCover.className).toContain('bg-white')
-      expect(loadedCover.className).not.toContain('bg-stone')
+      expect(loadedCover.className).toContain('bg-[var(--theme-bg-hover)]')
+      expect(loadedCover.className).not.toMatch(/bg-(?:white|stone)/)
       expect(loadedCover.className).not.toContain('max-h-')
       expect(loadedCover.querySelector('img')).not.toBeNull()
     })

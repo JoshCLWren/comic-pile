@@ -352,7 +352,7 @@ describe('ComicVineSearchDialog issue #1695 fixes', () => {
     expect(metadataElements.length).toBeGreaterThan(0)
     metadataElements.forEach((el) => {
       expect(el.className).toMatch(/text-sm/)
-      expect(el.className).toMatch(/text-stone-300/)
+      expect(el.className).toContain('text-[var(--theme-text-primary)]')
     })
   })
 

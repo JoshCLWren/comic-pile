@@ -450,7 +450,7 @@ describe('QueueThreadCard', () => {
       crossoverGroupsError: true,
     })
 
-    expect(screen.getByText('Crossovers unavailable')).toHaveClass('text-red-300/80')
+    expect(screen.getByText('Crossovers unavailable')).toHaveClass('text-[var(--theme-error)]/80')
   })
 
   it('keeps manual Read & Rate enabled when the thread is blocked', () => {
@@ -465,11 +465,11 @@ describe('QueueThreadCard', () => {
     renderCard(createMockThread(), { isDragOver: true })
 
     const card = screen.getByTestId('queue-thread-item')
-    expect(card.className).toMatch(/hover:bg-white\/\[0\.04\]/)
-    expect(card.className).not.toMatch(/bg-amber-500\/10/)
+    expect(card.className).toContain('hover:bg-[var(--theme-bg-hover)]')
+    expect(card.className).not.toContain('bg-[var(--theme-comic-accent)]/10')
 
     const tint = screen.getByTestId('queue-thread-drag-over')
-    expect(tint).toHaveClass('bg-amber-500/10')
+    expect(tint).toHaveClass('bg-[var(--theme-comic-accent)]/10')
     expect(tint).toHaveClass('pointer-events-none', 'absolute', 'inset-0')
   })
 
@@ -486,7 +486,7 @@ describe('QueueThreadCard', () => {
       blockingDependencies: [],
     })
 
-    expect(screen.getByTestId('queue-thread-drag-over')).toHaveClass('bg-amber-500/10')
+    expect(screen.getByTestId('queue-thread-drag-over')).toHaveClass('bg-[var(--theme-comic-accent)]/10')
     expect(screen.getByLabelText('Blocked series')).toHaveClass('text-[var(--theme-continuity-accent)]')
     expect(screen.getByTestId('queue-thread-blocked-detail').className).toMatch(/theme-continuity-accent/)
   })

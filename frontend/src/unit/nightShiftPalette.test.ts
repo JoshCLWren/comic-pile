@@ -278,4 +278,46 @@ describe('Night Shift boot and storage contract (#5980)', () => {
     expect(shell).not.toContain('#d4a35f')
     expect(shell).not.toMatch(/data-theme|localStorage/)
   })
+
+  it('keeps every runtime surface off retired Tailwind palettes and raw theme literals', () => {
+    const files: string[] = []
+    const visit = (directory: string): void => {
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const path = resolve(directory, entry.name)
+        if (entry.isDirectory()) {
+          if (entry.name !== 'generated' && entry.name !== 'types') visit(path)
+          continue
+        }
+        if (/\.(?:ts|tsx|css)$/.test(entry.name) && !/\.(?:test|spec)\.(?:ts|tsx)$/.test(entry.name)) {
+          files.push(path)
+        }
+      }
+    }
+    visit(sourceRoot)
+
+    const retiredUtility = /(?:bg|text|border|ring|from|to|via|placeholder|divide|outline|shadow|accent|caret|fill|stroke|ring-offset)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d+/
+    const retiredWhiteUtility = /(?:bg|text|border|ring|from|to|via)-(?:white)(?:\/|\[)/
+    const retiredLiterals = [
+      '#1a1410', '#d4890e', '#110e0a', '#2b2118', '#d4a35f', '#e8d5b0', '#a0937e', '#c0392b',
+      'rgba(6,182,212', 'rgba(6, 182, 212', 'rgba(168,85,247', 'rgba(168, 85, 247',
+      'rgba(212,137,14', 'rgba(212, 137, 14', 'rgba(165,243,252', 'rgba(165, 243, 252',
+      'rgb(165, 243, 252)', 'rgb(250, 204, 139)', 'rgba(250, 204, 139', 'rgba(255,255,255',
+      'rgba(255, 255, 255',
+    ]
+    for (const path of files) {
+      const source = readFileSync(path, 'utf8')
+      expect(source, `${path} still uses a retired Tailwind palette`).not.toMatch(retiredUtility)
+      expect(source, `${path} still uses a raw white palette utility`).not.toMatch(retiredWhiteUtility)
+      for (const literal of retiredLiterals) {
+        expect(source.toLowerCase(), `${path} still uses legacy literal ${literal}`).not.toContain(literal)
+      }
+    }
+  })
+
+  it('uses the approved Night Shift dice colors', () => {
+    const config = readFrontendFile('src/components/diceRenderConfig.ts')
+    expect(config).toContain(`textColor: '${resolveToken(tokens, '--theme-primary-action-text')}'`)
+    expect(config).toContain(`borderColor: '${resolveToken(tokens, '--die-dark')}'`)
+    expect(config).toContain(`backgroundColor: '${resolveToken(tokens, '--die-light')}'`)
+  })
 })
