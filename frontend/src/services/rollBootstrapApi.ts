@@ -52,19 +52,29 @@ export function createRollBootstrapApi(client: HttpClient) {
         return [{
           id: card.thread_id ?? eligible.thread_ids[index] ?? 0,
           title: card.thread_title,
-          format: '',
+          format: card.thread_format ?? '',
           issue_id: card.issue_id,
           issue_number: card.display_issue_number ?? card.issue_number,
-          tags: [],
-          route_labels: [],
-          overflow_routes_count: 0,
+          tags: card.tags ?? [],
+          route_labels: card.route_labels?.slice(0, 3) ?? [],
+          overflow_routes_count: card.overflow_routes_count ?? 0,
         }]
       })
 
       // Recovery reads the signed-in reader's browser partition, matching the
-      // hook that wrote the selection. A blocked pending issue is the only case
-      // that needs an extra scoped request.
-      const pending = readPendingSelection(userId)
+      // hook that wrote the selection. The eligible resource intentionally
+      // excludes an outstanding server offer, so fetch the exact pending card
+      // separately when it is not already a visible face. Its committed read
+      // state is also the authoritative oracle for an ambiguous rating.
+      const storedPending = readPendingSelection(userId)
+      let pendingCard = storedPending != null ? cardByIssue.get(storedPending.issue_id) : undefined
+      if (storedPending != null && pendingCard === undefined) {
+        pendingCard = (await nativeV2.issueCards({
+          body: { issue_ids: [storedPending.issue_id] },
+        })).items[0]
+        if (pendingCard) cardByIssue.set(pendingCard.issue_id, pendingCard)
+      }
+      const pending = storedPending != null && pendingCard?.status !== 'read' ? storedPending : null
       const blockedIssueId = pending != null && !issueIds.includes(pending.issue_id)
         ? pending.issue_id
         : null
@@ -100,7 +110,7 @@ export function createRollBootstrapApi(client: HttpClient) {
             dependencies,
             prerequisiteCards,
             graph,
-            originalTitle: rollPool.find((thread) => thread.issue_id === pending.issue_id)?.title ?? null,
+            originalTitle: cardByIssue.get(pending.issue_id)?.thread_title ?? null,
           })
         : null
 
