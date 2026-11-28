@@ -35,10 +35,9 @@ export const rollPrimaryActionClass = [
  * phone widths instead of squeezing three labels into one line, and the label
  * keeps the same `px-4` inline padding at every width.
  *
- * The label uses `--theme-text-primary` rather than `--theme-text-muted` on
- * purpose. In Night Shift, muted text is a cool blue-gray that would read as a
- * secondary accent beside the cyan action palette; hierarchy here comes from
- * the surface treatment, not from dimming the label into a different hue.
+ * The label uses the high-contrast primary-action foreground rather than muted
+ * text. Night Shift's muted blue-gray would read as a secondary accent beside
+ * the cyan action palette; hierarchy here comes from the surface treatment.
  */
 export const rollSecondaryActionClass = [
   'min-h-11 min-w-28 flex-1 rounded-xl border border-[var(--theme-border)]',
