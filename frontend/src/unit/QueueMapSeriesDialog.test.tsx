@@ -756,6 +756,24 @@ describe('QueueMapSeriesDialog', () => {
     expect(invalidateQueueSpy).not.toHaveBeenCalled()
   })
 
+  it('distinguishes a refused commit from a committed mapping whose follow-up hydration failed', async () => {
+    // #5170: the server persisted the mapping and returned success; only the
+    // post-commit cache/hydration refresh failed. That must not be reported as
+    // "Nothing was changed" — the mapping is confirmed and stays confirmed on
+    // reload. A genuinely refused commit (asserted by the neighbouring test)
+    // is the opposite case and does call onMapped.
+    const user = userEvent.setup()
+    clearIntelligenceManySpy.mockRejectedValueOnce(new Error('hydration refresh failed'))
+    const { onMapped } = renderDialog()
+
+    await user.click(await screen.findByTestId('queue-map-series-result'))
+    await user.click(await screen.findByTestId('queue-map-series-approve'))
+
+    expect(await screen.findByRole('status')).toHaveTextContent('1 issue mapped to Saga')
+    expect(onMapped).toHaveBeenCalledWith([2])
+    expect(screen.queryByText('Could not map the series. Nothing was changed.')).not.toBeInTheDocument()
+  })
+
   it('retries a lost commit response and accepts the replayed success', async () => {
     // Issue #3776 / Greptile #4126: a lost response may hide an already-committed
     // mapping. The idempotency key makes a replay safe, so the reader should not
