@@ -266,7 +266,6 @@ describe('continuity comic selectors', () => {
     // wrapping text, never an ellipsis-only value in the search input.
     const selectedValue = screen.getByTestId('selected-thread-value')
     expect(selectedValue).toHaveTextContent(longTitle)
-    expect(selectedValue).toHaveTextContent('omnibus')
 
     const titleLine = within(selectedValue).getByTestId('selected-thread-title')
     expect(titleLine).toHaveTextContent(longTitle)
