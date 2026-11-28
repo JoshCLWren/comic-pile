@@ -63,9 +63,14 @@ export function MobileGallery({
   }, [])
 
   // Decorative rotation while a roll is in flight. No mutation is issued here;
-  // the authoritative winner is supplied by the committed roll response.
+  // the authoritative winner is supplied by the committed roll response. Reduced
+  // motion skips the decorative rotation; the winning face still centers.
   useEffect(() => {
-    if (!isRolling || pool.length < 2) return
+    const reducedMotion =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reducedMotion || !isRolling || pool.length < 2) return
     const interval = window.setInterval(() => {
       setActive((current) => wrapCarouselIndex(current + 1, pool.length))
     }, 110)
