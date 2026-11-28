@@ -982,6 +982,7 @@ pub async fn sync_cbl_lists<C: GenericClient>(
     };
 
     let mut pending = Vec::new();
+    let mut reactivated = Vec::new();
     let mut inserted = 0;
     let mut updated = 0;
     let mut unchanged = 0;
@@ -989,6 +990,10 @@ pub async fn sync_cbl_lists<C: GenericClient>(
         match existing_lists.get(parsed.source_path.as_str()) {
             Some(existing) if existing.active && existing.content_hash == parsed.content_hash => {
                 unchanged += 1;
+            }
+            Some(existing) if existing.content_hash == parsed.content_hash => {
+                updated += 1;
+                reactivated.push(parsed);
             }
             Some(_) => {
                 updated += 1;
@@ -1023,7 +1028,11 @@ pub async fn sync_cbl_lists<C: GenericClient>(
             } else {
                 0
             },
-            identities_upserted: 0,
+            identities_upserted: if dry_run {
+                count_missing_identities(client, &pending).await?
+            } else {
+                0
+            },
             dry_run,
             changed,
             repository_reconciled: dry_run && repository_reconciled,
@@ -1032,7 +1041,14 @@ pub async fn sync_cbl_lists<C: GenericClient>(
 
     let source_id = upsert_source(client, source_id, &repository, &revision_sha, synced_at).await?;
     let list_ids = upsert_lists(client, source_id, &pending, &revision_sha, synced_at).await?;
-    let changed_ids: Vec<i32> = list_ids.values().copied().collect();
+    upsert_lists(client, source_id, &reactivated, &revision_sha, synced_at).await?;
+    let changed_ids: Vec<i32> = pending
+        .iter()
+        .filter_map(|list| list_ids.get(list.source_path.as_str()).copied())
+        .collect();
+    if changed_ids.len() != pending.len() {
+        return Err(IngestError::new("upserted CBL list has no id"));
+    }
     delete_entries(client, &changed_ids).await?;
     let identities_upserted = upsert_identities(client, &pending, synced_at).await?;
     let identity_ids = resolve_identity_ids(client, &pending).await?;
