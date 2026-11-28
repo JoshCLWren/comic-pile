@@ -201,6 +201,60 @@ pub(crate) fn blocked_order_expr(bool_param: &str, ids_param: &str) -> String {
     )
 }
 
+/// Total display order for one threads collection sort.
+///
+/// Every branch ends in the unique `threads.id` primary key so a cursor page
+/// can never split ties: equal queue positions, titles or timestamps still
+/// resolve to one stable sequence across repeated read-only fetches (#3604).
+fn order_expression(sort: &str, blocked: &str) -> String {
+    match sort {
+        "title" => "t.title, t.id".to_string(),
+        "created" => "t.created_at DESC, t.id DESC".to_string(),
+        _ => format!("({blocked}), t.queue_position, t.id"),
+    }
+}
+
+/// Queue-membership predicate shared by the list rows, their displayed
+/// positions and the authoritative totals.
+///
+/// The Queue collection only contains active rows that actually hold a queue
+/// slot (`queue_position >= 1`). Completed/excluded collections keep their
+/// existing membership: their rows are deliberately written with position 0
+/// and their totals are replaced with `WHERE FALSE` below.
+fn queue_membership_clause(status: &str) -> &'static str {
+    if status == "active" {
+        "AND t.queue_position >= 1"
+    } else {
+        ""
+    }
+}
+
+/// Assemble the page statement from its validated fragments.
+///
+/// Kept pure so the membership/ordering contract can be regression-tested
+/// without a database connection. `#3604` requires the rendered rows, the
+/// display ranks and both totals to derive from the same queue predicate.
+fn build_threads_sql(status: &str, order: &str, cursor_sql: &str, blocked: &str) -> String {
+    THREADS_SQL_PREFIX
+        .replace("t.status = 'active'", &format!("t.status = '{status}'"))
+        .replace(
+            &format!("WHERE t.status = '{status}' AND t.queue_position >= 1"),
+            if status == "active" {
+                "WHERE t.status = 'active' AND t.queue_position >= 1"
+            } else {
+                "WHERE FALSE"
+            },
+        )
+        .replace("{order}", order)
+        .replace("{cursor}", cursor_sql)
+        .replace("{blocked}", blocked)
+        .replace("{queue_membership}", queue_membership_clause(status))
+        .replace("{activity_timestamp}", &iso_timestamp("p.last_activity_at"))
+        .replace("{created_timestamp}", &iso_timestamp("p.created_at"))
+        .replace("{tag_created_timestamp}", &iso_timestamp("tg.created_at"))
+        .replace("{tag_updated_timestamp}", &iso_timestamp("tg.updated_at"))
+}
+
 /// Canonical 1-based display position for one thread as an SQL scalar expression.
 ///
 /// This is the same dense `row_number()` ranking the Queue list uses over the
@@ -220,6 +274,7 @@ pub(crate) fn display_position_expr(
                     row_number() OVER (ORDER BY {blocked}, t.queue_position, t.id)::int AS display_position
              FROM threads t
              WHERE t.user_id = {user_expr} AND t.status = 'active'
+               AND t.queue_position >= 1
          ) ranked WHERE ranked.id = {thread_expr})"
     )
 }
@@ -1179,6 +1234,7 @@ ranked AS (
     FROM threads t
     JOIN me ON t.user_id = me.user_id
     WHERE t.status = 'active'
+      {queue_membership}
 ),
 page AS (
     SELECT t.id, t.next_unread_issue_id, t.title, t.format, t.queue_position, t.status,
@@ -1197,6 +1253,7 @@ page AS (
     WHERE t.status = 'active'
       AND ($4 = '' OR t.title ILIKE '%' || $4 || '%')
       {cursor}
+      {queue_membership}
     ORDER BY page_ord
     LIMIT $5
 ),
@@ -1389,29 +1446,9 @@ async fn query_page(
     // Reference both mode parameters unconditionally so the statement keeps a
     // stable bind count whether the Option E preview is active or not.
     let blocked = blocked_order_expr("$7", "$8");
-    let order = match sort {
-        "title" => "t.title, t.id".to_string(),
-        "created" => "t.created_at DESC, t.id DESC".to_string(),
-        _ => format!("({blocked}), t.queue_position, t.id"),
-    };
+    let order = order_expression(sort, &blocked);
     let (cursor_sql, cursor_bindings) = cursor_clause(sort, cursor);
-    let sql = THREADS_SQL_PREFIX
-        .replace("t.status = 'active'", &format!("t.status = '{status}'"))
-        .replace(
-            &format!("WHERE t.status = '{status}' AND t.queue_position >= 1"),
-            if status == "completed" {
-                "WHERE FALSE"
-            } else {
-                "WHERE t.status = 'active' AND t.queue_position >= 1"
-            },
-        )
-        .replace("{order}", &order)
-        .replace("{cursor}", &cursor_sql)
-        .replace("{blocked}", &blocked)
-        .replace("{activity_timestamp}", &iso_timestamp("p.last_activity_at"))
-        .replace("{created_timestamp}", &iso_timestamp("p.created_at"))
-        .replace("{tag_created_timestamp}", &iso_timestamp("tg.created_at"))
-        .replace("{tag_updated_timestamp}", &iso_timestamp("tg.updated_at"));
+    let sql = build_threads_sql(status, &order, &cursor_sql, &blocked);
 
     let expected_epoch = claims.expected_epoch()?;
     let candidates: Vec<i32> = projection
@@ -1856,6 +1893,152 @@ mod tests {
             generated.trim_end(),
             "Regenerate native/contracts/threads-v2.openapi.json with \
              cargo run --example threads_openapi"
+        );
+    }
+
+    /// Slice one named CTE body out of the assembled statement.
+    fn cte_body<'a>(sql: &'a str, name: &str) -> &'a str {
+        let after = sql
+            .split_once(&format!("{name} AS ("))
+            .unwrap_or_else(|| panic!("missing {name} CTE"))
+            .1;
+        after.split("\n),").next().expect("CTE terminator")
+    }
+
+    #[test]
+    fn active_queue_rows_ranks_and_totals_share_one_membership_predicate() {
+        let blocked = blocked_order_expr("$7", "$8");
+        let order = order_expression("position", &blocked);
+        let sql = build_threads_sql("active", &order, "", &blocked);
+
+        let ranked = cte_body(&sql, "ranked");
+        let page = cte_body(&sql, "page");
+        assert!(
+            ranked.contains("AND t.queue_position >= 1"),
+            "ranked rows must be queue members: {ranked}"
+        );
+        assert!(
+            page.contains("AND t.queue_position >= 1"),
+            "rendered rows must be queue members: {page}"
+        );
+        assert!(
+            sql.contains("WHERE t.status = 'active' AND t.queue_position >= 1"),
+            "totals must count exactly the rows the list renders"
+        );
+        for placeholder in [
+            "{queue_membership}",
+            "{order}",
+            "{cursor}",
+            "{blocked}",
+            "{activity_timestamp}",
+            "{created_timestamp}",
+            "{tag_created_timestamp}",
+            "{tag_updated_timestamp}",
+        ] {
+            assert!(
+                !sql.contains(placeholder),
+                "unexpanded SQL placeholder {placeholder}"
+            );
+        }
+    }
+
+    #[test]
+    fn non_queue_collections_keep_their_own_membership() {
+        let blocked = blocked_order_expr("$7", "$8");
+        let order = order_expression("created", &blocked);
+        for status in ["completed", "excluded"] {
+            let sql = build_threads_sql(status, &order, "", &blocked);
+            let ranked = cte_body(&sql, "ranked");
+            let page = cte_body(&sql, "page");
+            assert!(
+                !ranked.contains("t.queue_position >= 1"),
+                "{status} rows are not queue members: {ranked}"
+            );
+            assert!(
+                !page.contains("t.queue_position >= 1"),
+                "{status} rows are not queue members: {page}"
+            );
+            assert!(
+                sql.contains("WHERE FALSE"),
+                "{status} totals must stay retired, not count queue slots"
+            );
+        }
+    }
+
+    #[test]
+    fn every_thread_sort_ends_in_a_unique_id_tie_breaker() {
+        let blocked = blocked_order_expr("$7", "$8");
+        assert_eq!(
+            order_expression("position", &blocked),
+            format!("({blocked}), t.queue_position, t.id")
+        );
+        assert_eq!(order_expression("title", &blocked), "t.title, t.id");
+        assert_eq!(
+            order_expression("created", &blocked),
+            "t.created_at DESC, t.id DESC"
+        );
+        for sort in ["position", "title", "created"] {
+            let order = order_expression(sort, &blocked);
+            assert!(
+                order.contains("t.id"),
+                "{sort} order must break ties by the unique thread id: {order}"
+            );
+        }
+    }
+
+    #[test]
+    fn cursor_predicates_follow_the_same_total_sort_keys() {
+        let (position_sql, _) = cursor_clause(
+            "position",
+            Some(&QueueCursor {
+                sort: "position".to_string(),
+                search: String::new(),
+                values: vec!["0".into(), "4".into(), "7".into()],
+                execution: "legacy".to_string(),
+            }),
+        );
+        assert!(
+            position_sql.contains("(t.queue_position, t.id) > ($11::int, $12::int)"),
+            "position cursor must continue after the full (position, id) key"
+        );
+        assert!(
+            position_sql.contains("{blocked}"),
+            "position cursor must respect blocked grouping"
+        );
+
+        let (title_sql, _) = cursor_clause(
+            "title",
+            Some(&QueueCursor {
+                sort: "title".to_string(),
+                search: String::new(),
+                values: vec!["Saga".into(), "7".into()],
+                execution: "legacy".to_string(),
+            }),
+        );
+        assert!(title_sql.contains("(t.title, t.id) > ($10::text, $11::int)"));
+
+        let (created_sql, _) = cursor_clause(
+            "created",
+            Some(&QueueCursor {
+                sort: "created".to_string(),
+                search: String::new(),
+                values: vec!["2026-01-01T00:00:00+00:00".into(), "7".into()],
+                execution: "legacy".to_string(),
+            }),
+        );
+        assert!(created_sql.contains("t.created_at = ($10::text)::timestamptz AND t.id < $11::int"));
+    }
+
+    #[test]
+    fn thread_page_position_uses_the_same_queue_membership() {
+        let expression = display_position_expr("1", "t.id", "$1", "$2");
+        assert!(
+            expression.contains("AND t.queue_position >= 1"),
+            "thread-page rank must match the Queue list's membership: {expression}"
+        );
+        assert!(
+            expression.contains("ORDER BY (CASE WHEN $1::boolean THEN NOT (t.id = ANY($2::int[])) ELSE t.is_blocked END), t.queue_position, t.id"),
+            "thread-page rank must use the Queue list's total order: {expression}"
         );
     }
 }
