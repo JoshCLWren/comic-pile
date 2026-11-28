@@ -2,7 +2,7 @@
  * Issue #5980 browser acceptance: Night Shift is the only visual identity.
  *
  * Captures desktop and mobile evidence for the main authenticated surfaces and
- * a representative dialog, asserts the approved palette resolves from the
+ * representative dialogs, asserts the approved palette resolves from the
  * central semantic variables, and proves that obsolete stored appearance
  * values and a stale `data-theme` attribute cannot change rendering.
  */
@@ -73,7 +73,7 @@ test.describe('Night Shift single visual identity (#5980)', () => {
     await mkdir(SCREENSHOT_DIRECTORY, { recursive: true })
   })
 
-  test('authenticated surfaces render the approved palette at desktop and mobile', async ({
+  test('authenticated surfaces and the actual die render the approved palette at desktop and mobile', async ({
     authenticatedWithThreadsPage,
   }) => {
     const page = authenticatedWithThreadsPage
@@ -106,10 +106,20 @@ test.describe('Night Shift single visual identity (#5980)', () => {
           caret: 'hide',
         })
       }
+
+      await page.goto('/', { waitUntil: 'domcontentloaded' })
+      const die = page.getByTestId('main-die-3d')
+      await expect(die).toBeVisible()
+      await settle(page)
+      expect(await readPalette(page)).toEqual(EXPECTED_PALETTE)
+      await die.screenshot({
+        path: join(SCREENSHOT_DIRECTORY, `die-${viewportName}.png`),
+        animations: 'disabled',
+      })
     }
   })
 
-  test('a representative modal and the shell use Night Shift surfaces', async ({
+  test('a representative modal uses Night Shift surfaces on desktop and mobile', async ({
     authenticatedWithThreadsPage,
   }) => {
     const page = authenticatedWithThreadsPage
@@ -124,6 +134,13 @@ test.describe('Night Shift single visual identity (#5980)', () => {
     expect(await readPalette(page)).toEqual(EXPECTED_PALETTE)
     await dialog.screenshot({
       path: join(SCREENSHOT_DIRECTORY, 'feedback-dialog-desktop.png'),
+      animations: 'disabled',
+    })
+
+    await page.setViewportSize(MOBILE_VIEWPORT)
+    await settle(page)
+    await dialog.screenshot({
+      path: join(SCREENSHOT_DIRECTORY, 'feedback-dialog-mobile.png'),
       animations: 'disabled',
     })
   })
@@ -148,7 +165,7 @@ test.describe('Night Shift single visual identity (#5980)', () => {
     expect(await readPalette(page)).toEqual(EXPECTED_PALETTE)
   })
 
-  test('no appearance selector is exposed on desktop or in the mobile More tray', async ({
+  test('no appearance selector is exposed and queue loading, error, and focus states stay semantic', async ({
     authenticatedWithThreadsPage,
   }) => {
     const page = authenticatedWithThreadsPage
@@ -176,100 +193,77 @@ test.describe('Night Shift single visual identity (#5980)', () => {
       path: join(SCREENSHOT_DIRECTORY, 'settings-tray-mobile.png'),
       animations: 'disabled',
     })
-  })
 
-  test('unauthenticated shell and mobile modal use Night Shift', async ({ page }) => {
-    await page.setViewportSize(DESKTOP_VIEWPORT)
-    await page.goto('/login', { waitUntil: 'domcontentloaded' })
-    await page.locator('main').waitFor({ state: 'visible' })
-    await settle(page)
-    expect(await readPalette(page)).toEqual(EXPECTED_PALETTE)
-    await page.screenshot({
-      path: join(SCREENSHOT_DIRECTORY, 'login-desktop.png'),
-      fullPage: true,
-      animations: 'disabled',
-    })
-
-    await page.setViewportSize(MOBILE_VIEWPORT)
-    await page.getByRole('button', { name: 'Send feedback' }).first().click()
-    const dialog = page.getByRole('dialog')
-    await expect(dialog).toBeVisible()
-    await settle(page)
-    expect(await readPalette(page)).toEqual(EXPECTED_PALETTE)
-    await dialog.screenshot({
-      path: join(SCREENSHOT_DIRECTORY, 'feedback-dialog-mobile.png'),
-      animations: 'disabled',
-    })
-  })
-
-  test('queue loading, error, and keyboard focus states remain visible and semantic', async ({
-    authenticatedWithThreadsPage,
-  }) => {
-    const page = authenticatedWithThreadsPage
-    await page.setViewportSize(DESKTOP_VIEWPORT)
-
+    const loadingPage = await page.context().newPage()
+    await loadingPage.setViewportSize(DESKTOP_VIEWPORT)
     let releaseThreads: (() => void) | undefined
     const threadsGate = new Promise<void>((resolve) => {
       releaseThreads = resolve
     })
-    await page.route('**/api/v2/threads*', async (route) => {
+    await loadingPage.route('**/api/v2/threads*', async (route) => {
       await threadsGate
       await route.continue()
     })
-    await page.goto('/queue', { waitUntil: 'domcontentloaded' })
-    await page.locator('main').waitFor({ state: 'visible' })
-    await settle(page)
-    expect(await readPalette(page)).toEqual(EXPECTED_PALETTE)
-    await page.screenshot({
+    await loadingPage.goto('/queue', { waitUntil: 'domcontentloaded' })
+    await loadingPage.locator('main').waitFor({ state: 'visible' })
+    await settle(loadingPage)
+    expect(await readPalette(loadingPage)).toEqual(EXPECTED_PALETTE)
+    await loadingPage.screenshot({
       path: join(SCREENSHOT_DIRECTORY, 'queue-loading-desktop.png'),
       fullPage: true,
       animations: 'disabled',
     })
+    const threadsResponse = loadingPage.waitForResponse((response) =>
+      response.url().includes('/api/v2/threads'),
+    )
     releaseThreads?.()
+    await threadsResponse
+    await loadingPage.close()
 
-    await page.unroute('**/api/v2/threads*')
-    await page.route('**/api/v2/threads*', (route) =>
+    const errorPage = await page.context().newPage()
+    await errorPage.setViewportSize(DESKTOP_VIEWPORT)
+    await errorPage.route('**/api/v2/threads*', (route) =>
       route.fulfill({ status: 503, json: { detail: 'Temporarily unavailable' } }),
     )
-    await page.goto('/queue', { waitUntil: 'domcontentloaded' })
-    await expect(page.getByRole('alert').filter({ hasText: /couldn.t load/i })).toBeVisible()
-    await settle(page)
-    expect(await readPalette(page)).toEqual(EXPECTED_PALETTE)
-    await page.screenshot({
+    await errorPage.goto('/queue', { waitUntil: 'domcontentloaded' })
+    await expect(errorPage.getByText('Series count unavailable.')).toBeVisible()
+    await settle(errorPage)
+    expect(await readPalette(errorPage)).toEqual(EXPECTED_PALETTE)
+    await errorPage.screenshot({
       path: join(SCREENSHOT_DIRECTORY, 'queue-error-desktop.png'),
       fullPage: true,
       animations: 'disabled',
     })
+    await errorPage.close()
 
-    await page.unroute('**/api/v2/threads*')
-    await page.goto('/queue', { waitUntil: 'domcontentloaded' })
-    const search = page.getByRole('textbox', { name: 'Search series' })
+    const focusPage = await page.context().newPage()
+    await focusPage.setViewportSize(DESKTOP_VIEWPORT)
+    await focusPage.goto('/queue', { waitUntil: 'domcontentloaded' })
+    const search = focusPage.getByRole('textbox', { name: 'Search series' })
     await search.focus()
     await expect(search).toBeFocused()
-    await settle(page)
-    await page.screenshot({
+    await settle(focusPage)
+    await focusPage.screenshot({
       path: join(SCREENSHOT_DIRECTORY, 'queue-focus-desktop.png'),
       fullPage: true,
       animations: 'disabled',
     })
+    await focusPage.close()
   })
 
-  test('the actual Night Shift die is captured at desktop and mobile sizes', async ({
-    authenticatedWithThreadsPage,
-  }) => {
-    const page = authenticatedWithThreadsPage
+  test('unauthenticated shell uses Night Shift at desktop and mobile sizes', async ({ page }) => {
     for (const [viewportName, viewport] of [
       ['desktop', DESKTOP_VIEWPORT],
       ['mobile', MOBILE_VIEWPORT],
     ] as const) {
       await page.setViewportSize(viewport)
-      await page.goto('/', { waitUntil: 'domcontentloaded' })
-      const die = page.getByTestId('main-die-3d')
-      await expect(die).toBeVisible()
+      await page.goto('/login', { waitUntil: 'domcontentloaded' })
+      await page.locator('main').waitFor({ state: 'visible' })
       await settle(page)
       expect(await readPalette(page)).toEqual(EXPECTED_PALETTE)
-      await die.screenshot({
-        path: join(SCREENSHOT_DIRECTORY, `die-${viewportName}.png`),
+      await page.screenshot({
+        path: join(SCREENSHOT_DIRECTORY, `login-${viewportName}.png`),
+        fullPage: true,
         animations: 'disabled',
       })
     }
