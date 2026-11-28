@@ -8,6 +8,7 @@ pub mod bug_reports;
 pub mod catalog_commit;
 pub mod catalog_series_mapping_preview;
 pub mod cbl_catalog;
+pub mod cbl_ingest;
 pub mod comicvine_issue;
 pub mod comicvine_limits;
 pub mod comicvine_matching;
@@ -119,7 +120,6 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-
 /// Runtime dependencies. Never log this state or its credentials.
 pub struct AppState {
     pub pool: Pool,

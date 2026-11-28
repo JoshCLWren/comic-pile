@@ -377,6 +377,7 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('option', { name: 'Saga (Comic)' }))
     await user.click(screen.getByRole('button', { name: 'Open issue card' }))
     expect(screen.getByTestId('direct-read-issue-panel')).toHaveTextContent('Saga')
+
     await user.click(screen.getByRole('button', { name: 'close modal' }))
     enterPendingRollRating()
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
@@ -518,6 +519,7 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('option', { name: 'Saga (Comic)' }))
     await user.click(screen.getByRole('button', { name: 'Open issue card' }))
     expect(screen.getByTestId('direct-read-issue-panel')).toBeInTheDocument()
+
   })
 
   it('handles normal roll failures and unresolved pending conflicts', async () => {
@@ -971,6 +973,7 @@ describe('RollPage parent handlers', () => {
     expect(screen.getByTestId('direct-read-issue-panel')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'skip migration' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'complete migration' })).not.toBeInTheDocument()
+
   })
 
   it('refreshes matching active metadata and reopens pending rolls', async () => {

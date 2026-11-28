@@ -222,6 +222,7 @@ def default_disposition(path: str) -> tuple[str, str, str, str]:
         "docs/CBL_COLLECTION_EXCLUSIONS.md",
         "docs/CBL_COMICVINE_LOOKUP.md",
         "docs/CBL_CREATE_CYCLE_FEEDBACK.md",
+        "docs/CBL_MIRROR_REFRESH.md",
         "docs/CBL_SERIES_NAMING.md",
         "docs/CBL_SOURCE_LABELS.md",
         "docs/CHATGPT_FACTORY_PROMPT.md",
