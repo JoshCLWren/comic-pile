@@ -1,9 +1,9 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
-const SRC_ROOT = fileURLToPath(new URL('../', import.meta.url))
+// Vitest runs from frontend/, so production sources are rooted under src/.
+const SRC_ROOT = join(process.cwd(), 'src')
 const BASELINE_PATH = join(SRC_ROOT, 'pagination/bespokePagers.baseline.json')
 
 interface PaginationBaseline {

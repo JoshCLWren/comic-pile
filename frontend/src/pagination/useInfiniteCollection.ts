@@ -45,6 +45,8 @@ export interface InfiniteCollectionSpec<TItem, TPage, TToken = PageToken> {
 export interface InfiniteCollectionState<TItem, TPage, TToken = PageToken> {
   /** All items across every loaded page, in server order. */
   items: TItem[]
+  /** The raw infinite cache entry, for consumers that expose page payloads. */
+  data: InfiniteData<TPage, TToken> | undefined
   /** The raw pages currently cached. */
   pages: TPage[]
   /** True while the first page is loading and no data is available yet. */
@@ -53,6 +55,10 @@ export interface InfiniteCollectionState<TItem, TPage, TToken = PageToken> {
   isNextPageLoading: boolean
   /** True while any fetch is in flight (initial, refetch, or next page). */
   isLoading: boolean
+  /** Alias for `isLoading` used by callers that render a fetching affordance. */
+  isFetching: boolean
+  /** Consecutive failure count, used by callers that latch a first-load error. */
+  failureCount: number
   /**
    * True when the rendered pages are placeholder data kept from the previous
    * query key by `keepPreviousData` while the new key's first page loads.
@@ -156,10 +162,13 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
 
   return {
     items,
+    data: query.data,
     pages,
     isInitialLoading,
     isNextPageLoading,
     isLoading: query.isFetching,
+    isFetching: query.isFetching,
+    failureCount: query.failureCount,
     isPlaceholderData: query.isPlaceholderData,
     isPending: isInitialLoading || isNextPageLoading,
     hasNextPage,
