@@ -389,6 +389,10 @@ jobs:
       # factory-only fast path, so the assertions run for every pull request.
       - name: Contributor fork CI boundary guards
         run: uv run --frozen python -m pytest -q --no-cov tests/test_contributor_ci.py
+      # Release recovery keeps release notes fresh without blocking merges
+      # (issue #5693). These regression tests must run in CI, not only locally.
+      - name: Release recovery regression tests
+        run: uv run --frozen python -m pytest -q --no-cov tests/test_release_recovery.py tests/test_release_writer_queue.py
 
   factory-shellcheck:
     name: Factory Shell Scripts (shellcheck)
