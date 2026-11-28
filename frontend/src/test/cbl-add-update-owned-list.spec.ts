@@ -473,7 +473,7 @@ test.describe('CBL add/update into an owned Reading List', () => {
     const graphDialog = page.getByTestId('reading-graph-overlap-dialog')
     await expect(graphDialog).toBeVisible()
     await graphDialog.getByRole('radio', { name: /Continue Ultimate Spider-Man/ }).click()
-    await graphDialog.getByRole('button', { name: 'Apply decision' }).click()
+    await graphDialog.getByRole('button', { name: 'Use these choices' }).click()
     await page.getByRole('button', { name: 'Add reading order' }).click()
     await expect(page).toHaveURL(/\/reading-lists\/900$/)
     expect(commits).toHaveLength(1)
@@ -489,13 +489,13 @@ test.describe('CBL add/update into an owned Reading List', () => {
     await expect(page.getByTestId('cbl-owned-list')).toContainText(
       'Previously added. Linked to Reading List #900',
     )
-    await page.getByRole('button', { name: 'Add this reading order' }).click()
+    await page.getByRole('button', { name: 'Review series decisions' }).click()
     const restoredDialog = page.getByTestId('reading-graph-overlap-dialog')
     await expect(restoredDialog).toBeVisible()
     await expect(
       restoredDialog.getByRole('radio', { name: /Continue Ultimate Spider-Man/ }),
     ).toHaveAttribute('aria-checked', 'true')
-    await restoredDialog.getByRole('button', { name: 'Close' }).click()
+    await restoredDialog.getByRole('button', { name: 'Cancel' }).click()
 
     // A changed source fingerprint must explain why the preview is stale.
     staleDetail = true
