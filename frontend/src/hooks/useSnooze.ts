@@ -59,7 +59,7 @@ export function useSnooze(deps: RollMutationDeps = {}) {
     const request = (async (): Promise<RefreshOutcome> => {
       for (let attempt = 1; attempt <= SNOOZE_REFRESH_ATTEMPTS; attempt += 1) {
         try {
-          await fetchAndPublishRollBootstrap(rollBootstrap)
+          await fetchAndPublishRollBootstrap(rollBootstrap, userId)
           setRefreshError(null)
           return { refreshed: true, error: null }
         } catch (error: unknown) {
@@ -78,7 +78,7 @@ export function useSnooze(deps: RollMutationDeps = {}) {
     } finally {
       refreshRequest.current = null
     }
-  }, [rollBootstrap])
+  }, [rollBootstrap, userId])
 
   const retryRefresh = useCallback(async (): Promise<boolean> => {
     setIsPending(true)
@@ -118,6 +118,7 @@ export function useSnooze(deps: RollMutationDeps = {}) {
               () => protectedRollApi.snooze(),
               undefined,
               protectedRollApi,
+              userId,
             )
             if (recovery.status === 'retried') {
               await invalidateSessionCache(queryClient)
@@ -138,6 +139,7 @@ export function useSnooze(deps: RollMutationDeps = {}) {
             const { committed } = await reconcileAmbiguousRollMutation(
               expectedPendingThreadId,
               rollBootstrap,
+              userId,
             )
             if (committed) {
               // The reconciliation already fetched and published authoritative
