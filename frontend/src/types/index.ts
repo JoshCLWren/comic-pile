@@ -302,30 +302,6 @@ export type ReadingBandwidth = 'light' | 'balanced' | 'deep'
 export type ReadingIntent = 'balanced' | 'momentum' | 'familiar' | 'explore' | 'random'
 export type ReadingModeSource = 'quiz' | 'manual'
 
-export type BandwidthSource = 'manual' | 'inferred' | 'snooze' | 'quiz' | null
-export type IntentSource = 'manual' | 'inferred' | 'snooze' | 'quiz' | null
-
-export type SessionModeCorrectionGuidance = Record<string, string>
-
-/**
- * Canonical session reading-mode snapshot carried by the Roll bootstrap. All
- * fields are null when the session is in the legacy default state. Roll and
- * API-client consumers must stay on this single shape.
- */
-export interface SessionMode {
-  active_bandwidth: ReadingBandwidth | string | null
-  predicted_bandwidth: ReadingBandwidth | string | null
-  bandwidth_confidence: number | null
-  bandwidth_source: BandwidthSource
-  bandwidth_version: string | null
-  active_intent: ReadingIntent | string | null
-  predicted_intent: ReadingIntent | string | null
-  intent_confidence: number | null
-  intent_source: IntentSource
-  intent_version: string | null
-  session_mode_correction_guidance: SessionModeCorrectionGuidance | null
-}
-
 export interface ReadingModeState {
   bandwidth: ReadingBandwidth | null
   intent: ReadingIntent | null
