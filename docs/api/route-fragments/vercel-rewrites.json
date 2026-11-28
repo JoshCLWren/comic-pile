@@ -2,12 +2,12 @@
   "generated_by": "scripts/generate_route_burndown.mjs",
   "source_fragments": [
     "activity",
-    "auth",
     "bug-reports",
     "catalog",
     "comicvine",
     "completed-threads",
     "continuity-plans",
+    "continuity-rules",
     "creators",
     "custom-cbl",
     "demo",
