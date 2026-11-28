@@ -75,10 +75,12 @@ async function registerRealUser(page: Page, request: APIRequestContext): Promise
     data: { username: user.username, password: user.password },
   })
   expect(loggedIn.ok(), `login failed: ${loggedIn.status()}`).toBeTruthy()
+  // SAFETY: this test reads only the access_token field of the asserted login response.
   const body = (await loggedIn.json()) as { access_token?: string }
   expect(body.access_token, 'login response must carry an access token').toBeTruthy()
   await page.addInitScript((accessToken: string) => {
     localStorage.setItem('auth_token', accessToken)
+    // SAFETY: this test sets and reads this exact global token slot on the injected page.
     const clientWindow = window as Window & { __COMIC_PILE_ACCESS_TOKEN?: string }
     clientWindow.__COMIC_PILE_ACCESS_TOKEN = accessToken
   }, body.access_token!)

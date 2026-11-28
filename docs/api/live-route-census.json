@@ -24,7 +24,7 @@
     "v1_with_owner": 57,
     "v1_needing_owner": 0,
     "unknown_ingress": 0,
-    "first_party_call_sites": 918,
+    "first_party_call_sites": 923,
     "stale_aip_baseline_entries": 4
   },
   "routes": [
@@ -1361,12 +1361,13 @@
       "consumers": [
         "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
         "frontend/src/test/issue-3429-bootstrap-recovery.spec.ts",
+        "frontend/src/test/issue-3575-history-filters.spec.ts",
         "frontend/src/test/ui-audit/stabilize.ts",
         "frontend/src/unit/api-activity.test.ts",
         "frontend/src/unit/coreRouteRequestBudget.test.tsx",
         "frontend/src/unit/ui-audit-stabilize.test.ts"
       ],
-      "caller_count": 8,
+      "caller_count": 11,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4822,
@@ -1466,6 +1467,7 @@
         "frontend/src/test/fixtures.ts",
         "frontend/src/test/helpers.ts",
         "frontend/src/test/issue-3429-bootstrap-recovery.spec.ts",
+        "frontend/src/test/issue-3575-history-filters.spec.ts",
         "frontend/src/test/p0-auth-outage-recovery.spec.ts",
         "frontend/src/unit/api-auth-v2.test.ts",
         "frontend/src/unit/api-proxy.test.ts",
@@ -1475,7 +1477,7 @@
         "frontend/src/unit/password-reset-pages.test.tsx",
         "frontend/src/unit/uncovered-pages.test.tsx"
       ],
-      "caller_count": 20,
+      "caller_count": 21,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4459,
@@ -1595,11 +1597,12 @@
         "frontend/src/test/custom-cbl-delete-prerequisite-survival.spec.ts",
         "frontend/src/test/fixtures.ts",
         "frontend/src/test/issue-3429-bootstrap-recovery.spec.ts",
+        "frontend/src/test/issue-3575-history-filters.spec.ts",
         "frontend/src/unit/api-auth-v2.test.ts",
         "frontend/src/unit/nativeV2Client.test.ts",
         "frontend/src/unit/uncovered-pages.test.tsx"
       ],
-      "caller_count": 8,
+      "caller_count": 9,
       "ingress_destination": "/api/native_roll.rs",
       "ingress_source": "vercel-route",
       "owner_issue": 4459,
