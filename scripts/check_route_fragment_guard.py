@@ -469,8 +469,24 @@ def main() -> int:
             print(f"  - {violation}")
         print("Remove generated files from this PR.")
         return 1
+    try:
+        action_violations = _action_route_violations_for_refs(
+            changed_files, args.base, args.head
+        )
+    except (subprocess.CalledProcessError, ValueError) as exc:
+        print(f"resource-route policy failed to inspect route fragments: {exc}")
+        return 2
+    if action_violations:
+        print(
+            "::error::New action-shaped v2 routes require a route-specific "
+            f"owner-approved exemption in {ACTION_EXEMPTIONS_PATH}."
+        )
+        for violation in action_violations:
+            print(f"  - {violation}")
+        return 1
     print(
-        "Route fragment guard passed: no bot-owned generated files in diff "
+        "Route fragment and resource-route guards passed: no bot-owned "
+        "generated files or unapproved action routes in diff "
         f"({len(changed_files)} changed file(s))."
     )
     return 0
