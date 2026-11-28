@@ -196,9 +196,7 @@ fn taste_signal_from_row(row: &Row) -> TasteSignalResponse {
 pub async fn get_user_preferences(
     user: AuthenticatedUser,
 ) -> Result<Json<UserPreferencesResponse>, ApiError> {
-    Ok(Json(UserPreferencesResponse {
-        user_id: user.id(),
-    }))
+    Ok(Json(UserPreferencesResponse { user_id: user.id() }))
 }
 
 /// `PATCH /api/v2/users/me/preferences`
@@ -209,9 +207,7 @@ pub async fn patch_user_preferences(
     user: AuthenticatedUser,
     Json(_request): Json<UserPreferencesPatchRequest>,
 ) -> Result<Json<UserPreferencesResponse>, ApiError> {
-    Ok(Json(UserPreferencesResponse {
-        user_id: user.id(),
-    }))
+    Ok(Json(UserPreferencesResponse { user_id: user.id() }))
 }
 
 /// `GET /api/v1/users/me/taste-signals`
