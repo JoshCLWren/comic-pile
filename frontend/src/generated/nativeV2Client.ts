@@ -302,7 +302,7 @@ export interface CreatorsListRequest {
   }
 }
 
-export type CreatorsListResponse = components['schemas']['NativeCreatorListResponse']
+export type CreatorsListResponse = components['schemas']['CreatorListResponse']
 
 export type CsrfResponse = components['schemas']['CsrfResponse']
 
@@ -425,7 +425,7 @@ export interface DetailRequest {
   }
 }
 
-export type DetailResponse = components['schemas']['NativeCreatorDetailResponse']
+export type DetailResponse = components['schemas']['CreatorDetailResponse']
 
 export type DieStateResponse = components['schemas']['RollDieStateResponse']
 
@@ -1267,7 +1267,7 @@ export interface SeriesIssuesRequest {
   }
 }
 
-export type SeriesIssuesResponse = components['schemas']['NativeCreatorSeriesIssueListResponse']
+export type SeriesIssuesResponse = components['schemas']['CreatorSeriesIssueListResponse']
 
 export interface SetReadingModeRequest {
   body: components['schemas']['ReadingModeSetRequest']
@@ -1291,7 +1291,7 @@ export interface SummariesRequest {
   }
 }
 
-export type SummariesResponse = components['schemas']['NativeCreatorSummariesResponse']
+export type SummariesResponse = components['schemas']['CreatorSummariesResponse']
 
 export interface SwitchPrerequisiteRequest {
   body: components['schemas']['RollPrerequisiteSwitchRequest']

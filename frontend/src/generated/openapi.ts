@@ -5148,11 +5148,11 @@ export interface components {
         CreatorDetailResponse: {
             coverage: components["schemas"]["CreatorSummaryCoverage"];
             headline_roles: string[];
-            insights?: components["schemas"]["CreatorInsights"] | null;
-            next_cursor?: string | null;
+            insights: components["schemas"]["CreatorInsights"] | null;
+            next_cursor: string | null;
             rated_issues: components["schemas"]["CreatorIssueRow"][];
-            rated_population_scope: string;
-            rating_distribution?: components["schemas"]["CreatorRatingDistribution"] | null;
+            rated_population_scope: components["schemas"]["CreatorRatedPopulationScope"];
+            rating_distribution: components["schemas"]["CreatorRatingDistribution"] | null;
             read_unrated_issues: components["schemas"]["CreatorIssueRow"][];
             role_stats: components["schemas"]["CreatorRoleStat"][];
             series_groups: components["schemas"]["CreatorSeriesGroup"][];
@@ -5246,11 +5246,11 @@ export interface components {
             lowest_rated_issues: components["schemas"]["CreatorIssueInsight"][];
             /** Format: int64 */
             min_series_sample: number;
-            most_rated_series?: components["schemas"]["CreatorSeriesInsight"] | null;
-            series_message?: string | null;
+            most_rated_series: components["schemas"]["CreatorSeriesInsight"] | null;
+            series_message: string | null;
             series_sample_met: boolean;
-            strongest_series?: components["schemas"]["CreatorSeriesInsight"] | null;
-            weakest_series?: components["schemas"]["CreatorSeriesInsight"] | null;
+            strongest_series: components["schemas"]["CreatorSeriesInsight"] | null;
+            weakest_series: components["schemas"]["CreatorSeriesInsight"] | null;
         };
         CreatorIssueInsight: {
             /** Format: double */
@@ -5266,11 +5266,11 @@ export interface components {
         };
         CreatorIssueRow: {
             /** Format: double */
-            effective_rating?: number | null;
+            effective_rating: number | null;
             /** Format: int64 */
             issue_id: number;
             issue_number: string;
-            rating_timestamp?: string | null;
+            rating_timestamp: string | null;
             roles: string[];
             sort_key: string;
             status: string;
@@ -5280,7 +5280,7 @@ export interface components {
         };
         CreatorListItem: {
             /** Format: double */
-            average_rating?: number | null;
+            average_rating: number | null;
             canonical_creator_key: string;
             display_name: string;
             normalized_roles: string[];
@@ -5386,7 +5386,7 @@ export interface components {
         };
         CreatorRoleStat: {
             /** Format: double */
-            average_rating?: number | null;
+            average_rating: number | null;
             /** Format: int64 */
             issue_count: number;
             /** Format: int64 */
@@ -5395,13 +5395,13 @@ export interface components {
         };
         CreatorSeriesGroup: {
             /** Format: double */
-            average_rating?: number | null;
+            average_rating: number | null;
             /** Format: double */
-            highest_rating?: number | null;
+            highest_rating: number | null;
             /** Format: double */
-            lowest_rating?: number | null;
+            lowest_rating: number | null;
             metadata_complete: boolean;
-            population_scope: string;
+            population_scope: components["schemas"]["CreatorSeriesPopulationScope"];
             /** Format: int64 */
             rated_issue_count: number;
             /** Format: int64 */
@@ -5434,19 +5434,19 @@ export interface components {
         };
         CreatorSeriesIssueListResponse: {
             /** Format: double */
-            average_rating?: number | null;
+            average_rating: number | null;
             /** Format: double */
-            highest_rating?: number | null;
+            highest_rating: number | null;
             issues: components["schemas"]["CreatorIssueRow"][];
             /** Format: int64 */
             limit: number;
             /** Format: double */
-            lowest_rating?: number | null;
+            lowest_rating: number | null;
             metadata_complete: boolean;
-            next_cursor?: string | null;
+            next_cursor: string | null;
             /** Format: int64 */
             offset: number;
-            population_scope: string;
+            population_scope: components["schemas"]["CreatorSeriesPopulationScope"];
             /** Format: int64 */
             rated_issue_count: number;
             roles: string[];
@@ -5487,7 +5487,7 @@ export interface components {
         };
         CreatorSummaryItem: {
             /** Format: double */
-            average_rating?: number | null;
+            average_rating: number | null;
             canonical_creator_key: string;
             display_name: string;
             normalized_roles: string[];
@@ -6790,147 +6790,6 @@ export interface components {
             status: string;
             /** Format: int32 */
             tracked_issue_count: number;
-        };
-        NativeCreatorDetailResponse: {
-            coverage: components["schemas"]["CreatorSummaryCoverage"];
-            headline_roles: string[];
-            insights: components["schemas"]["NativeCreatorInsights"] | null;
-            next_cursor: string | null;
-            rated_issues: components["schemas"]["NativeCreatorIssueRow"][];
-            rated_population_scope: components["schemas"]["CreatorRatedPopulationScope"];
-            rating_distribution: components["schemas"]["CreatorRatingDistribution"] | null;
-            read_unrated_issues: components["schemas"]["NativeCreatorIssueRow"][];
-            role_stats: components["schemas"]["NativeCreatorRoleStat"][];
-            series_groups: components["schemas"]["NativeCreatorSeriesGroup"][];
-            series_groups_complete: boolean;
-            /** Format: int64 */
-            series_groups_total: number;
-            summary: components["schemas"]["NativeCreatorSummaryItem"];
-            upcoming_issues: components["schemas"]["NativeCreatorIssueRow"][];
-        };
-        NativeCreatorInsights: {
-            /** Format: int64 */
-            excluded_incomplete_series_count: number;
-            highest_rated_issues: components["schemas"]["CreatorIssueInsight"][];
-            /** Format: int64 */
-            individual_issue_limit: number;
-            individual_issues_combined: boolean;
-            lowest_rated_issues: components["schemas"]["CreatorIssueInsight"][];
-            /** Format: int64 */
-            min_series_sample: number;
-            most_rated_series: components["schemas"]["CreatorSeriesInsight"] | null;
-            series_message: string | null;
-            series_sample_met: boolean;
-            strongest_series: components["schemas"]["CreatorSeriesInsight"] | null;
-            weakest_series: components["schemas"]["CreatorSeriesInsight"] | null;
-        };
-        NativeCreatorIssueRow: {
-            /** Format: double */
-            effective_rating: number | null;
-            /** Format: int64 */
-            issue_id: number;
-            issue_number: string;
-            rating_timestamp: string | null;
-            roles: string[];
-            sort_key: string;
-            status: string;
-            /** Format: int64 */
-            thread_id: number;
-            thread_title: string;
-        };
-        NativeCreatorListItem: {
-            /** Format: double */
-            average_rating: number | null;
-            canonical_creator_key: string;
-            display_name: string;
-            normalized_roles: string[];
-            /** Format: int64 */
-            ratings_count: number;
-        };
-        NativeCreatorListResponse: {
-            coverage: components["schemas"]["CreatorSummaryCoverage"];
-            items: components["schemas"]["NativeCreatorListItem"][];
-            /** Format: int64 */
-            limit: number;
-            /** Format: int64 */
-            offset: number;
-            /** Format: int64 */
-            total: number;
-        };
-        NativeCreatorRoleStat: {
-            /** Format: double */
-            average_rating: number | null;
-            /** Format: int64 */
-            issue_count: number;
-            /** Format: int64 */
-            rated_issue_count: number;
-            role: string;
-        };
-        NativeCreatorSeriesGroup: {
-            /** Format: double */
-            average_rating: number | null;
-            /** Format: double */
-            highest_rating: number | null;
-            /** Format: double */
-            lowest_rating: number | null;
-            metadata_complete: boolean;
-            population_scope: components["schemas"]["CreatorSeriesPopulationScope"];
-            /** Format: int64 */
-            rated_issue_count: number;
-            /** Format: int64 */
-            read_unrated_issue_count: number;
-            roles: string[];
-            series_key: string;
-            sort_key: string;
-            /** Format: int64 */
-            thread_id: number;
-            thread_title: string;
-            /** Format: int64 */
-            unread_issue_count: number;
-        };
-        NativeCreatorSeriesIssueListResponse: {
-            /** Format: double */
-            average_rating: number | null;
-            /** Format: double */
-            highest_rating: number | null;
-            issues: components["schemas"]["NativeCreatorIssueRow"][];
-            /** Format: int64 */
-            limit: number;
-            /** Format: double */
-            lowest_rating: number | null;
-            metadata_complete: boolean;
-            next_cursor: string | null;
-            /** Format: int64 */
-            offset: number;
-            population_scope: components["schemas"]["CreatorSeriesPopulationScope"];
-            /** Format: int64 */
-            rated_issue_count: number;
-            roles: string[];
-            series_key: string;
-            /** Format: int64 */
-            thread_id: number;
-            thread_title: string;
-            /** Format: int64 */
-            total: number;
-        };
-        NativeCreatorSummariesResponse: {
-            coverage: components["schemas"]["CreatorSummaryCoverage"];
-            summaries: {
-                [key: string]: components["schemas"]["NativeCreatorSummaryItem"];
-            };
-        };
-        NativeCreatorSummaryItem: {
-            /** Format: double */
-            average_rating: number | null;
-            canonical_creator_key: string;
-            display_name: string;
-            normalized_roles: string[];
-            /** Format: int64 */
-            ratings_count: number;
-            /** Format: int64 */
-            read_unrated_count: number;
-            /** Format: int64 */
-            upcoming_count: number;
         };
         /** @description Wire response member mirroring the Python `DependencyGroupDetailMemberResponse`. */
         NativeDependencyGroupDetailMemberResponse: {
@@ -14926,7 +14785,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCreatorListResponse"];
+                    "application/json": components["schemas"]["CreatorListResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -15025,7 +14884,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCreatorSummariesResponse"];
+                    "application/json": components["schemas"]["CreatorSummariesResponse"];
                 };
             };
             /** @description Invalid creator keys */
@@ -15092,7 +14951,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCreatorDetailResponse"];
+                    "application/json": components["schemas"]["CreatorDetailResponse"];
                 };
             };
             /** @description Invalid key */
@@ -15340,7 +15199,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeCreatorSeriesIssueListResponse"];
+                    "application/json": components["schemas"]["CreatorSeriesIssueListResponse"];
                 };
             };
             /** @description Invalid keys */
