@@ -66,6 +66,15 @@ describe('pagination migration conformance (#2570)', () => {
     expect(offenders).toEqual([])
   })
 
+  it('keeps raw TanStack infinite queries inside the shared paginator', () => {
+    const offenders = productionSources(SRC_ROOT)
+      .filter((path) => !relative(SRC_ROOT, path).startsWith('pagination'))
+      .filter((path) => /useInfiniteQuery\s*\(/.test(readFileSync(path, 'utf8')))
+      .map((path) => relative(SRC_ROOT, path))
+
+    expect(offenders).toEqual([])
+  })
+
   it('routes every former bespoke surface through the shared collector', () => {
     for (const surface of CANONICAL_COLLECTOR_CONSUMERS) {
       const source = readFileSync(join(SRC_ROOT, surface), 'utf8')
