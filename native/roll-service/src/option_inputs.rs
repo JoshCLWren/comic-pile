@@ -1625,13 +1625,13 @@ mod tests {
         let response = crate::issue_service::cards(
             &conn,
             crate::auth::AuthenticatedUser::for_test(9101),
-            &[9201, 9401, 9202, 9999],
+            &[9201, 9401, 9202, 9204, 9999],
         )
         .await
         .expect("A card projection");
         assert_eq!(
             response.items.iter().map(|c| c.issue_id).collect::<Vec<_>>(),
-            vec![9201, 9202],
+            vec![9201, 9202, 9204],
             "card projection must be owner-scoped and preserve first-request order"
         );
         let catalog_only = &response.items[0];
@@ -1640,6 +1640,9 @@ mod tests {
         assert_eq!(catalog_only.comicvine_issue_id, None);
         assert_eq!(catalog_only.cover_image_url, None);
         assert_eq!(catalog_only.rating, Some(4.0), "A's own rating must survive");
+        let missing_mapping = &response.items[2];
+        assert_eq!(missing_mapping.mapping_state, "unmapped");
+        assert!(!missing_mapping.has_confirmed_identity);
 
         let b_response = crate::issue_service::cards(
             &conn,
