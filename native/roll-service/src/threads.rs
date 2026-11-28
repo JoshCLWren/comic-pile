@@ -164,6 +164,8 @@ pub struct ThreadListQuery {
     pub page_token: Option<String>,
     /// Retired v1 filter: reject it instead of silently changing its meaning.
     pub collection_id: Option<String>,
+    /// Bounded exact-id summary filter (at most 200 positive owned thread ids).
+    pub ids: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -176,6 +178,28 @@ struct QueueCursor {
 
 fn bad_request(detail: &str) -> ApiError {
     ApiError::BadRequest(detail.to_string())
+}
+
+fn parse_exact_ids(raw: &str) -> Result<Vec<i32>, ApiError> {
+    let mut ids = Vec::new();
+    let mut seen = HashSet::new();
+    for part in raw.split(',') {
+        let part = part.trim();
+        if part.is_empty() {
+            return Err(unprocessable("ids must contain positive thread ids"));
+        }
+        let id: i32 = part.parse().map_err(|_| unprocessable("ids must contain positive thread ids"))?;
+        if id <= 0 {
+            return Err(unprocessable("ids must contain positive thread ids"));
+        }
+        if seen.insert(id) {
+            ids.push(id);
+            if ids.len() > MAX_PAGE_SIZE as usize {
+                return Err(unprocessable("ids must contain at most 200 thread ids"));
+            }
+        }
+    }
+    Ok(ids)
 }
 
 fn unprocessable(detail: &str) -> ApiError {
@@ -383,6 +407,7 @@ pub async fn list_threads(
         sort,
         page_size,
         cursor.as_ref(),
+        exact_ids.as_deref(),
         "active",
     )
     .await?;
@@ -443,7 +468,7 @@ pub async fn list_threads(
         threads,
         next_page_token,
         active_count,
-        filtered_count: Some(filtered_count),
+        filtered_count: Some(exact_ids.as_ref().map_or(filtered_count, |ids| ids.len() as i32)),
     }))
 }
 
@@ -586,6 +611,7 @@ pub async fn list_completed_threads(
         sort,
         page_size,
         cursor.as_ref(),
+        None,
         "completed",
     )
     .await?;
@@ -1384,6 +1410,7 @@ async fn query_page(
     sort: &str,
     page_size: i64,
     cursor: Option<&QueueCursor>,
+    exact_ids: Option<&[i32]>,
     status: &str,
 ) -> Result<(Option<AuthRow>, i32, i32, Vec<ListName>, Vec<PageRow>), ApiError> {
     // Reference both mode parameters unconditionally so the statement keeps a
@@ -1412,6 +1439,14 @@ async fn query_page(
         .replace("{created_timestamp}", &iso_timestamp("p.created_at"))
         .replace("{tag_created_timestamp}", &iso_timestamp("tg.created_at"))
         .replace("{tag_updated_timestamp}", &iso_timestamp("tg.updated_at"));
+    let sql = if let Some(ids) = exact_ids {
+        sql.replace(
+            "WHERE t.status = 'active' AND t.queue_position >= 1",
+            "WHERE t.status = 'active' AND t.queue_position >= 1 AND t.id = ANY($9::int[])",
+        )
+    } else {
+        sql
+    };
 
     let expected_epoch = claims.expected_epoch()?;
     let candidates: Vec<i32> = projection
@@ -1431,6 +1466,9 @@ async fn query_page(
         Param::Bool(option_e),
         Param::IntArray(candidates),
     ];
+    if let Some(ids) = exact_ids {
+        params.push(Param::IntArray(ids.to_vec()));
+    }
     params.extend(cursor_bindings);
     let bindings: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> =
         params.iter().map(Param::as_sql).collect();
