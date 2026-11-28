@@ -170,6 +170,12 @@ pub struct ReplacementUndoResponse {
     pub restored_issue_ids: Vec<i32>,
 }
 
+
+fn qe(error: tokio_postgres::Error) -> ApiError {
+    eprintln!("REPLACEMENT SQL ERROR: {error}");
+    db::query_error(error)
+}
+
 fn structured(
     status: axum::http::StatusCode,
     code: &str,
@@ -240,7 +246,7 @@ async fn load_entries(
             &[&list_id],
         )
         .await
-        .map_err(db::query_error)?;
+        .map_err(qe)?;
     rows.into_iter()
         .map(|row| {
             let targets: Vec<i32> =
@@ -273,7 +279,7 @@ async fn load_overlap_decisions(
             &[&user_id, &list_id],
         )
         .await
-        .map_err(db::query_error)?;
+        .map_err(qe)?;
     Ok(json!(rows
         .iter()
         .map(|row| {
@@ -477,7 +483,7 @@ async fn write_entries(
         &[&list_id, &ids],
     )
     .await
-    .map_err(db::query_error)?;
+    .map_err(qe)?;
     if ids.is_empty() {
         return Ok(());
     }
@@ -503,7 +509,7 @@ async fn write_entries(
         &[&list_id, &ids, &tokio_postgres::types::Json(intents)],
     )
     .await
-    .map_err(db::query_error)?;
+    .map_err(qe)?;
     Ok(())
 }
 
@@ -518,7 +524,7 @@ async fn write_overlap_decisions(
         &[&user_id, &list_id],
     )
     .await
-    .map_err(db::query_error)?;
+    .map_err(qe)?;
     let items = decisions.as_array().cloned().unwrap_or_default();
     if items.is_empty() {
         return Ok(());
@@ -539,7 +545,7 @@ async fn write_overlap_decisions(
         &[&user_id, &list_id, &tokio_postgres::types::Json(decisions)],
     )
     .await
-    .map_err(db::query_error)?;
+    .map_err(qe)?;
     Ok(())
 }
 
@@ -653,7 +659,7 @@ pub async fn preview_replacement(
         .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
         .start()
         .await
-        .map_err(db::query_error)?;
+        .map_err(qe)?;
     let row = tx
         .query_opt(
             "SELECT name, description, mode, updated_at::text FROM custom_cbl_lists
@@ -661,13 +667,13 @@ pub async fn preview_replacement(
             &[&list_id, &user.id()],
         )
         .await
-        .map_err(db::query_error)?
+        .map_err(qe)?
         .ok_or_else(|| ApiError::NotFound(format!("Reading List {list_id} not found")))?;
     let name: String = row.get(0);
     let expected_updated_at: String = row.get(3);
     let old = load_entries(&tx, list_id).await?;
     let overlaps = load_overlap_decisions(&tx, user.id(), list_id).await?;
-    tx.rollback().await.map_err(db::query_error)?;
+    tx.rollback().await.map_err(qe)?;
     drop(conn);
 
     let (fingerprint, source_ids, unresolved_count) = adopted_issue_ids(
@@ -790,13 +796,13 @@ pub async fn commit_replacement(
         .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
         .start()
         .await
-        .map_err(db::query_error)?;
+        .map_err(qe)?;
     tx.execute(
         "SELECT 1 FROM users WHERE id = $1 FOR UPDATE",
         &[&user.id()],
     )
     .await
-    .map_err(db::query_error)?;
+    .map_err(qe)?;
     let list_row = tx
         .query_opt(
             "SELECT name, description, mode, updated_at::text FROM custom_cbl_lists
@@ -804,7 +810,7 @@ pub async fn commit_replacement(
             &[&list_id, &user.id()],
         )
         .await
-        .map_err(db::query_error)?
+        .map_err(qe)?
         .ok_or_else(|| ApiError::NotFound(format!("Reading List {list_id} not found")))?;
     let current_updated_at: String = list_row.get(3);
     if current_updated_at != request.expected_updated_at {
@@ -823,7 +829,7 @@ pub async fn commit_replacement(
             &[&request.source_list_id],
         )
         .await
-        .map_err(db::query_error)?
+        .map_err(qe)?
         .ok_or_else(|| {
             ApiError::NotFound(format!("CBL source list {} not found", request.source_list_id))
         })?;
@@ -845,7 +851,7 @@ pub async fn commit_replacement(
                 &[&user.id(), &list_id, &key],
             )
             .await
-            .map_err(db::query_error)?;
+            .map_err(qe)?;
         if let Some(row) = replay {
             let mut response: ReplacementCommitResponse =
                 serde_json::from_str(&row.get::<_, String>(1)).unwrap_or(ReplacementCommitResponse {
@@ -857,7 +863,7 @@ pub async fn commit_replacement(
                     replayed: true,
                 });
             response.replayed = true;
-            tx.commit().await.map_err(db::query_error)?;
+            tx.commit().await.map_err(qe)?;
             return Ok(Json(response));
         }
     }
@@ -904,7 +910,7 @@ pub async fn commit_replacement(
             &[&user.id(), &request.issue_ids],
         )
         .await
-        .map_err(db::query_error)?
+        .map_err(qe)?
         .get(0);
     if owned_count != request.issue_ids.len() as i64 {
         return Err(ApiError::NotFound("Issue not found".to_string()));
@@ -945,14 +951,14 @@ pub async fn commit_replacement(
         &[&list_id, &user.id()],
     )
     .await
-    .map_err(db::query_error)?;
+    .map_err(qe)?;
     let updated_at: String = tx
         .query_one(
             "SELECT updated_at::text FROM custom_cbl_lists WHERE id = $1",
             &[&list_id],
         )
         .await
-        .map_err(db::query_error)?
+        .map_err(qe)?
         .get(0);
     let mut after_state = state_json(
         &list_row.get::<_, String>(0),
@@ -1017,8 +1023,8 @@ pub async fn commit_replacement(
         &[&tokio_postgres::types::Json(&response), &snapshot_id],
     )
     .await
-    .map_err(db::query_error)?;
-    tx.commit().await.map_err(db::query_error)?;
+    .map_err(qe)?;
+    tx.commit().await.map_err(qe)?;
 
     Ok(Json(response))
 }
@@ -1055,20 +1061,20 @@ pub async fn undo_replacement(
         .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
         .start()
         .await
-        .map_err(db::query_error)?;
+        .map_err(qe)?;
     tx.execute(
         "SELECT 1 FROM users WHERE id = $1 FOR UPDATE",
         &[&user.id()],
     )
     .await
-    .map_err(db::query_error)?;
+    .map_err(qe)?;
     let row = tx
         .query_opt(
             "SELECT updated_at::text FROM custom_cbl_lists WHERE id = $1 AND user_id = $2 FOR UPDATE",
             &[&list_id, &user.id()],
         )
         .await
-        .map_err(db::query_error)?
+        .map_err(qe)?
         .ok_or_else(|| ApiError::NotFound(format!("Reading List {list_id} not found")))?;
     let current_updated_at: String = row.get(0);
     if current_updated_at != request.expected_updated_at {
@@ -1091,7 +1097,7 @@ pub async fn undo_replacement(
                 &[&user.id(), &list_id, &key],
             )
             .await
-            .map_err(db::query_error)?;
+            .map_err(qe)?;
         if let Some(row) = replay {
             let before: JsonValue = serde_json::from_str(&row.get::<_, String>(1))
                 .map_err(|error| ApiError::Internal(error.to_string()))?;
@@ -1107,7 +1113,7 @@ pub async fn undo_replacement(
                         .collect::<Vec<_>>()
                 })
                 .unwrap_or_default();
-            tx.commit().await.map_err(db::query_error)?;
+            tx.commit().await.map_err(qe)?;
             return Ok(Json(ReplacementUndoResponse {
                 target_list_id: list_id,
                 snapshot_id: row.get(0),
@@ -1131,7 +1137,7 @@ pub async fn undo_replacement(
             &[&user.id(), &list_id, &request.snapshot_id],
         )
         .await
-        .map_err(db::query_error)?
+        .map_err(qe)?
         .ok_or_else(|| {
             ApiError::NotFound(format!(
                 "No reversible replacement snapshot for Reading List {list_id}"
@@ -1186,22 +1192,22 @@ pub async fn undo_replacement(
         ],
     )
     .await
-    .map_err(db::query_error)?;
+    .map_err(qe)?;
     let updated_at: String = tx
         .query_one(
             "SELECT updated_at::text FROM custom_cbl_lists WHERE id = $1",
             &[&list_id],
         )
         .await
-        .map_err(db::query_error)?
+        .map_err(qe)?
         .get(0);
     tx.execute(
         "UPDATE custom_cbl_replacement_snapshots SET undone_at = NOW() WHERE id = $1",
         &[&snapshot_id],
     )
     .await
-    .map_err(db::query_error)?;
-    tx.commit().await.map_err(db::query_error)?;
+    .map_err(qe)?;
+    tx.commit().await.map_err(qe)?;
 
     Ok(Json(ReplacementUndoResponse {
         target_list_id: list_id,
