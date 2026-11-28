@@ -35,7 +35,6 @@ describe('generated OpenAPI client surface', () => {
     expect(paths).not.toContain('/api/v1/metrics')
     for (const path of [
       '/api/v2/releases',
-      '/api/v2/roll/override',
       '/api/v2/roll/dismiss-pending',
       '/api/v2/roll/switch-prerequisite',
       '/api/v2/readingSessions',

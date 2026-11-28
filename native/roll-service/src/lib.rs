@@ -76,7 +76,6 @@ pub mod recommendation_explanation;
 pub mod releases;
 pub mod roll_exclusions;
 pub mod roll_offer;
-pub mod roll_override;
 pub mod roll_pool;
 pub mod roll_reset;
 pub mod roll_resources;
@@ -728,7 +727,6 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/roll/eligible-issue-ids",
             get(roll_resources::eligible_issue_ids),
         )
-        .route("/api/v2/roll/override", post(roll_override::override_roll))
         .route(
             "/api/v1/roll/events/{event_id}/recommendation-explanation",
             get(recommendation_explanation::get_recommendation_explanation),
