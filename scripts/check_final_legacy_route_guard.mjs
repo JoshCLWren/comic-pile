@@ -30,6 +30,7 @@ const VERBS = ['get', 'post', 'put', 'patch', 'delete'];
 /** True for v1 and bare-domain application paths; v2 and /api/metrics are not legacy. */
 export function isLegacyPath(pathname) {
   if (typeof pathname !== 'string') return false;
+  if (pathname === '/api/metrics') return false; // documented operational exemption
   return pathname.startsWith('/api/v1/')
     || /^\/api\/[^v/]/.test(pathname)
     || /^\/api\/v[^12]/.test(pathname);
