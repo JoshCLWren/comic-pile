@@ -1050,6 +1050,16 @@ export default function ThreadDetailView() {
             />
           )}
 
+          {editError && (
+            <p
+              role="alert"
+              data-testid="thread-edit-error"
+              className="rounded-xl border border-[var(--theme-danger)] bg-[var(--theme-bg-panel)] p-3 text-sm text-[var(--theme-danger)]"
+            >
+              {editError}
+            </p>
+          )}
+
           <button
             type="submit"
             form="edit-thread-form"
