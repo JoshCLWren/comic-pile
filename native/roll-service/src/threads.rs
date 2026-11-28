@@ -201,6 +201,60 @@ pub(crate) fn blocked_order_expr(bool_param: &str, ids_param: &str) -> String {
     )
 }
 
+/// Total display order for one threads collection sort.
+///
+/// Every branch ends in the unique `threads.id` primary key so a cursor page
+/// can never split ties: equal queue positions, titles or timestamps still
+/// resolve to one stable sequence across repeated read-only fetches (#3604).
+fn order_expression(sort: &str, blocked: &str) -> String {
+    match sort {
+        "title" => "t.title, t.id".to_string(),
+        "created" => "t.created_at DESC, t.id DESC".to_string(),
+        _ => format!("({blocked}), t.queue_position, t.id"),
+    }
+}
+
+/// Queue-membership predicate shared by the list rows, their displayed
+/// positions and the authoritative totals.
+///
+/// The Queue collection only contains active rows that actually hold a queue
+/// slot (`queue_position >= 1`). Completed/excluded collections keep their
+/// existing membership: their rows are deliberately written with position 0
+/// and their totals are replaced with `WHERE FALSE` below.
+fn queue_membership_clause(status: &str) -> &'static str {
+    if status == "active" {
+        "AND t.queue_position >= 1"
+    } else {
+        ""
+    }
+}
+
+/// Assemble the page statement from its validated fragments.
+///
+/// Kept pure so the membership/ordering contract can be regression-tested
+/// without a database connection. `#3604` requires the rendered rows, the
+/// display ranks and both totals to derive from the same queue predicate.
+fn build_threads_sql(status: &str, order: &str, cursor_sql: &str, blocked: &str) -> String {
+    THREADS_SQL_PREFIX
+        .replace("t.status = 'active'", &format!("t.status = '{status}'"))
+        .replace(
+            &format!("WHERE t.status = '{status}' AND t.queue_position >= 1"),
+            if status == "completed" {
+                "WHERE FALSE"
+            } else {
+                "WHERE t.status = 'active' AND t.queue_position >= 1"
+            },
+        )
+        .replace("{order}", order)
+        .replace("{cursor}", cursor_sql)
+        .replace("{blocked}", blocked)
+        .replace("{queue_membership}", queue_membership_clause(status))
+        .replace("{activity_timestamp}", &iso_timestamp("p.last_activity_at"))
+        .replace("{created_timestamp}", &iso_timestamp("p.created_at"))
+        .replace("{tag_created_timestamp}", &iso_timestamp("tg.created_at"))
+        .replace("{tag_updated_timestamp}", &iso_timestamp("tg.updated_at"))
+}
+
 /// Canonical 1-based display position for one thread as an SQL scalar expression.
 ///
 /// This is the same dense `row_number()` ranking the Queue list uses over the
