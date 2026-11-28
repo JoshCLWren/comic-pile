@@ -5683,7 +5683,7 @@ mod guard_db_tests {
     async fn rehearsal_rollback_restores_exclusion_state() {
         let (state, _guard) = fixture().await;
         let mut conn = db::checkout(&state).await.expect("rollback connection");
-        let mut tx = conn
+        let tx = conn
             .build_transaction()
             .start()
             .await
