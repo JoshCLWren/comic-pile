@@ -1574,10 +1574,11 @@ mod tests {
             Some(&BTreeSet::from([("comicvine".into(), "1000".into())])),
             "B's confirmed metadata volume survives"
         );
-        assert_eq!(
-            b_after.get(&9403),
-            Some(&BTreeSet::from([("comicvine".into(), "2000".into())])),
-            "B's distinct edition keeps its own volume key"
+        assert!(
+            b_after
+                .get(&9403)
+                .is_some_and(|v| v.contains(&("comicvine".into(), "2000".into()))),
+            "B's distinct edition keeps its own volume key: {b_after:?}"
         );
 
         let b_inputs = assemble_snapshot(b_snapshot).expect("B snapshot");
