@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { useAllThreads, useCrossoverIssuesForRange } from '../hooks/useCrossovers'
 import { useThreadIssuesForDependency } from '../hooks/useDependencies'
 import { COLLECT_ALL_DEFAULT_MAX_PAGES } from '../pagination/collectAllPages'
-import type { Issue, IssueListResponse } from '../types'
+import type { Issue, IssueListResponse, ThreadListItem } from '../types'
 
 const SUPPORTED_ISSUE_PAGES = 100
 
