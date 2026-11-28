@@ -83,6 +83,7 @@ ACTION_VERBS: Final = frozenset(
         "refresh",
         "register",
         "reject",
+        "reorder",
         "replace",
         "reset",
         "resolve",
