@@ -606,7 +606,7 @@ async fn delete_and_update_with_dependent_rows_do_not_deadlock() {
             send(
                 &state,
                 Request::builder()
-                    .method("PUT")
+                    .method("PATCH")
                     .uri(format!("/api/v2/threads/{thread_id}"))
                     .header(header::AUTHORIZATION, format!("Bearer {token}"))
                     .header("x-csrf-token", &csrf)
