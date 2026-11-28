@@ -7,6 +7,8 @@ import { useThreadIssuesForDependency } from '../hooks/useDependencies'
 import { COLLECT_ALL_DEFAULT_MAX_PAGES } from '../pagination/collectAllPages'
 import type { Issue, IssueListResponse } from '../types'
 
+const SUPPORTED_ISSUE_PAGES = 100
+
 function createWrapper() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return function Wrapper({ children }: PropsWithChildren) {
@@ -51,6 +53,36 @@ describe('canonical hook pagination', () => {
     expect(list).toHaveBeenCalledTimes(2)
   })
 
+  it('loads the full supported unread issue collection across 100 pages', async () => {
+    let count = 0
+    const list = vi.fn(async () => issuePage(
+      [firstIssue],
+      ++count < SUPPORTED_ISSUE_PAGES ? String(count) : null,
+    ))
+    const { result } = renderHook(
+      () => useThreadIssuesForDependency(7, true, { list }),
+      { wrapper: createWrapper() },
+    )
+    await waitFor(() => expect(result.current.data).toHaveLength(SUPPORTED_ISSUE_PAGES))
+    expect(result.current.isError).toBe(false)
+    expect(list).toHaveBeenCalledTimes(SUPPORTED_ISSUE_PAGES)
+  })
+
+  it('loads the full supported crossover issue range across 100 pages', async () => {
+    let count = 0
+    const list = vi.fn(async () => issuePage(
+      [firstIssue],
+      ++count < SUPPORTED_ISSUE_PAGES ? String(count) : null,
+    ))
+    const { result } = renderHook(
+      () => useCrossoverIssuesForRange(7, { issues: { list } }),
+      { wrapper: createWrapper() },
+    )
+    await waitFor(() => expect(result.current.data).toHaveLength(SUPPORTED_ISSUE_PAGES))
+    expect(result.current.isError).toBe(false)
+    expect(list).toHaveBeenCalledTimes(SUPPORTED_ISSUE_PAGES)
+  })
+
   it('fails a capped unread issue collection instead of exposing incomplete data', async () => {
     let count = 0
     const list = vi.fn(async () => issuePage([firstIssue], String(++count)))
@@ -60,7 +92,7 @@ describe('canonical hook pagination', () => {
     )
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(result.current.data).toBeUndefined()
-    expect(list).toHaveBeenCalledTimes(COLLECT_ALL_DEFAULT_MAX_PAGES)
+    expect(list).toHaveBeenCalledTimes(SUPPORTED_ISSUE_PAGES)
   })
 
   it('fails a capped crossover issue range instead of exposing incomplete data', async () => {
@@ -72,7 +104,28 @@ describe('canonical hook pagination', () => {
     )
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(result.current.data).toBeUndefined()
-    expect(list).toHaveBeenCalledTimes(COLLECT_ALL_DEFAULT_MAX_PAGES)
+    expect(list).toHaveBeenCalledTimes(SUPPORTED_ISSUE_PAGES)
+  })
+
+  it('sizes the thread collection bound from the authoritative active count', async () => {
+    const threadCount = COLLECT_ALL_DEFAULT_MAX_PAGES * 100 + 1
+    let count = 0
+    const list = vi.fn(async () => {
+      count += 1
+      return {
+        threads: [{ id: count }],
+        active_count: threadCount,
+        filtered_count: threadCount,
+        next_page_token: count < threadCount ? String(count) : null,
+      }
+    })
+    const { result } = renderHook(
+      () => useAllThreads({ threads: { list } }),
+      { wrapper: createWrapper() },
+    )
+    await waitFor(() => expect(result.current.data).toHaveLength(COLLECT_ALL_DEFAULT_MAX_PAGES + 1))
+    expect(result.current.isError).toBe(false)
+    expect(list).toHaveBeenCalledTimes(COLLECT_ALL_DEFAULT_MAX_PAGES + 1)
   })
 
   it('fails a capped crossover thread selection instead of exposing incomplete data', async () => {
