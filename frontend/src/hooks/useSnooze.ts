@@ -11,6 +11,7 @@ import {
   reconcileAmbiguousRollMutation,
   recoverProtectedRollMutation,
 } from './rollMutationReconciliation'
+import { useRollPendingSelection } from './useRollPendingSelection'
 
 type SnoozeResult = Awaited<ReturnType<typeof protectedRollMutationApi.snooze>> | undefined
 
@@ -47,6 +48,7 @@ export function useSnooze(deps: RollMutationDeps = {}) {
   const queryClient = useQueryClient()
   // Keep the recovery read in the signed-in reader's browser partition.
   const userId = useContext(AuthContext)?.user?.id ?? null
+  const { seedFromOffer } = useRollPendingSelection()
   const [isPending, setIsPending] = useState(false)
   const [isError, setIsError] = useState(false)
   const [refreshError, setRefreshError] = useState<unknown>(null)
@@ -104,6 +106,7 @@ export function useSnooze(deps: RollMutationDeps = {}) {
     const request: Promise<SnoozeMutationOutcome> = (async () => {
       try {
         const result = await protectedRollApi.snooze()
+        if (result) seedFromOffer(result)
         await invalidateSessionCache(queryClient)
         const refresh = await refreshAuthoritativeState()
         return { response: result, refreshed: refresh.refreshed, refreshError: refresh.error }
@@ -121,6 +124,7 @@ export function useSnooze(deps: RollMutationDeps = {}) {
               userId,
             )
             if (recovery.status === 'retried') {
+              if (recovery.value) seedFromOffer(recovery.value)
               await invalidateSessionCache(queryClient)
               const refresh = await refreshAuthoritativeState()
               return {

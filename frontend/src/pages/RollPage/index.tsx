@@ -229,6 +229,7 @@ export default function RollPage() {
     rerollMutation: rollMutation,
     unsnoozeMutation,
     enterRatingView: rating.enterRatingView,
+    seedPending: pendingSelection.seedFromOffer,
     refetchBootstrap,
     onRefreshFailed: reportSnoozeRefreshFailed,
   })

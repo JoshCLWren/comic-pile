@@ -2,7 +2,6 @@ import type {
   RatePayload,
   RateResponsePayload,
   RollResponse,
-  SnoozeSessionResponse,
 } from '../types'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 
@@ -23,7 +22,7 @@ export type RollPendingUserId = number | string | null | undefined
 
 export interface ProtectedRollMutationApi {
   rate: (data: RatePayload) => Promise<RateResponsePayload>
-  snooze: () => Promise<SnoozeSessionResponse>
+  snooze: () => Promise<RollResponse>
   bootstrap: (userId?: RollPendingUserId) => Promise<RollBootstrapResponse>
 }
 

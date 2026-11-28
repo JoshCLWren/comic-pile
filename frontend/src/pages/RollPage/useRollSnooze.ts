@@ -2,6 +2,7 @@ import { getApiErrorDetail } from '../../utils/apiError'
 import type { RollBootstrapResponse } from '../../types/rollBootstrap'
 import type { RollResponse } from '../../types'
 import type { RollUnsnoozeResponse } from '../../services/apiTypes'
+import type { RollOfferSeed } from '../../hooks/useRollPendingSelection'
 import type { ThreadMetadata } from './types'
 import type { SnoozeMutationOutcome } from '../../hooks/useSnooze'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
@@ -44,6 +45,7 @@ export function useRollSnooze({
   rerollMutation,
   unsnoozeMutation,
   enterRatingView,
+  seedPending,
   refetchBootstrap,
   onRefreshFailed,
 }: UseRollSnoozeParams) {
@@ -77,6 +79,7 @@ export function useRollSnooze({
     if (!rerollMutation) return
     try {
       const response = await rerollMutation.mutate()
+      seedPending?.(response)
       if (enterRatingView) {
         // Use the offer response directly so a failed background refresh cannot
         // leave the just-snoozed thread open in the rating view.

@@ -51,7 +51,13 @@ export function useRollPendingSelection(): UseRollPendingSelectionResult {
 
   const seedFromOffer = useCallback(
     (offer: RollOfferSeed) => {
-      if (offer.thread_id == null || offer.issue_id == null) return
+      if (offer.thread_id == null) return
+      // A legacy counter-only offer has no exact owned Issue row. It replaces
+      // the previous selection, but must not restore a different issue later.
+      if (offer.issue_id == null) {
+        clearPendingSelection(userId)
+        return
+      }
       const selection: RollPendingSelection = {
         thread_id: offer.thread_id,
         issue_id: offer.issue_id,
