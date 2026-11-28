@@ -493,7 +493,6 @@ struct LockedThread {
     status: String,
     queue_position: i32,
     total_issues: Option<i32>,
-    issues_remaining: i32,
     next_unread_issue_id: Option<i32>,
 }
 
@@ -510,7 +509,7 @@ async fn lock_owned_thread(
     queue::lock_queue(tx, user_id).await?;
     let row = tx
         .query_opt(
-            "SELECT status, queue_position, total_issues, issues_remaining, next_unread_issue_id \
+            "SELECT status, queue_position, total_issues, next_unread_issue_id \
              FROM threads WHERE id = $1 AND user_id = $2 FOR UPDATE",
             &[&thread_id, &user_id],
         )
@@ -521,8 +520,7 @@ async fn lock_owned_thread(
         status: row.get(0),
         queue_position: row.get(1),
         total_issues: row.get(2),
-        issues_remaining: row.get(3),
-        next_unread_issue_id: row.get(4),
+        next_unread_issue_id: row.get(3),
     })
 }
 
