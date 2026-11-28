@@ -333,6 +333,33 @@ async fn delete_v2_removes_thread_and_subsequent_operations_return_404() {
     )
     .await
     .unwrap();
+    let issue_id: i32 = conn
+        .query_one(
+            "INSERT INTO issues (thread_id, issue_number, status, created_at, position)
+             VALUES ($1, '1', 'unread', NOW(), 1) RETURNING id",
+            &[&thread],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let reading_list_id: i32 = conn
+        .query_one(
+            "INSERT INTO custom_cbl_lists (user_id, name, description, mode, created_at, updated_at, overlap_decisions_updated_at)
+             VALUES ($1, 'Delete fixture list', NULL, 'loose', NOW(), NOW(), NOW()) RETURNING id",
+            &[&ctx.user_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    let reading_list_entry_id: i32 = conn
+        .query_one(
+            "INSERT INTO custom_cbl_entries (list_id, issue_id, position, created_at, is_checkpoint, checkpoint_target_issue_ids, gate, skipped)
+             VALUES ($1, $2, 0, NOW(), false, '[]'::json, 'none', false) RETURNING id",
+            &[&reading_list_id, &issue_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
     drop(conn);
 
     let (status, body) = call(&ctx, "DELETE", &uri, None).await;
@@ -344,14 +371,16 @@ async fn delete_v2_removes_thread_and_subsequent_operations_return_404() {
         .query_one(
             "SELECT (SELECT count(*) FROM events WHERE id = $1),
                     (SELECT count(*) FROM snapshots WHERE id = $2),
-                    (SELECT count(*) FROM reading_order_items WHERE thread_id = $3)",
-            &[&event_id, &snapshot_id, &thread],
+                    (SELECT count(*) FROM reading_order_items WHERE thread_id = $3),
+                    (SELECT count(*) FROM custom_cbl_entries WHERE id = $4)",
+            &[&event_id, &snapshot_id, &thread, &reading_list_entry_id],
         )
         .await
         .unwrap();
     assert_eq!(remaining.get::<_, i64>(0), 0, "thread event removed");
     assert_eq!(remaining.get::<_, i64>(1), 0, "dependent snapshot removed");
     assert_eq!(remaining.get::<_, i64>(2), 0, "reading-order item removed");
+    assert_eq!(remaining.get::<_, i64>(3), 0, "reading-list membership removed");
     drop(conn);
 
     let (status, body) = call(&ctx, "DELETE", &uri, None).await;
