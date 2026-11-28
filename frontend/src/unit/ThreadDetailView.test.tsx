@@ -525,7 +525,7 @@ it('shows a visible save error and keeps the Edit Series draft when PATCH fails 
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Edit' }))
   await user.clear(screen.getByDisplayValue('Saga'))
-  await user.type(screen.getByDisplayValue(''), 'Renamed Saga')
+  await user.type(screen.getAllByDisplayValue('')[0]!, 'Renamed Saga')
   await user.click(screen.getByRole('button', { name: 'Save Changes' }))
 
   await waitFor(() =>
