@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { useInfiniteCollection } from '../pagination/useInfiniteCollection'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { ComicIssueCard } from './ComicIssueCard'
 import CompactIssueCardTrigger from './CompactIssueCardTrigger'
 import { ComicIdentity } from '../pages/RollPage/components/ComicIdentity'
@@ -75,7 +74,7 @@ export function DirectReadIssuePanel({
 
   // Browse is opt-in and paginated; opening dozens of Queue rows must never
   // fetch a whole library or start one request per owned issue.
-  const browseCollection = useInfiniteCollection<Issue, Awaited<ReturnType<typeof issuesApi.list>>>({
+  const browse = useInfiniteQuery({
     queryKey: queryKeys.thread.directReadBrowse(threadId),
     // SAFETY: the issue cursor is a nullable string; the first page has no cursor.
     initialPageParam: null as string | null,
@@ -84,16 +83,9 @@ export function DirectReadIssuePanel({
       page_token: pageParam ?? undefined,
     }),
     getNextPageParam: (lastPage) => lastPage.next_page_token ?? undefined,
-    selectPage: (page) => page.issues,
     enabled: browseOpen,
     retry: false,
   })
-  // A next-page append keeps the already-rendered choices on screen, so it is
-  // not an initial load for this panel's status copy.
-  const browse = {
-    ...browseCollection,
-    isPending: browseCollection.isInitialLoading,
-  }
   const issue = selectedIssue ?? initialIssue ?? null
   const cards = useIssueCards(issue ? [issue.id] : [], { enabled: issue != null })
   const card = cards.data?.find((item) => item.issue_id === issue?.id) ?? null

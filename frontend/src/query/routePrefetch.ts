@@ -13,7 +13,7 @@ import { isFunction } from '../utils/runtimeChecks'
  *
  * Bounded *data* prefetching is limited to the one retained screen that reads
  * through a TanStack Query contract today: the Queue list first page
- * (`useQueueThreads` via the canonical `useInfiniteCollection`). Roll bootstrap, thread detail,
+ * (`useQueueThreads` via `useInfiniteQuery`). Roll bootstrap, thread detail,
  * and session reads still flow through legacy hooks that bypass the query
  * cache, so prefetching those keys would fetch into a cache no consumer reads.
  * Those keys stay excluded until their screens adopt bounded query contracts;
@@ -195,7 +195,7 @@ function matchLikelyNextData(pathname: string): BoundedDataPrefetch | null {
 
 /**
  * Warms the bounded Queue list first page through the exact options consumed
- * by the canonical paginator in `useQueueThreads`, so navigation to `/queue`
+ * by `useInfiniteQuery` in `useQueueThreads`, so navigation to `/queue`
  * renders immediately from cache while the entry is fresh.
  *
  * Idempotent: the page is requested once per client lifetime keyed by the

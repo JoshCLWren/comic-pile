@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { issuesApi } from '../services/api-issues'
 import { queryKeys } from '../query/queryKeys'
-import { collectAllPages, MAX_ISSUE_COLLECTION_PAGES } from '../pagination/collectAllPages'
 import type { ManualCreatorCredit } from '../types'
 
 interface ThreadIssueCreatorsState {
@@ -36,18 +35,19 @@ export function useThreadIssueCreators(
     queryFn: async () => {
       const pageSize = 100
       const first = await issuesApi.listCreators(threadId!, { page_size: pageSize })
-      const collected = await collectAllPages({
-        fetchPage: async (token) => token === null
-          ? first
-          : issuesApi.listCreators(threadId!, { page_size: pageSize, page_token: token }),
-        selectItems: (page) => page.issues,
-        selectNextToken: (page) => page.next_page_token || null,
-        maxPages: MAX_ISSUE_COLLECTION_PAGES,
-      })
-      if (collected.stopReason === 'max-pages') {
-        throw new Error('Unable to load the complete issue creator projection.')
+      const issues = [...first.issues]
+      const seenTokens = new Set<string>()
+      let token = first.next_page_token ?? null
+      while (token && !seenTokens.has(token)) {
+        seenTokens.add(token)
+        const page = await issuesApi.listCreators(threadId!, {
+          page_size: pageSize,
+          page_token: token,
+        })
+        issues.push(...page.issues)
+        token = page.next_page_token ?? null
       }
-      return { ...first, issues: collected.items }
+      return { ...first, issues }
     },
     enabled: !!threadId && enabled,
   })

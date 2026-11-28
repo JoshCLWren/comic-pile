@@ -88,7 +88,7 @@ export function queueThreadsQueryOptions(
       }
       return threadsList.list(params, pageParam ?? undefined)
     },
-    // SAFETY: null is the intentional first pageParam; the canonical paginator types it as string after the first page.
+    // SAFETY: null is the intentional first pageParam; useInfiniteQuery types it as string after the first page.
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage: ThreadListResponse) => lastPage.next_page_token ?? undefined,
     /**

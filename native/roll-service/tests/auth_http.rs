@@ -75,7 +75,7 @@ async fn mounted_native_auth_surface_round_trips_login_refresh_logout_and_recove
     let (status, registered, _) = send(
         &state,
         post(
-            "/api/v2/auth/register",
+            "/api/v1/auth/register",
             serde_json::json!({
                 "username": "http-reader",
                 "email": "http-reader@example.com",
@@ -89,7 +89,7 @@ async fn mounted_native_auth_surface_round_trips_login_refresh_logout_and_recove
     let (status, logged_in, cookies) = send(
         &state,
         post(
-            "/api/v2/auth/login",
+            "/api/v1/auth/login",
             serde_json::json!({"username": "http-reader", "password": "correct-horse-battery"}),
         ),
     )
@@ -112,7 +112,7 @@ async fn mounted_native_auth_surface_round_trips_login_refresh_logout_and_recove
         let (status, body, _) = send(
             &state,
             post(
-                "/api/v2/auth/login",
+                "/api/v1/auth/login",
                 serde_json::json!({"username": username, "password": "incorrect-password"}),
             ),
         )
@@ -146,7 +146,7 @@ async fn mounted_native_auth_surface_round_trips_login_refresh_logout_and_recove
     assert!(long_ip.len() > 45);
     let long_header_request = Request::builder()
         .method("POST")
-        .uri("/api/v2/auth/login")
+        .uri("/api/v1/auth/login")
         .header(header::CONTENT_TYPE, "application/json")
         .header("x-forwarded-for", &long_ip)
         .body(Body::from(
@@ -191,7 +191,7 @@ async fn mounted_native_auth_surface_round_trips_login_refresh_logout_and_recove
     // Exercise that exact transport, not only the body-token variant.
     let refresh_request = Request::builder()
         .method("POST")
-        .uri("/api/v2/auth/refresh")
+        .uri("/api/v1/auth/refresh")
         .header(header::COOKIE, format!("refresh_token={refresh_token}"))
         .body(Body::empty())
         .unwrap();
@@ -202,7 +202,7 @@ async fn mounted_native_auth_surface_round_trips_login_refresh_logout_and_recove
     let (status, _, _) = send(
         &state,
         post(
-            "/api/v2/auth/refresh",
+            "/api/v1/auth/refresh",
             serde_json::json!({"refresh_token": refresh_token}),
         ),
     )
@@ -215,7 +215,7 @@ async fn mounted_native_auth_surface_round_trips_login_refresh_logout_and_recove
 
     let logout = Request::builder()
         .method("POST")
-        .uri("/api/v2/auth/logout")
+        .uri("/api/v1/auth/logout")
         .header(header::AUTHORIZATION, format!("Bearer {access_token}"))
         .header(header::COOKIE, format!("csrf_token={csrf}"))
         .header("x-csrf-token", csrf.clone())
@@ -233,7 +233,7 @@ async fn mounted_native_auth_surface_round_trips_login_refresh_logout_and_recove
     let (status, acknowledgement, _) = send(
         &state,
         post(
-            "/api/v2/auth/forgot-password",
+            "/api/v1/auth/forgot-password",
             serde_json::json!({"email": "http-reader@example.com"}),
         ),
     )
@@ -247,7 +247,7 @@ async fn mounted_native_auth_surface_round_trips_login_refresh_logout_and_recove
     let (status, rejected, _) = send(
         &state,
         post(
-            "/api/v2/auth/reset-password",
+            "/api/v1/auth/reset-password",
             serde_json::json!({"token": "not-a-real-token", "new_password": "brand-new-secret"}),
         ),
     )
@@ -263,7 +263,7 @@ async fn forgot_password_registers_delivery_as_tracked_background_work() {
     let (status, registered_body, _) = send(
         &state,
         post(
-            "/api/v2/auth/register",
+            "/api/v1/auth/register",
             serde_json::json!({
                 "username": "delivery-reader",
                 "email": "delivery-reader@example.com",
@@ -289,7 +289,7 @@ async fn forgot_password_registers_delivery_as_tracked_background_work() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/v2/auth/forgot-password")
+        .uri("/api/v1/auth/forgot-password")
         .header(header::CONTENT_TYPE, "application/json")
         .header("x-forwarded-for", "198.51.100.91")
         .extension(handle)

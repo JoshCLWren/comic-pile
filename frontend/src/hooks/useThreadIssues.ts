@@ -1,4 +1,4 @@
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useInfiniteQuery } from '@tanstack/react-query'
 import type { InfiniteData } from '@tanstack/react-query'
 import { issuesApi } from '../services/api-issues'
 import { issueDependenciesApi } from '../services/api-dependencies'
@@ -6,7 +6,6 @@ import type { IssueListParams, IssueListResponse } from '../services/api-issues'
 import type { Issue, IssueDependenciesResponse } from '../types'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
-import { useInfiniteCollection } from '../pagination/useInfiniteCollection'
 import { invalidateAfterIssueEdit, optimisticallyUpdateIssueStatus, optimisticallyDeleteIssue, optimisticallyReorderIssues } from '../query/cacheEffects'
 
 export const THREAD_ISSUES_PAGE_SIZE = 100
@@ -40,7 +39,7 @@ export function useThreadIssuePages(
       : threadId != null
         ? queryKeys.thread.issuePages(threadId)
         : []
-  const query = useInfiniteCollection<Issue, IssueListResponse>({
+  const query = useInfiniteQuery<IssueListResponse>({
     queryKey: pageKey,
     queryFn: ({ pageParam }) => {
       const params: IssueListParams = { page_size: THREAD_ISSUES_PAGE_SIZE }
@@ -53,23 +52,25 @@ export function useThreadIssuePages(
       }
       return issuesApi.list(threadId!, params)
     },
-    // SAFETY: the first page has no cursor; the cast pins the cursor type so
-    // getNextPageParam may return the opaque string token.
+    // SAFETY: the first page has no cursor; the cast pins TPageParam so
+    // getNextPageParam may return the string cursor
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.next_page_token,
-    selectPage: (page) => page.issues,
     enabled: threadId != null && enabled,
     retry: false,
   })
 
+  const pages = query.data?.pages ?? []
+  const lastPage = pages[pages.length - 1] ?? null
+  const nextPageToken: string | null =
+    query.hasNextPage && lastPage ? (lastPage.next_page_token ?? null) : null
+
   return {
     ...query,
-    issues: query.items,
+    issues: flattenIssuePages(query.data),
     totalCount: getIssueTotalCount(query.data),
-    // Preserve the pre-migration meaning: a next-page append is not a new
-    // initial load, so it must not replace the rendered issue list with a
-    // full-screen loader (the inline "Loading more..." state covers it).
-    isPending: query.isInitialLoading,
+    pages,
+    nextPageToken,
   }
 }
 

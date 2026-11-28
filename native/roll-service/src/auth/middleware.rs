@@ -57,6 +57,16 @@ pub async fn csrf_middleware(request: Request, next: Next) -> Response {
             | "/api/v2/auth/refresh"
             | "/api/v2/auth/forgot-password"
             | "/api/v2/auth/reset-password"
+            | "/api/v1/auth/login"
+            | "/api/v1/auth/register"
+            | "/api/v1/auth/refresh"
+            | "/api/v1/auth/forgot-password"
+            | "/api/v1/auth/reset-password"
+            | "/api/auth/login"
+            | "/api/auth/register"
+            | "/api/auth/refresh"
+            | "/api/auth/forgot-password"
+            | "/api/auth/reset-password"
     );
     if protected && authenticated && !exempt {
         let cookie = cookie_token(request.headers());

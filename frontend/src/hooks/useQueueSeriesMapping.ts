@@ -92,22 +92,10 @@ export function useQueueSeriesMappingCommit() {
     // mapping. A definitive 4xx refusal is surfaced immediately.
     retry: (failureCount, error) => failureCount < 3 && isIndeterminateApiOutcome(error),
     onSuccess: async (result) => {
-      // The commit is already durable. A failed follow-up cache/hydration
-      // refresh must not turn a successful commit into a reported refusal:
-      // the dialog would otherwise tell the reader "Nothing was changed"
-      // (#5170). Log the refresh failure and keep the successful commit state.
-      try {
-        // Cancel and drop the previous identity before refetching: an in-flight
-        // response for A must not repaint B after a series remap (#5841).
-        await clearComicVineIssueIntelligenceMany(queryClient, result.confirmed_issue_ids)
-      } catch (error) {
-        console.error('Series mapping committed but issue-intelligence refresh failed:', error)
-      }
-      try {
-        await invalidateAfterQueueMutation(queryClient)
-      } catch (error) {
-        console.error('Series mapping committed but queue refresh failed:', error)
-      }
+      // Cancel and drop the previous identity before refetching: an in-flight
+      // response for A must not repaint B after a series remap (#5841).
+      await clearComicVineIssueIntelligenceMany(queryClient, result.confirmed_issue_ids)
+      await invalidateAfterQueueMutation(queryClient)
     },
   })
 }

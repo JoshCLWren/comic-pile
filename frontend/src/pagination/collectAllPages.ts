@@ -16,12 +16,6 @@
 /** Default upper bound on the number of pages `collectAllPages` will fetch. */
 export const COLLECT_ALL_DEFAULT_MAX_PAGES = 50
 
-/**
- * Bound for complete issue collections: the native thread issue cap is 10,000
- * issues, which is 100 pages at the canonical 100-issue page size.
- */
-export const MAX_ISSUE_COLLECTION_PAGES = 100
-
 /** Why an all-pages walk stopped. */
 export type CollectAllStopReason = 'exhausted' | 'max-pages' | 'repeat-token'
 

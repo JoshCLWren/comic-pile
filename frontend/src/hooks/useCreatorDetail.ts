@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { useInfiniteCollection } from '../pagination/useInfiniteCollection'
+import { useInfiniteQuery } from '@tanstack/react-query'
 import { creatorsApi } from '../services/api-creators'
 import type { CreatorDetailResponse, CreatorInsights, CreatorIssueRow, CreatorSeriesGroup } from '../services/api-creators'
 import { queryKeys } from '../query/queryKeys'
@@ -69,19 +69,15 @@ export function useCreatorDetail(
   limit: number = CREATOR_DETAIL_PAGE_SIZE,
   detailApi: CreatorsDetailApi = creatorsApi,
 ): CreatorDetailState {
-  const query = useInfiniteCollection<CreatorIssueRow, CreatorDetailResponse, number>({
+  const query = useInfiniteQuery({
     ...creatorDetailQueryOptions(creatorKey, limit, detailApi),
-    // The detail response carries three independent collections; the flat
-    // `items` view is the rated-issue projection, while the component reads
-    // the other collections from the shared page cache below.
-    selectPage: (page) => page.rated_issues,
     enabled: !!creatorKey,
     retry: false,
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
   })
 
-  const pages = query.pages
+  const pages = query.data?.pages ?? []
   const firstPage = pages[0] ?? null
 
   const ratedIssues = pages.flatMap((page) => page.rated_issues)
@@ -89,10 +85,10 @@ export function useCreatorDetail(
   const upcomingIssues = pages.flatMap((page) => page.upcoming_issues)
 
   const loadMore = useCallback((): Promise<void> => {
-    if (!query.hasNextPage || query.isNextPageLoading) {
+    if (!query.hasNextPage || query.isFetchingNextPage) {
       return Promise.resolve()
     }
-    return query.fetchNextPage()
+    return query.fetchNextPage().then(() => undefined)
   }, [query])
 
   return {
@@ -108,11 +104,11 @@ export function useCreatorDetail(
     headlineRoles: firstPage?.headline_roles ?? [],
     readUnratedIssues,
     upcomingIssues,
-    isPending: query.isInitialLoading,
-    isFetchingMore: query.isNextPageLoading,
+    isPending: query.isPending,
+    isFetchingMore: query.isFetchingNextPage,
     isError: query.isError,
     error: query.error,
-    hasMore: query.hasNextPage,
+    hasMore: query.hasNextPage ?? false,
     loadMore,
     refetch: () => {
       void query.refetch()
