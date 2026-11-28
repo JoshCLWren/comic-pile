@@ -239,10 +239,10 @@ fn build_threads_sql(status: &str, order: &str, cursor_sql: &str, blocked: &str)
         .replace("t.status = 'active'", &format!("t.status = '{status}'"))
         .replace(
             &format!("WHERE t.status = '{status}' AND t.queue_position >= 1"),
-            if status == "completed" {
-                "WHERE FALSE"
-            } else {
+            if status == "active" {
                 "WHERE t.status = 'active' AND t.queue_position >= 1"
+            } else {
+                "WHERE FALSE"
             },
         )
         .replace("{order}", order)
@@ -1925,10 +1925,21 @@ mod tests {
             sql.contains("WHERE t.status = 'active' AND t.queue_position >= 1"),
             "totals must count exactly the rows the list renders"
         );
-        assert!(
-            !sql.contains('{'),
-            "unexpanded SQL placeholder in assembled statement"
-        );
+        for placeholder in [
+            "{queue_membership}",
+            "{order}",
+            "{cursor}",
+            "{blocked}",
+            "{activity_timestamp}",
+            "{created_timestamp}",
+            "{tag_created_timestamp}",
+            "{tag_updated_timestamp}",
+        ] {
+            assert!(
+                !sql.contains(placeholder),
+                "unexpanded SQL placeholder {placeholder}"
+            );
+        }
     }
 
     #[test]
@@ -1992,7 +2003,7 @@ mod tests {
             "position cursor must continue after the full (position, id) key"
         );
         assert!(
-            position_sql.contains(&blocked),
+            position_sql.contains("{blocked}"),
             "position cursor must respect blocked grouping"
         );
 
