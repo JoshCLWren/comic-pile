@@ -126,7 +126,6 @@ pub struct ThreadCreatorCreditsResponse {
 pub struct ThreadResponse {
     pub id: i32,
     pub title: String,
-    pub format: String,
     pub issues_remaining: i32,
     pub queue_position: i32,
     pub status: String,
@@ -150,7 +149,6 @@ pub struct ThreadResponse {
 pub struct SetCurrentIssueResponse {
     pub thread_id: i32,
     pub title: String,
-    pub format: String,
     pub issues_remaining: i32,
     pub queue_position: i32,
     pub issue_id: Option<i32>,
@@ -677,14 +675,6 @@ async fn apply_tracking_state(
     Ok(TrackingState { total, next_unread })
 }
 
-fn normalize_format_value(value: &str) -> String {
-    match value.trim().to_lowercase().as_str() {
-        "comic" | "comics" => "Comic".to_string(),
-        "digital" => "Digital".to_string(),
-        _ => value.trim().to_string(),
-    }
-}
-
 /// The reader's dense Queue ordinal for one thread
 /// (`queue_display.display_position`), zero when outside the Queue.
 async fn display_position(
@@ -742,7 +732,7 @@ async fn thread_response(
     option_e: bool,
 ) -> Result<ThreadResponse, ApiError> {
     let sql = format!(
-        "SELECT t.title, t.format, t.issues_remaining, t.status, t.last_rating, {last_activity}, \
+        "SELECT t.title, t.issues_remaining, t.status, t.last_rating, {last_activity}, \
                 t.notes, t.is_test, t.is_blocked, {created}, t.total_issues, t.reading_progress, \
                 t.next_unread_issue_id, t.manual_creator_credits::text, \
                 (SELECT i.issue_number FROM issues i WHERE i.id = t.next_unread_issue_id), \
@@ -756,33 +746,32 @@ async fn thread_response(
         .await
         .map_err(db::query_error)?
         .ok_or_else(|| thread_not_found(thread_id))?;
-    let total_issues: Option<i32> = row.get(10);
-    let unread: i64 = row.get(15);
+    let total_issues: Option<i32> = row.get(9);
+    let unread: i64 = row.get(14);
     let issues_remaining = if total_issues.is_some() {
         unread as i32
     } else {
-        row.get(2)
+        row.get(1)
     };
     let queue_position = display_position(tx, user, thread_id, option_e).await?;
-    let credits: Option<String> = row.get(13);
+    let credits: Option<String> = row.get(12);
     Ok(ThreadResponse {
         id: thread_id,
         title: row.get(0),
-        format: normalize_format_value(&row.get::<_, String>(1)),
         issues_remaining,
         queue_position,
-        status: row.get(3),
-        last_rating: row.get(4),
-        last_activity_at: row.get(5),
-        notes: row.get(6),
-        is_test: row.get(7),
-        is_blocked: row.get(8),
+        status: row.get(2),
+        last_rating: row.get(3),
+        last_activity_at: row.get(4),
+        notes: row.get(5),
+        is_test: row.get(6),
+        is_blocked: row.get(7),
         blocking_reasons: Vec::new(),
-        created_at: row.get(9),
+        created_at: row.get(8),
         total_issues,
-        reading_progress: row.get(11),
-        next_unread_issue_id: row.get(12),
-        next_unread_issue_number: row.get(14),
+        reading_progress: row.get(10),
+        next_unread_issue_id: row.get(11),
+        next_unread_issue_number: row.get(13),
         manual_creator_credits: credits
             .and_then(|text| serde_json::from_str(&text).ok())
             .unwrap_or_else(|| Value::Array(Vec::new())),
@@ -1713,13 +1702,12 @@ pub(crate) async fn set_current_issue(
     let queue_position = display_position(&tx, user, thread_id, option_e).await?;
     let meta = tx
         .query_one(
-            "SELECT title, format FROM threads WHERE id = $1",
+            "SELECT title FROM threads WHERE id = $1",
             &[&thread_id],
         )
         .await
         .map_err(db::query_error)?;
     let title: String = meta.get(0);
-    let format = normalize_format_value(&meta.get::<_, String>(1));
 
     if option_e {
         select_manual_pick(
@@ -1738,7 +1726,6 @@ pub(crate) async fn set_current_issue(
     Ok(Json(SetCurrentIssueResponse {
         thread_id,
         title,
-        format,
         issues_remaining,
         queue_position,
         issue_id: Some(target_id),

@@ -528,7 +528,6 @@ pub struct UnsnoozeRequest {
 pub struct UnsnoozeResponse {
     pub thread_id: i32,
     pub title: String,
-    pub format: String,
     pub issues_remaining: i32,
     pub queue_position: i32,
     pub die_size: i32,
