@@ -1286,22 +1286,25 @@ mod tests {
                 (9201, 9201, '1', 'unread', NOW(), 1, 9001),
                 (9202, 9201, '2', 'unread', NOW(), 2, 9002),
                 (9203, 9201, '3', 'unread', NOW(), 3, NULL),
+                (9204, 9201, '4', 'unread', NOW(), 4, NULL),
                 (9401, 9401, '1', 'unread', NOW(), 1, 9001),
                 (9402, 9401, '2', 'unread', NOW(), 2, NULL),
                 (9403, 9401, '3', 'unread', NOW(), 3, 9003);
 
-            -- Both readers confirm the same series identity.
+            -- Reader B confirms the shared series identity; reader A confirms
+            -- the same external issue identity on its own private issue row.
             INSERT INTO thread_external_series_mappings
                 (id, thread_id, external_identity_id, status, evidence_source, created_at, updated_at)
-            VALUES (9601, 9201, 8001, 'confirmed', 'rehearsal', NOW(), NOW()),
-                   (9602, 9401, 8001, 'confirmed', 'rehearsal', NOW(), NOW());
-            -- Reader B has confirmed issue evidence; reader A deliberately has
-            -- only catalog-only evidence plus one issue with no evidence at all.
+            VALUES (9602, 9401, 8001, 'confirmed', 'rehearsal', NOW(), NOW());
+            -- A confirms identity 8103 and B confirms the same 8103: a
+            -- legitimate cross-owner shared reference, not a duplicate.
+            -- A's final issue has neither mapping nor catalog evidence.
             INSERT INTO issue_external_identity_mappings
                 (id, issue_id, external_identity_id, status, evidence_source, evidence_json,
                  created_at, updated_at)
-            VALUES (9701, 9402, 8103, 'confirmed', 'rehearsal', '{}'::json, NOW(), NOW()),
-                   (9702, 9403, 8104, 'confirmed', 'rehearsal', '{}'::json, NOW(), NOW());
+            VALUES (9701, 9203, 8103, 'confirmed', 'rehearsal', '{}'::json, NOW(), NOW()),
+                   (9702, 9402, 8103, 'confirmed', 'rehearsal', '{}'::json, NOW(), NOW()),
+                   (9703, 9403, 8104, 'confirmed', 'rehearsal', '{}'::json, NOW(), NOW());
 
             INSERT INTO events (id, type, "timestamp", thread_id, issue_id, rating, user_id)
             VALUES (9801, 'rate', NOW(), 9201, 9201, 4.0, 9101),
@@ -1316,6 +1319,7 @@ mod tests {
             VALUES (9501, 9301, 9201, 1, NOW(), 'none', false),
                    (9502, 9301, 9202, 2, NOW(), 'after_previous', false),
                    (9503, 9301, 9203, 3, NOW(), 'none', false),
+                   (9504, 9301, 9204, 4, NOW(), 'none', false),
                    (9601, 9302, 9401, 1, NOW(), 'none', false),
                    (9602, 9302, 9402, 2, NOW(), 'hold', false),
                    (9603, 9302, 9403, 3, NOW(), 'none', false);
@@ -1342,12 +1346,13 @@ mod tests {
         let (state, _guard) = rehearsal_fixture().await;
         let conn = db::checkout(&state).await.expect("rehearsal verification connection");
 
-        // The shared external series identity is confirmed for both readers.
+        // The same external issue identity is confirmed by both readers.
         let shared: Vec<tokio_postgres::Row> = conn
             .query(
-                "SELECT t.user_id FROM thread_external_series_mappings m \
-                 JOIN threads t ON t.id = m.thread_id \
-                 WHERE m.external_identity_id = 8001 AND m.status = 'confirmed' \
+                "SELECT t.user_id FROM issue_external_identity_mappings m \
+                 JOIN issues i ON i.id = m.issue_id \
+                 JOIN threads t ON t.id = i.thread_id \
+                 WHERE m.external_identity_id = 8103 AND m.status = 'confirmed' \
                  ORDER BY t.user_id",
                 &[],
             )
@@ -1380,7 +1385,7 @@ mod tests {
         for (user_id, ids, notes, rating, queue, mode, gate, exclusion, dependency) in [
             (
                 9101,
-                vec![9201, 9202, 9203],
+                vec![9201, 9202, 9203, 9204],
                 "A private notes",
                 4.0,
                 1,
