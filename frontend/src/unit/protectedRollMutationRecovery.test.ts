@@ -104,6 +104,23 @@ describe('protected Roll mutation recovery', () => {
     expect(retry).toHaveBeenCalledTimes(1)
   })
 
+  it('waits through an auth-shaped 403 recovery failure then retries the same pending mutation', async () => {
+    mockedProtectedApi.bootstrap
+      .mockRejectedValueOnce(authFailure)
+      .mockResolvedValueOnce(bootstrapState(7))
+    const retry = vi.fn().mockResolvedValue('committed')
+    const wait = vi.fn().mockResolvedValue(undefined)
+
+    await expect(recoverProtectedRollMutation(7, retry, wait, protectedRollMutationApi)).resolves.toEqual({
+      status: 'retried',
+      value: 'committed',
+    })
+
+    expect(mockedProtectedApi.bootstrap).toHaveBeenCalledTimes(2)
+    expect(wait).toHaveBeenCalledTimes(1)
+    expect(retry).toHaveBeenCalledTimes(1)
+  })
+
   it('waits through a 503 recovery failure then retries the same pending mutation', async () => {
     const unavailable = { response: { status: 503 } }
     mockedProtectedApi.bootstrap
