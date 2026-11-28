@@ -217,6 +217,44 @@ describe('useRollBootstrap composed scoped view', () => {
     expect(result.current.data?.active_thread?.last_rolled_result).toBe(6)
   })
 
+  it('keeps a blocked pending selection addressable when no scoped card or summary is present', async () => {
+    const pending: RollPendingSelection = {
+      issue_id: 10,
+      thread_id: 3,
+      issue_number: '10',
+      selected_at: 1_700_000_000_000,
+    }
+    mockedPending.mockReturnValue({
+      pending,
+      seedFromOffer: vi.fn(),
+      select: vi.fn(),
+      clear: vi.fn(),
+      clearAll: vi.fn(),
+    })
+    mockedResources.eligibleIssueIds.mockResolvedValue({
+      die: 6,
+      issue_ids: [20],
+      thread_ids: [4],
+      pool_reason: 'ready',
+    })
+    mockedResources.issueCards.mockResolvedValue({ items: [card(20, 4, 'unread')] })
+    mockedDependencies.mockResolvedValue({ issue_id: 10, incoming: [], outgoing: [] })
+
+    const { result } = renderHook(() => useRollBootstrap(), { wrapper: Wrapper })
+    await waitFor(() => expect(result.current.isPending).toBe(false))
+
+    // The exact stored selection remains the identity even when recovery has no
+    // card and no thumbnail summary; no server session is rehydrated.
+    expect(result.current.data?.active_thread).toEqual({
+      id: 3,
+      title: '',
+      format: '',
+      issue_id: 10,
+      issue_number: '10',
+    })
+    expect(result.current.data?.pending_thread_id).toBe(3)
+  })
+
   it('composes snoozed-series chips from one bounded scoped thread page', async () => {
     mockedSnoozes.mockReturnValue([7])
     mockedThreadsList.mockResolvedValue({
