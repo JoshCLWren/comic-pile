@@ -1988,7 +1988,6 @@ mod tests {
 
     #[test]
     fn cursor_predicates_follow_the_same_total_sort_keys() {
-        let blocked = blocked_order_expr("$7", "$8");
         let (position_sql, _) = cursor_clause(
             "position",
             Some(&QueueCursor {
