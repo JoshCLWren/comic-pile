@@ -51,9 +51,10 @@ invent a route.
 - Do not redirect a retained v1 operation to v2 merely to reach a different
   implementation. A URL change is a separate API decision.
 
-Auth publishes the same handlers under `/api/v2/auth/*`, `/api/v1/auth/*`, and
-`/api/auth/*`; product clients use v2. Other compatibility paths remain only for
-existing callers documented in the same-path contract.
+Auth is published only under `/api/v2/auth/*`. The former `/api/v1/auth/*` and
+bare `/api/auth/*` aliases were retired in #4549 after caller proof: they are no
+longer registered at the router or ingress and return a JSON 404. All first-party
+browser, operational and test callers use canonical v2.
 
 ## Current route families
 
