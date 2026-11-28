@@ -1593,7 +1593,7 @@ mod tests {
         assert_eq!(
             b_edges
                 .iter()
-                .filter(|e| e.origin == "reader")
+                .filter(|e| e.prerequisite_origin.as_deref() == Some("reader"))
                 .map(|e| (e.source_issue_id, e.target_issue_id))
                 .collect::<Vec<_>>(),
             vec![(9401, 9402)],
