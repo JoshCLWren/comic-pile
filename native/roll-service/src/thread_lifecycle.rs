@@ -3309,6 +3309,24 @@ mod tests {
             .any(|error| error["field"] == "body.update_mask"));
     }
 
+    #[test]
+    fn patch_no_longer_accepts_the_retired_format_field() {
+        let mut check = Check::default();
+        assert!(parse_patch(
+            &mut check,
+            Some(json!({"title": "x", "update_mask": ["format"]})),
+        )
+        .is_ok());
+        assert!(!check.is_clean());
+
+        let mut check = Check::default();
+        parse_precondition(&mut check, &json!({"format": "Comic"}));
+        assert!(!check.is_clean());
+        assert!(check_errors(&check)
+            .iter()
+            .any(|error| error["field"] == "body.expected.format"));
+    }
+
     fn owned_thread_for_precondition() -> OwnedThread {
         OwnedThread {
             id: 7,
@@ -3338,7 +3356,6 @@ mod tests {
     fn patch_precondition_returns_409_with_current_values_when_stale() {
         let expected = PatchPrecondition {
             title: Some("Stale title".to_owned()),
-            format: Some("Comic".to_owned()),
             notes_present: true,
             notes: Some("stale notes".to_owned()),
             credits: None,
