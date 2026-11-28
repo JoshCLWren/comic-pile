@@ -97,7 +97,7 @@ describe('cblSourcesApi.commit', () => {
     expect(client.post).toHaveBeenCalledWith(
       '/v2/reading-lists/42/reading-plans/77/adoption-commits',
       {
-        entry_decisions: {},
+        entry_decisions: { '102': 'include', '103': 'exclude' },
         series_decisions: [],
         series_overrides: [
           { cbl_position: 1, decision: 'exclude' },
@@ -198,7 +198,7 @@ describe('cblSourcesApi.commitNew', () => {
     expect(client.post).toHaveBeenCalledWith(
       '/v2/reading-lists/42/adoption-commits',
       {
-        entry_decisions: {},
+        entry_decisions: { '102': 'include' },
         series_decisions: [],
         series_overrides: [
           { cbl_position: 1, decision: 'exclude' },

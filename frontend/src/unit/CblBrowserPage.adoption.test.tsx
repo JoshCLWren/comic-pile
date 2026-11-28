@@ -619,7 +619,7 @@ describe('CblBrowserPage adoption', () => {
       expect(mockCommitNew).toHaveBeenCalledTimes(1)
     })
     const [, , choices] = mockCommitNew.mock.calls[0]
-    expect(choices.entry_decisions).toEqual({ '101': false })
+    expect(choices.entry_decisions).toEqual({ '101': 'exclude' })
   })
 
   it('a 409 on commit surfaces the stale-review message and refresh recovers', async () => {
@@ -648,44 +648,35 @@ describe('CblBrowserPage adoption', () => {
     })
   })
 
-  it('recovers a timed-out commit by polling the created plan (#3364)', async () => {
+  it('recovers a timed-out commit by replaying its idempotency key, not a second save', async () => {
     const user = userEvent.setup()
     const timeout = Object.assign(new Error('timeout of 10000ms exceeded'), {
       code: 'ECONNABORTED',
     })
-    mockCommitNew.mockRejectedValue(timeout)
-    mockListPlans.mockResolvedValueOnce([]).mockResolvedValue([
-      {
-        id: 88,
-        name: 'Ultimate Universe',
-        ordering_mode: 'informational',
-        lane_count: 1,
-        step_count: 2,
-        source_paths: ['Ultimate.cbl'],
-        updated_at: '2026-10-12T00:00:00Z',
-      },
-    ])
-    const recovered = { id: 88, name: 'Ultimate Universe' }
-    mockGetPlan.mockResolvedValue(recovered)
+    mockCommitSource
+      .mockRejectedValueOnce(timeout)
+      .mockResolvedValueOnce({ id: 88, custom_cbl_list_id: 900, list_version: 1 })
     mockApplyCommitted.mockResolvedValue(undefined)
     renderPage()
     await searchFor(user)
     await selectSource(user)
     await confirmAdd(user)
     await waitFor(() => {
-      expect(mockListPlans).toHaveBeenCalled()
-      expect(mockGetPlan).toHaveBeenCalledWith(88)
-      expect(screen.getByTestId('location')).toHaveTextContent('/continuity-plans/88')
+      expect(mockCommitSource).toHaveBeenCalledTimes(2)
+      expect(screen.getByTestId('location')).toHaveTextContent('/reading-lists/900')
     })
-    expect(screen.queryByText(/Network error/)).not.toBeInTheDocument()
+    const firstKey = mockCommitSource.mock.calls[0][2].idempotency_key
+    expect(firstKey).toBeTruthy()
+    expect(mockCommitSource.mock.calls[1][2].idempotency_key).toBe(firstKey)
+    expect(mockApplyCommitted).toHaveBeenCalledWith(expect.anything(), 900)
   })
 
   it('recovers a timed-out commit even after Back changed the source view (#4136)', async () => {
     const user = userEvent.setup()
     let rejectCommit: (error: unknown) => void = () => undefined
-    mockCommitNew.mockImplementation(
+    mockCommitSource.mockImplementation(
       () =>
-        new Promise<{ id: number; name: string }>((_resolve, reject) => {
+        new Promise((_resolve, reject) => {
           rejectCommit = reject
         }),
     )
@@ -699,7 +690,7 @@ describe('CblBrowserPage adoption', () => {
     await user.click(await screen.findByRole('button', { name: /Ultimate Universe/ }))
     await confirmAdd(user)
     await waitFor(() => {
-      expect(mockCommitNew).toHaveBeenCalledTimes(1)
+      expect(mockCommitSource).toHaveBeenCalledTimes(1)
     })
 
     // Pressing browser Back leaves the write running and changes the view away
@@ -708,39 +699,23 @@ describe('CblBrowserPage adoption', () => {
     expect(screen.getByTestId('location')).toHaveTextContent('/cbl-sources')
     expect(screen.getByLabelText('Search source lists')).toBeDisabled()
 
-    // The server settled the add but its response was lost (an ambiguous
-    // network failure). Recovery and cache updates must still run even though
-    // the reader is no longer viewing the added source; only navigation and
-    // the stale message belong to the view that made the request.
+    // The server settled the add but its response was lost. The idempotent
+    // replay still updates caches, but navigation belongs to the view that
+    // made the request: the reader stays on the catalog they returned to.
+    mockCommitSource.mockResolvedValueOnce({ id: 88, custom_cbl_list_id: 900, list_version: 1 })
     const timeout = Object.assign(new Error('timeout of 10000ms exceeded'), {
       code: 'ECONNABORTED',
     })
-    mockListPlans.mockResolvedValue([
-      {
-        id: 88,
-        name: 'Ultimate Universe',
-        ordering_mode: 'informational',
-        lane_count: 1,
-        step_count: 2,
-        source_paths: ['Ultimate.cbl'],
-        updated_at: '2026-10-12T00:00:00Z',
-      },
-    ])
-    const recovered = { id: 88, name: 'Ultimate Universe' }
-    mockGetPlan.mockResolvedValue(recovered)
-
     await act(async () => {
       rejectCommit(timeout)
     })
     await waitFor(() => {
-      expect(mockListPlans).toHaveBeenCalled()
-      expect(mockGetPlan).toHaveBeenCalledWith(88)
+      expect(mockCommitSource).toHaveBeenCalledTimes(2)
       expect(mockApplyCommitted).toHaveBeenCalled()
     })
-    // No navigation hijack: the reader stays on the catalog they returned to.
     expect(screen.getByTestId('location')).toHaveTextContent('/cbl-sources')
     expect(screen.queryByRole('heading', { name: 'Add this reading order?' })).not.toBeInTheDocument()
-    expect(screen.queryByText(/ComicPile did not confirm the new plan in time/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/ComicPile did not confirm the saved Reading List in time/)).not.toBeInTheDocument()
   })
 
   it('a new search resets the selection and decisions', async () => {
